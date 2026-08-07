@@ -301,8 +301,16 @@ function updateClient(id, { companyName, contactName, email, phone, plan, status
     return getClientById(id);
 }
 
+// Deleting a client is different from deactivating one: deactivation keeps
+// everything and just locks people out (see deactivateClientUsers); deleting
+// the client record removes its users too (profiles/grants cascade off
+// clients.id already) — there's no client left for them to belong to.
 function deleteClient(id) {
-    db.prepare('DELETE FROM clients WHERE id = ?').run(id);
+    const cleanup = db.transaction(() => {
+        db.prepare('DELETE FROM users WHERE client_id = ?').run(id);
+        db.prepare('DELETE FROM clients WHERE id = ?').run(id);
+    });
+    cleanup();
 }
 
 // --- Query helpers: client module entitlements ("Contrataciones") ------------

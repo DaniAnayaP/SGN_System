@@ -261,7 +261,7 @@ app.post('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
     const { companyName, contactName, email, phone, plan, status } = req.body;
     const client = createClient({ companyName, contactName, email, phone, plan, status });
     const generatedAdmin = applyClientLifecycle(client);
-    res.status(201).json({ client, generatedAdmin });
+    res.status(201).json({ client: getClientById(client.id), generatedAdmin });
 });
 
 app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
@@ -272,7 +272,7 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
     const { companyName, contactName, email, phone, plan, status } = req.body;
     const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status });
     const generatedAdmin = applyClientLifecycle(client);
-    res.json({ client, generatedAdmin });
+    res.json({ client: getClientById(client.id), generatedAdmin });
 });
 
 app.delete('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
