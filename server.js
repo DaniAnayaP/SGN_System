@@ -35,6 +35,7 @@ const {
     findUserByUsername,
     usernameOrEmailExists,
     createUser,
+    promoteToAdmin,
     MODULE_CATALOG,
     listClients,
     getClientById,
@@ -165,6 +166,22 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
     res.clearCookie('sgn_session');
     res.json({ message: 'Logged out.' });
+});
+
+// --- TEMPORARY: one-time admin bootstrap -------------------------------------
+// Promotes a user to admin so the first real admin account can be created
+// without shell/SSH access to the deployment. Gated by ADMIN_BOOTSTRAP_TOKEN,
+// which only exists as an env var for as long as it takes to run this once.
+// DELETE this route (and the env var) after the first admin is promoted.
+app.post('/api/admin/bootstrap', (req, res) => {
+    const bootstrapToken = process.env.ADMIN_BOOTSTRAP_TOKEN;
+    const { token, username } = req.body || {};
+    if (!bootstrapToken || token !== bootstrapToken) {
+        return res.status(404).end();
+    }
+    const promoted = promoteToAdmin(username);
+    if (!promoted) return res.status(404).json({ message: 'User not found.' });
+    res.json({ message: `${username} promoted to admin.` });
 });
 
 // --- Example protected route --------------------------------------------------

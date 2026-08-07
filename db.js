@@ -128,6 +128,11 @@ function createUser({ username, email, passwordHash, name }) {
     return db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 }
 
+function promoteToAdmin(username) {
+    const result = db.prepare("UPDATE users SET role = 'admin' WHERE username = ?").run(username);
+    return result.changes > 0;
+}
+
 // --- Query helpers: clients (SaaS admin) --------------------------------------
 function listClients() {
     return db.prepare('SELECT * FROM clients ORDER BY created_at DESC').all();
@@ -194,6 +199,7 @@ module.exports = {
     findUserByUsername,
     usernameOrEmailExists,
     createUser,
+    promoteToAdmin,
     listClients,
     getClientById,
     createClient,
