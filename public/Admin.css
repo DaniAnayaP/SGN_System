@@ -1,0 +1,267 @@
+/* SaaS admin panel: shared styles for Clientes Nuevos / Contrataciones */
+
+.admin-panel{
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    background-color: var(--color-surface);
+    box-shadow: 0 0 0 1px var(--color-border);
+}
+.admin-subtitle{
+    margin-bottom: 1.25rem;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+/* Form */
+.admin-form-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.admin-field{
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.admin-field label{
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+.admin-field input,
+.admin-field select{
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.85rem;
+}
+.admin-field input:focus,
+.admin-field select:focus{
+    outline: none;
+    border-color: var(--color-text-primary);
+}
+.admin-error{
+    margin-bottom: 1rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 0.4rem;
+    background-color: #fdecea;
+    color: #b3261e;
+    font-size: 0.8rem;
+}
+body.dark-mode .admin-error{
+    background-color: #3a1f1e;
+    color: #ff8a80;
+}
+.admin-form-actions{
+    display: flex;
+    gap: 0.75rem;
+}
+.admin-form-actions .btn{
+    width: auto;
+    padding: 0.6rem 1.4rem;
+    border-radius: 0.4rem;
+    font-size: 0.85rem;
+}
+.btn-secondary{
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+}
+
+/* Table */
+.admin-table-wrap{
+    margin-top: 1.5rem;
+    overflow-x: auto;
+}
+.admin-table{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.admin-table th{
+    padding: 0.6rem 0.7rem;
+    text-align: left;
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+.admin-table td{
+    padding: 0.6rem 0.7rem;
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border);
+}
+.admin-table-actions{
+    display: flex;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+.admin-icon-btn{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.admin-icon-btn:hover{
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+}
+.admin-icon-btn-danger:hover{
+    color: #b3261e;
+}
+.admin-empty{
+    padding: 1.5rem 0;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+/* Status badges */
+.admin-badge{
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 1rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+.admin-badge-activo{
+    background-color: #e3f6e8;
+    color: #1e7e34;
+}
+.admin-badge-inactivo{
+    background-color: #f2e9e9;
+    color: #8a4b4b;
+}
+.admin-badge-prospecto{
+    background-color: #eaf1fb;
+    color: #2c5aa0;
+}
+body.dark-mode .admin-badge-activo{
+    background-color: #1c3324; color: #7fd99a;
+}
+body.dark-mode .admin-badge-inactivo{
+    background-color: #332020; color: #e0a3a3;
+}
+body.dark-mode .admin-badge-prospecto{
+    background-color: #1e2a3a; color: #8fb8ea;
+}
+
+/* Contrataciones */
+.admin-module-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+.admin-module-row{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+}
+.admin-module-name{
+    font-size: 0.85rem;
+    color: var(--color-text-primary);
+    font-weight: 500;
+}
+
+/* Toggle switch */
+.admin-switch{
+    position: relative;
+    display: inline-block;
+    width: 2.6rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+}
+.admin-switch input{
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.admin-switch-track{
+    position: absolute;
+    inset: 0;
+    background-color: var(--color-border);
+    border-radius: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.admin-switch-track::before{
+    content: '';
+    position: absolute;
+    width: 1.1rem;
+    height: 1.1rem;
+    left: 0.2rem;
+    top: 0.2rem;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+}
+.admin-switch input:checked + .admin-switch-track{
+    background-color: #2c8f4a;
+}
+.admin-switch input:checked + .admin-switch-track::before{
+    transform: translateX(1.1rem);
+}
+.admin-switch input:focus-visible + .admin-switch-track{
+    outline: 2px solid var(--color-text-primary);
+    outline-offset: 2px;
+}
+
+.admin-select-row{
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-width: 24rem;
+    margin-bottom: 1rem;
+}
+.admin-select-row label{
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+.admin-select-row select{
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.85rem;
+}
+.admin-hint{
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    padding: 1rem 0;
+}
+.admin-save-status{
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    color: #1e7e34;
+    min-height: 1.2em;
+}
+body.dark-mode .admin-save-status{
+    color: #7fd99a;
+}
+
+@media (max-width: 700px){
+    .admin-panel{
+        padding: 1rem;
+    }
+    .admin-form-grid{
+        grid-template-columns: 1fr;
+    }
+}

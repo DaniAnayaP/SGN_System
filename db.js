@@ -43,6 +43,51 @@ db.exec(`
     );
 `);
 
+// role was added after the initial release — add it to pre-existing
+// databases instead of requiring a fresh one.
+const userColumns = db.prepare('PRAGMA table_info(users)').all();
+if (!userColumns.some((c) => c.name === 'role')) {
+    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+}
+
+// --- SaaS admin: clients and their per-module entitlements ------------------
+// "Contrataciones" = which SGN modules (matching the section ids in
+// public/data/menu.json) are turned on for a given client, based on what
+// they've contracted. MODULE_CATALOG is the fixed list of togglable modules.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS clients (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_name  TEXT NOT NULL,
+        contact_name  TEXT NOT NULL,
+        email         TEXT NOT NULL,
+        phone         TEXT NOT NULL DEFAULT '',
+        plan          TEXT NOT NULL DEFAULT '',
+        status        TEXT NOT NULL DEFAULT 'prospecto',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS client_modules (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        module_key  TEXT NOT NULL,
+        enabled     INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(client_id, module_key)
+    );
+`);
+
+const MODULE_CATALOG = [
+    { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
+    { key: 'general-management', labelKey: 'menu.generalManagement' },
+    { key: 'management-control', labelKey: 'menu.managementControl' },
+    { key: 'supply-chain', labelKey: 'menu.supplyChain' },
+    { key: 'purchasing', labelKey: 'menu.purchasing' },
+    { key: 'commercial', labelKey: 'menu.commercial' },
+    { key: 'marketing', labelKey: 'menu.marketing' },
+    { key: 'human-resources', labelKey: 'menu.humanResources' },
+    { key: 'accounting', labelKey: 'menu.accounting' },
+    { key: 'finance', labelKey: 'menu.finance' },
+];
+
 // --- One-time seed: create the demo admin/admin user if the table is empty.
 // This only ever runs once — after that, the row lives in sgn.sqlite and
 // survives server restarts. Delete the row (see README) once you're done
@@ -50,18 +95,19 @@ db.exec(`
 const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
 if (userCount === 0) {
     db.prepare(`
-        INSERT INTO users (username, email, password_hash, name)
-        VALUES (@username, @email, @passwordHash, @name)
+        INSERT INTO users (username, email, password_hash, name, role)
+        VALUES (@username, @email, @passwordHash, @name, @role)
     `).run({
         username: 'admin',
         email: 'admin@geipsa.com',
         passwordHash: hashPassword('admin'),
         name: 'Admin',
+        role: 'admin',
     });
     console.log('[db] Seeded demo user admin/admin (first run only).');
 }
 
-// --- Query helpers -----------------------------------------------------------
+// --- Query helpers: users -----------------------------------------------------
 function findUserByUsername(username) {
     return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 }
@@ -82,9 +128,77 @@ function createUser({ username, email, passwordHash, name }) {
     return db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 }
 
+// --- Query helpers: clients (SaaS admin) --------------------------------------
+function listClients() {
+    return db.prepare('SELECT * FROM clients ORDER BY created_at DESC').all();
+}
+
+function getClientById(id) {
+    return db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+}
+
+function createClient({ companyName, contactName, email, phone, plan, status }) {
+    const result = db
+        .prepare(`
+            INSERT INTO clients (company_name, contact_name, email, phone, plan, status)
+            VALUES (@companyName, @contactName, @email, @phone, @plan, @status)
+        `)
+        .run({ companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto' });
+    return getClientById(result.lastInsertRowid);
+}
+
+function updateClient(id, { companyName, contactName, email, phone, plan, status }) {
+    db.prepare(`
+        UPDATE clients
+        SET company_name = @companyName, contact_name = @contactName, email = @email,
+            phone = @phone, plan = @plan, status = @status
+        WHERE id = @id
+    `).run({ id, companyName, contactName, email, phone: phone || '', plan: plan || '', status });
+    return getClientById(id);
+}
+
+function deleteClient(id) {
+    db.prepare('DELETE FROM clients WHERE id = ?').run(id);
+}
+
+// --- Query helpers: client module entitlements ("Contrataciones") ------------
+function getClientModules(clientId) {
+    const rows = db
+        .prepare('SELECT module_key, enabled FROM client_modules WHERE client_id = ?')
+        .all(clientId);
+    const enabledByKey = new Map(rows.map((r) => [r.module_key, !!r.enabled]));
+    return MODULE_CATALOG.map((m) => ({ ...m, enabled: enabledByKey.get(m.key) || false }));
+}
+
+const upsertClientModule = db.prepare(`
+    INSERT INTO client_modules (client_id, module_key, enabled)
+    VALUES (@clientId, @moduleKey, @enabled)
+    ON CONFLICT(client_id, module_key) DO UPDATE SET enabled = @enabled
+`);
+
+function setClientModules(clientId, moduleStates) {
+    const validKeys = new Set(MODULE_CATALOG.map((m) => m.key));
+    const apply = db.transaction((states) => {
+        for (const { key, enabled } of states) {
+            if (!validKeys.has(key)) continue;
+            upsertClientModule.run({ clientId, moduleKey: key, enabled: enabled ? 1 : 0 });
+        }
+    });
+    apply(moduleStates);
+    return getClientModules(clientId);
+}
+
 module.exports = {
     db,
+    MODULE_CATALOG,
     findUserByUsername,
     usernameOrEmailExists,
     createUser,
+    listClients,
+    getClientById,
+    createClient,
+    updateClient,
+    deleteClient,
+    getClientModules,
+    setClientModules,
 };

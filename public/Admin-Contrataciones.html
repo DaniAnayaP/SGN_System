@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="meta.dashboardTitle">SGN - Home</title>
+    <title data-i18n="admin.contratacionesTitle">Contracted Modules</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
+    <link rel="stylesheet" href="Admin.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
 </head>
 <body>
@@ -63,7 +64,7 @@
 
     <main>
         <div class="top-bar barra-arriba">
-            <p class="welcome-text" data-i18n="main.welcome">Welcome</p>
+            <p class="welcome-text" data-i18n="admin.contratacionesTitle">Contracted Modules</p>
             <div class="top-bar-actions">
                 <button type="button" data-i18n-aria="main.messages" aria-label="Messages">
                     <i class="bx bx-message" aria-hidden="true"></i>
@@ -123,9 +124,32 @@
                 </button>
             </div>
         </div>
+
+        <section class="admin-panel">
+            <p class="admin-subtitle" data-i18n="admin.contratacionesSubtitle">Turn on the modules each client has contracted.</p>
+
+            <div class="admin-select-row">
+                <label for="contrataciones-client" data-i18n="admin.selectClient">Select a client</label>
+                <select id="contrataciones-client">
+                    <option value="" data-i18n="admin.selectClientPlaceholder">Choose a client...</option>
+                </select>
+            </div>
+
+            <p id="contrataciones-hint" class="admin-hint" data-i18n="admin.noClientSelected">Select a client above to manage their modules.</p>
+
+            <div id="modules-panel" hidden>
+                <div class="admin-module-list" id="modules-list">
+                    <!-- rendered at runtime -->
+                </div>
+                <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                    <button type="button" class="btn" id="modules-save" data-i18n="admin.save">Save</button>
+                </div>
+                <p id="modules-save-status" class="admin-save-status"></p>
+            </div>
+        </section>
     </main>
 
     <script src="Dashboard.js"></script>
-    <script src="Inicio-en.js"></script>
+    <script src="Admin-Contrataciones.js"></script>
 </body>
 </html>

@@ -31,7 +31,19 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 
 const { hashPassword, verifyPassword } = require('./password');
-const { findUserByUsername, usernameOrEmailExists, createUser } = require('./db');
+const {
+    findUserByUsername,
+    usernameOrEmailExists,
+    createUser,
+    MODULE_CATALOG,
+    listClients,
+    getClientById,
+    createClient,
+    updateClient,
+    deleteClient,
+    getClientModules,
+    setClientModules,
+} = require('./db');
 
 const app = express();
 
@@ -87,6 +99,17 @@ function requireAuth(req, res, next) {
     }
 }
 
+// --- Admin-only guard (SaaS control panel: clients, module entitlements) ---
+// Must run after requireAuth so req.user is populated. The role lives in the
+// JWT issued at login, so a promotion to admin only takes effect on the
+// user's next login (token is valid for up to 8h).
+function requireAdmin(req, res, next) {
+    if (req.user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required.' });
+    }
+    next();
+}
+
 // --- POST /api/auth/login ----------------------------------------------------
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const { username, password } = req.body || {};
@@ -106,7 +129,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     }
 
     const token = jwt.sign(
-        { sub: user.id, username: user.username, name: user.name },
+        { sub: user.id, username: user.username, name: user.name, role: user.role },
         JWT_SECRET,
         { expiresIn: '8h' }
     );
@@ -147,6 +170,71 @@ app.post('/api/auth/logout', (req, res) => {
 // --- Example protected route --------------------------------------------------
 app.get('/api/me', requireAuth, (req, res) => {
     res.json({ user: req.user });
+});
+
+// --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -
+// Every route below requires an authenticated admin (requireAuth first so
+// req.user exists, then requireAdmin checks the role in that token).
+const CLIENT_STATUSES = ['activo', 'inactivo', 'prospecto'];
+
+function validateClientBody(body) {
+    const { companyName, contactName, email, status } = body || {};
+    if (!companyName || !contactName || !email) {
+        return 'companyName, contactName and email are required.';
+    }
+    if (status && !CLIENT_STATUSES.includes(status)) {
+        return `status must be one of: ${CLIENT_STATUSES.join(', ')}.`;
+    }
+    return null;
+}
+
+app.get('/api/admin/modules', requireAuth, requireAdmin, (req, res) => {
+    res.json({ modules: MODULE_CATALOG });
+});
+
+app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
+    res.json({ clients: listClients() });
+});
+
+app.post('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
+    const error = validateClientBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { companyName, contactName, email, phone, plan, status } = req.body;
+    const client = createClient({ companyName, contactName, email, phone, plan, status });
+    res.status(201).json({ client });
+});
+
+app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    const error = validateClientBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { companyName, contactName, email, phone, plan, status } = req.body;
+    const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status });
+    res.json({ client });
+});
+
+app.delete('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    deleteClient(req.params.id);
+    res.status(204).end();
+});
+
+app.get('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    res.json({ modules: getClientModules(req.params.id) });
+});
+
+app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    const { modules } = req.body || {};
+    if (!Array.isArray(modules)) {
+        return res.status(400).json({ message: 'modules must be an array of { key, enabled }.' });
+    }
+    res.json({ modules: setClientModules(req.params.id, modules) });
 });
 
 const PORT = process.env.PORT || 3000;
