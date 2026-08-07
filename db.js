@@ -310,6 +310,9 @@ function updateClient(id, { companyName, contactName, email, phone, plan, status
 // column after the fact, only on tables created fresh with it already there.
 function deleteClient(id) {
     const cleanup = db.transaction(() => {
+        // Must clear this first: clients.admin_user_id points at a user we're
+        // about to delete, and that FK has no cascade action.
+        db.prepare('UPDATE clients SET admin_user_id = NULL WHERE id = ?').run(id);
         db.prepare('DELETE FROM profiles WHERE client_id = ?').run(id);
         db.prepare('DELETE FROM users WHERE client_id = ?').run(id);
         db.prepare('DELETE FROM clients WHERE id = ?').run(id);
