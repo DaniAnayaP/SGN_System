@@ -441,7 +441,8 @@
         cursor: pointer;
         transition: background-color 0.2s ease, color 0.2s ease;
     }
-    .settings-dropdown-toggle:hover{
+    .settings-dropdown-toggle:hover,
+    .settings-dropdown-group.open .settings-dropdown-toggle{
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
