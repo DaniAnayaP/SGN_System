@@ -80,6 +80,8 @@
     "languageEnglish": "Inglés",
     "languageSpanish": "Español",
     "styleLight": "Claro",
-    "styleDark": "Oscuro"
+    "styleDark": "Oscuro",
+    "styleInstitutional": "Color Institucional",
+    "inDevelopment": "En desarrollo, seguimos trabajando para una mejor experiencia"
   }
 }

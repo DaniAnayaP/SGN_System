@@ -40,7 +40,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional Color", inDevelopment: "Under development. We're working on a better experience." }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -58,7 +58,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Color Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia" }
     }
 };
 
@@ -380,8 +380,13 @@ document.querySelectorAll('.lang-option').forEach((btn) => {
 
 document.querySelectorAll('.style-option').forEach((btn) => {
     btn.addEventListener('click', () => {
+        if (btn.dataset.style === 'institutional') {
+            alert(t('main.inDevelopment'));
+            return;
+        }
         document.body.classList.toggle('dark-mode', btn.dataset.style === 'dark');
-        document.querySelectorAll('.style-option').forEach((b) => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.style-option[data-style="light"], .style-option[data-style="dark"]')
+            .forEach((b) => b.classList.toggle('active', b === btn));
     });
 });
 
