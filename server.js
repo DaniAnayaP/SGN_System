@@ -51,8 +51,8 @@ app.use(helmet({
         directives: {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
             'script-src': ["'self'", "'unsafe-inline'"],
-            'style-src': ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
-            'font-src': ["'self'", 'https://unpkg.com', 'data:'],
+            'style-src': ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://fonts.googleapis.com'],
+            'font-src': ["'self'", 'https://unpkg.com', 'https://fonts.gstatic.com', 'data:'],
         },
     },
 }));
