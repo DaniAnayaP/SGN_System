@@ -420,6 +420,35 @@
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
+    /* Language toggle relocated inside the settings dropdown */
+    .settings-dropdown .lang-toggle{
+        position: static;
+        border: none;
+        text-align: left;
+    }
+    /* Dark mode toggle relocated inside the settings dropdown */
+    .settings-dropdown .dark-mode-btn{
+        position: static;
+        width: 100%;
+        height: auto;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0.6rem;
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0.35rem;
+    }
+    .settings-dropdown .dark-mode-icons{
+        position: relative;
+        width: 1.3rem;
+        height: 1.3rem;
+        flex-shrink: 0;
+        overflow: hidden;
+    }
+    .settings-dropdown .dark-mode-icons i{
+        font-size: 1.1rem;
+    }
 
     /* Dark mode */
     .brand-dark{

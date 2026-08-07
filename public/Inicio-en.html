@@ -15,13 +15,6 @@
         <i class="bx bx-x" aria-hidden="true"></i>
     </div>
 
-    <button type="button" class="dark-mode-btn" id="dark-mode-btn" aria-label="Toggle dark mode">
-        <i class="bx bx-moon" aria-hidden="true"></i>
-        <i class="bx bx-sun" aria-hidden="true"></i>
-    </button>
-
-    <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Change language">EN / ES</button>
-
     <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
         <div class="header">
             <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
@@ -88,10 +81,16 @@
                     </button>
                     <ul class="settings-dropdown" id="settings-dropdown" role="menu">
                         <li role="none">
-                            <button type="button" role="menuitem" id="settings-language" data-i18n="main.language">Language</button>
+                            <button type="button" role="menuitem" id="lang-toggle" class="lang-toggle" aria-label="Change language">EN / ES</button>
                         </li>
                         <li role="none">
-                            <button type="button" role="menuitem" id="settings-style" data-i18n="main.style">Style</button>
+                            <button type="button" role="menuitem" id="dark-mode-btn" class="dark-mode-btn" aria-label="Toggle dark mode">
+                                <span class="dark-mode-icons">
+                                    <i class="bx bx-moon" aria-hidden="true"></i>
+                                    <i class="bx bx-sun" aria-hidden="true"></i>
+                                </span>
+                                <span data-i18n="main.style">Style</span>
+                            </button>
                         </li>
                         <li role="none">
                             <button type="button" role="menuitem" id="settings-others" data-i18n="main.others">Others</button>

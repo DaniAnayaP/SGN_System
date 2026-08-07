@@ -321,8 +321,13 @@ function checkWindowSize() {
 window.addEventListener('resize', checkWindowSize);
 
 // --- Settings dropdown (Language / Style / Others) --------------------------
+// The Language and Style controls live inside this dropdown as the actual
+// #lang-toggle / #dark-mode-btn buttons (their toggle behavior is wired
+// separately below/in wireMenuInteractions) — this block only owns
+// open/close of the dropdown itself.
 const settingsMenu = document.getElementById('settings-menu');
 const settingsBtn = document.getElementById('settings-btn');
+const settingsDropdown = document.getElementById('settings-dropdown');
 
 function closeSettingsMenu() {
     settingsMenu?.classList.remove('open');
@@ -343,18 +348,8 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeSettingsMenu();
 });
 
-document.getElementById('settings-language')?.addEventListener('click', () => {
-    closeSettingsMenu();
-    document.getElementById('lang-toggle')?.click();
-});
-
-document.getElementById('settings-style')?.addEventListener('click', () => {
-    closeSettingsMenu();
-    document.getElementById('dark-mode-btn')?.click();
-});
-
-document.getElementById('settings-others')?.addEventListener('click', () => {
-    closeSettingsMenu();
+settingsDropdown?.addEventListener('click', (event) => {
+    if (event.target.closest('button')) closeSettingsMenu();
 });
 
 // --- Logout: invalidate the server-side session, then navigate away --------
