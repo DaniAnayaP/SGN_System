@@ -62,14 +62,21 @@ const EMBEDDED_TRANSLATIONS = {
     }
 };
 
-// --- Auth guard (client-side UX only, see note above) ----------------------
-(function authGuard() {
-    const hasToken = sessionStorage.getItem('sgn_token');
-    const usesCookieAuth = document.cookie.includes('sgn_session');
-    if (!hasToken && !usesCookieAuth) {
+// --- Auth guard -------------------------------------------------------------
+// The session cookie is httpOnly (by design, to keep it out of reach of any
+// injected script), so it can't be read from document.cookie. The only way
+// to check auth client-side is to ask the server, which is also the only
+// check that actually matters — see /api/me below.
+async function authGuard() {
+    try {
+        const res = await fetch(`${API_BASE}/me`, { credentials: 'include' });
+        if (!res.ok) throw new Error('not authenticated');
+        return true;
+    } catch {
         window.location.replace('Login.html');
+        return false;
     }
-})();
+}
 
 // --- i18n --------------------------------------------------------------------
 function getStoredLang() {
@@ -313,17 +320,19 @@ function checkWindowSize() {
 }
 window.addEventListener('resize', checkWindowSize);
 
-// --- Logout: clear client-side auth state before navigating away -----------
-document.getElementById('logout-link')?.addEventListener('click', () => {
+// --- Logout: invalidate the server-side session, then navigate away --------
+document.getElementById('logout-link')?.addEventListener('click', (event) => {
+    event.preventDefault();
     sessionStorage.removeItem('sgn_token');
-    // If using cookie-based sessions, also call POST /api/auth/logout here
-    // so the server invalidates the session — clearing client storage alone
-    // does not revoke a server-side session or cookie.
+    fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' })
+        .catch(() => {})
+        .finally(() => window.location.replace('Login.html'));
 });
 
 // --- Init --------------------------------------------------------------------
 (async function init() {
     try {
+        if (!(await authGuard())) return;
         await loadLanguage(getStoredLang());
         menuData = await loadMenu();
         renderMenu(menuData);
