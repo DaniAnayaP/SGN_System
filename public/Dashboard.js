@@ -25,7 +25,7 @@ let currentLang = DEFAULT_LANG;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", notifications: "Notifications", settings: "Settings", logout: "Log out" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department" },
         menu: {
             home: "Home", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Config",
@@ -61,7 +61,7 @@ const EMBEDDED_TRANSLATIONS = {
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento" },
         menu: {
             home: "Inicio", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Configuración del Negocio",
@@ -140,7 +140,8 @@ async function loadLanguage(lang) {
     document.querySelectorAll('.lang-option').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.lang === lang);
     });
-    if (menuData) renderMenu(menuData);
+    renderFilteredMenu();
+    updateDeptPickerLabel();
     document.dispatchEvent(new CustomEvent('dashboard:language-changed', { detail: { lang } }));
 }
 
@@ -212,6 +213,57 @@ function injectAdminSection(data, role, activePage) {
         ]
     };
     return { ...data, sections: [...data.sections, adminSection] };
+}
+
+// --- Department picker --------------------------------------------------------
+// Matches the section ids in public/data/menu.json (and the module catalog
+// used by "Contrataciones") so picking a department shows exactly that
+// section's items below, instead of every department stacked at once.
+const DEPARTMENTS = [
+    { key: 'finance', labelKey: 'menu.finance' },
+    { key: 'accounting', labelKey: 'menu.accounting' },
+    { key: 'human-resources', labelKey: 'menu.humanResources' },
+    { key: 'marketing', labelKey: 'menu.marketing' },
+    { key: 'commercial', labelKey: 'menu.commercial' },
+    { key: 'purchasing', labelKey: 'menu.purchasing' },
+    { key: 'supply-chain', labelKey: 'menu.supplyChain' },
+    { key: 'management-control', labelKey: 'menu.managementControl' },
+    { key: 'general-management', labelKey: 'menu.generalManagement' },
+    { key: 'steering-committee', labelKey: 'menu.steeringCommittee' }
+];
+const ALWAYS_VISIBLE_SECTIONS = ['main', 'saas-admin'];
+
+function getStoredDepartment() {
+    const stored = localStorage.getItem('department');
+    return DEPARTMENTS.some((d) => d.key === stored) ? stored : null;
+}
+
+let selectedDepartment = getStoredDepartment();
+
+// Only the always-visible sections + whichever department is selected (none
+// selected = just the always-visible ones, keeping the sidebar uncluttered
+// until the user picks a department).
+function applyDepartmentFilter(data) {
+    return {
+        ...data,
+        sections: data.sections.filter(
+            (s) => ALWAYS_VISIBLE_SECTIONS.includes(s.id) || s.id === selectedDepartment
+        )
+    };
+}
+
+function renderFilteredMenu() {
+    if (menuData) renderMenu(applyDepartmentFilter(menuData));
+}
+
+function updateDeptPickerLabel() {
+    const label = document.getElementById('dept-picker-label');
+    if (!label) return;
+    const dept = DEPARTMENTS.find((d) => d.key === selectedDepartment);
+    label.textContent = dept ? t(dept.labelKey) : t('sidebar.department');
+    document.querySelectorAll('.dept-option').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.dept === selectedDepartment);
+    });
 }
 
 function buildSubmenu(items) {
@@ -443,6 +495,56 @@ document.querySelectorAll('.style-option').forEach((btn) => {
     });
 });
 
+// --- Department picker dropdown ----------------------------------------------
+const deptPicker = document.getElementById('dept-picker');
+const deptPickerBtn = document.getElementById('dept-picker-btn');
+const deptPickerDropdown = document.getElementById('dept-picker-dropdown');
+
+function closeDeptPicker() {
+    deptPicker?.classList.remove('open');
+    deptPickerBtn?.setAttribute('aria-expanded', 'false');
+}
+
+deptPickerBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = deptPicker.classList.toggle('open');
+    deptPickerBtn.setAttribute('aria-expanded', String(isOpen));
+});
+
+document.addEventListener('click', (event) => {
+    if (deptPicker && !deptPicker.contains(event.target)) closeDeptPicker();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeDeptPicker();
+});
+
+if (deptPickerDropdown) {
+    DEPARTMENTS.forEach((dept) => {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'none');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.className = 'dept-option';
+        btn.dataset.dept = dept.key;
+        btn.dataset.i18n = dept.labelKey;
+        btn.textContent = dept.labelKey;
+        li.appendChild(btn);
+        deptPickerDropdown.appendChild(li);
+    });
+}
+
+deptPickerDropdown?.addEventListener('click', (event) => {
+    const btn = event.target.closest('.dept-option');
+    if (!btn) return;
+    selectedDepartment = selectedDepartment === btn.dataset.dept ? null : btn.dataset.dept;
+    localStorage.setItem('department', selectedDepartment || '');
+    updateDeptPickerLabel();
+    renderFilteredMenu();
+    closeDeptPicker();
+});
+
 // --- Logout: invalidate the server-side session, then navigate away --------
 document.getElementById('logout-link')?.addEventListener('click', (event) => {
     event.preventDefault();
@@ -461,7 +563,8 @@ async function initDashboard({ activePage } = {}) {
     await loadLanguage(getStoredLang());
     menuData = await loadMenu();
     menuData = injectAdminSection(menuData, role, activePage);
-    renderMenu(menuData);
+    renderFilteredMenu();
+    updateDeptPickerLabel();
     checkWindowSize();
     return role;
 }

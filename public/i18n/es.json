@@ -33,7 +33,8 @@
     "searchPlaceholder": "Buscar",
     "notifications": "Notificaciones",
     "settings": "Configuración",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "department": "Departamento"
   },
   "menu": {
     "home": "Inicio",
