@@ -38,7 +38,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Purchasing", commercial: "Commercial", marketing: "Marketing",
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}",
-            clientesNuevos: "New Clients", contrataciones: "Contracted Modules", clientAdmin: "Client Administration"
+            clientesNuevos: "New Clients", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", mainSection: "General"
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
@@ -57,6 +57,26 @@ const EMBEDDED_TRANSLATIONS = {
             noClientSelected: "Select a client above to manage their modules.",
             modulesSaved: "Modules updated."
         },
+        business: {
+            usersTitle: "Users", usersSubtitle: "Manage the people who use this SGN instance.",
+            username: "Username", name: "Full name", password: "Password", createUser: "Create user",
+            role: "Role", createdAt: "Created", assignProfilesTitle: "Assign profiles",
+            selectUser: "Select a user", selectUserPlaceholder: "Choose a user...",
+            noUserSelected: "Select a user above to manage their profiles.",
+            noProfilesYet: "No profiles yet — create one in Roles first.",
+            usersEmpty: "No users yet. Create the first one above.",
+            userCreated: "User created.", profilesSaved: "Profiles updated.", profilesLabel: "Profiles",
+            rolesTitle: "Roles", rolesSubtitle: "Create reusable profiles and configure which modules, sections, and screens they grant access to.",
+            profileName: "Profile name", profileDescription: "Description",
+            addProfile: "Add profile", editProfile: "Edit profile",
+            confirmDeleteProfile: "Delete this profile? Users assigned to it will lose this access.",
+            noProfiles: "No profiles yet. Create the first one above.",
+            profileSaved: "Profile saved.", profileDeleted: "Profile deleted.",
+            permissionsTitle: "Access for this profile", selectProfileHint: "Create or select a profile above to configure its access.",
+            accesosTitle: "Access & Permissions", accesosSubtitle: "Grant a user extra modules, sections, or screens beyond what their profile(s) already give them.",
+            selectUserForAccess: "Select a user", extraAccessHint: "This is in addition to whatever their assigned profiles already grant — it never removes access.",
+            accessSaved: "Access updated."
+        },
         main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience." }
     },
     es: {
@@ -74,7 +94,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Compras", commercial: "Comercial", marketing: "Mercadotecnia",
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
-            clientesNuevos: "Clientes Nuevos", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes"
+            clientesNuevos: "Clientes Nuevos", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", mainSection: "General"
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
@@ -92,6 +112,26 @@ const EMBEDDED_TRANSLATIONS = {
             selectClient: "Selecciona un cliente", selectClientPlaceholder: "Elige un cliente...",
             noClientSelected: "Selecciona un cliente arriba para administrar sus módulos.",
             modulesSaved: "Módulos actualizados."
+        },
+        business: {
+            usersTitle: "Usuarios", usersSubtitle: "Administra las personas que usan esta instancia de SGN.",
+            username: "Usuario", name: "Nombre completo", password: "Contraseña", createUser: "Crear usuario",
+            role: "Rol", createdAt: "Creado", assignProfilesTitle: "Asignar perfiles",
+            selectUser: "Selecciona un usuario", selectUserPlaceholder: "Elige un usuario...",
+            noUserSelected: "Selecciona un usuario arriba para administrar sus perfiles.",
+            noProfilesYet: "Aún no hay perfiles — crea uno primero en Roles.",
+            usersEmpty: "Aún no hay usuarios. Crea el primero arriba.",
+            userCreated: "Usuario creado.", profilesSaved: "Perfiles actualizados.", profilesLabel: "Perfiles",
+            rolesTitle: "Roles", rolesSubtitle: "Crea perfiles reutilizables y configura a qué módulos, apartados y pantallas dan acceso.",
+            profileName: "Nombre del perfil", profileDescription: "Descripción",
+            addProfile: "Agregar perfil", editProfile: "Editar perfil",
+            confirmDeleteProfile: "¿Eliminar este perfil? Los usuarios que lo tengan asignado perderán ese acceso.",
+            noProfiles: "Aún no hay perfiles. Crea el primero arriba.",
+            profileSaved: "Perfil guardado.", profileDeleted: "Perfil eliminado.",
+            permissionsTitle: "Accesos de este perfil", selectProfileHint: "Crea o selecciona un perfil arriba para configurar sus accesos.",
+            accesosTitle: "Accesos y Permisos", accesosSubtitle: "Otorga a un usuario módulos, apartados o pantallas adicionales a los que ya le dan sus perfiles.",
+            selectUserForAccess: "Selecciona un usuario", extraAccessHint: "Esto se suma a lo que ya otorgan sus perfiles asignados — nunca quita acceso.",
+            accessSaved: "Accesos actualizados."
         },
         main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia" }
     }

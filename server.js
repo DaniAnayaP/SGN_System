@@ -43,6 +43,19 @@ const {
     deleteClient,
     getClientModules,
     setClientModules,
+    listBusinessUsers,
+    getUserById,
+    listProfiles,
+    getProfileById,
+    createProfile,
+    updateProfile,
+    deleteProfile,
+    getProfileGrants,
+    setProfileGrants,
+    getUserGrants,
+    setUserGrants,
+    getUserProfiles,
+    setUserProfiles,
 } = require('./db');
 
 const app = express();
@@ -235,6 +248,114 @@ app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
         return res.status(400).json({ message: 'modules must be an array of { key, enabled }.' });
     }
     res.json({ modules: setClientModules(req.params.id, modules) });
+});
+
+// --- Business admin: users, profiles, and permission grants ------------------
+// "Administración del Negocio" — the client company's own admin tooling for
+// managing its users, reusable permission profiles ("perfiles"), and each
+// profile/user's access to modules ("módulos"), sections within them
+// ("apartados"), and individual pages ("pantallas") — the same three levels
+// as public/data/menu.json (section > item > submenu entry).
+//
+// Access note: only requireAuth for now, not the SaaS `role` — see the
+// longer note above the profiles/user_grants tables in db.js.
+function validateGrants(grants) {
+    if (!Array.isArray(grants)) return 'grants must be an array.';
+    for (const g of grants) {
+        if (!g || typeof g.sectionId !== 'string' || !g.sectionId) {
+            return 'each grant needs a sectionId.';
+        }
+    }
+    return null;
+}
+
+app.get('/api/business/users', requireAuth, (req, res) => {
+    res.json({ users: listBusinessUsers() });
+});
+
+app.post('/api/business/users', requireAuth, async (req, res) => {
+    const { username, email, password, name } = req.body || {};
+    if (!username || !email || !name || !password || password.length < 8) {
+        return res.status(400).json({ message: 'username, email, name and a password of at least 8 characters are required.' });
+    }
+    if (usernameOrEmailExists(username, email)) {
+        return res.status(409).json({ message: 'Username or email already taken.' });
+    }
+    const user = createUser({ username, email, passwordHash: hashPassword(password), name });
+    res.status(201).json({
+        user: { id: user.id, username: user.username, email: user.email, name: user.name, role: user.role, created_at: user.created_at },
+    });
+});
+
+app.get('/api/business/users/:id/profiles', requireAuth, (req, res) => {
+    const user = getUserById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    res.json({ profiles: getUserProfiles(req.params.id) });
+});
+
+app.put('/api/business/users/:id/profiles', requireAuth, (req, res) => {
+    const user = getUserById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    const { profileIds } = req.body || {};
+    if (!Array.isArray(profileIds)) {
+        return res.status(400).json({ message: 'profileIds must be an array.' });
+    }
+    res.json({ profiles: setUserProfiles(req.params.id, profileIds) });
+});
+
+app.get('/api/business/users/:id/grants', requireAuth, (req, res) => {
+    const user = getUserById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    res.json({ grants: getUserGrants(req.params.id) });
+});
+
+app.put('/api/business/users/:id/grants', requireAuth, (req, res) => {
+    const user = getUserById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    const { grants } = req.body || {};
+    const error = validateGrants(grants);
+    if (error) return res.status(400).json({ message: error });
+    res.json({ grants: setUserGrants(req.params.id, grants) });
+});
+
+app.get('/api/business/profiles', requireAuth, (req, res) => {
+    res.json({ profiles: listProfiles() });
+});
+
+app.post('/api/business/profiles', requireAuth, (req, res) => {
+    const { name, description } = req.body || {};
+    if (!name) return res.status(400).json({ message: 'name is required.' });
+    res.status(201).json({ profile: createProfile({ name, description }) });
+});
+
+app.patch('/api/business/profiles/:id', requireAuth, (req, res) => {
+    const existing = getProfileById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Profile not found.' });
+    const { name, description } = req.body || {};
+    if (!name) return res.status(400).json({ message: 'name is required.' });
+    res.json({ profile: updateProfile(req.params.id, { name, description }) });
+});
+
+app.delete('/api/business/profiles/:id', requireAuth, (req, res) => {
+    const existing = getProfileById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Profile not found.' });
+    deleteProfile(req.params.id);
+    res.status(204).end();
+});
+
+app.get('/api/business/profiles/:id/grants', requireAuth, (req, res) => {
+    const existing = getProfileById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Profile not found.' });
+    res.json({ grants: getProfileGrants(req.params.id) });
+});
+
+app.put('/api/business/profiles/:id/grants', requireAuth, (req, res) => {
+    const existing = getProfileById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Profile not found.' });
+    const { grants } = req.body || {};
+    const error = validateGrants(grants);
+    if (error) return res.status(400).json({ message: error });
+    res.json({ grants: setProfileGrants(req.params.id, grants) });
 });
 
 const PORT = process.env.PORT || 3000;

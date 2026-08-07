@@ -182,6 +182,51 @@ body.dark-mode .admin-badge-prospecto{
     background-color: #1e2a3a; color: #8fb8ea;
 }
 
+/* Permission tree (módulo / apartado / pantalla) */
+.perm-tree{
+    display: flex;
+    flex-direction: column;
+    max-height: 24rem;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    padding: 0.5rem;
+}
+.perm-tree-row{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.4rem;
+    border-radius: 0.3rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--color-text-primary);
+}
+.perm-tree-row:hover{
+    background-color: var(--color-bg);
+}
+.perm-tree-depth-0{
+    font-weight: 700;
+    margin-top: 0.4rem;
+}
+.perm-tree-depth-0:first-child{
+    margin-top: 0;
+}
+.perm-tree-depth-1{
+    padding-left: 1.5rem;
+    font-weight: 500;
+}
+.perm-tree-depth-2{
+    padding-left: 3rem;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+}
+.perm-tree-row input[type="checkbox"]{
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
 /* Contrataciones */
 .admin-module-list{
     display: flex;

@@ -88,6 +88,51 @@ const MODULE_CATALOG = [
     { key: 'finance', labelKey: 'menu.finance' },
 ];
 
+// --- Business admin: profiles and permission grants --------------------------
+// "Administración del Negocio" — this is the CLIENT COMPANY's own admin
+// tooling (distinct from the GEIPSA SaaS admin panel above). A "profile"
+// (perfil) is a reusable bundle of access to modules/apartados/pantallas —
+// the same three levels as public/data/menu.json (section > item > submenu
+// entry). Users can hold one or more profiles, plus individual grants on top
+// of whatever their profile(s) already give them.
+//
+// Access note: these routes currently only require being logged in
+// (requireAuth), not the SaaS `role`. This instance-per-client system has no
+// separate "company admin" flag yet — anyone signed in to this instance can
+// manage its profiles/users/grants. Tighten this (e.g. gate access itself
+// behind a profile grant for the "ab-users"/"ab-roles"/"ab-access-permissions"
+// apartados, once at least one profile exists) before this goes to real users.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS profiles (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS profile_grants (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        profile_id  INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        section_id  TEXT NOT NULL,
+        item_id     TEXT,
+        submenu_id  TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS user_profiles (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, profile_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_grants (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        section_id  TEXT NOT NULL,
+        item_id     TEXT,
+        submenu_id  TEXT
+    );
+`);
+
 // --- One-time seed: create the demo admin/admin user if the table is empty.
 // This only ever runs once — after that, the row lives in sgn.sqlite and
 // survives server restarts. Delete the row (see README) once you're done
@@ -193,6 +238,106 @@ function setClientModules(clientId, moduleStates) {
     return getClientModules(clientId);
 }
 
+// --- Query helpers: business users --------------------------------------------
+function listBusinessUsers() {
+    return db.prepare('SELECT id, username, email, name, role, created_at FROM users ORDER BY created_at DESC').all();
+}
+
+function getUserById(id) {
+    return db.prepare('SELECT id, username, email, name, role, created_at FROM users WHERE id = ?').get(id);
+}
+
+// --- Query helpers: profiles (perfiles) ---------------------------------------
+function listProfiles() {
+    return db.prepare('SELECT * FROM profiles ORDER BY created_at DESC').all();
+}
+
+function getProfileById(id) {
+    return db.prepare('SELECT * FROM profiles WHERE id = ?').get(id);
+}
+
+function createProfile({ name, description }) {
+    const result = db
+        .prepare('INSERT INTO profiles (name, description) VALUES (@name, @description)')
+        .run({ name, description: description || '' });
+    return getProfileById(result.lastInsertRowid);
+}
+
+function updateProfile(id, { name, description }) {
+    db.prepare('UPDATE profiles SET name = @name, description = @description WHERE id = @id')
+        .run({ id, name, description: description || '' });
+    return getProfileById(id);
+}
+
+function deleteProfile(id) {
+    db.prepare('DELETE FROM profiles WHERE id = ?').run(id);
+}
+
+// --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
+function getProfileGrants(profileId) {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM profile_grants WHERE profile_id = ?')
+        .all(profileId);
+}
+
+function setProfileGrants(profileId, grants) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM profile_grants WHERE profile_id = ?').run(profileId);
+        const insert = db.prepare(`
+            INSERT INTO profile_grants (profile_id, section_id, item_id, submenu_id)
+            VALUES (@profileId, @sectionId, @itemId, @submenuId)
+        `);
+        for (const g of rows) {
+            insert.run({ profileId, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
+        }
+    });
+    replace(grants);
+    return getProfileGrants(profileId);
+}
+
+function getUserGrants(userId) {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM user_grants WHERE user_id = ?')
+        .all(userId);
+}
+
+function setUserGrants(userId, grants) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM user_grants WHERE user_id = ?').run(userId);
+        const insert = db.prepare(`
+            INSERT INTO user_grants (user_id, section_id, item_id, submenu_id)
+            VALUES (@userId, @sectionId, @itemId, @submenuId)
+        `);
+        for (const g of rows) {
+            insert.run({ userId, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
+        }
+    });
+    replace(grants);
+    return getUserGrants(userId);
+}
+
+// --- Query helpers: user <-> profile assignment -------------------------------
+function getUserProfiles(userId) {
+    return db
+        .prepare(`
+            SELECT p.* FROM profiles p
+            JOIN user_profiles up ON up.profile_id = p.id
+            WHERE up.user_id = ?
+            ORDER BY p.name
+        `)
+        .all(userId);
+}
+
+function setUserProfiles(userId, profileIds) {
+    const replace = db.transaction((ids) => {
+        db.prepare('DELETE FROM user_profiles WHERE user_id = ?').run(userId);
+        const insert = db.prepare('INSERT INTO user_profiles (user_id, profile_id) VALUES (?, ?)');
+        for (const profileId of ids) insert.run(userId, profileId);
+    });
+    replace(profileIds);
+    return getUserProfiles(userId);
+}
+
 module.exports = {
     db,
     MODULE_CATALOG,
@@ -207,4 +352,17 @@ module.exports = {
     deleteClient,
     getClientModules,
     setClientModules,
+    listBusinessUsers,
+    getUserById,
+    listProfiles,
+    getProfileById,
+    createProfile,
+    updateProfile,
+    deleteProfile,
+    getProfileGrants,
+    setProfileGrants,
+    getUserGrants,
+    setUserGrants,
+    getUserProfiles,
+    setUserProfiles,
 };
