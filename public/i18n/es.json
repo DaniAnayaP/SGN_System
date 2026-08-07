@@ -73,6 +73,9 @@
     "notifications": "Notificaciones",
     "bookmarks": "Marcadores",
     "settings": "Configuración",
-    "addUser": "Agregar usuario"
+    "addUser": "Agregar usuario",
+    "language": "Idioma",
+    "style": "Estilo",
+    "others": "Otros"
   }
 }

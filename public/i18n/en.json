@@ -73,6 +73,9 @@
     "notifications": "Notifications",
     "bookmarks": "Bookmarks",
     "settings": "Settings",
-    "addUser": "Add user"
+    "addUser": "Add user",
+    "language": "Language",
+    "style": "Style",
+    "others": "Others"
   }
 }

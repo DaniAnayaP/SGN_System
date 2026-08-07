@@ -40,7 +40,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -58,7 +58,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros" }
     }
 };
 
@@ -319,6 +319,43 @@ function checkWindowSize() {
     document.getElementById('Sidebar')?.classList.remove('minimize');
 }
 window.addEventListener('resize', checkWindowSize);
+
+// --- Settings dropdown (Language / Style / Others) --------------------------
+const settingsMenu = document.getElementById('settings-menu');
+const settingsBtn = document.getElementById('settings-btn');
+
+function closeSettingsMenu() {
+    settingsMenu?.classList.remove('open');
+    settingsBtn?.setAttribute('aria-expanded', 'false');
+}
+
+settingsBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = settingsMenu.classList.toggle('open');
+    settingsBtn.setAttribute('aria-expanded', String(isOpen));
+});
+
+document.addEventListener('click', (event) => {
+    if (settingsMenu && !settingsMenu.contains(event.target)) closeSettingsMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeSettingsMenu();
+});
+
+document.getElementById('settings-language')?.addEventListener('click', () => {
+    closeSettingsMenu();
+    document.getElementById('lang-toggle')?.click();
+});
+
+document.getElementById('settings-style')?.addEventListener('click', () => {
+    closeSettingsMenu();
+    document.getElementById('dark-mode-btn')?.click();
+});
+
+document.getElementById('settings-others')?.addEventListener('click', () => {
+    closeSettingsMenu();
+});
 
 // --- Logout: invalidate the server-side session, then navigate away --------
 document.getElementById('logout-link')?.addEventListener('click', (event) => {

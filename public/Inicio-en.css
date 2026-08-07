@@ -371,6 +371,56 @@
         padding-left: 7.96rem;
     }
 
+    /* Settings dropdown */
+    .settings-menu{
+        position: relative;
+    }
+    .settings-dropdown{
+        position: absolute;
+        top: 2.7rem;
+        right: 0;
+        min-width: 9rem;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        padding: 0.4rem;
+        background-color: var(--color-surface);
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 16px var(--shadow-border), 0 0 0 1px var(--color-border);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-0.4rem);
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+        z-index: 10;
+    }
+    .settings-menu.open .settings-dropdown{
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+    .settings-menu.open #settings-btn{
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .settings-dropdown button{
+        width: 100%;
+        border: none;
+        border-radius: 0.35rem;
+        padding: 0.5rem 0.6rem;
+        background: transparent;
+        color: var(--color-text-secondary);
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    .settings-dropdown button:hover{
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+
     /* Dark mode */
     .brand-dark{
         display: none;

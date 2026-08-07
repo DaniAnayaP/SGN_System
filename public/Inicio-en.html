@@ -81,9 +81,23 @@
                 <button type="button" data-i18n-aria="main.bookmarks" aria-label="Bookmarks">
                     <i class="bx bx-bookmarks" aria-hidden="true"></i>
                 </button>
-                <button type="button" data-i18n-aria="main.settings" aria-label="Settings">
-                    <i class="bx bx-cog" aria-hidden="true"></i>
-                </button>
+                <div class="settings-menu" id="settings-menu">
+                    <button type="button" data-i18n-aria="main.settings" aria-label="Settings" id="settings-btn"
+                            aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-cog" aria-hidden="true"></i>
+                    </button>
+                    <ul class="settings-dropdown" id="settings-dropdown" role="menu">
+                        <li role="none">
+                            <button type="button" role="menuitem" id="settings-language" data-i18n="main.language">Language</button>
+                        </li>
+                        <li role="none">
+                            <button type="button" role="menuitem" id="settings-style" data-i18n="main.style">Style</button>
+                        </li>
+                        <li role="none">
+                            <button type="button" role="menuitem" id="settings-others" data-i18n="main.others">Others</button>
+                        </li>
+                    </ul>
+                </div>
                 <button type="button" data-i18n-aria="main.addUser" aria-label="Add user">
                     <i class="bx bx-user-plus" aria-hidden="true"></i>
                 </button>
