@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="meta.loginTitle">SGN by GEIPSA - Login</title>
+    <link rel="icon" href="Imagenes/Logo_Stickers.webp">
+    <link rel="stylesheet" href="Login.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+</head>
+<body>
+    <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Change language">EN / ES</button>
+
+    <div id="form-error" class="form-error" role="alert" hidden></div>
+
+    <div class="container">
+        <div class="form-box login">
+            <form id="login-form" novalidate>
+                <h1 data-i18n="login.loginHeading">Login</h1>
+
+                <div class="input-box">
+                    <label for="login-username" class="sr-only" data-i18n="login.usernameLabel">Username</label>
+                    <input id="login-username" name="username" type="text" autocomplete="username"
+                           data-i18n-placeholder="login.usernamePlaceholder" placeholder="Username" required>
+                    <i class="bx bxs-user" aria-hidden="true"></i>
+                </div>
+
+                <div class="input-box">
+                    <label for="login-password" class="sr-only" data-i18n="login.passwordLabel">Password</label>
+                    <input id="login-password" name="password" type="password" autocomplete="current-password"
+                           data-i18n-placeholder="login.passwordPlaceholder" placeholder="Password" required minlength="8">
+                    <button type="button" class="toggle-password" id="toggle-login-password"
+                            data-i18n-aria="login.showPassword" aria-label="Show password">
+                        <i class="bx bx-hide" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div class="forgot-link">
+                    <a href="#" data-i18n="login.forgotPassword">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="btn" id="login-submit">
+                    <span data-i18n="login.loginButton">Login</span>
+                </button>
+
+                <p data-i18n="login.orLoginWith">or login with social platforms</p>
+                <div class="social-icons">
+                    <a href="#" class="google" aria-label="Login with Google"><i class="bx bxl-google"></i></a>
+                    <a href="#" class="facebook" aria-label="Login with Facebook"><i class="bx bxl-facebook"></i></a>
+                    <a href="#" class="github" aria-label="Login with GitHub"><i class="bx bxl-github"></i></a>
+                    <a href="#" class="linkedin" aria-label="Login with LinkedIn"><i class="bx bxl-linkedin"></i></a>
+                    <a href="#" class="slack" aria-label="Login with Slack"><i class="bx bxl-slack"></i></a>
+                </div>
+            </form>
+        </div>
+
+        <div class="form-box register">
+            <form id="register-form" novalidate>
+                <h1 data-i18n="login.registerHeading">Registration</h1>
+
+                <div class="input-box">
+                    <label for="register-username" class="sr-only" data-i18n="login.usernameLabel">Username</label>
+                    <input id="register-username" name="username" type="text" autocomplete="username"
+                           data-i18n-placeholder="login.usernamePlaceholder" placeholder="Username" required>
+                    <i class="bx bxs-user" aria-hidden="true"></i>
+                </div>
+
+                <div class="input-box">
+                    <label for="register-email" class="sr-only" data-i18n="login.emailLabel">Email</label>
+                    <input id="register-email" name="email" type="email" autocomplete="email"
+                           data-i18n-placeholder="login.emailPlaceholder" placeholder="Email" required>
+                    <i class="bx bxs-envelope" aria-hidden="true"></i>
+                </div>
+
+                <div class="input-box">
+                    <label for="register-password" class="sr-only" data-i18n="login.passwordLabel">Password</label>
+                    <input id="register-password" name="password" type="password" autocomplete="new-password"
+                           data-i18n-placeholder="login.passwordPlaceholder" placeholder="Password" required minlength="8">
+                    <button type="button" class="toggle-password" id="toggle-register-password"
+                            data-i18n-aria="login.showPassword" aria-label="Show password">
+                        <i class="bx bx-hide" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <button type="submit" class="btn" id="register-submit">
+                    <span data-i18n="login.registerButton">Register</span>
+                </button>
+
+                <p data-i18n="login.orRegisterWith">or register with social platforms</p>
+                <div class="social-icons">
+                    <a href="#" class="google" aria-label="Register with Google"><i class="bx bxl-google"></i></a>
+                    <a href="#" class="facebook" aria-label="Register with Facebook"><i class="bx bxl-facebook"></i></a>
+                    <a href="#" class="github" aria-label="Register with GitHub"><i class="bx bxl-github"></i></a>
+                    <a href="#" class="linkedin" aria-label="Register with LinkedIn"><i class="bx bxl-linkedin"></i></a>
+                </div>
+            </form>
+        </div>
+
+        <div class="toggle-box">
+            <div class="toggle-panel toggle-left">
+                <h1 data-i18n="login.helloWelcome">Hello, welcome!</h1>
+                <p data-i18n="login.noAccount">Don't have an account?</p>
+                <button type="button" class="btn register-btn" data-i18n="login.registerButton">Register</button>
+            </div>
+
+            <div class="toggle-panel toggle-right">
+                <h1 data-i18n="login.welcomeBack">Welcome back!</h1>
+                <p data-i18n="login.alreadyHaveAccount">Already have an account?</p>
+                <button type="button" class="btn login-btn" data-i18n="login.loginButton">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="login.js" defer></script>
+</body>
+</html>

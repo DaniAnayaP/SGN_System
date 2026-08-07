@@ -1,0 +1,143 @@
+{
+  "sections": [
+    {
+      "id": "main",
+      "items": [
+        { "id": "home", "labelKey": "menu.home", "icon": "bx-home-alt-2", "href": "#", "active": true },
+        { "id": "dashboard", "labelKey": "menu.dashboard", "icon": "bx-bar-chart-alt-2", "href": "Inicio-en.html" },
+        {
+          "id": "admin-business",
+          "labelKey": "menu.adminBusiness",
+          "icon": "bx-shopping-bag",
+          "submenu": [
+            { "labelKey": "menu.contractedService", "href": "#" },
+            { "labelKey": "menu.expansions", "href": "#" },
+            { "labelKey": "menu.businessConfig", "href": "#" },
+            { "labelKey": "menu.roles", "href": "#" },
+            { "labelKey": "menu.users", "href": "#" },
+            { "labelKey": "menu.accessPermissions", "href": "#" },
+            { "labelKey": "menu.upcomingUpdates", "href": "#" },
+            { "labelKey": "menu.trainingSessions", "href": "#" }
+          ]
+        },
+        {
+          "id": "file",
+          "labelKey": "menu.file",
+          "icon": "bx-file-blank",
+          "submenu": [
+            { "labelKey": "menu.images", "href": "#" },
+            { "labelKey": "menu.audios", "href": "#" }
+          ]
+        },
+        { "id": "task", "labelKey": "menu.task", "icon": "bx-task", "href": "#" }
+      ]
+    },
+    {
+      "id": "steering-committee",
+      "items": [
+        { "id": "steering-committee-home", "labelKey": "menu.steeringCommittee", "icon": "bx-home-alt-2", "href": "Comite-Directivo-en.html" },
+        { "id": "sc-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "sc-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "sc-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "general-management",
+      "items": [
+        { "id": "gm-home", "labelKey": "menu.generalManagement", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "gm-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "gm-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "gm-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "management-control",
+      "items": [
+        { "id": "mc-home", "labelKey": "menu.managementControl", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "mc-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "mc-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "mc-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "supply-chain",
+      "items": [
+        { "id": "sc2-home", "labelKey": "menu.supplyChain", "icon": "bx-home-alt-2", "href": "Cadena-Suministro.html" },
+        {
+          "id": "inventory",
+          "labelKey": "menu.inventory",
+          "icon": "bx-shopping-bag",
+          "submenu": [
+            { "labelKey": "menu.consumption", "href": "#" },
+            { "labelKey": "menu.overstock", "href": "#" }
+          ]
+        },
+        { "id": "sc2-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "sc2-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "purchasing",
+      "items": [
+        { "id": "purchasing-home", "labelKey": "menu.purchasing", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "pu-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "pu-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "pu-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "commercial",
+      "items": [
+        { "id": "commercial-home", "labelKey": "menu.commercial", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "co-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "co-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "co-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "marketing",
+      "items": [
+        { "id": "marketing-home", "labelKey": "menu.marketing", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "ma-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "ma-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "ma-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "human-resources",
+      "items": [
+        { "id": "hr-home", "labelKey": "menu.humanResources", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "hr-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "hr-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "hr-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "accounting",
+      "items": [
+        { "id": "acc-home", "labelKey": "menu.accounting", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "acc-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "acc-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "acc-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    },
+    {
+      "id": "finance",
+      "items": [
+        { "id": "fin-home", "labelKey": "menu.finance", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "fin-dept-1", "labelKey": "menu.deptArea", "labelParams": { "n": 1 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "fin-dept-2", "labelKey": "menu.deptArea", "labelParams": { "n": 2 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] },
+        { "id": "fin-dept-3", "labelKey": "menu.deptArea", "labelParams": { "n": 3 }, "icon": "bx-shopping-bag", "submenu": [{ "labelKey": "menu.option", "labelParams": { "n": 1 }, "href": "#" }] }
+      ]
+    }
+  ],
+  "footer": [
+    { "labelKey": "sidebar.notifications", "icon": "bx-bell", "href": "#" },
+    { "labelKey": "sidebar.settings", "icon": "bx-cog", "href": "#" }
+  ],
+  "user": {
+    "name": "Daniel Anaya",
+    "email": "daniel.anaya@geipsa.com",
+    "avatar": "Imagenes/User.jpg"
+  }
+}

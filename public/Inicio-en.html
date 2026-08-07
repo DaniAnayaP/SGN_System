@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="meta.dashboardTitle">SGN - Home</title>
+    <link rel="icon" href="Imagenes/Logo_Stickers.webp">
+    <link rel="stylesheet" href="Inicio-en.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+</head>
+<body>
+    <div class="menu-btn sidebars-btn" id="sidebars-btn" role="button" tabindex="0"
+         aria-label="Toggle sidebar" aria-expanded="false">
+        <i class="bx bx-menu" aria-hidden="true"></i>
+        <i class="bx bx-x" aria-hidden="true"></i>
+    </div>
+
+    <button type="button" class="dark-mode-btn" id="dark-mode-btn" aria-label="Toggle dark mode">
+        <i class="bx bx-moon" aria-hidden="true"></i>
+        <i class="bx bx-sun" aria-hidden="true"></i>
+    </button>
+
+    <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Change language">EN / ES</button>
+
+    <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
+        <div class="header">
+            <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
+                 aria-label="Collapse sidebar" aria-expanded="true">
+                <i class="bx bx-chevron-left" aria-hidden="true"></i>
+            </div>
+            <div class="brand">
+                <img class="brand-light" src="Imagenes/LogoSGN_F_Blanco.jfif" alt="SGN logo">
+                <img class="brand-dark" src="Imagenes/LogoSGN.jfif" alt="SGN logo">
+                <span data-i18n="sidebar.brand">SGN</span>
+            </div>
+        </div>
+
+        <div class="menu-container">
+            <div class="search">
+                <i class="bx bx-search" aria-hidden="true"></i>
+                <label for="sidebar-search" class="sr-only" data-i18n="sidebar.searchPlaceholder">Search</label>
+                <input id="sidebar-search" type="search" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search">
+            </div>
+
+            <div id="menu-mount" aria-live="polite">
+                <!-- Sidebar sections are rendered here at runtime from data/menu.json -->
+            </div>
+        </div>
+
+        <div class="footer">
+            <ul class="menu" id="footer-menu-mount">
+                <!-- Rendered at runtime from data/menu.json -->
+            </ul>
+            <div class="user">
+                <div class="user-img">
+                    <img id="user-avatar" src="Imagenes/User.jpg" alt="User avatar">
+                </div>
+                <div class="user-data">
+                    <span class="name" id="user-name">&nbsp;</span>
+                    <span class="email" id="user-email">&nbsp;</span>
+                </div>
+                <div class="user-icon">
+                    <a href="Login.html" class="exit" id="logout-link" data-i18n-aria="sidebar.logout" aria-label="Log out">
+                        <i class="bx bx-exit" aria-hidden="true"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <div class="top-bar barra-arriba">
+            <p class="welcome-text" data-i18n="main.welcome">Welcome</p>
+            <div class="top-bar-actions">
+                <button type="button" data-i18n-aria="main.messages" aria-label="Messages">
+                    <i class="bx bx-message" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-i18n-aria="main.notifications" aria-label="Notifications">
+                    <i class="bx bx-bell" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-i18n-aria="main.bookmarks" aria-label="Bookmarks">
+                    <i class="bx bx-bookmarks" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-i18n-aria="main.settings" aria-label="Settings">
+                    <i class="bx bx-cog" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-i18n-aria="main.addUser" aria-label="Add user">
+                    <i class="bx bx-user-plus" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script src="Inicio-en.js"></script>
+</body>
+</html>
