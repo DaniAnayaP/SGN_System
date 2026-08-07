@@ -303,10 +303,14 @@ function updateClient(id, { companyName, contactName, email, phone, plan, status
 
 // Deleting a client is different from deactivating one: deactivation keeps
 // everything and just locks people out (see deactivateClientUsers); deleting
-// the client record removes its users too (profiles/grants cascade off
-// clients.id already) — there's no client left for them to belong to.
+// the client record removes its users and profiles too — there's no client
+// left for them to belong to. Deleted explicitly rather than relying on
+// ON DELETE CASCADE: profiles.client_id was added via ALTER TABLE on
+// already-deployed databases, and SQLite can't attach a cascade action to a
+// column after the fact, only on tables created fresh with it already there.
 function deleteClient(id) {
     const cleanup = db.transaction(() => {
+        db.prepare('DELETE FROM profiles WHERE client_id = ?').run(id);
         db.prepare('DELETE FROM users WHERE client_id = ?').run(id);
         db.prepare('DELETE FROM clients WHERE id = ?').run(id);
     });
