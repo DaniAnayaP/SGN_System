@@ -420,34 +420,64 @@
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
-    /* Language toggle relocated inside the settings dropdown */
-    .settings-dropdown .lang-toggle{
-        position: static;
-        border: none;
-        text-align: left;
+    /* Settings dropdown: Language / Style accordion groups */
+    .settings-dropdown-group{
+        display: flex;
+        flex-direction: column;
     }
-    /* Dark mode toggle relocated inside the settings dropdown */
-    .settings-dropdown .dark-mode-btn{
-        position: static;
-        width: 100%;
-        height: auto;
+    .settings-dropdown-toggle{
         display: flex;
         align-items: center;
-        justify-content: flex-start;
-        gap: 0.6rem;
-        background: transparent;
-        box-shadow: none;
+        justify-content: space-between;
+        width: 100%;
+        border: none;
         border-radius: 0.35rem;
+        padding: 0.5rem 0.6rem;
+        background: transparent;
+        color: var(--color-text-secondary);
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease;
     }
-    .settings-dropdown .dark-mode-icons{
-        position: relative;
-        width: 1.3rem;
-        height: 1.3rem;
-        flex-shrink: 0;
+    .settings-dropdown-toggle:hover{
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .settings-dropdown-toggle i{
+        font-size: 1rem;
+        transition: transform 0.2s ease;
+    }
+    .settings-dropdown-group.open .settings-dropdown-toggle i{
+        transform: rotate(180deg);
+    }
+    .settings-submenu{
+        list-style: none;
+        height: 0;
         overflow: hidden;
+        transition: height 0.2s ease;
     }
-    .settings-dropdown .dark-mode-icons i{
-        font-size: 1.1rem;
+    .settings-submenu button{
+        width: 100%;
+        border: none;
+        border-radius: 0.35rem;
+        padding: 0.45rem 0.6rem 0.45rem 1.5rem;
+        background: transparent;
+        color: var(--color-text-secondary);
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    .settings-submenu button:hover{
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .settings-submenu button.active{
+        color: var(--color-text-primary);
+        font-weight: 700;
     }
 
     /* Dark mode */

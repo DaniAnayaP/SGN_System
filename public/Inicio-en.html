@@ -80,17 +80,35 @@
                         <i class="bx bx-cog" aria-hidden="true"></i>
                     </button>
                     <ul class="settings-dropdown" id="settings-dropdown" role="menu">
-                        <li role="none">
-                            <button type="button" role="menuitem" id="lang-toggle" class="lang-toggle" aria-label="Change language">EN / ES</button>
-                        </li>
-                        <li role="none">
-                            <button type="button" role="menuitem" id="dark-mode-btn" class="dark-mode-btn" aria-label="Toggle dark mode">
-                                <span class="dark-mode-icons">
-                                    <i class="bx bx-moon" aria-hidden="true"></i>
-                                    <i class="bx bx-sun" aria-hidden="true"></i>
-                                </span>
-                                <span data-i18n="main.style">Style</span>
+                        <li role="none" class="settings-dropdown-group" id="language-group">
+                            <button type="button" class="settings-dropdown-toggle" id="language-toggle-btn"
+                                    aria-haspopup="true" aria-expanded="false">
+                                <span data-i18n="main.language">Language</span>
+                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
                             </button>
+                            <ul class="settings-submenu" id="language-submenu" role="menu">
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="lang-option active" data-lang="en" data-i18n="main.languageEnglish">English</button>
+                                </li>
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="lang-option" data-lang="es" data-i18n="main.languageSpanish">Spanish</button>
+                                </li>
+                            </ul>
+                        </li>
+                        <li role="none" class="settings-dropdown-group" id="style-group">
+                            <button type="button" class="settings-dropdown-toggle" id="style-toggle-btn"
+                                    aria-haspopup="true" aria-expanded="false">
+                                <span data-i18n="main.style">Style</span>
+                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <ul class="settings-submenu" id="style-submenu" role="menu">
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="style-option active" data-style="light" data-i18n="main.styleLight">Light</button>
+                                </li>
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="style-option" data-style="dark" data-i18n="main.styleDark">Dark</button>
+                                </li>
+                            </ul>
                         </li>
                         <li role="none">
                             <button type="button" role="menuitem" id="settings-others" data-i18n="main.others">Others</button>

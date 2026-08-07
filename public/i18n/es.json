@@ -76,6 +76,10 @@
     "addUser": "Agregar usuario",
     "language": "Idioma",
     "style": "Estilo",
-    "others": "Otros"
+    "others": "Otros",
+    "languageEnglish": "Inglés",
+    "languageSpanish": "Español",
+    "styleLight": "Claro",
+    "styleDark": "Oscuro"
   }
 }

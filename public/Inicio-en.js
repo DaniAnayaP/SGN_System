@@ -40,7 +40,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -58,7 +58,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro" }
     }
 };
 
@@ -103,6 +103,9 @@ async function loadLanguage(lang) {
     document.documentElement.lang = lang;
     localStorage.setItem('lang', lang);
     applyStaticTranslations();
+    document.querySelectorAll('.lang-option').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.lang === lang);
+    });
     if (menuData) renderMenu(menuData);
 }
 
@@ -121,18 +124,6 @@ function applyStaticTranslations() {
 }
 
 let langSwitching = false;
-document.getElementById('lang-toggle')?.addEventListener('click', async () => {
-    if (langSwitching) return;
-    langSwitching = true;
-    const next = currentLang === 'en' ? 'es' : 'en';
-    try {
-        await loadLanguage(next);
-    } catch (err) {
-        console.error('Language switch failed:', err);
-    } finally {
-        langSwitching = false;
-    }
-});
 
 // --- Dynamic sidebar menu ------------------------------------------------------
 // Minimal embedded fallback (main navigation + footer + demo user) used only
@@ -256,13 +247,8 @@ function wireMenuInteractions() {
     const Sidebar = document.getElementById('Sidebar');
     const menuBtn = document.getElementById('menu-btn');
     const sidebarsBtn = document.getElementById('sidebars-btn');
-    const darkModeBtn = document.getElementById('dark-mode-btn');
     const menuItemsDropdown = document.querySelectorAll('.menu-item-dropdown');
     const menuItemsStatic = document.querySelectorAll('.menu-item-static');
-
-    darkModeBtn?.addEventListener('click', () => {
-        document.body.classList.toggle('dark-mode');
-    });
 
     sidebarsBtn?.addEventListener('click', () => {
         const isHidden = document.body.classList.toggle('sidebars-hidden');
@@ -332,6 +318,12 @@ const settingsDropdown = document.getElementById('settings-dropdown');
 function closeSettingsMenu() {
     settingsMenu?.classList.remove('open');
     settingsBtn?.setAttribute('aria-expanded', 'false');
+    document.querySelectorAll('.settings-dropdown-group.open').forEach((group) => {
+        group.classList.remove('open');
+        group.querySelector('.settings-dropdown-toggle')?.setAttribute('aria-expanded', 'false');
+        const submenu = group.querySelector('.settings-submenu');
+        if (submenu) submenu.style.height = '0';
+    });
 }
 
 settingsBtn?.addEventListener('click', (event) => {
@@ -350,6 +342,47 @@ document.addEventListener('keydown', (event) => {
 
 settingsDropdown?.addEventListener('click', (event) => {
     if (event.target.closest('button')) closeSettingsMenu();
+});
+
+// Language / Style accordions: clicking "Language" or "Style" expands its
+// submenu in place without closing the whole settings dropdown.
+document.querySelectorAll('.settings-dropdown-toggle').forEach((toggleBtn) => {
+    toggleBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const group = toggleBtn.closest('.settings-dropdown-group');
+        const submenu = group.querySelector('.settings-submenu');
+        document.querySelectorAll('.settings-dropdown-group').forEach((other) => {
+            if (other !== group) {
+                other.classList.remove('open');
+                other.querySelector('.settings-dropdown-toggle')?.setAttribute('aria-expanded', 'false');
+                other.querySelector('.settings-submenu').style.height = '0';
+            }
+        });
+        const isOpen = group.classList.toggle('open');
+        toggleBtn.setAttribute('aria-expanded', String(isOpen));
+        submenu.style.height = isOpen ? `${submenu.scrollHeight}px` : '0';
+    });
+});
+
+document.querySelectorAll('.lang-option').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+        if (langSwitching) return;
+        langSwitching = true;
+        try {
+            await loadLanguage(btn.dataset.lang);
+        } catch (err) {
+            console.error('Language switch failed:', err);
+        } finally {
+            langSwitching = false;
+        }
+    });
+});
+
+document.querySelectorAll('.style-option').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode', btn.dataset.style === 'dark');
+        document.querySelectorAll('.style-option').forEach((b) => b.classList.toggle('active', b === btn));
+    });
 });
 
 // --- Logout: invalidate the server-side session, then navigate away --------
