@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="admin.contratacionesTitle">Contracted Modules</title>
+    <title data-i18n="menu.clientAdmin">Client Administration</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -76,7 +76,7 @@
 
     <main>
         <div class="top-bar barra-arriba">
-            <p class="welcome-text" data-i18n="admin.contratacionesTitle">Contracted Modules</p>
+            <p class="welcome-text" data-i18n="menu.clientAdmin">Client Administration</p>
             <div class="top-bar-actions">
                 <button type="button" data-i18n-aria="main.messages" aria-label="Messages">
                     <i class="bx bx-message" aria-hidden="true"></i>
@@ -138,30 +138,101 @@
         </div>
 
         <section class="admin-panel">
-            <p class="admin-subtitle" data-i18n="admin.contratacionesSubtitle">Turn on the modules each client has contracted.</p>
-
-            <div class="admin-select-row">
-                <label for="contrataciones-client" data-i18n="admin.selectClient">Select a client</label>
-                <select id="contrataciones-client">
-                    <option value="" data-i18n="admin.selectClientPlaceholder">Choose a client...</option>
-                </select>
+            <div class="admin-tabs" role="tablist">
+                <button type="button" class="admin-tab active" id="tab-clients" role="tab"
+                        aria-selected="true" aria-controls="panel-clients" data-i18n="menu.clientesNuevos">New Clients</button>
+                <button type="button" class="admin-tab" id="tab-contrataciones" role="tab"
+                        aria-selected="false" aria-controls="panel-contrataciones" data-i18n="menu.contrataciones">Contracted Modules</button>
             </div>
 
-            <p id="contrataciones-hint" class="admin-hint" data-i18n="admin.noClientSelected">Select a client above to manage their modules.</p>
+            <div id="panel-clients" class="admin-tab-panel" role="tabpanel" aria-labelledby="tab-clients">
+                <p class="admin-subtitle" data-i18n="admin.clientsSubtitle">Manage the companies using this SGN instance.</p>
 
-            <div id="modules-panel" hidden>
-                <div class="admin-module-list" id="modules-list">
-                    <!-- rendered at runtime -->
+                <form id="client-form" class="admin-form" novalidate>
+                    <input type="hidden" id="client-id" value="">
+                    <div class="admin-form-grid">
+                        <div class="admin-field">
+                            <label for="client-company" data-i18n="admin.companyName">Company name</label>
+                            <input id="client-company" name="companyName" type="text" required>
+                        </div>
+                        <div class="admin-field">
+                            <label for="client-contact" data-i18n="admin.contactName">Contact name</label>
+                            <input id="client-contact" name="contactName" type="text" required>
+                        </div>
+                        <div class="admin-field">
+                            <label for="client-email" data-i18n="admin.email">Email</label>
+                            <input id="client-email" name="email" type="email" required>
+                        </div>
+                        <div class="admin-field">
+                            <label for="client-phone" data-i18n="admin.phone">Phone</label>
+                            <input id="client-phone" name="phone" type="text">
+                        </div>
+                        <div class="admin-field">
+                            <label for="client-plan" data-i18n="admin.plan">Plan / package</label>
+                            <input id="client-plan" name="plan" type="text">
+                        </div>
+                        <div class="admin-field">
+                            <label for="client-status" data-i18n="admin.status">Status</label>
+                            <select id="client-status" name="status">
+                                <option value="prospecto" data-i18n="admin.statusProspecto">Prospect</option>
+                                <option value="activo" data-i18n="admin.statusActivo">Active</option>
+                                <option value="inactivo" data-i18n="admin.statusInactivo">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="client-form-error" class="admin-error" role="alert" hidden></div>
+                    <div class="admin-form-actions">
+                        <button type="submit" class="btn" id="client-form-submit" data-i18n="admin.addClient">Add client</button>
+                        <button type="button" class="btn btn-secondary" id="client-form-cancel" data-i18n="admin.cancel" hidden>Cancel</button>
+                    </div>
+                </form>
+
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="admin.companyName">Company name</th>
+                                <th data-i18n="admin.contactName">Contact name</th>
+                                <th data-i18n="admin.email">Email</th>
+                                <th data-i18n="admin.plan">Plan / package</th>
+                                <th data-i18n="admin.status">Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="clients-table-body">
+                            <!-- rendered at runtime -->
+                        </tbody>
+                    </table>
+                    <p id="clients-empty" class="admin-empty" data-i18n="admin.noClients" hidden>No clients yet. Add the first one above.</p>
                 </div>
-                <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                    <button type="button" class="btn" id="modules-save" data-i18n="admin.save">Save</button>
+            </div>
+
+            <div id="panel-contrataciones" class="admin-tab-panel" role="tabpanel" aria-labelledby="tab-contrataciones" hidden>
+                <p class="admin-subtitle" data-i18n="admin.contratacionesSubtitle">Turn on the modules each client has contracted.</p>
+
+                <div class="admin-select-row">
+                    <label for="contrataciones-client" data-i18n="admin.selectClient">Select a client</label>
+                    <select id="contrataciones-client">
+                        <option value="" data-i18n="admin.selectClientPlaceholder">Choose a client...</option>
+                    </select>
                 </div>
-                <p id="modules-save-status" class="admin-save-status"></p>
+
+                <p id="contrataciones-hint" class="admin-hint" data-i18n="admin.noClientSelected">Select a client above to manage their modules.</p>
+
+                <div id="modules-panel" hidden>
+                    <div class="admin-module-list" id="modules-list">
+                        <!-- rendered at runtime -->
+                    </div>
+                    <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                        <button type="button" class="btn" id="modules-save" data-i18n="admin.save">Save</button>
+                    </div>
+                    <p id="modules-save-status" class="admin-save-status"></p>
+                </div>
             </div>
         </section>
     </main>
 
     <script src="Dashboard.js"></script>
-    <script src="Admin-Contrataciones.js"></script>
+    <script src="Admin-SaaS.js"></script>
 </body>
 </html>

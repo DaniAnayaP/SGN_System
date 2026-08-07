@@ -7,6 +7,30 @@
     background-color: var(--color-surface);
     box-shadow: 0 0 0 1px var(--color-border);
 }
+.admin-tabs{
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+}
+.admin-tab{
+    padding: 0.7rem 1rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+.admin-tab:hover{
+    color: var(--color-text-primary);
+}
+.admin-tab.active{
+    color: var(--color-text-primary);
+    border-bottom-color: var(--color-text-primary);
+}
 .admin-subtitle{
     margin-bottom: 1.25rem;
     color: var(--color-text-secondary);

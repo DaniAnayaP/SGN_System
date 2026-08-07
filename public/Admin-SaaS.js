@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
-// "Clientes Nuevos" — SaaS admin: create/edit/delete client companies.
-// Shell (sidebar, i18n, settings, logout) comes from Dashboard.js.
+// "Administración de Clientes" — combined SaaS admin screen: client list
+// (Clientes Nuevos tab) and per-client module entitlements (Contrataciones
+// tab). Shell (sidebar, i18n, settings, logout) comes from Dashboard.js.
 //
 // Access note: the sidebar only shows this page's link to admins, and the
 // redirect below covers anyone who lands here directly without the role —
@@ -8,6 +9,26 @@
 // /api/admin/* route in server.js). This redirect is UX only.
 // ---------------------------------------------------------------------------
 
+// --- Tabs ---------------------------------------------------------------------
+const tabClients = document.getElementById('tab-clients');
+const tabContrataciones = document.getElementById('tab-contrataciones');
+const panelClients = document.getElementById('panel-clients');
+const panelContrataciones = document.getElementById('panel-contrataciones');
+
+function activateTab(tab) {
+    const isClients = tab === 'clients';
+    tabClients.classList.toggle('active', isClients);
+    tabClients.setAttribute('aria-selected', String(isClients));
+    tabContrataciones.classList.toggle('active', !isClients);
+    tabContrataciones.setAttribute('aria-selected', String(!isClients));
+    panelClients.hidden = !isClients;
+    panelContrataciones.hidden = isClients;
+}
+
+tabClients.addEventListener('click', () => activateTab('clients'));
+tabContrataciones.addEventListener('click', () => activateTab('contrataciones'));
+
+// --- Clientes Nuevos: create/edit/delete clients ------------------------------
 const form = document.getElementById('client-form');
 const idField = document.getElementById('client-id');
 const companyField = document.getElementById('client-company');
@@ -111,6 +132,7 @@ async function removeClient(client) {
         if (!res.ok) throw new Error('delete failed');
         clients = clients.filter((c) => c.id !== client.id);
         renderClients();
+        populateClientSelect();
     } catch {
         alert(Dashboard.t('admin.saveError'));
     }
@@ -123,6 +145,7 @@ async function loadClients() {
         const data = await res.json();
         clients = data.clients || [];
         renderClients();
+        populateClientSelect();
     } catch {
         showError(Dashboard.t('admin.loadError'));
     }
@@ -173,6 +196,7 @@ form.addEventListener('submit', async (event) => {
             clients = [client, ...clients];
         }
         renderClients();
+        populateClientSelect();
         resetForm();
     } catch {
         showError(Dashboard.t('admin.saveError'));
@@ -183,14 +207,125 @@ form.addEventListener('submit', async (event) => {
 
 cancelBtn.addEventListener('click', resetForm);
 
+// --- Contrataciones: per-client module toggles --------------------------------
+const clientSelect = document.getElementById('contrataciones-client');
+const hint = document.getElementById('contrataciones-hint');
+const modulesPanel = document.getElementById('modules-panel');
+const modulesList = document.getElementById('modules-list');
+const saveBtn = document.getElementById('modules-save');
+const saveStatus = document.getElementById('modules-save-status');
+
+let currentModules = [];
+
+function populateClientSelect() {
+    const previousValue = clientSelect.value;
+    clientSelect.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
+    clients.forEach((client) => {
+        const option = document.createElement('option');
+        option.value = client.id;
+        option.textContent = client.company_name;
+        clientSelect.appendChild(option);
+    });
+    if (clients.some((c) => String(c.id) === previousValue)) {
+        clientSelect.value = previousValue;
+    } else {
+        clientSelect.value = '';
+        modulesPanel.hidden = true;
+        hint.textContent = Dashboard.t('admin.noClientSelected');
+        hint.hidden = false;
+    }
+}
+
+function renderModules(modules) {
+    modulesList.innerHTML = '';
+    modules.forEach((mod) => {
+        const row = document.createElement('div');
+        row.className = 'admin-module-row';
+
+        const name = document.createElement('span');
+        name.className = 'admin-module-name';
+        name.textContent = Dashboard.t(mod.labelKey);
+
+        const label = document.createElement('label');
+        label.className = 'admin-switch';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = mod.enabled;
+        input.dataset.moduleKey = mod.key;
+        const track = document.createElement('span');
+        track.className = 'admin-switch-track';
+        label.append(input, track);
+
+        row.append(name, label);
+        modulesList.appendChild(row);
+    });
+}
+
+async function loadModulesForClient(clientId) {
+    saveStatus.textContent = '';
+    try {
+        const res = await fetch(`/api/admin/clients/${clientId}/modules`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        currentModules = data.modules || [];
+        renderModules(currentModules);
+        modulesPanel.hidden = false;
+        hint.hidden = true;
+    } catch {
+        modulesPanel.hidden = true;
+        hint.textContent = Dashboard.t('admin.loadError');
+        hint.hidden = false;
+    }
+}
+
+clientSelect.addEventListener('change', () => {
+    const clientId = clientSelect.value;
+    if (!clientId) {
+        modulesPanel.hidden = true;
+        hint.textContent = Dashboard.t('admin.noClientSelected');
+        hint.hidden = false;
+        return;
+    }
+    loadModulesForClient(clientId);
+});
+
+saveBtn.addEventListener('click', async () => {
+    const clientId = clientSelect.value;
+    if (!clientId) return;
+    const states = Array.from(modulesList.querySelectorAll('input[type="checkbox"]')).map((input) => ({
+        key: input.dataset.moduleKey,
+        enabled: input.checked,
+    }));
+
+    saveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/clients/${clientId}/modules`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ modules: states }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const data = await res.json();
+        currentModules = data.modules || [];
+        saveStatus.textContent = Dashboard.t('admin.modulesSaved');
+    } catch {
+        saveStatus.textContent = Dashboard.t('admin.saveError');
+    } finally {
+        saveBtn.disabled = false;
+    }
+});
+
 document.addEventListener('dashboard:language-changed', () => {
     if (!idField.value) submitBtn.textContent = Dashboard.t('admin.addClient');
     renderClients();
+    if (currentModules.length) renderModules(currentModules);
+    if (modulesPanel.hidden) hint.textContent = Dashboard.t('admin.noClientSelected');
 });
 
 (async function init() {
     try {
-        const role = await Dashboard.initDashboard({ activePage: 'clients' });
+        const role = await Dashboard.initDashboard({ activePage: 'admin-saas' });
         if (!role) return;
         if (role !== 'admin') {
             window.location.replace('Inicio-en.html');
@@ -198,6 +333,6 @@ document.addEventListener('dashboard:language-changed', () => {
         }
         await loadClients();
     } catch (err) {
-        console.error('Admin (Clientes) failed to initialize:', err);
+        console.error('Admin (SaaS) failed to initialize:', err);
     }
 })();

@@ -68,7 +68,8 @@
     "deptArea": "Área Dep. {n}",
     "option": "Opción {n}",
     "clientesNuevos": "Clientes Nuevos",
-    "contrataciones": "Contrataciones"
+    "contrataciones": "Contrataciones",
+    "clientAdmin": "Administración de Clientes"
   },
   "admin": {
     "clientsTitle": "Clientes Nuevos",

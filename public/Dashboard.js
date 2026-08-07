@@ -38,7 +38,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Purchasing", commercial: "Commercial", marketing: "Marketing",
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}",
-            clientesNuevos: "New Clients", contrataciones: "Contracted Modules"
+            clientesNuevos: "New Clients", contrataciones: "Contracted Modules", clientAdmin: "Client Administration"
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
@@ -74,7 +74,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Compras", commercial: "Comercial", marketing: "Mercadotecnia",
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
-            clientesNuevos: "Clientes Nuevos", contrataciones: "Contrataciones"
+            clientesNuevos: "Clientes Nuevos", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes"
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
@@ -193,26 +193,28 @@ async function loadMenu() {
     return EMBEDDED_MENU_FALLBACK;
 }
 
-// Admin-only sidebar section (SaaS control panel). Only ever added when the
+// Admin-only sidebar link (SaaS control panel: client list + module
+// entitlements, combined into one screen). Only ever added when the
 // server-verified role (from /api/me) is 'admin' — the real access control
 // is enforced server-side on every /api/admin/* route regardless of what the
-// sidebar shows.
+// sidebar shows. Regular client users never see this; they manage their own
+// access from "Administración del Negocio" instead. Placed right after
+// "Tablero" in the main section, not as a separate section, so it doesn't
+// read as part of the client-facing navigation.
 function injectAdminSection(data, role, activePage) {
     if (role !== 'admin') return data;
-    const adminSection = {
-        id: 'saas-admin',
-        items: [
-            {
-                id: 'admin-clients', labelKey: 'menu.clientesNuevos', icon: 'bx-buildings',
-                href: 'Admin-Clientes.html', active: activePage === 'clients'
-            },
-            {
-                id: 'admin-contrataciones', labelKey: 'menu.contrataciones', icon: 'bx-toggle-left',
-                href: 'Admin-Contrataciones.html', active: activePage === 'contrataciones'
-            }
-        ]
+    const adminItem = {
+        id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings',
+        href: 'Admin-SaaS.html', active: activePage === 'admin-saas'
     };
-    return { ...data, sections: [...data.sections, adminSection] };
+    const sections = data.sections.map((section) => {
+        if (section.id !== 'main') return section;
+        const items = [...section.items];
+        const dashboardIndex = items.findIndex((item) => item.id === 'dashboard');
+        items.splice(dashboardIndex + 1, 0, adminItem);
+        return { ...section, items };
+    });
+    return { ...data, sections };
 }
 
 // --- Department picker --------------------------------------------------------
@@ -231,7 +233,7 @@ const DEPARTMENTS = [
     { key: 'general-management', labelKey: 'menu.generalManagement' },
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' }
 ];
-const ALWAYS_VISIBLE_SECTIONS = ['main', 'saas-admin'];
+const ALWAYS_VISIBLE_SECTIONS = ['main'];
 
 function getStoredDepartment() {
     const stored = localStorage.getItem('department');
