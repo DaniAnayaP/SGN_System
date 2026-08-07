@@ -43,13 +43,6 @@ db.exec(`
     );
 `);
 
-// role was added after the initial release — add it to pre-existing
-// databases instead of requiring a fresh one.
-const userColumns = db.prepare('PRAGMA table_info(users)').all();
-if (!userColumns.some((c) => c.name === 'role')) {
-    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
-}
-
 // --- SaaS admin: clients and their per-module entitlements ------------------
 // "Contrataciones" = which SGN modules (matching the section ids in
 // public/data/menu.json) are turned on for a given client, based on what
@@ -75,6 +68,29 @@ db.exec(`
     );
 `);
 
+// --- Schema migrations for columns added after the initial release ----------
+// Run in dependency order: `clients` must exist before `users.client_id` and
+// `profiles.client_id` reference it; `users` must exist before
+// `clients.admin_user_id` references it.
+const userColumns = db.prepare('PRAGMA table_info(users)').all();
+if (!userColumns.some((c) => c.name === 'role')) {
+    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+}
+if (!userColumns.some((c) => c.name === 'client_id')) {
+    db.exec('ALTER TABLE users ADD COLUMN client_id INTEGER REFERENCES clients(id)');
+}
+if (!userColumns.some((c) => c.name === 'active')) {
+    db.exec('ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+}
+if (!userColumns.some((c) => c.name === 'is_client_admin')) {
+    db.exec('ALTER TABLE users ADD COLUMN is_client_admin INTEGER NOT NULL DEFAULT 0');
+}
+
+const clientColumns = db.prepare('PRAGMA table_info(clients)').all();
+if (!clientColumns.some((c) => c.name === 'admin_user_id')) {
+    db.exec('ALTER TABLE clients ADD COLUMN admin_user_id INTEGER REFERENCES users(id)');
+}
+
 const MODULE_CATALOG = [
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
     { key: 'general-management', labelKey: 'menu.generalManagement' },
@@ -96,15 +112,14 @@ const MODULE_CATALOG = [
 // entry). Users can hold one or more profiles, plus individual grants on top
 // of whatever their profile(s) already give them.
 //
-// Access note: these routes currently only require being logged in
-// (requireAuth), not the SaaS `role`. This instance-per-client system has no
-// separate "company admin" flag yet — anyone signed in to this instance can
-// manage its profiles/users/grants. Tighten this (e.g. gate access itself
-// behind a profile grant for the "ab-users"/"ab-roles"/"ab-access-permissions"
-// apartados, once at least one profile exists) before this goes to real users.
+// Access note: every profile/user/grant here is scoped to a client_id — see
+// requireClientAdmin in server.js. Only that client's own admin_user (the
+// auto-provisioned "Admin+ABBR" account, see activateClient below) can manage
+// them, and every query is filtered by their client_id.
 db.exec(`
     CREATE TABLE IF NOT EXISTS profiles (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
         name        TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -132,6 +147,15 @@ db.exec(`
         submenu_id  TEXT
     );
 `);
+
+// profiles.client_id was added after profiles already shipped once — add it
+// to pre-existing databases (nullable there; any pre-migration profile rows
+// become orphaned/inaccessible via the client-scoped queries below, which is
+// fine, they were test data from before multi-tenant scoping existed).
+const profileColumns = db.prepare('PRAGMA table_info(profiles)').all();
+if (!profileColumns.some((c) => c.name === 'client_id')) {
+    db.exec('ALTER TABLE profiles ADD COLUMN client_id INTEGER REFERENCES clients(id)');
+}
 
 // --- One-time seed: create the demo admin/admin user if the table is empty.
 // This only ever runs once — after that, the row lives in sgn.sqlite and
@@ -163,19 +187,89 @@ function usernameOrEmailExists(username, email) {
         .get(username, email);
 }
 
-function createUser({ username, email, passwordHash, name }) {
+function createUser({ username, email, passwordHash, name, clientId = null, isClientAdmin = false }) {
     const result = db
         .prepare(`
-            INSERT INTO users (username, email, password_hash, name)
-            VALUES (@username, @email, @passwordHash, @name)
+            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin)
+            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin)
         `)
-        .run({ username, email, passwordHash, name });
+        .run({ username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0 });
     return db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 }
 
 function promoteToAdmin(username) {
     const result = db.prepare("UPDATE users SET role = 'admin' WHERE username = ?").run(username);
     return result.changes > 0;
+}
+
+// --- Client lifecycle: auto-provisioned "Admin+ABBR" user -------------------
+// When a client is set to status 'activo', it gets exactly one admin user
+// (username "Admin" + an abbreviation derived from the company name). That
+// user — and only that user — can then manage the client's own
+// users/profiles/access (see requireClientAdmin in server.js). Setting the
+// client to any other status deactivates that admin and every user they (or
+// anyone else at that client) created — nothing is deleted, just locked out.
+function generateClientAbbreviation(companyName) {
+    const firstWord = (companyName || '').trim().split(/\s+/)[0] || 'CLIENTE';
+    const letters = firstWord.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    return (letters || 'CLIENTE').slice(0, 10);
+}
+
+function generateUniqueUsername(baseUsername) {
+    let candidate = baseUsername;
+    let suffix = 2;
+    while (findUserByUsername(candidate)) {
+        candidate = `${baseUsername}${suffix}`;
+        suffix += 1;
+    }
+    return candidate;
+}
+
+function generateRandomPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let pwd = '';
+    for (let i = 0; i < 12; i++) {
+        pwd += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return pwd;
+}
+
+// Returns { user, generatedPassword } when a NEW admin was created (only
+// happens the first time a client is activated), or { user, generatedPassword:
+// null } when an existing admin (and their team) was just reactivated.
+function activateClient(clientId) {
+    const client = getClientById(clientId);
+    if (!client) throw new Error('Client not found.');
+
+    if (client.admin_user_id) {
+        db.prepare('UPDATE users SET active = 1 WHERE client_id = ?').run(clientId);
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(client.admin_user_id);
+        return { user, generatedPassword: null };
+    }
+
+    const abbr = generateClientAbbreviation(client.company_name);
+    const username = generateUniqueUsername(`Admin${abbr}`);
+    const password = generateRandomPassword();
+    const email = client.email || `${username.toLowerCase()}@example.invalid`;
+
+    const create = db.transaction(() => {
+        const user = createUser({
+            username,
+            email,
+            passwordHash: hashPassword(password),
+            name: `Admin ${client.company_name}`,
+            clientId,
+            isClientAdmin: true,
+        });
+        db.prepare('UPDATE clients SET admin_user_id = ? WHERE id = ?').run(user.id, clientId);
+        return user;
+    });
+    const user = create();
+    return { user, generatedPassword: password };
+}
+
+function deactivateClientUsers(clientId) {
+    db.prepare('UPDATE users SET active = 0 WHERE client_id = ?').run(clientId);
 }
 
 // --- Query helpers: clients (SaaS admin) --------------------------------------
@@ -220,6 +314,12 @@ function getClientModules(clientId) {
     return MODULE_CATALOG.map((m) => ({ ...m, enabled: enabledByKey.get(m.key) || false }));
 }
 
+function getClientModuleKeys(clientId) {
+    return getClientModules(clientId)
+        .filter((m) => m.enabled)
+        .map((m) => m.key);
+}
+
 const upsertClientModule = db.prepare(`
     INSERT INTO client_modules (client_id, module_key, enabled)
     VALUES (@clientId, @moduleKey, @enabled)
@@ -238,39 +338,49 @@ function setClientModules(clientId, moduleStates) {
     return getClientModules(clientId);
 }
 
-// --- Query helpers: business users --------------------------------------------
-function listBusinessUsers() {
-    return db.prepare('SELECT id, username, email, name, role, created_at FROM users ORDER BY created_at DESC').all();
+// --- Query helpers: business users (scoped to one client) --------------------
+function listBusinessUsers(clientId) {
+    return db
+        .prepare(`
+            SELECT id, username, email, name, role, active, is_client_admin, created_at
+            FROM users WHERE client_id = ? ORDER BY created_at DESC
+        `)
+        .all(clientId);
 }
 
-function getUserById(id) {
-    return db.prepare('SELECT id, username, email, name, role, created_at FROM users WHERE id = ?').get(id);
+function getUserById(id, clientId) {
+    return db
+        .prepare(`
+            SELECT id, username, email, name, role, active, is_client_admin, created_at
+            FROM users WHERE id = ? AND client_id = ?
+        `)
+        .get(id, clientId);
 }
 
-// --- Query helpers: profiles (perfiles) ---------------------------------------
-function listProfiles() {
-    return db.prepare('SELECT * FROM profiles ORDER BY created_at DESC').all();
+// --- Query helpers: profiles (perfiles, scoped to one client) ----------------
+function listProfiles(clientId) {
+    return db.prepare('SELECT * FROM profiles WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
 }
 
-function getProfileById(id) {
-    return db.prepare('SELECT * FROM profiles WHERE id = ?').get(id);
+function getProfileById(id, clientId) {
+    return db.prepare('SELECT * FROM profiles WHERE id = ? AND client_id = ?').get(id, clientId);
 }
 
-function createProfile({ name, description }) {
+function createProfile({ clientId, name, description }) {
     const result = db
-        .prepare('INSERT INTO profiles (name, description) VALUES (@name, @description)')
-        .run({ name, description: description || '' });
-    return getProfileById(result.lastInsertRowid);
+        .prepare('INSERT INTO profiles (client_id, name, description) VALUES (@clientId, @name, @description)')
+        .run({ clientId, name, description: description || '' });
+    return getProfileById(result.lastInsertRowid, clientId);
 }
 
-function updateProfile(id, { name, description }) {
-    db.prepare('UPDATE profiles SET name = @name, description = @description WHERE id = @id')
-        .run({ id, name, description: description || '' });
-    return getProfileById(id);
+function updateProfile(id, clientId, { name, description }) {
+    db.prepare('UPDATE profiles SET name = @name, description = @description WHERE id = @id AND client_id = @clientId')
+        .run({ id, clientId, name, description: description || '' });
+    return getProfileById(id, clientId);
 }
 
-function deleteProfile(id) {
-    db.prepare('DELETE FROM profiles WHERE id = ?').run(id);
+function deleteProfile(id, clientId) {
+    db.prepare('DELETE FROM profiles WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
@@ -352,6 +462,9 @@ module.exports = {
     deleteClient,
     getClientModules,
     setClientModules,
+    getClientModuleKeys,
+    activateClient,
+    deactivateClientUsers,
     listBusinessUsers,
     getUserById,
     listProfiles,

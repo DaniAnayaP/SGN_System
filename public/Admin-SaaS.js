@@ -189,7 +189,7 @@ form.addEventListener('submit', async (event) => {
             showError(body.message || Dashboard.t('admin.saveError'));
             return;
         }
-        const { client } = await res.json();
+        const { client, generatedAdmin } = await res.json();
         if (editingId) {
             clients = clients.map((c) => (c.id === client.id ? client : c));
         } else {
@@ -198,6 +198,7 @@ form.addEventListener('submit', async (event) => {
         renderClients();
         populateClientSelect();
         resetForm();
+        if (generatedAdmin) showGeneratedAdmin(generatedAdmin);
     } catch {
         showError(Dashboard.t('admin.saveError'));
     } finally {
@@ -206,6 +207,23 @@ form.addEventListener('submit', async (event) => {
 });
 
 cancelBtn.addEventListener('click', resetForm);
+
+// --- One-time generated admin credentials (shown when a client is activated) -
+const generatedAdminBox = document.getElementById('generated-admin-box');
+const generatedAdminUsername = document.getElementById('generated-admin-username');
+const generatedAdminPassword = document.getElementById('generated-admin-password');
+const generatedAdminDismiss = document.getElementById('generated-admin-dismiss');
+
+function showGeneratedAdmin({ username, password }) {
+    generatedAdminUsername.textContent = username;
+    generatedAdminPassword.textContent = password;
+    generatedAdminBox.hidden = false;
+    generatedAdminBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+generatedAdminDismiss.addEventListener('click', () => {
+    generatedAdminBox.hidden = true;
+});
 
 // --- Contrataciones: per-client module toggles --------------------------------
 const clientSelect = document.getElementById('contrataciones-client');

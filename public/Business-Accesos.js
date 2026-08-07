@@ -12,6 +12,18 @@ const saveBtn = document.getElementById('access-save');
 const saveStatus = document.getElementById('access-save-status');
 
 let tree = null;
+let allowedSectionIds = null;
+
+async function loadContractedModules() {
+    try {
+        const res = await fetch('/api/business/contracted-modules', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        allowedSectionIds = data.moduleKeys || [];
+    } catch {
+        allowedSectionIds = [];
+    }
+}
 
 async function loadUserOptions() {
     try {
@@ -36,7 +48,7 @@ async function loadGrantsForUser(userId) {
         const res = await fetch(`/api/business/users/${userId}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        tree = window.PermissionTree.create(treeContainer);
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds });
         await tree.init(data.grants || []);
         panel.hidden = false;
         hint.hidden = true;
@@ -82,7 +94,7 @@ saveBtn.addEventListener('click', async () => {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'business-accesos' });
         if (!role) return;
-        await loadUserOptions();
+        await Promise.all([loadUserOptions(), loadContractedModules()]);
     } catch (err) {
         console.error('Business (Accesos) failed to initialize:', err);
     }

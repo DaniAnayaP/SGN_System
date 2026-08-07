@@ -24,6 +24,18 @@ const permissionsSaveStatus = document.getElementById('permissions-save-status')
 let profiles = [];
 let selectedProfileId = null;
 let tree = null;
+let allowedSectionIds = null;
+
+async function loadContractedModules() {
+    try {
+        const res = await fetch('/api/business/contracted-modules', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        allowedSectionIds = data.moduleKeys || [];
+    } catch {
+        allowedSectionIds = [];
+    }
+}
 
 function showError(message) {
     errorBanner.textContent = message;
@@ -175,7 +187,7 @@ async function selectProfileForPermissions(profile) {
         const res = await fetch(`/api/business/profiles/${profile.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        tree = window.PermissionTree.create(treeContainer);
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds });
         await tree.init(data.grants || []);
         permissionsPanel.hidden = false;
         permissionsHint.hidden = true;
@@ -215,7 +227,7 @@ document.addEventListener('dashboard:language-changed', () => {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'business-roles' });
         if (!role) return;
-        await loadProfiles();
+        await Promise.all([loadProfiles(), loadContractedModules()]);
     } catch (err) {
         console.error('Business (Roles) failed to initialize:', err);
     }

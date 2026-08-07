@@ -187,6 +187,18 @@
                     </div>
                 </form>
 
+                <div id="generated-admin-box" class="admin-generated-credentials" role="alert" hidden>
+                    <p class="admin-generated-title" data-i18n="admin.generatedAdminTitle">New client admin account created</p>
+                    <p class="admin-generated-note" data-i18n="admin.generatedAdminNote">This password is shown only once — copy it now and share it with the client securely.</p>
+                    <div class="admin-generated-row">
+                        <span data-i18n="business.username">Username</span>: <strong id="generated-admin-username"></strong>
+                    </div>
+                    <div class="admin-generated-row">
+                        <span data-i18n="business.password">Password</span>: <strong id="generated-admin-password"></strong>
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="generated-admin-dismiss" data-i18n="admin.dismiss">Dismiss</button>
+                </div>
+
                 <div class="admin-table-wrap">
                     <table class="admin-table">
                         <thead>

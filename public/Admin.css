@@ -96,6 +96,40 @@ body.dark-mode .admin-error{
     color: var(--color-text-primary);
 }
 
+/* One-time generated credentials banner */
+.admin-generated-credentials{
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.2rem;
+    border-radius: 0.5rem;
+    background-color: #eaf6ec;
+    border: 1px solid #1e7e34;
+}
+body.dark-mode .admin-generated-credentials{
+    background-color: #1c3324;
+    border-color: #2c8f4a;
+}
+.admin-generated-title{
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: 0.3rem;
+}
+.admin-generated-note{
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.6rem;
+}
+.admin-generated-row{
+    font-size: 0.85rem;
+    color: var(--color-text-primary);
+    margin-bottom: 0.3rem;
+}
+.admin-generated-credentials .btn{
+    width: auto;
+    padding: 0.4rem 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+}
+
 /* Table */
 .admin-table-wrap{
     margin-top: 1.5rem;

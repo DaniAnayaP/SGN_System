@@ -49,7 +49,7 @@
         return [keyOf(section.id, item.id, null)];
     }
 
-    function create(container) {
+    function create(container, { allowedSectionIds = null } = {}) {
         let sectionsData = [];
         let grantSet = new Set();
 
@@ -126,7 +126,13 @@
 
         return {
             async init(initialGrants) {
-                sectionsData = await loadSections();
+                const allSections = await loadSections();
+                // 'main' (Inicio, Tablero, Administración del Negocio, etc.)
+                // is core navigation, not a contracted module — always shown
+                // regardless of which módulos the client has contracted.
+                sectionsData = allowedSectionIds
+                    ? allSections.filter((s) => s.id === 'main' || allowedSectionIds.includes(s.id))
+                    : allSections;
                 grantSet = expand(initialGrants || []);
                 render();
             },
