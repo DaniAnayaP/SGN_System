@@ -227,7 +227,8 @@
         color: var(--color-text-primary);
         font-weight: 700;
     }
-    .Sidebar.minimize .dept-picker{
+    .Sidebar.minimize .dept-picker,
+    .dept-picker-disabled{
         display: none;
     }
 

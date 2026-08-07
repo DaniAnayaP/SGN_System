@@ -18,6 +18,7 @@ const DEFAULT_LANG = 'en';
 let dict = {};
 let menuData = null;
 let currentLang = DEFAULT_LANG;
+let currentRole = null;
 
 // Embedded fallback so the UI still works even when i18n/*.json can't be
 // fetched (e.g. opened as a file:// page). Keep in sync with i18n/en.json /
@@ -245,20 +246,22 @@ async function loadMenu() {
 // access from "Administración del Negocio" instead. Placed right after
 // "Tablero" in the main section, not as a separate section, so it doesn't
 // read as part of the client-facing navigation.
-function injectAdminSection(data, role, activePage) {
-    if (role !== 'admin') return data;
+// GEIPSA staff (role 'admin') aren't a client using the product — they're
+// the SaaS operator. Their sidebar is deliberately minimal: search, Inicio,
+// Tablero, and Administración de Clientes, nothing else. Client users (any
+// non-admin, including a client's own isClientAdmin account) keep the full
+// menu.json-driven sidebar untouched.
+function buildSidebarData(data, role, activePage) {
     const adminItem = {
         id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings',
         href: 'Admin-SaaS.html', active: activePage === 'admin-saas'
     };
-    const sections = data.sections.map((section) => {
-        if (section.id !== 'main') return section;
-        const items = [...section.items];
-        const dashboardIndex = items.findIndex((item) => item.id === 'dashboard');
-        items.splice(dashboardIndex + 1, 0, adminItem);
-        return { ...section, items };
-    });
-    return { ...data, sections };
+    if (role !== 'admin') return data;
+
+    const mainSection = data.sections.find((s) => s.id === 'main');
+    const home = mainSection?.items.find((i) => i.id === 'home');
+    const dashboard = mainSection?.items.find((i) => i.id === 'dashboard');
+    return { ...data, sections: [{ id: 'main', items: [home, dashboard, adminItem].filter(Boolean) }] };
 }
 
 // --- Department picker --------------------------------------------------------
@@ -606,13 +609,18 @@ document.getElementById('logout-link')?.addEventListener('click', (event) => {
 async function initDashboard({ activePage } = {}) {
     const role = await authGuard();
     if (!role) return null;
+    currentRole = role;
     await loadLanguage(getStoredLang());
     menuData = await loadMenu();
-    menuData = injectAdminSection(menuData, role, activePage);
+    menuData = buildSidebarData(menuData, role, activePage);
     renderFilteredMenu();
     updateDeptPickerLabel();
     checkWindowSize();
+    // GEIPSA staff have nothing to filter by department (their sidebar is
+    // fixed to Inicio/Tablero/Administración de Clientes), so the picker
+    // itself shouldn't even be offered.
+    document.getElementById('dept-picker')?.classList.toggle('dept-picker-disabled', role === 'admin');
     return role;
 }
 
-window.Dashboard = { initDashboard, t, get lang() { return currentLang; } };
+window.Dashboard = { initDashboard, t, get lang() { return currentLang; }, get role() { return currentRole; } };
