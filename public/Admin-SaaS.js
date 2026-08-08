@@ -42,7 +42,7 @@ const logoDataField = document.getElementById('client-logo-data');
 const logoPreview = document.getElementById('client-logo-preview');
 const logoClearBtn = document.getElementById('client-logo-clear');
 const paletteContainer = document.getElementById('client-color-palette');
-const paletteWidget = window.ColorPalette.create(paletteContainer);
+let paletteWidget; // created after Dashboard.initDashboard() so i18n labels are ready — see init() below
 const errorBanner = document.getElementById('client-form-error');
 const submitBtn = document.getElementById('client-form-submit');
 const cancelBtn = document.getElementById('client-form-cancel');
@@ -398,6 +398,8 @@ document.addEventListener('dashboard:language-changed', () => {
             window.location.replace('Inicio-en.html');
             return;
         }
+        paletteWidget = window.ColorPalette.create(paletteContainer);
+        document.addEventListener('dashboard:language-changed', () => paletteWidget.refreshLabels());
         await loadClients();
     } catch (err) {
         console.error('Admin (SaaS) failed to initialize:', err);

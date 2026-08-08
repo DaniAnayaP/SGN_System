@@ -10,7 +10,7 @@ const logoDataField = document.getElementById('config-logo-data');
 const logoPreview = document.getElementById('config-logo-preview');
 const logoClearBtn = document.getElementById('config-logo-clear');
 const paletteContainer = document.getElementById('config-color-palette');
-const paletteWidget = window.ColorPalette.create(paletteContainer);
+let paletteWidget; // created after Dashboard.initDashboard() so i18n labels are ready — see init() below
 const errorBanner = document.getElementById('config-error');
 const saveBtn = document.getElementById('config-save');
 const saveStatus = document.getElementById('config-save-status');
@@ -105,6 +105,8 @@ saveBtn.addEventListener('click', async () => {
             window.location.replace('Inicio-en.html');
             return;
         }
+        paletteWidget = window.ColorPalette.create(paletteContainer);
+        document.addEventListener('dashboard:language-changed', () => paletteWidget.refreshLabels());
         await loadCurrentBranding();
     } catch (err) {
         console.error('Business (Config) failed to initialize:', err);

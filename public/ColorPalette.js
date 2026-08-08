@@ -227,6 +227,12 @@
                 seedInput.value = palette.seed || seedInput.value;
                 renderGrid();
             },
+            refreshLabels() {
+                seedLabel.textContent = t('admin.paletteSeedLabel');
+                suggestBtn.textContent = t('admin.paletteSuggest');
+                hint.textContent = t('admin.paletteHint');
+                renderGrid();
+            },
         };
     }
 
