@@ -161,6 +161,14 @@
         align-items: center;
         overflow-y: auto;
     }
+    /* Without an explicit width, this flex child sizes to its content's
+       intrinsic (unshrunk) width — wider than the collapsed 4.94rem sidebar
+       — and the column's align-items:center then centers that overflow
+       instead of clipping it flush against the edge, pushing icons out of
+       view to the left. */
+    #menu-mount{
+        width: 100%;
+    }
 
     /* Department picker */
     .dept-picker{
