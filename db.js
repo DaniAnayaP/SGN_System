@@ -90,6 +90,18 @@ const clientColumns = db.prepare('PRAGMA table_info(clients)').all();
 if (!clientColumns.some((c) => c.name === 'admin_user_id')) {
     db.exec('ALTER TABLE clients ADD COLUMN admin_user_id INTEGER REFERENCES users(id)');
 }
+// Branding: logo (stored as a data: URI — small enough not to need real file
+// storage) and up to two institutional colors, shown in the client's own
+// sidebar and used by the "Institucional" style option.
+if (!clientColumns.some((c) => c.name === 'logo_data_url')) {
+    db.exec('ALTER TABLE clients ADD COLUMN logo_data_url TEXT');
+}
+if (!clientColumns.some((c) => c.name === 'primary_color')) {
+    db.exec('ALTER TABLE clients ADD COLUMN primary_color TEXT');
+}
+if (!clientColumns.some((c) => c.name === 'secondary_color')) {
+    db.exec('ALTER TABLE clients ADD COLUMN secondary_color TEXT');
+}
 
 const MODULE_CATALOG = [
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
@@ -281,23 +293,36 @@ function getClientById(id) {
     return db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
 }
 
-function createClient({ companyName, contactName, email, phone, plan, status }) {
+function getClientBranding(id) {
+    return db
+        .prepare('SELECT company_name AS companyName, logo_data_url AS logoDataUrl, primary_color AS primaryColor, secondary_color AS secondaryColor FROM clients WHERE id = ?')
+        .get(id);
+}
+
+function createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor }) {
     const result = db
         .prepare(`
-            INSERT INTO clients (company_name, contact_name, email, phone, plan, status)
-            VALUES (@companyName, @contactName, @email, @phone, @plan, @status)
+            INSERT INTO clients (company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color)
+            VALUES (@companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor)
         `)
-        .run({ companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto' });
+        .run({
+            companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto',
+            logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
+        });
     return getClientById(result.lastInsertRowid);
 }
 
-function updateClient(id, { companyName, contactName, email, phone, plan, status }) {
+function updateClient(id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor }) {
     db.prepare(`
         UPDATE clients
         SET company_name = @companyName, contact_name = @contactName, email = @email,
-            phone = @phone, plan = @plan, status = @status
+            phone = @phone, plan = @plan, status = @status,
+            logo_data_url = @logoDataUrl, primary_color = @primaryColor, secondary_color = @secondaryColor
         WHERE id = @id
-    `).run({ id, companyName, contactName, email, phone: phone || '', plan: plan || '', status });
+    `).run({
+        id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
+        logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
+    });
     return getClientById(id);
 }
 
@@ -472,6 +497,7 @@ module.exports = {
     promoteToAdmin,
     listClients,
     getClientById,
+    getClientBranding,
     createClient,
     updateClient,
     deleteClient,

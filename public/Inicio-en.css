@@ -28,6 +28,30 @@
         --shadow-border: rgba(255, 255, 255, 0.1);
         --user-bg-color: #FAFAFC;
     }
+    /* Institutional style: the client's own logo bar + accent colors,
+       supplied at runtime via --institutional-primary/-secondary (see
+       applyClientBranding in Dashboard.js). Keeps the rest of the light
+       theme's contrast intact rather than overriding text/background colors
+       wholesale with an arbitrary client-picked hex. */
+    body.institutional-mode .brand{
+        background-color: var(--institutional-primary, transparent);
+        border-radius: 0.4rem;
+        padding: 0.5rem 0.455rem;
+        margin: -0.2rem -0.2rem 1.6rem -0.2rem;
+        transition: background-color 0.3s ease;
+    }
+    body.institutional-mode .brand span{
+        color: #FFFFFF;
+    }
+    body.institutional-mode .menu-item:hover .menu-link,
+    body.institutional-mode .menu-item.active .menu-link{
+        background-color: var(--institutional-secondary, var(--color-bg));
+        color: #FFFFFF;
+    }
+    body.institutional-mode .dept-picker-btn:hover,
+    body.institutional-mode .dept-picker.open .dept-picker-btn{
+        color: var(--institutional-primary, var(--color-text-primary));
+    }
     .sr-only{
         position: absolute;
         width: 1px;

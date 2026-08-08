@@ -37,6 +37,12 @@ const emailField = document.getElementById('client-email');
 const phoneField = document.getElementById('client-phone');
 const planField = document.getElementById('client-plan');
 const statusField = document.getElementById('client-status');
+const logoInput = document.getElementById('client-logo');
+const logoDataField = document.getElementById('client-logo-data');
+const logoPreview = document.getElementById('client-logo-preview');
+const logoClearBtn = document.getElementById('client-logo-clear');
+const primaryColorField = document.getElementById('client-primary-color');
+const secondaryColorField = document.getElementById('client-secondary-color');
 const errorBanner = document.getElementById('client-form-error');
 const submitBtn = document.getElementById('client-form-submit');
 const cancelBtn = document.getElementById('client-form-cancel');
@@ -59,9 +65,42 @@ function statusLabel(status) {
     return Dashboard.t(key);
 }
 
+function setLogoPreview(dataUrl) {
+    logoDataField.value = dataUrl || '';
+    if (dataUrl) {
+        logoPreview.src = dataUrl;
+        logoPreview.hidden = false;
+        logoClearBtn.hidden = false;
+    } else {
+        logoPreview.hidden = true;
+        logoClearBtn.hidden = true;
+    }
+}
+
+logoInput.addEventListener('change', () => {
+    const file = logoInput.files?.[0];
+    if (!file) return;
+    if (file.size > 350 * 1024) {
+        showError(Dashboard.t('admin.saveError'));
+        logoInput.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setLogoPreview(reader.result);
+    reader.readAsDataURL(file);
+});
+
+logoClearBtn.addEventListener('click', () => {
+    logoInput.value = '';
+    setLogoPreview('');
+});
+
 function resetForm() {
     form.reset();
     idField.value = '';
+    setLogoPreview('');
+    primaryColorField.value = '#1a73e8';
+    secondaryColorField.value = '#12141a';
     submitBtn.textContent = Dashboard.t('admin.addClient');
     cancelBtn.hidden = true;
     clearError();
@@ -116,6 +155,9 @@ function startEdit(client) {
     phoneField.value = client.phone || '';
     planField.value = client.plan || '';
     statusField.value = client.status;
+    setLogoPreview(client.logo_data_url || '');
+    primaryColorField.value = client.primary_color || '#1a73e8';
+    secondaryColorField.value = client.secondary_color || '#12141a';
     submitBtn.textContent = Dashboard.t('admin.save');
     cancelBtn.hidden = false;
     clearError();
@@ -170,6 +212,9 @@ form.addEventListener('submit', async (event) => {
         phone: phoneField.value.trim(),
         plan: planField.value.trim(),
         status: statusField.value,
+        logoDataUrl: logoDataField.value || null,
+        primaryColor: primaryColorField.value,
+        secondaryColor: secondaryColorField.value,
     };
 
     const editingId = idField.value;

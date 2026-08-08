@@ -38,6 +38,7 @@ const {
     MODULE_CATALOG,
     listClients,
     getClientById,
+    getClientBranding,
     createClient,
     updateClient,
     deleteClient,
@@ -84,7 +85,10 @@ app.use(helmet({
         },
     },
 }));
-app.use(express.json());
+// Default express.json() caps requests at 100kb — too small for a base64
+// logo image (see MAX_LOGO_DATA_URL_LENGTH below). validateClientBody still
+// enforces the real ~350KB cap; this just raises the hard ceiling above it.
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
 // --- Static frontend ---------------------------------------------------------
@@ -218,14 +222,30 @@ app.get('/api/me', requireAuth, (req, res) => {
 // Every route below requires an authenticated admin (requireAuth first so
 // req.user exists, then requireAdmin checks the role in that token).
 const CLIENT_STATUSES = ['activo', 'inactivo', 'prospecto'];
+const MAX_LOGO_DATA_URL_LENGTH = 500 * 1024; // ~350KB image once base64-decoded
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 function validateClientBody(body) {
-    const { companyName, contactName, email, status } = body || {};
+    const { companyName, contactName, email, status, logoDataUrl, primaryColor, secondaryColor } = body || {};
     if (!companyName || !contactName || !email) {
         return 'companyName, contactName and email are required.';
     }
     if (status && !CLIENT_STATUSES.includes(status)) {
         return `status must be one of: ${CLIENT_STATUSES.join(', ')}.`;
+    }
+    if (logoDataUrl) {
+        if (typeof logoDataUrl !== 'string' || !logoDataUrl.startsWith('data:image/')) {
+            return 'logoDataUrl must be an image data URL.';
+        }
+        if (logoDataUrl.length > MAX_LOGO_DATA_URL_LENGTH) {
+            return 'Logo image is too large (max ~350KB).';
+        }
+    }
+    if (primaryColor && !HEX_COLOR_RE.test(primaryColor)) {
+        return 'primaryColor must be a hex color like #1a73e8.';
+    }
+    if (secondaryColor && !HEX_COLOR_RE.test(secondaryColor)) {
+        return 'secondaryColor must be a hex color like #1a73e8.';
     }
     return null;
 }
@@ -258,8 +278,8 @@ function applyClientLifecycle(client) {
 app.post('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { companyName, contactName, email, phone, plan, status } = req.body;
-    const client = createClient({ companyName, contactName, email, phone, plan, status });
+    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor } = req.body;
+    const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor });
     const generatedAdmin = applyClientLifecycle(client);
     res.status(201).json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -269,8 +289,8 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { companyName, contactName, email, phone, plan, status } = req.body;
-    const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status });
+    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor } = req.body;
+    const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor });
     const generatedAdmin = applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -320,6 +340,17 @@ function validateGrants(grants) {
 
 app.get('/api/business/contracted-modules', requireAuth, requireClientAdmin, (req, res) => {
     res.json({ moduleKeys: getClientModuleKeys(req.user.clientId) });
+});
+
+// Branding (company name, logo, institutional colors) — any authenticated
+// user AT a client can see their own company's branding, not just that
+// client's admin (everyone on the team sees the same sidebar identity).
+// GEIPSA/SGN staff (no clientId) get a 404: there's no client to brand for.
+app.get('/api/business/branding', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const branding = getClientBranding(req.user.clientId);
+    if (!branding) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ branding });
 });
 
 app.get('/api/business/users', requireAuth, requireClientAdmin, (req, res) => {

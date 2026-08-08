@@ -68,6 +68,40 @@
     outline: none;
     border-color: var(--color-text-primary);
 }
+.admin-branding-fields{
+    display: grid;
+    grid-template-columns: minmax(14rem, 2fr) 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.admin-logo-row{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.admin-logo-preview{
+    width: 2.5rem;
+    height: 2.5rem;
+    object-fit: contain;
+    border-radius: 0.3rem;
+    background-color: var(--color-bg);
+    box-shadow: 0 0 0 1px var(--color-border);
+}
+.admin-logo-clear{
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+}
+.admin-field input[type="color"]{
+    padding: 0.2rem;
+    height: 2.4rem;
+    cursor: pointer;
+}
+@media (max-width: 700px){
+    .admin-branding-fields{
+        grid-template-columns: 1fr;
+    }
+}
+
 .admin-error{
     margin-bottom: 1rem;
     padding: 0.6rem 0.8rem;

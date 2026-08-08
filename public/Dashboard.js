@@ -19,6 +19,7 @@ let dict = {};
 let menuData = null;
 let currentLang = DEFAULT_LANG;
 let currentRole = null;
+let clientBranding = null;
 
 // Embedded fallback so the UI still works even when i18n/*.json can't be
 // fetched (e.g. opened as a file:// page). Keep in sync with i18n/en.json /
@@ -43,6 +44,7 @@ const EMBEDDED_TRANSLATIONS = {
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
+            logo: "Logo", removeLogo: "Remove", primaryColor: "Primary color", secondaryColor: "Secondary color",
             companyName: "Company name", contactName: "Contact name", email: "Email", phone: "Phone",
             plan: "Plan / package", status: "Status",
             statusActivo: "Active", statusInactivo: "Inactive", statusProspecto: "Prospect",
@@ -101,6 +103,7 @@ const EMBEDDED_TRANSLATIONS = {
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
+            logo: "Logo", removeLogo: "Quitar", primaryColor: "Color primario", secondaryColor: "Color secundario",
             companyName: "Nombre de la empresa", contactName: "Nombre de contacto", email: "Correo electrónico", phone: "Teléfono",
             plan: "Plan / paquete", status: "Estado",
             statusActivo: "Activo", statusInactivo: "Inactivo", statusProspecto: "Prospecto",
@@ -182,6 +185,7 @@ async function loadLanguage(lang) {
     document.documentElement.lang = lang;
     localStorage.setItem('lang', lang);
     applyStaticTranslations();
+    applyClientBranding(clientBranding); // re-assert: applyStaticTranslations just reset .brand span to the generic "SGN" label
     document.querySelectorAll('.lang-option').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.lang === lang);
     });
@@ -535,12 +539,17 @@ document.querySelectorAll('.lang-option').forEach((btn) => {
 document.querySelectorAll('.style-option').forEach((btn) => {
     btn.addEventListener('click', () => {
         if (btn.dataset.style === 'institutional') {
-            alert(t('main.inDevelopment'));
-            return;
+            if (!clientBranding) {
+                alert(t('main.inDevelopment'));
+                return;
+            }
+            document.body.classList.remove('dark-mode');
+            document.body.classList.add('institutional-mode');
+        } else {
+            document.body.classList.remove('institutional-mode');
+            document.body.classList.toggle('dark-mode', btn.dataset.style === 'dark');
         }
-        document.body.classList.toggle('dark-mode', btn.dataset.style === 'dark');
-        document.querySelectorAll('.style-option[data-style="light"], .style-option[data-style="dark"]')
-            .forEach((b) => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.style-option').forEach((b) => b.classList.toggle('active', b === btn));
     });
 });
 
@@ -603,6 +612,38 @@ document.getElementById('logout-link')?.addEventListener('click', (event) => {
         .finally(() => window.location.replace('Login.html'));
 });
 
+// --- Client branding (logo, company name, institutional colors) -------------
+// Only client users (anyone with a clientId — the client's own admin or any
+// staff they created) have branding to show; GEIPSA/SGN staff get a 404 here
+// and keep the generic SGN sidebar identity.
+async function fetchClientBranding() {
+    try {
+        const res = await fetch(`${API_BASE}/business/branding`, { credentials: 'include' });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.branding || null;
+    } catch {
+        return null;
+    }
+}
+
+function applyClientBranding(branding) {
+    if (!branding) return;
+    if (branding.primaryColor) {
+        document.documentElement.style.setProperty('--institutional-primary', branding.primaryColor);
+    }
+    if (branding.secondaryColor) {
+        document.documentElement.style.setProperty('--institutional-secondary', branding.secondaryColor);
+    }
+    if (branding.logoDataUrl) {
+        document.querySelectorAll('.brand-light, .brand-dark').forEach((img) => {
+            img.src = branding.logoDataUrl;
+        });
+    }
+    const brandLabel = document.querySelector('.brand span');
+    if (brandLabel && branding.companyName) brandLabel.textContent = branding.companyName;
+}
+
 // --- Public entry point --------------------------------------------------------
 // Call once per page: await Dashboard.initDashboard({ activePage: 'clients' }).
 // Returns the user's role, or null if the user was redirected to Login.html.
@@ -620,6 +661,10 @@ async function initDashboard({ activePage } = {}) {
     // fixed to Inicio/Tablero/Administración de Clientes), so the picker
     // itself shouldn't even be offered.
     document.getElementById('dept-picker')?.classList.toggle('dept-picker-disabled', role === 'admin');
+    if (role !== 'admin') {
+        clientBranding = await fetchClientBranding();
+        applyClientBranding(clientBranding);
+    }
     return role;
 }
 

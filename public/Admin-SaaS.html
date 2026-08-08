@@ -180,6 +180,27 @@
                             </select>
                         </div>
                     </div>
+
+                    <div class="admin-branding-fields">
+                        <div class="admin-field admin-logo-field">
+                            <label for="client-logo" data-i18n="admin.logo">Logo</label>
+                            <div class="admin-logo-row">
+                                <img id="client-logo-preview" class="admin-logo-preview" alt="" hidden>
+                                <input id="client-logo" name="logo" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+                                <button type="button" class="btn btn-secondary admin-logo-clear" id="client-logo-clear" data-i18n="admin.removeLogo" hidden>Remove</button>
+                            </div>
+                            <input type="hidden" id="client-logo-data" name="logoDataUrl" value="">
+                        </div>
+                        <div class="admin-field">
+                            <label for="client-primary-color" data-i18n="admin.primaryColor">Primary color</label>
+                            <input id="client-primary-color" name="primaryColor" type="color" value="#1a73e8">
+                        </div>
+                        <div class="admin-field">
+                            <label for="client-secondary-color" data-i18n="admin.secondaryColor">Secondary color</label>
+                            <input id="client-secondary-color" name="secondaryColor" type="color" value="#12141a">
+                        </div>
+                    </div>
+
                     <div id="client-form-error" class="admin-error" role="alert" hidden></div>
                     <div class="admin-form-actions">
                         <button type="submit" class="btn" id="client-form-submit" data-i18n="admin.addClient">Add client</button>
