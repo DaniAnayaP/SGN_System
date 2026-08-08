@@ -434,6 +434,7 @@ function wireMenuInteractions() {
     menuBtn?.addEventListener('click', () => {
         const isMinimized = Sidebar.classList.toggle('minimize');
         menuBtn.setAttribute('aria-expanded', String(!isMinimized));
+        hideSidebarTooltip();
     });
 
     menuItemsDropdown.forEach((menuItem) => {
@@ -475,6 +476,41 @@ function wireMenuInteractions() {
             });
         });
     });
+
+    // Collapsed-sidebar tooltip: shows the item's label next to its icon on
+    // hover. Positioned explicitly via JS (not pure CSS :hover) — see the
+    // note in Inicio-en.css on why the old CSS-only version never worked.
+    document.querySelectorAll('.menu-item').forEach((menuItem) => {
+        menuItem.addEventListener('mouseenter', () => showSidebarTooltip(menuItem, Sidebar));
+        menuItem.addEventListener('mouseleave', hideSidebarTooltip);
+    });
+}
+
+function getSidebarTooltip() {
+    let tooltip = document.getElementById('sidebar-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'sidebar-tooltip';
+        tooltip.className = 'sidebar-tooltip';
+        document.body.appendChild(tooltip);
+    }
+    return tooltip;
+}
+
+function showSidebarTooltip(menuItem, Sidebar) {
+    if (!Sidebar.classList.contains('minimize')) return;
+    const label = menuItem.querySelector('.menu-link > span')?.textContent;
+    if (!label) return;
+    const tooltip = getSidebarTooltip();
+    tooltip.textContent = label;
+    const rect = menuItem.getBoundingClientRect();
+    tooltip.style.top = `${rect.top + rect.height / 2}px`;
+    tooltip.style.left = `${rect.right + 8}px`;
+    tooltip.classList.add('visible');
+}
+
+function hideSidebarTooltip() {
+    document.getElementById('sidebar-tooltip')?.classList.remove('visible');
 }
 
 function checkWindowSize() {

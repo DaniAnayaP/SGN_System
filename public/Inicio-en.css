@@ -351,11 +351,18 @@
         font-size: 0.8rem;
         font-weight: 500;
     }
-    .Sidebar.minimize .menu-item:hover,
+    /* The hover-driven tooltip used to live here as a pure-CSS rule
+       (position:absolute on the label span, revealed via overflow:visible
+       on :hover). It never reliably rendered — position:absolute with no
+       `top` set relies on "static position", which browsers don't compute
+       consistently for elements inside an overflow:hidden ancestor. Replaced
+       by a JS-driven tooltip (see sidebar-tooltip in Dashboard.js), which
+       positions itself explicitly via getBoundingClientRect. This selector
+       now only handles the click-to-expand submenu label, a separate
+       feature from the hover tooltip. */
     .Sidebar.minimize .menu-item.sub-menu-toggle {
         overflow: visible;
     }
-    .Sidebar.minimize .menu-item:hover span,
     .Sidebar.minimize .menu-item.sub-menu-toggle span{
         position: absolute;
         left: 4.2rem;
@@ -364,6 +371,26 @@
         border-radius: 0.4rem;
         color: var(--color-tooltip-text);
         transition: all 0.3s ease;
+    }
+    .sidebar-tooltip{
+        position: fixed;
+        transform: translateY(-50%);
+        padding: 0.5rem 0.7rem;
+        border-radius: 0.4rem;
+        background-color: var(--color-tooltip-bg);
+        color: var(--color-tooltip-text);
+        font-size: 0.8rem;
+        font-weight: 500;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 50;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.15s ease;
+    }
+    .sidebar-tooltip.visible{
+        opacity: 1;
+        visibility: visible;
     }
     /* Sub Menu */
     .sub-menu{
