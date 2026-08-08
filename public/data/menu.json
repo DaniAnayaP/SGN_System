@@ -12,7 +12,7 @@
           "submenu": [
             { "id": "ab-contracted-service", "labelKey": "menu.contractedService", "href": "#" },
             { "id": "ab-expansions", "labelKey": "menu.expansions", "href": "#" },
-            { "id": "ab-business-config", "labelKey": "menu.businessConfig", "href": "#" },
+            { "id": "ab-business-config", "labelKey": "menu.businessConfig", "href": "Business-Config.html" },
             { "id": "ab-roles", "labelKey": "menu.roles", "href": "Business-Roles.html" },
             { "id": "ab-users", "labelKey": "menu.users", "href": "Business-Usuarios.html" },
             { "id": "ab-access-permissions", "labelKey": "menu.accessPermissions", "href": "Business-Accesos.html" },

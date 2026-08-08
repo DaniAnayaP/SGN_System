@@ -181,7 +181,7 @@
                         </div>
                     </div>
 
-                    <div class="admin-branding-fields">
+                    <div class="admin-branding-fields admin-branding-fields-logo-only">
                         <div class="admin-field admin-logo-field">
                             <label for="client-logo" data-i18n="admin.logo">Logo</label>
                             <div class="admin-logo-row">
@@ -191,15 +191,9 @@
                             </div>
                             <input type="hidden" id="client-logo-data" name="logoDataUrl" value="">
                         </div>
-                        <div class="admin-field">
-                            <label for="client-primary-color" data-i18n="admin.primaryColor">Primary color</label>
-                            <input id="client-primary-color" name="primaryColor" type="color" value="#1a73e8">
-                        </div>
-                        <div class="admin-field">
-                            <label for="client-secondary-color" data-i18n="admin.secondaryColor">Secondary color</label>
-                            <input id="client-secondary-color" name="secondaryColor" type="color" value="#12141a">
-                        </div>
                     </div>
+
+                    <div id="client-color-palette"></div>
 
                     <div id="client-form-error" class="admin-error" role="alert" hidden></div>
                     <div class="admin-form-actions">
@@ -266,6 +260,7 @@
     </main>
 
     <script src="Dashboard.js"></script>
+    <script src="ColorPalette.js"></script>
     <script src="Admin-SaaS.js"></script>
 </body>
 </html>

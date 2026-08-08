@@ -41,8 +41,8 @@ const logoInput = document.getElementById('client-logo');
 const logoDataField = document.getElementById('client-logo-data');
 const logoPreview = document.getElementById('client-logo-preview');
 const logoClearBtn = document.getElementById('client-logo-clear');
-const primaryColorField = document.getElementById('client-primary-color');
-const secondaryColorField = document.getElementById('client-secondary-color');
+const paletteContainer = document.getElementById('client-color-palette');
+const paletteWidget = window.ColorPalette.create(paletteContainer);
 const errorBanner = document.getElementById('client-form-error');
 const submitBtn = document.getElementById('client-form-submit');
 const cancelBtn = document.getElementById('client-form-cancel');
@@ -99,8 +99,7 @@ function resetForm() {
     form.reset();
     idField.value = '';
     setLogoPreview('');
-    primaryColorField.value = '#1a73e8';
-    secondaryColorField.value = '#12141a';
+    paletteWidget.setPalette(null);
     submitBtn.textContent = Dashboard.t('admin.addClient');
     cancelBtn.hidden = true;
     clearError();
@@ -156,8 +155,12 @@ function startEdit(client) {
     planField.value = client.plan || '';
     statusField.value = client.status;
     setLogoPreview(client.logo_data_url || '');
-    primaryColorField.value = client.primary_color || '#1a73e8';
-    secondaryColorField.value = client.secondary_color || '#12141a';
+    let existingPalette = null;
+    if (client.color_palette) {
+        try { existingPalette = JSON.parse(client.color_palette); } catch { existingPalette = null; }
+    }
+    if (existingPalette) existingPalette.seed = client.seed_color || existingPalette.seed;
+    paletteWidget.setPalette(existingPalette);
     submitBtn.textContent = Dashboard.t('admin.save');
     cancelBtn.hidden = false;
     clearError();
@@ -205,6 +208,7 @@ form.addEventListener('submit', async (event) => {
         return;
     }
 
+    const { seed, ...currentPalette } = paletteWidget.getPalette();
     const payload = {
         companyName,
         contactName,
@@ -213,8 +217,8 @@ form.addEventListener('submit', async (event) => {
         plan: planField.value.trim(),
         status: statusField.value,
         logoDataUrl: logoDataField.value || null,
-        primaryColor: primaryColorField.value,
-        secondaryColor: secondaryColorField.value,
+        seedColor: seed,
+        colorPalette: currentPalette,
     };
 
     const editingId = idField.value;

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="business.usersTitle">Users</title>
+    <title data-i18n="menu.businessConfig">Business Config</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -76,7 +76,7 @@
 
     <main>
         <div class="top-bar barra-arriba">
-            <p class="welcome-text" data-i18n="business.usersTitle">Users</p>
+            <p class="welcome-text" data-i18n="menu.businessConfig">Business Config</p>
             <div class="top-bar-actions">
                 <button type="button" data-i18n-aria="main.messages" aria-label="Messages">
                     <i class="bx bx-message" aria-hidden="true"></i>
@@ -138,73 +138,32 @@
         </div>
 
         <section class="admin-panel">
-            <p class="admin-subtitle" data-i18n="business.usersSubtitle">Manage the people who use this SGN instance.</p>
+            <p class="admin-subtitle" data-i18n="business.configSubtitle">Adjust your company's logo and institutional colors — this is what your team sees when they pick "Institutional" style.</p>
 
-            <form id="user-form" class="admin-form" novalidate>
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="user-username" data-i18n="business.username">Username</label>
-                        <input id="user-username" name="username" type="text" required>
+            <div class="admin-branding-fields admin-branding-fields-logo-only">
+                <div class="admin-field admin-logo-field">
+                    <label for="config-logo" data-i18n="admin.logo">Logo</label>
+                    <div class="admin-logo-row">
+                        <img id="config-logo-preview" class="admin-logo-preview" alt="" hidden>
+                        <input id="config-logo" name="logo" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+                        <button type="button" class="btn btn-secondary admin-logo-clear" id="config-logo-clear" data-i18n="admin.removeLogo" hidden>Remove</button>
                     </div>
-                    <div class="admin-field">
-                        <label for="user-name" data-i18n="business.name">Full name</label>
-                        <input id="user-name" name="name" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="user-email" data-i18n="admin.email">Email</label>
-                        <input id="user-email" name="email" type="email" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="user-password" data-i18n="business.password">Password</label>
-                        <input id="user-password" name="password" type="password" minlength="8" required>
-                    </div>
+                    <input type="hidden" id="config-logo-data" value="">
                 </div>
-                <div id="user-form-error" class="admin-error" role="alert" hidden></div>
-                <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="user-form-submit" data-i18n="business.createUser">Create user</button>
-                </div>
-            </form>
-
-            <div class="admin-table-wrap">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th data-i18n="business.username">Username</th>
-                            <th data-i18n="business.name">Full name</th>
-                            <th data-i18n="admin.email">Email</th>
-                            <th data-i18n="business.profilesLabel">Profiles</th>
-                            <th data-i18n="business.createdAt">Created</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body">
-                        <!-- rendered at runtime -->
-                    </tbody>
-                </table>
-                <p id="users-empty" class="admin-empty" data-i18n="business.usersEmpty" hidden>No users yet. Create the first one above.</p>
             </div>
 
-            <h3 style="margin-top: 2rem; margin-bottom: 0.75rem; font-size: 0.95rem;" data-i18n="business.assignProfilesTitle">Assign profiles</h3>
-            <div class="admin-select-row">
-                <label for="assign-user-select" data-i18n="business.selectUser">Select a user</label>
-                <select id="assign-user-select">
-                    <option value="" data-i18n="business.selectUserPlaceholder">Choose a user...</option>
-                </select>
+            <div id="config-color-palette"></div>
+
+            <div id="config-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions">
+                <button type="button" class="btn" id="config-save" data-i18n="admin.save">Save</button>
             </div>
-            <p id="assign-hint" class="admin-hint" data-i18n="business.noUserSelected">Select a user above to manage their profiles.</p>
-            <div id="assign-panel" hidden>
-                <div class="admin-module-list" id="assign-profiles-list">
-                    <!-- rendered at runtime -->
-                </div>
-                <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                    <button type="button" class="btn" id="assign-save" data-i18n="admin.save">Save</button>
-                </div>
-                <p id="assign-save-status" class="admin-save-status"></p>
-            </div>
+            <p id="config-save-status" class="admin-save-status"></p>
         </section>
     </main>
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="Business-Usuarios.js"></script>
+    <script src="Business-Config.js"></script>
 </body>
 </html>

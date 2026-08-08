@@ -80,6 +80,17 @@
     "removeLogo": "Remove",
     "primaryColor": "Primary color",
     "secondaryColor": "Secondary color",
+    "paletteSeedLabel": "Client's representative color",
+    "paletteSuggest": "Suggest palette",
+    "paletteHint": "Pick the client's most representative color and click \"Suggest palette\" to auto-fill a full, readable theme — then adjust any color by hand.",
+    "paletteBg": "Background",
+    "paletteSurface": "Surface",
+    "paletteBorder": "Border",
+    "paletteTextPrimary": "Primary text",
+    "paletteTextSecondary": "Secondary text",
+    "paletteAccent": "Accent (buttons, active items)",
+    "paletteTooltipBg": "Tooltip background",
+    "paletteTooltipText": "Tooltip text",
     "contactName": "Contact name",
     "email": "Email",
     "phone": "Phone",
@@ -145,7 +156,9 @@
     "accesosSubtitle": "Grant a user extra modules, sections, or screens beyond what their profile(s) already give them.",
     "selectUserForAccess": "Select a user",
     "extraAccessHint": "This is in addition to whatever their assigned profiles already grant — it never removes access.",
-    "accessSaved": "Access updated."
+    "accessSaved": "Access updated.",
+    "configSubtitle": "Adjust your company's logo and institutional colors — this is what your team sees when they pick \"Institutional\" style.",
+    "brandingSaved": "Branding saved."
   },
   "main": {
     "welcome": "Welcome",

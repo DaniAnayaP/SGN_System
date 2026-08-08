@@ -46,6 +46,11 @@ const EMBEDDED_TRANSLATIONS = {
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
             logo: "Logo", removeLogo: "Remove", primaryColor: "Primary color", secondaryColor: "Secondary color",
+            paletteSeedLabel: "Client's representative color", paletteSuggest: "Suggest palette",
+            paletteHint: "Pick the client's most representative color and click \"Suggest palette\" to auto-fill a full, readable theme — then adjust any color by hand.",
+            paletteBg: "Background", paletteSurface: "Surface", paletteBorder: "Border",
+            paletteTextPrimary: "Primary text", paletteTextSecondary: "Secondary text",
+            paletteAccent: "Accent (buttons, active items)", paletteTooltipBg: "Tooltip background", paletteTooltipText: "Tooltip text",
             companyName: "Company name", contactName: "Contact name", email: "Email", phone: "Phone",
             plan: "Plan / package", status: "Status",
             statusActivo: "Active", statusInactivo: "Inactive", statusProspecto: "Prospect",
@@ -81,7 +86,9 @@ const EMBEDDED_TRANSLATIONS = {
             permissionsTitle: "Access for this profile", selectProfileHint: "Create or select a profile above to configure its access.",
             accesosTitle: "Access & Permissions", accesosSubtitle: "Grant a user extra modules, sections, or screens beyond what their profile(s) already give them.",
             selectUserForAccess: "Select a user", extraAccessHint: "This is in addition to whatever their assigned profiles already grant — it never removes access.",
-            accessSaved: "Access updated."
+            accessSaved: "Access updated.",
+            configSubtitle: "Adjust your company's logo and institutional colors — this is what your team sees when they pick \"Institutional\" style.",
+            brandingSaved: "Branding saved."
         },
         main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience." }
     },
@@ -105,6 +112,11 @@ const EMBEDDED_TRANSLATIONS = {
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
             logo: "Logo", removeLogo: "Quitar", primaryColor: "Color primario", secondaryColor: "Color secundario",
+            paletteSeedLabel: "Color representativo del cliente", paletteSuggest: "Sugerir paleta",
+            paletteHint: "Elige el color más representativo del cliente y haz clic en \"Sugerir paleta\" para generar un tema completo y legible — luego ajusta cualquier color a mano.",
+            paletteBg: "Fondo", paletteSurface: "Superficie", paletteBorder: "Borde",
+            paletteTextPrimary: "Texto principal", paletteTextSecondary: "Texto secundario",
+            paletteAccent: "Acento (botones, activos)", paletteTooltipBg: "Fondo de tooltip", paletteTooltipText: "Texto de tooltip",
             companyName: "Nombre de la empresa", contactName: "Nombre de contacto", email: "Correo electrónico", phone: "Teléfono",
             plan: "Plan / paquete", status: "Estado",
             statusActivo: "Activo", statusInactivo: "Inactivo", statusProspecto: "Prospecto",
@@ -140,7 +152,9 @@ const EMBEDDED_TRANSLATIONS = {
             permissionsTitle: "Accesos de este perfil", selectProfileHint: "Crea o selecciona un perfil arriba para configurar sus accesos.",
             accesosTitle: "Accesos y Permisos", accesosSubtitle: "Otorga a un usuario módulos, apartados o pantallas adicionales a los que ya le dan sus perfiles.",
             selectUserForAccess: "Selecciona un usuario", extraAccessHint: "Esto se suma a lo que ya otorgan sus perfiles asignados — nunca quita acceso.",
-            accessSaved: "Accesos actualizados."
+            accessSaved: "Accesos actualizados.",
+            configSubtitle: "Ajusta el logo y los colores institucionales de tu empresa — esto es lo que tu equipo ve al elegir el estilo \"Institucional\".",
+            brandingSaved: "Marca guardada."
         },
         main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia" }
     }
@@ -679,11 +693,25 @@ async function fetchClientBranding() {
 
 function applyClientBranding(branding) {
     if (!branding) return;
-    if (branding.primaryColor) {
-        document.documentElement.style.setProperty('--institutional-primary', branding.primaryColor);
-    }
-    if (branding.secondaryColor) {
-        document.documentElement.style.setProperty('--institutional-secondary', branding.secondaryColor);
+    // Institutional is a FULL theme variant, same depth as light/dark (see
+    // :root / body.dark-mode in Inicio-en.css) — every role below maps to
+    // one of those same variables, just sourced from the client's palette
+    // instead of a hardcoded value. Older clients that only ever set
+    // primary/secondaryColor (before the full palette existed) still get a
+    // reasonable theme via ColorPalette.suggestPalette as a fallback.
+    const palette = branding.colorPalette
+        || (branding.primaryColor && window.ColorPalette ? window.ColorPalette.suggestPalette(branding.primaryColor) : null);
+    if (palette) {
+        const root = document.documentElement.style;
+        root.setProperty('--institutional-bg', palette.bg || branding.secondaryColor || '#EBECF2');
+        root.setProperty('--institutional-surface', palette.surface || '#FFFFFF');
+        root.setProperty('--institutional-border', palette.border || '#9A9EB2');
+        root.setProperty('--institutional-text-primary', palette.textPrimary || '#000000');
+        root.setProperty('--institutional-text-secondary', palette.textSecondary || '#3F435D');
+        root.setProperty('--institutional-accent', palette.accent || branding.primaryColor || '#1a73e8');
+        root.setProperty('--institutional-accent-text', palette.accentText || '#FFFFFF');
+        root.setProperty('--institutional-tooltip-bg', palette.tooltipBg || '#2A2E33');
+        root.setProperty('--institutional-tooltip-text', palette.tooltipText || '#FFFFFF');
     }
     if (branding.logoDataUrl) {
         document.querySelectorAll('.brand-light, .brand-dark').forEach((img) => {
@@ -718,4 +746,10 @@ async function initDashboard({ activePage } = {}) {
     return role;
 }
 
-window.Dashboard = { initDashboard, t, get lang() { return currentLang; }, get role() { return currentRole; } };
+window.Dashboard = {
+    initDashboard,
+    t,
+    get lang() { return currentLang; },
+    get role() { return currentRole; },
+    get isClientAdmin() { return !!currentUser?.isClientAdmin; },
+};

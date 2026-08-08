@@ -28,29 +28,47 @@
         --shadow-border: rgba(255, 255, 255, 0.1);
         --user-bg-color: #FAFAFC;
     }
-    /* Institutional style: the client's own logo bar + accent colors,
-       supplied at runtime via --institutional-primary/-secondary (see
-       applyClientBranding in Dashboard.js). Keeps the rest of the light
-       theme's contrast intact rather than overriding text/background colors
-       wholesale with an arbitrary client-picked hex. */
+    /* Institutional style: a FULL theme variant, exactly like body.dark-mode
+       above — every one of the same variables gets overridden, just sourced
+       from the client's own palette (applyClientBranding in Dashboard.js)
+       instead of a hardcoded value. --institutional-* custom properties are
+       set at runtime on :root; the var(...) fallbacks here keep things sane
+       if branding hasn't loaded yet. */
+    body.institutional-mode{
+        --color-bg: var(--institutional-bg, #EBECF2);
+        --color-surface: var(--institutional-surface, #FFFFFF);
+        --color-border: var(--institutional-border, #9A9EB2);
+        --color-text-primary: var(--institutional-text-primary, #000);
+        --color-text-secondary: var(--institutional-text-secondary, #3F435D);
+        --color-tooltip-bg: var(--institutional-tooltip-bg, #2A2E33);
+        --color-tooltip-text: var(--institutional-tooltip-text, #FFF);
+        --shadow-border: rgba(0, 0, 0, 0.12);
+        --user-bg-color: var(--institutional-surface, #FAFAFC);
+    }
     body.institutional-mode .brand{
-        background-color: var(--institutional-primary, transparent);
+        background-color: var(--institutional-accent, transparent);
         border-radius: 0.4rem;
         padding: 0.5rem 0.455rem;
         margin: -0.2rem -0.2rem 1.6rem -0.2rem;
         transition: background-color 0.3s ease;
     }
     body.institutional-mode .brand span{
-        color: #FFFFFF;
+        color: var(--institutional-accent-text, #FFFFFF);
     }
     body.institutional-mode .menu-item:hover .menu-link,
     body.institutional-mode .menu-item.active .menu-link{
-        background-color: var(--institutional-secondary, var(--color-bg));
-        color: #FFFFFF;
+        background-color: var(--institutional-accent, var(--color-bg));
+        color: var(--institutional-accent-text, #FFFFFF);
     }
     body.institutional-mode .dept-picker-btn:hover,
-    body.institutional-mode .dept-picker.open .dept-picker-btn{
-        color: var(--institutional-primary, var(--color-text-primary));
+    body.institutional-mode .dept-picker.open .dept-picker-btn,
+    body.institutional-mode .settings-menu.open #settings-btn,
+    body.institutional-mode .settings-dropdown-group.open .settings-dropdown-toggle{
+        color: var(--institutional-accent, var(--color-text-primary));
+    }
+    body.institutional-mode .btn{
+        background: var(--institutional-accent, #4753b0);
+        color: var(--institutional-accent-text, #FFFFFF);
     }
     .sr-only{
         position: absolute;

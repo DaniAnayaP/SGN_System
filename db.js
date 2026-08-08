@@ -102,6 +102,16 @@ if (!clientColumns.some((c) => c.name === 'primary_color')) {
 if (!clientColumns.some((c) => c.name === 'secondary_color')) {
     db.exec('ALTER TABLE clients ADD COLUMN secondary_color TEXT');
 }
+// Full institutional palette (bg/surface/border/text.../accent/tooltip...),
+// generated from seed_color and then hand-tuned — see ColorPalette.js.
+// primary_color/secondary_color above still work as a fallback for clients
+// configured before this existed.
+if (!clientColumns.some((c) => c.name === 'seed_color')) {
+    db.exec('ALTER TABLE clients ADD COLUMN seed_color TEXT');
+}
+if (!clientColumns.some((c) => c.name === 'color_palette')) {
+    db.exec('ALTER TABLE clients ADD COLUMN color_palette TEXT');
+}
 
 const MODULE_CATALOG = [
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
@@ -294,36 +304,64 @@ function getClientById(id) {
 }
 
 function getClientBranding(id) {
-    return db
-        .prepare('SELECT company_name AS companyName, logo_data_url AS logoDataUrl, primary_color AS primaryColor, secondary_color AS secondaryColor FROM clients WHERE id = ?')
+    const row = db
+        .prepare(`
+            SELECT company_name AS companyName, logo_data_url AS logoDataUrl,
+                   primary_color AS primaryColor, secondary_color AS secondaryColor,
+                   seed_color AS seedColor, color_palette AS colorPaletteRaw
+            FROM clients WHERE id = ?
+        `)
         .get(id);
+    if (!row) return null;
+    const { colorPaletteRaw, ...rest } = row;
+    let colorPalette = null;
+    if (colorPaletteRaw) {
+        try { colorPalette = JSON.parse(colorPaletteRaw); } catch { colorPalette = null; }
+    }
+    return { ...rest, colorPalette };
 }
 
-function createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor }) {
+function createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette }) {
     const result = db
         .prepare(`
-            INSERT INTO clients (company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color)
-            VALUES (@companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor)
+            INSERT INTO clients (company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette)
+            VALUES (@companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette)
         `)
         .run({
             companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto',
             logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
+            seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
         });
     return getClientById(result.lastInsertRowid);
 }
 
-function updateClient(id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor }) {
+function updateClient(id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette }) {
     db.prepare(`
         UPDATE clients
         SET company_name = @companyName, contact_name = @contactName, email = @email,
             phone = @phone, plan = @plan, status = @status,
-            logo_data_url = @logoDataUrl, primary_color = @primaryColor, secondary_color = @secondaryColor
+            logo_data_url = @logoDataUrl, primary_color = @primaryColor, secondary_color = @secondaryColor,
+            seed_color = @seedColor, color_palette = @colorPalette
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
         logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
+        seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
     });
     return getClientById(id);
+}
+
+// Self-service version for the client's own admin (Business-Config page):
+// only branding fields, never company_name/status/plan/etc.
+function updateClientBranding(clientId, { logoDataUrl, seedColor, colorPalette }) {
+    db.prepare(`
+        UPDATE clients SET logo_data_url = @logoDataUrl, seed_color = @seedColor, color_palette = @colorPalette
+        WHERE id = @id
+    `).run({
+        id: clientId, logoDataUrl: logoDataUrl || null,
+        seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
+    });
+    return getClientBranding(clientId);
 }
 
 // Deleting a client is different from deactivating one: deactivation keeps
@@ -500,6 +538,7 @@ module.exports = {
     getClientBranding,
     createClient,
     updateClient,
+    updateClientBranding,
     deleteClient,
     getClientModules,
     setClientModules,

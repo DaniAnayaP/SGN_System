@@ -74,6 +74,9 @@
     gap: 1rem;
     margin-bottom: 1rem;
 }
+.admin-branding-fields-logo-only{
+    grid-template-columns: minmax(14rem, 24rem);
+}
 .admin-logo-row{
     display: flex;
     align-items: center;
@@ -248,6 +251,82 @@ body.dark-mode .admin-badge-inactivo{
 }
 body.dark-mode .admin-badge-prospecto{
     background-color: #1e2a3a; color: #8fb8ea;
+}
+
+/* Institutional color palette widget */
+.color-palette-widget{
+    margin-bottom: 1rem;
+}
+.palette-seed-row{
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+.palette-seed-row .admin-field{
+    max-width: 16rem;
+}
+.palette-seed-row .btn{
+    width: auto;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.85rem;
+}
+.palette-hint{
+    max-width: 40rem;
+    margin-bottom: 1rem;
+}
+.palette-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.25rem;
+}
+.palette-field label{
+    font-size: 0.72rem;
+}
+.palette-preview{
+    max-width: 20rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px var(--color-border);
+}
+.palette-preview-bar{
+    padding: 0.7rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+.palette-preview-bar::before{
+    content: 'SGN';
+}
+.palette-preview-body{
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.palette-preview-item{
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.35rem;
+    font-size: 0.75rem;
+    border: 1px solid transparent;
+}
+.palette-preview-item::before{
+    content: 'Menú';
+}
+.palette-preview-item-active::before{
+    content: 'Menú activo';
+}
+.palette-preview-btn{
+    align-self: flex-start;
+    margin-top: 0.3rem;
+    padding: 0.45rem 1rem;
+    border-radius: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.palette-preview-btn::before{
+    content: 'Botón';
 }
 
 /* Permission tree (módulo / apartado / pantalla) */

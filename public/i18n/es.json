@@ -80,6 +80,17 @@
     "removeLogo": "Quitar",
     "primaryColor": "Color primario",
     "secondaryColor": "Color secundario",
+    "paletteSeedLabel": "Color representativo del cliente",
+    "paletteSuggest": "Sugerir paleta",
+    "paletteHint": "Elige el color más representativo del cliente y haz clic en \"Sugerir paleta\" para generar un tema completo y legible — luego ajusta cualquier color a mano.",
+    "paletteBg": "Fondo",
+    "paletteSurface": "Superficie",
+    "paletteBorder": "Borde",
+    "paletteTextPrimary": "Texto principal",
+    "paletteTextSecondary": "Texto secundario",
+    "paletteAccent": "Acento (botones, activos)",
+    "paletteTooltipBg": "Fondo de tooltip",
+    "paletteTooltipText": "Texto de tooltip",
     "contactName": "Nombre de contacto",
     "email": "Correo electrónico",
     "phone": "Teléfono",
@@ -145,7 +156,9 @@
     "accesosSubtitle": "Otorga a un usuario módulos, apartados o pantallas adicionales a los que ya le dan sus perfiles.",
     "selectUserForAccess": "Selecciona un usuario",
     "extraAccessHint": "Esto se suma a lo que ya otorgan sus perfiles asignados — nunca quita acceso.",
-    "accessSaved": "Accesos actualizados."
+    "accessSaved": "Accesos actualizados.",
+    "configSubtitle": "Ajusta el logo y los colores institucionales de tu empresa — esto es lo que tu equipo ve al elegir el estilo \"Institucional\".",
+    "brandingSaved": "Marca guardada."
   },
   "main": {
     "welcome": "Bienvenido",

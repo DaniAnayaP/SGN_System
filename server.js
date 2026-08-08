@@ -41,6 +41,7 @@ const {
     getClientBranding,
     createClient,
     updateClient,
+    updateClientBranding,
     deleteClient,
     getClientModules,
     setClientModules,
@@ -226,21 +227,45 @@ const CLIENT_STATUSES = ['activo', 'inactivo', 'prospecto'];
 const MAX_LOGO_DATA_URL_LENGTH = 500 * 1024; // ~350KB image once base64-decoded
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
+const PALETTE_KEYS = ['bg', 'surface', 'border', 'textPrimary', 'textSecondary', 'accent', 'accentText', 'tooltipBg', 'tooltipText'];
+
+function validateLogo(logoDataUrl) {
+    if (!logoDataUrl) return null;
+    if (typeof logoDataUrl !== 'string' || !logoDataUrl.startsWith('data:image/')) {
+        return 'logoDataUrl must be an image data URL.';
+    }
+    if (logoDataUrl.length > MAX_LOGO_DATA_URL_LENGTH) {
+        return 'Logo image is too large (max ~350KB).';
+    }
+    return null;
+}
+
+function validateSeedColor(seedColor) {
+    if (seedColor && !HEX_COLOR_RE.test(seedColor)) {
+        return 'seedColor must be a hex color like #1a73e8.';
+    }
+    return null;
+}
+
+function validateColorPalette(colorPalette) {
+    if (colorPalette == null) return null;
+    if (typeof colorPalette !== 'object' || Array.isArray(colorPalette)) {
+        return 'colorPalette must be an object.';
+    }
+    for (const [key, value] of Object.entries(colorPalette)) {
+        if (!PALETTE_KEYS.includes(key)) return `colorPalette has an unknown key: ${key}.`;
+        if (!HEX_COLOR_RE.test(value)) return `colorPalette.${key} must be a hex color like #1a73e8.`;
+    }
+    return null;
+}
+
 function validateClientBody(body) {
-    const { companyName, contactName, email, status, logoDataUrl, primaryColor, secondaryColor } = body || {};
+    const { companyName, contactName, email, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette } = body || {};
     if (!companyName || !contactName || !email) {
         return 'companyName, contactName and email are required.';
     }
     if (status && !CLIENT_STATUSES.includes(status)) {
         return `status must be one of: ${CLIENT_STATUSES.join(', ')}.`;
-    }
-    if (logoDataUrl) {
-        if (typeof logoDataUrl !== 'string' || !logoDataUrl.startsWith('data:image/')) {
-            return 'logoDataUrl must be an image data URL.';
-        }
-        if (logoDataUrl.length > MAX_LOGO_DATA_URL_LENGTH) {
-            return 'Logo image is too large (max ~350KB).';
-        }
     }
     if (primaryColor && !HEX_COLOR_RE.test(primaryColor)) {
         return 'primaryColor must be a hex color like #1a73e8.';
@@ -248,7 +273,7 @@ function validateClientBody(body) {
     if (secondaryColor && !HEX_COLOR_RE.test(secondaryColor)) {
         return 'secondaryColor must be a hex color like #1a73e8.';
     }
-    return null;
+    return validateLogo(logoDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette);
 }
 
 app.get('/api/admin/modules', requireAuth, requireAdmin, (req, res) => {
@@ -279,8 +304,8 @@ function applyClientLifecycle(client) {
 app.post('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor } = req.body;
-    const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor });
+    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette } = req.body;
+    const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette });
     const generatedAdmin = applyClientLifecycle(client);
     res.status(201).json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -290,8 +315,8 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor } = req.body;
-    const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor });
+    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette } = req.body;
+    const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette });
     const generatedAdmin = applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -351,6 +376,17 @@ app.get('/api/business/branding', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const branding = getClientBranding(req.user.clientId);
     if (!branding) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ branding });
+});
+
+// Self-service: only the client's own admin can change their branding
+// (logo + institutional palette), and only for their own client_id — never
+// company_name/status/plan, which stay GEIPSA-controlled (see Admin-SaaS).
+app.put('/api/business/branding', requireAuth, requireClientAdmin, (req, res) => {
+    const { logoDataUrl, seedColor, colorPalette } = req.body || {};
+    const error = validateLogo(logoDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette);
+    if (error) return res.status(400).json({ message: error });
+    const branding = updateClientBranding(req.user.clientId, { logoDataUrl, seedColor, colorPalette });
     res.json({ branding });
 });
 
