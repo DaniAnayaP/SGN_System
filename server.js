@@ -172,6 +172,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             sub: user.id,
             username: user.username,
             name: user.name,
+            email: user.email,
             role: user.role,
             clientId: user.client_id,
             isClientAdmin: !!user.is_client_admin,

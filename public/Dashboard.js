@@ -20,6 +20,7 @@ let menuData = null;
 let currentLang = DEFAULT_LANG;
 let currentRole = null;
 let clientBranding = null;
+let currentUser = null;
 
 // Embedded fallback so the UI still works even when i18n/*.json can't be
 // fetched (e.g. opened as a file:// page). Keep in sync with i18n/en.json /
@@ -153,11 +154,23 @@ async function authGuard() {
         const res = await fetch(`${API_BASE}/me`, { credentials: 'include' });
         if (!res.ok) throw new Error('not authenticated');
         const data = await res.json();
+        currentUser = data.user || null;
         return data.user?.role || 'user';
     } catch {
         window.location.replace('Login.html');
         return null;
     }
+}
+
+// renderMenu() sets #user-name/#user-email from menu.json's static demo
+// data — call this right after to replace it with whoever is actually
+// signed in.
+function applyRealUserIdentity() {
+    if (!currentUser) return;
+    const nameEl = document.getElementById('user-name');
+    const emailEl = document.getElementById('user-email');
+    if (nameEl) nameEl.textContent = currentUser.name || currentUser.username || '';
+    if (emailEl) emailEl.textContent = currentUser.email || '';
 }
 
 // --- i18n --------------------------------------------------------------------
@@ -307,6 +320,7 @@ function applyDepartmentFilter(data) {
 
 function renderFilteredMenu() {
     if (menuData) renderMenu(applyDepartmentFilter(menuData));
+    applyRealUserIdentity();
 }
 
 function updateDeptPickerLabel() {
