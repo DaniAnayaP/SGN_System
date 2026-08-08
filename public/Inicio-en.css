@@ -324,11 +324,16 @@
         font-size: 1.35rem;
         padding: 0 0.8rem;
     }
-    .menu-link i:last-child{
+    /* :not(:only-child) matters here: items with no submenu have exactly one
+       icon, which is technically both :first-child and :last-child — without
+       this guard these rules (meant only for the dropdown chevron) push that
+       lone icon out to the far right and then hide it entirely when
+       minimized, leaving nothing visible but clipped text. */
+    .menu-link i:last-child:not(:only-child){
         margin-left: auto;
         transition: transform 0.3s ease;
     }
-    .Sidebar.minimize .menu-link i:last-child{
+    .Sidebar.minimize .menu-link i:last-child:not(:only-child){
         display: none;
     }
     .menu-item.sub-menu-toggle .menu-link i:last-child{
