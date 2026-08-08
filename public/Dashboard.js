@@ -396,12 +396,29 @@ function buildMenuItem(item) {
 
 function renderMenu(data) {
     const mount = document.getElementById('menu-mount');
+    const adminBusinessMount = document.getElementById('admin-business-mount');
     mount.innerHTML = '';
+    if (adminBusinessMount) adminBusinessMount.innerHTML = '';
+
     data.sections.forEach((section) => {
+        let items = section.items;
+        // "Administración del Negocio" renders in its own mount right below
+        // the department picker instead of buried in the main item list.
+        if (section.id === 'main' && adminBusinessMount) {
+            const adminBusinessItem = items.find((i) => i.id === 'admin-business');
+            if (adminBusinessItem) {
+                const shortcutUl = document.createElement('ul');
+                shortcutUl.className = 'menu';
+                shortcutUl.dataset.sectionId = 'admin-business-shortcut';
+                shortcutUl.appendChild(buildMenuItem(adminBusinessItem));
+                adminBusinessMount.appendChild(shortcutUl);
+                items = items.filter((i) => i.id !== 'admin-business');
+            }
+        }
         const ul = document.createElement('ul');
         ul.className = 'menu';
         ul.dataset.sectionId = section.id;
-        section.items.forEach((item) => ul.appendChild(buildMenuItem(item)));
+        items.forEach((item) => ul.appendChild(buildMenuItem(item)));
         mount.appendChild(ul);
     });
 
