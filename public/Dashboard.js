@@ -28,7 +28,7 @@ let currentUser = null;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department" },
         menu: {
             home: "Home", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Config",
@@ -102,7 +102,7 @@ const EMBEDDED_TRANSLATIONS = {
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento" },
         menu: {
             home: "Inicio", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Configuración del Negocio",
@@ -760,6 +760,105 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     } else {
         container.prepend(chatbotBtn);
     }
+});
+
+// --- Sidebar search: live-filters the menu items actually rendered right
+// now (respecting the current department filter, role-based sidebar, and
+// language) instead of a separate hardcoded index, so results always match
+// what the user can already see and click. ----------------------------------
+const sidebarSearchInput = document.getElementById('sidebar-search');
+let sidebarSearchResultsEl = null;
+
+function normalizeSearchText(str) {
+    return str.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function getSearchableLinks() {
+    return Array.from(document.querySelectorAll(
+        '#menu-mount .menu-link, #menu-mount .sub-menu-link, #admin-business-mount .menu-link, #admin-business-mount .sub-menu-link'
+    )).filter((a) => a.textContent.trim().length > 0);
+}
+
+function getResultIcon(anchor) {
+    const icon = anchor.classList.contains('sub-menu-link')
+        ? anchor.closest('.menu-item')?.querySelector('.menu-link i:first-child')
+        : anchor.querySelector('i:first-child');
+    return icon ? icon.className : 'bx bx-link';
+}
+
+function getSidebarSearchResultsEl() {
+    if (!sidebarSearchResultsEl) {
+        sidebarSearchResultsEl = document.createElement('ul');
+        sidebarSearchResultsEl.id = 'sidebar-search-results';
+        sidebarSearchResultsEl.className = 'sidebar-search-results';
+        sidebarSearchInput?.closest('.search')?.appendChild(sidebarSearchResultsEl);
+    }
+    return sidebarSearchResultsEl;
+}
+
+function closeSidebarSearchResults() {
+    sidebarSearchResultsEl?.classList.remove('open');
+}
+
+function selectSidebarSearchResult(anchor) {
+    if (sidebarSearchInput) sidebarSearchInput.value = '';
+    closeSidebarSearchResults();
+    document.getElementById('Sidebar')?.classList.remove('minimize');
+    anchor.click();
+    anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function renderSidebarSearchResults(query) {
+    const dropdown = getSidebarSearchResultsEl();
+    dropdown.innerHTML = '';
+    const q = normalizeSearchText(query.trim());
+    if (!q) {
+        dropdown.classList.remove('open');
+        return;
+    }
+    const matches = getSearchableLinks()
+        .filter((a) => normalizeSearchText(a.textContent).includes(q))
+        .slice(0, 8);
+    if (!matches.length) {
+        const li = document.createElement('li');
+        li.className = 'sidebar-search-empty';
+        li.textContent = t('sidebar.searchNoResults');
+        dropdown.appendChild(li);
+        dropdown.classList.add('open');
+        return;
+    }
+    matches.forEach((anchor) => {
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sidebar-search-result';
+        const icon = document.createElement('i');
+        icon.className = getResultIcon(anchor);
+        icon.setAttribute('aria-hidden', 'true');
+        const span = document.createElement('span');
+        span.textContent = anchor.textContent.trim();
+        btn.append(icon, span);
+        btn.addEventListener('click', () => selectSidebarSearchResult(anchor));
+        li.appendChild(btn);
+        dropdown.appendChild(li);
+    });
+    dropdown.classList.add('open');
+}
+
+sidebarSearchInput?.addEventListener('input', () => {
+    renderSidebarSearchResults(sidebarSearchInput.value);
+});
+
+sidebarSearchInput?.addEventListener('focus', () => {
+    if (sidebarSearchInput.value) renderSidebarSearchResults(sidebarSearchInput.value);
+});
+
+document.addEventListener('click', (event) => {
+    if (sidebarSearchResultsEl && !event.target.closest('.search')) closeSidebarSearchResults();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeSidebarSearchResults();
 });
 
 // --- Department picker dropdown ----------------------------------------------

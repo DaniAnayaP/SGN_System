@@ -31,6 +31,7 @@
   "sidebar": {
     "brand": "SGN",
     "searchPlaceholder": "Search",
+    "searchNoResults": "No matches found.",
     "notifications": "Notifications",
     "settings": "Settings",
     "logout": "Log out",
