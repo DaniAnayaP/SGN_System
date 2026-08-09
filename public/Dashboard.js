@@ -98,7 +98,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience." }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI." }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -172,7 +172,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA." }
     }
 };
 
@@ -648,6 +648,113 @@ document.querySelectorAll('.style-option').forEach((btn) => {
         }
         document.querySelectorAll('.style-option').forEach((b) => b.classList.toggle('active', b === btn));
     });
+});
+
+// --- Chatbot button + slide-in conversation panel (UI shell only for now,
+// no AI backend wired up yet) -------------------------------------------------
+// The button is inserted next to "Messages" on every page's top bar; the
+// panel itself is built lazily on first open and reused after that.
+let chatbotPanel = null;
+let chatbotGreeted = false;
+
+function buildChatbotPanel() {
+    const panel = document.createElement('div');
+    panel.id = 'chatbot-panel';
+    panel.className = 'chatbot-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.innerHTML = `
+        <div class="chatbot-header">
+            <span class="chatbot-title" data-i18n="main.chatbotTitle">Chatbot</span>
+            <button type="button" class="chatbot-close" data-i18n-aria="main.chatbotClose" aria-label="Close">
+                <i class="bx bx-x" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="chatbot-messages" id="chatbot-messages"></div>
+        <form class="chatbot-input-row" id="chatbot-form">
+            <input type="text" id="chatbot-input" data-i18n-placeholder="main.chatbotPlaceholder" placeholder="Message" autocomplete="off">
+            <button type="submit" class="chatbot-send" data-i18n-aria="main.chatbotSend" aria-label="Send">
+                <i class="bx bx-send" aria-hidden="true"></i>
+            </button>
+        </form>
+    `;
+    document.body.appendChild(panel);
+    // Built lazily on first open (well after loadLanguage() has already run),
+    // so translating it here — instead of waiting for the next language
+    // switch — is safe and needed for its first paint.
+    applyStaticTranslations();
+
+    panel.querySelector('.chatbot-close').addEventListener('click', closeChatbot);
+    panel.querySelector('#chatbot-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const input = document.getElementById('chatbot-input');
+        const text = input.value.trim();
+        if (!text) return;
+        addChatMessage(text, 'user');
+        input.value = '';
+        setTimeout(() => addChatMessage(t('main.chatbotCannedReply'), 'bot'), 400);
+    });
+    return panel;
+}
+
+function addChatMessage(text, from) {
+    const messages = document.getElementById('chatbot-messages');
+    if (!messages) return;
+    const bubble = document.createElement('div');
+    bubble.className = `chatbot-message chatbot-message-${from}`;
+    bubble.textContent = text;
+    messages.appendChild(bubble);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function openChatbot() {
+    if (!chatbotPanel) chatbotPanel = buildChatbotPanel();
+    if (!chatbotGreeted) {
+        addChatMessage(t('main.chatbotGreeting'), 'bot');
+        chatbotGreeted = true;
+    }
+    chatbotPanel.classList.add('open');
+    document.getElementById('chatbot-input')?.focus();
+}
+
+function closeChatbot() {
+    chatbotPanel?.classList.remove('open');
+}
+
+document.addEventListener('click', (event) => {
+    if (!chatbotPanel?.classList.contains('open')) return;
+    if (chatbotPanel.contains(event.target) || event.target.closest('#chatbot-btn')) return;
+    closeChatbot();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeChatbot();
+});
+
+// Inserted next to the "Messages" button in every page's static top bar —
+// data-i18n-aria (not a direct t() call) so applyStaticTranslations() picks
+// it up on the next loadLanguage() pass instead of racing it.
+document.querySelectorAll('.top-bar-actions').forEach((container) => {
+    if (container.querySelector('#chatbot-btn')) return;
+    const messagesBtn = container.querySelector('[data-i18n-aria="main.messages"]');
+    const chatbotBtn = document.createElement('button');
+    chatbotBtn.type = 'button';
+    chatbotBtn.id = 'chatbot-btn';
+    chatbotBtn.setAttribute('data-i18n-aria', 'main.chatbot');
+    chatbotBtn.setAttribute('aria-label', 'Chatbot');
+    chatbotBtn.innerHTML = '<i class="bx bx-bot" aria-hidden="true"></i>';
+    chatbotBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (chatbotPanel?.classList.contains('open')) {
+            closeChatbot();
+        } else {
+            openChatbot();
+        }
+    });
+    if (messagesBtn) {
+        messagesBtn.insertAdjacentElement('afterend', chatbotBtn);
+    } else {
+        container.prepend(chatbotBtn);
+    }
 });
 
 // --- Department picker dropdown ----------------------------------------------

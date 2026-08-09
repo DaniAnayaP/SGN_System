@@ -188,6 +188,13 @@
     "styleLight": "Claro",
     "styleDark": "Oscuro",
     "styleInstitutional": "Institucional",
-    "inDevelopment": "En desarrollo, seguimos trabajando para una mejor experiencia"
+    "inDevelopment": "En desarrollo, seguimos trabajando para una mejor experiencia",
+    "chatbot": "Chatbot",
+    "chatbotTitle": "Asistente SGN",
+    "chatbotClose": "Cerrar chat",
+    "chatbotPlaceholder": "Escribe un mensaje...",
+    "chatbotSend": "Enviar",
+    "chatbotGreeting": "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.",
+    "chatbotCannedReply": "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA."
   }
 }
