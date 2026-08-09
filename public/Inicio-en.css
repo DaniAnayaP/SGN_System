@@ -194,6 +194,14 @@
         position: relative;
         width: 100%;
         margin-bottom: 0.8rem;
+        /* Clips the label/chevron when the sidebar collapses, same trick
+           .menu-item uses, so the leading icon stays visible instead of the
+           whole control disappearing. Lifted back to visible while open so
+           the dropdown (a child, positioned absolute) isn't clipped too. */
+        overflow: hidden;
+    }
+    .dept-picker.open{
+        overflow: visible;
     }
     .dept-picker-btn{
         display: flex;
@@ -216,6 +224,7 @@
     }
     .dept-picker-btn i:first-child{
         font-size: 1.1rem;
+        flex-shrink: 0;
     }
     .dept-picker-btn span{
         flex: 1;
@@ -278,8 +287,10 @@
         color: var(--color-text-primary);
         font-weight: 700;
     }
-    .Sidebar.minimize .dept-picker,
     .dept-picker-disabled{
+        display: none;
+    }
+    .Sidebar.minimize .dept-picker-btn i:last-child{
         display: none;
     }
 
