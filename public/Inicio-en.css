@@ -199,6 +199,14 @@
            whole control disappearing. Lifted back to visible while open so
            the dropdown (a child, positioned absolute) isn't clipped too. */
         overflow: hidden;
+        /* A flex item with overflow != visible loses its content-based
+           automatic minimum size (goes to 0 instead) — as a direct child of
+           .menu-container (a height-constrained flex column that already
+           needs to shrink its children to fit), that let this item get
+           crushed to 0 height while its icon still painted at the old spot,
+           overlapping the item below. flex-shrink:0 opts it out of shrinking
+           entirely, like its siblings' non-zero content-based minimum does. */
+        flex-shrink: 0;
     }
     .dept-picker.open{
         overflow: visible;
