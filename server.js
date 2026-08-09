@@ -47,6 +47,12 @@ const {
     setClientModules,
     setClientCostCentersLimit,
     getClientModuleKeys,
+    listCostCenters,
+    countCostCenters,
+    getCostCenterById,
+    createCostCenter,
+    updateCostCenter,
+    deleteCostCenter,
     activateClient,
     deactivateClientUsers,
     listBusinessUsers,
@@ -491,6 +497,64 @@ app.put('/api/business/profiles/:id/grants', requireAuth, requireClientAdmin, (r
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
     res.json({ grants: setProfileGrants(req.params.id, grants) });
+});
+
+// --- Centros de Costo (cost centers, scoped to one client) -------------------
+// Capped by clients.cost_centers_limit, which GEIPSA sets from Contrataciones
+// (Admin-SaaS) — see setClientCostCentersLimit. Same access rule as the rest
+// of "Administración del Negocio": only the client's own admin manages this.
+function validateCostCenterBody(body) {
+    const { code, name } = body || {};
+    if (!code || !name) return 'code and name are required.';
+    return null;
+}
+
+app.get('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, res) => {
+    const client = getClientById(req.user.clientId);
+    res.json({ costCenters: listCostCenters(req.user.clientId), limit: client.cost_centers_limit });
+});
+
+app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, res) => {
+    const error = validateCostCenterBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const client = getClientById(req.user.clientId);
+    if (countCostCenters(req.user.clientId) >= client.cost_centers_limit) {
+        return res.status(409).json({ message: 'Cost center limit reached for this client.' });
+    }
+    const { code, name, description, responsible } = req.body;
+    try {
+        const costCenter = createCostCenter({ clientId: req.user.clientId, code, name, description, responsible });
+        res.status(201).json({ costCenter });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'A cost center with that code already exists.' });
+        }
+        throw err;
+    }
+});
+
+app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getCostCenterById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
+    const error = validateCostCenterBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { code, name, description, responsible } = req.body;
+    try {
+        const costCenter = updateCostCenter(req.params.id, req.user.clientId, { code, name, description, responsible });
+        res.json({ costCenter });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'A cost center with that code already exists.' });
+        }
+        throw err;
+    }
+});
+
+app.delete('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getCostCenterById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
+    deleteCostCenter(req.params.id, req.user.clientId);
+    res.status(204).end();
 });
 
 const PORT = process.env.PORT || 3000;

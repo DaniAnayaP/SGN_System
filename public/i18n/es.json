@@ -159,7 +159,19 @@
     "extraAccessHint": "Esto se suma a lo que ya otorgan sus perfiles asignados — nunca quita acceso.",
     "accessSaved": "Accesos actualizados.",
     "configSubtitle": "Ajusta el logo y los colores institucionales de tu empresa — esto es lo que tu equipo ve al elegir el estilo \"Institucional\".",
-    "brandingSaved": "Marca guardada."
+    "brandingSaved": "Marca guardada.",
+    "costCentersTitle": "Centros de Costo",
+    "costCentersSubtitle": "Administra el catálogo de centros de costo de tu empresa.",
+    "ccCode": "Código",
+    "ccName": "Nombre",
+    "ccDescription": "Descripción",
+    "ccResponsible": "Responsable",
+    "addCostCenter": "Agregar centro de costo",
+    "ccLimitStatus": "{count} de {limit} centros de costo usados.",
+    "ccLimitReached": "Has alcanzado el límite de centros de costo de tu plan ({limit}). Contacta a GEIPSA para aumentarlo.",
+    "ccNoneYet": "Aún no hay centros de costo. Agrega el primero arriba.",
+    "ccCodeExists": "Ya existe un centro de costo con ese código.",
+    "ccDeleteConfirm": "¿Eliminar este centro de costo?"
   },
   "main": {
     "welcome": "Bienvenido",

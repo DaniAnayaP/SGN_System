@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="business.costCentersTitle">Cost Centers</title>
+    <link rel="icon" href="Imagenes/Logo_Stickers.webp">
+    <link rel="stylesheet" href="Inicio-en.css">
+    <link rel="stylesheet" href="Admin.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+</head>
+<body>
+    <div class="menu-btn sidebars-btn" id="sidebars-btn" role="button" tabindex="0"
+         aria-label="Toggle sidebar" aria-expanded="false">
+        <i class="bx bx-menu" aria-hidden="true"></i>
+        <i class="bx bx-x" aria-hidden="true"></i>
+    </div>
+
+    <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
+        <div class="header">
+            <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
+                 aria-label="Collapse sidebar" aria-expanded="true">
+                <i class="bx bx-chevron-left" aria-hidden="true"></i>
+            </div>
+            <div class="brand">
+                <img class="brand-light" src="Imagenes/LogoSGN_F_Blanco.jfif" alt="SGN logo">
+                <img class="brand-dark" src="Imagenes/LogoSGN.jfif" alt="SGN logo">
+                <span data-i18n="sidebar.brand">SGN</span>
+            </div>
+        </div>
+
+        <div class="menu-container">
+            <div class="dept-picker" id="dept-picker">
+                <button type="button" class="dept-picker-btn" id="dept-picker-btn"
+                        aria-haspopup="true" aria-expanded="false">
+                    <i class="bx bx-buildings" aria-hidden="true"></i>
+                    <span id="dept-picker-label" data-i18n="sidebar.department">Department</span>
+                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                </button>
+                <ul class="dept-picker-dropdown" id="dept-picker-dropdown" role="menu">
+                    <!-- Department options are rendered at runtime -->
+                </ul>
+            </div>
+
+            <div id="admin-business-mount">
+                <!-- "Administración del Negocio" shortcut rendered here at runtime -->
+            </div>
+
+            <div class="search">
+                <i class="bx bx-search" aria-hidden="true"></i>
+                <label for="sidebar-search" class="sr-only" data-i18n="sidebar.searchPlaceholder">Search</label>
+                <input id="sidebar-search" type="search" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search">
+            </div>
+
+            <div id="menu-mount" aria-live="polite">
+                <!-- Sidebar sections are rendered here at runtime from data/menu.json -->
+            </div>
+        </div>
+
+        <div class="footer">
+            <ul class="menu" id="footer-menu-mount">
+                <!-- Rendered at runtime from data/menu.json -->
+            </ul>
+            <div class="user">
+                <div class="user-img">
+                    <img id="user-avatar" src="Imagenes/User.jpg" alt="User avatar">
+                </div>
+                <div class="user-data">
+                    <span class="name" id="user-name">&nbsp;</span>
+                    <span class="email" id="user-email">&nbsp;</span>
+                </div>
+                <div class="user-icon">
+                    <a href="Login.html" class="exit" id="logout-link" data-i18n-aria="sidebar.logout" aria-label="Log out">
+                        <i class="bx bx-exit" aria-hidden="true"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <div class="top-bar barra-arriba">
+            <p class="welcome-text" data-i18n="business.costCentersTitle">Cost Centers</p>
+            <div class="top-bar-actions">
+                <button type="button" data-i18n-aria="main.messages" aria-label="Messages">
+                    <i class="bx bx-message" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-i18n-aria="main.notifications" aria-label="Notifications">
+                    <i class="bx bx-bell" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-i18n-aria="main.bookmarks" aria-label="Bookmarks">
+                    <i class="bx bx-bookmarks" aria-hidden="true"></i>
+                </button>
+                <div class="settings-menu" id="settings-menu">
+                    <button type="button" data-i18n-aria="main.settings" aria-label="Settings" id="settings-btn"
+                            aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-cog" aria-hidden="true"></i>
+                    </button>
+                    <ul class="settings-dropdown" id="settings-dropdown" role="menu">
+                        <li role="none" class="settings-dropdown-group" id="language-group">
+                            <button type="button" class="settings-dropdown-toggle" id="language-toggle-btn"
+                                    aria-haspopup="true" aria-expanded="false">
+                                <span data-i18n="main.language">Language</span>
+                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <ul class="settings-submenu" id="language-submenu" role="menu">
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="lang-option active" data-lang="en" data-i18n="main.languageEnglish">English</button>
+                                </li>
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="lang-option" data-lang="es" data-i18n="main.languageSpanish">Spanish</button>
+                                </li>
+                            </ul>
+                        </li>
+                        <li role="none" class="settings-dropdown-group" id="style-group">
+                            <button type="button" class="settings-dropdown-toggle" id="style-toggle-btn"
+                                    aria-haspopup="true" aria-expanded="false">
+                                <span data-i18n="main.style">Style</span>
+                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <ul class="settings-submenu" id="style-submenu" role="menu">
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="style-option active" data-style="light" data-i18n="main.styleLight">Light</button>
+                                </li>
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="style-option" data-style="dark" data-i18n="main.styleDark">Dark</button>
+                                </li>
+                                <li role="none">
+                                    <button type="button" role="menuitem" class="style-option" data-style="institutional" data-i18n="main.styleInstitutional">Institutional</button>
+                                </li>
+                            </ul>
+                        </li>
+                        <li role="none">
+                            <button type="button" role="menuitem" id="settings-others" data-i18n="main.others">Others</button>
+                        </li>
+                    </ul>
+                </div>
+                <button type="button" data-i18n-aria="main.addUser" aria-label="Add user">
+                    <i class="bx bx-user-plus" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+
+        <section class="admin-panel">
+            <p class="admin-subtitle" data-i18n="business.costCentersSubtitle">Manage your company's cost centers.</p>
+            <p id="cc-limit-status" class="admin-hint"></p>
+
+            <form id="cc-form" class="admin-form" novalidate>
+                <input type="hidden" id="cc-id" value="">
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="cc-code" data-i18n="business.ccCode">Code</label>
+                        <input id="cc-code" name="code" type="text" required>
+                    </div>
+                    <div class="admin-field">
+                        <label for="cc-name" data-i18n="business.ccName">Name</label>
+                        <input id="cc-name" name="name" type="text" required>
+                    </div>
+                    <div class="admin-field">
+                        <label for="cc-responsible" data-i18n="business.ccResponsible">Responsible</label>
+                        <input id="cc-responsible" name="responsible" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="cc-description" data-i18n="business.ccDescription">Description</label>
+                        <input id="cc-description" name="description" type="text">
+                    </div>
+                </div>
+                <div id="cc-form-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn" id="cc-form-submit" data-i18n="business.addCostCenter">Add cost center</button>
+                    <button type="button" class="btn btn-secondary" id="cc-form-cancel" data-i18n="admin.cancel" hidden>Cancel</button>
+                </div>
+            </form>
+
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="business.ccCode">Code</th>
+                            <th data-i18n="business.ccName">Name</th>
+                            <th data-i18n="business.ccResponsible">Responsible</th>
+                            <th data-i18n="business.ccDescription">Description</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="cc-table-body">
+                        <!-- rendered at runtime -->
+                    </tbody>
+                </table>
+                <p id="cc-empty" class="admin-empty" data-i18n="business.ccNoneYet" hidden>No cost centers yet. Add the first one above.</p>
+            </div>
+        </section>
+    </main>
+
+    <script src="Dashboard.js"></script>
+    <script src="ColorPalette.js"></script>
+    <script src="Business-CentrosCosto.js"></script>
+</body>
+</html>

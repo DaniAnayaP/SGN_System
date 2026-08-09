@@ -89,7 +89,14 @@ const EMBEDDED_TRANSLATIONS = {
             selectUserForAccess: "Select a user", extraAccessHint: "This is in addition to whatever their assigned profiles already grant — it never removes access.",
             accessSaved: "Access updated.",
             configSubtitle: "Adjust your company's logo and institutional colors — this is what your team sees when they pick \"Institutional\" style.",
-            brandingSaved: "Branding saved."
+            brandingSaved: "Branding saved.",
+            costCentersTitle: "Cost Centers", costCentersSubtitle: "Manage your company's cost centers.",
+            ccCode: "Code", ccName: "Name", ccDescription: "Description", ccResponsible: "Responsible",
+            addCostCenter: "Add cost center", ccLimitStatus: "{count} of {limit} cost centers used.",
+            ccLimitReached: "You've reached your plan's cost center limit ({limit}). Contact GEIPSA to increase it.",
+            ccNoneYet: "No cost centers yet. Add the first one above.",
+            ccCodeExists: "A cost center with that code already exists.",
+            ccDeleteConfirm: "Delete this cost center?"
         },
         main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience." }
     },
@@ -156,7 +163,14 @@ const EMBEDDED_TRANSLATIONS = {
             selectUserForAccess: "Selecciona un usuario", extraAccessHint: "Esto se suma a lo que ya otorgan sus perfiles asignados — nunca quita acceso.",
             accessSaved: "Accesos actualizados.",
             configSubtitle: "Ajusta el logo y los colores institucionales de tu empresa — esto es lo que tu equipo ve al elegir el estilo \"Institucional\".",
-            brandingSaved: "Marca guardada."
+            brandingSaved: "Marca guardada.",
+            costCentersTitle: "Centros de Costo", costCentersSubtitle: "Administra el catálogo de centros de costo de tu empresa.",
+            ccCode: "Código", ccName: "Nombre", ccDescription: "Descripción", ccResponsible: "Responsable",
+            addCostCenter: "Agregar centro de costo", ccLimitStatus: "{count} de {limit} centros de costo usados.",
+            ccLimitReached: "Has alcanzado el límite de centros de costo de tu plan ({limit}). Contacta a GEIPSA para aumentarlo.",
+            ccNoneYet: "Aún no hay centros de costo. Agrega el primero arriba.",
+            ccCodeExists: "Ya existe un centro de costo con ese código.",
+            ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
         main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia" }
     }

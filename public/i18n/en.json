@@ -159,7 +159,19 @@
     "extraAccessHint": "This is in addition to whatever their assigned profiles already grant — it never removes access.",
     "accessSaved": "Access updated.",
     "configSubtitle": "Adjust your company's logo and institutional colors — this is what your team sees when they pick \"Institutional\" style.",
-    "brandingSaved": "Branding saved."
+    "brandingSaved": "Branding saved.",
+    "costCentersTitle": "Cost Centers",
+    "costCentersSubtitle": "Manage your company's cost centers.",
+    "ccCode": "Code",
+    "ccName": "Name",
+    "ccDescription": "Description",
+    "ccResponsible": "Responsible",
+    "addCostCenter": "Add cost center",
+    "ccLimitStatus": "{count} of {limit} cost centers used.",
+    "ccLimitReached": "You've reached your plan's cost center limit ({limit}). Contact GEIPSA to increase it.",
+    "ccNoneYet": "No cost centers yet. Add the first one above.",
+    "ccCodeExists": "A cost center with that code already exists.",
+    "ccDeleteConfirm": "Delete this cost center?"
   },
   "main": {
     "welcome": "Welcome",

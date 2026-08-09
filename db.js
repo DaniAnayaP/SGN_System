@@ -66,6 +66,21 @@ db.exec(`
         enabled     INTEGER NOT NULL DEFAULT 0,
         UNIQUE(client_id, module_key)
     );
+
+    -- Centros de Costo: a client's own catalog of cost centers, capped by
+    -- clients.cost_centers_limit (set by GEIPSA in Contrataciones). Created
+    -- fresh with the FK already in place, so ON DELETE CASCADE works here
+    -- (unlike profiles.client_id, added later via ALTER TABLE).
+    CREATE TABLE IF NOT EXISTS cost_centers (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        code          TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        description   TEXT NOT NULL DEFAULT '',
+        responsible   TEXT NOT NULL DEFAULT '',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(client_id, code)
+    );
 `);
 
 // --- Schema migrations for columns added after the initial release ----------
@@ -427,6 +442,42 @@ function setClientCostCentersLimit(clientId, limit) {
     return getClientById(clientId).cost_centers_limit;
 }
 
+// --- Query helpers: cost centers (Centros de Costo, scoped to one client) ----
+function listCostCenters(clientId) {
+    return db.prepare('SELECT * FROM cost_centers WHERE client_id = ? ORDER BY code ASC').all(clientId);
+}
+
+function countCostCenters(clientId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM cost_centers WHERE client_id = ?').get(clientId).n;
+}
+
+function getCostCenterById(id, clientId) {
+    return db.prepare('SELECT * FROM cost_centers WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function createCostCenter({ clientId, code, name, description, responsible }) {
+    const result = db
+        .prepare(`
+            INSERT INTO cost_centers (client_id, code, name, description, responsible)
+            VALUES (@clientId, @code, @name, @description, @responsible)
+        `)
+        .run({ clientId, code, name, description: description || '', responsible: responsible || '' });
+    return getCostCenterById(result.lastInsertRowid, clientId);
+}
+
+function updateCostCenter(id, clientId, { code, name, description, responsible }) {
+    db.prepare(`
+        UPDATE cost_centers
+        SET code = @code, name = @name, description = @description, responsible = @responsible
+        WHERE id = @id AND client_id = @clientId
+    `).run({ id, clientId, code, name, description: description || '', responsible: responsible || '' });
+    return getCostCenterById(id, clientId);
+}
+
+function deleteCostCenter(id, clientId) {
+    db.prepare('DELETE FROM cost_centers WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
 // --- Query helpers: business users (scoped to one client) --------------------
 function listBusinessUsers(clientId) {
     return db
@@ -555,6 +606,12 @@ module.exports = {
     setClientModules,
     setClientCostCentersLimit,
     getClientModuleKeys,
+    listCostCenters,
+    countCostCenters,
+    getCostCenterById,
+    createCostCenter,
+    updateCostCenter,
+    deleteCostCenter,
     activateClient,
     deactivateClientUsers,
     listBusinessUsers,
