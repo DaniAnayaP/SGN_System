@@ -112,6 +112,12 @@ if (!clientColumns.some((c) => c.name === 'seed_color')) {
 if (!clientColumns.some((c) => c.name === 'color_palette')) {
     db.exec('ALTER TABLE clients ADD COLUMN color_palette TEXT');
 }
+// How many Centros de Costo (cost centers) this client is allowed to create.
+// Set from "Contrataciones" alongside the module toggles; enforced wherever
+// the client-side cost-center feature eventually gets built.
+if (!clientColumns.some((c) => c.name === 'cost_centers_limit')) {
+    db.exec('ALTER TABLE clients ADD COLUMN cost_centers_limit INTEGER NOT NULL DEFAULT 0');
+}
 
 const MODULE_CATALOG = [
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
@@ -416,6 +422,11 @@ function setClientModules(clientId, moduleStates) {
     return getClientModules(clientId);
 }
 
+function setClientCostCentersLimit(clientId, limit) {
+    db.prepare('UPDATE clients SET cost_centers_limit = ? WHERE id = ?').run(limit, clientId);
+    return getClientById(clientId).cost_centers_limit;
+}
+
 // --- Query helpers: business users (scoped to one client) --------------------
 function listBusinessUsers(clientId) {
     return db
@@ -542,6 +553,7 @@ module.exports = {
     deleteClient,
     getClientModules,
     setClientModules,
+    setClientCostCentersLimit,
     getClientModuleKeys,
     activateClient,
     deactivateClientUsers,

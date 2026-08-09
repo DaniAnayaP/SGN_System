@@ -120,7 +120,8 @@
     "selectClient": "Select a client",
     "selectClientPlaceholder": "Choose a client...",
     "noClientSelected": "Select a client above to manage their modules.",
-    "modulesSaved": "Modules updated."
+    "modulesSaved": "Modules updated.",
+    "costCentersLimit": "Allowed cost centers"
   },
   "business": {
     "usersTitle": "Users",

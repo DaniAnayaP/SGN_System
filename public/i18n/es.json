@@ -120,7 +120,8 @@
     "selectClient": "Selecciona un cliente",
     "selectClientPlaceholder": "Elige un cliente...",
     "noClientSelected": "Selecciona un cliente arriba para administrar sus módulos.",
-    "modulesSaved": "Módulos actualizados."
+    "modulesSaved": "Módulos actualizados.",
+    "costCentersLimit": "Centros de costo permitidos"
   },
   "business": {
     "usersTitle": "Usuarios",

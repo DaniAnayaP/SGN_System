@@ -251,6 +251,10 @@
                 <p id="contrataciones-hint" class="admin-hint" data-i18n="admin.noClientSelected">Select a client above to manage their modules.</p>
 
                 <div id="modules-panel" hidden>
+                    <div class="admin-field" style="max-width: 20rem; margin-bottom: 1rem;">
+                        <label for="cost-centers-limit" data-i18n="admin.costCentersLimit">Allowed cost centers</label>
+                        <input id="cost-centers-limit" type="number" min="0" step="1" value="0">
+                    </div>
                     <div class="admin-module-list" id="modules-list">
                         <!-- rendered at runtime -->
                     </div>

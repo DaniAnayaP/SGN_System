@@ -45,6 +45,7 @@ const {
     deleteClient,
     getClientModules,
     setClientModules,
+    setClientCostCentersLimit,
     getClientModuleKeys,
     activateClient,
     deactivateClientUsers,
@@ -331,17 +332,24 @@ app.delete('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
 app.get('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
-    res.json({ modules: getClientModules(req.params.id) });
+    res.json({ modules: getClientModules(req.params.id), costCentersLimit: existing.cost_centers_limit });
 });
 
 app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
-    const { modules } = req.body || {};
+    const { modules, costCentersLimit } = req.body || {};
     if (!Array.isArray(modules)) {
         return res.status(400).json({ message: 'modules must be an array of { key, enabled }.' });
     }
-    res.json({ modules: setClientModules(req.params.id, modules) });
+    if (costCentersLimit !== undefined && (!Number.isInteger(costCentersLimit) || costCentersLimit < 0)) {
+        return res.status(400).json({ message: 'costCentersLimit must be a non-negative integer.' });
+    }
+    const updatedModules = setClientModules(req.params.id, modules);
+    const updatedLimit = costCentersLimit !== undefined
+        ? setClientCostCentersLimit(req.params.id, costCentersLimit)
+        : existing.cost_centers_limit;
+    res.json({ modules: updatedModules, costCentersLimit: updatedLimit });
 });
 
 // --- Business admin: users, profiles, and permission grants ------------------

@@ -279,6 +279,7 @@ const clientSelect = document.getElementById('contrataciones-client');
 const hint = document.getElementById('contrataciones-hint');
 const modulesPanel = document.getElementById('modules-panel');
 const modulesList = document.getElementById('modules-list');
+const costCentersLimitInput = document.getElementById('cost-centers-limit');
 const saveBtn = document.getElementById('modules-save');
 const saveStatus = document.getElementById('modules-save-status');
 
@@ -336,6 +337,7 @@ async function loadModulesForClient(clientId) {
         const data = await res.json();
         currentModules = data.modules || [];
         renderModules(currentModules);
+        costCentersLimitInput.value = data.costCentersLimit ?? 0;
         modulesPanel.hidden = false;
         hint.hidden = true;
     } catch {
@@ -363,6 +365,7 @@ saveBtn.addEventListener('click', async () => {
         key: input.dataset.moduleKey,
         enabled: input.checked,
     }));
+    const costCentersLimit = Math.max(0, parseInt(costCentersLimitInput.value, 10) || 0);
 
     saveBtn.disabled = true;
     try {
@@ -370,11 +373,12 @@ saveBtn.addEventListener('click', async () => {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ modules: states }),
+            body: JSON.stringify({ modules: states, costCentersLimit }),
         });
         if (!res.ok) throw new Error('save failed');
         const data = await res.json();
         currentModules = data.modules || [];
+        costCentersLimitInput.value = data.costCentersLimit ?? costCentersLimit;
         saveStatus.textContent = Dashboard.t('admin.modulesSaved');
     } catch {
         saveStatus.textContent = Dashboard.t('admin.saveError');

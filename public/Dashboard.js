@@ -66,7 +66,8 @@ const EMBEDDED_TRANSLATIONS = {
             contratacionesTitle: "Contracted Modules", contratacionesSubtitle: "Turn on the modules each client has contracted.",
             selectClient: "Select a client", selectClientPlaceholder: "Choose a client...",
             noClientSelected: "Select a client above to manage their modules.",
-            modulesSaved: "Modules updated."
+            modulesSaved: "Modules updated.",
+            costCentersLimit: "Allowed cost centers"
         },
         business: {
             usersTitle: "Users", usersSubtitle: "Manage the people who use this SGN instance.",
@@ -132,7 +133,8 @@ const EMBEDDED_TRANSLATIONS = {
             contratacionesTitle: "Contrataciones", contratacionesSubtitle: "Activa los módulos que cada cliente tiene contratados.",
             selectClient: "Selecciona un cliente", selectClientPlaceholder: "Elige un cliente...",
             noClientSelected: "Selecciona un cliente arriba para administrar sus módulos.",
-            modulesSaved: "Módulos actualizados."
+            modulesSaved: "Módulos actualizados.",
+            costCentersLimit: "Centros de costo permitidos"
         },
         business: {
             usersTitle: "Usuarios", usersSubtitle: "Administra las personas que usan esta instancia de SGN.",
