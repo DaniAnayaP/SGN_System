@@ -184,7 +184,8 @@
        — and the column's align-items:center then centers that overflow
        instead of clipping it flush against the edge, pushing icons out of
        view to the left. */
-    #menu-mount{
+    #menu-mount,
+    #admin-business-mount{
         width: 100%;
     }
 
