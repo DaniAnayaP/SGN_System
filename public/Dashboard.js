@@ -691,17 +691,22 @@ function buildChatbotPanel() {
         if (!text) return;
         addChatMessage(text, 'user');
         input.value = '';
-        setTimeout(() => addChatMessage(t('main.chatbotCannedReply'), 'bot'), 400);
+        setTimeout(() => addChatMessage(t('main.chatbotCannedReply'), 'bot', 'main.chatbotCannedReply'), 400);
     });
     return panel;
 }
 
-function addChatMessage(text, from) {
+// i18nKey is set only for app-generated bot messages (greeting, canned
+// reply) — it's what applyStaticTranslations() re-reads via [data-i18n] on
+// every language switch, same mechanism as any other static label. The
+// user's own typed messages never get one, so they're never rewritten.
+function addChatMessage(text, from, i18nKey) {
     const messages = document.getElementById('chatbot-messages');
     if (!messages) return;
     const bubble = document.createElement('div');
     bubble.className = `chatbot-message chatbot-message-${from}`;
     bubble.textContent = text;
+    if (i18nKey) bubble.dataset.i18n = i18nKey;
     messages.appendChild(bubble);
     messages.scrollTop = messages.scrollHeight;
 }
@@ -709,7 +714,7 @@ function addChatMessage(text, from) {
 function openChatbot() {
     if (!chatbotPanel) chatbotPanel = buildChatbotPanel();
     if (!chatbotGreeted) {
-        addChatMessage(t('main.chatbotGreeting'), 'bot');
+        addChatMessage(t('main.chatbotGreeting'), 'bot', 'main.chatbotGreeting');
         chatbotGreeted = true;
     }
     chatbotPanel.classList.add('open');
