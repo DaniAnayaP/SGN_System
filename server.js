@@ -112,7 +112,17 @@ app.use(cookieParser());
 // Only files inside public/ are ever served to the browser. server.js,
 // db.js, password.js, .env, and the database file all live outside this
 // folder and are never web-accessible.
-app.use(express.static(PUBLIC_DIR));
+//
+// maxAge is intentionally short (1 minute), not the usual long-lived
+// "immutable" static-asset cache: none of these filenames are content-hashed
+// (Dashboard.js is always Dashboard.js), so a long maxAge would mean a
+// deployed fix doesn't show up in an already-open browser tab until it
+// expires, no revalidation possible in between. A short maxAge still avoids
+// re-fetching everything on every rapid page-to-page navigation within a
+// session (the common case), while etag (on by default) handles proper
+// revalidation once it expires. Raise this once the UI stabilizes and/or
+// filenames get a cache-busting hash.
+app.use(express.static(PUBLIC_DIR, { maxAge: '1m' }));
 app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'Login.html')));
 
 // --- Rate limiting on auth routes -------------------------------------------
@@ -172,7 +182,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     // dummy hash of the same shape, so response time doesn't leak whether
     // the username exists ("timing attack").
     const dummyHash = '00000000000000000000000000000000:00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
-    const passwordMatches = verifyPassword(password, user?.password_hash || dummyHash);
+    const passwordMatches = await verifyPassword(password, user?.password_hash || dummyHash);
 
     if (!user || !passwordMatches) {
         return res.status(401).json({ message: 'Invalid username or password.' });
@@ -220,7 +230,7 @@ app.post('/api/auth/register', async (req, res) => {
         return res.status(409).json({ message: 'Username or email already taken.' });
     }
 
-    createUser({ username, email, passwordHash: hashPassword(password), name: username });
+    createUser({ username, email, passwordHash: await hashPassword(password), name: username });
 
     res.status(201).json({ message: 'Account created.' });
 });
@@ -305,9 +315,9 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
 // out. Returns { username, password } only the one time a NEW admin user is
 // created — that's the only chance to hand the password to GEIPSA, since it's
 // never stored anywhere in recoverable form.
-function applyClientLifecycle(client) {
+async function applyClientLifecycle(client) {
     if (client.status === 'activo') {
-        const { user, generatedPassword } = activateClient(client.id);
+        const { user, generatedPassword } = await activateClient(client.id);
         if (generatedPassword) {
             return { username: user.username, password: generatedPassword };
         }
@@ -317,23 +327,23 @@ function applyClientLifecycle(client) {
     return null;
 }
 
-app.post('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
+app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette } = req.body;
     const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette });
-    const generatedAdmin = applyClientLifecycle(client);
+    const generatedAdmin = await applyClientLifecycle(client);
     res.status(201).json({ client: getClientById(client.id), generatedAdmin });
 });
 
-app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
+app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) => {
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette } = req.body;
     const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette });
-    const generatedAdmin = applyClientLifecycle(client);
+    const generatedAdmin = await applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
 });
 
@@ -426,7 +436,7 @@ app.post('/api/business/users', requireAuth, requireClientAdmin, async (req, res
         return res.status(409).json({ message: 'Username or email already taken.' });
     }
     const user = createUser({
-        username, email, passwordHash: hashPassword(password), name,
+        username, email, passwordHash: await hashPassword(password), name,
         clientId: req.user.clientId, isClientAdmin: false,
     });
     res.status(201).json({

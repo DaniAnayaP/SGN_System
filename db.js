@@ -18,7 +18,7 @@
 const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
-const { hashPassword } = require('./password');
+const { hashPassword, hashPasswordSync } = require('./password');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'storage', 'sgn.sqlite');
 const DATA_DIR = path.dirname(DB_PATH);
@@ -200,6 +200,20 @@ if (!profileColumns.some((c) => c.name === 'client_id')) {
     db.exec('ALTER TABLE profiles ADD COLUMN client_id INTEGER REFERENCES clients(id)');
 }
 
+// --- Indexes -------------------------------------------------------------
+// Only for FK/lookup columns that actually appear in a WHERE clause below
+// and aren't already covered by a UNIQUE constraint's implicit index (e.g.
+// client_modules and cost_centers are both UNIQUE(client_id, ...), so a
+// lookup by client_id alone already uses that index's leftmost column —
+// no separate index needed there). Run after every table/column above
+// exists, in dependency order.
+db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_users_client_id ON users(client_id);
+    CREATE INDEX IF NOT EXISTS idx_profiles_client_id ON profiles(client_id);
+    CREATE INDEX IF NOT EXISTS idx_profile_grants_profile_id ON profile_grants(profile_id);
+    CREATE INDEX IF NOT EXISTS idx_user_grants_user_id ON user_grants(user_id);
+`);
+
 // --- One-time seed: create the demo admin/admin user if the table is empty.
 // This only ever runs once — after that, the row lives in sgn.sqlite and
 // survives server restarts. Delete the row (see README) once you're done
@@ -212,7 +226,10 @@ if (userCount === 0) {
     `).run({
         username: 'admin',
         email: 'admin@geipsa.com',
-        passwordHash: hashPassword('admin'),
+        // hashPasswordSync, not hashPassword: this runs at module-load time
+        // (CommonJS has no top-level await), before the server starts
+        // accepting requests — see the comment on hashPasswordSync itself.
+        passwordHash: hashPasswordSync('admin'),
         name: 'Admin',
         role: 'admin',
     });
@@ -280,7 +297,12 @@ function generateRandomPassword() {
 // Returns { user, generatedPassword } when a NEW admin was created (only
 // happens the first time a client is activated), or { user, generatedPassword:
 // null } when an existing admin (and their team) was just reactivated.
-function activateClient(clientId) {
+//
+// async: hashPassword is (scrypt is CPU-heavy, see password.js), and
+// better-sqlite3 transactions must be fully synchronous — no await allowed
+// inside db.transaction(). So the hash is computed BEFORE the transaction
+// starts, and only the already-resolved string goes in.
+async function activateClient(clientId) {
     const client = getClientById(clientId);
     if (!client) throw new Error('Client not found.');
 
@@ -294,12 +316,13 @@ function activateClient(clientId) {
     const username = generateUniqueUsername(`Admin${abbr}`);
     const password = generateRandomPassword();
     const email = client.email || `${username.toLowerCase()}@example.invalid`;
+    const passwordHash = await hashPassword(password);
 
     const create = db.transaction(() => {
         const user = createUser({
             username,
             email,
-            passwordHash: hashPassword(password),
+            passwordHash,
             name: `Admin ${client.company_name}`,
             clientId,
             isClientAdmin: true,

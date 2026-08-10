@@ -1165,12 +1165,19 @@
         .top-bar{
             padding: 0.6rem 0.9rem;
         }
-        /* The page title stays; the six action icons collapse behind a
-           single toggle button instead, opening as a dropdown — same idea
-           as .dept-picker/.cc-picker, just vertical since it's a list of
-           icon buttons rather than text options. ID selector to reliably
-           beat the unconditional #top-bar-actions-toggle{display:none}
-           above — same specificity, later in the cascade wins. */
+    }
+
+    /* The top bar's own content (cost-center picker + title + six action
+       icons) stops fitting well before the sidebar needs to go off-canvas
+       (that's the 700px/683px breakpoint above, a separate concern) —
+       confirmed by testing the actual breakpoint where icons start
+       spilling past the rounded box: ~936px, not 700px. Collapsing the
+       action icons behind the "more" toggle gets its own, wider breakpoint
+       so the switch happens before the overflow, not after. */
+    @media (max-width: 936px) {
+        /* ID selector to reliably beat the unconditional
+           #top-bar-actions-toggle{display:none} base rule — same
+           specificity, later in the cascade wins. */
         #top-bar-actions-toggle{
             display: flex;
         }
