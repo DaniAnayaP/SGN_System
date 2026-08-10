@@ -974,6 +974,12 @@
     .settings-dropdown a{
         display: flex;
         align-items: center;
+        /* .top-bar-actions button (the round icon-only top-bar buttons)
+           also matches every button in here, since they're nested inside
+           .top-bar-actions too, and its justify-content:center otherwise
+           wins (same specificity, but declared earlier) — pin these back
+           to the left explicitly rather than relying on cascade order. */
+        justify-content: flex-start;
         gap: 0.5rem;
         width: 100%;
         border: none;
