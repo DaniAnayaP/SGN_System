@@ -38,8 +38,9 @@
     "department": "Departamento",
     "costCenters": "Centros de Costo",
     "costCentersAll": "Todos los centros de costo",
+    "costCentersAllCount": "Todos ({count})",
     "costCentersNone": "Ninguno seleccionado",
-    "costCentersSelectedCount": "{count} seleccionados"
+    "costCentersSelectedCount": "Varios ({count})"
   },
   "menu": {
     "home": "Inicio",

@@ -28,7 +28,7 @@ let currentUser = null;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersNone: "None selected", costCentersSelectedCount: "{count} selected" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
         menu: {
             home: "Home", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Config",
@@ -102,7 +102,7 @@ const EMBEDDED_TRANSLATIONS = {
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "{count} seleccionados" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
         menu: {
             home: "Inicio", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Configuración del Negocio",
@@ -969,9 +969,9 @@ function updateCostCenterPickerLabel() {
     if (selected.length === 0) {
         label.textContent = t('sidebar.costCentersNone');
     } else if (selected.length === sidebarCostCenters.length) {
-        label.textContent = t('sidebar.costCentersAll');
+        label.textContent = t('sidebar.costCentersAllCount', { count: sidebarCostCenters.length });
     } else if (selected.length === 1) {
-        label.textContent = `${selected[0].code} - ${selected[0].name}`;
+        label.textContent = selected[0].code;
     } else {
         label.textContent = t('sidebar.costCentersSelectedCount', { count: selected.length });
     }

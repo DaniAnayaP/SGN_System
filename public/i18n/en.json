@@ -38,8 +38,9 @@
     "department": "Department",
     "costCenters": "Cost Centers",
     "costCentersAll": "All cost centers",
+    "costCentersAllCount": "All ({count})",
     "costCentersNone": "None selected",
-    "costCentersSelectedCount": "{count} selected"
+    "costCentersSelectedCount": "Several ({count})"
   },
   "menu": {
     "home": "Home",

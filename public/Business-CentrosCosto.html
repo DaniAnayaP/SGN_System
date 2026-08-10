@@ -48,18 +48,6 @@
                 </ul>
             </div>
 
-            <div class="cc-picker" id="cc-picker">
-                <button type="button" class="cc-picker-btn" id="cc-picker-btn"
-                        aria-haspopup="true" aria-expanded="false">
-                    <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
-                    <span id="cc-picker-label" data-i18n="sidebar.costCenters">Cost Centers</span>
-                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                </button>
-                <ul class="cc-picker-dropdown" id="cc-picker-dropdown" role="menu">
-                    <!-- Cost center options are rendered at runtime -->
-                </ul>
-            </div>
-
             <div id="admin-business-mount">
                 <!-- "Administración del Negocio" shortcut rendered here at runtime -->
             </div>
@@ -92,7 +80,20 @@
 
     <main>
         <div class="top-bar barra-arriba">
-            <p class="welcome-text" data-i18n="business.costCentersTitle">Cost Centers</p>
+            <div class="top-bar-title">
+                <div class="cc-picker" id="cc-picker">
+                    <button type="button" class="cc-picker-btn" id="cc-picker-btn"
+                            aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
+                        <span id="cc-picker-label" data-i18n="sidebar.costCenters">Cost Centers</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <ul class="cc-picker-dropdown" id="cc-picker-dropdown" role="menu">
+                        <!-- Cost center options are rendered at runtime -->
+                    </ul>
+                </div>
+                <p class="welcome-text" data-i18n="business.costCentersTitle">Cost Centers</p>
+            </div>
             <div class="top-bar-actions">
                 <button type="button" data-i18n-aria="main.messages" aria-label="Messages">
                     <i class="bx bx-message" aria-hidden="true"></i>
