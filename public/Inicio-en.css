@@ -1094,6 +1094,31 @@
         main{
             padding: 2rem;
         }
+        /* The page title and six top-bar-actions icons (plus the cost-center
+           button) don't all fit in one row at phone width — drop the title
+           first (redundant with the sidebar page it names) and tighten the
+           icon row so everything stays inside the rounded top-bar instead of
+           spilling past its edge. */
+        .top-bar .welcome-text{
+            display: none;
+        }
+        .top-bar{
+            padding: 0.6rem 0.9rem;
+        }
+        .top-bar-actions{
+            gap: 0.25rem;
+        }
+        .top-bar-actions button{
+            width: 1.9rem;
+            height: 1.9rem;
+            font-size: 1.05rem;
+        }
+        .cc-picker-btn{
+            padding: 0.4rem;
+        }
+        .cc-picker-btn i:first-child{
+            font-size: 1.05rem;
+        }
     }
-    
-    /*border: 2px solid red; -- Borde colorido*/ 
+
+    /*border: 2px solid red; -- Borde colorido*/
