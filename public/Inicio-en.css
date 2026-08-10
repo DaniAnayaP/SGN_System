@@ -527,6 +527,8 @@
     }
     .sub-menu .sub-menu-link{
         display: flex;
+        align-items: center;
+        gap: 0.5rem;
         margin-left: 2.5rem;
         padding: 0.55rem 0.5rem;
         font-size: 0.75rem;
@@ -535,6 +537,10 @@
         text-decoration: none;
         border-radius: 0.3rem;
         white-space: nowrap;
+    }
+    .sub-menu .sub-menu-link i{
+        flex-shrink: 0;
+        font-size: 0.9rem;
     }
     .sub-menu::before{
         content: '';

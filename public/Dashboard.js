@@ -30,7 +30,7 @@ const EMBEDDED_TRANSLATIONS = {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
         sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", deptAbbr: { finance: "FIN", accounting: "ACC", humanResources: "HR", marketing: "MKT", commercial: "COM", purchasing: "PUR", supplyChain: "SCM", managementControl: "MC", generalManagement: "GM", steeringCommittee: "STC" }, area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
         menu: {
-            home: "Home", dashboard: "Dashboard", adminBusiness: "Admin Business",
+            home: "Home", panel: "Panel", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Style",
             clientData: "Client Data",
             roles: "Roles", users: "Users", accessPermissions: "Access and Permissions",
@@ -43,7 +43,13 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transport: "Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints" },
-            clientesRegistrados: "Registered Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Registered Plans", addPlanNew: "+ Add New Plan", mainSection: "General"
+            clientesRegistrados: "Registered Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Registered Plans", addPlanNew: "+ Add New Plan", mainSection: "General",
+            catCatalogos: "Catalogs", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
+            catOperaciones: "Operations", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
+            catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
+            catGestion: "Management", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
+            catReportes: "Reports", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
+            catMaterialApoyo: "Support Material", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2"
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
@@ -123,7 +129,7 @@ const EMBEDDED_TRANSLATIONS = {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
         sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", deptAbbr: { finance: "FIN", accounting: "CONT", humanResources: "RRHH", marketing: "MKT", commercial: "COM", purchasing: "COMP", supplyChain: "CDS", managementControl: "CG", generalManagement: "DG", steeringCommittee: "CD" }, area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
         menu: {
-            home: "Inicio", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
+            home: "Inicio", panel: "Panel", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Estilo del Negocio",
             clientData: "Datos de Cliente",
             roles: "Roles", users: "Usuarios", accessPermissions: "Accesos y Permisos",
@@ -135,7 +141,13 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Compras", commercial: "Comercial", marketing: "Mercadotecnia",
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
-            clientesRegistrados: "Clientes Registrados", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Planes Registrados", addPlanNew: "+ Agregar Plan Nuevo", mainSection: "General"
+            clientesRegistrados: "Clientes Registrados", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Planes Registrados", addPlanNew: "+ Agregar Plan Nuevo", mainSection: "General",
+            catCatalogos: "Catálogos", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
+            catOperaciones: "Operaciones", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
+            catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
+            catGestion: "Gestión", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
+            catReportes: "Reportes", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
+            catMaterialApoyo: "Material Apoyo", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2"
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
@@ -438,15 +450,18 @@ function getStoredArea() {
 
 let selectedArea = getStoredArea();
 
-// Further filters the already department-filtered section's items: items
-// without an area tag (e.g. a department's fixed home link) stay visible;
-// items with one only show once the matching area is selected.
+// Every department's section is empty in menu.json — once an area is picked
+// (any area, any department), the selected department's section shows the
+// same shared category template (data.areaCategories: General/Catálogos/
+// Operaciones/Admin/Gestión/Reportes/Material Apoyo) instead of per-area
+// content. Real screens replace today's placeholders inside that one array
+// as they're built, rather than needing edits in every department section.
 function applyAreaFilter(data) {
     return {
         ...data,
         sections: data.sections.map((s) => {
             if (s.id !== selectedDepartment) return s;
-            return { ...s, items: s.items.filter((item) => !item.area || item.area === selectedArea) };
+            return { ...s, items: selectedArea ? (data.areaCategories || []) : [] };
         })
     };
 }
@@ -524,7 +539,15 @@ function buildSubmenu(items) {
         const a = document.createElement('a');
         a.href = item.href || '#';
         a.className = 'sub-menu-link';
-        a.textContent = t(item.labelKey, item.labelParams || {});
+        if (item.icon) {
+            const icon = document.createElement('i');
+            icon.className = `bx ${item.icon}`;
+            icon.setAttribute('aria-hidden', 'true');
+            a.appendChild(icon);
+        }
+        const span = document.createElement('span');
+        span.textContent = t(item.labelKey, item.labelParams || {});
+        a.appendChild(span);
         li.appendChild(a);
         ul.appendChild(li);
     });
