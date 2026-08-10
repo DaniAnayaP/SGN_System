@@ -943,7 +943,11 @@
         position: absolute;
         top: 2.7rem;
         right: 0;
-        min-width: 9rem;
+        /* Wide enough that "Administración del Negocio" fits the toggle
+           button on one line — it used to wrap to 2 lines, which overflowed
+           the button's box (hover highlight didn't cover the wrapped part,
+           and the extra line visually overlapped the submenu below it). */
+        min-width: 16rem;
         list-style: none;
         display: flex;
         flex-direction: column;
@@ -1004,6 +1008,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 0.5rem;
         width: 100%;
         border: none;
         border-radius: 0.35rem;
@@ -1021,7 +1026,13 @@
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
+    .settings-dropdown-toggle span{
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .settings-dropdown-toggle i{
+        flex-shrink: 0;
         font-size: 1rem;
         transition: transform 0.2s ease;
     }
