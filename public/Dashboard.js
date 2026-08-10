@@ -923,7 +923,10 @@ const ccPickerBtn = document.getElementById('cc-picker-btn');
 const ccPickerDropdown = document.getElementById('cc-picker-dropdown');
 const CC_SELECTION_KEY = 'costCenterSelection';
 
-let costCenters = [];
+// Named sidebarCostCenters (not costCenters) — Dashboard.js and page scripts
+// like Business-CentrosCosto.js share one global scope (plain <script> tags,
+// not modules), and that page has its own top-level costCenters already.
+let sidebarCostCenters = [];
 
 function getStoredCostCenterSelection() {
     const raw = localStorage.getItem(CC_SELECTION_KEY);
@@ -961,11 +964,11 @@ async function fetchCostCenters() {
 
 function updateCostCenterPickerLabel() {
     const label = document.getElementById('cc-picker-label');
-    if (!label || !costCenters.length) return;
-    const selected = costCenters.filter((cc) => isCostCenterSelected(cc.id));
+    if (!label || !sidebarCostCenters.length) return;
+    const selected = sidebarCostCenters.filter((cc) => isCostCenterSelected(cc.id));
     if (selected.length === 0) {
         label.textContent = t('sidebar.costCentersNone');
-    } else if (selected.length === costCenters.length) {
+    } else if (selected.length === sidebarCostCenters.length) {
         label.textContent = t('sidebar.costCentersAll');
     } else if (selected.length === 1) {
         label.textContent = `${selected[0].code} - ${selected[0].name}`;
@@ -981,8 +984,8 @@ function closeCcPicker() {
 
 function renderCostCenterPicker() {
     if (!ccPicker || !ccPickerDropdown) return;
-    ccPicker.classList.toggle('cc-picker-disabled', costCenters.length === 0 || currentRole === 'admin');
-    if (!costCenters.length) return;
+    ccPicker.classList.toggle('cc-picker-disabled', sidebarCostCenters.length === 0 || currentRole === 'admin');
+    if (!sidebarCostCenters.length) return;
 
     ccPickerDropdown.innerHTML = '';
 
@@ -991,9 +994,9 @@ function renderCostCenterPicker() {
     const allLabel = document.createElement('label');
     const allCheckbox = document.createElement('input');
     allCheckbox.type = 'checkbox';
-    allCheckbox.checked = costCenters.every((cc) => isCostCenterSelected(cc.id));
+    allCheckbox.checked = sidebarCostCenters.every((cc) => isCostCenterSelected(cc.id));
     allCheckbox.addEventListener('change', () => {
-        selectedCostCenterIds = allCheckbox.checked ? new Set(costCenters.map((cc) => cc.id)) : new Set();
+        selectedCostCenterIds = allCheckbox.checked ? new Set(sidebarCostCenters.map((cc) => cc.id)) : new Set();
         persistCostCenterSelection();
         renderCostCenterPicker();
     });
@@ -1004,7 +1007,7 @@ function renderCostCenterPicker() {
     ccPickerDropdown.appendChild(allLi);
     ccPickerDropdown.appendChild(Object.assign(document.createElement('li'), { className: 'cc-picker-divider' }));
 
-    costCenters.forEach((cc) => {
+    sidebarCostCenters.forEach((cc) => {
         const li = document.createElement('li');
         li.className = 'cc-option';
         const label = document.createElement('label');
@@ -1012,12 +1015,12 @@ function renderCostCenterPicker() {
         checkbox.type = 'checkbox';
         checkbox.checked = isCostCenterSelected(cc.id);
         checkbox.addEventListener('change', () => {
-            if (selectedCostCenterIds === 'all') selectedCostCenterIds = new Set(costCenters.map((c) => c.id));
+            if (selectedCostCenterIds === 'all') selectedCostCenterIds = new Set(sidebarCostCenters.map((c) => c.id));
             if (checkbox.checked) selectedCostCenterIds.add(cc.id);
             else selectedCostCenterIds.delete(cc.id);
             persistCostCenterSelection();
             updateCostCenterPickerLabel();
-            allCheckbox.checked = costCenters.every((c) => isCostCenterSelected(c.id));
+            allCheckbox.checked = sidebarCostCenters.every((c) => isCostCenterSelected(c.id));
         });
         const span = document.createElement('span');
         span.textContent = `${cc.code} - ${cc.name}`;
@@ -1030,9 +1033,9 @@ function renderCostCenterPicker() {
 }
 
 async function initCostCenterPicker() {
-    costCenters = await fetchCostCenters();
+    sidebarCostCenters = await fetchCostCenters();
     if (selectedCostCenterIds !== 'all') {
-        const validIds = new Set(costCenters.map((cc) => cc.id));
+        const validIds = new Set(sidebarCostCenters.map((cc) => cc.id));
         selectedCostCenterIds = new Set(Array.from(selectedCostCenterIds).filter((id) => validIds.has(id)));
         persistCostCenterSelection();
     }
