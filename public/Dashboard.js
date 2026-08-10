@@ -31,7 +31,7 @@ const EMBEDDED_TRANSLATIONS = {
         sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
         menu: {
             home: "Home", dashboard: "Dashboard", adminBusiness: "Admin Business",
-            contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Config",
+            contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Style",
             roles: "Roles", users: "Users", accessPermissions: "Access and Permissions",
             upcomingUpdates: "Upcoming Updates", trainingSessions: "Training Sessions",
             file: "File", images: "Images", audios: "Audio Files", task: "Tasks",
@@ -106,7 +106,7 @@ const EMBEDDED_TRANSLATIONS = {
         sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
         menu: {
             home: "Inicio", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
-            contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Configuración del Negocio",
+            contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Estilo del Negocio",
             roles: "Roles", users: "Usuarios", accessPermissions: "Accesos y Permisos",
             upcomingUpdates: "Próximas Actualizaciones", trainingSessions: "Sesiones de Capacitación",
             file: "Archivos", images: "Imágenes", audios: "Audios", task: "Tareas",
