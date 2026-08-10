@@ -593,7 +593,11 @@
 
     /* Main */
     main{
-        padding: 2rem 3rem 3rem 17rem;
+        /* Left padding is the sidebar's own width (15rem) plus a small 1rem
+           gap — not the ~2-3rem buffer this used to have on top of that,
+           which read as a big empty gap between the sidebar and everything
+           else instead of the sidebar's edge/shadow just being the seam. */
+        padding: 2rem 3rem 3rem 16rem;
         transition: padding 0.5s ease;
         width: 100%;
         min-height: 100vh;
@@ -793,7 +797,8 @@
         color: var(--color-text-primary);
     }
     .Sidebar.minimize + main{
-        padding-left: 7.96rem;
+        /* Same 1rem gap on top of the collapsed sidebar's own width (4.94rem). */
+        padding-left: 5.94rem;
     }
 
     /* Chatbot panel (UI shell — see Dashboard.js) */
