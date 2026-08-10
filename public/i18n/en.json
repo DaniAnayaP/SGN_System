@@ -86,7 +86,8 @@
       "endCustomer": "End Customer",
       "customerComplaints": "Customer Complaints"
     },
-    "clientesNuevos": "New Clients",
+    "clientesRegistrados": "Registered Clients",
+    "addClientNew": "+ Add New Client",
     "contrataciones": "Contracted Modules",
     "clientAdmin": "Client Administration",
     "plans": "Plans / Packages",
@@ -95,6 +96,7 @@
   "admin": {
     "clientsTitle": "New Clients",
     "clientsSubtitle": "Manage the companies using this SGN instance.",
+    "addClientSubtitle": "Register a new company as an SGN client.",
     "companyName": "Company name",
     "logo": "Logo",
     "removeLogo": "Remove",

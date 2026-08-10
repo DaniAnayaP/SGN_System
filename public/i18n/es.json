@@ -86,7 +86,8 @@
       "endCustomer": "Cliente Final",
       "customerComplaints": "Quejas de Cliente"
     },
-    "clientesNuevos": "Clientes Nuevos",
+    "clientesRegistrados": "Clientes Registrados",
+    "addClientNew": "+ Agregar Cliente Nuevo",
     "contrataciones": "Contrataciones",
     "clientAdmin": "Administración de Clientes",
     "plans": "Planes / Paquetes",
@@ -95,6 +96,7 @@
   "admin": {
     "clientsTitle": "Clientes Nuevos",
     "clientsSubtitle": "Administra las empresas que usan esta instancia de SGN.",
+    "addClientSubtitle": "Registra una nueva empresa como cliente de SGN.",
     "companyName": "Nombre de la empresa",
     "logo": "Logo",
     "removeLogo": "Quitar",

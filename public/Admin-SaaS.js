@@ -1,7 +1,10 @@
 // ---------------------------------------------------------------------------
 // "Administración de Clientes" — combined SaaS admin screen: client list
-// (Clientes Nuevos tab) and per-client module entitlements (Contrataciones
-// tab). Shell (sidebar, i18n, settings, logout) comes from Dashboard.js.
+// (Clientes Registrados tab — view/edit/Anexos/delete) and per-client module
+// entitlements (Contrataciones tab). Creating a brand new client lives on
+// its own page instead (+ Agregar Cliente Nuevo, Admin-ClienteNuevo.js) —
+// the edit form here only ever appears via startEdit(). Shell (sidebar,
+// i18n, settings, logout) comes from Dashboard.js.
 //
 // Access note: the sidebar only shows this page's link to admins, and the
 // redirect below covers anyone who lands here directly without the role —
@@ -28,7 +31,7 @@ function activateTab(tab) {
 tabClients.addEventListener('click', () => activateTab('clients'));
 tabContrataciones.addEventListener('click', () => activateTab('contrataciones'));
 
-// --- Clientes Nuevos: create/edit/delete clients ------------------------------
+// --- Clientes Registrados: view/edit/delete existing clients ------------------
 const form = document.getElementById('client-form');
 const idField = document.getElementById('client-id');
 const companyField = document.getElementById('client-company');
@@ -100,13 +103,15 @@ logoClearBtn.addEventListener('click', () => {
     setLogoPreview('');
 });
 
+// This form is edit-only here (creating a client lives on its own page, +
+// Agregar Cliente Nuevo) — it only ever appears via startEdit, and hides
+// again once you're done with it.
 function resetForm() {
     form.reset();
+    form.hidden = true;
     idField.value = '';
     setLogoPreview('');
     paletteWidget.setPalette(null);
-    submitBtn.textContent = Dashboard.t('admin.addClient');
-    cancelBtn.hidden = true;
     clearError();
 }
 
@@ -184,8 +189,7 @@ function startEdit(client) {
     }
     if (existingPalette) existingPalette.seed = client.seed_color || existingPalette.seed;
     paletteWidget.setPalette(existingPalette);
-    submitBtn.textContent = Dashboard.t('admin.save');
-    cancelBtn.hidden = false;
+    form.hidden = false;
     clearError();
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -284,13 +288,11 @@ form.addEventListener('submit', async (event) => {
     };
 
     const editingId = idField.value;
-    const url = editingId ? `/api/admin/clients/${editingId}` : '/api/admin/clients';
-    const method = editingId ? 'PATCH' : 'POST';
 
     submitBtn.disabled = true;
     try {
-        const res = await fetch(url, {
-            method,
+        const res = await fetch(`/api/admin/clients/${editingId}`, {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(payload),
@@ -301,11 +303,7 @@ form.addEventListener('submit', async (event) => {
             return;
         }
         const { client, generatedAdmin } = await res.json();
-        if (editingId) {
-            clients = clients.map((c) => (c.id === client.id ? client : c));
-        } else {
-            clients = [client, ...clients];
-        }
+        clients = clients.map((c) => (c.id === client.id ? client : c));
         renderClients();
         populateClientSelect();
         resetForm();
@@ -567,7 +565,6 @@ saveBtn.addEventListener('click', async () => {
 });
 
 document.addEventListener('dashboard:language-changed', () => {
-    if (!idField.value) submitBtn.textContent = Dashboard.t('admin.addClient');
     renderClients();
     if (currentModules.length) renderModules(currentModules);
     if (modulesPanel.hidden) hint.textContent = Dashboard.t('admin.noClientSelected');

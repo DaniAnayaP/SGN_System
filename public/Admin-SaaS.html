@@ -174,7 +174,7 @@
         <section class="admin-panel">
             <div class="admin-tabs" role="tablist">
                 <button type="button" class="admin-tab active" id="tab-clients" role="tab"
-                        aria-selected="true" aria-controls="panel-clients" data-i18n="menu.clientesNuevos">New Clients</button>
+                        aria-selected="true" aria-controls="panel-clients" data-i18n="menu.clientesRegistrados">Registered Clients</button>
                 <button type="button" class="admin-tab" id="tab-contrataciones" role="tab"
                         aria-selected="false" aria-controls="panel-contrataciones" data-i18n="menu.contrataciones">Contracted Modules</button>
             </div>
@@ -182,7 +182,7 @@
             <div id="panel-clients" class="admin-tab-panel" role="tabpanel" aria-labelledby="tab-clients">
                 <p class="admin-subtitle" data-i18n="admin.clientsSubtitle">Manage the companies using this SGN instance.</p>
 
-                <form id="client-form" class="admin-form" novalidate>
+                <form id="client-form" class="admin-form" novalidate hidden>
                     <input type="hidden" id="client-id" value="">
                     <div class="admin-form-grid">
                         <div class="admin-field">
@@ -252,8 +252,8 @@
 
                     <div id="client-form-error" class="admin-error" role="alert" hidden></div>
                     <div class="admin-form-actions">
-                        <button type="submit" class="btn" id="client-form-submit" data-i18n="admin.addClient">Add client</button>
-                        <button type="button" class="btn btn-secondary" id="client-form-cancel" data-i18n="admin.cancel" hidden>Cancel</button>
+                        <button type="submit" class="btn" id="client-form-submit" data-i18n="admin.save">Save</button>
+                        <button type="button" class="btn btn-secondary" id="client-form-cancel" data-i18n="admin.cancel">Cancel</button>
                     </div>
                 </form>
 

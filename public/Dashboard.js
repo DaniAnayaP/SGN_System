@@ -43,10 +43,11 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transport: "Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints" },
-            clientesNuevos: "New Clients", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plans: "Plans / Packages", mainSection: "General"
+            clientesRegistrados: "Registered Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plans: "Plans / Packages", mainSection: "General"
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
+            addClientSubtitle: "Register a new company as an SGN client.",
             logo: "Logo", removeLogo: "Remove", primaryColor: "Primary color", secondaryColor: "Secondary color",
             paletteSeedLabel: "Client's representative color", paletteSuggest: "Suggest palette",
             paletteHint: "Pick the client's most representative color and click \"Suggest palette\" to auto-fill a full, readable theme — then adjust any color by hand.",
@@ -133,10 +134,11 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Compras", commercial: "Comercial", marketing: "Mercadotecnia",
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
-            clientesNuevos: "Clientes Nuevos", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plans: "Planes / Paquetes", mainSection: "General"
+            clientesRegistrados: "Clientes Registrados", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plans: "Planes / Paquetes", mainSection: "General"
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
+            addClientSubtitle: "Registra una nueva empresa como cliente de SGN.",
             logo: "Logo", removeLogo: "Quitar", primaryColor: "Color primario", secondaryColor: "Color secundario",
             paletteSeedLabel: "Color representativo del cliente", paletteSuggest: "Sugerir paleta",
             paletteHint: "Elige el color más representativo del cliente y haz clic en \"Sugerir paleta\" para generar un tema completo y legible — luego ajusta cualquier color a mano.",
@@ -320,8 +322,9 @@ async function loadMenu() {
     return EMBEDDED_MENU_FALLBACK;
 }
 
-// Admin-only sidebar dropdown (SaaS control panel: Clientes Nuevos — client
-// list + module entitlements, combined into one screen — and Planes /
+// Admin-only sidebar dropdown (SaaS control panel: Clientes Registrados —
+// the list of existing clients, module entitlements, and Anexos, all on one
+// screen — + Agregar Cliente Nuevo, a dedicated add-only form; and Planes /
 // Paquetes, GEIPSA's own plan-type catalog). Only ever added when the
 // server-verified role (from /api/me) is 'admin' — the real access control
 // is enforced server-side on every /api/admin/* route regardless of what the
@@ -338,7 +341,8 @@ function buildSidebarData(data, role, activePage) {
     const adminItem = {
         id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings',
         submenu: [
-            { id: 'admin-clientes-nuevos', labelKey: 'menu.clientesNuevos', href: 'Admin-SaaS.html' },
+            { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html' },
+            { id: 'admin-cliente-nuevo', labelKey: 'menu.addClientNew', href: 'Admin-ClienteNuevo.html' },
             { id: 'admin-planes', labelKey: 'menu.plans', href: 'Admin-Planes.html' }
         ]
     };
