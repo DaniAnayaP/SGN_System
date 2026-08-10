@@ -501,15 +501,18 @@ app.put('/api/business/profiles/:id/grants', requireAuth, requireClientAdmin, (r
 
 // --- Centros de Costo (cost centers, scoped to one client) -------------------
 // Capped by clients.cost_centers_limit, which GEIPSA sets from Contrataciones
-// (Admin-SaaS) — see setClientCostCentersLimit. Same access rule as the rest
-// of "Administración del Negocio": only the client's own admin manages this.
+// (Admin-SaaS) — see setClientCostCentersLimit. Managing the catalog (create/
+// edit/delete) stays admin-only, same as the rest of "Administración del
+// Negocio" — but any authenticated user at the client can READ the list,
+// since every client user needs it for the sidebar's Centro de Costo picker.
 function validateCostCenterBody(body) {
     const { code, name } = body || {};
     if (!code || !name) return 'code and name are required.';
     return null;
 }
 
-app.get('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, res) => {
+app.get('/api/business/cost-centers', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const client = getClientById(req.user.clientId);
     res.json({ costCenters: listCostCenters(req.user.clientId), limit: client.cost_centers_limit });
 });

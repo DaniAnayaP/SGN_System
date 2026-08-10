@@ -28,7 +28,7 @@ let currentUser = null;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersNone: "None selected", costCentersSelectedCount: "{count} selected" },
         menu: {
             home: "Home", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Config",
@@ -102,7 +102,7 @@ const EMBEDDED_TRANSLATIONS = {
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "{count} seleccionados" },
         menu: {
             home: "Inicio", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Configuración del Negocio",
@@ -234,6 +234,7 @@ async function loadLanguage(lang) {
     });
     renderFilteredMenu();
     updateDeptPickerLabel();
+    renderCostCenterPicker(); // no-op until costCenters loads; re-translates the "Todos"/count label after that
     document.dispatchEvent(new CustomEvent('dashboard:language-changed', { detail: { lang } }));
 }
 
@@ -911,6 +912,147 @@ deptPickerDropdown?.addEventListener('click', (event) => {
     closeDeptPicker();
 });
 
+// --- Cost center picker: multi-select (one, several, or all) ----------------
+// Selection persists in localStorage (same idea as the department picker)
+// ready for whatever screen ends up filtering by it — this just captures and
+// remembers the choice for now. 'all' is a sentinel meaning "every cost
+// center, including ones added later"; once the user deselects anything it
+// becomes an explicit id set.
+const ccPicker = document.getElementById('cc-picker');
+const ccPickerBtn = document.getElementById('cc-picker-btn');
+const ccPickerDropdown = document.getElementById('cc-picker-dropdown');
+const CC_SELECTION_KEY = 'costCenterSelection';
+
+let costCenters = [];
+
+function getStoredCostCenterSelection() {
+    const raw = localStorage.getItem(CC_SELECTION_KEY);
+    if (!raw || raw === 'all') return 'all';
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return new Set(parsed);
+    } catch { /* fall through to default */ }
+    return 'all';
+}
+
+let selectedCostCenterIds = getStoredCostCenterSelection();
+
+function isCostCenterSelected(id) {
+    return selectedCostCenterIds === 'all' || selectedCostCenterIds.has(id);
+}
+
+function persistCostCenterSelection() {
+    localStorage.setItem(
+        CC_SELECTION_KEY,
+        selectedCostCenterIds === 'all' ? 'all' : JSON.stringify(Array.from(selectedCostCenterIds))
+    );
+}
+
+async function fetchCostCenters() {
+    try {
+        const res = await fetch(`${API_BASE}/business/cost-centers`, { credentials: 'include' });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.costCenters || [];
+    } catch {
+        return [];
+    }
+}
+
+function updateCostCenterPickerLabel() {
+    const label = document.getElementById('cc-picker-label');
+    if (!label || !costCenters.length) return;
+    const selected = costCenters.filter((cc) => isCostCenterSelected(cc.id));
+    if (selected.length === 0) {
+        label.textContent = t('sidebar.costCentersNone');
+    } else if (selected.length === costCenters.length) {
+        label.textContent = t('sidebar.costCentersAll');
+    } else if (selected.length === 1) {
+        label.textContent = `${selected[0].code} - ${selected[0].name}`;
+    } else {
+        label.textContent = t('sidebar.costCentersSelectedCount', { count: selected.length });
+    }
+}
+
+function closeCcPicker() {
+    ccPicker?.classList.remove('open');
+    ccPickerBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function renderCostCenterPicker() {
+    if (!ccPicker || !ccPickerDropdown) return;
+    ccPicker.classList.toggle('cc-picker-disabled', costCenters.length === 0 || currentRole === 'admin');
+    if (!costCenters.length) return;
+
+    ccPickerDropdown.innerHTML = '';
+
+    const allLi = document.createElement('li');
+    allLi.className = 'cc-option';
+    const allLabel = document.createElement('label');
+    const allCheckbox = document.createElement('input');
+    allCheckbox.type = 'checkbox';
+    allCheckbox.checked = costCenters.every((cc) => isCostCenterSelected(cc.id));
+    allCheckbox.addEventListener('change', () => {
+        selectedCostCenterIds = allCheckbox.checked ? new Set(costCenters.map((cc) => cc.id)) : new Set();
+        persistCostCenterSelection();
+        renderCostCenterPicker();
+    });
+    const allSpan = document.createElement('span');
+    allSpan.textContent = t('sidebar.costCentersAll');
+    allLabel.append(allCheckbox, allSpan);
+    allLi.appendChild(allLabel);
+    ccPickerDropdown.appendChild(allLi);
+    ccPickerDropdown.appendChild(Object.assign(document.createElement('li'), { className: 'cc-picker-divider' }));
+
+    costCenters.forEach((cc) => {
+        const li = document.createElement('li');
+        li.className = 'cc-option';
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = isCostCenterSelected(cc.id);
+        checkbox.addEventListener('change', () => {
+            if (selectedCostCenterIds === 'all') selectedCostCenterIds = new Set(costCenters.map((c) => c.id));
+            if (checkbox.checked) selectedCostCenterIds.add(cc.id);
+            else selectedCostCenterIds.delete(cc.id);
+            persistCostCenterSelection();
+            updateCostCenterPickerLabel();
+            allCheckbox.checked = costCenters.every((c) => isCostCenterSelected(c.id));
+        });
+        const span = document.createElement('span');
+        span.textContent = `${cc.code} - ${cc.name}`;
+        label.append(checkbox, span);
+        li.appendChild(label);
+        ccPickerDropdown.appendChild(li);
+    });
+
+    updateCostCenterPickerLabel();
+}
+
+async function initCostCenterPicker() {
+    costCenters = await fetchCostCenters();
+    if (selectedCostCenterIds !== 'all') {
+        const validIds = new Set(costCenters.map((cc) => cc.id));
+        selectedCostCenterIds = new Set(Array.from(selectedCostCenterIds).filter((id) => validIds.has(id)));
+        persistCostCenterSelection();
+    }
+    renderCostCenterPicker();
+}
+
+ccPickerBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = ccPicker.classList.toggle('open');
+    ccPickerBtn.setAttribute('aria-expanded', String(isOpen));
+});
+
+document.addEventListener('click', (event) => {
+    if (ccPicker && !ccPicker.contains(event.target)) closeCcPicker();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeCcPicker();
+});
+
 // --- Logout: invalidate the server-side session, then navigate away --------
 document.getElementById('logout-link')?.addEventListener('click', (event) => {
     event.preventDefault();
@@ -986,6 +1128,9 @@ async function initDashboard({ activePage } = {}) {
     if (role !== 'admin') {
         clientBranding = await fetchClientBranding();
         applyClientBranding(clientBranding);
+        await initCostCenterPicker();
+    } else {
+        document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');
     }
     return role;
 }

@@ -35,7 +35,11 @@
     "notifications": "Notificaciones",
     "settings": "Configuración",
     "logout": "Cerrar sesión",
-    "department": "Departamento"
+    "department": "Departamento",
+    "costCenters": "Centros de Costo",
+    "costCentersAll": "Todos los centros de costo",
+    "costCentersNone": "Ninguno seleccionado",
+    "costCentersSelectedCount": "{count} seleccionados"
   },
   "menu": {
     "home": "Inicio",

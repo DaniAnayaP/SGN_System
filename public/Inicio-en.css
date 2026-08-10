@@ -302,6 +302,128 @@
         display: none;
     }
 
+    /* Cost center picker — same structure/quirks as .dept-picker above
+       (overflow trick for the collapse-clip, flex-shrink:0 to avoid the
+       0-height bug that trick causes on a .menu-container flex child). */
+    .cc-picker{
+        position: relative;
+        width: 100%;
+        margin-bottom: 0.8rem;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    .cc-picker.open{
+        overflow: visible;
+    }
+    .cc-picker-btn{
+        display: flex;
+        align-items: center;
+        width: 100%;
+        gap: 0.6rem;
+        padding: 0.55rem 0.8rem;
+        border: none;
+        border-radius: 0.3rem;
+        background-color: var(--color-bg);
+        color: var(--color-text-secondary);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: color 0.2s ease;
+    }
+    .cc-picker-btn:hover,
+    .cc-picker.open .cc-picker-btn{
+        color: var(--color-text-primary);
+    }
+    .cc-picker-btn i:first-child{
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+    .cc-picker-btn span{
+        flex: 1;
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .cc-picker-btn i:last-child{
+        font-size: 1rem;
+        transition: transform 0.2s ease;
+    }
+    .cc-picker.open .cc-picker-btn i:last-child{
+        transform: rotate(180deg);
+    }
+    .cc-picker-dropdown{
+        position: absolute;
+        top: 2.7rem;
+        left: 0;
+        right: 0;
+        max-height: 16rem;
+        overflow-y: auto;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+        padding: 0.4rem;
+        background-color: var(--color-surface);
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 16px var(--shadow-border), 0 0 0 1px var(--color-border);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-0.4rem);
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+        z-index: 15;
+    }
+    .cc-picker.open .cc-picker-dropdown{
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+    .cc-picker-dropdown .cc-option label{
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        width: 100%;
+        border-radius: 0.35rem;
+        padding: 0.5rem 0.6rem;
+        color: var(--color-text-secondary);
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    .cc-picker-dropdown .cc-option label:hover{
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .cc-picker-dropdown .cc-option input[type="checkbox"]{
+        flex-shrink: 0;
+        width: 0.95rem;
+        height: 0.95rem;
+        accent-color: var(--color-text-primary);
+        cursor: pointer;
+    }
+    .cc-picker-dropdown .cc-option span{
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .cc-picker-divider{
+        height: 1px;
+        margin: 0.3rem 0.2rem;
+        background-color: var(--color-border);
+    }
+    .cc-picker-empty{
+        padding: 0.6rem;
+        font-size: 0.8rem;
+        color: var(--color-text-secondary);
+    }
+    .cc-picker-disabled{
+        display: none;
+    }
+    .Sidebar.minimize .cc-picker-btn i:last-child{
+        display: none;
+    }
+
     /* Search */
     .search{
         position: relative;
