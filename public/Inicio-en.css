@@ -1224,14 +1224,16 @@
         }
     }
 
-    /* The top bar's own content (cost-center picker + title + six action
-       icons) stops fitting well before the sidebar needs to go off-canvas
-       (that's the 700px/683px breakpoint above, a separate concern) —
-       confirmed by testing the actual breakpoint where icons start
-       spilling past the rounded box: ~936px, not 700px. Collapsing the
-       action icons behind the "more" toggle gets its own, wider breakpoint
-       so the switch happens before the overflow, not after. */
-    @media (max-width: 936px) {
+    /* The top bar's own content (department + area + cost-center pickers,
+       page title, six action icons) stops fitting well before the sidebar
+       needs to go off-canvas (that's the 700px/683px breakpoint above, a
+       separate concern) — confirmed by testing the actual breakpoint where
+       icons start spilling past the rounded box. This was 936px before the
+       department/area pickers moved into the top bar (see the "Move
+       Departamento/Área pickers to top bar" change); the extra pickers eat
+       into the same row, so the icons now need to collapse behind the
+       "more" toggle earlier, at 1120px, to stay ahead of the overflow. */
+    @media (max-width: 1120px) {
         /* ID selector to reliably beat the unconditional
            #top-bar-actions-toggle{display:none} base rule — same
            specificity, later in the cascade wins. */
@@ -1258,6 +1260,18 @@
             opacity: 1;
             visibility: visible;
             transform: translateY(0);
+        }
+    }
+
+    /* Below 1120px the action icons are already tucked behind the "more"
+       toggle (see above), but the department/area/cost-center pickers on
+       the left keep their full pill width and, combined with the page
+       title, still get tight — confirmed by testing where the title starts
+       crowding the pickers: ~847px. Dropping just the title (same idea as
+       the sidebars-hidden rule above) frees up the room the pickers need. */
+    @media (max-width: 847px) {
+        .top-bar .welcome-text{
+            display: none;
         }
     }
 
