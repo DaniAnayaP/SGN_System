@@ -1345,6 +1345,10 @@ async function initDashboard({ activePage } = {}) {
     } else {
         updateAreaPickerVisibility();
     }
+    // "Estilo del Negocio" shortcut in the Settings dropdown: GEIPSA staff
+    // have no client (no logo/institutional colors to configure), so hide it
+    // instead of linking to a page they'd immediately get redirected out of.
+    document.getElementById('settings-business-config-item')?.toggleAttribute('hidden', role === 'admin');
     if (role !== 'admin') {
         clientBranding = await fetchClientBranding();
         applyClientBranding(clientBranding);
