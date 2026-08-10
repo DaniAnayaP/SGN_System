@@ -72,6 +72,15 @@ const {
 
 const app = express();
 
+// Railway (like Heroku/most PaaS) puts the app behind a reverse proxy, which
+// sets X-Forwarded-For on every request. Without this, Express doesn't trust
+// that header, so express-rate-limit can't tell real client IPs apart —
+// every request behind the proxy looks like it's coming from the same
+// address, which both breaks per-IP rate limiting and logs a validation
+// error on every single request. `1` trusts exactly one hop (Railway's own
+// proxy), not arbitrary client-supplied headers.
+app.set('trust proxy', 1);
+
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const PUBLIC_DIR = path.join(__dirname, 'public');
