@@ -614,7 +614,6 @@
         display: flex;
         align-items: center;
         gap: 0.7rem;
-        min-width: 0;
     }
 
     /* Cost center picker (top bar): compact pill with icon + label on
