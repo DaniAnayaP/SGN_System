@@ -28,7 +28,7 @@ let currentUser = null;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
         menu: {
             home: "Home", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Config",
@@ -41,6 +41,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Purchasing", commercial: "Commercial", marketing: "Marketing",
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}",
+            area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transport: "Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints" },
             clientesNuevos: "New Clients", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", mainSection: "General"
         },
         admin: {
@@ -102,7 +103,7 @@ const EMBEDDED_TRANSLATIONS = {
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
         menu: {
             home: "Inicio", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Configuración del Negocio",
@@ -234,6 +235,7 @@ async function loadLanguage(lang) {
     });
     renderFilteredMenu();
     updateDeptPickerLabel();
+    renderAreaPickerOptions(); // rebuilds labels for the current department's areas
     renderCostCenterPicker(); // no-op until costCenters loads; re-translates the "Todos"/count label after that
     document.dispatchEvent(new CustomEvent('dashboard:language-changed', { detail: { lang } }));
 }
@@ -349,9 +351,105 @@ function applyDepartmentFilter(data) {
     };
 }
 
+// --- Area picker (linked to the department picker) --------------------------
+// Each department has its own list of areas; picking one further narrows
+// that department's menu items down to just the ones tagged with that area
+// (item.area in menu.json), the same way picking a department narrows
+// sections. Supply Chain has real area names; every other department reuses
+// the generic "Area 1/2/3" placeholders that already back its existing
+// dept-N items, until real names are provided for those too.
+const GENERIC_AREAS = [
+    { key: 'area-1', labelKey: 'menu.area.generic', labelParams: { n: 1 } },
+    { key: 'area-2', labelKey: 'menu.area.generic', labelParams: { n: 2 } },
+    { key: 'area-3', labelKey: 'menu.area.generic', labelParams: { n: 3 } }
+];
+const AREAS_BY_DEPARTMENT = {
+    'supply-chain': [
+        { key: 'sc-area-raw-material', labelKey: 'menu.area.rawMaterial' },
+        { key: 'sc-area-production', labelKey: 'menu.area.production' },
+        { key: 'sc-area-transport-1', labelKey: 'menu.area.transport' },
+        { key: 'sc-area-distribution-center', labelKey: 'menu.area.distributionCenter' },
+        { key: 'sc-area-transport-2', labelKey: 'menu.area.transport' },
+        { key: 'sc-area-point-of-sale', labelKey: 'menu.area.pointOfSale' },
+        { key: 'sc-area-delivery', labelKey: 'menu.area.delivery' },
+        { key: 'sc-area-end-customer', labelKey: 'menu.area.endCustomer' },
+        { key: 'sc-area-customer-complaints', labelKey: 'menu.area.customerComplaints' }
+    ],
+    finance: GENERIC_AREAS,
+    accounting: GENERIC_AREAS,
+    'human-resources': GENERIC_AREAS,
+    marketing: GENERIC_AREAS,
+    commercial: GENERIC_AREAS,
+    purchasing: GENERIC_AREAS,
+    'management-control': GENERIC_AREAS,
+    'general-management': GENERIC_AREAS,
+    'steering-committee': GENERIC_AREAS
+};
+
+function getStoredArea() {
+    const stored = localStorage.getItem('area');
+    const areas = AREAS_BY_DEPARTMENT[selectedDepartment] || [];
+    return areas.some((a) => a.key === stored) ? stored : null;
+}
+
+let selectedArea = getStoredArea();
+
+// Further filters the already department-filtered section's items: items
+// without an area tag (e.g. a department's fixed home link) stay visible;
+// items with one only show once the matching area is selected.
+function applyAreaFilter(data) {
+    return {
+        ...data,
+        sections: data.sections.map((s) => {
+            if (s.id !== selectedDepartment) return s;
+            return { ...s, items: s.items.filter((item) => !item.area || item.area === selectedArea) };
+        })
+    };
+}
+
 function renderFilteredMenu() {
-    if (menuData) renderMenu(applyDepartmentFilter(menuData));
+    if (menuData) renderMenu(applyAreaFilter(applyDepartmentFilter(menuData)));
     applyRealUserIdentity();
+}
+
+function updateAreaPickerLabel() {
+    const label = document.getElementById('area-picker-label');
+    if (!label) return;
+    const areas = AREAS_BY_DEPARTMENT[selectedDepartment] || [];
+    const area = areas.find((a) => a.key === selectedArea);
+    label.textContent = area ? t(area.labelKey, area.labelParams || {}) : t('sidebar.area');
+    document.querySelectorAll('.area-option').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.area === selectedArea);
+    });
+}
+
+// Rebuilt (not just relabeled) whenever the department or language changes,
+// since the list of areas itself depends on which department is selected.
+function renderAreaPickerOptions() {
+    const dropdown = document.getElementById('area-picker-dropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = '';
+    const areas = AREAS_BY_DEPARTMENT[selectedDepartment] || [];
+    areas.forEach((area) => {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'none');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.className = 'dept-option area-option';
+        btn.dataset.area = area.key;
+        btn.textContent = t(area.labelKey, area.labelParams || {});
+        li.appendChild(btn);
+        dropdown.appendChild(li);
+    });
+    updateAreaPickerLabel();
+}
+
+function updateAreaPickerVisibility() {
+    const picker = document.getElementById('area-picker');
+    if (!picker || currentRole === 'admin') return;
+    const hasAreas = !!(selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]?.length);
+    picker.classList.toggle('dept-picker-disabled', !hasAreas);
 }
 
 function updateDeptPickerLabel() {
@@ -934,10 +1032,52 @@ deptPickerDropdown?.addEventListener('click', (event) => {
     if (!btn) return;
     selectedDepartment = selectedDepartment === btn.dataset.dept ? null : btn.dataset.dept;
     localStorage.setItem('department', selectedDepartment || '');
+    // A department's areas are a different list than the previous one's, so
+    // any area chosen before this switch no longer applies.
+    selectedArea = null;
+    localStorage.setItem('area', '');
     updateDeptPickerLabel();
+    renderAreaPickerOptions();
+    updateAreaPickerVisibility();
     renderFilteredMenu();
     closeDeptPicker();
 });
+
+// --- Area picker dropdown (mirrors the department picker above) -------------
+const areaPicker = document.getElementById('area-picker');
+const areaPickerBtn = document.getElementById('area-picker-btn');
+const areaPickerDropdown = document.getElementById('area-picker-dropdown');
+
+function closeAreaPicker() {
+    areaPicker?.classList.remove('open');
+    areaPickerBtn?.setAttribute('aria-expanded', 'false');
+}
+
+areaPickerBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = areaPicker.classList.toggle('open');
+    areaPickerBtn.setAttribute('aria-expanded', String(isOpen));
+});
+
+document.addEventListener('click', (event) => {
+    if (areaPicker && !areaPicker.contains(event.target)) closeAreaPicker();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeAreaPicker();
+});
+
+areaPickerDropdown?.addEventListener('click', (event) => {
+    const btn = event.target.closest('.area-option');
+    if (!btn) return;
+    selectedArea = selectedArea === btn.dataset.area ? null : btn.dataset.area;
+    localStorage.setItem('area', selectedArea || '');
+    updateAreaPickerLabel();
+    renderFilteredMenu();
+    closeAreaPicker();
+});
+
+renderAreaPickerOptions();
 
 // --- Cost center picker: multi-select (one, several, or all) ----------------
 // Selection persists in localStorage (same idea as the department picker)
@@ -1150,11 +1290,17 @@ async function initDashboard({ activePage } = {}) {
     menuData = buildSidebarData(menuData, role, activePage);
     renderFilteredMenu();
     updateDeptPickerLabel();
+    renderAreaPickerOptions();
     checkWindowSize();
     // GEIPSA staff have nothing to filter by department (their sidebar is
     // fixed to Inicio/Tablero/Administración de Clientes), so the picker
     // itself shouldn't even be offered.
     document.getElementById('dept-picker')?.classList.toggle('dept-picker-disabled', role === 'admin');
+    if (role === 'admin') {
+        document.getElementById('area-picker')?.classList.add('dept-picker-disabled');
+    } else {
+        updateAreaPickerVisibility();
+    }
     if (role !== 'admin') {
         clientBranding = await fetchClientBranding();
         applyClientBranding(clientBranding);
