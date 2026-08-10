@@ -36,6 +36,18 @@
     "settings": "Settings",
     "logout": "Log out",
     "department": "Department",
+    "deptAbbr": {
+      "finance": "FIN",
+      "accounting": "ACC",
+      "humanResources": "HR",
+      "marketing": "MKT",
+      "commercial": "COM",
+      "purchasing": "PUR",
+      "supplyChain": "SCM",
+      "managementControl": "MC",
+      "generalManagement": "GM",
+      "steeringCommittee": "STC"
+    },
     "area": "Area",
     "costCenters": "Cost Centers",
     "costCentersAll": "All cost centers",

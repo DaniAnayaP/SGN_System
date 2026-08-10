@@ -36,6 +36,18 @@
     "settings": "Configuración",
     "logout": "Cerrar sesión",
     "department": "Departamento",
+    "deptAbbr": {
+      "finance": "FIN",
+      "accounting": "CONT",
+      "humanResources": "RRHH",
+      "marketing": "MKT",
+      "commercial": "COM",
+      "purchasing": "COMP",
+      "supplyChain": "CDS",
+      "managementControl": "CG",
+      "generalManagement": "DG",
+      "steeringCommittee": "CD"
+    },
     "area": "Área",
     "costCenters": "Centros de Costo",
     "costCentersAll": "Todos los centros de costo",

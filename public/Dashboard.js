@@ -28,7 +28,7 @@ let currentUser = null;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", deptAbbr: { finance: "FIN", accounting: "ACC", humanResources: "HR", marketing: "MKT", commercial: "COM", purchasing: "PUR", supplyChain: "SCM", managementControl: "MC", generalManagement: "GM", steeringCommittee: "STC" }, area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
         menu: {
             home: "Home", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Style",
@@ -121,7 +121,7 @@ const EMBEDDED_TRANSLATIONS = {
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", deptAbbr: { finance: "FIN", accounting: "CONT", humanResources: "RRHH", marketing: "MKT", commercial: "COM", purchasing: "COMP", supplyChain: "CDS", managementControl: "CG", generalManagement: "DG", steeringCommittee: "CD" }, area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
         menu: {
             home: "Inicio", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Estilo del Negocio",
@@ -363,16 +363,16 @@ function buildSidebarData(data, role, activePage) {
 // used by "Contrataciones") so picking a department shows exactly that
 // section's items below, instead of every department stacked at once.
 const DEPARTMENTS = [
-    { key: 'finance', labelKey: 'menu.finance' },
-    { key: 'accounting', labelKey: 'menu.accounting' },
-    { key: 'human-resources', labelKey: 'menu.humanResources' },
-    { key: 'marketing', labelKey: 'menu.marketing' },
-    { key: 'commercial', labelKey: 'menu.commercial' },
-    { key: 'purchasing', labelKey: 'menu.purchasing' },
-    { key: 'supply-chain', labelKey: 'menu.supplyChain' },
-    { key: 'management-control', labelKey: 'menu.managementControl' },
-    { key: 'general-management', labelKey: 'menu.generalManagement' },
-    { key: 'steering-committee', labelKey: 'menu.steeringCommittee' }
+    { key: 'finance', labelKey: 'menu.finance', abbrKey: 'sidebar.deptAbbr.finance', icon: 'bx-dollar-circle' },
+    { key: 'accounting', labelKey: 'menu.accounting', abbrKey: 'sidebar.deptAbbr.accounting', icon: 'bx-calculator' },
+    { key: 'human-resources', labelKey: 'menu.humanResources', abbrKey: 'sidebar.deptAbbr.humanResources', icon: 'bx-id-card' },
+    { key: 'marketing', labelKey: 'menu.marketing', abbrKey: 'sidebar.deptAbbr.marketing', icon: 'bx-megaphone' },
+    { key: 'commercial', labelKey: 'menu.commercial', abbrKey: 'sidebar.deptAbbr.commercial', icon: 'bx-store-alt' },
+    { key: 'purchasing', labelKey: 'menu.purchasing', abbrKey: 'sidebar.deptAbbr.purchasing', icon: 'bx-cart-alt' },
+    { key: 'supply-chain', labelKey: 'menu.supplyChain', abbrKey: 'sidebar.deptAbbr.supplyChain', icon: 'bx-package' },
+    { key: 'management-control', labelKey: 'menu.managementControl', abbrKey: 'sidebar.deptAbbr.managementControl', icon: 'bx-line-chart' },
+    { key: 'general-management', labelKey: 'menu.generalManagement', abbrKey: 'sidebar.deptAbbr.generalManagement', icon: 'bx-crown' },
+    { key: 'steering-committee', labelKey: 'menu.steeringCommittee', abbrKey: 'sidebar.deptAbbr.steeringCommittee', icon: 'bx-group' }
 ];
 const ALWAYS_VISIBLE_SECTIONS = ['main'];
 
@@ -403,21 +403,21 @@ function applyDepartmentFilter(data) {
 // the generic "Area 1/2/3" placeholders that already back its existing
 // dept-N items, until real names are provided for those too.
 const GENERIC_AREAS = [
-    { key: 'area-1', labelKey: 'menu.area.generic', labelParams: { n: 1 } },
-    { key: 'area-2', labelKey: 'menu.area.generic', labelParams: { n: 2 } },
-    { key: 'area-3', labelKey: 'menu.area.generic', labelParams: { n: 3 } }
+    { key: 'area-1', labelKey: 'menu.area.generic', labelParams: { n: 1 }, icon: 'bx-folder' },
+    { key: 'area-2', labelKey: 'menu.area.generic', labelParams: { n: 2 }, icon: 'bx-folder' },
+    { key: 'area-3', labelKey: 'menu.area.generic', labelParams: { n: 3 }, icon: 'bx-folder' }
 ];
 const AREAS_BY_DEPARTMENT = {
     'supply-chain': [
-        { key: 'sc-area-raw-material', labelKey: 'menu.area.rawMaterial' },
-        { key: 'sc-area-production', labelKey: 'menu.area.production' },
-        { key: 'sc-area-transport-1', labelKey: 'menu.area.transport' },
-        { key: 'sc-area-distribution-center', labelKey: 'menu.area.distributionCenter' },
-        { key: 'sc-area-transport-2', labelKey: 'menu.area.transport' },
-        { key: 'sc-area-point-of-sale', labelKey: 'menu.area.pointOfSale' },
-        { key: 'sc-area-delivery', labelKey: 'menu.area.delivery' },
-        { key: 'sc-area-end-customer', labelKey: 'menu.area.endCustomer' },
-        { key: 'sc-area-customer-complaints', labelKey: 'menu.area.customerComplaints' }
+        { key: 'sc-area-raw-material', labelKey: 'menu.area.rawMaterial', icon: 'bx-cube' },
+        { key: 'sc-area-production', labelKey: 'menu.area.production', icon: 'bx-cog' },
+        { key: 'sc-area-transport-1', labelKey: 'menu.area.transport', icon: 'bx-car' },
+        { key: 'sc-area-distribution-center', labelKey: 'menu.area.distributionCenter', icon: 'bx-building' },
+        { key: 'sc-area-transport-2', labelKey: 'menu.area.transport', icon: 'bx-car' },
+        { key: 'sc-area-point-of-sale', labelKey: 'menu.area.pointOfSale', icon: 'bx-store' },
+        { key: 'sc-area-delivery', labelKey: 'menu.area.delivery', icon: 'bx-send' },
+        { key: 'sc-area-end-customer', labelKey: 'menu.area.endCustomer', icon: 'bx-user' },
+        { key: 'sc-area-customer-complaints', labelKey: 'menu.area.customerComplaints', icon: 'bx-error-circle' }
     ],
     finance: GENERIC_AREAS,
     accounting: GENERIC_AREAS,
@@ -482,7 +482,13 @@ function renderAreaPickerOptions() {
         btn.setAttribute('role', 'menuitem');
         btn.className = 'dept-option area-option';
         btn.dataset.area = area.key;
-        btn.textContent = t(area.labelKey, area.labelParams || {});
+        const icon = document.createElement('i');
+        icon.className = `bx ${area.icon}`;
+        icon.setAttribute('aria-hidden', 'true');
+        const span = document.createElement('span');
+        span.textContent = t(area.labelKey, area.labelParams || {});
+        btn.appendChild(icon);
+        btn.appendChild(span);
         li.appendChild(btn);
         dropdown.appendChild(li);
     });
@@ -496,11 +502,15 @@ function updateAreaPickerVisibility() {
     picker.classList.toggle('dept-picker-disabled', !hasAreas);
 }
 
+// Shows only the abbreviation once a department is picked (e.g. "FIN"),
+// not the full name — same compact-pill treatment as Cost Centers, now that
+// this lives in the top bar instead of the sidebar. Falls back to the
+// generic placeholder word when nothing is selected yet.
 function updateDeptPickerLabel() {
     const label = document.getElementById('dept-picker-label');
     if (!label) return;
     const dept = DEPARTMENTS.find((d) => d.key === selectedDepartment);
-    label.textContent = dept ? t(dept.labelKey) : t('sidebar.department');
+    label.textContent = dept ? t(dept.abbrKey) : t('sidebar.department');
     document.querySelectorAll('.dept-option').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.dept === selectedDepartment);
     });
@@ -1095,8 +1105,14 @@ if (deptPickerDropdown) {
         btn.setAttribute('role', 'menuitem');
         btn.className = 'dept-option';
         btn.dataset.dept = dept.key;
-        btn.dataset.i18n = dept.labelKey;
-        btn.textContent = dept.labelKey;
+        const icon = document.createElement('i');
+        icon.className = `bx ${dept.icon}`;
+        icon.setAttribute('aria-hidden', 'true');
+        const span = document.createElement('span');
+        span.dataset.i18n = dept.labelKey;
+        span.textContent = dept.labelKey;
+        btn.appendChild(icon);
+        btn.appendChild(span);
         li.appendChild(btn);
         deptPickerDropdown.appendChild(li);
     });

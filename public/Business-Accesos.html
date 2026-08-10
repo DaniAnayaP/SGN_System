@@ -30,30 +30,6 @@
                 <input id="sidebar-search" type="search" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search" autocomplete="off">
             </div>
 
-            <div class="dept-picker" id="dept-picker">
-                <button type="button" class="dept-picker-btn" id="dept-picker-btn"
-                        aria-haspopup="true" aria-expanded="false">
-                    <i class="bx bx-buildings" aria-hidden="true"></i>
-                    <span id="dept-picker-label" data-i18n="sidebar.department">Department</span>
-                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                </button>
-                <ul class="dept-picker-dropdown" id="dept-picker-dropdown" role="menu">
-                    <!-- Department options are rendered at runtime -->
-                </ul>
-            </div>
-
-            <div class="dept-picker" id="area-picker">
-                <button type="button" class="dept-picker-btn" id="area-picker-btn"
-                        aria-haspopup="true" aria-expanded="false">
-                    <i class="bx bx-collection" aria-hidden="true"></i>
-                    <span id="area-picker-label" data-i18n="sidebar.area">Area</span>
-                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                </button>
-                <ul class="dept-picker-dropdown" id="area-picker-dropdown" role="menu">
-                    <!-- Area options are rendered at runtime -->
-                </ul>
-            </div>
-
             <div id="menu-mount" aria-live="polite">
                 <!-- Sidebar sections are rendered here at runtime from data/menu.json -->
             </div>
@@ -83,6 +59,30 @@
     <main>
         <div class="top-bar barra-arriba">
             <div class="top-bar-title">
+                <div class="dept-picker" id="dept-picker">
+                    <button type="button" class="dept-picker-btn" id="dept-picker-btn"
+                            aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-buildings" aria-hidden="true"></i>
+                        <span id="dept-picker-label" data-i18n="sidebar.department">Department</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <ul class="dept-picker-dropdown" id="dept-picker-dropdown" role="menu">
+                        <!-- Department options are rendered at runtime -->
+                    </ul>
+                </div>
+
+                <div class="dept-picker" id="area-picker">
+                    <button type="button" class="dept-picker-btn" id="area-picker-btn"
+                            aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-collection" aria-hidden="true"></i>
+                        <span id="area-picker-label" data-i18n="sidebar.area">Area</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <ul class="dept-picker-dropdown" id="area-picker-dropdown" role="menu">
+                        <!-- Area options are rendered at runtime -->
+                    </ul>
+                </div>
+
                 <div class="cc-picker" id="cc-picker">
                     <button type="button" class="cc-picker-btn" id="cc-picker-btn"
                             aria-haspopup="true" aria-expanded="false">
