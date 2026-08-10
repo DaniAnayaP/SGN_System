@@ -14,6 +14,8 @@ const form = document.getElementById('plan-form');
 const idField = document.getElementById('plan-id');
 const nameField = document.getElementById('plan-name');
 const descriptionField = document.getElementById('plan-description');
+const costCentersLimitField = document.getElementById('plan-cost-centers-limit');
+const modulesList = document.getElementById('plan-modules-list');
 const errorBanner = document.getElementById('plan-form-error');
 const submitBtn = document.getElementById('plan-form-submit');
 const cancelBtn = document.getElementById('plan-form-cancel');
@@ -21,6 +23,48 @@ const tableBody = document.getElementById('plan-table-body');
 const emptyMsg = document.getElementById('plan-empty');
 
 let plans = [];
+let moduleCatalog = []; // { key, labelKey } — same catalog Contrataciones uses
+
+// Same switches as Contrataciones (per-client module toggles): a plan is
+// just a reusable preset of that same { key, enabled } shape, applied to a
+// client's own Contrataciones automatically when that plan is selected for
+// them in Clientes Nuevos (see applyPlanToClient in server.js).
+function renderModuleToggles(checkedKeys) {
+    modulesList.innerHTML = '';
+    moduleCatalog.forEach((mod) => {
+        const row = document.createElement('div');
+        row.className = 'admin-module-row';
+
+        const name = document.createElement('span');
+        name.className = 'admin-module-name';
+        name.textContent = Dashboard.t(mod.labelKey);
+
+        const label = document.createElement('label');
+        label.className = 'admin-switch';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = checkedKeys.includes(mod.key);
+        input.dataset.moduleKey = mod.key;
+        const track = document.createElement('span');
+        track.className = 'admin-switch-track';
+        label.append(input, track);
+
+        row.append(name, label);
+        modulesList.appendChild(row);
+    });
+}
+
+function getCheckedModuleKeys() {
+    return Array.from(modulesList.querySelectorAll('input[type="checkbox"]:checked')).map((i) => i.dataset.moduleKey);
+}
+
+async function loadModuleCatalog() {
+    const res = await fetch('/api/admin/modules', { credentials: 'include' });
+    if (!res.ok) throw new Error('load failed');
+    const data = await res.json();
+    moduleCatalog = data.modules || [];
+    renderModuleToggles([]);
+}
 
 function showError(message) {
     errorBanner.textContent = message;
@@ -34,6 +78,8 @@ function clearError() {
 function resetForm() {
     form.reset();
     idField.value = '';
+    costCentersLimitField.value = 0;
+    renderModuleToggles([]);
     submitBtn.textContent = Dashboard.t('admin.addPlan');
     cancelBtn.hidden = true;
     clearError();
@@ -75,6 +121,8 @@ function startEdit(plan) {
     idField.value = plan.id;
     nameField.value = plan.name;
     descriptionField.value = plan.description || '';
+    costCentersLimitField.value = plan.costCentersLimit || 0;
+    renderModuleToggles(plan.modules || []);
     submitBtn.textContent = Dashboard.t('admin.save');
     cancelBtn.hidden = false;
     clearError();
@@ -118,6 +166,8 @@ form.addEventListener('submit', async (event) => {
         return;
     }
     const description = descriptionField.value.trim();
+    const modules = getCheckedModuleKeys();
+    const costCentersLimit = Math.max(0, parseInt(costCentersLimitField.value, 10) || 0);
 
     const editingId = idField.value;
     const url = editingId ? `/api/admin/plans/${editingId}` : '/api/admin/plans';
@@ -129,7 +179,7 @@ form.addEventListener('submit', async (event) => {
             method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, description }),
+            body: JSON.stringify({ name, description, modules, costCentersLimit }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -160,6 +210,7 @@ cancelBtn.addEventListener('click', resetForm);
 document.addEventListener('dashboard:language-changed', () => {
     if (!idField.value) submitBtn.textContent = Dashboard.t('admin.addPlan');
     renderPlans();
+    renderModuleToggles(getCheckedModuleKeys());
 });
 
 (async function init() {
@@ -170,7 +221,7 @@ document.addEventListener('dashboard:language-changed', () => {
             window.location.replace('Inicio-en.html');
             return;
         }
-        await loadPlans();
+        await Promise.all([loadPlans(), loadModuleCatalog()]);
     } catch (err) {
         console.error('Admin (Planes) failed to initialize:', err);
     }

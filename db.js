@@ -169,6 +169,18 @@ if (!clientColumns.some((c) => c.name === 'history')) {
     db.exec("ALTER TABLE clients ADD COLUMN history TEXT NOT NULL DEFAULT ''");
 }
 
+// A plan/package can carry a preset of módulos + centros de costo limit —
+// the same options as Contrataciones — so assigning a plan to a client
+// (Clientes Nuevos) can stamp its Contrataciones automatically instead of
+// GEIPSA re-toggling everything by hand for every client on that plan.
+const planColumns = db.prepare('PRAGMA table_info(plans)').all();
+if (!planColumns.some((c) => c.name === 'modules')) {
+    db.exec("ALTER TABLE plans ADD COLUMN modules TEXT NOT NULL DEFAULT '[]'");
+}
+if (!planColumns.some((c) => c.name === 'cost_centers_limit')) {
+    db.exec('ALTER TABLE plans ADD COLUMN cost_centers_limit INTEGER NOT NULL DEFAULT 0');
+}
+
 const MODULE_CATALOG = [
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
     { key: 'general-management', labelKey: 'menu.generalManagement' },
@@ -374,12 +386,29 @@ function deactivateClientUsers(clientId) {
 }
 
 // --- Query helpers: clients (SaaS admin) --------------------------------------
+// LEFT JOIN so the auto-provisioned admin's username (adminUsername) rides
+// along wherever a client record is fetched — used by Clientes Nuevos to
+// keep it visible after the one-time "generated credentials" banner is
+// dismissed. The password itself is never stored in recoverable form, but
+// the username isn't secret, so it's safe to surface here indefinitely.
 function listClients() {
-    return db.prepare('SELECT * FROM clients ORDER BY created_at DESC').all();
+    return db
+        .prepare(`
+            SELECT clients.*, users.username AS adminUsername
+            FROM clients LEFT JOIN users ON users.id = clients.admin_user_id
+            ORDER BY clients.created_at DESC
+        `)
+        .all();
 }
 
 function getClientById(id) {
-    return db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+    return db
+        .prepare(`
+            SELECT clients.*, users.username AS adminUsername
+            FROM clients LEFT JOIN users ON users.id = clients.admin_user_id
+            WHERE clients.id = ?
+        `)
+        .get(id);
 }
 
 function getClientBranding(id) {
@@ -550,24 +579,45 @@ function deleteCostCenter(id, clientId) {
 }
 
 // --- Query helpers: plans (Planes y Paquetes, GEIPSA-wide, not per-client) ---
+// modules is stored as a JSON array of MODULE_CATALOG keys; costCentersLimit
+// mirrors clients.cost_centers_limit. Together they're the same shape
+// Contrataciones edits per-client — see applyPlanToClient in server.js.
+function deserializePlan(row) {
+    if (!row) return row;
+    const { modules, cost_centers_limit, ...rest } = row;
+    let parsedModules = [];
+    try { parsedModules = JSON.parse(modules) || []; } catch { parsedModules = []; }
+    return { ...rest, modules: parsedModules, costCentersLimit: cost_centers_limit };
+}
+
 function listPlans() {
-    return db.prepare('SELECT * FROM plans ORDER BY name ASC').all();
+    return db.prepare('SELECT * FROM plans ORDER BY name ASC').all().map(deserializePlan);
 }
 
 function getPlanById(id) {
-    return db.prepare('SELECT * FROM plans WHERE id = ?').get(id);
+    return deserializePlan(db.prepare('SELECT * FROM plans WHERE id = ?').get(id));
 }
 
-function createPlan({ name, description }) {
+function getPlanByName(name) {
+    return deserializePlan(db.prepare('SELECT * FROM plans WHERE name = ?').get(name));
+}
+
+function createPlan({ name, description, modules, costCentersLimit }) {
     const result = db
-        .prepare('INSERT INTO plans (name, description) VALUES (@name, @description)')
-        .run({ name, description: description || '' });
+        .prepare('INSERT INTO plans (name, description, modules, cost_centers_limit) VALUES (@name, @description, @modules, @costCentersLimit)')
+        .run({
+            name, description: description || '',
+            modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0,
+        });
     return getPlanById(result.lastInsertRowid);
 }
 
-function updatePlan(id, { name, description }) {
-    db.prepare('UPDATE plans SET name = @name, description = @description WHERE id = @id')
-        .run({ id, name, description: description || '' });
+function updatePlan(id, { name, description, modules, costCentersLimit }) {
+    db.prepare('UPDATE plans SET name = @name, description = @description, modules = @modules, cost_centers_limit = @costCentersLimit WHERE id = @id')
+        .run({
+            id, name, description: description || '',
+            modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0,
+        });
     return getPlanById(id);
 }
 
@@ -712,6 +762,7 @@ module.exports = {
     deleteCostCenter,
     listPlans,
     getPlanById,
+    getPlanByName,
     createPlan,
     updatePlan,
     deletePlan,

@@ -56,6 +56,7 @@ const {
     deleteCostCenter,
     listPlans,
     getPlanById,
+    getPlanByName,
     createPlan,
     updatePlan,
     deletePlan,
@@ -333,11 +334,27 @@ async function applyClientLifecycle(client) {
     return null;
 }
 
+// A plan's módulos + centros de costo limit (set in Planes y Paquetes) get
+// stamped onto the client's own Contrataciones every time a client is
+// saved with that plan selected — a full replace across MODULE_CATALOG
+// (not just enabling the plan's modules), so switching plans also turns
+// off whatever the previous plan had on. No-op if no plan is selected, or
+// the selected plan name doesn't match a real plan (free-text edge case).
+function applyPlanToClient(clientId, planName) {
+    if (!planName) return;
+    const plan = getPlanByName(planName);
+    if (!plan) return;
+    const moduleStates = MODULE_CATALOG.map((m) => ({ key: m.key, enabled: plan.modules.includes(m.key) }));
+    setClientModules(clientId, moduleStates);
+    setClientCostCentersLimit(clientId, plan.costCentersLimit);
+}
+
 app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history } = req.body;
     const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history });
+    applyPlanToClient(client.id, plan);
     const generatedAdmin = await applyClientLifecycle(client);
     res.status(201).json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -349,6 +366,7 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     if (error) return res.status(400).json({ message: error });
     const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history } = req.body;
     const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history });
+    applyPlanToClient(client.id, plan);
     const generatedAdmin = await applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -388,9 +406,20 @@ app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
 // paquete" field in Clientes Nuevos. Not tied to module entitlements —
 // clients.plan just stores the chosen name as free text (see db.js).
 function validatePlanBody(body) {
-    const { name } = body || {};
+    const { name, modules, costCentersLimit } = body || {};
     if (!name || !name.trim()) return 'name is required.';
+    if (modules !== undefined && !Array.isArray(modules)) return 'modules must be an array.';
+    if (costCentersLimit !== undefined && (!Number.isInteger(costCentersLimit) || costCentersLimit < 0)) {
+        return 'costCentersLimit must be a non-negative integer.';
+    }
     return null;
+}
+
+// Same filtering setClientModules does — silently drop anything that isn't
+// a real module key, rather than storing garbage a client could never have.
+function sanitizePlanModules(modules) {
+    const validKeys = new Set(MODULE_CATALOG.map((m) => m.key));
+    return Array.isArray(modules) ? modules.filter((key) => validKeys.has(key)) : [];
 }
 
 app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
@@ -400,9 +429,12 @@ app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
 app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
     const error = validatePlanBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, description } = req.body;
+    const { name, description, modules, costCentersLimit } = req.body;
     try {
-        const plan = createPlan({ name: name.trim(), description });
+        const plan = createPlan({
+            name: name.trim(), description,
+            modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0,
+        });
         res.status(201).json({ plan });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -417,9 +449,12 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     const error = validatePlanBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, description } = req.body;
+    const { name, description, modules, costCentersLimit } = req.body;
     try {
-        const plan = updatePlan(req.params.id, { name: name.trim(), description });
+        const plan = updatePlan(req.params.id, {
+            name: name.trim(), description,
+            modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0,
+        });
         res.json({ plan });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {

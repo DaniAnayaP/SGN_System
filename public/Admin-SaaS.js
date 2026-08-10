@@ -124,6 +124,8 @@ function renderClients() {
         tdEmail.textContent = client.email;
         const tdPlan = document.createElement('td');
         tdPlan.textContent = client.plan || '—';
+        const tdUsername = document.createElement('td');
+        tdUsername.textContent = client.adminUsername || '—';
         const tdStatus = document.createElement('td');
         const statusBadge = document.createElement('span');
         statusBadge.className = `admin-badge admin-badge-${client.status}`;
@@ -146,7 +148,7 @@ function renderClients() {
         deleteBtn.addEventListener('click', () => removeClient(client));
         tdActions.append(editBtn, deleteBtn);
 
-        tr.append(tdCompany, tdContact, tdEmail, tdPlan, tdStatus, tdActions);
+        tr.append(tdCompany, tdContact, tdEmail, tdPlan, tdUsername, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
 }
