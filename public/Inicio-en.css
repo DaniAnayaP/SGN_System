@@ -118,6 +118,12 @@
     /* Sidebar */
     .Sidebar{
         position: fixed;
+        /* Must outrank .top-bar's z-index (30, added for its own dropdowns —
+           cc-picker, settings, etc.) — otherwise on phones, where the
+           sidebar becomes a slide-in overlay instead of pushing main's
+           content over, the sticky top bar painted on top of it instead of
+           being covered like the rest of the page underneath. */
+        z-index: 40;
         display: flex;
         flex-direction: column;
         align-items: center;
