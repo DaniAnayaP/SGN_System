@@ -1131,6 +1131,16 @@
         body.sidebars-hidden .sidebars-btn i:first-child{
             display: none;
         }
+        /* On phones the sidebar slides in as an overlay rather than pushing
+           main's content over (no room for both side by side) — raising its
+           z-index above .top-bar stopped the top bar from poking through
+           it, but the sidebar then covered the top bar instead, which is
+           still one overlapping the other. Hiding the top bar while the
+           sidebar is open removes the overlap entirely, in either
+           direction, instead of just changing who's on top. */
+        body.sidebars-hidden .top-bar{
+            display: none;
+        }
         main{
             padding: 2rem;
         }
