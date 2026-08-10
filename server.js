@@ -39,6 +39,7 @@ const {
     listClients,
     getClientById,
     getClientBranding,
+    getClientProfile,
     createClient,
     updateClient,
     updateClientBranding,
@@ -335,8 +336,8 @@ async function applyClientLifecycle(client) {
 app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette } = req.body;
-    const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette });
+    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history } = req.body;
+    const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history });
     const generatedAdmin = await applyClientLifecycle(client);
     res.status(201).json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -346,8 +347,8 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette } = req.body;
-    const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette });
+    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history } = req.body;
+    const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history });
     const generatedAdmin = await applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -479,6 +480,17 @@ app.put('/api/business/branding', requireAuth, requireClientAdmin, (req, res) =>
     if (error) return res.status(400).json({ message: error });
     const branding = updateClientBranding(req.user.clientId, { logoDataUrl, seedColor, colorPalette });
     res.json({ branding });
+});
+
+// Datos de Cliente (misión, visión, valores, historia) — read-only here on
+// purpose: GEIPSA sets these from Clientes Nuevos (Admin-SaaS), the client's
+// own team can only view them. Same visibility as branding: any
+// authenticated user at the client, not just their admin.
+app.get('/api/business/client-data', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const profile = getClientProfile(req.user.clientId);
+    if (!profile) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ profile });
 });
 
 app.get('/api/business/users', requireAuth, requireClientAdmin, (req, res) => {

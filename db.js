@@ -150,6 +150,24 @@ if (!clientColumns.some((c) => c.name === 'color_palette')) {
 if (!clientColumns.some((c) => c.name === 'cost_centers_limit')) {
     db.exec('ALTER TABLE clients ADD COLUMN cost_centers_limit INTEGER NOT NULL DEFAULT 0');
 }
+// Datos de Cliente: the client's core identity (misión, visión, valores,
+// historia), set by GEIPSA at client creation/edit time (Clientes Nuevos)
+// and shown read-only to the client's own team (Administración del Negocio)
+// — so this doesn't get lost once Comercial/Marketing modules connect to it.
+// `values` is a SQL keyword, so the column is `core_values` to keep every
+// hand-written SQL string in this file unambiguous.
+if (!clientColumns.some((c) => c.name === 'mission')) {
+    db.exec("ALTER TABLE clients ADD COLUMN mission TEXT NOT NULL DEFAULT ''");
+}
+if (!clientColumns.some((c) => c.name === 'vision')) {
+    db.exec("ALTER TABLE clients ADD COLUMN vision TEXT NOT NULL DEFAULT ''");
+}
+if (!clientColumns.some((c) => c.name === 'core_values')) {
+    db.exec("ALTER TABLE clients ADD COLUMN core_values TEXT NOT NULL DEFAULT ''");
+}
+if (!clientColumns.some((c) => c.name === 'history')) {
+    db.exec("ALTER TABLE clients ADD COLUMN history TEXT NOT NULL DEFAULT ''");
+}
 
 const MODULE_CATALOG = [
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
@@ -382,32 +400,45 @@ function getClientBranding(id) {
     return { ...rest, colorPalette };
 }
 
-function createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette }) {
+function getClientProfile(id) {
+    return db
+        .prepare(`
+            SELECT company_name AS companyName, mission, vision,
+                   core_values AS coreValues, history
+            FROM clients WHERE id = ?
+        `)
+        .get(id);
+}
+
+function createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history }) {
     const result = db
         .prepare(`
-            INSERT INTO clients (company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette)
-            VALUES (@companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette)
+            INSERT INTO clients (company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette, mission, vision, core_values, history)
+            VALUES (@companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette, @mission, @vision, @coreValues, @history)
         `)
         .run({
             companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto',
             logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
             seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
+            mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
         });
     return getClientById(result.lastInsertRowid);
 }
 
-function updateClient(id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette }) {
+function updateClient(id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history }) {
     db.prepare(`
         UPDATE clients
         SET company_name = @companyName, contact_name = @contactName, email = @email,
             phone = @phone, plan = @plan, status = @status,
             logo_data_url = @logoDataUrl, primary_color = @primaryColor, secondary_color = @secondaryColor,
-            seed_color = @seedColor, color_palette = @colorPalette
+            seed_color = @seedColor, color_palette = @colorPalette,
+            mission = @mission, vision = @vision, core_values = @coreValues, history = @history
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
         logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
         seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
+        mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
     });
     return getClientById(id);
 }
@@ -664,6 +695,7 @@ module.exports = {
     listClients,
     getClientById,
     getClientBranding,
+    getClientProfile,
     createClient,
     updateClient,
     updateClientBranding,

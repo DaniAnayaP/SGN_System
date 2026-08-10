@@ -37,6 +37,10 @@ const emailField = document.getElementById('client-email');
 const phoneField = document.getElementById('client-phone');
 const planField = document.getElementById('client-plan');
 const statusField = document.getElementById('client-status');
+const missionField = document.getElementById('client-mission');
+const visionField = document.getElementById('client-vision');
+const valuesField = document.getElementById('client-values');
+const historyField = document.getElementById('client-history');
 const logoInput = document.getElementById('client-logo');
 const logoDataField = document.getElementById('client-logo-data');
 const logoPreview = document.getElementById('client-logo-preview');
@@ -161,6 +165,10 @@ function startEdit(client) {
     }
     planField.value = client.plan || '';
     statusField.value = client.status;
+    missionField.value = client.mission || '';
+    visionField.value = client.vision || '';
+    valuesField.value = client.core_values || '';
+    historyField.value = client.history || '';
     setLogoPreview(client.logo_data_url || '');
     let existingPalette = null;
     if (client.color_palette) {
@@ -261,6 +269,10 @@ form.addEventListener('submit', async (event) => {
         logoDataUrl: logoDataField.value || null,
         seedColor: seed,
         colorPalette: currentPalette,
+        mission: missionField.value.trim(),
+        vision: visionField.value.trim(),
+        coreValues: valuesField.value.trim(),
+        history: historyField.value.trim(),
     };
 
     const editingId = idField.value;
