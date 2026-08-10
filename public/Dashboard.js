@@ -553,6 +553,33 @@ function buildMenuItem(item) {
     return li;
 }
 
+// Mirrors "Administración del Negocio" (sidebar) into its own accordion
+// group in the top-bar Settings dropdown, right below Style, so its items
+// (Servicio Contratado, Roles, Datos de Cliente, etc.) are reachable from
+// there too. Hidden whenever there's no admin-business item to show (GEIPSA
+// admin's reduced sidebar has none).
+function renderBusinessAdminSettingsMenu(items) {
+    const group = document.getElementById('business-admin-group');
+    const submenu = document.getElementById('business-admin-submenu');
+    if (!group || !submenu) return;
+    submenu.innerHTML = '';
+    if (!items || !items.length) {
+        group.hidden = true;
+        return;
+    }
+    items.forEach((item) => {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'none');
+        const a = document.createElement('a');
+        a.href = item.href || '#';
+        a.setAttribute('role', 'menuitem');
+        a.textContent = t(item.labelKey, item.labelParams || {});
+        li.appendChild(a);
+        submenu.appendChild(li);
+    });
+    group.hidden = false;
+}
+
 function renderMenu(data) {
     const mount = document.getElementById('menu-mount');
     const adminBusinessMount = document.getElementById('admin-business-mount');
@@ -573,6 +600,7 @@ function renderMenu(data) {
                 adminBusinessMount.appendChild(shortcutUl);
                 items = items.filter((i) => i.id !== 'admin-business');
             }
+            renderBusinessAdminSettingsMenu(adminBusinessItem?.submenu);
         }
         const ul = document.createElement('ul');
         ul.className = 'menu';
@@ -1345,10 +1373,6 @@ async function initDashboard({ activePage } = {}) {
     } else {
         updateAreaPickerVisibility();
     }
-    // "Estilo del Negocio" shortcut in the Settings dropdown: GEIPSA staff
-    // have no client (no logo/institutional colors to configure), so hide it
-    // instead of linking to a page they'd immediately get redirected out of.
-    document.getElementById('settings-business-config-item')?.toggleAttribute('hidden', role === 'admin');
     if (role !== 'admin') {
         clientBranding = await fetchClientBranding();
         applyClientBranding(clientBranding);

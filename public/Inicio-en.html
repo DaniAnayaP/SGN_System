@@ -158,8 +158,15 @@
                                     </li>
                                 </ul>
                             </li>
-                            <li role="none" id="settings-business-config-item">
-                                <a href="Business-Config.html" role="menuitem" id="settings-business-config" data-i18n="menu.businessConfig">Business Style</a>
+                            <li role="none" class="settings-dropdown-group" id="business-admin-group" hidden>
+                                <button type="button" class="settings-dropdown-toggle" id="business-admin-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <span data-i18n="menu.adminBusiness">Admin Business</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="business-admin-submenu" role="menu">
+                                    <!-- Administración del Negocio items rendered at runtime -->
+                                </ul>
                             </li>
                             <li role="none">
                                 <button type="button" role="menuitem" id="settings-others" data-i18n="main.others">Others</button>

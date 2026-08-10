@@ -989,10 +989,16 @@
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
-    /* Settings dropdown: Language / Style accordion groups */
+    /* Settings dropdown: Language / Style / Administración del Negocio accordion groups */
     .settings-dropdown-group{
         display: flex;
         flex-direction: column;
+    }
+    /* Without this, [hidden] loses to the rule above (equal specificity,
+       author CSS beats the UA stylesheet) and a hidden group stays visible —
+       same bug already fixed once for .modal-overlay. */
+    .settings-dropdown-group[hidden]{
+        display: none;
     }
     .settings-dropdown-toggle{
         display: flex;
@@ -1028,7 +1034,9 @@
         overflow: hidden;
         transition: height 0.2s ease;
     }
-    .settings-submenu button{
+    .settings-submenu button,
+    .settings-submenu a{
+        display: block;
         width: 100%;
         border: none;
         border-radius: 0.35rem;
@@ -1038,10 +1046,13 @@
         font-size: 0.75rem;
         font-weight: 500;
         text-align: left;
+        text-decoration: none;
         cursor: pointer;
         transition: background-color 0.2s ease, color 0.2s ease;
+        box-sizing: border-box;
     }
-    .settings-submenu button:hover{
+    .settings-submenu button:hover,
+    .settings-submenu a:hover{
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
