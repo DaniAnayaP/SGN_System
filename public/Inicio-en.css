@@ -1163,7 +1163,10 @@
             padding: 2rem;
         }
     }
-    @media (max-width:700px) or (max-height:683px) {
+    /* Sidebar goes off-canvas (opened only via the hamburger) starting at
+       780px — raised from 700px since the sidebar itself was still taking
+       up too much room relative to the content below that width. */
+    @media (max-width:780px) or (max-height:683px) {
         #menu-btn{
             display: none;
         }
@@ -1226,7 +1229,7 @@
 
     /* The top bar's own content (department + area + cost-center pickers,
        page title, six action icons) stops fitting well before the sidebar
-       needs to go off-canvas (that's the 700px/683px breakpoint above, a
+       needs to go off-canvas (that's the 780px/683px breakpoint above, a
        separate concern) — confirmed by testing the actual breakpoint where
        icons start spilling past the rounded box. This was 936px before the
        department/area pickers moved into the top bar (see the "Move
