@@ -99,7 +99,18 @@
     body{
         display: flex;
         width: 100%;
-        height: 100vh;
+        /* min-height, not height: body is a flex container, and a fixed
+           height here stretches its only real flex participant (.Sidebar is
+           position:fixed, so it's excluded from flex sizing) — main — to
+           exactly that height via the default align-items:stretch, capping
+           main's box at 100vh even when its content is much taller. That
+           capped box is what .top-bar's position:sticky sticks within, so
+           on any page tall enough to scroll, the sticky range ran out at
+           100vh and the bar scrolled away with the rest of the page past
+           that point. min-height keeps the full-viewport look on short
+           pages while letting main (and the sticky range within it) grow
+           to match real content height on long ones. */
+        min-height: 100vh;
         background-color: var(--color-bg);
         transition: color 0.3s ease,
         background-color 0.3s ease, left 0.3s ease;
