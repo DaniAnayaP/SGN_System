@@ -314,8 +314,8 @@ const EMBEDDED_MENU_FALLBACK = {
         id: 'main',
         items: [
             { id: 'home', labelKey: 'menu.home', icon: 'bx-home-alt-2', href: '#', active: true },
-            { id: 'dashboard', labelKey: 'menu.dashboard', icon: 'bx-bar-chart-alt-2', href: 'Inicio-en.html' },
-            { id: 'task', labelKey: 'menu.task', icon: 'bx-task', href: '#' }
+            { id: 'panel', labelKey: 'menu.panel', icon: 'bx-grid-alt', href: '#' },
+            { id: 'dashboard', labelKey: 'menu.dashboard', icon: 'bx-bar-chart-alt-2', href: 'Inicio-en.html' }
         ]
     }],
     footer: [

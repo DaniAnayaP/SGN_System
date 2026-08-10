@@ -21,17 +21,7 @@
             { "id": "ab-upcoming-updates", "labelKey": "menu.upcomingUpdates", "href": "#", "icon": "bx-calendar" },
             { "id": "ab-training-sessions", "labelKey": "menu.trainingSessions", "href": "#", "icon": "bx-chalkboard" }
           ]
-        },
-        {
-          "id": "file",
-          "labelKey": "menu.file",
-          "icon": "bx-file-blank",
-          "submenu": [
-            { "id": "file-images", "labelKey": "menu.images", "href": "#" },
-            { "id": "file-audios", "labelKey": "menu.audios", "href": "#" }
-          ]
-        },
-        { "id": "task", "labelKey": "menu.task", "icon": "bx-task", "href": "#" }
+        }
       ]
     },
     { "id": "steering-committee", "items": [] },
