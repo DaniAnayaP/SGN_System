@@ -168,6 +168,18 @@ if (!clientColumns.some((c) => c.name === 'core_values')) {
 if (!clientColumns.some((c) => c.name === 'history')) {
     db.exec("ALTER TABLE clients ADD COLUMN history TEXT NOT NULL DEFAULT ''");
 }
+// Anexos: per-client extras on top of whatever their plan already grants
+// (e.g. plan gives 5 centros de costo, an anexo adds 2 more for THIS client
+// only — the plan itself, and every other client on it, stays untouched).
+// Kept separate from cost_centers_limit/client_modules (the actual applied
+// state) so re-stamping a plan never wipes these out — see
+// applyEffectiveEntitlements in server.js, which always merges plan + anexo.
+if (!clientColumns.some((c) => c.name === 'extra_cost_centers')) {
+    db.exec('ALTER TABLE clients ADD COLUMN extra_cost_centers INTEGER NOT NULL DEFAULT 0');
+}
+if (!clientColumns.some((c) => c.name === 'extra_modules')) {
+    db.exec("ALTER TABLE clients ADD COLUMN extra_modules TEXT NOT NULL DEFAULT '[]'");
+}
 
 // A plan/package can carry a preset of módulos + centros de costo limit —
 // the same options as Contrataciones — so assigning a plan to a client
@@ -542,6 +554,25 @@ function setClientCostCentersLimit(clientId, limit) {
     return getClientById(clientId).cost_centers_limit;
 }
 
+// --- Anexos: per-client extras on top of their plan --------------------------
+function getClientAddenda(clientId) {
+    const row = db.prepare('SELECT extra_cost_centers, extra_modules FROM clients WHERE id = ?').get(clientId);
+    if (!row) return null;
+    let extraModules = [];
+    try { extraModules = JSON.parse(row.extra_modules) || []; } catch { extraModules = []; }
+    return { extraCostCenters: row.extra_cost_centers, extraModules };
+}
+
+function setClientAddenda(clientId, { extraCostCenters, extraModules }) {
+    db.prepare('UPDATE clients SET extra_cost_centers = @extraCostCenters, extra_modules = @extraModules WHERE id = @id')
+        .run({
+            id: clientId,
+            extraCostCenters: extraCostCenters || 0,
+            extraModules: JSON.stringify(extraModules || []),
+        });
+    return getClientAddenda(clientId);
+}
+
 // --- Query helpers: cost centers (Centros de Costo, scoped to one client) ----
 function listCostCenters(clientId) {
     return db.prepare('SELECT * FROM cost_centers WHERE client_id = ? ORDER BY code ASC').all(clientId);
@@ -753,6 +784,8 @@ module.exports = {
     getClientModules,
     setClientModules,
     setClientCostCentersLimit,
+    getClientAddenda,
+    setClientAddenda,
     getClientModuleKeys,
     listCostCenters,
     countCostCenters,

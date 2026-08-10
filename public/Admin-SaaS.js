@@ -134,6 +134,12 @@ function renderClients() {
 
         const tdActions = document.createElement('td');
         tdActions.className = 'admin-table-actions';
+        const addendaBtn = document.createElement('button');
+        addendaBtn.type = 'button';
+        addendaBtn.className = 'admin-icon-btn';
+        addendaBtn.setAttribute('aria-label', Dashboard.t('admin.addenda'));
+        addendaBtn.innerHTML = '<i class="bx bx-file-plus" aria-hidden="true"></i>';
+        addendaBtn.addEventListener('click', () => openAddendaModal(client));
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'admin-icon-btn';
@@ -146,7 +152,7 @@ function renderClients() {
         deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
         deleteBtn.addEventListener('click', () => removeClient(client));
-        tdActions.append(editBtn, deleteBtn);
+        tdActions.append(addendaBtn, editBtn, deleteBtn);
 
         tr.append(tdCompany, tdContact, tdEmail, tdPlan, tdUsername, tdStatus, tdActions);
         tableBody.appendChild(tr);
@@ -330,6 +336,123 @@ generatedAdminDismiss.addEventListener('click', () => {
     generatedAdminBox.hidden = true;
 });
 
+// --- Anexos: per-client extras on top of their plan ---------------------------
+// e.g. the plan gives 5 centros de costo, this client specifically gets 2
+// more — without touching the plan itself or any other client on it. Only
+// modules the plan doesn't already include are offered here (granting one
+// it already has would be a no-op). See applyEffectiveEntitlements in
+// server.js for how plan + addenda get merged into the client's actual
+// Contrataciones state.
+const addendaModal = document.getElementById('addenda-modal');
+const addendaPlanBase = document.getElementById('addenda-plan-base');
+const addendaExtraCcField = document.getElementById('addenda-extra-cc');
+const addendaModulesList = document.getElementById('addenda-modules-list');
+const addendaError = document.getElementById('addenda-error');
+const addendaSaveBtn = document.getElementById('addenda-save');
+const addendaCancelBtn = document.getElementById('addenda-cancel');
+
+let moduleCatalog = []; // { key, labelKey } — full catalog, same as Contrataciones/Planes
+let addendaClientId = null;
+let addendaPlanModules = [];
+
+async function loadModuleCatalog() {
+    const res = await fetch('/api/admin/modules', { credentials: 'include' });
+    if (!res.ok) throw new Error('load failed');
+    const data = await res.json();
+    moduleCatalog = data.modules || [];
+}
+
+function renderAddendaModules(checkedKeys) {
+    addendaModulesList.innerHTML = '';
+    const candidates = moduleCatalog.filter((m) => !addendaPlanModules.includes(m.key));
+    if (!candidates.length) {
+        const note = document.createElement('p');
+        note.className = 'admin-hint';
+        note.textContent = Dashboard.t('admin.noExtraModulesAvailable');
+        addendaModulesList.appendChild(note);
+        return;
+    }
+    candidates.forEach((mod) => {
+        const row = document.createElement('div');
+        row.className = 'admin-module-row';
+        const name = document.createElement('span');
+        name.className = 'admin-module-name';
+        name.textContent = Dashboard.t(mod.labelKey);
+        const label = document.createElement('label');
+        label.className = 'admin-switch';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = checkedKeys.includes(mod.key);
+        input.dataset.moduleKey = mod.key;
+        const track = document.createElement('span');
+        track.className = 'admin-switch-track';
+        label.append(input, track);
+        row.append(name, label);
+        addendaModulesList.appendChild(row);
+    });
+}
+
+function closeAddendaModal() {
+    addendaModal.hidden = true;
+    addendaClientId = null;
+}
+
+async function openAddendaModal(client) {
+    addendaClientId = client.id;
+    addendaError.hidden = true;
+    try {
+        const res = await fetch(`/api/admin/clients/${client.id}/addenda`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { addenda, planBase } = await res.json();
+        addendaPlanModules = planBase.modules;
+        addendaPlanBase.textContent = client.plan
+            ? Dashboard.t('admin.addendaPlanBase', { plan: client.plan, limit: planBase.costCentersLimit })
+            : Dashboard.t('admin.addendaNoPlan');
+        addendaExtraCcField.value = addenda.extraCostCenters || 0;
+        renderAddendaModules(addenda.extraModules || []);
+        addendaModal.hidden = false;
+    } catch {
+        showError(Dashboard.t('admin.loadError'));
+    }
+}
+
+addendaSaveBtn.addEventListener('click', async () => {
+    if (!addendaClientId) return;
+    const extraCostCenters = Math.max(0, parseInt(addendaExtraCcField.value, 10) || 0);
+    const extraModules = Array.from(addendaModulesList.querySelectorAll('input[type="checkbox"]:checked'))
+        .map((i) => i.dataset.moduleKey);
+
+    addendaSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/clients/${addendaClientId}/addenda`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ extraCostCenters, extraModules }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            addendaError.textContent = body.message || Dashboard.t('admin.saveError');
+            addendaError.hidden = false;
+            return;
+        }
+        closeAddendaModal();
+    } catch {
+        addendaError.textContent = Dashboard.t('admin.saveError');
+        addendaError.hidden = false;
+    } finally {
+        addendaSaveBtn.disabled = false;
+    }
+});
+
+addendaCancelBtn.addEventListener('click', closeAddendaModal);
+addendaModal.addEventListener('click', (event) => {
+    if (event.target === addendaModal) closeAddendaModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !addendaModal.hidden) closeAddendaModal();
+});
+
 // --- Contrataciones: per-client module toggles --------------------------------
 const clientSelect = document.getElementById('contrataciones-client');
 const hint = document.getElementById('contrataciones-hint');
@@ -448,6 +571,10 @@ document.addEventListener('dashboard:language-changed', () => {
     renderClients();
     if (currentModules.length) renderModules(currentModules);
     if (modulesPanel.hidden) hint.textContent = Dashboard.t('admin.noClientSelected');
+    if (!addendaModal.hidden) {
+        const checked = Array.from(addendaModulesList.querySelectorAll('input[type="checkbox"]:checked')).map((i) => i.dataset.moduleKey);
+        renderAddendaModules(checked);
+    }
 });
 
 (async function init() {
@@ -460,7 +587,7 @@ document.addEventListener('dashboard:language-changed', () => {
         }
         paletteWidget = window.ColorPalette.create(paletteContainer);
         document.addEventListener('dashboard:language-changed', () => paletteWidget.refreshLabels());
-        await Promise.all([loadClients(), loadPlans()]);
+        await Promise.all([loadClients(), loadPlans(), loadModuleCatalog()]);
     } catch (err) {
         console.error('Admin (SaaS) failed to initialize:', err);
     }

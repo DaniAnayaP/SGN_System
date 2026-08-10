@@ -319,6 +319,29 @@
         </section>
     </main>
 
+    <div class="modal-overlay" id="addenda-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="addenda-modal-title">
+            <h3 id="addenda-modal-title" data-i18n="admin.addendaTitle">Addenda</h3>
+            <p id="addenda-plan-base" class="admin-subtitle"></p>
+
+            <div class="admin-field" style="max-width: 20rem; margin-bottom: 1rem;">
+                <label for="addenda-extra-cc" data-i18n="admin.extraCostCenters">Extra cost centers</label>
+                <input id="addenda-extra-cc" type="number" min="0" step="1" value="0">
+            </div>
+
+            <p class="admin-field-label" style="font-size: 0.75rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 0.5rem;" data-i18n="admin.extraModulesLabel">Extra modules (not included in the plan)</p>
+            <div class="admin-module-list" id="addenda-modules-list">
+                <!-- rendered at runtime -->
+            </div>
+
+            <div id="addenda-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="addenda-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="addenda-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
     <script src="Admin-SaaS.js"></script>

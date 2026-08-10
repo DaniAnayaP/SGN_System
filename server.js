@@ -47,6 +47,8 @@ const {
     getClientModules,
     setClientModules,
     setClientCostCentersLimit,
+    getClientAddenda,
+    setClientAddenda,
     getClientModuleKeys,
     listCostCenters,
     countCostCenters,
@@ -338,15 +340,25 @@ async function applyClientLifecycle(client) {
 // stamped onto the client's own Contrataciones every time a client is
 // saved with that plan selected — a full replace across MODULE_CATALOG
 // (not just enabling the plan's modules), so switching plans also turns
-// off whatever the previous plan had on. No-op if no plan is selected, or
-// the selected plan name doesn't match a real plan (free-text edge case).
-function applyPlanToClient(clientId, planName) {
-    if (!planName) return;
-    const plan = getPlanByName(planName);
-    if (!plan) return;
-    const moduleStates = MODULE_CATALOG.map((m) => ({ key: m.key, enabled: plan.modules.includes(m.key) }));
+// off whatever the previous plan had on. Then Anexos (per-client extras —
+// see the addenda routes below) are merged in on top, so re-stamping a plan
+// never wipes out an anexo, and an anexo never has to be re-entered just
+// because the client's base plan was edited or reassigned. No-op on the
+// plan side if the client has none selected, or the name doesn't match a
+// real plan (free-text edge case).
+function applyEffectiveEntitlements(clientId) {
+    const client = getClientById(clientId);
+    if (!client) return;
+    const plan = client.plan ? getPlanByName(client.plan) : null;
+    const baseModules = plan ? plan.modules : [];
+    const baseCostCenters = plan ? plan.costCentersLimit : 0;
+    const addenda = getClientAddenda(clientId);
+    const moduleStates = MODULE_CATALOG.map((m) => ({
+        key: m.key,
+        enabled: baseModules.includes(m.key) || addenda.extraModules.includes(m.key),
+    }));
     setClientModules(clientId, moduleStates);
-    setClientCostCentersLimit(clientId, plan.costCentersLimit);
+    setClientCostCentersLimit(clientId, baseCostCenters + addenda.extraCostCenters);
 }
 
 app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
@@ -354,7 +366,7 @@ app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     if (error) return res.status(400).json({ message: error });
     const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history } = req.body;
     const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history });
-    applyPlanToClient(client.id, plan);
+    applyEffectiveEntitlements(client.id);
     const generatedAdmin = await applyClientLifecycle(client);
     res.status(201).json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -366,7 +378,7 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     if (error) return res.status(400).json({ message: error });
     const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history } = req.body;
     const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history });
-    applyPlanToClient(client.id, plan);
+    applyEffectiveEntitlements(client.id);
     const generatedAdmin = await applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
 });
@@ -399,6 +411,42 @@ app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
         ? setClientCostCentersLimit(req.params.id, costCentersLimit)
         : existing.cost_centers_limit;
     res.json({ modules: updatedModules, costCentersLimit: updatedLimit });
+});
+
+// Anexos: per-client extras on top of their plan (e.g. +2 centros de costo
+// beyond what the plan gives, or a module the plan doesn't include). GET
+// also returns the plan's own base numbers so the UI can show them as
+// context ("this plan gives 5, you're adding 2 more for this client").
+app.get('/api/admin/clients/:id/addenda', requireAuth, requireAdmin, (req, res) => {
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    const plan = client.plan ? getPlanByName(client.plan) : null;
+    res.json({
+        addenda: getClientAddenda(req.params.id),
+        planBase: { modules: plan ? plan.modules : [], costCentersLimit: plan ? plan.costCentersLimit : 0 },
+    });
+});
+
+app.put('/api/admin/clients/:id/addenda', requireAuth, requireAdmin, (req, res) => {
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    const { extraModules, extraCostCenters } = req.body || {};
+    if (extraModules !== undefined && !Array.isArray(extraModules)) {
+        return res.status(400).json({ message: 'extraModules must be an array.' });
+    }
+    if (extraCostCenters !== undefined && (!Number.isInteger(extraCostCenters) || extraCostCenters < 0)) {
+        return res.status(400).json({ message: 'extraCostCenters must be a non-negative integer.' });
+    }
+    setClientAddenda(req.params.id, {
+        extraModules: sanitizePlanModules(extraModules),
+        extraCostCenters: extraCostCenters || 0,
+    });
+    applyEffectiveEntitlements(req.params.id);
+    res.json({
+        addenda: getClientAddenda(req.params.id),
+        modules: getClientModules(req.params.id),
+        costCentersLimit: getClientById(req.params.id).cost_centers_limit,
+    });
 });
 
 // --- SaaS admin: plans / packages (Planes y Paquetes) ------------------------
