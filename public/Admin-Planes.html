@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.clientAdmin">Client Administration</title>
+    <title data-i18n="menu.plans">Plans / Packages</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -98,7 +98,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="menu.clientAdmin">Client Administration</p>
+                <p class="welcome-text" data-i18n="menu.plans">Plans / Packages</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -172,135 +172,46 @@
         </div>
 
         <section class="admin-panel">
-            <div class="admin-tabs" role="tablist">
-                <button type="button" class="admin-tab active" id="tab-clients" role="tab"
-                        aria-selected="true" aria-controls="panel-clients" data-i18n="menu.clientesNuevos">New Clients</button>
-                <button type="button" class="admin-tab" id="tab-contrataciones" role="tab"
-                        aria-selected="false" aria-controls="panel-contrataciones" data-i18n="menu.contrataciones">Contracted Modules</button>
-            </div>
+            <p class="admin-subtitle" data-i18n="admin.plansSubtitle">Manage the plan or package types you can assign to your clients.</p>
 
-            <div id="panel-clients" class="admin-tab-panel" role="tabpanel" aria-labelledby="tab-clients">
-                <p class="admin-subtitle" data-i18n="admin.clientsSubtitle">Manage the companies using this SGN instance.</p>
-
-                <form id="client-form" class="admin-form" novalidate>
-                    <input type="hidden" id="client-id" value="">
-                    <div class="admin-form-grid">
-                        <div class="admin-field">
-                            <label for="client-company" data-i18n="admin.companyName">Company name</label>
-                            <input id="client-company" name="companyName" type="text" required>
-                        </div>
-                        <div class="admin-field">
-                            <label for="client-contact" data-i18n="admin.contactName">Contact name</label>
-                            <input id="client-contact" name="contactName" type="text" required>
-                        </div>
-                        <div class="admin-field">
-                            <label for="client-email" data-i18n="admin.email">Email</label>
-                            <input id="client-email" name="email" type="email" required>
-                        </div>
-                        <div class="admin-field">
-                            <label for="client-phone" data-i18n="admin.phone">Phone</label>
-                            <input id="client-phone" name="phone" type="text">
-                        </div>
-                        <div class="admin-field">
-                            <label for="client-plan" data-i18n="admin.plan">Plan / package</label>
-                            <select id="client-plan" name="plan">
-                                <option value="" data-i18n="admin.selectPlanPlaceholder">Choose a plan...</option>
-                            </select>
-                        </div>
-                        <div class="admin-field">
-                            <label for="client-status" data-i18n="admin.status">Status</label>
-                            <select id="client-status" name="status">
-                                <option value="prospecto" data-i18n="admin.statusProspecto">Prospect</option>
-                                <option value="activo" data-i18n="admin.statusActivo">Active</option>
-                                <option value="inactivo" data-i18n="admin.statusInactivo">Inactive</option>
-                            </select>
-                        </div>
+            <form id="plan-form" class="admin-form" novalidate>
+                <input type="hidden" id="plan-id" value="">
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="plan-name" data-i18n="admin.planName">Plan name</label>
+                        <input id="plan-name" name="name" type="text" required>
                     </div>
-
-                    <div class="admin-branding-fields admin-branding-fields-logo-only">
-                        <div class="admin-field admin-logo-field">
-                            <label for="client-logo" data-i18n="admin.logo">Logo</label>
-                            <div class="admin-logo-row">
-                                <img id="client-logo-preview" class="admin-logo-preview" alt="" hidden>
-                                <input id="client-logo" name="logo" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
-                                <button type="button" class="btn btn-secondary admin-logo-clear" id="client-logo-clear" data-i18n="admin.removeLogo" hidden>Remove</button>
-                            </div>
-                            <input type="hidden" id="client-logo-data" name="logoDataUrl" value="">
-                        </div>
+                    <div class="admin-field">
+                        <label for="plan-description" data-i18n="admin.planDescription">Description</label>
+                        <input id="plan-description" name="description" type="text">
                     </div>
-
-                    <div id="client-color-palette"></div>
-
-                    <div id="client-form-error" class="admin-error" role="alert" hidden></div>
-                    <div class="admin-form-actions">
-                        <button type="submit" class="btn" id="client-form-submit" data-i18n="admin.addClient">Add client</button>
-                        <button type="button" class="btn btn-secondary" id="client-form-cancel" data-i18n="admin.cancel" hidden>Cancel</button>
-                    </div>
-                </form>
-
-                <div id="generated-admin-box" class="admin-generated-credentials" role="alert" hidden>
-                    <p class="admin-generated-title" data-i18n="admin.generatedAdminTitle">New client admin account created</p>
-                    <p class="admin-generated-note" data-i18n="admin.generatedAdminNote">This password is shown only once — copy it now and share it with the client securely.</p>
-                    <div class="admin-generated-row">
-                        <span data-i18n="business.username">Username</span>: <strong id="generated-admin-username"></strong>
-                    </div>
-                    <div class="admin-generated-row">
-                        <span data-i18n="business.password">Password</span>: <strong id="generated-admin-password"></strong>
-                    </div>
-                    <button type="button" class="btn btn-secondary" id="generated-admin-dismiss" data-i18n="admin.dismiss">Dismiss</button>
                 </div>
-
-                <div class="admin-table-wrap">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th data-i18n="admin.companyName">Company name</th>
-                                <th data-i18n="admin.contactName">Contact name</th>
-                                <th data-i18n="admin.email">Email</th>
-                                <th data-i18n="admin.plan">Plan / package</th>
-                                <th data-i18n="admin.status">Status</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="clients-table-body">
-                            <!-- rendered at runtime -->
-                        </tbody>
-                    </table>
-                    <p id="clients-empty" class="admin-empty" data-i18n="admin.noClients" hidden>No clients yet. Add the first one above.</p>
+                <div id="plan-form-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn" id="plan-form-submit" data-i18n="admin.addPlan">Add plan</button>
+                    <button type="button" class="btn btn-secondary" id="plan-form-cancel" data-i18n="admin.cancel" hidden>Cancel</button>
                 </div>
-            </div>
+            </form>
 
-            <div id="panel-contrataciones" class="admin-tab-panel" role="tabpanel" aria-labelledby="tab-contrataciones" hidden>
-                <p class="admin-subtitle" data-i18n="admin.contratacionesSubtitle">Turn on the modules each client has contracted.</p>
-
-                <div class="admin-select-row">
-                    <label for="contrataciones-client" data-i18n="admin.selectClient">Select a client</label>
-                    <select id="contrataciones-client">
-                        <option value="" data-i18n="admin.selectClientPlaceholder">Choose a client...</option>
-                    </select>
-                </div>
-
-                <p id="contrataciones-hint" class="admin-hint" data-i18n="admin.noClientSelected">Select a client above to manage their modules.</p>
-
-                <div id="modules-panel" hidden>
-                    <div class="admin-field" style="max-width: 20rem; margin-bottom: 1rem;">
-                        <label for="cost-centers-limit" data-i18n="admin.costCentersLimit">Allowed cost centers</label>
-                        <input id="cost-centers-limit" type="number" min="0" step="1" value="0">
-                    </div>
-                    <div class="admin-module-list" id="modules-list">
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="admin.planName">Plan name</th>
+                            <th data-i18n="admin.planDescription">Description</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="plan-table-body">
                         <!-- rendered at runtime -->
-                    </div>
-                    <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                        <button type="button" class="btn" id="modules-save" data-i18n="admin.save">Save</button>
-                    </div>
-                    <p id="modules-save-status" class="admin-save-status"></p>
-                </div>
+                    </tbody>
+                </table>
+                <p id="plan-empty" class="admin-empty" data-i18n="admin.noPlans" hidden>No plans yet. Add the first one above.</p>
             </div>
         </section>
     </main>
 
     <script src="Dashboard.js"></script>
-    <script src="ColorPalette.js"></script>
-    <script src="Admin-SaaS.js"></script>
+    <script src="Admin-Planes.js"></script>
 </body>
 </html>

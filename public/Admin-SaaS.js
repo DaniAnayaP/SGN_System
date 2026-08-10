@@ -50,6 +50,7 @@ const tableBody = document.getElementById('clients-table-body');
 const emptyMsg = document.getElementById('clients-empty');
 
 let clients = [];
+let plans = [];
 
 function showError(message) {
     errorBanner.textContent = message;
@@ -152,6 +153,12 @@ function startEdit(client) {
     contactField.value = client.contact_name;
     emailField.value = client.email;
     phoneField.value = client.phone || '';
+    if (client.plan && !planField.querySelector(`option[value="${CSS.escape(client.plan)}"]`)) {
+        const option = document.createElement('option');
+        option.value = client.plan;
+        option.textContent = client.plan;
+        planField.appendChild(option);
+    }
     planField.value = client.plan || '';
     statusField.value = client.status;
     setLogoPreview(client.logo_data_url || '');
@@ -191,6 +198,41 @@ async function loadClients() {
         clients = data.clients || [];
         renderClients();
         populateClientSelect();
+    } catch {
+        showError(Dashboard.t('admin.loadError'));
+    }
+}
+
+// --- Plan / paquete: options come from the Planes y Paquetes catalog --------
+// (Admin-Planes.html), not typed in free-form here anymore.
+function populatePlanSelect() {
+    const previousValue = planField.value;
+    planField.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
+    plans.forEach((plan) => {
+        const option = document.createElement('option');
+        option.value = plan.name;
+        option.textContent = plan.name;
+        planField.appendChild(option);
+    });
+    // A client already assigned a plan that was since renamed/deleted from
+    // the catalog would otherwise silently blank out on edit — keep it
+    // selectable so saving the form doesn't accidentally erase it.
+    if (previousValue && !plans.some((p) => p.name === previousValue)) {
+        const option = document.createElement('option');
+        option.value = previousValue;
+        option.textContent = previousValue;
+        planField.appendChild(option);
+    }
+    planField.value = previousValue;
+}
+
+async function loadPlans() {
+    try {
+        const res = await fetch('/api/admin/plans', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        plans = data.plans || [];
+        populatePlanSelect();
     } catch {
         showError(Dashboard.t('admin.loadError'));
     }
@@ -404,7 +446,7 @@ document.addEventListener('dashboard:language-changed', () => {
         }
         paletteWidget = window.ColorPalette.create(paletteContainer);
         document.addEventListener('dashboard:language-changed', () => paletteWidget.refreshLabels());
-        await loadClients();
+        await Promise.all([loadClients(), loadPlans()]);
     } catch (err) {
         console.error('Admin (SaaS) failed to initialize:', err);
     }

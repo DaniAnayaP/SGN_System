@@ -81,6 +81,18 @@ db.exec(`
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE(client_id, code)
     );
+
+    -- Planes y Paquetes: GEIPSA's own catalog of plan/package types, managed
+    -- from Admin-Planes (SaaS admin only). clients.plan just stores the
+    -- chosen plan's name as free text (like clients.status) rather than a
+    -- foreign key, so renaming/deleting a plan here never breaks an existing
+    -- client record.
+    CREATE TABLE IF NOT EXISTS plans (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT NOT NULL UNIQUE,
+        description   TEXT NOT NULL DEFAULT '',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 `);
 
 // --- Schema migrations for columns added after the initial release ----------
@@ -501,6 +513,32 @@ function deleteCostCenter(id, clientId) {
     db.prepare('DELETE FROM cost_centers WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
+// --- Query helpers: plans (Planes y Paquetes, GEIPSA-wide, not per-client) ---
+function listPlans() {
+    return db.prepare('SELECT * FROM plans ORDER BY name ASC').all();
+}
+
+function getPlanById(id) {
+    return db.prepare('SELECT * FROM plans WHERE id = ?').get(id);
+}
+
+function createPlan({ name, description }) {
+    const result = db
+        .prepare('INSERT INTO plans (name, description) VALUES (@name, @description)')
+        .run({ name, description: description || '' });
+    return getPlanById(result.lastInsertRowid);
+}
+
+function updatePlan(id, { name, description }) {
+    db.prepare('UPDATE plans SET name = @name, description = @description WHERE id = @id')
+        .run({ id, name, description: description || '' });
+    return getPlanById(id);
+}
+
+function deletePlan(id) {
+    db.prepare('DELETE FROM plans WHERE id = ?').run(id);
+}
+
 // --- Query helpers: business users (scoped to one client) --------------------
 function listBusinessUsers(clientId) {
     return db
@@ -635,6 +673,11 @@ module.exports = {
     createCostCenter,
     updateCostCenter,
     deleteCostCenter,
+    listPlans,
+    getPlanById,
+    createPlan,
+    updatePlan,
+    deletePlan,
     activateClient,
     deactivateClientUsers,
     listBusinessUsers,

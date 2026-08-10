@@ -53,6 +53,11 @@ const {
     createCostCenter,
     updateCostCenter,
     deleteCostCenter,
+    listPlans,
+    getPlanById,
+    createPlan,
+    updatePlan,
+    deletePlan,
     activateClient,
     deactivateClientUsers,
     listBusinessUsers,
@@ -375,6 +380,59 @@ app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
         ? setClientCostCentersLimit(req.params.id, costCentersLimit)
         : existing.cost_centers_limit;
     res.json({ modules: updatedModules, costCentersLimit: updatedLimit });
+});
+
+// --- SaaS admin: plans / packages (Planes y Paquetes) ------------------------
+// GEIPSA's own catalog of plan types, shown as options on the "Plan /
+// paquete" field in Clientes Nuevos. Not tied to module entitlements —
+// clients.plan just stores the chosen name as free text (see db.js).
+function validatePlanBody(body) {
+    const { name } = body || {};
+    if (!name || !name.trim()) return 'name is required.';
+    return null;
+}
+
+app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
+    res.json({ plans: listPlans() });
+});
+
+app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
+    const error = validatePlanBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { name, description } = req.body;
+    try {
+        const plan = createPlan({ name: name.trim(), description });
+        res.status(201).json({ plan });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'A plan with that name already exists.' });
+        }
+        throw err;
+    }
+});
+
+app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    const error = validatePlanBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { name, description } = req.body;
+    try {
+        const plan = updatePlan(req.params.id, { name: name.trim(), description });
+        res.json({ plan });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'A plan with that name already exists.' });
+        }
+        throw err;
+    }
+});
+
+app.delete('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    deletePlan(req.params.id);
+    res.status(204).end();
 });
 
 // --- Business admin: users, profiles, and permission grants ------------------

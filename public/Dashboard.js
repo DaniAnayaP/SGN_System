@@ -42,7 +42,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transport: "Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints" },
-            clientesNuevos: "New Clients", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", mainSection: "General"
+            clientesNuevos: "New Clients", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plans: "Plans / Packages", mainSection: "General"
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
@@ -68,7 +68,13 @@ const EMBEDDED_TRANSLATIONS = {
             selectClient: "Select a client", selectClientPlaceholder: "Choose a client...",
             noClientSelected: "Select a client above to manage their modules.",
             modulesSaved: "Modules updated.",
-            costCentersLimit: "Allowed cost centers"
+            costCentersLimit: "Allowed cost centers",
+            plansSubtitle: "Manage the plan or package types you can assign to your clients.",
+            planName: "Plan name", planDescription: "Description", addPlan: "Add plan",
+            noPlans: "No plans yet. Add the first one above.",
+            confirmDeletePlan: "Delete this plan? This doesn't affect clients already assigned to it.",
+            planNameExists: "A plan with that name already exists.",
+            selectPlanPlaceholder: "Choose a plan..."
         },
         business: {
             usersTitle: "Users", usersSubtitle: "Manage the people who use this SGN instance.",
@@ -116,7 +122,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Compras", commercial: "Comercial", marketing: "Mercadotecnia",
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
-            clientesNuevos: "Clientes Nuevos", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", mainSection: "General"
+            clientesNuevos: "Clientes Nuevos", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plans: "Planes / Paquetes", mainSection: "General"
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
@@ -142,7 +148,13 @@ const EMBEDDED_TRANSLATIONS = {
             selectClient: "Selecciona un cliente", selectClientPlaceholder: "Elige un cliente...",
             noClientSelected: "Selecciona un cliente arriba para administrar sus módulos.",
             modulesSaved: "Módulos actualizados.",
-            costCentersLimit: "Centros de costo permitidos"
+            costCentersLimit: "Centros de costo permitidos",
+            plansSubtitle: "Administra los tipos de plan o paquete que puedes asignar a tus clientes.",
+            planName: "Nombre del plan", planDescription: "Descripción", addPlan: "Agregar plan",
+            noPlans: "Aún no hay planes. Agrega el primero arriba.",
+            confirmDeletePlan: "¿Eliminar este plan? Esto no afecta a los clientes que ya lo tienen asignado.",
+            planNameExists: "Ya existe un plan con ese nombre.",
+            selectPlanPlaceholder: "Selecciona un plan..."
         },
         business: {
             usersTitle: "Usuarios", usersSubtitle: "Administra las personas que usan esta instancia de SGN.",
@@ -288,8 +300,9 @@ async function loadMenu() {
     return EMBEDDED_MENU_FALLBACK;
 }
 
-// Admin-only sidebar link (SaaS control panel: client list + module
-// entitlements, combined into one screen). Only ever added when the
+// Admin-only sidebar dropdown (SaaS control panel: Clientes Nuevos — client
+// list + module entitlements, combined into one screen — and Planes /
+// Paquetes, GEIPSA's own plan-type catalog). Only ever added when the
 // server-verified role (from /api/me) is 'admin' — the real access control
 // is enforced server-side on every /api/admin/* route regardless of what the
 // sidebar shows. Regular client users never see this; they manage their own
@@ -304,7 +317,10 @@ async function loadMenu() {
 function buildSidebarData(data, role, activePage) {
     const adminItem = {
         id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings',
-        href: 'Admin-SaaS.html', active: activePage === 'admin-saas'
+        submenu: [
+            { id: 'admin-clientes-nuevos', labelKey: 'menu.clientesNuevos', href: 'Admin-SaaS.html' },
+            { id: 'admin-planes', labelKey: 'menu.plans', href: 'Admin-Planes.html' }
+        ]
     };
     if (role !== 'admin') return data;
 

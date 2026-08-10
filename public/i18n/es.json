@@ -88,6 +88,7 @@
     "clientesNuevos": "Clientes Nuevos",
     "contrataciones": "Contrataciones",
     "clientAdmin": "Administración de Clientes",
+    "plans": "Planes / Paquetes",
     "mainSection": "General"
   },
   "admin": {
@@ -139,7 +140,15 @@
     "selectClientPlaceholder": "Elige un cliente...",
     "noClientSelected": "Selecciona un cliente arriba para administrar sus módulos.",
     "modulesSaved": "Módulos actualizados.",
-    "costCentersLimit": "Centros de costo permitidos"
+    "costCentersLimit": "Centros de costo permitidos",
+    "plansSubtitle": "Administra los tipos de plan o paquete que puedes asignar a tus clientes.",
+    "planName": "Nombre del plan",
+    "planDescription": "Descripción",
+    "addPlan": "Agregar plan",
+    "noPlans": "Aún no hay planes. Agrega el primero arriba.",
+    "confirmDeletePlan": "¿Eliminar este plan? Esto no afecta a los clientes que ya lo tienen asignado.",
+    "planNameExists": "Ya existe un plan con ese nombre.",
+    "selectPlanPlaceholder": "Selecciona un plan..."
   },
   "business": {
     "usersTitle": "Usuarios",
