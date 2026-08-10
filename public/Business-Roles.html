@@ -94,63 +94,69 @@
                 </div>
                 <p class="welcome-text" data-i18n="business.rolesTitle">Roles</p>
             </div>
-            <div class="top-bar-actions">
-                <button type="button" data-i18n-aria="main.messages" aria-label="Messages">
-                    <i class="bx bx-message" aria-hidden="true"></i>
+            <div class="top-bar-actions" id="top-bar-actions">
+                <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
+                        aria-label="More" aria-haspopup="true" aria-expanded="false">
+                    <i class="bx bx-dots-vertical-rounded" aria-hidden="true"></i>
                 </button>
-                <button type="button" data-i18n-aria="main.notifications" aria-label="Notifications">
-                    <i class="bx bx-bell" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-i18n-aria="main.bookmarks" aria-label="Bookmarks">
-                    <i class="bx bx-bookmarks" aria-hidden="true"></i>
-                </button>
-                <div class="settings-menu" id="settings-menu">
-                    <button type="button" data-i18n-aria="main.settings" aria-label="Settings" id="settings-btn"
-                            aria-haspopup="true" aria-expanded="false">
-                        <i class="bx bx-cog" aria-hidden="true"></i>
+                <div class="top-bar-actions-list" id="top-bar-actions-list">
+                    <button type="button" data-i18n-aria="main.messages" aria-label="Messages">
+                        <i class="bx bx-message" aria-hidden="true"></i>
                     </button>
-                    <ul class="settings-dropdown" id="settings-dropdown" role="menu">
-                        <li role="none" class="settings-dropdown-group" id="language-group">
-                            <button type="button" class="settings-dropdown-toggle" id="language-toggle-btn"
-                                    aria-haspopup="true" aria-expanded="false">
-                                <span data-i18n="main.language">Language</span>
-                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                            </button>
-                            <ul class="settings-submenu" id="language-submenu" role="menu">
-                                <li role="none">
-                                    <button type="button" role="menuitem" class="lang-option active" data-lang="en" data-i18n="main.languageEnglish">English</button>
-                                </li>
-                                <li role="none">
-                                    <button type="button" role="menuitem" class="lang-option" data-lang="es" data-i18n="main.languageSpanish">Spanish</button>
-                                </li>
-                            </ul>
-                        </li>
-                        <li role="none" class="settings-dropdown-group" id="style-group">
-                            <button type="button" class="settings-dropdown-toggle" id="style-toggle-btn"
-                                    aria-haspopup="true" aria-expanded="false">
-                                <span data-i18n="main.style">Style</span>
-                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                            </button>
-                            <ul class="settings-submenu" id="style-submenu" role="menu">
-                                <li role="none">
-                                    <button type="button" role="menuitem" class="style-option active" data-style="light" data-i18n="main.styleLight">Light</button>
-                                </li>
-                                <li role="none">
-                                    <button type="button" role="menuitem" class="style-option" data-style="dark" data-i18n="main.styleDark">Dark</button>
-                                </li>
-                                <li role="none">
-                                    <button type="button" role="menuitem" class="style-option" data-style="institutional" data-i18n="main.styleInstitutional">Institutional</button>
-                                </li>
-                            </ul>
-                        </li>
-                        <li role="none">
-                            <button type="button" role="menuitem" id="settings-others" data-i18n="main.others">Others</button>
-                        </li>
-                    </ul>
+                    <button type="button" data-i18n-aria="main.notifications" aria-label="Notifications">
+                        <i class="bx bx-bell" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" data-i18n-aria="main.bookmarks" aria-label="Bookmarks">
+                        <i class="bx bx-bookmarks" aria-hidden="true"></i>
+                    </button>
+                    <div class="settings-menu" id="settings-menu">
+                        <button type="button" data-i18n-aria="main.settings" aria-label="Settings" id="settings-btn"
+                                aria-haspopup="true" aria-expanded="false">
+                            <i class="bx bx-cog" aria-hidden="true"></i>
+                        </button>
+                        <ul class="settings-dropdown" id="settings-dropdown" role="menu">
+                            <li role="none" class="settings-dropdown-group" id="language-group">
+                                <button type="button" class="settings-dropdown-toggle" id="language-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <span data-i18n="main.language">Language</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="language-submenu" role="menu">
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="lang-option active" data-lang="en" data-i18n="main.languageEnglish">English</button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="lang-option" data-lang="es" data-i18n="main.languageSpanish">Spanish</button>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li role="none" class="settings-dropdown-group" id="style-group">
+                                <button type="button" class="settings-dropdown-toggle" id="style-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <span data-i18n="main.style">Style</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="style-submenu" role="menu">
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="style-option active" data-style="light" data-i18n="main.styleLight">Light</button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="style-option" data-style="dark" data-i18n="main.styleDark">Dark</button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="style-option" data-style="institutional" data-i18n="main.styleInstitutional">Institutional</button>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li role="none">
+                                <button type="button" role="menuitem" id="settings-others" data-i18n="main.others">Others</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <button type="button" data-i18n-aria="main.addUser" aria-label="Add user">
+                        <i class="bx bx-user-plus" aria-hidden="true"></i>
+                    </button>
                 </div>
-                <button type="button" data-i18n-aria="main.addUser" aria-label="Add user">
-                    <i class="bx bx-user-plus" aria-hidden="true"></i>
-                </button>
             </div>
         </div>
 

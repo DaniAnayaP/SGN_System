@@ -566,6 +566,33 @@ function checkWindowSize() {
 }
 window.addEventListener('resize', checkWindowSize);
 
+// --- Top-bar actions collapse (mobile only) ----------------------------------
+// On phones, Messages/Chatbot/Notifications/Bookmarks/Settings/Add-user don't
+// all fit next to the page title, so they collapse behind a single toggle
+// button and open as a dropdown — CSS handles hiding .top-bar-actions-list
+// vs. showing it inline, this just tracks the open/close state.
+const topBarActions = document.getElementById('top-bar-actions');
+const topBarActionsToggle = document.getElementById('top-bar-actions-toggle');
+
+function closeTopBarActions() {
+    topBarActions?.classList.remove('open');
+    topBarActionsToggle?.setAttribute('aria-expanded', 'false');
+}
+
+topBarActionsToggle?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = topBarActions.classList.toggle('open');
+    topBarActionsToggle.setAttribute('aria-expanded', String(isOpen));
+});
+
+document.addEventListener('click', (event) => {
+    if (topBarActions && !topBarActions.contains(event.target)) closeTopBarActions();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeTopBarActions();
+});
+
 // --- Settings dropdown (Language / Style / Others) --------------------------
 const settingsMenu = document.getElementById('settings-menu');
 const settingsBtn = document.getElementById('settings-btn');

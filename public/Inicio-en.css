@@ -742,9 +742,23 @@
     }
 
     .top-bar-actions{
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .top-bar-actions-list{
         display: flex;
         align-items: center;
         gap: 0.75rem;
+    }
+    /* Hidden on desktop — .top-bar-actions-list shows inline there. Only
+       revealed at phone width (see the mobile breakpoint below), where it
+       toggles .top-bar-actions-list open as a dropdown instead. ID selector
+       (not .top-bar-actions-toggle) so it reliably outweighs the plain
+       ".top-bar-actions button" rule below, which also matches this button
+       and would otherwise win on specificity (class+type beats class alone). */
+    #top-bar-actions-toggle{
+        display: none;
     }
     .top-bar-actions button{
         display: flex;
@@ -1094,30 +1108,38 @@
         main{
             padding: 2rem;
         }
-        /* The page title and six top-bar-actions icons (plus the cost-center
-           button) don't all fit in one row at phone width — drop the title
-           first (redundant with the sidebar page it names) and tighten the
-           icon row so everything stays inside the rounded top-bar instead of
-           spilling past its edge. */
-        .top-bar .welcome-text{
-            display: none;
-        }
         .top-bar{
             padding: 0.6rem 0.9rem;
         }
-        .top-bar-actions{
-            gap: 0.25rem;
+        /* The page title stays; the six action icons collapse behind a
+           single toggle button instead, opening as a dropdown — same idea
+           as .dept-picker/.cc-picker, just vertical since it's a list of
+           icon buttons rather than text options. ID selector to reliably
+           beat the unconditional #top-bar-actions-toggle{display:none}
+           above — same specificity, later in the cascade wins. */
+        #top-bar-actions-toggle{
+            display: flex;
         }
-        .top-bar-actions button{
-            width: 1.9rem;
-            height: 1.9rem;
-            font-size: 1.05rem;
+        .top-bar-actions-list{
+            position: absolute;
+            top: 2.6rem;
+            right: 0;
+            flex-direction: column;
+            gap: 0.3rem;
+            padding: 0.5rem;
+            background-color: var(--color-surface);
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 16px var(--shadow-border), 0 0 0 1px var(--color-border);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-0.4rem);
+            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+            z-index: 25;
         }
-        .cc-picker-btn{
-            padding: 0.4rem;
-        }
-        .cc-picker-btn i:first-child{
-            font-size: 1.05rem;
+        .top-bar-actions.open .top-bar-actions-list{
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }
     }
 
