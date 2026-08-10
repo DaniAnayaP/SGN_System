@@ -1114,10 +1114,27 @@
             transform: translateX(-100%);
             transition: transform 0.3s ease;
         }
+        /* Used to float independently (position:absolute, top-right of the
+           viewport) and overlapped the top bar's corner. Now sits inline in
+           .top-bar-actions right after the "more" toggle, styled to match
+           .top-bar-actions button (circular icon, same size) instead of the
+           old floating white-circle look. */
         .sidebars-btn{
             display: flex;
-            right: 1rem;
-            padding: 1.2rem;
+            align-items: center;
+            justify-content: center;
+            width: 2.2rem;
+            height: 2.2rem;
+            border-radius: 50%;
+            background: transparent;
+            color: var(--color-text-secondary);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .sidebars-btn:hover{
+            background-color: var(--color-bg);
+            color: var(--color-text-primary);
         }
         .sidebars-btn i:last-child{
             display: none;
