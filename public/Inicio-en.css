@@ -1132,13 +1132,14 @@
             display: none;
         }
         /* On phones the sidebar slides in as an overlay rather than pushing
-           main's content over (no room for both side by side) — raising its
-           z-index above .top-bar stopped the top bar from poking through
-           it, but the sidebar then covered the top bar instead, which is
-           still one overlapping the other. Hiding the top bar while the
-           sidebar is open removes the overlap entirely, in either
-           direction, instead of just changing who's on top. */
-        body.sidebars-hidden .top-bar{
+           main's content over (no room for both side by side), so the top
+           bar's left portion sits in the same screen region the open
+           sidebar covers. Neither the sidebar nor the top bar should
+           disappear for this — dropping just the page title (the one part
+           with no fixed function) frees up enough of the top bar that it
+           reads cleanly alongside the open sidebar instead of the two
+           competing for the same space. */
+        body.sidebars-hidden .top-bar .welcome-text{
             display: none;
         }
         main{
