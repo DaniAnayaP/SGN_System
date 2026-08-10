@@ -201,8 +201,7 @@
        — and the column's align-items:center then centers that overflow
        instead of clipping it flush against the edge, pushing icons out of
        view to the left. */
-    #menu-mount,
-    #admin-business-mount{
+    #menu-mount{
         width: 100%;
     }
 
@@ -973,7 +972,9 @@
     }
     .settings-dropdown button,
     .settings-dropdown a{
-        display: block;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
         width: 100%;
         border: none;
         border-radius: 0.35rem;
@@ -987,6 +988,11 @@
         cursor: pointer;
         transition: background-color 0.2s ease, color 0.2s ease;
         box-sizing: border-box;
+    }
+    .settings-dropdown button i,
+    .settings-dropdown a i{
+        flex-shrink: 0;
+        font-size: 0.9rem;
     }
     .settings-dropdown button:hover,
     .settings-dropdown a:hover{
@@ -1007,7 +1013,6 @@
     .settings-dropdown-toggle{
         display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: 0.5rem;
         width: 100%;
         border: none;
@@ -1034,9 +1039,16 @@
     .settings-dropdown-toggle i{
         flex-shrink: 0;
         font-size: 1rem;
+    }
+    /* The chevron is always the last icon (leading icon, then label, then
+       chevron) — margin-left:auto pins it to the right regardless of the
+       leading icon, replacing justify-content:space-between (which would've
+       spread space between all 3 children instead of just before the last one). */
+    .settings-dropdown-toggle i:last-child{
+        margin-left: auto;
         transition: transform 0.2s ease;
     }
-    .settings-dropdown-group.open .settings-dropdown-toggle i{
+    .settings-dropdown-group.open .settings-dropdown-toggle i:last-child{
         transform: rotate(180deg);
     }
     .settings-submenu{
@@ -1047,7 +1059,9 @@
     }
     .settings-submenu button,
     .settings-submenu a{
-        display: block;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
         width: 100%;
         border: none;
         border-radius: 0.35rem;
@@ -1061,6 +1075,11 @@
         cursor: pointer;
         transition: background-color 0.2s ease, color 0.2s ease;
         box-sizing: border-box;
+    }
+    .settings-submenu button i,
+    .settings-submenu a i{
+        flex-shrink: 0;
+        font-size: 0.85rem;
     }
     .settings-submenu button:hover,
     .settings-submenu a:hover{

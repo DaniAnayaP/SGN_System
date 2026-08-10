@@ -573,7 +573,15 @@ function renderBusinessAdminSettingsMenu(items) {
         const a = document.createElement('a');
         a.href = item.href || '#';
         a.setAttribute('role', 'menuitem');
-        a.textContent = t(item.labelKey, item.labelParams || {});
+        if (item.icon) {
+            const icon = document.createElement('i');
+            icon.className = `bx ${item.icon}`;
+            icon.setAttribute('aria-hidden', 'true');
+            a.appendChild(icon);
+        }
+        const span = document.createElement('span');
+        span.textContent = t(item.labelKey, item.labelParams || {});
+        a.appendChild(span);
         li.appendChild(a);
         submenu.appendChild(li);
     });
@@ -582,22 +590,17 @@ function renderBusinessAdminSettingsMenu(items) {
 
 function renderMenu(data) {
     const mount = document.getElementById('menu-mount');
-    const adminBusinessMount = document.getElementById('admin-business-mount');
     mount.innerHTML = '';
-    if (adminBusinessMount) adminBusinessMount.innerHTML = '';
 
     data.sections.forEach((section) => {
         let items = section.items;
-        // "Administración del Negocio" renders in its own mount right below
-        // the department picker instead of buried in the main item list.
-        if (section.id === 'main' && adminBusinessMount) {
+        // "Administración del Negocio" no longer gets its own sidebar
+        // shortcut — it's reachable from the top-bar Settings dropdown
+        // instead (renderBusinessAdminSettingsMenu below), so just drop it
+        // from the regular item list here.
+        if (section.id === 'main') {
             const adminBusinessItem = items.find((i) => i.id === 'admin-business');
             if (adminBusinessItem) {
-                const shortcutUl = document.createElement('ul');
-                shortcutUl.className = 'menu';
-                shortcutUl.dataset.sectionId = 'admin-business-shortcut';
-                shortcutUl.appendChild(buildMenuItem(adminBusinessItem));
-                adminBusinessMount.appendChild(shortcutUl);
                 items = items.filter((i) => i.id !== 'admin-business');
             }
             renderBusinessAdminSettingsMenu(adminBusinessItem?.submenu);
@@ -973,7 +976,7 @@ function normalizeSearchText(str) {
 
 function getSearchableLinks() {
     return Array.from(document.querySelectorAll(
-        '#menu-mount .menu-link, #menu-mount .sub-menu-link, #admin-business-mount .menu-link, #admin-business-mount .sub-menu-link'
+        '#menu-mount .menu-link, #menu-mount .sub-menu-link, #business-admin-submenu a'
     )).filter((a) => a.textContent.trim().length > 0);
 }
 

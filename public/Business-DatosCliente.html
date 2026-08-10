@@ -54,10 +54,6 @@
                 </ul>
             </div>
 
-            <div id="admin-business-mount">
-                <!-- "Administración del Negocio" shortcut rendered here at runtime -->
-            </div>
-
             <div id="menu-mount" aria-live="polite">
                 <!-- Sidebar sections are rendered here at runtime from data/menu.json -->
             </div>
@@ -129,39 +125,57 @@
                             <li role="none" class="settings-dropdown-group" id="language-group">
                                 <button type="button" class="settings-dropdown-toggle" id="language-toggle-btn"
                                         aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-globe" aria-hidden="true"></i>
                                     <span data-i18n="main.language">Language</span>
                                     <i class="bx bx-chevron-down" aria-hidden="true"></i>
                                 </button>
                                 <ul class="settings-submenu" id="language-submenu" role="menu">
                                     <li role="none">
-                                        <button type="button" role="menuitem" class="lang-option active" data-lang="en" data-i18n="main.languageEnglish">English</button>
+                                        <button type="button" role="menuitem" class="lang-option active" data-lang="en">
+                                            <i class="bx bx-globe" aria-hidden="true"></i>
+                                            <span data-i18n="main.languageEnglish">English</span>
+                                        </button>
                                     </li>
                                     <li role="none">
-                                        <button type="button" role="menuitem" class="lang-option" data-lang="es" data-i18n="main.languageSpanish">Spanish</button>
+                                        <button type="button" role="menuitem" class="lang-option" data-lang="es">
+                                            <i class="bx bx-globe" aria-hidden="true"></i>
+                                            <span data-i18n="main.languageSpanish">Spanish</span>
+                                        </button>
                                     </li>
                                 </ul>
                             </li>
                             <li role="none" class="settings-dropdown-group" id="style-group">
                                 <button type="button" class="settings-dropdown-toggle" id="style-toggle-btn"
                                         aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-palette" aria-hidden="true"></i>
                                     <span data-i18n="main.style">Style</span>
                                     <i class="bx bx-chevron-down" aria-hidden="true"></i>
                                 </button>
                                 <ul class="settings-submenu" id="style-submenu" role="menu">
                                     <li role="none">
-                                        <button type="button" role="menuitem" class="style-option active" data-style="light" data-i18n="main.styleLight">Light</button>
+                                        <button type="button" role="menuitem" class="style-option active" data-style="light">
+                                            <i class="bx bx-sun" aria-hidden="true"></i>
+                                            <span data-i18n="main.styleLight">Light</span>
+                                        </button>
                                     </li>
                                     <li role="none">
-                                        <button type="button" role="menuitem" class="style-option" data-style="dark" data-i18n="main.styleDark">Dark</button>
+                                        <button type="button" role="menuitem" class="style-option" data-style="dark">
+                                            <i class="bx bx-moon" aria-hidden="true"></i>
+                                            <span data-i18n="main.styleDark">Dark</span>
+                                        </button>
                                     </li>
                                     <li role="none">
-                                        <button type="button" role="menuitem" class="style-option" data-style="institutional" data-i18n="main.styleInstitutional">Institutional</button>
+                                        <button type="button" role="menuitem" class="style-option" data-style="institutional">
+                                            <i class="bx bx-buildings" aria-hidden="true"></i>
+                                            <span data-i18n="main.styleInstitutional">Institutional</span>
+                                        </button>
                                     </li>
                                 </ul>
                             </li>
                             <li role="none" class="settings-dropdown-group" id="business-admin-group" hidden>
                                 <button type="button" class="settings-dropdown-toggle" id="business-admin-toggle-btn"
                                         aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-shopping-bag" aria-hidden="true"></i>
                                     <span data-i18n="menu.adminBusiness">Admin Business</span>
                                     <i class="bx bx-chevron-down" aria-hidden="true"></i>
                                 </button>
@@ -170,7 +184,10 @@
                                 </ul>
                             </li>
                             <li role="none">
-                                <button type="button" role="menuitem" id="settings-others" data-i18n="main.others">Others</button>
+                                <button type="button" role="menuitem" id="settings-others">
+                                    <i class="bx bx-dots-horizontal-rounded" aria-hidden="true"></i>
+                                    <span data-i18n="main.others">Others</span>
+                                </button>
                             </li>
                         </ul>
                     </div>
