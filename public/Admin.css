@@ -532,6 +532,12 @@ body.dark-mode .admin-save-status{
     padding: 1rem;
     z-index: 100;
 }
+/* Without this, [hidden] loses to the class rule above (equal specificity,
+   author CSS beats the UA stylesheet) and the modal stays visible — and
+   since it's position:fixed/inset:0, it blocks the whole page underneath. */
+.modal-overlay[hidden]{
+    display: none;
+}
 .modal-panel{
     width: 100%;
     max-width: 30rem;
