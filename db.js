@@ -103,6 +103,11 @@ const userColumns = db.prepare('PRAGMA table_info(users)').all();
 if (!userColumns.some((c) => c.name === 'role')) {
     db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
 }
+// The demo admin/admin account (seeded below) may have been created before
+// the ALTER TABLE above existed, in which case it got backfilled with the
+// DEFAULT 'user' like every other pre-existing row — leaving the one account
+// meant to be GEIPSA's own admin stuck without admin access. Fix it up once.
+db.prepare("UPDATE users SET role = 'admin' WHERE username = 'admin' AND role != 'admin'").run();
 if (!userColumns.some((c) => c.name === 'client_id')) {
     db.exec('ALTER TABLE users ADD COLUMN client_id INTEGER REFERENCES clients(id)');
 }
