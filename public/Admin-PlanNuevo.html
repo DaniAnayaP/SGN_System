@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.plansRegistered">Registered Plans</title>
+    <title data-i18n="menu.addPlanNew">+ Add New Plan</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -98,7 +98,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="menu.plansRegistered">Registered Plans</p>
+                <p class="welcome-text" data-i18n="menu.addPlanNew">+ Add New Plan</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -172,10 +172,9 @@
         </div>
 
         <section class="admin-panel">
-            <p class="admin-subtitle" data-i18n="admin.plansSubtitle">Manage the plan or package types you can assign to your clients.</p>
+            <p class="admin-subtitle" data-i18n="admin.addPlanSubtitle">Register a new plan or package type.</p>
 
-            <form id="plan-form" class="admin-form" novalidate hidden>
-                <input type="hidden" id="plan-id" value="">
+            <form id="plan-form" class="admin-form" novalidate>
                 <div class="admin-form-grid">
                     <div class="admin-field">
                         <label for="plan-name" data-i18n="admin.planName">Plan name</label>
@@ -197,30 +196,13 @@
 
                 <div id="plan-form-error" class="admin-error" role="alert" hidden></div>
                 <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="plan-form-submit" data-i18n="admin.save">Save</button>
-                    <button type="button" class="btn btn-secondary" id="plan-form-cancel" data-i18n="admin.cancel">Cancel</button>
+                    <button type="submit" class="btn" id="plan-form-submit" data-i18n="admin.addPlan">Add plan</button>
                 </div>
             </form>
-
-            <div class="admin-table-wrap">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th data-i18n="admin.planName">Plan name</th>
-                            <th data-i18n="admin.planDescription">Description</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="plan-table-body">
-                        <!-- rendered at runtime -->
-                    </tbody>
-                </table>
-                <p id="plan-empty" class="admin-empty" data-i18n="admin.noPlans" hidden>No plans yet. Add the first one above.</p>
-            </div>
         </section>
     </main>
 
     <script src="Dashboard.js"></script>
-    <script src="Admin-Planes.js"></script>
+    <script src="Admin-PlanNuevo.js"></script>
 </body>
 </html>

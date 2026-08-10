@@ -90,7 +90,8 @@
     "addClientNew": "+ Add New Client",
     "contrataciones": "Contracted Modules",
     "clientAdmin": "Client Administration",
-    "plans": "Plans / Packages",
+    "plansRegistered": "Registered Plans",
+    "addPlanNew": "+ Add New Plan",
     "mainSection": "General"
   },
   "admin": {
@@ -156,6 +157,7 @@
     "addendaNoPlan": "This client has no plan assigned yet — extras still apply on top of nothing until one is chosen.",
     "addendaPlanBase": "Plan \"{plan}\": {limit} cost centers included.",
     "plansSubtitle": "Manage the plan or package types you can assign to your clients.",
+    "addPlanSubtitle": "Register a new plan or package type.",
     "planName": "Plan name",
     "planDescription": "Description",
     "addPlan": "Add plan",

@@ -43,7 +43,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transport: "Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints" },
-            clientesRegistrados: "Registered Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plans: "Plans / Packages", mainSection: "General"
+            clientesRegistrados: "Registered Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Registered Plans", addPlanNew: "+ Add New Plan", mainSection: "General"
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
@@ -79,6 +79,7 @@ const EMBEDDED_TRANSLATIONS = {
             addendaNoPlan: "This client has no plan assigned yet — extras still apply on top of nothing until one is chosen.",
             addendaPlanBase: "Plan \"{plan}\": {limit} cost centers included.",
             plansSubtitle: "Manage the plan or package types you can assign to your clients.",
+            addPlanSubtitle: "Register a new plan or package type.",
             planName: "Plan name", planDescription: "Description", addPlan: "Add plan",
             noPlans: "No plans yet. Add the first one above.",
             confirmDeletePlan: "Delete this plan? This doesn't affect clients already assigned to it.",
@@ -134,7 +135,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Compras", commercial: "Comercial", marketing: "Mercadotecnia",
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
-            clientesRegistrados: "Clientes Registrados", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plans: "Planes / Paquetes", mainSection: "General"
+            clientesRegistrados: "Clientes Registrados", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Planes Registrados", addPlanNew: "+ Agregar Plan Nuevo", mainSection: "General"
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
@@ -170,6 +171,7 @@ const EMBEDDED_TRANSLATIONS = {
             addendaNoPlan: "Este cliente aún no tiene un plan asignado — los extras se suman sobre cero hasta que elijas uno.",
             addendaPlanBase: "Plan \"{plan}\": {limit} centros de costo incluidos.",
             plansSubtitle: "Administra los tipos de plan o paquete que puedes asignar a tus clientes.",
+            addPlanSubtitle: "Registra un nuevo tipo de plan o paquete.",
             planName: "Nombre del plan", planDescription: "Descripción", addPlan: "Agregar plan",
             noPlans: "Aún no hay planes. Agrega el primero arriba.",
             confirmDeletePlan: "¿Eliminar este plan? Esto no afecta a los clientes que ya lo tienen asignado.",
@@ -324,8 +326,9 @@ async function loadMenu() {
 
 // Admin-only sidebar dropdown (SaaS control panel: Clientes Registrados —
 // the list of existing clients, module entitlements, and Anexos, all on one
-// screen — + Agregar Cliente Nuevo, a dedicated add-only form; and Planes /
-// Paquetes, GEIPSA's own plan-type catalog). Only ever added when the
+// screen — + Agregar Cliente Nuevo, a dedicated add-only form; Planes
+// Registrados, GEIPSA's own plan-type catalog; and + Agregar Plan Nuevo,
+// same add-only split as the client screens). Only ever added when the
 // server-verified role (from /api/me) is 'admin' — the real access control
 // is enforced server-side on every /api/admin/* route regardless of what the
 // sidebar shows. Regular client users never see this; they manage their own
@@ -343,7 +346,8 @@ function buildSidebarData(data, role, activePage) {
         submenu: [
             { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html' },
             { id: 'admin-cliente-nuevo', labelKey: 'menu.addClientNew', href: 'Admin-ClienteNuevo.html' },
-            { id: 'admin-planes', labelKey: 'menu.plans', href: 'Admin-Planes.html' }
+            { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html' },
+            { id: 'admin-plan-nuevo', labelKey: 'menu.addPlanNew', href: 'Admin-PlanNuevo.html' }
         ]
     };
     if (role !== 'admin') return data;

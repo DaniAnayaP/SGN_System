@@ -1,8 +1,10 @@
 // ---------------------------------------------------------------------------
-// "Planes y Paquetes" — GEIPSA's own catalog of plan/package types, managed
-// from the SaaS admin sidebar. These names are what populate the "Plan /
-// paquete" select on Clientes Nuevos (Admin-SaaS.html). Shell (sidebar,
-// i18n, settings, logout) comes from Dashboard.js.
+// "Planes Registrados" — view/edit/delete GEIPSA's existing plan/package
+// catalog. These names are what populate the "Plan / paquete" select on
+// Clientes Nuevos (Admin-SaaS.html). Creating a brand new plan lives on its
+// own page instead (+ Agregar Plan Nuevo, Admin-PlanNuevo.js) — the edit
+// form here only ever appears via startEdit(). Shell (sidebar, i18n,
+// settings, logout) comes from Dashboard.js.
 //
 // Access note: the sidebar only shows this page's link to admins, and the
 // redirect below covers anyone who lands here directly without the role —
@@ -75,13 +77,15 @@ function clearError() {
     errorBanner.textContent = '';
 }
 
+// This form is edit-only here (creating a plan lives on its own page, +
+// Agregar Plan Nuevo) — it only ever appears via startEdit, and hides
+// again once you're done with it.
 function resetForm() {
     form.reset();
+    form.hidden = true;
     idField.value = '';
     costCentersLimitField.value = 0;
     renderModuleToggles([]);
-    submitBtn.textContent = Dashboard.t('admin.addPlan');
-    cancelBtn.hidden = true;
     clearError();
 }
 
@@ -123,8 +127,7 @@ function startEdit(plan) {
     descriptionField.value = plan.description || '';
     costCentersLimitField.value = plan.costCentersLimit || 0;
     renderModuleToggles(plan.modules || []);
-    submitBtn.textContent = Dashboard.t('admin.save');
-    cancelBtn.hidden = false;
+    form.hidden = false;
     clearError();
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -170,13 +173,11 @@ form.addEventListener('submit', async (event) => {
     const costCentersLimit = Math.max(0, parseInt(costCentersLimitField.value, 10) || 0);
 
     const editingId = idField.value;
-    const url = editingId ? `/api/admin/plans/${editingId}` : '/api/admin/plans';
-    const method = editingId ? 'PATCH' : 'POST';
 
     submitBtn.disabled = true;
     try {
-        const res = await fetch(url, {
-            method,
+        const res = await fetch(`/api/admin/plans/${editingId}`, {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({ name, description, modules, costCentersLimit }),
@@ -191,11 +192,7 @@ form.addEventListener('submit', async (event) => {
             return;
         }
         const { plan } = await res.json();
-        if (editingId) {
-            plans = plans.map((p) => (p.id === plan.id ? plan : p));
-        } else {
-            plans = [...plans, plan].sort((a, b) => a.name.localeCompare(b.name));
-        }
+        plans = plans.map((p) => (p.id === plan.id ? plan : p));
         renderPlans();
         resetForm();
     } catch {
@@ -208,7 +205,6 @@ form.addEventListener('submit', async (event) => {
 cancelBtn.addEventListener('click', resetForm);
 
 document.addEventListener('dashboard:language-changed', () => {
-    if (!idField.value) submitBtn.textContent = Dashboard.t('admin.addPlan');
     renderPlans();
     renderModuleToggles(getCheckedModuleKeys());
 });

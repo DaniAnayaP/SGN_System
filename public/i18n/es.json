@@ -90,7 +90,8 @@
     "addClientNew": "+ Agregar Cliente Nuevo",
     "contrataciones": "Contrataciones",
     "clientAdmin": "Administración de Clientes",
-    "plans": "Planes / Paquetes",
+    "plansRegistered": "Planes Registrados",
+    "addPlanNew": "+ Agregar Plan Nuevo",
     "mainSection": "General"
   },
   "admin": {
@@ -156,6 +157,7 @@
     "addendaNoPlan": "Este cliente aún no tiene un plan asignado — los extras se suman sobre cero hasta que elijas uno.",
     "addendaPlanBase": "Plan \"{plan}\": {limit} centros de costo incluidos.",
     "plansSubtitle": "Administra los tipos de plan o paquete que puedes asignar a tus clientes.",
+    "addPlanSubtitle": "Registra un nuevo tipo de plan o paquete.",
     "planName": "Nombre del plan",
     "planDescription": "Descripción",
     "addPlan": "Agregar plan",
