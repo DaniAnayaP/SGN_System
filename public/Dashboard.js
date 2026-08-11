@@ -313,7 +313,7 @@ const EMBEDDED_MENU_FALLBACK = {
     sections: [{
         id: 'main',
         items: [
-            { id: 'home', labelKey: 'menu.home', icon: 'bx-home-alt-2', href: '#', active: true },
+            { id: 'home', labelKey: 'menu.home', icon: 'bx-home-alt-2', href: '#' },
             { id: 'panel', labelKey: 'menu.panel', icon: 'bx-grid-alt', href: '#' },
             { id: 'dashboard', labelKey: 'menu.dashboard', icon: 'bx-bar-chart-alt-2', href: 'Inicio-en.html' }
         ]
