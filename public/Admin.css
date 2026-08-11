@@ -381,10 +381,9 @@ body.dark-mode .admin-badge-prospecto{
 .perm-tree-row{
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.3rem;
     padding: 0.35rem 0.4rem;
     border-radius: 0.3rem;
-    cursor: pointer;
     font-size: 0.82rem;
     color: var(--color-text-primary);
 }
@@ -411,6 +410,46 @@ body.dark-mode .admin-badge-prospecto{
     width: 1rem;
     height: 1rem;
     flex-shrink: 0;
+}
+/* Expand/collapse chevron — same rotate-on-open idea as the settings
+   dropdown toggles. A disabled, invisible spacer takes its place on rows
+   with no children (leaves), so labels at the same depth still line up. */
+.perm-tree-toggle{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.perm-tree-toggle:hover{
+    color: var(--color-text-primary);
+}
+.perm-tree-toggle i{
+    font-size: 0.9rem;
+    transition: transform 0.15s ease;
+}
+.perm-tree-toggle[aria-expanded="true"] i{
+    transform: rotate(180deg);
+}
+.perm-tree-toggle-spacer{
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    visibility: hidden;
+}
+.perm-tree-check{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
 }
 
 /* Contrataciones */

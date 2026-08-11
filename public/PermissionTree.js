@@ -68,6 +68,13 @@
     function create(container, { allowedSectionIds = null } = {}) {
         let sectionsData = [];
         let grantSet = new Set();
+        // Which depth-0 sections and depth-1 items are expanded — set once
+        // in init() (anything already granted starts open so it's not
+        // hidden; everything else starts collapsed), then toggled freely by
+        // the chevron buttons from there. Collapsing/expanding never
+        // touches grantSet, so it can't change what's actually saved.
+        let expandedSections = new Set();
+        let expandedItems = new Set();
 
         function expand(grants) {
             const rawSet = new Set(grants.map((g) => keyOf(g.sectionId, g.itemId, g.submenuId)));
@@ -85,14 +92,42 @@
             return expanded;
         }
 
-        function buildRow(labelText, depth) {
-            const row = document.createElement('label');
+        // toggle is null for leaf rows (no children to expand) — they get an
+        // invisible spacer instead, so every row's checkbox still lines up
+        // regardless of depth.
+        function buildRow(labelText, depth, toggle) {
+            const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
+
+            if (toggle) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'perm-tree-toggle';
+                btn.setAttribute('aria-expanded', String(toggle.expanded));
+                const icon = document.createElement('i');
+                icon.className = 'bx bx-chevron-down';
+                icon.setAttribute('aria-hidden', 'true');
+                btn.appendChild(icon);
+                btn.addEventListener('click', () => {
+                    toggle.onToggle();
+                    render();
+                });
+                row.appendChild(btn);
+            } else {
+                const spacer = document.createElement('span');
+                spacer.className = 'perm-tree-toggle-spacer';
+                row.appendChild(spacer);
+            }
+
+            const label = document.createElement('label');
+            label.className = 'perm-tree-check';
             const input = document.createElement('input');
             input.type = 'checkbox';
             const span = document.createElement('span');
             span.textContent = labelText;
-            row.append(input, span);
+            label.append(input, span);
+            row.appendChild(label);
+
             return { row, input };
         }
 
@@ -105,7 +140,14 @@
             sectionsData.forEach((section) => {
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
                 const sectionChecked = sectionLeafKeys.filter((k) => grantSet.has(k)).length;
-                const sectionRow = buildRow(t(sectionLabelKey(section)), 0);
+                const sectionExpanded = expandedSections.has(section.id);
+                const sectionRow = buildRow(t(sectionLabelKey(section)), 0, section.items.length ? {
+                    expanded: sectionExpanded,
+                    onToggle: () => {
+                        if (sectionExpanded) expandedSections.delete(section.id);
+                        else expandedSections.add(section.id);
+                    },
+                } : null);
                 sectionRow.input.checked = sectionChecked === sectionLeafKeys.length && sectionLeafKeys.length > 0;
                 sectionRow.input.indeterminate = sectionChecked > 0 && sectionChecked < sectionLeafKeys.length;
                 sectionRow.input.addEventListener('change', () => {
@@ -113,11 +155,21 @@
                     render();
                 });
                 container.appendChild(sectionRow.row);
+                if (!sectionExpanded) return;
 
                 section.items.forEach((item) => {
                     const itemLeafKeys = leafKeysUnder(section, item);
                     const itemChecked = itemLeafKeys.filter((k) => grantSet.has(k)).length;
-                    const itemRow = buildRow(t(item.labelKey, item.labelParams), 1);
+                    const hasSubmenu = !!(item.submenu && item.submenu.length);
+                    const itemKey = `${section.id}::${item.id}`;
+                    const itemExpanded = expandedItems.has(itemKey);
+                    const itemRow = buildRow(t(item.labelKey, item.labelParams), 1, hasSubmenu ? {
+                        expanded: itemExpanded,
+                        onToggle: () => {
+                            if (itemExpanded) expandedItems.delete(itemKey);
+                            else expandedItems.add(itemKey);
+                        },
+                    } : null);
                     itemRow.input.checked = itemChecked === itemLeafKeys.length;
                     itemRow.input.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
                     itemRow.input.addEventListener('change', () => {
@@ -125,8 +177,9 @@
                         render();
                     });
                     container.appendChild(itemRow.row);
+                    if (!hasSubmenu || !itemExpanded) return;
 
-                    (item.submenu || []).forEach((sm) => {
+                    item.submenu.forEach((sm) => {
                         const key = keyOf(section.id, item.id, sm.id);
                         const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2);
                         smRow.input.checked = grantSet.has(key);
@@ -165,6 +218,23 @@
                     s.id === 'main' ? s : { ...s, items: [...generalItems, ...(areaCategories || [])] }
                 ));
                 grantSet = expand(initialGrants || []);
+                // Start collapsed everywhere except any section/item that
+                // already has at least one granted leaf — so existing
+                // grants are never hidden behind a closed row on load, but
+                // the tree isn't a 50+ row wall by default either.
+                expandedSections = new Set();
+                expandedItems = new Set();
+                sectionsData.forEach((section) => {
+                    const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
+                    if (sectionLeafKeys.some((k) => grantSet.has(k))) expandedSections.add(section.id);
+                    section.items.forEach((item) => {
+                        const itemLeafKeys = leafKeysUnder(section, item);
+                        if (itemLeafKeys.some((k) => grantSet.has(k))) {
+                            expandedItems.add(`${section.id}::${item.id}`);
+                            expandedSections.add(section.id);
+                        }
+                    });
+                });
                 render();
             },
             getGrants() {
