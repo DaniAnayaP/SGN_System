@@ -132,7 +132,10 @@
     "catMaterialApoyoItem2": "M. Apoy 2",
     "catIconosBotones": "Iconos y Botones",
     "catIconosBotonesItem1": "Icono 1",
-    "catIconosBotonesItem2": "Icono 2"
+    "catIconosBotonesItem2": "Icono 2",
+    "btnDepartamento": "Botón Departamento",
+    "btnArea": "Botón Área",
+    "btnCostCenters": "Botón Centro de Costos"
   },
   "admin": {
     "clientsTitle": "Clientes Nuevos",

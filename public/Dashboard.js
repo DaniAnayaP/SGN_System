@@ -50,7 +50,7 @@ const EMBEDDED_TRANSLATIONS = {
             catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
             catGestion: "Management", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
             catReportes: "Reports", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
-            catMaterialApoyo: "Support Material", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2", catIconosBotones: "Icons and Buttons", catIconosBotonesItem1: "Icon 1", catIconosBotonesItem2: "Icon 2"
+            catMaterialApoyo: "Support Material", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2", catIconosBotones: "Icons and Buttons", catIconosBotonesItem1: "Icon 1", catIconosBotonesItem2: "Icon 2", btnDepartamento: "Department Button", btnArea: "Area Button", btnCostCenters: "Cost Centers Button"
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
@@ -150,7 +150,7 @@ const EMBEDDED_TRANSLATIONS = {
             catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
             catGestion: "Gestión", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
             catReportes: "Reportes", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
-            catMaterialApoyo: "Material Apoyo", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2", catIconosBotones: "Iconos y Botones", catIconosBotonesItem1: "Icono 1", catIconosBotonesItem2: "Icono 2"
+            catMaterialApoyo: "Material Apoyo", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2", catIconosBotones: "Iconos y Botones", catIconosBotonesItem1: "Icono 1", catIconosBotonesItem2: "Icono 2", btnDepartamento: "Botón Departamento", btnArea: "Botón Área", btnCostCenters: "Botón Centro de Costos"
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
@@ -539,11 +539,9 @@ function updateAreaPickerVisibility() {
             renderFilteredMenu();
         }
         picker.classList.add('dept-picker-disabled');
-        syncButtonConfigShortcuts();
         return;
     }
     picker.classList.toggle('dept-picker-disabled', areas.length === 0);
-    syncButtonConfigShortcuts();
 }
 
 // Shows only the abbreviation once a department is picked (e.g. "FIN"),
@@ -1565,7 +1563,6 @@ function closeCcPicker() {
 function renderCostCenterPicker() {
     if (!ccPicker || !ccPickerDropdown) return;
     ccPicker.classList.toggle('cc-picker-disabled', sidebarCostCenters.length <= 1 || currentRole === 'admin');
-    syncButtonConfigShortcuts();
     if (!sidebarCostCenters.length) return;
 
     ccPickerDropdown.innerHTML = '';
@@ -1644,16 +1641,23 @@ document.addEventListener('keydown', (event) => {
 
 // --- "Configuración de Botones" shortcuts (Departamento / Áreas / Centro
 // Costos) inside the Settings dropdown — each just opens the real picker
-// that already lives in the top bar, instead of duplicating its logic. A
-// shortcut hides itself whenever its picker is hidden (nothing to pick
-// between), matching the picker's own visibility exactly. -------------------
+// that already lives in the top bar, instead of duplicating its logic. Each
+// one is gated by its own grant under "Iconos y Botones" in Accesos y
+// Permisos (btn-departamento/btn-area/btn-cc), same as any other screen —
+// NOT by whether the real picker currently has anything to choose between.
+// A profile/user granted the permission sees the shortcut even if, say,
+// only one department is contracted and its real picker is hidden.
+function hasButtonPermission(submenuId) {
+    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.submenuId === submenuId);
+}
+
 function syncButtonConfigShortcuts() {
     const deptShortcut = document.getElementById('button-config-dept-btn')?.closest('li');
     const areaShortcut = document.getElementById('button-config-area-btn')?.closest('li');
     const ccShortcut = document.getElementById('button-config-cc-btn')?.closest('li');
-    if (deptShortcut) deptShortcut.hidden = !!deptPicker?.classList.contains('dept-picker-disabled');
-    if (areaShortcut) areaShortcut.hidden = !!areaPicker?.classList.contains('dept-picker-disabled');
-    if (ccShortcut) ccShortcut.hidden = !!ccPicker?.classList.contains('cc-picker-disabled');
+    if (deptShortcut) deptShortcut.hidden = !hasButtonPermission('btn-departamento');
+    if (areaShortcut) areaShortcut.hidden = !hasButtonPermission('btn-area');
+    if (ccShortcut) ccShortcut.hidden = !hasButtonPermission('btn-cc');
 }
 
 // stopPropagation matters here: without it, the original click's bubbling
@@ -1853,7 +1857,11 @@ async function initDashboard({ activePage } = {}) {
         // one (or nothing) isn't in that list anymore, fall back to the
         // single contracted department when there's exactly one, or clear
         // it otherwise.
-        const contractedModuleKeys = await fetchContractedModuleKeys();
+        // Also load this user's own business profile (position/role/grants)
+        // now, in parallel — "Configuración de Botones" needs their granted
+        // permissions ready before the first render, not just whenever they
+        // happen to open the "Datos de Usuario del Negocio" panel.
+        const [contractedModuleKeys] = await Promise.all([fetchContractedModuleKeys(), loadBusinessProfile()]);
         availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
         if (!availableDepartments.some((d) => d.key === selectedDepartment)) {
             selectedDepartment = availableDepartments.length === 1 ? availableDepartments[0].key : null;
