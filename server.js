@@ -630,7 +630,12 @@ function validateGrants(grants) {
     return null;
 }
 
-app.get('/api/business/contracted-modules', requireAuth, requireClientAdmin, (req, res) => {
+// Any authenticated user AT a client needs this to filter their OWN
+// sidebar/top-bar correctly (department picker, the 7 top-bar buttons) —
+// not just that client's admin. Read-only, scoped to the caller's own
+// clientId, same reasoning as /api/business/branding below.
+app.get('/api/business/contracted-modules', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     res.json({ moduleKeys: getClientModuleKeys(req.user.clientId) });
 });
 
