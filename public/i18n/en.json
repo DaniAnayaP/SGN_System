@@ -332,6 +332,9 @@
     "filterSortName": "Name",
     "filterSearchBtn": "Search",
     "filterClearBtn": "Clear",
-    "emptyStateText": "No data yet."
+    "emptyStateText": "No data yet.",
+    "breadcrumbLabel": "Path",
+    "breadcrumbExpand": "Expand breadcrumb",
+    "breadcrumbCollapse": "Collapse breadcrumb"
   }
 }

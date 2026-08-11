@@ -332,6 +332,9 @@
     "filterSortName": "Nombre",
     "filterSearchBtn": "Buscar",
     "filterClearBtn": "Limpiar",
-    "emptyStateText": "Aún no hay datos."
+    "emptyStateText": "Aún no hay datos.",
+    "breadcrumbLabel": "Ruta",
+    "breadcrumbExpand": "Expandir ruta de acceso",
+    "breadcrumbCollapse": "Contraer ruta de acceso"
   }
 }

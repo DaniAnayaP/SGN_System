@@ -1561,4 +1561,91 @@
         font-size: 0.9rem;
     }
 
+    /* Breadcrumb bar — path used to reach the current screen, computed from
+       the same menu tree that builds the sidebar/settings dropdowns (see
+       Dashboard.js renderBreadcrumbBar). Injected below the top bar on every
+       dashboard-shell page rather than hand-authored per page, so it stays
+       in sync automatically and never needs touching HTML files again. */
+    .breadcrumb-bar{
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 2rem;
+        border-bottom: 1px solid var(--color-border);
+        background-color: var(--color-bg);
+        min-height: 1.9rem;
+    }
+    .breadcrumb-list{
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        overflow-x: auto;
+        scrollbar-width: none;
+        flex: 1;
+    }
+    .breadcrumb-list::-webkit-scrollbar{
+        display: none;
+    }
+    .breadcrumb-item{
+        display: flex;
+        align-items: center;
+        white-space: nowrap;
+        font-size: 0.78rem;
+        color: var(--color-text-secondary);
+    }
+    .breadcrumb-item + .breadcrumb-item::before{
+        content: "\203A";
+        margin: 0 0.4rem;
+        color: var(--color-text-secondary);
+        opacity: 0.6;
+    }
+    .breadcrumb-item a{
+        color: var(--color-text-secondary);
+        text-decoration: none;
+    }
+    .breadcrumb-item a:hover{
+        color: var(--color-text-primary);
+        text-decoration: underline;
+    }
+    .breadcrumb-item span[aria-current="page"]{
+        color: var(--color-text-primary);
+        font-weight: 600;
+    }
+    .breadcrumb-bar-collapsed .breadcrumb-list{
+        display: none;
+    }
+    .breadcrumb-toggle{
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-shrink: 0;
+        margin-left: auto;
+        border: none;
+        background: transparent;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.4rem;
+        font: inherit;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+    }
+    .breadcrumb-toggle:hover{
+        background-color: var(--color-surface);
+        color: var(--color-text-primary);
+    }
+    .breadcrumb-toggle i{
+        font-size: 0.95rem;
+    }
+    .breadcrumb-toggle-label{
+        display: none;
+    }
+    .breadcrumb-bar-collapsed .breadcrumb-toggle-label{
+        display: inline;
+    }
+
     /*border: 2px solid red; -- Borde colorido*/

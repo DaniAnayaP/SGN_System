@@ -128,7 +128,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", emptyStateText: "No data yet." }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", emptyStateText: "No data yet.", breadcrumbLabel: "Path", breadcrumbExpand: "Expand breadcrumb", breadcrumbCollapse: "Collapse breadcrumb" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -232,7 +232,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", emptyStateText: "Aún no hay datos." }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", emptyStateText: "Aún no hay datos.", breadcrumbLabel: "Ruta", breadcrumbExpand: "Expandir ruta de acceso", breadcrumbCollapse: "Contraer ruta de acceso" }
     }
 };
 
@@ -2184,6 +2184,157 @@ function applyClientBranding(branding) {
     }
 }
 
+// --- Breadcrumb bar ----------------------------------------------------------
+// "Ruta de acceso": below the top bar, shows the path used to reach the
+// current screen. Computed by walking the same menuData tree that already
+// builds the sidebar and the Settings dropdown (renderMenu,
+// renderBusinessAdminSettingsMenu) — never hand-authored per page, so it
+// can't drift out of sync with them, and it updates automatically on every
+// navigation for free (each page is its own load, which re-runs
+// initDashboard from scratch).
+function normalizeHrefTarget(href) {
+    if (!href || href === '#') return null;
+    return href.split(/[?#]/)[0];
+}
+
+function currentPageFile() {
+    const path = window.location.pathname;
+    return path.substring(path.lastIndexOf('/') + 1) || 'Inicio-en.html';
+}
+
+// Recursively walks a menu.json-shaped item tree (item.submenu can nest
+// arbitrarily deep) for the node whose href matches the current page,
+// returning the chain of items from root to that match.
+function findHrefTrail(items, targetFile, trail = []) {
+    for (const item of items || []) {
+        if (!item) continue;
+        const nextTrail = [...trail, item];
+        if (normalizeHrefTarget(item.href) === targetFile) return nextTrail;
+        if (item.submenu?.length) {
+            const found = findHrefTrail(item.submenu, targetFile, nextTrail);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
+// Every matched item becomes a non-clickable crumb: interior items (Admin.
+// del Negocio, Configuración, a category group) never carry a real href of
+// their own in menu.json, and the leaf that DOES have one is always the
+// current page — which shouldn't link to itself either way.
+function crumbFromItem(item) {
+    return { label: t(item.labelKey, item.labelParams || {}), href: null };
+}
+
+// The areaCategories screens (Cat 1/2, Ope 1/2, etc.) are one shared array
+// reused under whichever department + área the sidebar currently has
+// selected (see applyAreaFilter) — that part of the path isn't in the tree
+// itself, so it's read from the picker state instead.
+function findAreaCategoryTrail(targetFile) {
+    const catTrail = findHrefTrail(menuData?.areaCategories || [], targetFile);
+    if (!catTrail) return null;
+    const crumbs = [];
+    const deptDef = DEPARTMENTS.find((d) => d.key === selectedDepartment);
+    if (deptDef) crumbs.push({ label: t(deptDef.labelKey), href: null });
+    const areaDef = (AREAS_BY_DEPARTMENT[selectedDepartment] || []).find((a) => a.key === selectedArea);
+    if (areaDef) crumbs.push({ label: t(areaDef.labelKey, areaDef.labelParams || {}), href: null });
+    catTrail.forEach((item) => crumbs.push(crumbFromItem(item)));
+    return crumbs;
+}
+
+function computeBreadcrumbCrumbs() {
+    const targetFile = currentPageFile();
+    if (targetFile === 'Inicio-en.html') return [{ label: t('menu.home'), href: null }];
+    const home = { label: t('menu.home'), href: 'Inicio-en.html' };
+
+    const mainItems = menuData?.sections?.find((s) => s.id === 'main')?.items || [];
+    const mainTrail = findHrefTrail(mainItems, targetFile);
+    if (mainTrail) return [home, ...mainTrail.map(crumbFromItem)];
+
+    const areaCrumbs = findAreaCategoryTrail(targetFile);
+    if (areaCrumbs) return [home, ...areaCrumbs];
+
+    // No match anywhere in the tree (a page not yet wired into menu.json) —
+    // still show something sensible rather than an empty bar.
+    return [home, { label: document.title, href: null }];
+}
+
+const BREADCRUMB_COLLAPSED_KEY = 'breadcrumbCollapsed';
+
+function isBreadcrumbCollapsed() {
+    return localStorage.getItem(BREADCRUMB_COLLAPSED_KEY) === 'true';
+}
+
+function setBreadcrumbCollapsed(collapsed) {
+    const bar = document.getElementById('breadcrumb-bar');
+    const toggle = document.getElementById('breadcrumb-toggle');
+    if (!bar || !toggle) return;
+    bar.classList.toggle('breadcrumb-bar-collapsed', collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.setAttribute('aria-label', t(collapsed ? 'main.breadcrumbExpand' : 'main.breadcrumbCollapse'));
+    const chevron = toggle.querySelector('.breadcrumb-toggle-chevron');
+    if (chevron) chevron.className = `bx breadcrumb-toggle-chevron ${collapsed ? 'bx-chevron-down' : 'bx-chevron-up'}`;
+    const label = toggle.querySelector('.breadcrumb-toggle-label');
+    if (label) label.textContent = t('main.breadcrumbLabel');
+    localStorage.setItem(BREADCRUMB_COLLAPSED_KEY, String(collapsed));
+}
+
+// Built once per page and inserted right after .top-bar — every dashboard
+// page already has that element, so no HTML file needs editing for the bar
+// to show up everywhere.
+function ensureBreadcrumbBar() {
+    let bar = document.getElementById('breadcrumb-bar');
+    if (bar) return bar;
+    const topBar = document.querySelector('.top-bar');
+    if (!topBar) return null;
+
+    bar = document.createElement('div');
+    bar.className = 'breadcrumb-bar';
+    bar.id = 'breadcrumb-bar';
+
+    const list = document.createElement('ol');
+    list.className = 'breadcrumb-list';
+    list.id = 'breadcrumb-list';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'breadcrumb-toggle';
+    toggle.id = 'breadcrumb-toggle';
+    toggle.innerHTML = '<i class="bx bx-map-alt" aria-hidden="true"></i>'
+        + '<span class="breadcrumb-toggle-label"></span>'
+        + '<i class="bx bx-chevron-up breadcrumb-toggle-chevron" aria-hidden="true"></i>';
+    toggle.addEventListener('click', () => setBreadcrumbCollapsed(!bar.classList.contains('breadcrumb-bar-collapsed')));
+
+    bar.append(list, toggle);
+    topBar.insertAdjacentElement('afterend', bar);
+    return bar;
+}
+
+function renderBreadcrumbBar() {
+    const bar = ensureBreadcrumbBar();
+    if (!bar) return;
+    const list = document.getElementById('breadcrumb-list');
+    list.innerHTML = '';
+    computeBreadcrumbCrumbs().forEach((crumb, index, crumbs) => {
+        const li = document.createElement('li');
+        li.className = 'breadcrumb-item';
+        const isCurrent = index === crumbs.length - 1;
+        if (crumb.href && !isCurrent) {
+            const a = document.createElement('a');
+            a.href = crumb.href;
+            a.textContent = crumb.label;
+            li.appendChild(a);
+        } else {
+            const span = document.createElement('span');
+            span.textContent = crumb.label;
+            if (isCurrent) span.setAttribute('aria-current', 'page');
+            li.appendChild(span);
+        }
+        list.appendChild(li);
+    });
+    setBreadcrumbCollapsed(isBreadcrumbCollapsed());
+}
+
 // --- Public entry point --------------------------------------------------------
 // Call once per page: await Dashboard.initDashboard({ activePage: 'clients' }).
 // Returns the user's role, or null if the user was redirected to Login.html.
@@ -2283,6 +2434,7 @@ async function initDashboard({ activePage } = {}) {
     // Institutional's real colors) has loaded — every other page load was
     // resetting back to Light since nothing re-applied the choice.
     applyStyle(getStoredStyle());
+    renderBreadcrumbBar();
     return role;
 }
 
