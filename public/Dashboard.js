@@ -1508,9 +1508,22 @@ function applyClientBranding(branding) {
         document.querySelectorAll('.brand-light, .brand-dark').forEach((img) => {
             img.src = branding.logoDataUrl;
         });
+        // Browser tab icon — same swap as the sidebar logo, so whichever
+        // client is logged in sees their own branding there too instead of
+        // SGN's, matching the sidebar (see applyClientBranding above).
+        const favicon = document.querySelector('link[rel="icon"]');
+        if (favicon) favicon.href = branding.logoDataUrl;
     }
     const brandLabel = document.querySelector('.brand span');
     if (brandLabel && branding.companyName) brandLabel.textContent = branding.companyName;
+    // Tab title: prefix whatever this page's own title already says (already
+    // re-translated by applyStaticTranslations before this runs) with the
+    // client's name, so e.g. "Roles" becomes "Acme Corp — Roles".
+    if (branding.companyName) {
+        const titleEl = document.querySelector('title[data-i18n]');
+        const pageTitle = titleEl ? t(titleEl.dataset.i18n) : document.title;
+        document.title = `${branding.companyName} — ${pageTitle}`;
+    }
 }
 
 // --- Public entry point --------------------------------------------------------
