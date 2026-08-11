@@ -35,6 +35,8 @@
     "notifications": "Notifications",
     "settings": "Settings",
     "logout": "Log out",
+    "logoutConfirm": "Are you sure you want to log out?",
+    "logoutConfirmGreeting": "{name}, are you sure you want to log out?",
     "department": "Department",
     "deptAbbr": {
       "finance": "FIN",

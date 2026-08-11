@@ -35,6 +35,8 @@
     "notifications": "Notificaciones",
     "settings": "Configuración",
     "logout": "Cerrar sesión",
+    "logoutConfirm": "¿Seguro que deseas salir?",
+    "logoutConfirmGreeting": "{name}, ¿seguro que deseas salir?",
     "department": "Departamento",
     "deptAbbr": {
       "finance": "FIN",
