@@ -406,6 +406,11 @@ body.dark-mode .admin-badge-prospecto{
     font-size: 0.78rem;
     color: var(--color-text-secondary);
 }
+.perm-tree-depth-3{
+    padding-left: 4.5rem;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+}
 .perm-tree-row input[type="checkbox"]{
     width: 1rem;
     height: 1rem;

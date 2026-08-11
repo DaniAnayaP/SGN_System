@@ -1691,28 +1691,32 @@ function isUnrestrictedClientAdmin() {
     return !!currentUser?.isClientAdmin && (cachedBusinessProfile?.effectiveGrants || []).length === 0;
 }
 
-function hasButtonPermission(submenuId) {
+// Every plain General item (the 7 top-bar buttons, plus Departamento/Área/
+// C. Costos below) lives at itemId level directly under 'main' — no submenu
+// nesting — so its grant is keyed by itemId (sectionId 'main', submenuId
+// null). The unrestricted client admin bypasses this entirely unless GEIPSA
+// has set an explicit override for them from Admin-SaaS ("Accesos del
+// Administrador") — an empty effectiveGrants set means "no override", not
+// "nothing granted", for that one user.
+function hasMainButtonPermission(itemId) {
     if (isUnrestrictedClientAdmin()) return true;
-    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.submenuId === submenuId);
+    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === 'main' && g.itemId === itemId);
 }
 
+// Departamento/Área/C. Costos inside "Configuración de Botones" are
+// double-gated exactly like the 7 top-bar buttons: the CLIENT must have
+// contracted them (MODULE_CATALOG, same as departments) AND the USER must
+// have the grant — not by whether the real picker currently has anything to
+// choose between. A profile/user granted the permission sees the shortcut
+// even if, say, only one department is contracted and its real picker is
+// hidden.
 function syncButtonConfigShortcuts() {
     const deptShortcut = document.getElementById('button-config-dept-btn')?.closest('li');
     const areaShortcut = document.getElementById('button-config-area-btn')?.closest('li');
     const ccShortcut = document.getElementById('button-config-cc-btn')?.closest('li');
-    if (deptShortcut) deptShortcut.hidden = !hasButtonPermission('btn-departamento');
-    if (areaShortcut) areaShortcut.hidden = !hasButtonPermission('btn-area');
-    if (ccShortcut) ccShortcut.hidden = !hasButtonPermission('btn-cc');
-}
-
-// The 7 real top-bar buttons (Mensajes/Chatbot/Notificaciones/Marcadores/
-// Configuración/Datos de Usuario/Datos de Usuario del Negocio) live once
-// under "General" in menu.json, not nested in a submenu — so their grant is
-// keyed by itemId directly (sectionId 'main', submenuId null). Same
-// unrestricted-client-admin bypass as hasButtonPermission above.
-function hasMainButtonPermission(itemId) {
-    if (isUnrestrictedClientAdmin()) return true;
-    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === 'main' && g.itemId === itemId);
+    if (deptShortcut) deptShortcut.hidden = !(contractedModuleKeys.includes('btn-departamento') && hasMainButtonPermission('btn-departamento'));
+    if (areaShortcut) areaShortcut.hidden = !(contractedModuleKeys.includes('btn-area') && hasMainButtonPermission('btn-area'));
+    if (ccShortcut) ccShortcut.hidden = !(contractedModuleKeys.includes('btn-cc') && hasMainButtonPermission('btn-cc'));
 }
 
 // Double-gated: a button only shows for role !== 'admin' when the CLIENT has
@@ -1763,11 +1767,9 @@ function syncTopBarButtonVisibility() {
 // Once the gear icon itself is visible, each row inside its dropdown is
 // independently gated too — Idioma/Estilo/Administración del Negocio/
 // Configuración de Botones/Otros are submenu grants under "btn-configuracion"
-// (see hasSettingsAccess above), so hasButtonPermission (which matches on
-// submenuId regardless of parent) already resolves them correctly. Only
-// ever ADDS hidden=true — never un-hides business-admin-group, which has
-// its own independent "nothing to show" hide logic (renderBusinessAdminSettingsMenu)
-// that must win when both say hide.
+// (see hasSettingsAccess above). Only ever ADDS hidden=true — never un-hides
+// business-admin-group, which has its own independent "nothing to show" hide
+// logic (renderBusinessAdminSettingsMenu) that must win when both say hide.
 // A lingering item-level grant from before "Configuración" had a submenu
 // (any profile/user that had the whole button checked back when it was
 // still a single leaf) implies access to everything inside it — matches
@@ -1780,7 +1782,11 @@ function hasSettingsSubPermission(submenuId) {
     if (isUnrestrictedClientAdmin()) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     if (grants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-configuracion' && !g.submenuId)) return true;
-    return grants.some((g) => g.submenuId === submenuId);
+    // "Administración del Negocio" nests its own 9 pantallas inside
+    // Configuración (see PermissionTree.js), so a granted screen there looks
+    // like submenuId "btn-admin-negocio/ab-roles" — any one of them implies
+    // the group itself should show.
+    return grants.some((g) => g.submenuId === submenuId || (g.submenuId && g.submenuId.startsWith(`${submenuId}/`)));
 }
 
 function syncSettingsSubmenuVisibility() {

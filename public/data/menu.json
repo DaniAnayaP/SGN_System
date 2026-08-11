@@ -22,6 +22,9 @@
         },
         { "id": "btn-datos-usuario", "labelKey": "main.userInfo", "icon": "bx-user-circle", "href": "#", "permissionOnly": true },
         { "id": "btn-datos-usuario-negocio", "labelKey": "main.businessProfile", "icon": "bx-briefcase", "href": "#", "permissionOnly": true },
+        { "id": "btn-departamento", "labelKey": "sidebar.department", "icon": "bx-buildings", "href": "#", "permissionOnly": true },
+        { "id": "btn-area", "labelKey": "sidebar.area", "icon": "bx-collection", "href": "#", "permissionOnly": true },
+        { "id": "btn-cc", "labelKey": "sidebar.costCenters", "icon": "bx-purchase-tag-alt", "href": "#", "permissionOnly": true },
         {
           "id": "admin-business",
           "labelKey": "menu.adminBusiness",

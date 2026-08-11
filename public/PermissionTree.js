@@ -58,9 +58,18 @@
         return res.json();
     }
 
+    // A submenu entry can itself have a submenu (e.g. "Administración del
+    // Negocio" nested inside "Configuración", with its own 9 pantallas) —
+    // that third level's leaf keys use a compound "parentId/leafId" as the
+    // submenuId, still fitting the existing 3-field {sectionId, itemId,
+    // submenuId} grant shape without a schema change.
     function leafKeysUnder(section, item) {
         if (item.submenu && item.submenu.length) {
-            return item.submenu.map((sm) => keyOf(section.id, item.id, sm.id));
+            return item.submenu.flatMap((sm) => (
+                sm.submenu && sm.submenu.length
+                    ? sm.submenu.map((subSm) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}`))
+                    : [keyOf(section.id, item.id, sm.id)]
+            ));
         }
         return [keyOf(section.id, item.id, null)];
     }
@@ -180,14 +189,53 @@
                     if (!hasSubmenu || !itemExpanded) return;
 
                     item.submenu.forEach((sm) => {
-                        const key = keyOf(section.id, item.id, sm.id);
-                        const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2);
-                        smRow.input.checked = grantSet.has(key);
+                        const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
+                        if (!hasSubSubmenu) {
+                            const key = keyOf(section.id, item.id, sm.id);
+                            const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2);
+                            smRow.input.checked = grantSet.has(key);
+                            smRow.input.addEventListener('change', () => {
+                                setKeys([key], smRow.input.checked);
+                                render();
+                            });
+                            container.appendChild(smRow.row);
+                            return;
+                        }
+
+                        // One more level down (e.g. "Administración del
+                        // Negocio" nested inside "Configuración") — reuses
+                        // expandedItems with a 3-part key, distinct from the
+                        // 2-part item-level keys above.
+                        const smLeafKeys = sm.submenu.map((subSm) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}`));
+                        const smChecked = smLeafKeys.filter((k) => grantSet.has(k)).length;
+                        const smKey = `${section.id}::${item.id}::${sm.id}`;
+                        const smExpandedNow = expandedItems.has(smKey);
+                        const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2, {
+                            expanded: smExpandedNow,
+                            onToggle: () => {
+                                if (smExpandedNow) expandedItems.delete(smKey);
+                                else expandedItems.add(smKey);
+                            },
+                        });
+                        smRow.input.checked = smChecked === smLeafKeys.length;
+                        smRow.input.indeterminate = smChecked > 0 && smChecked < smLeafKeys.length;
                         smRow.input.addEventListener('change', () => {
-                            setKeys([key], smRow.input.checked);
+                            setKeys(smLeafKeys, smRow.input.checked);
                             render();
                         });
                         container.appendChild(smRow.row);
+                        if (!smExpandedNow) return;
+
+                        sm.submenu.forEach((subSm) => {
+                            const key = keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
+                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3);
+                            subRow.input.checked = grantSet.has(key);
+                            subRow.input.addEventListener('change', () => {
+                                setKeys([key], subRow.input.checked);
+                                render();
+                            });
+                            container.appendChild(subRow.row);
+                        });
                     });
                 });
             });
@@ -215,14 +263,13 @@
                 // same way to every department, so swap them in here
                 // instead of using the section's own (empty) items.
                 // "Administración del Negocio" (admin-business) is excluded
-                // here — it's redundant with "Botón Administración del
-                // Negocio" (btn-admin-negocio), already grantable as one of
-                // Configuración's 5 rows, and its own ab-* sub-items were
-                // never actually wired to any real access filtering (the
-                // real topbar shows them all unconditionally once the group
-                // itself is visible). Rendering it here too just showed the
-                // same concept twice, once as its own top-level "button" and
-                // once nested inside Configuración.
+                // as its own top-level row here — it only ever appears
+                // nested inside "Configuración" (see the swap below), so it
+                // doesn't also show up as a duplicate top-level "button".
+                // Its 9 pantallas are the SAME data the real topbar
+                // dropdown uses (renderBusinessAdminSettingsMenu in
+                // Dashboard.js) — reused here, not duplicated in menu.json.
+                const adminBusinessItem = mainSection?.items.find((i) => i.id === 'admin-business');
                 // Centros de Costo aren't a static menu.json catalog like
                 // departments — they're created on the fly per client (see
                 // Business-CentrosCosto.html), so this list comes in as a
@@ -239,7 +286,19 @@
                     : null;
                 sectionsData = filtered.map((s) => {
                     if (s.id !== 'main') return { ...s, items: [...generalItems, ...(areaCategories || [])] };
-                    const items = s.items.filter((i) => i.id !== 'admin-business');
+                    const items = s.items
+                        .filter((i) => i.id !== 'admin-business')
+                        .map((i) => {
+                            if (i.id !== 'btn-configuracion' || !i.submenu || !adminBusinessItem) return i;
+                            return {
+                                ...i,
+                                submenu: i.submenu.map((sm) => (
+                                    sm.id === 'btn-admin-negocio'
+                                        ? { id: 'btn-admin-negocio', labelKey: sm.labelKey, labelParams: sm.labelParams, submenu: adminBusinessItem.submenu }
+                                        : sm
+                                )),
+                            };
+                        });
                     return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };
                 });
                 grantSet = expand(initialGrants || []);

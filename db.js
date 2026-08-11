@@ -244,6 +244,9 @@ const MODULE_CATALOG = [
     { key: 'btn-configuracion', labelKey: 'main.settings' },
     { key: 'btn-datos-usuario', labelKey: 'main.userInfo' },
     { key: 'btn-datos-usuario-negocio', labelKey: 'main.businessProfile' },
+    { key: 'btn-departamento', labelKey: 'sidebar.department' },
+    { key: 'btn-area', labelKey: 'sidebar.area' },
+    { key: 'btn-cc', labelKey: 'sidebar.costCenters' },
 ];
 
 // --- Business admin: profiles and permission grants --------------------------
