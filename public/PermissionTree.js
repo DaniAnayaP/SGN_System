@@ -60,14 +60,24 @@
 
     // A submenu entry can itself have a submenu (e.g. "Administración del
     // Negocio" nested inside "Configuración", with its own 9 pantallas) —
-    // that third level's leaf keys use a compound "parentId/leafId" as the
-    // submenuId, still fitting the existing 3-field {sectionId, itemId,
-    // submenuId} grant shape without a schema change.
+    // that third level's leaf keys normally use a compound "parentId/leafId"
+    // as the submenuId, still fitting the existing 3-field {sectionId,
+    // itemId, submenuId} grant shape without a schema change. A grandchild
+    // marked `standalone` (e.g. Departamento/Área/C. Costos/Salir nested
+    // under "Configuración de Botones") is really its OWN independent
+    // top-level item just displayed deeper — it keeps its own itemId as the
+    // key instead of the compound form, so it stays interchangeable with
+    // whatever else already checks that same grant (e.g. the double-gate
+    // with MODULE_CATALOG in Dashboard.js).
     function leafKeysUnder(section, item) {
         if (item.submenu && item.submenu.length) {
             return item.submenu.flatMap((sm) => (
                 sm.submenu && sm.submenu.length
-                    ? sm.submenu.map((subSm) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}`))
+                    ? sm.submenu.map((subSm) => (
+                        subSm.standalone
+                            ? keyOf(section.id, subSm.id, null)
+                            : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
+                    ))
                     : [keyOf(section.id, item.id, sm.id)]
             ));
         }
@@ -203,10 +213,13 @@
                         }
 
                         // One more level down (e.g. "Administración del
-                        // Negocio" nested inside "Configuración") — reuses
-                        // expandedItems with a 3-part key, distinct from the
-                        // 2-part item-level keys above.
-                        const smLeafKeys = sm.submenu.map((subSm) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}`));
+                        // Negocio" or "Configuración de Botones" nested
+                        // inside "Configuración") — reuses expandedItems
+                        // with a 3-part key, distinct from the 2-part
+                        // item-level keys above.
+                        const smLeafKeys = sm.submenu.map((subSm) => (
+                            subSm.standalone ? keyOf(section.id, subSm.id, null) : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
+                        ));
                         const smChecked = smLeafKeys.filter((k) => grantSet.has(k)).length;
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
                         const smExpandedNow = expandedItems.has(smKey);
@@ -227,7 +240,9 @@
                         if (!smExpandedNow) return;
 
                         sm.submenu.forEach((subSm) => {
-                            const key = keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
+                            const key = subSm.standalone
+                                ? keyOf(section.id, subSm.id, null)
+                                : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
                             const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3);
                             subRow.input.checked = grantSet.has(key);
                             subRow.input.addEventListener('change', () => {
@@ -270,6 +285,20 @@
                 // dropdown uses (renderBusinessAdminSettingsMenu in
                 // Dashboard.js) — reused here, not duplicated in menu.json.
                 const adminBusinessItem = mainSection?.items.find((i) => i.id === 'admin-business');
+                // Salir/Departamento/Área/C. Costos are each their own real
+                // 'main' item (so Dashboard.js's double-gate with
+                // MODULE_CATALOG keeps working unchanged for the latter 3),
+                // but only ever DISPLAYED nested inside "Configuración de
+                // Botones" — never as their own top-level "General" rows.
+                // `standalone: true` (handled in leafKeysUnder/render above)
+                // keeps each one's own itemId as its grant key instead of a
+                // compound one, since they're independent items just shown
+                // deeper, not genuinely owned by btn-config-botones.
+                const BUTTON_CONFIG_ITEM_IDS = ['btn-salir', 'btn-departamento', 'btn-area', 'btn-cc'];
+                const buttonConfigItems = BUTTON_CONFIG_ITEM_IDS
+                    .map((id) => mainSection?.items.find((i) => i.id === id))
+                    .filter(Boolean)
+                    .map((i) => ({ ...i, standalone: true }));
                 // Centros de Costo aren't a static menu.json catalog like
                 // departments — they're created on the fly per client (see
                 // Business-CentrosCosto.html), so this list comes in as a
@@ -287,16 +316,20 @@
                 sectionsData = filtered.map((s) => {
                     if (s.id !== 'main') return { ...s, items: [...generalItems, ...(areaCategories || [])] };
                     const items = s.items
-                        .filter((i) => i.id !== 'admin-business')
+                        .filter((i) => i.id !== 'admin-business' && !BUTTON_CONFIG_ITEM_IDS.includes(i.id))
                         .map((i) => {
-                            if (i.id !== 'btn-configuracion' || !i.submenu || !adminBusinessItem) return i;
+                            if (i.id !== 'btn-configuracion' || !i.submenu) return i;
                             return {
                                 ...i,
-                                submenu: i.submenu.map((sm) => (
-                                    sm.id === 'btn-admin-negocio'
-                                        ? { id: 'btn-admin-negocio', labelKey: sm.labelKey, labelParams: sm.labelParams, submenu: adminBusinessItem.submenu }
-                                        : sm
-                                )),
+                                submenu: i.submenu.map((sm) => {
+                                    if (sm.id === 'btn-admin-negocio' && adminBusinessItem) {
+                                        return { id: 'btn-admin-negocio', labelKey: sm.labelKey, labelParams: sm.labelParams, submenu: adminBusinessItem.submenu };
+                                    }
+                                    if (sm.id === 'btn-config-botones' && buttonConfigItems.length) {
+                                        return { id: 'btn-config-botones', labelKey: sm.labelKey, labelParams: sm.labelParams, submenu: buttonConfigItems };
+                                    }
+                                    return sm;
+                                }),
                             };
                         });
                     return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };

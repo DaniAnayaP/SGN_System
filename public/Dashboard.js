@@ -1740,9 +1740,13 @@ function hasMainButtonPermission(itemId) {
 // even if, say, only one department is contracted and its real picker is
 // hidden.
 function syncButtonConfigShortcuts() {
+    const exitShortcut = document.getElementById('logout-mode-menu-btn')?.closest('li');
     const deptShortcut = document.getElementById('button-config-dept-btn')?.closest('li');
     const areaShortcut = document.getElementById('button-config-area-btn')?.closest('li');
     const ccShortcut = document.getElementById('button-config-cc-btn')?.closest('li');
+    // "Salir" isn't a contracted module (there's no per-client on/off switch
+    // for it in Admin-SaaS) — only the user's own grant controls it.
+    if (exitShortcut) exitShortcut.hidden = !hasMainButtonPermission('btn-salir');
     if (deptShortcut) deptShortcut.hidden = !(contractedModuleKeys.includes('btn-departamento') && hasMainButtonPermission('btn-departamento'));
     if (areaShortcut) areaShortcut.hidden = !(contractedModuleKeys.includes('btn-area') && hasMainButtonPermission('btn-area'));
     if (ccShortcut) ccShortcut.hidden = !(contractedModuleKeys.includes('btn-cc') && hasMainButtonPermission('btn-cc'));
