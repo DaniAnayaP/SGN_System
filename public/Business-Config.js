@@ -45,7 +45,7 @@ logoInput.addEventListener('change', () => {
         return;
     }
     const reader = new FileReader();
-    reader.onload = () => setLogoPreview(reader.result);
+    reader.onload = () => setLogoPreview(Dashboard.svgifyLogo(reader.result));
     reader.readAsDataURL(file);
 });
 

@@ -1487,14 +1487,19 @@ async function fetchClientBranding() {
     }
 }
 
-// Wraps a client's uploaded logo (raster, usually filling its whole square —
-// hence the "boxed" look it had as a plain favicon) in a small SVG that
-// clips it to a circle with a transparent surround, the common shape for a
-// company logo shown as a tiny tab icon.
-function buildFaviconDataUrl(logoDataUrl) {
+// Wraps an uploaded logo (raster — PNG/JPG straight out of a FileReader,
+// usually filling its whole square, hence the "boxed" look it had wherever
+// shown small like the tab favicon) in an SVG that clips it to a circle with
+// a transparent surround. Called once at upload time in Admin-ClienteNuevo.js
+// / Admin-SaaS.js / Business-Config.js so logoDataUrl is *stored* as SVG —
+// every place that reads it (sidebar logo, favicon, preview) gets the same
+// already-converted image for free. No-ops on input that's already SVG, so
+// re-uploading a previously-converted logo doesn't double-wrap it.
+function svgifyLogo(rasterDataUrl) {
+    if (!rasterDataUrl || rasterDataUrl.startsWith('data:image/svg+xml')) return rasterDataUrl;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
         + `<defs><clipPath id="c"><circle cx="32" cy="32" r="32"/></clipPath></defs>`
-        + `<image href="${logoDataUrl}" width="64" height="64" clip-path="url(#c)" preserveAspectRatio="xMidYMid slice"/>`
+        + `<image href="${rasterDataUrl}" width="64" height="64" clip-path="url(#c)" preserveAspectRatio="xMidYMid slice"/>`
         + `</svg>`;
     return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
@@ -1527,13 +1532,13 @@ function applyClientBranding(branding) {
         });
         // Browser tab icon — same swap as the sidebar logo, so whichever
         // client is logged in sees their own branding there too instead of
-        // SGN's. Wrapped as a circular SVG (see buildFaviconDataUrl) rather
-        // than using the raw logo file directly, which showed as a plain
-        // square with whatever background the uploaded image itself has.
+        // SGN's. logoDataUrl is already circular-SVG from upload time (see
+        // svgifyLogo) for any client saved after that change; svgifyLogo
+        // here is just a safety net for logos stored before it existed.
         const favicon = document.querySelector('link[rel="icon"]');
         if (favicon) {
             try {
-                favicon.href = buildFaviconDataUrl(branding.logoDataUrl);
+                favicon.href = svgifyLogo(branding.logoDataUrl);
             } catch {
                 favicon.href = branding.logoDataUrl;
             }
@@ -1587,6 +1592,7 @@ async function initDashboard({ activePage } = {}) {
 window.Dashboard = {
     initDashboard,
     t,
+    svgifyLogo,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },
