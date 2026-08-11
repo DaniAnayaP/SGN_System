@@ -686,11 +686,15 @@ function deletePlan(id) {
 }
 
 // --- Query helpers: business users (scoped to one client) --------------------
+// Excludes the auto-provisioned client admin (is_client_admin) — that one
+// user isn't part of the client's own team management; their access is
+// contracted-by-default and only editable from GEIPSA's Admin-SaaS (see
+// /api/admin/clients/:id/admin-access in server.js).
 function listBusinessUsers(clientId) {
     return db
         .prepare(`
             SELECT id, username, email, name, role, active, is_client_admin, created_at
-            FROM users WHERE client_id = ? ORDER BY created_at DESC
+            FROM users WHERE client_id = ? AND is_client_admin = 0 ORDER BY created_at DESC
         `)
         .all(clientId);
 }

@@ -479,6 +479,21 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="admin-access-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="admin-access-modal-title">
+            <h3 id="admin-access-modal-title" data-i18n="admin.adminAccessTitle">Administrator Access</h3>
+            <p id="admin-access-subtitle" class="admin-subtitle"></p>
+            <p id="admin-access-hint" class="admin-hint" data-i18n="admin.adminAccessHint">No overrides yet — this administrator sees everything the client has contracted. Check specific items below to restrict them to only those.</p>
+            <div id="admin-access-tree-container"></div>
+            <div id="admin-access-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="admin-access-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="admin-access-clear" data-i18n="admin.adminAccessClear">Clear overrides</button>
+                <button type="button" class="btn btn-secondary" id="admin-access-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
             <h3 id="business-summary-modal-title" data-i18n="main.businessProfile">Business User Data</h3>
@@ -523,6 +538,7 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
+    <script src="PermissionTree.js"></script>
     <script src="Admin-SaaS.js"></script>
 </body>
 </html>

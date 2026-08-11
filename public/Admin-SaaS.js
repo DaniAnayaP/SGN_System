@@ -145,6 +145,14 @@ function renderClients() {
         addendaBtn.setAttribute('aria-label', Dashboard.t('admin.addenda'));
         addendaBtn.innerHTML = '<i class="bx bx-file-plus" aria-hidden="true"></i>';
         addendaBtn.addEventListener('click', () => openAddendaModal(client));
+        const adminAccessBtn = document.createElement('button');
+        adminAccessBtn.type = 'button';
+        adminAccessBtn.className = 'admin-icon-btn';
+        adminAccessBtn.setAttribute('aria-label', Dashboard.t('admin.adminAccessTitle'));
+        adminAccessBtn.innerHTML = '<i class="bx bx-key" aria-hidden="true"></i>';
+        adminAccessBtn.disabled = !client.adminUsername;
+        adminAccessBtn.title = client.adminUsername ? '' : Dashboard.t('admin.adminAccessNoAdminYet');
+        adminAccessBtn.addEventListener('click', () => openAdminAccessModal(client));
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'admin-icon-btn';
@@ -157,7 +165,7 @@ function renderClients() {
         deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
         deleteBtn.addEventListener('click', () => removeClient(client));
-        tdActions.append(addendaBtn, editBtn, deleteBtn);
+        tdActions.append(addendaBtn, adminAccessBtn, editBtn, deleteBtn);
 
         tr.append(tdCompany, tdContact, tdEmail, tdPlan, tdUsername, tdStatus, tdActions);
         tableBody.appendChild(tr);
@@ -449,6 +457,94 @@ addendaModal.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !addendaModal.hidden) closeAddendaModal();
+});
+
+// --- Accesos del Administrador: GEIPSA-only override for the auto-
+// provisioned client admin, who otherwise sees everything the client has
+// contracted by default (see hasButtonPermission/hasMainButtonPermission's
+// unrestricted-client-admin bypass in Dashboard.js). Reuses the shared
+// PermissionTree component, scoped to that client's own contracted
+// departments so GEIPSA can't grant something the client never bought. An
+// empty grants array (the default, or after "Clear overrides") means "no
+// override" client-side, not "nothing" — that's what gives the admin full
+// access by default. ------------------------------------------------------
+const adminAccessModal = document.getElementById('admin-access-modal');
+const adminAccessSubtitle = document.getElementById('admin-access-subtitle');
+const adminAccessTreeContainer = document.getElementById('admin-access-tree-container');
+const adminAccessError = document.getElementById('admin-access-error');
+const adminAccessSaveBtn = document.getElementById('admin-access-save');
+const adminAccessClearBtn = document.getElementById('admin-access-clear');
+const adminAccessCancelBtn = document.getElementById('admin-access-cancel');
+
+let adminAccessClientId = null;
+let adminAccessTree = null;
+
+function closeAdminAccessModal() {
+    adminAccessModal.hidden = true;
+    adminAccessClientId = null;
+    adminAccessTree = null;
+}
+
+async function openAdminAccessModal(client) {
+    if (!client.adminUsername) return;
+    adminAccessClientId = client.id;
+    adminAccessSubtitle.textContent = `${client.company_name} — ${client.adminUsername}`;
+    adminAccessError.hidden = true;
+    try {
+        const [modulesRes, accessRes] = await Promise.all([
+            fetch(`/api/admin/clients/${client.id}/modules`, { credentials: 'include' }),
+            fetch(`/api/admin/clients/${client.id}/admin-access`, { credentials: 'include' }),
+        ]);
+        if (!modulesRes.ok || !accessRes.ok) throw new Error('load failed');
+        const modulesData = await modulesRes.json();
+        const accessData = await accessRes.json();
+        const allowedSectionIds = (modulesData.modules || []).filter((m) => m.enabled).map((m) => m.key);
+        adminAccessTree = window.PermissionTree.create(adminAccessTreeContainer, { allowedSectionIds });
+        await adminAccessTree.init(accessData.grants || []);
+        adminAccessModal.hidden = false;
+    } catch {
+        showError(Dashboard.t('admin.loadError'));
+    }
+}
+
+async function saveAdminAccess(grants) {
+    if (!adminAccessClientId) return;
+    adminAccessSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/clients/${adminAccessClientId}/admin-access`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ grants }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            adminAccessError.textContent = body.message || Dashboard.t('admin.saveError');
+            adminAccessError.hidden = false;
+            return;
+        }
+        closeAdminAccessModal();
+    } catch {
+        adminAccessError.textContent = Dashboard.t('admin.saveError');
+        adminAccessError.hidden = false;
+    } finally {
+        adminAccessSaveBtn.disabled = false;
+    }
+}
+
+adminAccessSaveBtn.addEventListener('click', () => {
+    if (!adminAccessTree) return;
+    saveAdminAccess(adminAccessTree.getGrants());
+});
+
+adminAccessClearBtn.addEventListener('click', () => saveAdminAccess([]));
+
+adminAccessCancelBtn.addEventListener('click', closeAdminAccessModal);
+adminAccessModal.addEventListener('click', (event) => {
+    if (event.target === adminAccessModal) closeAdminAccessModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !adminAccessModal.hidden) closeAdminAccessModal();
 });
 
 // --- Contrataciones: per-client module toggles --------------------------------

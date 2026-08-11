@@ -433,6 +433,30 @@ app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
     res.json({ modules: updatedModules, costCentersLimit: updatedLimit });
 });
 
+// Accesos del Administrador: the auto-provisioned client admin sees every
+// módulo/apartado/pantalla the client has contracted by default (no grants
+// needed) — this only exists for GEIPSA to explicitly RESTRICT that default
+// down to a specific set, same grant shape as a normal user's extra grants
+// (reuses user_grants via getUserGrants/setUserGrants), just reachable only
+// from here. An empty grants array here means "no override" — Dashboard.js
+// treats that as full access to whatever's contracted, not "nothing".
+app.get('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, res) => {
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    if (!client.admin_user_id) return res.status(404).json({ message: 'This client has no admin user yet.' });
+    res.json({ grants: getUserGrants(client.admin_user_id) });
+});
+
+app.put('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, res) => {
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    if (!client.admin_user_id) return res.status(404).json({ message: 'This client has no admin user yet.' });
+    const { grants } = req.body || {};
+    const error = validateGrants(grants);
+    if (error) return res.status(400).json({ message: error });
+    res.json({ grants: setUserGrants(client.admin_user_id, grants) });
+});
+
 // Anexos: per-client extras on top of their plan (e.g. +2 centros de costo
 // beyond what the plan gives, or a module the plan doesn't include). GET
 // also returns the plan's own base numbers so the UI can show them as
@@ -617,15 +641,23 @@ app.post('/api/business/users', requireAuth, requireClientAdmin, async (req, res
     });
 });
 
+// The auto-provisioned client admin (is_client_admin) is managed from the
+// GEIPSA side only (Admin-SaaS > "Accesos del Administrador" — see
+// /api/admin/clients/:id/admin-access below), never from this client's own
+// Administración del Negocio — hence the 403s below on every route in this
+// file that would otherwise let a client touch that one user's
+// profiles/grants.
 app.get('/api/business/users/:id/profiles', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
     res.json({ profiles: getUserProfiles(req.params.id) });
 });
 
 app.put('/api/business/users/:id/profiles', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
     const { profileIds } = req.body || {};
     if (!Array.isArray(profileIds)) {
         return res.status(400).json({ message: 'profileIds must be an array.' });
@@ -639,12 +671,14 @@ app.put('/api/business/users/:id/profiles', requireAuth, requireClientAdmin, (re
 app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
     res.json({ grants: getUserGrants(req.params.id) });
 });
 
 app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });

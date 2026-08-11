@@ -85,6 +85,10 @@ const EMBEDDED_TRANSLATIONS = {
             noExtraModulesAvailable: "This plan already includes every module.",
             addendaNoPlan: "This client has no plan assigned yet — extras still apply on top of nothing until one is chosen.",
             addendaPlanBase: "Plan \"{plan}\": {limit} cost centers included.",
+            adminAccessTitle: "Administrator Access",
+            adminAccessHint: "No overrides yet — this administrator sees everything the client has contracted. Check specific items below to restrict them to only those.",
+            adminAccessClear: "Clear overrides",
+            adminAccessNoAdminYet: "This client doesn't have an admin user yet — activate it first.",
             plansSubtitle: "Manage the plan or package types you can assign to your clients.",
             addPlanSubtitle: "Register a new plan or package type.",
             planName: "Plan name", planDescription: "Description", addPlan: "Add plan",
@@ -185,6 +189,10 @@ const EMBEDDED_TRANSLATIONS = {
             noExtraModulesAvailable: "Este plan ya incluye todos los módulos.",
             addendaNoPlan: "Este cliente aún no tiene un plan asignado — los extras se suman sobre cero hasta que elijas uno.",
             addendaPlanBase: "Plan \"{plan}\": {limit} centros de costo incluidos.",
+            adminAccessTitle: "Accesos del Administrador",
+            adminAccessHint: "Sin restricciones todavía — este administrador ve todo lo que el cliente tiene contratado. Marca items específicos abajo para restringirlo solo a esos.",
+            adminAccessClear: "Quitar restricciones",
+            adminAccessNoAdminYet: "Este cliente aún no tiene un usuario administrador — actívalo primero.",
             plansSubtitle: "Administra los tipos de plan o paquete que puedes asignar a tus clientes.",
             addPlanSubtitle: "Registra un nuevo tipo de plan o paquete.",
             planName: "Nombre del plan", planDescription: "Descripción", addPlan: "Agregar plan",
@@ -1661,7 +1669,17 @@ document.addEventListener('keydown', (event) => {
 // NOT by whether the real picker currently has anything to choose between.
 // A profile/user granted the permission sees the shortcut even if, say,
 // only one department is contracted and its real picker is hidden.
+//
+// The auto-provisioned client admin (isClientAdmin) bypasses this grant
+// check entirely UNLESS GEIPSA has explicitly set an override for them from
+// Admin-SaaS ("Accesos del Administrador") — an empty effectiveGrants set
+// means "no override", not "nothing granted", for that one user.
+function isUnrestrictedClientAdmin() {
+    return !!currentUser?.isClientAdmin && (cachedBusinessProfile?.effectiveGrants || []).length === 0;
+}
+
 function hasButtonPermission(submenuId) {
+    if (isUnrestrictedClientAdmin()) return true;
     return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.submenuId === submenuId);
 }
 
@@ -1677,15 +1695,20 @@ function syncButtonConfigShortcuts() {
 // The 7 real top-bar buttons (Mensajes/Chatbot/Notificaciones/Marcadores/
 // Configuración/Datos de Usuario/Datos de Usuario del Negocio) live once
 // under "General" in menu.json, not nested in a submenu — so their grant is
-// keyed by itemId directly (sectionId 'main', submenuId null).
+// keyed by itemId directly (sectionId 'main', submenuId null). Same
+// unrestricted-client-admin bypass as hasButtonPermission above.
 function hasMainButtonPermission(itemId) {
+    if (isUnrestrictedClientAdmin()) return true;
     return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === 'main' && g.itemId === itemId);
 }
 
 // Double-gated: a button only shows for role !== 'admin' when the CLIENT has
 // contracted it (MODULE_CATALOG, same mechanism as department modules) AND
-// the current USER has been granted it in Accesos y Permisos. GEIPSA staff
-// aren't a client with contracted modules, so this never touches that role.
+// the current USER has been granted it in Accesos y Permisos — except the
+// unrestricted client admin, who still needs the CLIENT to have contracted
+// it (this bypass is "all you're entitled to", not "everything, period"),
+// just not an individual grant on top. GEIPSA staff aren't a client with
+// contracted modules, so this never touches that role.
 const TOP_BAR_BUTTONS = [
     { moduleKey: 'btn-mensajes', itemId: 'btn-mensajes', elementId: 'messages-btn' },
     { moduleKey: 'btn-chatbot', itemId: 'btn-chatbot', elementId: 'chatbot-btn' },
