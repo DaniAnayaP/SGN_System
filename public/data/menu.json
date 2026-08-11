@@ -106,18 +106,6 @@
         { "id": "cat-material-apoyo-1", "labelKey": "menu.catMaterialApoyoItem1", "icon": "bx-window", "href": "#" },
         { "id": "cat-material-apoyo-2", "labelKey": "menu.catMaterialApoyoItem2", "icon": "bx-window", "href": "#" }
       ]
-    },
-    {
-      "id": "cat-iconos-botones",
-      "labelKey": "menu.catIconosBotones",
-      "icon": "bx-shapes",
-      "submenu": [
-        { "id": "cat-iconos-botones-1", "labelKey": "menu.catIconosBotonesItem1", "icon": "bx-window", "href": "#" },
-        { "id": "cat-iconos-botones-2", "labelKey": "menu.catIconosBotonesItem2", "icon": "bx-window", "href": "#" },
-        { "id": "btn-departamento", "labelKey": "menu.btnDepartamento", "icon": "bx-buildings", "href": "#", "permissionOnly": true },
-        { "id": "btn-area", "labelKey": "menu.btnArea", "icon": "bx-collection", "href": "#", "permissionOnly": true },
-        { "id": "btn-cc", "labelKey": "menu.btnCostCenters", "icon": "bx-purchase-tag-alt", "href": "#", "permissionOnly": true }
-      ]
     }
   ],
   "footer": []

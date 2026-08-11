@@ -50,7 +50,7 @@ const EMBEDDED_TRANSLATIONS = {
             catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
             catGestion: "Management", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
             catReportes: "Reports", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
-            catMaterialApoyo: "Support Material", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2", catIconosBotones: "Icons and Buttons", catIconosBotonesItem1: "Icon 1", catIconosBotonesItem2: "Icon 2", btnDepartamento: "Department Button", btnArea: "Area Button", btnCostCenters: "Cost Centers Button"
+            catMaterialApoyo: "Support Material", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2"
         },
         admin: {
             clientsTitle: "New Clients", clientsSubtitle: "Manage the companies using this SGN instance.",
@@ -154,7 +154,7 @@ const EMBEDDED_TRANSLATIONS = {
             catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
             catGestion: "Gestión", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
             catReportes: "Reportes", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
-            catMaterialApoyo: "Material Apoyo", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2", catIconosBotones: "Iconos y Botones", catIconosBotonesItem1: "Icono 1", catIconosBotonesItem2: "Icono 2", btnDepartamento: "Botón Departamento", btnArea: "Botón Área", btnCostCenters: "Botón Centro de Costos"
+            catMaterialApoyo: "Material Apoyo", catMaterialApoyoItem1: "M. Apoy 1", catMaterialApoyoItem2: "M. Apoy 2"
         },
         admin: {
             clientsTitle: "Clientes Nuevos", clientsSubtitle: "Administra las empresas que usan esta instancia de SGN.",
