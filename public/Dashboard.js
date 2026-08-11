@@ -1632,8 +1632,21 @@ function renderCostCenterPicker() {
     updateCostCenterPickerLabel();
 }
 
+// Centros de Costo aren't a static catalog like departments — each one is
+// its own grant under "cc-list" in Accesos y Permisos (see PermissionTree.js
+// and Business-Roles/Accesos), keyed by submenuId `cc-<id>`. Same
+// unrestricted-client-admin bypass as the top-bar buttons: sees every cost
+// center the client has, no per-item grant needed, unless GEIPSA has set an
+// explicit override for them.
+function hasCostCenterPermission(ccId) {
+    if (isUnrestrictedClientAdmin()) return true;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    return grants.some((g) => g.sectionId === 'main' && g.itemId === 'cc-list' && g.submenuId === `cc-${ccId}`);
+}
+
 async function initCostCenterPicker() {
-    sidebarCostCenters = await fetchCostCenters();
+    const allCostCenters = await fetchCostCenters();
+    sidebarCostCenters = allCostCenters.filter((cc) => hasCostCenterPermission(cc.id));
     if (sidebarCostCenters.length === 1) {
         // Nothing to actually choose between — same idea as the department
         // and area pickers auto-picking their one option.

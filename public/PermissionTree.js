@@ -65,7 +65,7 @@
         return [keyOf(section.id, item.id, null)];
     }
 
-    function create(container, { allowedSectionIds = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [] } = {}) {
         let sectionsData = [];
         let grantSet = new Set();
         // Which depth-0 sections and depth-1 items are expanded — set once
@@ -223,11 +223,25 @@
                 // itself is visible). Rendering it here too just showed the
                 // same concept twice, once as its own top-level "button" and
                 // once nested inside Configuración.
-                sectionsData = filtered.map((s) => (
-                    s.id === 'main'
-                        ? { ...s, items: s.items.filter((i) => i.id !== 'admin-business') }
-                        : { ...s, items: [...generalItems, ...(areaCategories || [])] }
-                ));
+                // Centros de Costo aren't a static menu.json catalog like
+                // departments — they're created on the fly per client (see
+                // Business-CentrosCosto.html), so this list comes in as a
+                // param instead of being read from loadMenuData(). Each one
+                // becomes its own grantable leaf; labelKey is the raw
+                // "CODE - Name" text rather than an i18n key, which t()
+                // already falls back to displaying as-is for unknown keys.
+                const costCentersItem = costCenters.length
+                    ? {
+                        id: 'cc-list',
+                        labelKey: 'sidebar.costCenters',
+                        submenu: costCenters.map((cc) => ({ id: `cc-${cc.id}`, labelKey: `${cc.code} - ${cc.name}` })),
+                    }
+                    : null;
+                sectionsData = filtered.map((s) => {
+                    if (s.id !== 'main') return { ...s, items: [...generalItems, ...(areaCategories || [])] };
+                    const items = s.items.filter((i) => i.id !== 'admin-business');
+                    return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };
+                });
                 grantSet = expand(initialGrants || []);
                 // Everything starts collapsed, even sections/items that
                 // already have a grant — simpler and more predictable than

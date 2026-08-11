@@ -440,6 +440,16 @@ app.get('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
     res.json({ modules: getClientModules(req.params.id), costCentersLimit: existing.cost_centers_limit });
 });
 
+// Read-only, for the "Accesos del Administrador" and Contrataciones-adjacent
+// tree in Admin-SaaS — GEIPSA has no clientId of its own, so it needs a
+// client-scoped route (unlike /api/business/cost-centers, which relies on
+// the caller's own session clientId).
+app.get('/api/admin/clients/:id/cost-centers', requireAuth, requireAdmin, (req, res) => {
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    res.json({ costCenters: listCostCenters(req.params.id) });
+});
+
 app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });

@@ -25,6 +25,7 @@ let profiles = [];
 let selectedProfileId = null;
 let tree = null;
 let allowedSectionIds = null;
+let costCenters = [];
 
 async function loadContractedModules() {
     try {
@@ -34,6 +35,17 @@ async function loadContractedModules() {
         allowedSectionIds = data.moduleKeys || [];
     } catch {
         allowedSectionIds = [];
+    }
+}
+
+async function loadCostCentersForTree() {
+    try {
+        const res = await fetch('/api/business/cost-centers', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        costCenters = data.costCenters || [];
+    } catch {
+        costCenters = [];
     }
 }
 
@@ -187,7 +199,7 @@ async function selectProfileForPermissions(profile) {
         const res = await fetch(`/api/business/profiles/${profile.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds });
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters });
         await tree.init(data.grants || []);
         permissionsPanel.hidden = false;
         permissionsHint.hidden = true;
@@ -227,7 +239,7 @@ document.addEventListener('dashboard:language-changed', () => {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'business-roles' });
         if (!role) return;
-        await Promise.all([loadProfiles(), loadContractedModules()]);
+        await Promise.all([loadProfiles(), loadContractedModules(), loadCostCentersForTree()]);
     } catch (err) {
         console.error('Business (Roles) failed to initialize:', err);
     }

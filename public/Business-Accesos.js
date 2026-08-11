@@ -13,6 +13,7 @@ const saveStatus = document.getElementById('access-save-status');
 
 let tree = null;
 let allowedSectionIds = null;
+let costCenters = [];
 
 async function loadContractedModules() {
     try {
@@ -22,6 +23,17 @@ async function loadContractedModules() {
         allowedSectionIds = data.moduleKeys || [];
     } catch {
         allowedSectionIds = [];
+    }
+}
+
+async function loadCostCentersForTree() {
+    try {
+        const res = await fetch('/api/business/cost-centers', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        costCenters = data.costCenters || [];
+    } catch {
+        costCenters = [];
     }
 }
 
@@ -48,7 +60,7 @@ async function loadGrantsForUser(userId) {
         const res = await fetch(`/api/business/users/${userId}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds });
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters });
         await tree.init(data.grants || []);
         panel.hidden = false;
         hint.hidden = true;
@@ -94,7 +106,7 @@ saveBtn.addEventListener('click', async () => {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'business-accesos' });
         if (!role) return;
-        await Promise.all([loadUserOptions(), loadContractedModules()]);
+        await Promise.all([loadUserOptions(), loadContractedModules(), loadCostCentersForTree()]);
     } catch (err) {
         console.error('Business (Accesos) failed to initialize:', err);
     }

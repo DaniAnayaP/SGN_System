@@ -491,15 +491,20 @@ async function openAdminAccessModal(client) {
     adminAccessSubtitle.textContent = `${client.company_name} — ${client.adminUsername}`;
     adminAccessError.hidden = true;
     try {
-        const [modulesRes, accessRes] = await Promise.all([
+        const [modulesRes, accessRes, costCentersRes] = await Promise.all([
             fetch(`/api/admin/clients/${client.id}/modules`, { credentials: 'include' }),
             fetch(`/api/admin/clients/${client.id}/admin-access`, { credentials: 'include' }),
+            fetch(`/api/admin/clients/${client.id}/cost-centers`, { credentials: 'include' }),
         ]);
-        if (!modulesRes.ok || !accessRes.ok) throw new Error('load failed');
+        if (!modulesRes.ok || !accessRes.ok || !costCentersRes.ok) throw new Error('load failed');
         const modulesData = await modulesRes.json();
         const accessData = await accessRes.json();
+        const costCentersData = await costCentersRes.json();
         const allowedSectionIds = (modulesData.modules || []).filter((m) => m.enabled).map((m) => m.key);
-        adminAccessTree = window.PermissionTree.create(adminAccessTreeContainer, { allowedSectionIds });
+        adminAccessTree = window.PermissionTree.create(adminAccessTreeContainer, {
+            allowedSectionIds,
+            costCenters: costCentersData.costCenters || [],
+        });
         await adminAccessTree.init(accessData.grants || []);
         adminAccessModal.hidden = false;
     } catch {
