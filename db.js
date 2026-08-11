@@ -134,6 +134,17 @@ for (const col of ['position', 'assigned_cost_center', 'assigned_areas', 'assign
         db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
     }
 }
+// Default Departamento/Área/Centro de Costos the user wants pre-selected
+// every time they log in (set from "Configuración de Botones" > Botón
+// Departamento/Área/C. Costos) — server-side so it follows the account
+// across devices, unlike the plain localStorage pick used while just
+// browsing mid-session. default_cost_centers holds either '' (no default),
+// 'all', or a JSON array of cost center ids.
+for (const col of ['default_department', 'default_area', 'default_cost_centers']) {
+    if (!userColumns.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+    }
+}
 
 const clientColumns = db.prepare('PRAGMA table_info(clients)').all();
 if (!clientColumns.some((c) => c.name === 'admin_user_id')) {
@@ -746,6 +757,51 @@ function getUserBusinessProfileById(id) {
     };
 }
 
+// Default Departamento/Área/Centro de Costos applied right after login (see
+// "applyLoginDefaults" in Dashboard.js) — distinct from whatever's just
+// sitting in localStorage from browsing mid-session. costCenters is 'all'
+// when unset/explicitly "todos", otherwise an array of cost center ids.
+function getUserDefaults(userId) {
+    const row = db
+        .prepare('SELECT default_department, default_area, default_cost_centers FROM users WHERE id = ?')
+        .get(userId);
+    if (!row) return null;
+    let costCenters = 'all';
+    if (row.default_cost_centers && row.default_cost_centers !== 'all') {
+        try {
+            const parsed = JSON.parse(row.default_cost_centers);
+            if (Array.isArray(parsed)) costCenters = parsed;
+        } catch { /* fall through to 'all' */ }
+    }
+    return {
+        department: row.default_department || null,
+        area: row.default_area || null,
+        costCenters,
+    };
+}
+
+// Partial update — a field left undefined keeps its current stored value
+// instead of being wiped, so setting a default Departamento doesn't also
+// blank out an unrelated default Centro de Costos in the same call.
+function setUserDefaults(userId, { department, area, costCenters }) {
+    const current = getUserDefaults(userId) || { department: null, area: null, costCenters: 'all' };
+    const next = {
+        department: department !== undefined ? department : current.department,
+        area: area !== undefined ? area : current.area,
+        costCenters: costCenters !== undefined ? costCenters : current.costCenters,
+    };
+    db.prepare(`
+        UPDATE users SET default_department = @department, default_area = @area, default_cost_centers = @costCenters
+        WHERE id = @userId
+    `).run({
+        userId,
+        department: next.department || '',
+        area: next.area || '',
+        costCenters: !next.costCenters || next.costCenters === 'all' ? 'all' : JSON.stringify(next.costCenters),
+    });
+    return getUserDefaults(userId);
+}
+
 // --- Query helpers: profiles (perfiles, scoped to one client) ----------------
 function listProfiles(clientId) {
     return db.prepare('SELECT * FROM profiles WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
@@ -900,6 +956,8 @@ module.exports = {
     getUserById,
     getUserProfileById,
     getUserBusinessProfileById,
+    getUserDefaults,
+    setUserDefaults,
     listProfiles,
     getProfileById,
     createProfile,

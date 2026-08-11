@@ -128,7 +128,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in." }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -232,7 +232,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión." }
     }
 };
 
@@ -1733,24 +1733,184 @@ function syncTopBarButtonVisibility() {
     });
 }
 
-// stopPropagation matters here: without it, the original click's bubbling
-// reaches that same picker's own "close if the click landed outside me"
-// document listener right after we open it (the picker being opened isn't
-// an ancestor of this button), closing it in the same tick.
+// --- Default Departamento/Área/Centro de Costos picker — opened from
+// "Configuración de Botones", lets the user pick which one should be active
+// every time they log in (not just for the rest of this browsing session,
+// like the real pickers). Selecting applies it immediately (same as the
+// real picker) AND saves it to the account via PUT /api/me/defaults, so it
+// follows them to the next login/device too. -------------------------------
+const defaultPickerModal = document.getElementById('default-picker-modal');
+const defaultPickerTitle = document.getElementById('default-picker-modal-title');
+const defaultPickerHint = document.getElementById('default-picker-modal-hint');
+const defaultPickerList = document.getElementById('default-picker-list');
+const defaultPickerCcActions = document.getElementById('default-picker-cc-actions');
+const defaultPickerCcSaveBtn = document.getElementById('default-picker-cc-save');
+
+function closeDefaultPickerModal() {
+    if (defaultPickerModal) defaultPickerModal.hidden = true;
+}
+
+async function saveDefaults(partial) {
+    try {
+        await fetch(`${API_BASE}/me/defaults`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(partial),
+        });
+    } catch {
+        // Best-effort — the live pick (localStorage) already applied either
+        // way, this only affects what shows up at the NEXT login.
+    }
+}
+
+function buildDefaultPickerOption(labelText, iconClass, onSelect) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'logout-mode-option';
+    const icon = document.createElement('i');
+    icon.className = `bx ${iconClass}`;
+    icon.setAttribute('aria-hidden', 'true');
+    const span = document.createElement('span');
+    span.textContent = labelText;
+    btn.append(icon, span);
+    btn.addEventListener('click', onSelect);
+    li.appendChild(btn);
+    return li;
+}
+
+function openDepartmentDefaultPicker() {
+    defaultPickerTitle.textContent = t('sidebar.department');
+    defaultPickerHint.textContent = t('main.defaultPickerDeptHint');
+    defaultPickerCcActions.hidden = true;
+    defaultPickerList.innerHTML = '';
+    availableDepartments.forEach((dept) => {
+        defaultPickerList.appendChild(buildDefaultPickerOption(t(dept.labelKey), dept.icon, () => {
+            selectedDepartment = dept.key;
+            localStorage.setItem('department', dept.key);
+            selectedArea = null;
+            localStorage.setItem('area', '');
+            updateDeptPickerLabel();
+            renderAreaPickerOptions();
+            updateAreaPickerVisibility();
+            renderFilteredMenu();
+            saveDefaults({ department: dept.key, area: null });
+            closeDefaultPickerModal();
+        }));
+    });
+}
+
+function openAreaDefaultPicker() {
+    defaultPickerTitle.textContent = t('sidebar.area');
+    defaultPickerCcActions.hidden = true;
+    defaultPickerList.innerHTML = '';
+    const areas = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+    if (!areas.length) {
+        defaultPickerHint.textContent = t('main.defaultPickerAreaNoDept');
+        return;
+    }
+    defaultPickerHint.textContent = t('main.defaultPickerAreaHint');
+    areas.forEach((area) => {
+        defaultPickerList.appendChild(buildDefaultPickerOption(t(area.labelKey, area.labelParams || {}), area.icon, () => {
+            selectedArea = area.key;
+            localStorage.setItem('area', area.key);
+            updateAreaPickerLabel();
+            renderFilteredMenu();
+            saveDefaults({ area: area.key });
+            closeDefaultPickerModal();
+        }));
+    });
+}
+
+function openCostCenterDefaultPicker() {
+    defaultPickerTitle.textContent = t('sidebar.costCenters');
+    defaultPickerHint.textContent = t('main.defaultPickerCcHint');
+    defaultPickerList.innerHTML = '';
+    if (!sidebarCostCenters.length) {
+        defaultPickerCcActions.hidden = true;
+        return;
+    }
+    defaultPickerCcActions.hidden = false;
+
+    const allLi = document.createElement('li');
+    const allLabel = document.createElement('label');
+    allLabel.className = 'logout-mode-option';
+    const allCheckbox = document.createElement('input');
+    allCheckbox.type = 'checkbox';
+    allCheckbox.id = 'default-picker-cc-all';
+    allCheckbox.checked = sidebarCostCenters.every((cc) => isCostCenterSelected(cc.id));
+    allCheckbox.addEventListener('change', () => {
+        defaultPickerList.querySelectorAll('input[type="checkbox"]:not(#default-picker-cc-all)').forEach((cb) => {
+            cb.checked = allCheckbox.checked;
+        });
+    });
+    const allSpan = document.createElement('span');
+    allSpan.textContent = t('sidebar.costCentersAll');
+    allLabel.append(allCheckbox, allSpan);
+    allLi.appendChild(allLabel);
+    defaultPickerList.appendChild(allLi);
+
+    sidebarCostCenters.forEach((cc) => {
+        const li = document.createElement('li');
+        const label = document.createElement('label');
+        label.className = 'logout-mode-option';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.ccId = cc.id;
+        checkbox.checked = isCostCenterSelected(cc.id);
+        checkbox.addEventListener('change', () => {
+            allCheckbox.checked = Array.from(
+                defaultPickerList.querySelectorAll('input[type="checkbox"]:not(#default-picker-cc-all)')
+            ).every((cb) => cb.checked);
+        });
+        const span = document.createElement('span');
+        span.textContent = `${cc.code} - ${cc.name}`;
+        label.append(checkbox, span);
+        li.appendChild(label);
+        defaultPickerList.appendChild(li);
+    });
+}
+
+defaultPickerCcSaveBtn?.addEventListener('click', () => {
+    const boxes = Array.from(defaultPickerList.querySelectorAll('input[type="checkbox"]:not(#default-picker-cc-all)'));
+    const checkedIds = boxes.filter((cb) => cb.checked).map((cb) => Number(cb.dataset.ccId));
+    selectedCostCenterIds = checkedIds.length === sidebarCostCenters.length ? 'all' : new Set(checkedIds);
+    persistCostCenterSelection();
+    renderCostCenterPicker();
+    saveDefaults({ costCenters: selectedCostCenterIds === 'all' ? 'all' : checkedIds });
+    closeDefaultPickerModal();
+});
+
+function openDefaultPickerModal(type) {
+    if (!defaultPickerModal) return;
+    if (type === 'department') openDepartmentDefaultPicker();
+    else if (type === 'area') openAreaDefaultPicker();
+    else if (type === 'costCenters') openCostCenterDefaultPicker();
+    defaultPickerModal.hidden = false;
+}
+
+defaultPickerModal?.addEventListener('click', (event) => {
+    if (event.target === defaultPickerModal) closeDefaultPickerModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && defaultPickerModal && !defaultPickerModal.hidden) closeDefaultPickerModal();
+});
+
 document.getElementById('button-config-dept-btn')?.addEventListener('click', (event) => {
     event.stopPropagation();
     closeSettingsMenu();
-    deptPickerBtn?.click();
+    openDefaultPickerModal('department');
 });
 document.getElementById('button-config-area-btn')?.addEventListener('click', (event) => {
     event.stopPropagation();
     closeSettingsMenu();
-    areaPickerBtn?.click();
+    openDefaultPickerModal('area');
 });
 document.getElementById('button-config-cc-btn')?.addEventListener('click', (event) => {
     event.stopPropagation();
     closeSettingsMenu();
-    ccPickerBtn?.click();
+    openDefaultPickerModal('costCenters');
 });
 
 // --- Logout: sidebar exit icon, gated by the "Menú Salir" preference
@@ -1918,12 +2078,50 @@ function applyClientBranding(branding) {
 // --- Public entry point --------------------------------------------------------
 // Call once per page: await Dashboard.initDashboard({ activePage: 'clients' }).
 // Returns the user's role, or null if the user was redirected to Login.html.
+// Runs once, right after a fresh login (see the 'applyLoginDefaults' flag
+// set in login.js) — pulls this account's saved default Departamento/Área/
+// Centro de Costos from the server and seeds localStorage + the in-memory
+// selection with it, same as if the user had just picked it themselves.
+// A no-op on ordinary page navigation within an already-open session, so it
+// never fights a live pick made via the real pickers mid-session.
+async function applyLoginDefaultsIfNeeded() {
+    if (sessionStorage.getItem('applyLoginDefaults') !== '1') return;
+    sessionStorage.removeItem('applyLoginDefaults');
+    try {
+        const res = await fetch(`${API_BASE}/me/defaults`, { credentials: 'include' });
+        if (!res.ok) return;
+        const { defaults } = await res.json();
+        if (!defaults) return;
+        if (defaults.department) {
+            selectedDepartment = defaults.department;
+            localStorage.setItem('department', defaults.department);
+        }
+        if (defaults.area) {
+            selectedArea = defaults.area;
+            localStorage.setItem('area', defaults.area);
+        }
+        if (defaults.costCenters) {
+            selectedCostCenterIds = defaults.costCenters === 'all' ? 'all' : new Set(defaults.costCenters);
+            persistCostCenterSelection();
+        }
+    } catch {
+        // Keep whatever's already in localStorage — no worse than before.
+    }
+}
+
 async function initDashboard({ activePage } = {}) {
     const role = await authGuard();
     if (!role) return null;
     currentRole = role;
     await loadLanguage(getStoredLang());
     if (role !== 'admin') {
+        // Right after a fresh login (flag set by login.js), the account's
+        // saved default Departamento/Área/Centro de Costos overrides
+        // whatever's left in localStorage from a previous session — applied
+        // before any of the validation below so an invalid/uncontracted
+        // default still gets corrected the same way a stale localStorage
+        // pick would.
+        await applyLoginDefaultsIfNeeded();
         // Narrow the department picker to what this client actually
         // contracted — resolve before the first render so there's no
         // flash of an uncontracted department. If the previously-selected

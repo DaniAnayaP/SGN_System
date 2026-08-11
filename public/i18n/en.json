@@ -322,6 +322,10 @@
     "summaryPermissions": "Permissions",
     "noDepartmentsAssigned": "No departments assigned",
     "noAreasAssigned": "No areas assigned",
-    "noCostCentersAssigned": "No cost centers assigned"
+    "noCostCentersAssigned": "No cost centers assigned",
+    "defaultPickerDeptHint": "Pick the department that should open by default every time you log in.",
+    "defaultPickerAreaHint": "Pick the area that should open by default every time you log in.",
+    "defaultPickerAreaNoDept": "Select a department first.",
+    "defaultPickerCcHint": "Pick the cost centers that should be selected by default every time you log in."
   }
 }

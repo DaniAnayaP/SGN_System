@@ -68,6 +68,8 @@ const {
     getUserById,
     getUserProfileById,
     getUserBusinessProfileById,
+    getUserDefaults,
+    setUserDefaults,
     listProfiles,
     getProfileById,
     createProfile,
@@ -273,6 +275,27 @@ app.get('/api/me/business-profile', requireAuth, (req, res) => {
     const profile = getUserBusinessProfileById(req.user.sub);
     if (!profile) return res.status(404).json({ message: 'User not found.' });
     res.json({ profile });
+});
+
+// Default Departamento/Área/Centro de Costos, applied by Dashboard.js right
+// after a fresh login (see applyLoginDefaults there) — set from
+// "Configuración de Botones" > Botón Departamento/Área/C. Costos.
+app.get('/api/me/defaults', requireAuth, (req, res) => {
+    res.json({ defaults: getUserDefaults(req.user.sub) });
+});
+
+app.put('/api/me/defaults', requireAuth, (req, res) => {
+    const { department, area, costCenters } = req.body || {};
+    if (department !== undefined && department !== null && typeof department !== 'string') {
+        return res.status(400).json({ message: 'department must be a string or null.' });
+    }
+    if (area !== undefined && area !== null && typeof area !== 'string') {
+        return res.status(400).json({ message: 'area must be a string or null.' });
+    }
+    if (costCenters !== undefined && costCenters !== null && costCenters !== 'all' && !Array.isArray(costCenters)) {
+        return res.status(400).json({ message: "costCenters must be 'all', null, or an array." });
+    }
+    res.json({ defaults: setUserDefaults(req.user.sub, { department, area, costCenters }) });
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -

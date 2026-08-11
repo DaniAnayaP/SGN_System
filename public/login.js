@@ -205,6 +205,10 @@ loginForm?.addEventListener('submit', async (event) => {
         if (data.token) {
             sessionStorage.setItem('sgn_token', data.token);
         }
+        // Tells Dashboard.js's first page load after this login to apply the
+        // account's saved default Departamento/Área/Centro de Costos instead
+        // of whatever's left over in localStorage from a previous session.
+        sessionStorage.setItem('applyLoginDefaults', '1');
         window.location.href = 'Inicio-en.html';
     } catch (err) {
         console.error(err);

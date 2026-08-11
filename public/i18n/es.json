@@ -322,6 +322,10 @@
     "summaryPermissions": "Permisos",
     "noDepartmentsAssigned": "Sin Dep asignados",
     "noAreasAssigned": "Sin Áreas asignados",
-    "noCostCentersAssigned": "Sin Centro de Costos asignados"
+    "noCostCentersAssigned": "Sin Centro de Costos asignados",
+    "defaultPickerDeptHint": "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.",
+    "defaultPickerAreaHint": "Elige el área que debe abrirse por defecto cada vez que inicies sesión.",
+    "defaultPickerAreaNoDept": "Primero selecciona un departamento.",
+    "defaultPickerCcHint": "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión."
   }
 }
