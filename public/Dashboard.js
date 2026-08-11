@@ -539,9 +539,11 @@ function updateAreaPickerVisibility() {
             renderFilteredMenu();
         }
         picker.classList.add('dept-picker-disabled');
+        syncButtonConfigShortcuts();
         return;
     }
     picker.classList.toggle('dept-picker-disabled', areas.length === 0);
+    syncButtonConfigShortcuts();
 }
 
 // Shows only the abbreviation once a department is picked (e.g. "FIN"),
@@ -1504,7 +1506,8 @@ function closeCcPicker() {
 
 function renderCostCenterPicker() {
     if (!ccPicker || !ccPickerDropdown) return;
-    ccPicker.classList.toggle('cc-picker-disabled', sidebarCostCenters.length === 0 || currentRole === 'admin');
+    ccPicker.classList.toggle('cc-picker-disabled', sidebarCostCenters.length <= 1 || currentRole === 'admin');
+    syncButtonConfigShortcuts();
     if (!sidebarCostCenters.length) return;
 
     ccPickerDropdown.innerHTML = '';
@@ -1554,7 +1557,12 @@ function renderCostCenterPicker() {
 
 async function initCostCenterPicker() {
     sidebarCostCenters = await fetchCostCenters();
-    if (selectedCostCenterIds !== 'all') {
+    if (sidebarCostCenters.length === 1) {
+        // Nothing to actually choose between — same idea as the department
+        // and area pickers auto-picking their one option.
+        selectedCostCenterIds = new Set([sidebarCostCenters[0].id]);
+        persistCostCenterSelection();
+    } else if (selectedCostCenterIds !== 'all') {
         const validIds = new Set(sidebarCostCenters.map((cc) => cc.id));
         selectedCostCenterIds = new Set(Array.from(selectedCostCenterIds).filter((id) => validIds.has(id)));
         persistCostCenterSelection();
@@ -1574,6 +1582,40 @@ document.addEventListener('click', (event) => {
 
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeCcPicker();
+});
+
+// --- "Configuración de Botones" shortcuts (Departamento / Áreas / Centro
+// Costos) inside the Settings dropdown — each just opens the real picker
+// that already lives in the top bar, instead of duplicating its logic. A
+// shortcut hides itself whenever its picker is hidden (nothing to pick
+// between), matching the picker's own visibility exactly. -------------------
+function syncButtonConfigShortcuts() {
+    const deptShortcut = document.getElementById('button-config-dept-btn')?.closest('li');
+    const areaShortcut = document.getElementById('button-config-area-btn')?.closest('li');
+    const ccShortcut = document.getElementById('button-config-cc-btn')?.closest('li');
+    if (deptShortcut) deptShortcut.hidden = !!deptPicker?.classList.contains('dept-picker-disabled');
+    if (areaShortcut) areaShortcut.hidden = !!areaPicker?.classList.contains('dept-picker-disabled');
+    if (ccShortcut) ccShortcut.hidden = !!ccPicker?.classList.contains('cc-picker-disabled');
+}
+
+// stopPropagation matters here: without it, the original click's bubbling
+// reaches that same picker's own "close if the click landed outside me"
+// document listener right after we open it (the picker being opened isn't
+// an ancestor of this button), closing it in the same tick.
+document.getElementById('button-config-dept-btn')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeSettingsMenu();
+    deptPickerBtn?.click();
+});
+document.getElementById('button-config-area-btn')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeSettingsMenu();
+    areaPickerBtn?.click();
+});
+document.getElementById('button-config-cc-btn')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeSettingsMenu();
+    ccPickerBtn?.click();
 });
 
 // --- Logout: sidebar exit icon, gated by the "Menú Salir" preference
@@ -1788,6 +1830,7 @@ async function initDashboard({ activePage } = {}) {
     } else {
         document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');
     }
+    syncButtonConfigShortcuts();
     // Restore the saved style now that clientBranding (needed for
     // Institutional's real colors) has loaded — every other page load was
     // resetting back to Light since nothing re-applied the choice.

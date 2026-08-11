@@ -175,11 +175,39 @@
                                     <!-- Administración del Negocio items rendered at runtime -->
                                 </ul>
                             </li>
-                            <li role="none">
-                                <button type="button" role="menuitem" id="logout-mode-menu-btn">
-                                    <i class="bx bx-log-out" aria-hidden="true"></i>
-                                    <span data-i18n="main.exitMenu">Exit Menu</span>
+                            <li role="none" class="settings-dropdown-group" id="button-config-group">
+                                <button type="button" class="settings-dropdown-toggle" id="button-config-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-slider-alt" aria-hidden="true"></i>
+                                    <span data-i18n="main.buttonConfig">Button Settings</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
                                 </button>
+                                <ul class="settings-submenu" id="button-config-submenu" role="menu">
+                                    <li role="none">
+                                        <button type="button" role="menuitem" id="logout-mode-menu-btn">
+                                            <i class="bx bx-log-out" aria-hidden="true"></i>
+                                            <span data-i18n="main.exitButton">Exit Button</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" id="button-config-dept-btn">
+                                            <i class="bx bx-buildings" aria-hidden="true"></i>
+                                            <span data-i18n="sidebar.department">Department</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" id="button-config-area-btn">
+                                            <i class="bx bx-collection" aria-hidden="true"></i>
+                                            <span data-i18n="sidebar.area">Area</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" id="button-config-cc-btn">
+                                            <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
+                                            <span data-i18n="sidebar.costCenters">Cost Centers</span>
+                                        </button>
+                                    </li>
+                                </ul>
                             </li>
                             <li role="none">
                                 <button type="button" role="menuitem" id="settings-others">
