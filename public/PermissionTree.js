@@ -214,8 +214,19 @@
                 // once in the shared areaCategories template and apply the
                 // same way to every department, so swap them in here
                 // instead of using the section's own (empty) items.
+                // "Administración del Negocio" (admin-business) is excluded
+                // here — it's redundant with "Botón Administración del
+                // Negocio" (btn-admin-negocio), already grantable as one of
+                // Configuración's 5 rows, and its own ab-* sub-items were
+                // never actually wired to any real access filtering (the
+                // real topbar shows them all unconditionally once the group
+                // itself is visible). Rendering it here too just showed the
+                // same concept twice, once as its own top-level "button" and
+                // once nested inside Configuración.
                 sectionsData = filtered.map((s) => (
-                    s.id === 'main' ? s : { ...s, items: [...generalItems, ...(areaCategories || [])] }
+                    s.id === 'main'
+                        ? { ...s, items: s.items.filter((i) => i.id !== 'admin-business') }
+                        : { ...s, items: [...generalItems, ...(areaCategories || [])] }
                 ));
                 grantSet = expand(initialGrants || []);
                 // Everything starts collapsed, even sections/items that
