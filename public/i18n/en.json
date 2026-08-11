@@ -265,6 +265,8 @@
     "language": "Language",
     "style": "Style",
     "others": "Others",
+    "buttonConfig": "Button Settings",
+    "exitButton": "Exit Button",
     "languageEnglish": "English",
     "languageSpanish": "Spanish",
     "styleLight": "Light",
