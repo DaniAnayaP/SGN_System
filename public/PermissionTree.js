@@ -29,17 +29,33 @@
         return window.Dashboard ? window.Dashboard.t(key, params) : key;
     }
 
+    // Every department section id maps 1:1 to one of these menu.* keys —
+    // can't derive the label from section.items[0] anymore (see loadMenuData
+    // below: department sections are just placeholders now, their items
+    // come from the shared areaCategories template instead).
+    const SECTION_LABEL_KEYS = {
+        finance: 'menu.finance',
+        accounting: 'menu.accounting',
+        'human-resources': 'menu.humanResources',
+        marketing: 'menu.marketing',
+        commercial: 'menu.commercial',
+        purchasing: 'menu.purchasing',
+        'supply-chain': 'menu.supplyChain',
+        'management-control': 'menu.managementControl',
+        'general-management': 'menu.generalManagement',
+        'steering-committee': 'menu.steeringCommittee',
+        certifications: 'menu.certifications',
+    };
+
     function sectionLabelKey(section) {
         if (section.id === 'main') return 'menu.mainSection';
-        const first = section.items[0];
-        return first ? first.labelKey : section.id;
+        return SECTION_LABEL_KEYS[section.id] || section.id;
     }
 
-    async function loadSections() {
+    async function loadMenuData() {
         const res = await fetch('data/menu.json');
         if (!res.ok) throw new Error('failed to load menu.json');
-        const data = await res.json();
-        return data.sections;
+        return res.json();
     }
 
     function leafKeysUnder(section, item) {
@@ -126,13 +142,20 @@
 
         return {
             async init(initialGrants) {
-                const allSections = await loadSections();
+                const { sections: allSections, areaCategories } = await loadMenuData();
                 // 'main' (Inicio, Tablero, Administración del Negocio, etc.)
                 // is core navigation, not a contracted module — always shown
                 // regardless of which módulos the client has contracted.
-                sectionsData = allowedSectionIds
+                const filtered = allowedSectionIds
                     ? allSections.filter((s) => s.id === 'main' || allowedSectionIds.includes(s.id))
                     : allSections;
+                // Every department section is just a placeholder in
+                // menu.json now (items: []) — the actual grantable
+                // categories/pantallas (Catálogos, Operaciones, ...) live
+                // once in the shared areaCategories template and apply the
+                // same way to every department, so swap them in here
+                // instead of using the section's own (empty) items.
+                sectionsData = filtered.map((s) => (s.id === 'main' ? s : { ...s, items: areaCategories || [] }));
                 grantSet = expand(initialGrants || []);
                 render();
             },
