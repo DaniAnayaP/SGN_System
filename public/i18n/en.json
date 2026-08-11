@@ -305,7 +305,7 @@
     "assignedAreas": "Assigned Areas",
     "assignedDepartments": "Assigned Departments",
     "noRoleAssigned": "No profile assigned",
-    "noExtraPermissions": "No extra permissions",
-    "extraPermissionsCount": "{count} extra permissions granted"
+    "noExtraPermissions": "No permissions granted",
+    "extraPermissionsCount": "{count} permissions granted"
   }
 }

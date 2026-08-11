@@ -124,7 +124,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No extra permissions", extraPermissionsCount: "{count} extra permissions granted" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -224,7 +224,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos adicionales", extraPermissionsCount: "{count} permisos adicionales otorgados" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados" }
     }
 };
 
@@ -379,9 +379,26 @@ const DEPARTMENTS = [
 ];
 const ALWAYS_VISIBLE_SECTIONS = ['main'];
 
+// Narrowed to the client's contracted modules once initDashboard() loads
+// them (see fetchContractedModuleKeys) — starts as the full catalog so
+// nothing breaks before that fetch resolves; admin/GEIPSA never shows the
+// picker at all, so it's simply never narrowed for that role.
+let availableDepartments = DEPARTMENTS;
+
+async function fetchContractedModuleKeys() {
+    try {
+        const res = await fetch(`${API_BASE}/business/contracted-modules`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.moduleKeys || [];
+    } catch {
+        return [];
+    }
+}
+
 function getStoredDepartment() {
     const stored = localStorage.getItem('department');
-    return DEPARTMENTS.some((d) => d.key === stored) ? stored : null;
+    return availableDepartments.some((d) => d.key === stored) ? stored : null;
 }
 
 let selectedDepartment = getStoredDepartment();
@@ -507,11 +524,24 @@ function renderAreaPickerOptions() {
     updateAreaPickerLabel();
 }
 
+// Also auto-picks the department's one area for the user when there's
+// nothing to actually choose between — same idea as the department picker
+// hiding itself when the client only has one contracted module.
 function updateAreaPickerVisibility() {
     const picker = document.getElementById('area-picker');
     if (!picker || currentRole === 'admin') return;
-    const hasAreas = !!(selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]?.length);
-    picker.classList.toggle('dept-picker-disabled', !hasAreas);
+    const areas = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+    if (areas.length === 1) {
+        if (selectedArea !== areas[0].key) {
+            selectedArea = areas[0].key;
+            localStorage.setItem('area', selectedArea);
+            renderAreaPickerOptions();
+            renderFilteredMenu();
+        }
+        picker.classList.add('dept-picker-disabled');
+        return;
+    }
+    picker.classList.toggle('dept-picker-disabled', areas.length === 0);
 }
 
 // Shows only the abbreviation once a department is picked (e.g. "FIN"),
@@ -521,7 +551,7 @@ function updateAreaPickerVisibility() {
 function updateDeptPickerLabel() {
     const label = document.getElementById('dept-picker-label');
     if (!label) return;
-    const dept = DEPARTMENTS.find((d) => d.key === selectedDepartment);
+    const dept = availableDepartments.find((d) => d.key === selectedDepartment);
     label.textContent = dept ? t(dept.abbrKey) : t('sidebar.department');
     document.querySelectorAll('.dept-option').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.dept === selectedDepartment);
@@ -899,6 +929,49 @@ function closeBusinessProfileMenu() {
     businessProfileBtn?.setAttribute('aria-expanded', 'false');
 }
 
+// Section id -> menu.* label key, same map PermissionTree.js uses — needed
+// here too since that file isn't loaded on every page that shows the
+// Datos de Usuario del Negocio panel.
+const SECTION_LABEL_KEYS = {
+    finance: 'menu.finance',
+    accounting: 'menu.accounting',
+    'human-resources': 'menu.humanResources',
+    marketing: 'menu.marketing',
+    commercial: 'menu.commercial',
+    purchasing: 'menu.purchasing',
+    'supply-chain': 'menu.supplyChain',
+    'management-control': 'menu.managementControl',
+    'general-management': 'menu.generalManagement',
+    'steering-committee': 'menu.steeringCommittee',
+    certifications: 'menu.certifications',
+};
+const GENERAL_ITEM_IDS = ['home', 'panel', 'dashboard'];
+
+function sectionGrantLabel(sectionId) {
+    if (sectionId === 'main') return t('menu.mainSection');
+    return t(SECTION_LABEL_KEYS[sectionId] || sectionId);
+}
+
+// Resolves one { sectionId, itemId, submenuId } grant row into a readable
+// "Departamento > Categoría > Pantalla" string. Inicio/Panel/Tablero live
+// under menuData.sections' main section; every other item id comes from the
+// shared areaCategories template (see PermissionTree.js for the same split).
+function resolveGrantLabel(grant) {
+    const sectionLabel = sectionGrantLabel(grant.sectionId);
+    if (!grant.itemId) return sectionLabel;
+
+    const item = GENERAL_ITEM_IDS.includes(grant.itemId)
+        ? (menuData?.sections?.find((s) => s.id === 'main')?.items || []).find((i) => i.id === grant.itemId)
+        : (menuData?.areaCategories || []).find((i) => i.id === grant.itemId);
+    if (!item) return sectionLabel;
+
+    const itemLabel = t(item.labelKey, item.labelParams);
+    if (!grant.submenuId) return `${sectionLabel} > ${itemLabel}`;
+
+    const sm = (item.submenu || []).find((s) => s.id === grant.submenuId);
+    return `${sectionLabel} > ${itemLabel} > ${sm ? t(sm.labelKey, sm.labelParams) : grant.submenuId}`;
+}
+
 function renderBusinessProfile() {
     if (!cachedBusinessProfile) return;
     const setField = (id, value, fallbackKey) => {
@@ -920,7 +993,28 @@ function renderBusinessProfile() {
         const count = cachedBusinessProfile.grantsCount || 0;
         permissionsEl.textContent = count > 0 ? t('main.extraPermissionsCount', { count }) : t('main.noExtraPermissions');
     }
+    const permissionsList = document.getElementById('business-profile-permissions-list');
+    if (permissionsList) {
+        permissionsList.innerHTML = '';
+        (cachedBusinessProfile.effectiveGrants || [])
+            .map(resolveGrantLabel)
+            .sort((a, b) => a.localeCompare(b))
+            .forEach((label) => {
+                const li = document.createElement('li');
+                li.textContent = label;
+                permissionsList.appendChild(li);
+            });
+    }
 }
+
+document.getElementById('business-profile-permissions-toggle')?.addEventListener('click', () => {
+    const toggleBtn = document.getElementById('business-profile-permissions-toggle');
+    const list = document.getElementById('business-profile-permissions-list');
+    if (!toggleBtn || !list) return;
+    const isOpen = toggleBtn.getAttribute('aria-expanded') === 'true';
+    toggleBtn.setAttribute('aria-expanded', String(!isOpen));
+    list.hidden = isOpen;
+});
 
 async function loadBusinessProfile() {
     if (cachedBusinessProfile) {
@@ -1256,8 +1350,15 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeDeptPicker();
 });
 
-if (deptPickerDropdown) {
-    DEPARTMENTS.forEach((dept) => {
+// Re-run once availableDepartments narrows to the client's contracted
+// modules (see initDashboard) — building this eagerly with the full
+// DEPARTMENTS list first means the dropdown briefly shows everything, but
+// nothing breaks if a client never calls this again (admin, or before the
+// fetch resolves).
+function renderDeptPickerOptions() {
+    if (!deptPickerDropdown) return;
+    deptPickerDropdown.innerHTML = '';
+    availableDepartments.forEach((dept) => {
         const li = document.createElement('li');
         li.setAttribute('role', 'none');
         const btn = document.createElement('button');
@@ -1270,13 +1371,14 @@ if (deptPickerDropdown) {
         icon.setAttribute('aria-hidden', 'true');
         const span = document.createElement('span');
         span.dataset.i18n = dept.labelKey;
-        span.textContent = dept.labelKey;
+        span.textContent = t(dept.labelKey);
         btn.appendChild(icon);
         btn.appendChild(span);
         li.appendChild(btn);
         deptPickerDropdown.appendChild(li);
     });
 }
+renderDeptPickerOptions();
 
 deptPickerDropdown?.addEventListener('click', (event) => {
     const btn = event.target.closest('.dept-option');
@@ -1644,6 +1746,23 @@ async function initDashboard({ activePage } = {}) {
     if (!role) return null;
     currentRole = role;
     await loadLanguage(getStoredLang());
+    if (role !== 'admin') {
+        // Narrow the department picker to what this client actually
+        // contracted — resolve before the first render so there's no
+        // flash of an uncontracted department. If the previously-selected
+        // one (or nothing) isn't in that list anymore, fall back to the
+        // single contracted department when there's exactly one, or clear
+        // it otherwise.
+        const contractedModuleKeys = await fetchContractedModuleKeys();
+        availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
+        if (!availableDepartments.some((d) => d.key === selectedDepartment)) {
+            selectedDepartment = availableDepartments.length === 1 ? availableDepartments[0].key : null;
+            localStorage.setItem('department', selectedDepartment || '');
+            selectedArea = null;
+            localStorage.setItem('area', '');
+        }
+        renderDeptPickerOptions();
+    }
     menuData = await loadMenu();
     menuData = buildSidebarData(menuData, role, activePage);
     renderFilteredMenu();
@@ -1652,8 +1771,11 @@ async function initDashboard({ activePage } = {}) {
     checkWindowSize();
     // GEIPSA staff have nothing to filter by department (their sidebar is
     // fixed to Inicio/Tablero/Administración de Clientes), so the picker
-    // itself shouldn't even be offered.
-    document.getElementById('dept-picker')?.classList.toggle('dept-picker-disabled', role === 'admin');
+    // itself shouldn't even be offered. Clients with 0 or 1 contracted
+    // departments don't need to pick either — there's nothing to choose.
+    document.getElementById('dept-picker')?.classList.toggle(
+        'dept-picker-disabled', role === 'admin' || availableDepartments.length <= 1
+    );
     if (role === 'admin') {
         document.getElementById('area-picker')?.classList.add('dept-picker-disabled');
     } else {

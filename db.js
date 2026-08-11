@@ -221,6 +221,7 @@ const MODULE_CATALOG = [
     { key: 'human-resources', labelKey: 'menu.humanResources' },
     { key: 'accounting', labelKey: 'menu.accounting' },
     { key: 'finance', labelKey: 'menu.finance' },
+    { key: 'certifications', labelKey: 'menu.certifications' },
 ];
 
 // --- Business admin: profiles and permission grants --------------------------
@@ -718,10 +719,12 @@ function getUserBusinessProfileById(id) {
         `)
         .get(id);
     if (!user) return null;
+    const effectiveGrants = getUserEffectiveGrants(id);
     return {
         ...user,
         profileNames: getUserProfiles(id).map((p) => p.name),
-        grantsCount: getUserGrants(id).length,
+        effectiveGrants,
+        grantsCount: effectiveGrants.length,
     };
 }
 
@@ -777,6 +780,30 @@ function getUserGrants(userId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM user_grants WHERE user_id = ?')
         .all(userId);
+}
+
+// Union of what every profile assigned to this user grants (via
+// getUserProfiles) plus their own extra grants (getUserGrants) — the full
+// "everything this user can actually see" set shown by the "Permisos" field
+// in Datos de Usuario del Negocio, deduplicated by section/item/submenu.
+function getUserEffectiveGrants(userId) {
+    const profileGrants = db
+        .prepare(`
+            SELECT DISTINCT pg.section_id AS sectionId, pg.item_id AS itemId, pg.submenu_id AS submenuId
+            FROM profile_grants pg
+            JOIN user_profiles up ON up.profile_id = pg.profile_id
+            WHERE up.user_id = ?
+        `)
+        .all(userId);
+    const seen = new Set();
+    const combined = [];
+    for (const g of [...profileGrants, ...getUserGrants(userId)]) {
+        const key = `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        combined.push(g);
+    }
+    return combined;
 }
 
 function setUserGrants(userId, grants) {
