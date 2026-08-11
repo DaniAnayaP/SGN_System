@@ -124,7 +124,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -224,7 +224,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar" }
     }
 };
 
@@ -1388,28 +1388,50 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeCcPicker();
 });
 
-// --- Logout: confirm (greeting by nickname if set), then invalidate the
-// server-side session and navigate away. Two triggers share this: the
-// sidebar's own exit icon, and "Botón Salir" under Settings > Configuración
-// botones. -------------------------------------------------------------------
-async function performLogout() {
-    // Reuse the profile if the "Datos de Usuario" panel was already opened
-    // this session; otherwise fetch it just for the greeting — logout is
-    // infrequent enough that one extra request here is no real cost.
-    if (!cachedUserProfile) {
-        try {
-            const res = await fetch(`${API_BASE}/me/profile`);
-            if (res.ok) cachedUserProfile = (await res.json()).profile;
-        } catch {
-            // No nickname to greet with — falls through to the generic prompt.
-        }
-    }
+// --- Logout: sidebar exit icon, gated by the "Botón Salir" preference under
+// Settings > Configuración botones (Preguntar antes de salir / Salir sin
+// preguntar). Not set until the user picks one — defaults to "confirm" so
+// every account starts out asking, per instructions. -------------------------
+function getLogoutMode() {
+    const stored = localStorage.getItem('logoutMode');
+    return stored === 'direct' ? 'direct' : 'confirm';
+}
 
-    const greeting = cachedUserProfile?.nickname || currentUser?.name || currentUser?.username || '';
-    const message = greeting
-        ? t('sidebar.logoutConfirmGreeting', { name: greeting })
-        : t('sidebar.logoutConfirm');
-    if (!window.confirm(message)) return;
+document.querySelectorAll('.logout-mode-option').forEach((btn) => {
+    if (btn.dataset.logoutMode === getLogoutMode()) {
+        btn.classList.add('active');
+        btn.setAttribute('aria-checked', 'true');
+    }
+    btn.addEventListener('click', () => {
+        localStorage.setItem('logoutMode', btn.dataset.logoutMode);
+        document.querySelectorAll('.logout-mode-option').forEach((other) => {
+            const isActive = other === btn;
+            other.classList.toggle('active', isActive);
+            other.setAttribute('aria-checked', String(isActive));
+        });
+    });
+});
+
+async function performLogout() {
+    if (getLogoutMode() === 'confirm') {
+        // Reuse the profile if the "Datos de Usuario" panel was already
+        // opened this session; otherwise fetch it just for the greeting —
+        // logout is infrequent enough that one extra request here is fine.
+        if (!cachedUserProfile) {
+            try {
+                const res = await fetch(`${API_BASE}/me/profile`);
+                if (res.ok) cachedUserProfile = (await res.json()).profile;
+            } catch {
+                // No nickname to greet with — falls through to the generic prompt.
+            }
+        }
+
+        const greeting = cachedUserProfile?.nickname || currentUser?.name || currentUser?.username || '';
+        const message = greeting
+            ? t('sidebar.logoutConfirmGreeting', { name: greeting })
+            : t('sidebar.logoutConfirm');
+        if (!window.confirm(message)) return;
+    }
 
     sessionStorage.removeItem('sgn_token');
     fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' })
@@ -1418,11 +1440,6 @@ async function performLogout() {
 }
 
 document.getElementById('logout-link')?.addEventListener('click', (event) => {
-    event.preventDefault();
-    performLogout();
-});
-
-document.getElementById('settings-logout-btn')?.addEventListener('click', (event) => {
     event.preventDefault();
     performLogout();
 });

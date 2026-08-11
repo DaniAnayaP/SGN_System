@@ -267,6 +267,8 @@
     "others": "Others",
     "buttonConfig": "Button Settings",
     "exitButton": "Exit Button",
+    "logoutModeConfirm": "Ask before exiting",
+    "logoutModeDirect": "Exit without asking",
     "languageEnglish": "English",
     "languageSpanish": "Spanish",
     "styleLight": "Light",
