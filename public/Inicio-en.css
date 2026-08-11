@@ -1457,4 +1457,108 @@
         }
     }
 
+    /* Category placeholder screens (Cat 1/2, Ope 1/2, etc.) — page title +
+       collapsible filter/search bar + empty state, until each screen gets
+       its own real content. */
+    .page-content{
+        padding: 1.5rem 2rem;
+    }
+    .page-header{
+        margin-bottom: 1rem;
+    }
+    .page-header h1{
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--color-text-primary);
+        margin: 0;
+    }
+    .filter-bar{
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 0.6rem;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+    .filter-bar-toggle{
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        border: none;
+        background: transparent;
+        padding: 0.75rem 1rem;
+        font: inherit;
+        font-weight: 500;
+        color: var(--color-text-primary);
+        text-align: left;
+        cursor: pointer;
+    }
+    .filter-bar-toggle i{
+        font-size: 1rem;
+        color: var(--color-text-secondary);
+        transition: transform 0.15s ease;
+    }
+    .filter-bar.filter-bar-expanded .filter-bar-toggle i.bx-chevron-down{
+        transform: rotate(180deg);
+    }
+    .filter-bar-panel{
+        display: none;
+        padding: 0 1rem 1rem;
+        border-top: 1px solid var(--color-border);
+    }
+    .filter-bar.filter-bar-expanded .filter-bar-panel{
+        display: block;
+    }
+    .filter-bar-fields{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    .filter-field{
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    .filter-field label{
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+    }
+    .filter-field input,
+    .filter-field select{
+        padding: 0.5rem 0.6rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.4rem;
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+        font: inherit;
+        font-size: 0.85rem;
+    }
+    .filter-bar-actions{
+        display: flex;
+        gap: 0.6rem;
+        margin-top: 1rem;
+    }
+    .empty-state{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.6rem;
+        padding: 3rem 1rem;
+        color: var(--color-text-secondary);
+        text-align: center;
+    }
+    .empty-state i{
+        font-size: 2.5rem;
+        opacity: 0.5;
+    }
+    .empty-state p{
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
     /*border: 2px solid red; -- Borde colorido*/

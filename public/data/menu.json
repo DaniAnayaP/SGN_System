@@ -61,7 +61,7 @@
       "labelKey": "menu.catCatalogos",
       "icon": "bx-category-alt",
       "submenu": [
-        { "id": "cat-catalogos-1", "labelKey": "menu.catCatalogosItem1", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-1", "labelKey": "menu.catCatalogosItem1", "icon": "bx-window", "href": "CatCatalogos1.html" },
         { "id": "cat-catalogos-2", "labelKey": "menu.catCatalogosItem2", "icon": "bx-window", "href": "#" }
       ]
     },

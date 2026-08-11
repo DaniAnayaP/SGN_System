@@ -320,6 +320,18 @@
     "defaultPickerDeptHint": "Pick the department that should open by default every time you log in.",
     "defaultPickerAreaHint": "Pick the area that should open by default every time you log in.",
     "defaultPickerAreaNoDept": "Select a department first.",
-    "defaultPickerCcHint": "Pick the cost centers that should be selected by default every time you log in."
+    "defaultPickerCcHint": "Pick the cost centers that should be selected by default every time you log in.",
+    "search": "Search",
+    "filterSearchPlaceholder": "Search...",
+    "filterStatus": "Status",
+    "filterAll": "All",
+    "filterActive": "Active",
+    "filterInactive": "Inactive",
+    "filterSort": "Sort by",
+    "filterSortRecent": "Most recent",
+    "filterSortName": "Name",
+    "filterSearchBtn": "Search",
+    "filterClearBtn": "Clear",
+    "emptyStateText": "No data yet."
   }
 }

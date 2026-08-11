@@ -320,6 +320,18 @@
     "defaultPickerDeptHint": "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.",
     "defaultPickerAreaHint": "Elige el área que debe abrirse por defecto cada vez que inicies sesión.",
     "defaultPickerAreaNoDept": "Primero selecciona un departamento.",
-    "defaultPickerCcHint": "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión."
+    "defaultPickerCcHint": "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.",
+    "search": "Búsqueda",
+    "filterSearchPlaceholder": "Buscar...",
+    "filterStatus": "Estado",
+    "filterAll": "Todos",
+    "filterActive": "Activo",
+    "filterInactive": "Inactivo",
+    "filterSort": "Ordenar por",
+    "filterSortRecent": "Más reciente",
+    "filterSortName": "Nombre",
+    "filterSearchBtn": "Buscar",
+    "filterClearBtn": "Limpiar",
+    "emptyStateText": "Aún no hay datos."
   }
 }
