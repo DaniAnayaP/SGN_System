@@ -68,6 +68,7 @@ const {
     getUserById,
     getUserProfileById,
     getUserBusinessProfileById,
+    getUserEffectiveGrants,
     getUserDefaults,
     setUserDefaults,
     listProfiles,
@@ -454,6 +455,29 @@ app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
         ? setClientCostCentersLimit(req.params.id, costCentersLimit)
         : existing.cost_centers_limit;
     res.json({ modules: updatedModules, costCentersLimit: updatedLimit });
+});
+
+// Read-only support views: lets GEIPSA see a client's own team (Business-
+// Usuarios list, minus the auto-provisioned admin) and one user's actual
+// access (profiles + extra grants + the effective union of both) without
+// needing that client's own login — useful for diagnosing "I granted
+// everything but the buttons still don't show" style reports.
+app.get('/api/admin/clients/:id/business-users', requireAuth, requireAdmin, (req, res) => {
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    res.json({ users: listBusinessUsers(req.params.id) });
+});
+
+app.get('/api/admin/clients/:id/business-users/:userId/access', requireAuth, requireAdmin, (req, res) => {
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    const user = getUserById(req.params.userId, req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    res.json({
+        profiles: getUserProfiles(req.params.userId),
+        extraGrants: getUserGrants(req.params.userId),
+        effectiveGrants: getUserEffectiveGrants(req.params.userId),
+    });
 });
 
 // Accesos del Administrador: the auto-provisioned client admin sees every

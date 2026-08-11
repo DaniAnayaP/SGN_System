@@ -956,6 +956,7 @@ module.exports = {
     getUserById,
     getUserProfileById,
     getUserBusinessProfileById,
+    getUserEffectiveGrants,
     getUserDefaults,
     setUserDefaults,
     listProfiles,
