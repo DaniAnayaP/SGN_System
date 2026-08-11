@@ -1709,28 +1709,63 @@ function hasMainButtonPermission(itemId) {
 // it (this bypass is "all you're entitled to", not "everything, period"),
 // just not an individual grant on top. GEIPSA staff aren't a client with
 // contracted modules, so this never touches that role.
+// "Configuración" is the one top-bar button whose own itemId grant isn't a
+// leaf anymore now that it has a submenu (Idioma/Estilo/Administración del
+// Negocio/Configuración de Botones/Otros) — checking a parent item's box in
+// PermissionTree.js grants its children, not the parent itself. So the gear
+// icon shows whenever the user has been granted the parent OR any single
+// child (a lingering itemId-only grant from before this submenu existed
+// still works too).
+const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-admin-negocio', 'btn-config-botones', 'btn-otros'];
+function hasSettingsAccess() {
+    if (isUnrestrictedClientAdmin()) return true;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    return grants.some((g) => g.sectionId === 'main' && (g.itemId === 'btn-configuracion' || SETTINGS_SUBITEM_IDS.includes(g.submenuId)));
+}
+
 const TOP_BAR_BUTTONS = [
-    { moduleKey: 'btn-mensajes', itemId: 'btn-mensajes', elementId: 'messages-btn' },
-    { moduleKey: 'btn-chatbot', itemId: 'btn-chatbot', elementId: 'chatbot-btn' },
-    { moduleKey: 'btn-notificaciones', itemId: 'btn-notificaciones', elementId: 'notifications-btn' },
-    { moduleKey: 'btn-marcadores', itemId: 'btn-marcadores', elementId: 'bookmarks-btn' },
-    { moduleKey: 'btn-configuracion', itemId: 'btn-configuracion', elementId: 'settings-menu' },
-    { moduleKey: 'btn-datos-usuario', itemId: 'btn-datos-usuario', elementId: 'user-info-menu' },
-    { moduleKey: 'btn-datos-usuario-negocio', itemId: 'btn-datos-usuario-negocio', elementId: 'business-profile-menu' },
+    { moduleKey: 'btn-mensajes', elementId: 'messages-btn', check: () => hasMainButtonPermission('btn-mensajes') },
+    { moduleKey: 'btn-chatbot', elementId: 'chatbot-btn', check: () => hasMainButtonPermission('btn-chatbot') },
+    { moduleKey: 'btn-notificaciones', elementId: 'notifications-btn', check: () => hasMainButtonPermission('btn-notificaciones') },
+    { moduleKey: 'btn-marcadores', elementId: 'bookmarks-btn', check: () => hasMainButtonPermission('btn-marcadores') },
+    { moduleKey: 'btn-configuracion', elementId: 'settings-menu', check: hasSettingsAccess },
+    { moduleKey: 'btn-datos-usuario', elementId: 'user-info-menu', check: () => hasMainButtonPermission('btn-datos-usuario') },
+    { moduleKey: 'btn-datos-usuario-negocio', elementId: 'business-profile-menu', check: () => hasMainButtonPermission('btn-datos-usuario-negocio') },
 ];
 
 function syncTopBarButtonVisibility() {
     if (currentRole === 'admin') return;
-    TOP_BAR_BUTTONS.forEach(({ moduleKey, itemId, elementId }) => {
+    TOP_BAR_BUTTONS.forEach(({ moduleKey, elementId, check }) => {
         const el = document.getElementById(elementId);
         if (!el) return;
-        const visible = contractedModuleKeys.includes(moduleKey) && hasMainButtonPermission(itemId);
+        const visible = contractedModuleKeys.includes(moduleKey) && check();
         // A plain `hidden` attribute loses to ".top-bar-actions button"
         // (higher specificity, forces display:flex) in some browsers — a
         // dedicated !important class sidesteps that instead of relying on
         // [hidden]'s UA-stylesheet specificity.
         el.classList.toggle('top-bar-btn-hidden', !visible);
     });
+}
+
+// Once the gear icon itself is visible, each row inside its dropdown is
+// independently gated too — Idioma/Estilo/Administración del Negocio/
+// Configuración de Botones/Otros are submenu grants under "btn-configuracion"
+// (see hasSettingsAccess above), so hasButtonPermission (which matches on
+// submenuId regardless of parent) already resolves them correctly. Only
+// ever ADDS hidden=true — never un-hides business-admin-group, which has
+// its own independent "nothing to show" hide logic (renderBusinessAdminSettingsMenu)
+// that must win when both say hide.
+function syncSettingsSubmenuVisibility() {
+    const languageGroup = document.getElementById('language-group');
+    const styleGroup = document.getElementById('style-group');
+    const businessAdminGroup = document.getElementById('business-admin-group');
+    const buttonConfigGroup = document.getElementById('button-config-group');
+    const othersGroup = document.getElementById('settings-others-group');
+    if (languageGroup && !hasButtonPermission('btn-idioma')) languageGroup.hidden = true;
+    if (styleGroup && !hasButtonPermission('btn-estilo')) styleGroup.hidden = true;
+    if (businessAdminGroup && !hasButtonPermission('btn-admin-negocio')) businessAdminGroup.hidden = true;
+    if (buttonConfigGroup && !hasButtonPermission('btn-config-botones')) buttonConfigGroup.hidden = true;
+    if (othersGroup && !hasButtonPermission('btn-otros')) othersGroup.hidden = true;
 }
 
 // --- Default Departamento/Área/Centro de Costos picker — opened from
@@ -2169,6 +2204,7 @@ async function initDashboard({ activePage } = {}) {
     }
     syncButtonConfigShortcuts();
     syncTopBarButtonVisibility();
+    syncSettingsSubmenuVisibility();
     // Restore the saved style now that clientBranding (needed for
     // Institutional's real colors) has loaded — every other page load was
     // resetting back to Light since nothing re-applied the choice.

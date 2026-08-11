@@ -10,7 +10,16 @@
         { "id": "btn-chatbot", "labelKey": "main.chatbot", "icon": "bx-bot", "href": "#", "permissionOnly": true },
         { "id": "btn-notificaciones", "labelKey": "main.notifications", "icon": "bx-bell", "href": "#", "permissionOnly": true },
         { "id": "btn-marcadores", "labelKey": "main.bookmarks", "icon": "bx-bookmarks", "href": "#", "permissionOnly": true },
-        { "id": "btn-configuracion", "labelKey": "main.settings", "icon": "bx-cog", "href": "#", "permissionOnly": true },
+        {
+          "id": "btn-configuracion", "labelKey": "main.settings", "icon": "bx-cog", "href": "#", "permissionOnly": true,
+          "submenu": [
+            { "id": "btn-idioma", "labelKey": "main.language", "icon": "bx-globe", "href": "#", "permissionOnly": true },
+            { "id": "btn-estilo", "labelKey": "main.style", "icon": "bx-palette", "href": "#", "permissionOnly": true },
+            { "id": "btn-admin-negocio", "labelKey": "menu.adminBusiness", "icon": "bx-shopping-bag", "href": "#", "permissionOnly": true },
+            { "id": "btn-config-botones", "labelKey": "main.buttonConfig", "icon": "bx-slider-alt", "href": "#", "permissionOnly": true },
+            { "id": "btn-otros", "labelKey": "main.others", "icon": "bx-dots-horizontal-rounded", "href": "#", "permissionOnly": true }
+          ]
+        },
         { "id": "btn-datos-usuario", "labelKey": "main.userInfo", "icon": "bx-user-circle", "href": "#", "permissionOnly": true },
         { "id": "btn-datos-usuario-negocio", "labelKey": "main.businessProfile", "icon": "bx-briefcase", "href": "#", "permissionOnly": true },
         {
