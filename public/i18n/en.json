@@ -129,7 +129,10 @@
     "catReportesItem2": "Report 2",
     "catMaterialApoyo": "Support Material",
     "catMaterialApoyoItem1": "M. Apoy 1",
-    "catMaterialApoyoItem2": "M. Apoy 2"
+    "catMaterialApoyoItem2": "M. Apoy 2",
+    "catIconosBotones": "Icons and Buttons",
+    "catIconosBotonesItem1": "Icon 1",
+    "catIconosBotonesItem2": "Icon 2"
   },
   "admin": {
     "clientsTitle": "New Clients",

@@ -146,6 +146,12 @@
                 // 'main' (Inicio, Tablero, Administración del Negocio, etc.)
                 // is core navigation, not a contracted module — always shown
                 // regardless of which módulos the client has contracted.
+                const mainSection = allSections.find((s) => s.id === 'main');
+                // Inicio/Panel/Tablero repeat inside every department here —
+                // grantable per area, not just once under General — on top
+                // of the shared category template (Catálogos, Operaciones,
+                // ...) every department already gets.
+                const generalItems = (mainSection?.items || []).filter((i) => ['home', 'panel', 'dashboard'].includes(i.id));
                 const filtered = allowedSectionIds
                     ? allSections.filter((s) => s.id === 'main' || allowedSectionIds.includes(s.id))
                     : allSections;
@@ -155,7 +161,9 @@
                 // once in the shared areaCategories template and apply the
                 // same way to every department, so swap them in here
                 // instead of using the section's own (empty) items.
-                sectionsData = filtered.map((s) => (s.id === 'main' ? s : { ...s, items: areaCategories || [] }));
+                sectionsData = filtered.map((s) => (
+                    s.id === 'main' ? s : { ...s, items: [...generalItems, ...(areaCategories || [])] }
+                ));
                 grantSet = expand(initialGrants || []);
                 render();
             },
