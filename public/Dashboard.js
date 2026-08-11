@@ -1755,17 +1755,32 @@ function syncTopBarButtonVisibility() {
 // ever ADDS hidden=true — never un-hides business-admin-group, which has
 // its own independent "nothing to show" hide logic (renderBusinessAdminSettingsMenu)
 // that must win when both say hide.
+// A lingering item-level grant from before "Configuración" had a submenu
+// (any profile/user that had the whole button checked back when it was
+// still a single leaf) implies access to everything inside it — matches
+// what was actually granted at the time instead of silently hiding every
+// row now that the button expanded into 5. New grants are always saved at
+// the child level going forward (checking "Configuración" in the tree now
+// checks its 5 children instead), so this only ever matters for grants
+// saved before this breakdown shipped.
+function hasSettingsSubPermission(submenuId) {
+    if (isUnrestrictedClientAdmin()) return true;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    if (grants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-configuracion' && !g.submenuId)) return true;
+    return grants.some((g) => g.submenuId === submenuId);
+}
+
 function syncSettingsSubmenuVisibility() {
     const languageGroup = document.getElementById('language-group');
     const styleGroup = document.getElementById('style-group');
     const businessAdminGroup = document.getElementById('business-admin-group');
     const buttonConfigGroup = document.getElementById('button-config-group');
     const othersGroup = document.getElementById('settings-others-group');
-    if (languageGroup && !hasButtonPermission('btn-idioma')) languageGroup.hidden = true;
-    if (styleGroup && !hasButtonPermission('btn-estilo')) styleGroup.hidden = true;
-    if (businessAdminGroup && !hasButtonPermission('btn-admin-negocio')) businessAdminGroup.hidden = true;
-    if (buttonConfigGroup && !hasButtonPermission('btn-config-botones')) buttonConfigGroup.hidden = true;
-    if (othersGroup && !hasButtonPermission('btn-otros')) othersGroup.hidden = true;
+    if (languageGroup && !hasSettingsSubPermission('btn-idioma')) languageGroup.hidden = true;
+    if (styleGroup && !hasSettingsSubPermission('btn-estilo')) styleGroup.hidden = true;
+    if (businessAdminGroup && !hasSettingsSubPermission('btn-admin-negocio')) businessAdminGroup.hidden = true;
+    if (buttonConfigGroup && !hasSettingsSubPermission('btn-config-botones')) buttonConfigGroup.hidden = true;
+    if (othersGroup && !hasSettingsSubPermission('btn-otros')) othersGroup.hidden = true;
 }
 
 // --- Default Departamento/Área/Centro de Costos picker — opened from
