@@ -124,7 +124,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -224,7 +224,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar" }
     }
 };
 
@@ -919,20 +919,36 @@ document.querySelectorAll('.lang-option').forEach((btn) => {
     });
 });
 
+// Style (Light/Dark/Institutional) persists across page loads the same way
+// language does — saved to localStorage on pick, re-applied in
+// initDashboard() below once clientBranding is loaded (Institutional needs
+// it for its actual colors).
+function getStoredStyle() {
+    const stored = localStorage.getItem('style');
+    return ['light', 'dark', 'institutional'].includes(stored) ? stored : 'light';
+}
+
+function applyStyle(style) {
+    if (style === 'institutional' && clientBranding) {
+        document.body.classList.remove('dark-mode');
+        document.body.classList.add('institutional-mode');
+    } else if (style === 'dark') {
+        document.body.classList.remove('institutional-mode');
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('institutional-mode', 'dark-mode');
+    }
+    document.querySelectorAll('.style-option').forEach((b) => b.classList.toggle('active', b.dataset.style === style));
+}
+
 document.querySelectorAll('.style-option').forEach((btn) => {
     btn.addEventListener('click', () => {
-        if (btn.dataset.style === 'institutional') {
-            if (!clientBranding) {
-                alert(t('main.inDevelopment'));
-                return;
-            }
-            document.body.classList.remove('dark-mode');
-            document.body.classList.add('institutional-mode');
-        } else {
-            document.body.classList.remove('institutional-mode');
-            document.body.classList.toggle('dark-mode', btn.dataset.style === 'dark');
+        if (btn.dataset.style === 'institutional' && !clientBranding) {
+            alert(t('main.inDevelopment'));
+            return;
         }
-        document.querySelectorAll('.style-option').forEach((b) => b.classList.toggle('active', b === btn));
+        localStorage.setItem('style', btn.dataset.style);
+        applyStyle(btn.dataset.style);
     });
 });
 
@@ -1389,14 +1405,35 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeCcPicker();
 });
 
-// --- Logout: sidebar exit icon, gated by the "Botón Salir" preference under
-// Settings > Configuración botones (Preguntar antes de salir / Salir sin
-// preguntar). Not set until the user picks one — defaults to "confirm" so
-// every account starts out asking, per instructions. -------------------------
+// --- Logout: sidebar exit icon, gated by the "Menú Salir" preference
+// (Preguntar antes de salir / Salir sin preguntar), picked from its own
+// modal off the Settings dropdown rather than a nested menu. Not set until
+// the user picks one — defaults to "confirm" so every account starts out
+// asking, per instructions. ---------------------------------------------------
 function getLogoutMode() {
     const stored = localStorage.getItem('logoutMode');
     return stored === 'direct' ? 'direct' : 'confirm';
 }
+
+const logoutModeMenuBtn = document.getElementById('logout-mode-menu-btn');
+const logoutModeModal = document.getElementById('logout-mode-modal');
+
+function closeLogoutModeModal() {
+    if (logoutModeModal) logoutModeModal.hidden = true;
+}
+
+logoutModeMenuBtn?.addEventListener('click', () => {
+    closeSettingsMenu();
+    if (logoutModeModal) logoutModeModal.hidden = false;
+});
+
+logoutModeModal?.addEventListener('click', (event) => {
+    if (event.target === logoutModeModal) closeLogoutModeModal();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && logoutModeModal && !logoutModeModal.hidden) closeLogoutModeModal();
+});
 
 document.querySelectorAll('.logout-mode-option').forEach((btn) => {
     if (btn.dataset.logoutMode === getLogoutMode()) {
@@ -1410,6 +1447,7 @@ document.querySelectorAll('.logout-mode-option').forEach((btn) => {
             other.classList.toggle('active', isActive);
             other.setAttribute('aria-checked', String(isActive));
         });
+        closeLogoutModeModal();
     });
 });
 
@@ -1559,6 +1597,10 @@ async function initDashboard({ activePage } = {}) {
     } else {
         document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');
     }
+    // Restore the saved style now that clientBranding (needed for
+    // Institutional's real colors) has loaded — every other page load was
+    // resetting back to Light since nothing re-applied the choice.
+    applyStyle(getStoredStyle());
     return role;
 }
 

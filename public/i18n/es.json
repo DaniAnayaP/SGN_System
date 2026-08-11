@@ -267,6 +267,7 @@
     "others": "Otros",
     "buttonConfig": "Configuración botones",
     "exitButton": "Botón Salir",
+    "exitMenu": "Menú Salir",
     "logoutModeConfirm": "Preguntar antes de salir",
     "logoutModeDirect": "Salir sin preguntar",
     "languageEnglish": "Inglés",

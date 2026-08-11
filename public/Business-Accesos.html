@@ -175,27 +175,11 @@
                                     <!-- Administración del Negocio items rendered at runtime -->
                                 </ul>
                             </li>
-                            <li role="none" class="settings-dropdown-group" id="button-config-group">
-                                <button type="button" class="settings-dropdown-toggle" id="button-config-toggle-btn"
-                                        aria-haspopup="true" aria-expanded="false">
-                                    <i class="bx bx-slider-alt" aria-hidden="true"></i>
-                                    <span data-i18n="main.buttonConfig">Button Settings</span>
-                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                            <li role="none">
+                                <button type="button" role="menuitem" id="logout-mode-menu-btn">
+                                    <i class="bx bx-log-out" aria-hidden="true"></i>
+                                    <span data-i18n="main.exitMenu">Exit Menu</span>
                                 </button>
-                                <ul class="settings-submenu" id="button-config-submenu" role="menu">
-                                    <li role="none">
-                                        <button type="button" role="menuitemradio" aria-checked="true" class="logout-mode-option active" data-logout-mode="confirm">
-                                            <i class="bx bx-message-alt-question" aria-hidden="true"></i>
-                                            <span data-i18n="main.logoutModeConfirm">Ask before exiting</span>
-                                        </button>
-                                    </li>
-                                    <li role="none">
-                                        <button type="button" role="menuitemradio" aria-checked="false" class="logout-mode-option" data-logout-mode="direct">
-                                            <i class="bx bx-log-out" aria-hidden="true"></i>
-                                            <span data-i18n="main.logoutModeDirect">Exit without asking</span>
-                                        </button>
-                                    </li>
-                                </ul>
                             </li>
                             <li role="none">
                                 <button type="button" role="menuitem" id="settings-others">
@@ -280,6 +264,26 @@
             </div>
         </section>
     </main>
+
+    <div class="modal-overlay" id="logout-mode-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="logout-mode-modal-title">
+            <h3 id="logout-mode-modal-title" data-i18n="main.exitMenu">Exit Menu</h3>
+            <ul class="logout-mode-list">
+                <li>
+                    <button type="button" role="menuitemradio" aria-checked="true" class="logout-mode-option active" data-logout-mode="confirm">
+                        <i class="bx bx-message-alt-question" aria-hidden="true"></i>
+                        <span data-i18n="main.logoutModeConfirm">Ask before exiting</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" role="menuitemradio" aria-checked="false" class="logout-mode-option" data-logout-mode="direct">
+                        <i class="bx bx-log-out" aria-hidden="true"></i>
+                        <span data-i18n="main.logoutModeDirect">Exit without asking</span>
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
