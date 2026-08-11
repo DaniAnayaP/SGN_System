@@ -1214,16 +1214,22 @@
     /* Datos de Usuario del Negocio — Departamentos/Áreas/Centro Costos/
        Permisos are condensed into one summary button ("3 Dep. - 6 Áreas -
        1 C. Costos - 15 Permisos"); clicking it opens business-summary-modal
-       with the full breakdown of each count. */
-    .user-info-summary-btn{
+       with the full breakdown of each count.
+       Scoped as ".user-info-dropdown .user-info-summary-btn" (not just the
+       single class) so it outranks ".top-bar-actions button" further up —
+       that generic rule turns every button under the top bar into a 2.2rem
+       circle, which was silently squashing this one down to an icon. */
+    .user-info-dropdown .user-info-summary-btn{
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 0.4rem;
         width: 100%;
+        height: auto;
         margin-top: 0.5rem;
         border: none;
         border-top: 1px dashed var(--color-border);
+        border-radius: 0;
         background: transparent;
         padding: 0.5rem 0 0;
         font: inherit;
@@ -1233,7 +1239,7 @@
         text-align: left;
         cursor: pointer;
     }
-    .user-info-summary-btn i{
+    .user-info-dropdown .user-info-summary-btn i{
         flex-shrink: 0;
         font-size: 0.85rem;
         color: var(--color-text-secondary);
