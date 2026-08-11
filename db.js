@@ -129,7 +129,7 @@ for (const col of ['nickname', 'business_email', 'phone', 'address', 'birth_date
 // cost-center/areas/departments have no assignment UI yet (unlike Rol and
 // Permisos below, which already come from the real profiles/grants
 // tables), so these just start blank like the fields above.
-for (const col of ['position', 'assigned_cost_center', 'assigned_areas', 'assigned_departments']) {
+for (const col of ['position', 'assigned_cost_center', 'assigned_areas', 'assigned_departments', 'hire_date', 'reports_to']) {
     if (!userColumns.some((c) => c.name === col)) {
         db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
     }
@@ -708,13 +708,16 @@ function getUserProfileById(id) {
 
 // Backs the top-bar "Datos de Usuario del Negocio" panel — Rol and Permisos
 // come from the real profiles/grants tables (getUserProfiles/getUserGrants,
-// defined further down); position and the assigned cost-center/areas/
-// departments are plain columns with no assignment UI yet (see the
-// migration above), same "blank until someone fills it in" idea.
+// defined further down); business_email/phone are the same columns already
+// shown in "Datos de Usuario" (reused here, not duplicated data); position,
+// assigned cost-center/areas/departments, hire_date and reports_to are
+// plain columns with no assignment UI yet (see the migration above), same
+// "blank until someone fills it in" idea.
 function getUserBusinessProfileById(id) {
     const user = db
         .prepare(`
-            SELECT id, position, assigned_cost_center, assigned_areas, assigned_departments
+            SELECT id, position, assigned_cost_center, assigned_areas, assigned_departments,
+                   business_email, phone, hire_date, reports_to
             FROM users WHERE id = ?
         `)
         .get(id);

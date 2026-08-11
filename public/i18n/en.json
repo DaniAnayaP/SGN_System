@@ -303,6 +303,8 @@
     "businessProfile": "Business User Data",
     "position": "Position",
     "role": "Role",
+    "hireDate": "Hire Date",
+    "reportsTo": "Reports To",
     "permissions": "Permissions",
     "assignedCostCenter": "Assigned Cost Center",
     "assignedAreas": "Assigned Areas",

@@ -303,6 +303,8 @@
     "businessProfile": "Datos de Usuario del Negocio",
     "position": "Puesto",
     "role": "Rol",
+    "hireDate": "Fecha de ingreso",
+    "reportsTo": "Jefe directo",
     "permissions": "Permisos",
     "assignedCostCenter": "Centro de costo asignado",
     "assignedAreas": "Áreas asignadas",
