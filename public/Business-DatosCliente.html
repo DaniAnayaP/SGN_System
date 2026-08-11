@@ -280,29 +280,11 @@
                                         <dt data-i18n="main.role">Role</dt>
                                         <dd id="business-profile-role">—</dd>
                                     </div>
-                                    <div class="user-info-field">
-                                        <dt data-i18n="main.permissions">Permissions</dt>
-                                        <dd>
-                                            <button type="button" class="user-info-expand" id="business-profile-permissions-toggle" aria-expanded="false">
-                                                <span id="business-profile-permissions">—</span>
-                                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                                            </button>
-                                            <ul class="user-info-permissions-list" id="business-profile-permissions-list" hidden></ul>
-                                        </dd>
-                                    </div>
-                                    <div class="user-info-field">
-                                        <dt data-i18n="main.assignedCostCenter">Assigned Cost Center</dt>
-                                        <dd id="business-profile-cost-center">—</dd>
-                                    </div>
-                                    <div class="user-info-field">
-                                        <dt data-i18n="main.assignedAreas">Assigned Areas</dt>
-                                        <dd id="business-profile-areas">—</dd>
-                                    </div>
-                                    <div class="user-info-field">
-                                        <dt data-i18n="main.assignedDepartments">Assigned Departments</dt>
-                                        <dd id="business-profile-departments">—</dd>
-                                    </div>
                                 </dl>
+                                <button type="button" class="user-info-summary-btn" id="business-profile-summary-btn">
+                                    <span id="business-profile-summary">—</span>
+                                    <i class="bx bx-chevron-right" aria-hidden="true"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -333,6 +315,28 @@
             </div>
         </section>
     </main>
+
+    <div class="modal-overlay" id="business-summary-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
+            <h3 id="business-summary-modal-title" data-i18n="main.businessProfile">Business User Data</h3>
+            <div class="business-summary-section">
+                <h4 data-i18n="main.assignedDepartments">Assigned Departments</h4>
+                <ul class="business-summary-list" id="business-summary-departments"></ul>
+            </div>
+            <div class="business-summary-section">
+                <h4 data-i18n="main.assignedAreas">Assigned Areas</h4>
+                <ul class="business-summary-list" id="business-summary-areas"></ul>
+            </div>
+            <div class="business-summary-section">
+                <h4 data-i18n="main.assignedCostCenter">Assigned Cost Center</h4>
+                <ul class="business-summary-list" id="business-summary-cost-centers"></ul>
+            </div>
+            <div class="business-summary-section">
+                <h4 data-i18n="main.permissions">Permissions</h4>
+                <ul class="business-summary-list" id="business-summary-permissions"></ul>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="logout-mode-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="logout-mode-modal-title">

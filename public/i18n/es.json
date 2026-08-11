@@ -306,6 +306,13 @@
     "assignedDepartments": "Departamentos asignados",
     "noRoleAssigned": "Sin perfil asignado",
     "noExtraPermissions": "Sin permisos otorgados",
-    "extraPermissionsCount": "{count} permisos otorgados"
+    "extraPermissionsCount": "{count} permisos otorgados",
+    "summaryDepartments": "Dep.",
+    "summaryAreas": "Áreas",
+    "summaryCostCenters": "C. Costos",
+    "summaryPermissions": "Permisos",
+    "noDepartmentsAssigned": "Sin Dep asignados",
+    "noAreasAssigned": "Sin Áreas asignados",
+    "noCostCentersAssigned": "Sin Centro de Costos asignados"
   }
 }

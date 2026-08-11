@@ -124,7 +124,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -224,7 +224,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados" }
     }
 };
 
@@ -974,6 +974,18 @@ function resolveGrantLabel(grant) {
     return `${sectionLabel} > ${itemLabel} > ${sm ? t(sm.labelKey, sm.labelParams) : grant.submenuId}`;
 }
 
+// Departments this user actually has some access to, derived from their
+// effective grants (profile + extra) rather than the free-text
+// assigned_departments column, which has no assignment UI yet. 'main'
+// (Inicio/Panel/Tablero) isn't a department, so it's excluded.
+function computeAssignedDepartmentKeys(profile) {
+    const keys = new Set();
+    (profile.effectiveGrants || []).forEach((g) => {
+        if (g.sectionId && g.sectionId !== 'main') keys.add(g.sectionId);
+    });
+    return Array.from(keys);
+}
+
 function renderBusinessProfile() {
     if (!cachedBusinessProfile) return;
     const setField = (id, value, fallbackKey) => {
@@ -981,41 +993,87 @@ function renderBusinessProfile() {
         if (el) el.textContent = value || t(fallbackKey);
     };
     setField('business-profile-position', cachedBusinessProfile.position, 'main.notSet');
-    setField('business-profile-cost-center', cachedBusinessProfile.assigned_cost_center, 'main.notSet');
-    setField('business-profile-areas', cachedBusinessProfile.assigned_areas, 'main.notSet');
-    setField('business-profile-departments', cachedBusinessProfile.assigned_departments, 'main.notSet');
 
     const roleEl = document.getElementById('business-profile-role');
     if (roleEl) {
         const names = cachedBusinessProfile.profileNames || [];
         roleEl.textContent = names.length ? names.join(', ') : t('main.noRoleAssigned');
     }
-    const permissionsEl = document.getElementById('business-profile-permissions');
-    if (permissionsEl) {
-        const count = cachedBusinessProfile.grantsCount || 0;
-        permissionsEl.textContent = count > 0 ? t('main.extraPermissionsCount', { count }) : t('main.noExtraPermissions');
+
+    // Areas aren't captured by the grants themselves (permissions stop at
+    // department/category/screen) — every area of a department this user
+    // has any access to counts as "enabled" for them.
+    const departmentKeys = computeAssignedDepartmentKeys(cachedBusinessProfile);
+    const areaEntries = departmentKeys.flatMap((deptKey) =>
+        (AREAS_BY_DEPARTMENT[deptKey] || []).map((area) => ({ deptKey, area }))
+    );
+    // No per-user cost center assignment exists yet — same free-text column
+    // as before, comma-separated once that UI exists.
+    const costCenterNames = (cachedBusinessProfile.assigned_cost_center || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    const grants = cachedBusinessProfile.effectiveGrants || [];
+
+    const summaryEl = document.getElementById('business-profile-summary');
+    if (summaryEl) {
+        summaryEl.textContent = [
+            `${departmentKeys.length} ${t('main.summaryDepartments')}`,
+            `${areaEntries.length} ${t('main.summaryAreas')}`,
+            `${costCenterNames.length} ${t('main.summaryCostCenters')}`,
+            `${grants.length} ${t('main.summaryPermissions')}`,
+        ].join(' - ');
     }
-    const permissionsList = document.getElementById('business-profile-permissions-list');
-    if (permissionsList) {
-        permissionsList.innerHTML = '';
-        (cachedBusinessProfile.effectiveGrants || [])
-            .map(resolveGrantLabel)
-            .sort((a, b) => a.localeCompare(b))
-            .forEach((label) => {
-                const li = document.createElement('li');
-                li.textContent = label;
-                permissionsList.appendChild(li);
-            });
-    }
+
+    const fillSummaryList = (id, items, emptyKey) => {
+        const list = document.getElementById(id);
+        if (!list) return;
+        list.innerHTML = '';
+        if (!items.length) {
+            const li = document.createElement('li');
+            li.className = 'business-summary-empty';
+            li.textContent = t(emptyKey);
+            list.appendChild(li);
+            return;
+        }
+        items.forEach((label) => {
+            const li = document.createElement('li');
+            li.textContent = label;
+            list.appendChild(li);
+        });
+    };
+
+    fillSummaryList('business-summary-departments', departmentKeys.map(sectionGrantLabel), 'main.noDepartmentsAssigned');
+    fillSummaryList(
+        'business-summary-areas',
+        areaEntries.map(({ deptKey, area }) => `${sectionGrantLabel(deptKey)}: ${t(area.labelKey, area.labelParams)}`),
+        'main.noAreasAssigned'
+    );
+    fillSummaryList('business-summary-cost-centers', costCenterNames, 'main.noCostCentersAssigned');
+    fillSummaryList(
+        'business-summary-permissions',
+        grants.map(resolveGrantLabel).sort((a, b) => a.localeCompare(b)),
+        'main.noExtraPermissions'
+    );
 }
 
-document.getElementById('business-profile-permissions-toggle')?.addEventListener('click', () => {
-    const toggleBtn = document.getElementById('business-profile-permissions-toggle');
-    const list = document.getElementById('business-profile-permissions-list');
-    if (!toggleBtn || !list) return;
-    const isOpen = toggleBtn.getAttribute('aria-expanded') === 'true';
-    toggleBtn.setAttribute('aria-expanded', String(!isOpen));
-    list.hidden = isOpen;
+const businessSummaryModal = document.getElementById('business-summary-modal');
+
+function closeBusinessSummaryModal() {
+    if (businessSummaryModal) businessSummaryModal.hidden = true;
+}
+
+document.getElementById('business-profile-summary-btn')?.addEventListener('click', () => {
+    closeBusinessProfileMenu();
+    if (businessSummaryModal) businessSummaryModal.hidden = false;
+});
+
+businessSummaryModal?.addEventListener('click', (event) => {
+    if (event.target === businessSummaryModal) closeBusinessSummaryModal();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && businessSummaryModal && !businessSummaryModal.hidden) closeBusinessSummaryModal();
 });
 
 async function loadBusinessProfile() {
