@@ -923,7 +923,12 @@ document.querySelectorAll('.settings-dropdown-toggle').forEach((toggleBtn) => {
         const isOpen = group.classList.toggle('open');
         toggleBtn.setAttribute('aria-expanded', String(isOpen));
         submenu.style.height = isOpen ? `${submenu.scrollHeight}px` : '0';
-        refreshOpenAncestorHeights(group);
+        // Wait for this submenu's own 0.2s height transition to finish
+        // before resizing an open ancestor to match — reading scrollHeight
+        // right away captures whatever partial height the browser has
+        // animated to so far (near 0 just after opening), not the final
+        // size, so the ancestor was never actually growing to fit it.
+        submenu.addEventListener('transitionend', () => refreshOpenAncestorHeights(group), { once: true });
     });
 });
 
@@ -1482,6 +1487,18 @@ async function fetchClientBranding() {
     }
 }
 
+// Wraps a client's uploaded logo (raster, usually filling its whole square —
+// hence the "boxed" look it had as a plain favicon) in a small SVG that
+// clips it to a circle with a transparent surround, the common shape for a
+// company logo shown as a tiny tab icon.
+function buildFaviconDataUrl(logoDataUrl) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
+        + `<defs><clipPath id="c"><circle cx="32" cy="32" r="32"/></clipPath></defs>`
+        + `<image href="${logoDataUrl}" width="64" height="64" clip-path="url(#c)" preserveAspectRatio="xMidYMid slice"/>`
+        + `</svg>`;
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
 function applyClientBranding(branding) {
     if (!branding) return;
     // Institutional is a FULL theme variant, same depth as light/dark (see
@@ -1510,9 +1527,17 @@ function applyClientBranding(branding) {
         });
         // Browser tab icon — same swap as the sidebar logo, so whichever
         // client is logged in sees their own branding there too instead of
-        // SGN's, matching the sidebar (see applyClientBranding above).
+        // SGN's. Wrapped as a circular SVG (see buildFaviconDataUrl) rather
+        // than using the raw logo file directly, which showed as a plain
+        // square with whatever background the uploaded image itself has.
         const favicon = document.querySelector('link[rel="icon"]');
-        if (favicon) favicon.href = branding.logoDataUrl;
+        if (favicon) {
+            try {
+                favicon.href = buildFaviconDataUrl(branding.logoDataUrl);
+            } catch {
+                favicon.href = branding.logoDataUrl;
+            }
+        }
     }
     const brandLabel = document.querySelector('.brand span');
     if (brandLabel && branding.companyName) brandLabel.textContent = branding.companyName;
