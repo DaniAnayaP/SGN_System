@@ -275,6 +275,17 @@
     "chatbotPlaceholder": "Escribe un mensaje...",
     "chatbotSend": "Enviar",
     "chatbotGreeting": "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.",
-    "chatbotCannedReply": "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA."
+    "chatbotCannedReply": "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.",
+    "userInfo": "Datos de Usuario",
+    "personalDataTitle": "Datos Personales",
+    "nickname": "Apodo",
+    "businessEmail": "Correo empresarial",
+    "fullName": "Nombre completo",
+    "phone": "Teléfono",
+    "address": "Dirección",
+    "birthDate": "Fecha de nacimiento",
+    "idNumber": "Número de identificación",
+    "noBusinessEmail": "Sin correo institucional",
+    "notSet": "No registrado"
   }
 }

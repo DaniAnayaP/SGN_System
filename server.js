@@ -66,6 +66,7 @@ const {
     deactivateClientUsers,
     listBusinessUsers,
     getUserById,
+    getUserProfileById,
     listProfiles,
     getProfileById,
     createProfile,
@@ -253,6 +254,16 @@ app.post('/api/auth/logout', (req, res) => {
 // --- Example protected route --------------------------------------------------
 app.get('/api/me', requireAuth, (req, res) => {
     res.json({ user: req.user });
+});
+
+// Top-bar "Datos de Usuario" / "Datos Personales" panel — always the
+// caller's own profile (req.user.sub comes from their verified session
+// token), read fresh from the DB rather than the JWT so edits made
+// elsewhere show up without waiting for the token to expire.
+app.get('/api/me/profile', requireAuth, (req, res) => {
+    const profile = getUserProfileById(req.user.sub);
+    if (!profile) return res.status(404).json({ message: 'User not found.' });
+    res.json({ profile });
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -

@@ -63,7 +63,8 @@
     body.institutional-mode .dept-picker-btn:hover,
     body.institutional-mode .dept-picker.open .dept-picker-btn,
     body.institutional-mode .settings-menu.open #settings-btn,
-    body.institutional-mode .settings-dropdown-group.open .settings-dropdown-toggle{
+    body.institutional-mode .settings-dropdown-group.open .settings-dropdown-toggle,
+    body.institutional-mode .user-info-menu.open #user-info-btn{
         color: var(--institutional-accent, var(--color-text-primary));
     }
     body.institutional-mode .btn{
@@ -1106,6 +1107,76 @@
     .settings-submenu button.active{
         color: var(--color-text-primary);
         font-weight: 700;
+    }
+
+    /* "Datos de Usuario" / "Datos Personales" panel — read-only, so unlike
+       .settings-dropdown this has no buttons/links, just label:value rows
+       grouped under two headings. Positioning/open-state mirrors the
+       Settings dropdown right next to it. */
+    .user-info-menu{
+        position: relative;
+    }
+    .user-info-dropdown{
+        position: absolute;
+        top: 2.7rem;
+        right: 0;
+        width: 17rem;
+        max-height: 24rem;
+        overflow-y: auto;
+        padding: 0.75rem 0.9rem;
+        background-color: var(--color-surface);
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 16px var(--shadow-border), 0 0 0 1px var(--color-border);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-0.4rem);
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+        z-index: 10;
+    }
+    .user-info-menu.open .user-info-dropdown{
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+    .user-info-menu.open #user-info-btn{
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .user-info-group + .user-info-group{
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--color-border);
+    }
+    .user-info-group h4{
+        margin: 0 0 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--color-text-secondary);
+    }
+    .user-info-fields{
+        margin: 0;
+    }
+    .user-info-field{
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+        padding: 0.35rem 0;
+    }
+    .user-info-field + .user-info-field{
+        border-top: 1px dashed var(--color-border);
+    }
+    .user-info-field dt{
+        font-size: 0.7rem;
+        color: var(--color-text-secondary);
+    }
+    .user-info-field dd{
+        margin: 0;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--color-text-primary);
+        overflow-wrap: break-word;
     }
 
     /* Dark mode */

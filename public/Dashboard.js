@@ -124,7 +124,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI." }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -224,7 +224,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA." }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado" }
     }
 };
 
@@ -288,6 +288,7 @@ async function loadLanguage(lang) {
     updateDeptPickerLabel();
     renderAreaPickerOptions(); // rebuilds labels for the current department's areas
     renderCostCenterPicker(); // no-op until costCenters loads; re-translates the "Todos"/count label after that
+    renderUserProfile(); // no-op until the profile panel has been opened at least once
     document.dispatchEvent(new CustomEvent('dashboard:language-changed', { detail: { lang } }));
 }
 
@@ -839,6 +840,67 @@ document.addEventListener('keydown', (event) => {
 
 settingsDropdown?.addEventListener('click', (event) => {
     if (event.target.closest('button')) closeSettingsMenu();
+});
+
+// --- "Datos de Usuario" / "Datos Personales" panel ---------------------------
+// Read-only, fetched once per page load and cached — re-opening the dropdown
+// just re-shows the cached copy instead of refetching every time.
+const userInfoMenu = document.getElementById('user-info-menu');
+const userInfoBtn = document.getElementById('user-info-btn');
+let cachedUserProfile = null;
+
+function closeUserInfoMenu() {
+    userInfoMenu?.classList.remove('open');
+    userInfoBtn?.setAttribute('aria-expanded', 'false');
+}
+
+// Re-run on language change too (see loadLanguage) so an already-fetched
+// profile's fallback text ("Sin correo institucional" / "No registrado")
+// re-translates instead of staying stuck in the old language.
+function renderUserProfile() {
+    if (!cachedUserProfile) return;
+    const setField = (id, value, fallbackKey) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value || t(fallbackKey);
+    };
+    setField('user-info-nickname', cachedUserProfile.nickname, 'main.notSet');
+    setField('user-info-business-email', cachedUserProfile.business_email, 'main.noBusinessEmail');
+    setField('user-info-name', cachedUserProfile.name, 'main.notSet');
+    setField('user-info-phone', cachedUserProfile.phone, 'main.notSet');
+    setField('user-info-address', cachedUserProfile.address, 'main.notSet');
+    setField('user-info-birth-date', cachedUserProfile.birth_date, 'main.notSet');
+    setField('user-info-id-number', cachedUserProfile.id_number, 'main.notSet');
+}
+
+async function loadUserProfile() {
+    if (cachedUserProfile) {
+        renderUserProfile();
+        return;
+    }
+    try {
+        const res = await fetch('/api/me/profile');
+        if (!res.ok) return;
+        const { profile } = await res.json();
+        cachedUserProfile = profile;
+        renderUserProfile();
+    } catch (err) {
+        console.error('Failed to load user profile:', err);
+    }
+}
+
+userInfoBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = userInfoMenu.classList.toggle('open');
+    userInfoBtn.setAttribute('aria-expanded', String(isOpen));
+    if (isOpen) loadUserProfile();
+});
+
+document.addEventListener('click', (event) => {
+    if (userInfoMenu && !userInfoMenu.contains(event.target)) closeUserInfoMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeUserInfoMenu();
 });
 
 // Language / Style accordions: clicking "Language" or "Style" expands its

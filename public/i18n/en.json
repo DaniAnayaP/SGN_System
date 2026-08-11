@@ -275,6 +275,17 @@
     "chatbotPlaceholder": "Type a message...",
     "chatbotSend": "Send",
     "chatbotGreeting": "Hi! This assistant is still under construction — soon I'll be able to really help you here.",
-    "chatbotCannedReply": "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI."
+    "chatbotCannedReply": "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.",
+    "userInfo": "User Data",
+    "personalDataTitle": "Personal Data",
+    "nickname": "Nickname",
+    "businessEmail": "Business Email",
+    "fullName": "Full Name",
+    "phone": "Phone",
+    "address": "Address",
+    "birthDate": "Date of Birth",
+    "idNumber": "ID Number",
+    "noBusinessEmail": "No institutional email",
+    "notSet": "Not set"
   }
 }

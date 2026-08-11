@@ -117,6 +117,14 @@ if (!userColumns.some((c) => c.name === 'active')) {
 if (!userColumns.some((c) => c.name === 'is_client_admin')) {
     db.exec('ALTER TABLE users ADD COLUMN is_client_admin INTEGER NOT NULL DEFAULT 0');
 }
+// Self-service profile fields shown in the top-bar "Datos de Usuario" /
+// "Datos Personales" panel — all optional (blank until someone fills them
+// in), so a plain '' default reads as "not set" without needing NULL checks.
+for (const col of ['nickname', 'business_email', 'phone', 'address', 'birth_date', 'id_number']) {
+    if (!userColumns.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+    }
+}
 
 const clientColumns = db.prepare('PRAGMA table_info(clients)').all();
 if (!clientColumns.some((c) => c.name === 'admin_user_id')) {
@@ -675,6 +683,19 @@ function getUserById(id, clientId) {
         .get(id, clientId);
 }
 
+// Unscoped by client_id on purpose — this is always called with the caller's
+// own id straight from their verified session token (see GET /api/me/profile
+// in server.js), never an id supplied by the client, so there's no
+// cross-tenant lookup to guard against.
+function getUserProfileById(id) {
+    return db
+        .prepare(`
+            SELECT id, username, email, name, nickname, business_email, phone, address, birth_date, id_number
+            FROM users WHERE id = ?
+        `)
+        .get(id);
+}
+
 // --- Query helpers: profiles (perfiles, scoped to one client) ----------------
 function listProfiles(clientId) {
     return db.prepare('SELECT * FROM profiles WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
@@ -803,6 +824,7 @@ module.exports = {
     deactivateClientUsers,
     listBusinessUsers,
     getUserById,
+    getUserProfileById,
     listProfiles,
     getProfileById,
     createProfile,
