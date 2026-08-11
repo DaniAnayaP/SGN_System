@@ -884,51 +884,24 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeUserInfoMenu();
 });
 
-// Language / Style / Botón Salir accordions: clicking a group's toggle
-// expands its submenu in place without closing the whole settings dropdown.
-// Groups can nest (Botón Salir lives inside Configuración botones), so
-// "close the other groups" only closes true siblings — not the ancestor
-// that contains the group being opened — and an open ancestor's own height
-// gets recalculated afterward so the newly-revealed nested content isn't
-// clipped inside a box sized before it existed.
-function closeSettingsGroup(group) {
-    group.classList.remove('open');
-    group.querySelector('.settings-dropdown-toggle')?.setAttribute('aria-expanded', 'false');
-    const submenu = group.querySelector('.settings-submenu');
-    if (submenu) submenu.style.height = '0';
-}
-
-function refreshOpenAncestorHeights(group) {
-    let ancestor = group.parentElement?.closest('.settings-dropdown-group');
-    while (ancestor) {
-        if (ancestor.classList.contains('open')) {
-            const ancestorSubmenu = ancestor.querySelector('.settings-submenu');
-            if (ancestorSubmenu) ancestorSubmenu.style.height = `${ancestorSubmenu.scrollHeight}px`;
-        }
-        ancestor = ancestor.parentElement?.closest('.settings-dropdown-group');
-    }
-}
-
+// Language / Style / Configuración botones accordions: clicking a group's
+// toggle expands its submenu in place, closing any other open group (all
+// flat/single-level, same as Idioma and Estilo — no nesting).
 document.querySelectorAll('.settings-dropdown-toggle').forEach((toggleBtn) => {
     toggleBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         const group = toggleBtn.closest('.settings-dropdown-group');
         const submenu = group.querySelector('.settings-submenu');
-        Array.from(group.parentElement.children).forEach((sibling) => {
-            if (sibling !== group && sibling.classList.contains('settings-dropdown-group')) {
-                closeSettingsGroup(sibling);
-                sibling.querySelectorAll('.settings-dropdown-group.open').forEach(closeSettingsGroup);
+        document.querySelectorAll('.settings-dropdown-group').forEach((other) => {
+            if (other !== group) {
+                other.classList.remove('open');
+                other.querySelector('.settings-dropdown-toggle')?.setAttribute('aria-expanded', 'false');
+                other.querySelector('.settings-submenu').style.height = '0';
             }
         });
         const isOpen = group.classList.toggle('open');
         toggleBtn.setAttribute('aria-expanded', String(isOpen));
         submenu.style.height = isOpen ? `${submenu.scrollHeight}px` : '0';
-        // Wait for this submenu's own 0.2s height transition to finish
-        // before resizing an open ancestor to match — reading scrollHeight
-        // right away captures whatever partial height the browser has
-        // animated to so far (near 0 just after opening), not the final
-        // size, so the ancestor was never actually growing to fit it.
-        submenu.addEventListener('transitionend', () => refreshOpenAncestorHeights(group), { once: true });
     });
 });
 
