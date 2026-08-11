@@ -222,6 +222,17 @@ const MODULE_CATALOG = [
     { key: 'accounting', labelKey: 'menu.accounting' },
     { key: 'finance', labelKey: 'menu.finance' },
     { key: 'certifications', labelKey: 'menu.certifications' },
+    // Top-bar buttons — contracted at the client level same as departments;
+    // a button only actually shows for a given user when it's BOTH
+    // contracted here AND granted to them in Accesos y Permisos (see
+    // btn-mensajes/btn-chatbot/etc. under "General" in menu.json).
+    { key: 'btn-mensajes', labelKey: 'main.messages' },
+    { key: 'btn-chatbot', labelKey: 'main.chatbot' },
+    { key: 'btn-notificaciones', labelKey: 'main.notifications' },
+    { key: 'btn-marcadores', labelKey: 'main.bookmarks' },
+    { key: 'btn-configuracion', labelKey: 'main.settings' },
+    { key: 'btn-datos-usuario', labelKey: 'main.userInfo' },
+    { key: 'btn-datos-usuario-negocio', labelKey: 'main.businessProfile' },
 ];
 
 // --- Business admin: profiles and permission grants --------------------------

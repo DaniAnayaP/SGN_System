@@ -809,6 +809,13 @@
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
+    /* Top-bar buttons hidden per Accesos y Permisos / contratación (see
+       syncTopBarButtonVisibility in Dashboard.js) — !important so it wins
+       over ".top-bar-actions button"'s own display:flex regardless of
+       selector order. */
+    .top-bar-btn-hidden{
+        display: none !important;
+    }
     .Sidebar.minimize + main{
         /* Same 1rem gap on top of the collapsed sidebar's own width (4.94rem). */
         padding-left: 5.94rem;

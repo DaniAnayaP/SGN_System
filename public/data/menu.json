@@ -6,6 +6,13 @@
         { "id": "home", "labelKey": "menu.home", "icon": "bx-home-alt-2", "href": "#" },
         { "id": "panel", "labelKey": "menu.panel", "icon": "bx-grid-alt", "href": "#" },
         { "id": "dashboard", "labelKey": "menu.dashboard", "icon": "bx-bar-chart-alt-2", "href": "Inicio-en.html" },
+        { "id": "btn-mensajes", "labelKey": "main.messages", "icon": "bx-message", "href": "#", "permissionOnly": true },
+        { "id": "btn-chatbot", "labelKey": "main.chatbot", "icon": "bx-bot", "href": "#", "permissionOnly": true },
+        { "id": "btn-notificaciones", "labelKey": "main.notifications", "icon": "bx-bell", "href": "#", "permissionOnly": true },
+        { "id": "btn-marcadores", "labelKey": "main.bookmarks", "icon": "bx-bookmarks", "href": "#", "permissionOnly": true },
+        { "id": "btn-configuracion", "labelKey": "main.settings", "icon": "bx-cog", "href": "#", "permissionOnly": true },
+        { "id": "btn-datos-usuario", "labelKey": "main.userInfo", "icon": "bx-user-circle", "href": "#", "permissionOnly": true },
+        { "id": "btn-datos-usuario-negocio", "labelKey": "main.businessProfile", "icon": "bx-briefcase", "href": "#", "permissionOnly": true },
         {
           "id": "admin-business",
           "labelKey": "menu.adminBusiness",
@@ -98,9 +105,9 @@
       "submenu": [
         { "id": "cat-iconos-botones-1", "labelKey": "menu.catIconosBotonesItem1", "icon": "bx-window", "href": "#" },
         { "id": "cat-iconos-botones-2", "labelKey": "menu.catIconosBotonesItem2", "icon": "bx-window", "href": "#" },
-        { "id": "btn-departamento", "labelKey": "menu.btnDepartamento", "icon": "bx-buildings", "href": "#" },
-        { "id": "btn-area", "labelKey": "menu.btnArea", "icon": "bx-collection", "href": "#" },
-        { "id": "btn-cc", "labelKey": "menu.btnCostCenters", "icon": "bx-purchase-tag-alt", "href": "#" }
+        { "id": "btn-departamento", "labelKey": "menu.btnDepartamento", "icon": "bx-buildings", "href": "#", "permissionOnly": true },
+        { "id": "btn-area", "labelKey": "menu.btnArea", "icon": "bx-collection", "href": "#", "permissionOnly": true },
+        { "id": "btn-cc", "labelKey": "menu.btnCostCenters", "icon": "bx-purchase-tag-alt", "href": "#", "permissionOnly": true }
       ]
     }
   ],

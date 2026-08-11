@@ -384,6 +384,10 @@ const ALWAYS_VISIBLE_SECTIONS = ['main'];
 // nothing breaks before that fetch resolves; admin/GEIPSA never shows the
 // picker at all, so it's simply never narrowed for that role.
 let availableDepartments = DEPARTMENTS;
+// Raw contracted-module keys (departments + top-bar buttons), kept around
+// after initDashboard() loads them so syncTopBarButtonVisibility() can
+// re-check it without needing its own fetch.
+let contractedModuleKeys = [];
 
 async function fetchContractedModuleKeys() {
     try {
@@ -608,7 +612,7 @@ function buildMenuItem(item) {
 
     li.appendChild(a);
     if (item.submenu) {
-        li.appendChild(buildSubmenu(item.submenu));
+        li.appendChild(buildSubmenu(item.submenu.filter((sm) => !sm.permissionOnly)));
     }
     return li;
 }
@@ -653,7 +657,11 @@ function renderMenu(data) {
     mount.innerHTML = '';
 
     data.sections.forEach((section) => {
-        let items = section.items;
+        // Items flagged permissionOnly (e.g. the top-bar button shortcuts
+        // under "Iconos y Botones" / "General") exist purely to be granted
+        // in Accesos y Permisos — they're not real navigation, so they never
+        // render here even though PermissionTree.js still lists them.
+        let items = (section.items || []).filter((i) => !i.permissionOnly);
         // "Administración del Negocio" no longer gets its own sidebar
         // shortcut — it's reachable from the top-bar Settings dropdown
         // instead (renderBusinessAdminSettingsMenu below), so just drop it
@@ -1666,6 +1674,42 @@ function syncButtonConfigShortcuts() {
     if (ccShortcut) ccShortcut.hidden = !hasButtonPermission('btn-cc');
 }
 
+// The 7 real top-bar buttons (Mensajes/Chatbot/Notificaciones/Marcadores/
+// Configuración/Datos de Usuario/Datos de Usuario del Negocio) live once
+// under "General" in menu.json, not nested in a submenu — so their grant is
+// keyed by itemId directly (sectionId 'main', submenuId null).
+function hasMainButtonPermission(itemId) {
+    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === 'main' && g.itemId === itemId);
+}
+
+// Double-gated: a button only shows for role !== 'admin' when the CLIENT has
+// contracted it (MODULE_CATALOG, same mechanism as department modules) AND
+// the current USER has been granted it in Accesos y Permisos. GEIPSA staff
+// aren't a client with contracted modules, so this never touches that role.
+const TOP_BAR_BUTTONS = [
+    { moduleKey: 'btn-mensajes', itemId: 'btn-mensajes', elementId: 'messages-btn' },
+    { moduleKey: 'btn-chatbot', itemId: 'btn-chatbot', elementId: 'chatbot-btn' },
+    { moduleKey: 'btn-notificaciones', itemId: 'btn-notificaciones', elementId: 'notifications-btn' },
+    { moduleKey: 'btn-marcadores', itemId: 'btn-marcadores', elementId: 'bookmarks-btn' },
+    { moduleKey: 'btn-configuracion', itemId: 'btn-configuracion', elementId: 'settings-menu' },
+    { moduleKey: 'btn-datos-usuario', itemId: 'btn-datos-usuario', elementId: 'user-info-menu' },
+    { moduleKey: 'btn-datos-usuario-negocio', itemId: 'btn-datos-usuario-negocio', elementId: 'business-profile-menu' },
+];
+
+function syncTopBarButtonVisibility() {
+    if (currentRole === 'admin') return;
+    TOP_BAR_BUTTONS.forEach(({ moduleKey, itemId, elementId }) => {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const visible = contractedModuleKeys.includes(moduleKey) && hasMainButtonPermission(itemId);
+        // A plain `hidden` attribute loses to ".top-bar-actions button"
+        // (higher specificity, forces display:flex) in some browsers — a
+        // dedicated !important class sidesteps that instead of relying on
+        // [hidden]'s UA-stylesheet specificity.
+        el.classList.toggle('top-bar-btn-hidden', !visible);
+    });
+}
+
 // stopPropagation matters here: without it, the original click's bubbling
 // reaches that same picker's own "close if the click landed outside me"
 // document listener right after we open it (the picker being opened isn't
@@ -1867,7 +1911,7 @@ async function initDashboard({ activePage } = {}) {
         // now, in parallel — "Configuración de Botones" needs their granted
         // permissions ready before the first render, not just whenever they
         // happen to open the "Datos de Usuario del Negocio" panel.
-        const [contractedModuleKeys] = await Promise.all([fetchContractedModuleKeys(), loadBusinessProfile()]);
+        [contractedModuleKeys] = await Promise.all([fetchContractedModuleKeys(), loadBusinessProfile()]);
         availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
         if (!availableDepartments.some((d) => d.key === selectedDepartment)) {
             selectedDepartment = availableDepartments.length === 1 ? availableDepartments[0].key : null;
@@ -1903,6 +1947,7 @@ async function initDashboard({ activePage } = {}) {
         document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');
     }
     syncButtonConfigShortcuts();
+    syncTopBarButtonVisibility();
     // Restore the saved style now that clientBranding (needed for
     // Institutional's real colors) has loaded — every other page load was
     // resetting back to Light since nothing re-applied the choice.
