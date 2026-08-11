@@ -46,7 +46,8 @@
       "supplyChain": "SCM",
       "managementControl": "MC",
       "generalManagement": "GM",
-      "steeringCommittee": "STC"
+      "steeringCommittee": "STC",
+      "certifications": "CERT"
     },
     "area": "Area",
     "costCenters": "Cost Centers",
@@ -86,6 +87,7 @@
     "humanResources": "Human Resources",
     "accounting": "Accounting",
     "finance": "Finance",
+    "certifications": "Certifications",
     "deptArea": "Dept. Area {n}",
     "option": "Option {n}",
     "area": {
@@ -97,7 +99,9 @@
       "pointOfSale": "Point of Sale",
       "delivery": "Delivery",
       "endCustomer": "End Customer",
-      "customerComplaints": "Customer Complaints"
+      "customerComplaints": "Customer Complaints",
+      "iso9001": "ISO 9001:2015 Quality Management System",
+      "iso9001Abbr": "QMS 9001:2015"
     },
     "clientesRegistrados": "Registered Clients",
     "addClientNew": "+ Add New Client",

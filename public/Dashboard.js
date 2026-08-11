@@ -28,7 +28,7 @@ let currentUser = null;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", deptAbbr: { finance: "FIN", accounting: "ACC", humanResources: "HR", marketing: "MKT", commercial: "COM", purchasing: "PUR", supplyChain: "SCM", managementControl: "MC", generalManagement: "GM", steeringCommittee: "STC" }, area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", department: "Department", deptAbbr: { finance: "FIN", accounting: "ACC", humanResources: "HR", marketing: "MKT", commercial: "COM", purchasing: "PUR", supplyChain: "SCM", managementControl: "MC", generalManagement: "GM", steeringCommittee: "STC", certifications: "CERT" }, area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
         menu: {
             home: "Home", panel: "Panel", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Style",
@@ -41,8 +41,9 @@ const EMBEDDED_TRANSLATIONS = {
             inventory: "Inventory", consumption: "Consumption", overstock: "Overstock",
             purchasing: "Purchasing", commercial: "Commercial", marketing: "Marketing",
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
+            certifications: "Certifications",
             deptArea: "Dept. Area {n}", option: "Option {n}",
-            area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transport: "Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints" },
+            area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transport: "Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015" },
             clientesRegistrados: "Registered Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Registered Plans", addPlanNew: "+ Add New Plan", mainSection: "General",
             catCatalogos: "Catalogs", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operations", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
@@ -127,7 +128,7 @@ const EMBEDDED_TRANSLATIONS = {
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", deptAbbr: { finance: "FIN", accounting: "CONT", humanResources: "RRHH", marketing: "MKT", commercial: "COM", purchasing: "COMP", supplyChain: "CDS", managementControl: "CG", generalManagement: "DG", steeringCommittee: "CD" }, area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", department: "Departamento", deptAbbr: { finance: "FIN", accounting: "CONT", humanResources: "RRHH", marketing: "MKT", commercial: "COM", purchasing: "COMP", supplyChain: "CDS", managementControl: "CG", generalManagement: "DG", steeringCommittee: "CD", certifications: "CERT" }, area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
         menu: {
             home: "Inicio", panel: "Panel", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Estilo del Negocio",
@@ -140,7 +141,9 @@ const EMBEDDED_TRANSLATIONS = {
             inventory: "Inventario", consumption: "Consumos", overstock: "Sobre Stock",
             purchasing: "Compras", commercial: "Comercial", marketing: "Mercadotecnia",
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
+            certifications: "Certificaciones",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
+            area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transport: "Transporte", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015" },
             clientesRegistrados: "Clientes Registrados", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Planes Registrados", addPlanNew: "+ Agregar Plan Nuevo", mainSection: "General",
             catCatalogos: "Catálogos", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operaciones", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
@@ -318,10 +321,7 @@ const EMBEDDED_MENU_FALLBACK = {
             { id: 'dashboard', labelKey: 'menu.dashboard', icon: 'bx-bar-chart-alt-2', href: 'Inicio-en.html' }
         ]
     }],
-    footer: [
-        { labelKey: 'sidebar.notifications', icon: 'bx-bell', href: '#' },
-        { labelKey: 'sidebar.settings', icon: 'bx-cog', href: '#' }
-    ],
+    footer: [],
     user: { name: 'Daniel Anaya', email: 'daniel.anaya@geipsa.com', avatar: 'Imagenes/User.jpg' }
 };
 
@@ -384,7 +384,8 @@ const DEPARTMENTS = [
     { key: 'supply-chain', labelKey: 'menu.supplyChain', abbrKey: 'sidebar.deptAbbr.supplyChain', icon: 'bx-package' },
     { key: 'management-control', labelKey: 'menu.managementControl', abbrKey: 'sidebar.deptAbbr.managementControl', icon: 'bx-line-chart' },
     { key: 'general-management', labelKey: 'menu.generalManagement', abbrKey: 'sidebar.deptAbbr.generalManagement', icon: 'bx-crown' },
-    { key: 'steering-committee', labelKey: 'menu.steeringCommittee', abbrKey: 'sidebar.deptAbbr.steeringCommittee', icon: 'bx-group' }
+    { key: 'steering-committee', labelKey: 'menu.steeringCommittee', abbrKey: 'sidebar.deptAbbr.steeringCommittee', icon: 'bx-group' },
+    { key: 'certifications', labelKey: 'menu.certifications', abbrKey: 'sidebar.deptAbbr.certifications', icon: 'bx-certification' }
 ];
 const ALWAYS_VISIBLE_SECTIONS = ['main'];
 
@@ -439,7 +440,10 @@ const AREAS_BY_DEPARTMENT = {
     purchasing: GENERIC_AREAS,
     'management-control': GENERIC_AREAS,
     'general-management': GENERIC_AREAS,
-    'steering-committee': GENERIC_AREAS
+    'steering-committee': GENERIC_AREAS,
+    certifications: [
+        { key: 'cert-area-iso-9001', labelKey: 'menu.area.iso9001', abbrKey: 'menu.area.iso9001Abbr', icon: 'bx-badge-check' }
+    ]
 };
 
 function getStoredArea() {
@@ -471,12 +475,16 @@ function renderFilteredMenu() {
     applyRealUserIdentity();
 }
 
+// Most areas' full names are already short enough to show as-is; a few
+// (e.g. "ISO 9001:2015 Sistema de Gestión de Calidad") are long enough to
+// need a dedicated abbreviation instead of just truncating with ellipsis —
+// abbrKey is optional and falls back to the full name when not set.
 function updateAreaPickerLabel() {
     const label = document.getElementById('area-picker-label');
     if (!label) return;
     const areas = AREAS_BY_DEPARTMENT[selectedDepartment] || [];
     const area = areas.find((a) => a.key === selectedArea);
-    label.textContent = area ? t(area.labelKey, area.labelParams || {}) : t('sidebar.area');
+    label.textContent = area ? t(area.abbrKey || area.labelKey, area.labelParams || {}) : t('sidebar.area');
     document.querySelectorAll('.area-option').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.area === selectedArea);
     });

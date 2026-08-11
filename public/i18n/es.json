@@ -46,7 +46,8 @@
       "supplyChain": "CDS",
       "managementControl": "CG",
       "generalManagement": "DG",
-      "steeringCommittee": "CD"
+      "steeringCommittee": "CD",
+      "certifications": "CERT"
     },
     "area": "Área",
     "costCenters": "Centros de Costo",
@@ -86,6 +87,7 @@
     "humanResources": "Recursos Humanos",
     "accounting": "Contabilidad",
     "finance": "Finanzas",
+    "certifications": "Certificaciones",
     "deptArea": "Área Dep. {n}",
     "option": "Opción {n}",
     "area": {
@@ -97,7 +99,9 @@
       "pointOfSale": "Punto Venta",
       "delivery": "Delivery",
       "endCustomer": "Cliente Final",
-      "customerComplaints": "Quejas de Cliente"
+      "customerComplaints": "Quejas de Cliente",
+      "iso9001": "ISO 9001:2015 Sistema de Gestión de Calidad",
+      "iso9001Abbr": "SGC 9001:2015"
     },
     "clientesRegistrados": "Clientes Registrados",
     "addClientNew": "+ Agregar Cliente Nuevo",

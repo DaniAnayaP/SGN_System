@@ -33,7 +33,8 @@
     { "id": "marketing", "items": [] },
     { "id": "human-resources", "items": [] },
     { "id": "accounting", "items": [] },
-    { "id": "finance", "items": [] }
+    { "id": "finance", "items": [] },
+    { "id": "certifications", "items": [] }
   ],
   "areaCategories": [
     {
@@ -91,10 +92,7 @@
       ]
     }
   ],
-  "footer": [
-    { "labelKey": "sidebar.notifications", "icon": "bx-bell", "href": "#" },
-    { "labelKey": "sidebar.settings", "icon": "bx-cog", "href": "#" }
-  ],
+  "footer": [],
   "user": {
     "name": "Daniel Anaya",
     "email": "daniel.anaya@geipsa.com",
