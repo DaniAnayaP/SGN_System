@@ -244,17 +244,6 @@ async function authGuard() {
     }
 }
 
-// renderMenu() sets #user-name/#user-email from menu.json's static demo
-// data — call this right after to replace it with whoever is actually
-// signed in.
-function applyRealUserIdentity() {
-    if (!currentUser) return;
-    const nameEl = document.getElementById('user-name');
-    const emailEl = document.getElementById('user-email');
-    if (nameEl) nameEl.textContent = currentUser.name || currentUser.username || '';
-    if (emailEl) emailEl.textContent = currentUser.email || '';
-}
-
 // --- i18n --------------------------------------------------------------------
 function getStoredLang() {
     const stored = localStorage.getItem('lang');
@@ -322,8 +311,7 @@ const EMBEDDED_MENU_FALLBACK = {
             { id: 'dashboard', labelKey: 'menu.dashboard', icon: 'bx-bar-chart-alt-2', href: 'Inicio-en.html' }
         ]
     }],
-    footer: [],
-    user: { name: 'Daniel Anaya', email: 'daniel.anaya@geipsa.com', avatar: 'Imagenes/User.jpg' }
+    footer: []
 };
 
 async function loadMenu() {
@@ -473,7 +461,6 @@ function applyAreaFilter(data) {
 
 function renderFilteredMenu() {
     if (menuData) renderMenu(applyAreaFilter(applyDepartmentFilter(menuData)));
-    applyRealUserIdentity();
 }
 
 // Most areas' full names are already short enough to show as-is; a few
@@ -671,12 +658,6 @@ function renderMenu(data) {
         li.appendChild(a);
         footerMount.appendChild(li);
     });
-
-    document.getElementById('user-name').textContent = data.user.name;
-    document.getElementById('user-email').textContent = data.user.email;
-    if (data.user.avatar) {
-        document.getElementById('user-avatar').src = data.user.avatar;
-    }
 
     wireMenuInteractions();
 }
