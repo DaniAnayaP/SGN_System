@@ -218,23 +218,11 @@
                     s.id === 'main' ? s : { ...s, items: [...generalItems, ...(areaCategories || [])] }
                 ));
                 grantSet = expand(initialGrants || []);
-                // Start collapsed everywhere except any section/item that
-                // already has at least one granted leaf — so existing
-                // grants are never hidden behind a closed row on load, but
-                // the tree isn't a 50+ row wall by default either.
+                // Everything starts collapsed, even sections/items that
+                // already have a grant — simpler and more predictable than
+                // guessing which rows to auto-open.
                 expandedSections = new Set();
                 expandedItems = new Set();
-                sectionsData.forEach((section) => {
-                    const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
-                    if (sectionLeafKeys.some((k) => grantSet.has(k))) expandedSections.add(section.id);
-                    section.items.forEach((item) => {
-                        const itemLeafKeys = leafKeysUnder(section, item);
-                        if (itemLeafKeys.some((k) => grantSet.has(k))) {
-                            expandedItems.add(`${section.id}::${item.id}`);
-                            expandedSections.add(section.id);
-                        }
-                    });
-                });
                 render();
             },
             getGrants() {
