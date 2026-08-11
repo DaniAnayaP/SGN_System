@@ -235,9 +235,43 @@
                             </div>
                         </div>
                     </div>
-                    <button type="button" data-i18n-aria="main.addUser" aria-label="Add user">
-                        <i class="bx bx-user-plus" aria-hidden="true"></i>
-                    </button>
+                    <div class="user-info-menu" id="business-profile-menu">
+                        <button type="button" data-i18n-aria="main.businessProfile" aria-label="Business User Data" id="business-profile-btn"
+                                aria-haspopup="true" aria-expanded="false">
+                            <i class="bx bx-briefcase" aria-hidden="true"></i>
+                        </button>
+                        <div class="user-info-dropdown" id="business-profile-dropdown" role="menu">
+                            <div class="user-info-group">
+                                <h4 data-i18n="main.businessProfile">Business User Data</h4>
+                                <dl class="user-info-fields">
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.position">Position</dt>
+                                        <dd id="business-profile-position">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.role">Role</dt>
+                                        <dd id="business-profile-role">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.permissions">Permissions</dt>
+                                        <dd id="business-profile-permissions">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.assignedCostCenter">Assigned Cost Center</dt>
+                                        <dd id="business-profile-cost-center">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.assignedAreas">Assigned Areas</dt>
+                                        <dd id="business-profile-areas">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.assignedDepartments">Assigned Departments</dt>
+                                        <dd id="business-profile-departments">—</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

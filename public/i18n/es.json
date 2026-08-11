@@ -296,6 +296,16 @@
     "birthDate": "Fecha de nacimiento",
     "idNumber": "Número de identificación",
     "noBusinessEmail": "Sin correo institucional",
-    "notSet": "No registrado"
+    "notSet": "No registrado",
+    "businessProfile": "Datos de Usuario del Negocio",
+    "position": "Puesto",
+    "role": "Rol",
+    "permissions": "Permisos",
+    "assignedCostCenter": "Centro de costo asignado",
+    "assignedAreas": "Áreas asignadas",
+    "assignedDepartments": "Departamentos asignados",
+    "noRoleAssigned": "Sin perfil asignado",
+    "noExtraPermissions": "Sin permisos adicionales",
+    "extraPermissionsCount": "{count} permisos adicionales otorgados"
   }
 }

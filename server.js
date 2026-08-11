@@ -67,6 +67,7 @@ const {
     listBusinessUsers,
     getUserById,
     getUserProfileById,
+    getUserBusinessProfileById,
     listProfiles,
     getProfileById,
     createProfile,
@@ -262,6 +263,14 @@ app.get('/api/me', requireAuth, (req, res) => {
 // elsewhere show up without waiting for the token to expire.
 app.get('/api/me/profile', requireAuth, (req, res) => {
     const profile = getUserProfileById(req.user.sub);
+    if (!profile) return res.status(404).json({ message: 'User not found.' });
+    res.json({ profile });
+});
+
+// Top-bar "Datos de Usuario del Negocio" panel — same "always the caller's
+// own, read fresh" reasoning as /api/me/profile above.
+app.get('/api/me/business-profile', requireAuth, (req, res) => {
+    const profile = getUserBusinessProfileById(req.user.sub);
     if (!profile) return res.status(404).json({ message: 'User not found.' });
     res.json({ profile });
 });

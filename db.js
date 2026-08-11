@@ -125,6 +125,15 @@ for (const col of ['nickname', 'business_email', 'phone', 'address', 'birth_date
         db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
     }
 }
+// "Datos de Usuario del Negocio" panel — position and the assigned
+// cost-center/areas/departments have no assignment UI yet (unlike Rol and
+// Permisos below, which already come from the real profiles/grants
+// tables), so these just start blank like the fields above.
+for (const col of ['position', 'assigned_cost_center', 'assigned_areas', 'assigned_departments']) {
+    if (!userColumns.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+    }
+}
 
 const clientColumns = db.prepare('PRAGMA table_info(clients)').all();
 if (!clientColumns.some((c) => c.name === 'admin_user_id')) {
@@ -696,6 +705,26 @@ function getUserProfileById(id) {
         .get(id);
 }
 
+// Backs the top-bar "Datos de Usuario del Negocio" panel — Rol and Permisos
+// come from the real profiles/grants tables (getUserProfiles/getUserGrants,
+// defined further down); position and the assigned cost-center/areas/
+// departments are plain columns with no assignment UI yet (see the
+// migration above), same "blank until someone fills it in" idea.
+function getUserBusinessProfileById(id) {
+    const user = db
+        .prepare(`
+            SELECT id, position, assigned_cost_center, assigned_areas, assigned_departments
+            FROM users WHERE id = ?
+        `)
+        .get(id);
+    if (!user) return null;
+    return {
+        ...user,
+        profileNames: getUserProfiles(id).map((p) => p.name),
+        grantsCount: getUserGrants(id).length,
+    };
+}
+
 // --- Query helpers: profiles (perfiles, scoped to one client) ----------------
 function listProfiles(clientId) {
     return db.prepare('SELECT * FROM profiles WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
@@ -825,6 +854,7 @@ module.exports = {
     listBusinessUsers,
     getUserById,
     getUserProfileById,
+    getUserBusinessProfileById,
     listProfiles,
     getProfileById,
     createProfile,

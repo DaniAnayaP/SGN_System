@@ -296,6 +296,16 @@
     "birthDate": "Date of Birth",
     "idNumber": "ID Number",
     "noBusinessEmail": "No institutional email",
-    "notSet": "Not set"
+    "notSet": "Not set",
+    "businessProfile": "Business User Data",
+    "position": "Position",
+    "role": "Role",
+    "permissions": "Permissions",
+    "assignedCostCenter": "Assigned Cost Center",
+    "assignedAreas": "Assigned Areas",
+    "assignedDepartments": "Assigned Departments",
+    "noRoleAssigned": "No profile assigned",
+    "noExtraPermissions": "No extra permissions",
+    "extraPermissionsCount": "{count} extra permissions granted"
   }
 }

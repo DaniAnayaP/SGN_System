@@ -124,7 +124,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking" }
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No extra permissions", extraPermissionsCount: "{count} extra permissions granted" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -224,7 +224,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar" }
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos adicionales", extraPermissionsCount: "{count} permisos adicionales otorgados" }
     }
 };
 
@@ -278,6 +278,7 @@ async function loadLanguage(lang) {
     renderAreaPickerOptions(); // rebuilds labels for the current department's areas
     renderCostCenterPicker(); // no-op until costCenters loads; re-translates the "Todos"/count label after that
     renderUserProfile(); // no-op until the profile panel has been opened at least once
+    renderBusinessProfile(); // same, for the business-profile panel
     document.dispatchEvent(new CustomEvent('dashboard:language-changed', { detail: { lang } }));
 }
 
@@ -882,6 +883,74 @@ document.addEventListener('click', (event) => {
 
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeUserInfoMenu();
+});
+
+// --- "Datos de Usuario del Negocio" panel ------------------------------------
+// Same read-once-and-cache shape as "Datos de Usuario" above. Rol/Permisos
+// come from the real profiles/grants tables; Puesto/Centro de costo/Áreas/
+// Departamentos have no assignment screen yet, so they just show "No
+// registrado" until one exists.
+const businessProfileMenu = document.getElementById('business-profile-menu');
+const businessProfileBtn = document.getElementById('business-profile-btn');
+let cachedBusinessProfile = null;
+
+function closeBusinessProfileMenu() {
+    businessProfileMenu?.classList.remove('open');
+    businessProfileBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function renderBusinessProfile() {
+    if (!cachedBusinessProfile) return;
+    const setField = (id, value, fallbackKey) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value || t(fallbackKey);
+    };
+    setField('business-profile-position', cachedBusinessProfile.position, 'main.notSet');
+    setField('business-profile-cost-center', cachedBusinessProfile.assigned_cost_center, 'main.notSet');
+    setField('business-profile-areas', cachedBusinessProfile.assigned_areas, 'main.notSet');
+    setField('business-profile-departments', cachedBusinessProfile.assigned_departments, 'main.notSet');
+
+    const roleEl = document.getElementById('business-profile-role');
+    if (roleEl) {
+        const names = cachedBusinessProfile.profileNames || [];
+        roleEl.textContent = names.length ? names.join(', ') : t('main.noRoleAssigned');
+    }
+    const permissionsEl = document.getElementById('business-profile-permissions');
+    if (permissionsEl) {
+        const count = cachedBusinessProfile.grantsCount || 0;
+        permissionsEl.textContent = count > 0 ? t('main.extraPermissionsCount', { count }) : t('main.noExtraPermissions');
+    }
+}
+
+async function loadBusinessProfile() {
+    if (cachedBusinessProfile) {
+        renderBusinessProfile();
+        return;
+    }
+    try {
+        const res = await fetch('/api/me/business-profile');
+        if (!res.ok) return;
+        const { profile } = await res.json();
+        cachedBusinessProfile = profile;
+        renderBusinessProfile();
+    } catch (err) {
+        console.error('Failed to load business profile:', err);
+    }
+}
+
+businessProfileBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = businessProfileMenu.classList.toggle('open');
+    businessProfileBtn.setAttribute('aria-expanded', String(isOpen));
+    if (isOpen) loadBusinessProfile();
+});
+
+document.addEventListener('click', (event) => {
+    if (businessProfileMenu && !businessProfileMenu.contains(event.target)) closeBusinessProfileMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeBusinessProfileMenu();
 });
 
 // Language / Style / Configuración botones accordions: clicking a group's
