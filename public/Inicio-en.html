@@ -183,18 +183,27 @@
                                     <i class="bx bx-chevron-down" aria-hidden="true"></i>
                                 </button>
                                 <ul class="settings-submenu" id="button-config-submenu" role="menu">
-                                    <li role="none" class="settings-submenu-label" data-i18n="main.exitButton">Exit Button</li>
-                                    <li role="none">
-                                        <button type="button" role="menuitemradio" aria-checked="true" class="logout-mode-option active" data-logout-mode="confirm">
-                                            <i class="bx bx-message-alt-question" aria-hidden="true"></i>
-                                            <span data-i18n="main.logoutModeConfirm">Ask before exiting</span>
-                                        </button>
-                                    </li>
-                                    <li role="none">
-                                        <button type="button" role="menuitemradio" aria-checked="false" class="logout-mode-option" data-logout-mode="direct">
+                                    <li role="none" class="settings-dropdown-group" id="exit-button-group">
+                                        <button type="button" class="settings-dropdown-toggle" id="exit-button-toggle-btn"
+                                                aria-haspopup="true" aria-expanded="false">
                                             <i class="bx bx-log-out" aria-hidden="true"></i>
-                                            <span data-i18n="main.logoutModeDirect">Exit without asking</span>
+                                            <span data-i18n="main.exitButton">Exit Button</span>
+                                            <i class="bx bx-chevron-down" aria-hidden="true"></i>
                                         </button>
+                                        <ul class="settings-submenu" id="exit-button-submenu" role="menu">
+                                            <li role="none">
+                                                <button type="button" role="menuitemradio" aria-checked="true" class="logout-mode-option active" data-logout-mode="confirm">
+                                                    <i class="bx bx-message-alt-question" aria-hidden="true"></i>
+                                                    <span data-i18n="main.logoutModeConfirm">Ask before exiting</span>
+                                                </button>
+                                            </li>
+                                            <li role="none">
+                                                <button type="button" role="menuitemradio" aria-checked="false" class="logout-mode-option" data-logout-mode="direct">
+                                                    <i class="bx bx-log-out" aria-hidden="true"></i>
+                                                    <span data-i18n="main.logoutModeDirect">Exit without asking</span>
+                                                </button>
+                                            </li>
+                                        </ul>
                                     </li>
                                 </ul>
                             </li>

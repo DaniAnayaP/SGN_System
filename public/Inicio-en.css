@@ -1108,18 +1108,6 @@
         color: var(--color-text-primary);
         font-weight: 700;
     }
-    /* Non-interactive heading inside a settings-submenu (e.g. "Botón Salir"
-       above its Preguntar antes de salir / Salir sin preguntar options) —
-       same left offset as the buttons below it, just not clickable. */
-    .settings-submenu-label{
-        padding: 0.4rem 0.6rem 0.15rem 1.5rem;
-        font-size: 0.65rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        color: var(--color-text-secondary);
-    }
-
     /* "Datos de Usuario" / "Datos Personales" panel — read-only, so unlike
        .settings-dropdown this has no buttons/links, just label:value rows
        grouped under two headings. Positioning/open-state mirrors the
