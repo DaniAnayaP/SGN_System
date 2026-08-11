@@ -1737,7 +1737,14 @@ const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-admin-negocio', '
 function hasSettingsAccess() {
     if (isUnrestrictedClientAdmin()) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
-    return grants.some((g) => g.sectionId === 'main' && (g.itemId === 'btn-configuracion' || SETTINGS_SUBITEM_IDS.includes(g.submenuId)));
+    return grants.some((g) => {
+        if (g.sectionId !== 'main' || g.itemId !== 'btn-configuracion') return false;
+        if (!g.submenuId) return true;
+        // "btn-admin-negocio/ab-roles" (a specific Administración del
+        // Negocio screen) still counts as "has some access to Configuración"
+        // even though it doesn't exactly equal "btn-admin-negocio".
+        return SETTINGS_SUBITEM_IDS.some((id) => g.submenuId === id || g.submenuId.startsWith(`${id}/`));
+    });
 }
 
 const TOP_BAR_BUTTONS = [
