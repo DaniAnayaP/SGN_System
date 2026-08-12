@@ -133,6 +133,13 @@
         { "id": "cat-operaciones-transporte-vol-gastos", "labelKey": "menu.opTransVolGastos", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-inventario", "labelKey": "menu.opTransVolInventario", "icon": "bx-window", "href": "#" }
       ]
+    },
+    "supply-chain/sc-area-distribution-center": {
+      "cat-catalogos": [
+        { "id": "cat-catalogos-centro-dist-codigos", "labelKey": "menu.catCentroDistCodigos", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-centro-dist-categorias", "labelKey": "menu.catCentroDistCategorias", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-centro-dist-udm", "labelKey": "menu.catCentroDistUdm", "icon": "bx-window", "href": "#" }
+      ]
     }
   },
   "footer": []
