@@ -2330,6 +2330,13 @@ function isBreadcrumbCollapsed() {
     return localStorage.getItem(BREADCRUMB_COLLAPSED_KEY) === 'true';
 }
 
+// Set by renderBreadcrumbBar() to the current screen's own name (the last
+// crumb) — shown in the collapsed toggle instead of a generic "Ruta" label,
+// so collapsing the trail doesn't lose track of which screen this is. Pages
+// that skip the big .page-header h1 (see Registro de traslados) rely on
+// this as their only on-screen title once the breadcrumb is collapsed.
+let currentBreadcrumbLabel = '';
+
 function setBreadcrumbCollapsed(collapsed) {
     const bar = document.getElementById('breadcrumb-bar');
     const toggle = document.getElementById('breadcrumb-toggle');
@@ -2340,7 +2347,7 @@ function setBreadcrumbCollapsed(collapsed) {
     const chevron = toggle.querySelector('.breadcrumb-toggle-chevron');
     if (chevron) chevron.className = `bx breadcrumb-toggle-chevron ${collapsed ? 'bx-chevron-down' : 'bx-chevron-up'}`;
     const label = toggle.querySelector('.breadcrumb-toggle-label');
-    if (label) label.textContent = t('main.breadcrumbLabel');
+    if (label) label.textContent = currentBreadcrumbLabel || t('main.breadcrumbLabel');
     localStorage.setItem(BREADCRUMB_COLLAPSED_KEY, String(collapsed));
     sizeDataTableWrappers();
 }
@@ -2381,7 +2388,9 @@ function renderBreadcrumbBar() {
     if (!bar) return;
     const list = document.getElementById('breadcrumb-list');
     list.innerHTML = '';
-    computeBreadcrumbCrumbs().forEach((crumb, index, crumbs) => {
+    const crumbList = computeBreadcrumbCrumbs();
+    currentBreadcrumbLabel = crumbList[crumbList.length - 1]?.label || '';
+    crumbList.forEach((crumb, index, crumbs) => {
         const li = document.createElement('li');
         li.className = 'breadcrumb-item';
         const isCurrent = index === crumbs.length - 1;
