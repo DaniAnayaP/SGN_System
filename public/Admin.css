@@ -133,6 +133,14 @@
     padding: 0.4rem 0.8rem;
     font-size: 0.75rem;
 }
+.admin-contract-filename{
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .admin-field input[type="color"]{
     padding: 0.2rem;
     height: 2.4rem;

@@ -26,6 +26,21 @@ const logoInput = document.getElementById('client-logo');
 const logoDataField = document.getElementById('client-logo-data');
 const logoPreview = document.getElementById('client-logo-preview');
 const logoClearBtn = document.getElementById('client-logo-clear');
+const rfcField = document.getElementById('client-rfc');
+const nicknameField = document.getElementById('client-nickname');
+const abbreviationField = document.getElementById('client-abbreviation');
+const ownerField = document.getElementById('client-owner');
+const billingEmailField = document.getElementById('client-billing-email');
+const contractStartField = document.getElementById('client-contract-start');
+const contractRegisteredField = document.getElementById('client-contract-registered');
+const contractEndField = document.getElementById('client-contract-end');
+const contractedCostField = document.getElementById('client-contracted-cost');
+const monthlyPaymentField = document.getElementById('client-monthly-payment');
+const contractInput = document.getElementById('client-contract');
+const contractDataField = document.getElementById('client-contract-data');
+const contractFilenameField = document.getElementById('client-contract-filename');
+const contractNameLabel = document.getElementById('client-contract-name');
+const contractClearBtn = document.getElementById('client-contract-clear');
 const paletteContainer = document.getElementById('client-color-palette');
 let paletteWidget; // created after Dashboard.initDashboard() so i18n labels are ready — see init() below
 const errorBanner = document.getElementById('client-form-error');
@@ -72,9 +87,44 @@ logoClearBtn.addEventListener('click', () => {
     setLogoPreview('');
 });
 
+// Contrato: same data-URL-in-the-record pattern as the logo above, just a
+// bigger size cap (real PDFs) and no image preview — a filename label
+// instead (see admin.contractFile in Admin-ClienteNuevo.html).
+function setContractPreview(dataUrl, filename) {
+    contractDataField.value = dataUrl || '';
+    contractFilenameField.value = filename || '';
+    if (dataUrl) {
+        contractNameLabel.textContent = filename || '';
+        contractNameLabel.hidden = false;
+        contractClearBtn.hidden = false;
+    } else {
+        contractNameLabel.hidden = true;
+        contractClearBtn.hidden = true;
+    }
+}
+
+contractInput.addEventListener('change', () => {
+    const file = contractInput.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+        showError(Dashboard.t('admin.saveError'));
+        contractInput.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setContractPreview(reader.result, file.name);
+    reader.readAsDataURL(file);
+});
+
+contractClearBtn.addEventListener('click', () => {
+    contractInput.value = '';
+    setContractPreview('', '');
+});
+
 function resetForm() {
     form.reset();
     setLogoPreview('');
+    setContractPreview('', '');
     paletteWidget.setPalette(null);
     clearError();
 }
@@ -129,6 +179,18 @@ form.addEventListener('submit', async (event) => {
         vision: visionField.value.trim(),
         coreValues: valuesField.value.trim(),
         history: historyField.value.trim(),
+        rfc: rfcField.value.trim(),
+        companyNickname: nicknameField.value.trim(),
+        companyAbbreviation: abbreviationField.value.trim(),
+        ownerName: ownerField.value.trim(),
+        billingEmail: billingEmailField.value.trim(),
+        contractStartDate: contractStartField.value || null,
+        contractRegisteredDate: contractRegisteredField.value || null,
+        contractEndDate: contractEndField.value || null,
+        contractFileDataUrl: contractDataField.value || null,
+        contractFileName: contractFilenameField.value || null,
+        contractedCost: contractedCostField.value ? Number(contractedCostField.value) : 0,
+        monthlyPayment: monthlyPaymentField.value ? Number(monthlyPaymentField.value) : 0,
     };
 
     submitBtn.disabled = true;

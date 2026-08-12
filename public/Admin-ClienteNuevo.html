@@ -345,6 +345,49 @@
                     </div>
                 </div>
 
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="client-rfc" data-i18n="admin.rfc">Company RFC</label>
+                        <input id="client-rfc" name="rfc" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-nickname" data-i18n="admin.companyNickname">Company nickname</label>
+                        <input id="client-nickname" name="companyNickname" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-abbreviation" data-i18n="admin.companyAbbreviation">Company abbreviation</label>
+                        <input id="client-abbreviation" name="companyAbbreviation" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-owner" data-i18n="admin.ownerName">Owner</label>
+                        <input id="client-owner" name="ownerName" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-billing-email" data-i18n="admin.billingEmail">Billing contact email</label>
+                        <input id="client-billing-email" name="billingEmail" type="email">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-contract-start" data-i18n="admin.contractStartDate">Contract start date</label>
+                        <input id="client-contract-start" name="contractStartDate" type="date">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-contract-registered" data-i18n="admin.contractRegisteredDate">Contract registration date</label>
+                        <input id="client-contract-registered" name="contractRegisteredDate" type="date">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-contract-end" data-i18n="admin.contractEndDate">Contract end date</label>
+                        <input id="client-contract-end" name="contractEndDate" type="date">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-contracted-cost" data-i18n="admin.contractedCost">Contracted cost $</label>
+                        <input id="client-contracted-cost" name="contractedCost" type="number" min="0" step="0.01">
+                    </div>
+                    <div class="admin-field">
+                        <label for="client-monthly-payment" data-i18n="admin.monthlyPayment">Monthly payment</label>
+                        <input id="client-monthly-payment" name="monthlyPayment" type="number" min="0" step="0.01">
+                    </div>
+                </div>
+
                 <div class="admin-client-profile-fields">
                     <div class="admin-field">
                         <label for="client-mission" data-i18n="admin.mission">Mission</label>
@@ -373,6 +416,16 @@
                             <button type="button" class="btn btn-secondary admin-logo-clear" id="client-logo-clear" data-i18n="admin.removeLogo" hidden>Remove</button>
                         </div>
                         <input type="hidden" id="client-logo-data" name="logoDataUrl" value="">
+                    </div>
+                    <div class="admin-field admin-logo-field">
+                        <label for="client-contract" data-i18n="admin.contractFile">Contract</label>
+                        <div class="admin-logo-row">
+                            <span id="client-contract-name" class="admin-contract-filename" hidden></span>
+                            <input id="client-contract" name="contract" type="file" accept="application/pdf">
+                            <button type="button" class="btn btn-secondary admin-logo-clear" id="client-contract-clear" data-i18n="admin.removeContract" hidden>Remove</button>
+                        </div>
+                        <input type="hidden" id="client-contract-data" name="contractFileDataUrl" value="">
+                        <input type="hidden" id="client-contract-filename" name="contractFileName" value="">
                     </div>
                 </div>
 

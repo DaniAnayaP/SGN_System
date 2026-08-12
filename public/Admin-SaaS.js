@@ -48,6 +48,21 @@ const logoInput = document.getElementById('client-logo');
 const logoDataField = document.getElementById('client-logo-data');
 const logoPreview = document.getElementById('client-logo-preview');
 const logoClearBtn = document.getElementById('client-logo-clear');
+const rfcField = document.getElementById('client-rfc');
+const nicknameField = document.getElementById('client-nickname');
+const abbreviationField = document.getElementById('client-abbreviation');
+const ownerField = document.getElementById('client-owner');
+const billingEmailField = document.getElementById('client-billing-email');
+const contractStartField = document.getElementById('client-contract-start');
+const contractRegisteredField = document.getElementById('client-contract-registered');
+const contractEndField = document.getElementById('client-contract-end');
+const contractedCostField = document.getElementById('client-contracted-cost');
+const monthlyPaymentField = document.getElementById('client-monthly-payment');
+const contractInput = document.getElementById('client-contract');
+const contractDataField = document.getElementById('client-contract-data');
+const contractFilenameField = document.getElementById('client-contract-filename');
+const contractNameLabel = document.getElementById('client-contract-name');
+const contractClearBtn = document.getElementById('client-contract-clear');
 const paletteContainer = document.getElementById('client-color-palette');
 let paletteWidget; // created after Dashboard.initDashboard() so i18n labels are ready — see init() below
 const errorBanner = document.getElementById('client-form-error');
@@ -103,6 +118,40 @@ logoClearBtn.addEventListener('click', () => {
     setLogoPreview('');
 });
 
+// Contrato: same data-URL-in-the-record pattern as the logo above, just a
+// bigger size cap (real PDFs) and no image preview — a filename label
+// instead (see admin.contractFile in Admin-SaaS.html).
+function setContractPreview(dataUrl, filename) {
+    contractDataField.value = dataUrl || '';
+    contractFilenameField.value = filename || '';
+    if (dataUrl) {
+        contractNameLabel.textContent = filename || '';
+        contractNameLabel.hidden = false;
+        contractClearBtn.hidden = false;
+    } else {
+        contractNameLabel.hidden = true;
+        contractClearBtn.hidden = true;
+    }
+}
+
+contractInput.addEventListener('change', () => {
+    const file = contractInput.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+        showError(Dashboard.t('admin.saveError'));
+        contractInput.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setContractPreview(reader.result, file.name);
+    reader.readAsDataURL(file);
+});
+
+contractClearBtn.addEventListener('click', () => {
+    contractInput.value = '';
+    setContractPreview('', '');
+});
+
 // This form is edit-only here (creating a client lives on its own page, +
 // Agregar Cliente Nuevo) — it only ever appears via startEdit, and hides
 // again once you're done with it.
@@ -111,8 +160,32 @@ function resetForm() {
     form.hidden = true;
     idField.value = '';
     setLogoPreview('');
+    setContractPreview('', '');
     paletteWidget.setPalette(null);
     clearError();
+}
+
+function formatMoney(value) {
+    const n = Number(value) || 0;
+    return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function textCell(value) {
+    const td = document.createElement('td');
+    td.textContent = value || '—';
+    return td;
+}
+
+function iconButton(iconClass, label, onClick, { disabled = false, title = '', danger = false } = {}) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = danger ? 'admin-icon-btn admin-icon-btn-danger' : 'admin-icon-btn';
+    btn.setAttribute('aria-label', label);
+    btn.innerHTML = `<i class="bx ${iconClass}" aria-hidden="true"></i>`;
+    btn.disabled = disabled;
+    if (title) btn.title = title;
+    btn.addEventListener('click', onClick);
+    return btn;
 }
 
 function renderClients() {
@@ -121,55 +194,99 @@ function renderClients() {
     clients.forEach((client) => {
         const tr = document.createElement('tr');
 
-        const tdCompany = document.createElement('td');
-        tdCompany.textContent = client.company_name;
-        const tdContact = document.createElement('td');
-        tdContact.textContent = client.contact_name;
-        const tdEmail = document.createElement('td');
-        tdEmail.textContent = client.email;
-        const tdPlan = document.createElement('td');
-        tdPlan.textContent = client.plan || '—';
-        const tdUsername = document.createElement('td');
-        tdUsername.textContent = client.adminUsername || '—';
         const tdStatus = document.createElement('td');
         const statusBadge = document.createElement('span');
         statusBadge.className = `admin-badge admin-badge-${client.status}`;
         statusBadge.textContent = statusLabel(client.status);
         tdStatus.appendChild(statusBadge);
 
+        const tdContract = document.createElement('td');
+        tdContract.appendChild(iconButton('bx-file-blank', Dashboard.t('admin.viewContract'), () => {
+            window.open(client.contract_file_data_url, '_blank');
+        }, { disabled: !client.contract_file_data_url, title: client.contract_file_data_url ? '' : Dashboard.t('admin.noContractFile') }));
+
+        const tdAddenda = document.createElement('td');
+        tdAddenda.appendChild(iconButton('bx-file-plus', Dashboard.t('admin.addenda'), () => openAddendaModal(client)));
+
+        const tdAnexoChanges = document.createElement('td');
+        tdAnexoChanges.appendChild(iconButton('bx-history', Dashboard.t('admin.anexoChanges'), () => openAnexoChangesModal(client)));
+
+        const tdActiveTree = document.createElement('td');
+        tdActiveTree.appendChild(iconButton('bx-sitemap', Dashboard.t('admin.activeTree'), () => openActiveTreeModal(client)));
+
         const tdActions = document.createElement('td');
         tdActions.className = 'admin-table-actions';
-        const addendaBtn = document.createElement('button');
-        addendaBtn.type = 'button';
-        addendaBtn.className = 'admin-icon-btn';
-        addendaBtn.setAttribute('aria-label', Dashboard.t('admin.addenda'));
-        addendaBtn.innerHTML = '<i class="bx bx-file-plus" aria-hidden="true"></i>';
-        addendaBtn.addEventListener('click', () => openAddendaModal(client));
-        const adminAccessBtn = document.createElement('button');
-        adminAccessBtn.type = 'button';
-        adminAccessBtn.className = 'admin-icon-btn';
-        adminAccessBtn.setAttribute('aria-label', Dashboard.t('admin.adminAccessTitle'));
-        adminAccessBtn.innerHTML = '<i class="bx bx-key" aria-hidden="true"></i>';
-        adminAccessBtn.disabled = !client.adminUsername;
-        adminAccessBtn.title = client.adminUsername ? '' : Dashboard.t('admin.adminAccessNoAdminYet');
-        adminAccessBtn.addEventListener('click', () => openAdminAccessModal(client));
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'admin-icon-btn';
-        editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
-        editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
-        editBtn.addEventListener('click', () => startEdit(client));
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => removeClient(client));
-        tdActions.append(addendaBtn, adminAccessBtn, editBtn, deleteBtn);
+        tdActions.append(
+            iconButton('bx-key', Dashboard.t('admin.adminAccessTitle'), () => openAdminAccessModal(client), {
+                disabled: !client.adminUsername,
+                title: client.adminUsername ? '' : Dashboard.t('admin.adminAccessNoAdminYet'),
+            }),
+            iconButton('bx-edit', Dashboard.t('admin.edit'), () => startEdit(client)),
+            iconButton(
+                client.status === 'inactivo' ? 'bx-check-circle' : 'bx-x-circle',
+                Dashboard.t(client.status === 'inactivo' ? 'admin.activate' : 'admin.deactivate'),
+                () => toggleClientStatus(client),
+            ),
+            iconButton('bx-trash', Dashboard.t('admin.delete'), () => removeClient(client), { danger: true }),
+        );
 
-        tr.append(tdCompany, tdContact, tdEmail, tdPlan, tdUsername, tdStatus, tdActions);
+        tr.append(
+            textCell(client.big_date_number),
+            textCell(client.rfc),
+            textCell(client.company_nickname),
+            textCell(client.company_abbreviation),
+            textCell(client.owner_name),
+            textCell(client.contact_name),
+            textCell(client.billing_email),
+            textCell(client.contract_start_date),
+            tdContract,
+            textCell(client.plan),
+            textCell(formatMoney(client.contracted_cost)),
+            textCell(formatMoney(client.monthly_payment)),
+            tdAddenda,
+            textCell(formatMoney(client.anexosPayment)),
+            tdAnexoChanges,
+            textCell(client.contract_registered_date),
+            textCell(client.contract_end_date),
+            tdActiveTree,
+            textCell(client.adminUsername),
+            tdStatus,
+            tdActions,
+        );
         tableBody.appendChild(tr);
     });
+}
+
+// Activar/Desactivar is the day-to-day lifecycle toggle — Eliminar (still
+// available for now, see removeClient) stays separate and destructive.
+async function toggleClientStatus(client) {
+    const nextStatus = client.status === 'inactivo' ? 'activo' : 'inactivo';
+    try {
+        const res = await fetch(`/api/admin/clients/${client.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                companyName: client.company_name, contactName: client.contact_name, email: client.email,
+                phone: client.phone, plan: client.plan, status: nextStatus,
+                logoDataUrl: client.logo_data_url, seedColor: client.seed_color,
+                colorPalette: client.color_palette ? JSON.parse(client.color_palette) : null,
+                mission: client.mission, vision: client.vision, coreValues: client.core_values, history: client.history,
+                rfc: client.rfc, companyNickname: client.company_nickname, companyAbbreviation: client.company_abbreviation,
+                ownerName: client.owner_name, billingEmail: client.billing_email,
+                contractStartDate: client.contract_start_date, contractRegisteredDate: client.contract_registered_date,
+                contractEndDate: client.contract_end_date, contractFileDataUrl: client.contract_file_data_url, contractFileName: client.contract_file_name,
+                contractedCost: client.contracted_cost, monthlyPayment: client.monthly_payment,
+            }),
+        });
+        if (!res.ok) throw new Error('status change failed');
+        const { client: updated } = await res.json();
+        clients = clients.map((c) => (c.id === updated.id ? { ...updated, anexosPayment: c.anexosPayment } : c));
+        renderClients();
+        populateClientSelect();
+    } catch {
+        alert(Dashboard.t('admin.saveError'));
+    }
 }
 
 function startEdit(client) {
@@ -191,6 +308,17 @@ function startEdit(client) {
     valuesField.value = client.core_values || '';
     historyField.value = client.history || '';
     setLogoPreview(client.logo_data_url || '');
+    rfcField.value = client.rfc || '';
+    nicknameField.value = client.company_nickname || '';
+    abbreviationField.value = client.company_abbreviation || '';
+    ownerField.value = client.owner_name || '';
+    billingEmailField.value = client.billing_email || '';
+    contractStartField.value = client.contract_start_date || '';
+    contractRegisteredField.value = client.contract_registered_date || '';
+    contractEndField.value = client.contract_end_date || '';
+    contractedCostField.value = client.contracted_cost || '';
+    monthlyPaymentField.value = client.monthly_payment || '';
+    setContractPreview(client.contract_file_data_url || '', client.contract_file_name || '');
     let existingPalette = null;
     if (client.color_palette) {
         try { existingPalette = JSON.parse(client.color_palette); } catch { existingPalette = null; }
@@ -293,6 +421,18 @@ form.addEventListener('submit', async (event) => {
         vision: visionField.value.trim(),
         coreValues: valuesField.value.trim(),
         history: historyField.value.trim(),
+        rfc: rfcField.value.trim(),
+        companyNickname: nicknameField.value.trim(),
+        companyAbbreviation: abbreviationField.value.trim(),
+        ownerName: ownerField.value.trim(),
+        billingEmail: billingEmailField.value.trim(),
+        contractStartDate: contractStartField.value || null,
+        contractRegisteredDate: contractRegisteredField.value || null,
+        contractEndDate: contractEndField.value || null,
+        contractFileDataUrl: contractDataField.value || null,
+        contractFileName: contractFilenameField.value || null,
+        contractedCost: contractedCostField.value ? Number(contractedCostField.value) : 0,
+        monthlyPayment: monthlyPaymentField.value ? Number(monthlyPaymentField.value) : 0,
     };
 
     const editingId = idField.value;
@@ -353,6 +493,9 @@ const addendaModal = document.getElementById('addenda-modal');
 const addendaPlanBase = document.getElementById('addenda-plan-base');
 const addendaExtraCcField = document.getElementById('addenda-extra-cc');
 const addendaModulesList = document.getElementById('addenda-modules-list');
+const addendaRequestedByField = document.getElementById('addenda-requested-by');
+const addendaRequestedAtField = document.getElementById('addenda-requested-at');
+const addendaDurationField = document.getElementById('addenda-duration');
 const addendaError = document.getElementById('addenda-error');
 const addendaSaveBtn = document.getElementById('addenda-save');
 const addendaCancelBtn = document.getElementById('addenda-cancel');
@@ -368,28 +511,28 @@ async function loadModuleCatalog() {
     moduleCatalog = data.modules || [];
 }
 
+// Shows the FULL catalog now, not just what's left to add — a module
+// already covered by the plan renders with a ★ and a checked, disabled
+// switch (toggling it here would be a no-op anyway; the plan is what to
+// edit for that). Only the un-starred, editable switches ever feed into
+// extraModules on save (see the :not([data-plan]) selector below).
 function renderAddendaModules(checkedKeys) {
     addendaModulesList.innerHTML = '';
-    const candidates = moduleCatalog.filter((m) => !addendaPlanModules.includes(m.key));
-    if (!candidates.length) {
-        const note = document.createElement('p');
-        note.className = 'admin-hint';
-        note.textContent = Dashboard.t('admin.noExtraModulesAvailable');
-        addendaModulesList.appendChild(note);
-        return;
-    }
-    candidates.forEach((mod) => {
+    moduleCatalog.forEach((mod) => {
+        const isPlanModule = addendaPlanModules.includes(mod.key);
         const row = document.createElement('div');
         row.className = 'admin-module-row';
         const name = document.createElement('span');
         name.className = 'admin-module-name';
-        name.textContent = Dashboard.t(mod.labelKey);
+        name.textContent = (isPlanModule ? '★ ' : '') + Dashboard.t(mod.labelKey);
         const label = document.createElement('label');
         label.className = 'admin-switch';
         const input = document.createElement('input');
         input.type = 'checkbox';
-        input.checked = checkedKeys.includes(mod.key);
+        input.checked = isPlanModule || checkedKeys.includes(mod.key);
+        input.disabled = isPlanModule;
         input.dataset.moduleKey = mod.key;
+        if (isPlanModule) input.dataset.plan = 'true';
         const track = document.createElement('span');
         track.className = 'admin-switch-track';
         label.append(input, track);
@@ -406,6 +549,9 @@ function closeAddendaModal() {
 async function openAddendaModal(client) {
     addendaClientId = client.id;
     addendaError.hidden = true;
+    addendaRequestedByField.value = '';
+    addendaRequestedAtField.value = '';
+    addendaDurationField.value = '';
     try {
         const res = await fetch(`/api/admin/clients/${client.id}/addenda`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
@@ -425,7 +571,9 @@ async function openAddendaModal(client) {
 addendaSaveBtn.addEventListener('click', async () => {
     if (!addendaClientId) return;
     const extraCostCenters = Math.max(0, parseInt(addendaExtraCcField.value, 10) || 0);
-    const extraModules = Array.from(addendaModulesList.querySelectorAll('input[type="checkbox"]:checked'))
+    // Only the editable (non-plan) switches count as anexos — the starred,
+    // disabled ones just show what the plan already covers.
+    const extraModules = Array.from(addendaModulesList.querySelectorAll('input[type="checkbox"]:not([data-plan]):checked'))
         .map((i) => i.dataset.moduleKey);
 
     addendaSaveBtn.disabled = true;
@@ -434,7 +582,12 @@ addendaSaveBtn.addEventListener('click', async () => {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ extraCostCenters, extraModules }),
+            body: JSON.stringify({
+                extraCostCenters, extraModules,
+                requestedBy: addendaRequestedByField.value.trim(),
+                requestedAt: addendaRequestedAtField.value || null,
+                contractedDuration: addendaDurationField.value.trim(),
+            }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -442,6 +595,7 @@ addendaSaveBtn.addEventListener('click', async () => {
             addendaError.hidden = false;
             return;
         }
+        await loadClients();
         closeAddendaModal();
     } catch {
         addendaError.textContent = Dashboard.t('admin.saveError');
@@ -457,6 +611,115 @@ addendaModal.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !addendaModal.hidden) closeAddendaModal();
+});
+
+// --- Cambios de Anexos: read-only history of every módulo that entered or
+// left extra_modules, and who/when requested it (written manually by GEIPSA
+// inside the Anexos modal above — see server.js's addenda PUT route). -------
+const anexoChangesModal = document.getElementById('anexo-changes-modal');
+const anexoChangesSubtitle = document.getElementById('anexo-changes-subtitle');
+const anexoChangesTableBody = document.getElementById('anexo-changes-table-body');
+const anexoChangesCloseBtn = document.getElementById('anexo-changes-close');
+
+function closeAnexoChangesModal() {
+    anexoChangesModal.hidden = true;
+}
+
+async function openAnexoChangesModal(client) {
+    anexoChangesSubtitle.textContent = client.company_name;
+    anexoChangesTableBody.innerHTML = '';
+    try {
+        const res = await fetch(`/api/admin/clients/${client.id}/anexo-changes`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { changes } = await res.json();
+        if (!changes.length) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 6;
+            td.className = 'admin-empty';
+            td.textContent = Dashboard.t('admin.anexoChangesEmpty');
+            tr.appendChild(td);
+            anexoChangesTableBody.appendChild(tr);
+        } else {
+            changes.forEach((change) => {
+                const moduleDef = moduleCatalog.find((m) => m.key === change.module_key);
+                const tr = document.createElement('tr');
+                [
+                    moduleDef ? Dashboard.t(moduleDef.labelKey) : change.module_key,
+                    Dashboard.t(change.action === 'added' ? 'admin.anexoChangeAdded' : 'admin.anexoChangeRemoved'),
+                    change.requested_by || '—',
+                    change.requested_at || '—',
+                    change.changed_at,
+                    change.contracted_duration || '—',
+                ].forEach((value) => {
+                    const td = document.createElement('td');
+                    td.textContent = value;
+                    tr.appendChild(td);
+                });
+                anexoChangesTableBody.appendChild(tr);
+            });
+        }
+        anexoChangesModal.hidden = false;
+    } catch {
+        showError(Dashboard.t('admin.loadError'));
+    }
+}
+
+anexoChangesCloseBtn.addEventListener('click', closeAnexoChangesModal);
+anexoChangesModal.addEventListener('click', (event) => {
+    if (event.target === anexoChangesModal) closeAnexoChangesModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !anexoChangesModal.hidden) closeAnexoChangesModal();
+});
+
+// --- Árbol de permisos activo: read-only view of everything this client has
+// enabled right now (contratado ∪ anexos, same union server.js already
+// computes for Contrataciones) — ★ marks what the plan itself contracts, no
+// star means it's there because of an anexo. -------------------------------
+const activeTreeModal = document.getElementById('active-tree-modal');
+const activeTreeSubtitle = document.getElementById('active-tree-subtitle');
+const activeTreeList = document.getElementById('active-tree-list');
+const activeTreeCloseBtn = document.getElementById('active-tree-close');
+
+function closeActiveTreeModal() {
+    activeTreeModal.hidden = true;
+}
+
+async function openActiveTreeModal(client) {
+    activeTreeSubtitle.textContent = client.company_name;
+    activeTreeList.innerHTML = '';
+    try {
+        const [modulesRes, addendaRes] = await Promise.all([
+            fetch(`/api/admin/clients/${client.id}/modules`, { credentials: 'include' }),
+            fetch(`/api/admin/clients/${client.id}/addenda`, { credentials: 'include' }),
+        ]);
+        if (!modulesRes.ok || !addendaRes.ok) throw new Error('load failed');
+        const modulesData = await modulesRes.json();
+        const { planBase } = await addendaRes.json();
+        const enabled = (modulesData.modules || []).filter((m) => m.enabled);
+        enabled.forEach((mod) => {
+            const isPlanModule = planBase.modules.includes(mod.key);
+            const row = document.createElement('div');
+            row.className = 'admin-module-row';
+            const name = document.createElement('span');
+            name.className = 'admin-module-name';
+            name.textContent = (isPlanModule ? '★ ' : '') + Dashboard.t(mod.labelKey);
+            row.appendChild(name);
+            activeTreeList.appendChild(row);
+        });
+        activeTreeModal.hidden = false;
+    } catch {
+        showError(Dashboard.t('admin.loadError'));
+    }
+}
+
+activeTreeCloseBtn.addEventListener('click', closeActiveTreeModal);
+activeTreeModal.addEventListener('click', (event) => {
+    if (event.target === activeTreeModal) closeActiveTreeModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !activeTreeModal.hidden) closeActiveTreeModal();
 });
 
 // --- Accesos del Administrador: GEIPSA-only override for the auto-

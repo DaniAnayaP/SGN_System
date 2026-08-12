@@ -93,7 +93,49 @@ db.exec(`
         description   TEXT NOT NULL DEFAULT '',
         created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Costo $ de cada botón/módulo de MODULE_CATALOG — configurado en su
+    -- propia pantalla (Costos de Módulos), usado para calcular "Pago por
+    -- Anexos" en Nuestros Clientes (suma del costo de cada módulo que un
+    -- cliente tiene como anexo, no como parte de su plan).
+    CREATE TABLE IF NOT EXISTS module_costs (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        module_key  TEXT NOT NULL UNIQUE,
+        cost        REAL NOT NULL DEFAULT 0
+    );
+
+    -- Auditoría de "Cambios de Anexos": una fila por cada módulo que entra o
+    -- sale de clients.extra_modules, la vez que se guarda el modal de Anexos
+    -- (ver PUT /api/admin/clients/:id/addenda) — quién lo solicitó y cuándo
+    -- se escribe a mano ahí mismo (no hay flujo de autoservicio del cliente
+    -- todavía), changed_at se registra solo.
+    CREATE TABLE IF NOT EXISTS anexo_changes (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id            INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        module_key           TEXT NOT NULL,
+        action               TEXT NOT NULL,
+        requested_by         TEXT NOT NULL DEFAULT '',
+        requested_at         TEXT,
+        changed_at           TEXT NOT NULL DEFAULT (datetime('now')),
+        contracted_duration  TEXT NOT NULL DEFAULT ''
+    );
 `);
+
+// A big, date-derived unique identifier shown as "No. Único de Big Date" on
+// records like clients (and, going forward, other record types that want
+// the same convention — traslados, etc.). Timestamp down to the millisecond
+// plus a wrapping call counter, so even several calls inside the same
+// millisecond (e.g. the backfill loop below) never collide. Stored as TEXT
+// everywhere — 20 digits is past Number.MAX_SAFE_INTEGER.
+let bigDateSequence = 0;
+function generateBigDateId() {
+    const now = new Date();
+    const pad = (n, len = 2) => String(n).padStart(len, '0');
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+        + `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}${pad(now.getMilliseconds(), 3)}`;
+    bigDateSequence = (bigDateSequence + 1) % 1000;
+    return `${stamp}${pad(bigDateSequence, 3)}`;
+}
 
 // --- Schema migrations for columns added after the initial release ----------
 // Run in dependency order: `clients` must exist before `users.client_id` and
@@ -208,6 +250,44 @@ if (!clientColumns.some((c) => c.name === 'extra_cost_centers')) {
 if (!clientColumns.some((c) => c.name === 'extra_modules')) {
     db.exec("ALTER TABLE clients ADD COLUMN extra_modules TEXT NOT NULL DEFAULT '[]'");
 }
+// "Nuestros Clientes" full commercial record: fiscal identity, contract
+// dates/file, and pricing — on top of the operational fields above. rfc is
+// the business key used to reject duplicate clients (see createClient); the
+// rest are plain display/record-keeping fields, no other code depends on
+// their values.
+for (const col of ['rfc', 'company_nickname', 'company_abbreviation', 'owner_name', 'billing_email', 'big_date_number']) {
+    if (!clientColumns.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE clients ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+    }
+}
+for (const col of ['contract_start_date', 'contract_registered_date', 'contract_end_date']) {
+    if (!clientColumns.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE clients ADD COLUMN ${col} TEXT`);
+    }
+}
+if (!clientColumns.some((c) => c.name === 'contract_file_data_url')) {
+    db.exec('ALTER TABLE clients ADD COLUMN contract_file_data_url TEXT');
+}
+if (!clientColumns.some((c) => c.name === 'contract_file_name')) {
+    db.exec('ALTER TABLE clients ADD COLUMN contract_file_name TEXT');
+}
+for (const col of ['contracted_cost', 'monthly_payment']) {
+    if (!clientColumns.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE clients ADD COLUMN ${col} REAL NOT NULL DEFAULT 0`);
+    }
+}
+// Existing clients (created before this migration) get backfilled with a
+// generated id here instead of staying blank — every client should have
+// one, not just ones created going forward. One at a time (not a single
+// bulk UPDATE) so each row gets its OWN generated id instead of all of them
+// sharing whatever a single call produced.
+const clientsMissingBigDate = db.prepare("SELECT id FROM clients WHERE big_date_number = ''").all();
+const backfillBigDate = db.prepare('UPDATE clients SET big_date_number = ? WHERE id = ?');
+clientsMissingBigDate.forEach((row) => backfillBigDate.run(generateBigDateId(), row.id));
+// Two clients could legitimately share an empty rfc (not yet on file), but
+// never a real one — WHERE clause excludes '' so pre-migration rows with no
+// RFC on record don't collide with each other.
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_rfc ON clients(rfc) WHERE rfc != ''");
 
 // A plan/package can carry a preset of módulos + centros de costo limit —
 // the same options as Contrataciones — so assigning a plan to a client
@@ -494,37 +574,137 @@ function getClientProfile(id) {
         .get(id);
 }
 
-function createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history }) {
+function createClient({
+    companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+    mission, vision, coreValues, history,
+    rfc, companyNickname, companyAbbreviation, ownerName, billingEmail,
+    contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
+    contractedCost, monthlyPayment,
+}) {
     const result = db
         .prepare(`
-            INSERT INTO clients (company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette, mission, vision, core_values, history)
-            VALUES (@companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette, @mission, @vision, @coreValues, @history)
+            INSERT INTO clients (
+                company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette,
+                mission, vision, core_values, history,
+                rfc, company_nickname, company_abbreviation, owner_name, billing_email, big_date_number,
+                contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
+                contracted_cost, monthly_payment
+            )
+            VALUES (
+                @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
+                @mission, @vision, @coreValues, @history,
+                @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @bigDateNumber,
+                @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
+                @contractedCost, @monthlyPayment
+            )
         `)
         .run({
             companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto',
             logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
             seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
             mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
+            rfc: rfc || '', companyNickname: companyNickname || '', companyAbbreviation: companyAbbreviation || '',
+            ownerName: ownerName || '', billingEmail: billingEmail || '', bigDateNumber: generateBigDateId(),
+            contractStartDate: contractStartDate || null, contractRegisteredDate: contractRegisteredDate || null,
+            contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
+            contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0,
         });
     return getClientById(result.lastInsertRowid);
 }
 
-function updateClient(id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history }) {
+function updateClient(id, {
+    companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+    mission, vision, coreValues, history,
+    rfc, companyNickname, companyAbbreviation, ownerName, billingEmail,
+    contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
+    contractedCost, monthlyPayment,
+}) {
     db.prepare(`
         UPDATE clients
         SET company_name = @companyName, contact_name = @contactName, email = @email,
             phone = @phone, plan = @plan, status = @status,
             logo_data_url = @logoDataUrl, primary_color = @primaryColor, secondary_color = @secondaryColor,
             seed_color = @seedColor, color_palette = @colorPalette,
-            mission = @mission, vision = @vision, core_values = @coreValues, history = @history
+            mission = @mission, vision = @vision, core_values = @coreValues, history = @history,
+            rfc = @rfc, company_nickname = @companyNickname, company_abbreviation = @companyAbbreviation,
+            owner_name = @ownerName, billing_email = @billingEmail,
+            contract_start_date = @contractStartDate, contract_registered_date = @contractRegisteredDate,
+            contract_end_date = @contractEndDate, contract_file_data_url = @contractFileDataUrl, contract_file_name = @contractFileName,
+            contracted_cost = @contractedCost, monthly_payment = @monthlyPayment
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
         logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
         seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
         mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
+        rfc: rfc || '', companyNickname: companyNickname || '', companyAbbreviation: companyAbbreviation || '',
+        ownerName: ownerName || '', billingEmail: billingEmail || '',
+        contractStartDate: contractStartDate || null, contractRegisteredDate: contractRegisteredDate || null,
+        contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
+        contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0,
     });
     return getClientById(id);
+}
+
+// --- RFC duplicate check ------------------------------------------------------
+// Business key for "no duplicate clients" — see POST /api/admin/clients.
+// excludeId lets an update check against every OTHER client (a client
+// keeping its own RFC on save isn't a duplicate of itself).
+function findClientByRfc(rfc, excludeId) {
+    if (!rfc) return null;
+    return db
+        .prepare('SELECT id, company_name FROM clients WHERE rfc = ? AND id != ?')
+        .get(rfc, excludeId || 0);
+}
+
+// --- Costo por módulo (Costos de Módulos) -------------------------------------
+function getModuleCosts() {
+    return db.prepare('SELECT module_key, cost FROM module_costs').all();
+}
+
+const upsertModuleCost = db.prepare(`
+    INSERT INTO module_costs (module_key, cost) VALUES (@moduleKey, @cost)
+    ON CONFLICT(module_key) DO UPDATE SET cost = @cost
+`);
+
+function setModuleCosts(costStates) {
+    const apply = db.transaction((states) => {
+        for (const { key, cost } of states) {
+            upsertModuleCost.run({ moduleKey: key, cost: Math.max(0, Number(cost) || 0) });
+        }
+    });
+    apply(costStates);
+    return getModuleCosts();
+}
+
+// Sum of module_costs.cost for every key in this client's extra_modules
+// (anexos) — what the plan itself includes is never charged again here.
+function getAnexosPaymentTotal(clientId) {
+    const client = getClientById(clientId);
+    if (!client) return 0;
+    let extraModules = [];
+    try { extraModules = JSON.parse(client.extra_modules || '[]'); } catch { extraModules = []; }
+    if (!extraModules.length) return 0;
+    const costs = getModuleCosts();
+    const costByKey = new Map(costs.map((c) => [c.module_key, c.cost]));
+    return extraModules.reduce((sum, key) => sum + (costByKey.get(key) || 0), 0);
+}
+
+// --- Cambios de Anexos (audit trail) ------------------------------------------
+function getAnexoChanges(clientId) {
+    return db
+        .prepare('SELECT * FROM anexo_changes WHERE client_id = ? ORDER BY changed_at DESC, id DESC')
+        .all(clientId);
+}
+
+function recordAnexoChange(clientId, { moduleKey, action, requestedBy, requestedAt, contractedDuration }) {
+    db.prepare(`
+        INSERT INTO anexo_changes (client_id, module_key, action, requested_by, requested_at, contracted_duration)
+        VALUES (@clientId, @moduleKey, @action, @requestedBy, @requestedAt, @contractedDuration)
+    `).run({
+        clientId, moduleKey, action,
+        requestedBy: requestedBy || '', requestedAt: requestedAt || null, contractedDuration: contractedDuration || '',
+    });
 }
 
 // Self-service version for the client's own admin (Business-Config page):
@@ -935,6 +1115,12 @@ module.exports = {
     updateClient,
     updateClientBranding,
     deleteClient,
+    findClientByRfc,
+    getModuleCosts,
+    setModuleCosts,
+    getAnexosPaymentTotal,
+    getAnexoChanges,
+    recordAnexoChange,
     getClientModules,
     setClientModules,
     setClientCostCentersLimit,

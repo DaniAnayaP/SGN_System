@@ -44,7 +44,7 @@ const EMBEDDED_TRANSLATIONS = {
             certifications: "Certifications",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transportVolume: "Volume Transport", transportLastMile: "Last-Mile Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015" },
-            clientesRegistrados: "Registered Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Registered Plans", addPlanNew: "+ Add New Plan", mainSection: "General",
+            clientesRegistrados: "Our Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Registered Plans", addPlanNew: "+ Add New Plan", moduleCosts: "Module Costs", mainSection: "General",
             catCatalogos: "Catalogs", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operations", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clients", catTransVolSitiosOrigen: "Origin Sites", catTransVolSitiosDestino: "Destination Sites", catTransVolRutas: "Routes", catTransVolTiposServicio: "Service Types", catTransVolTiposTraslado: "Transfer Types", catTransVolContactos: "Contacts", catTransVolEmpresasAsociadas: "Partner Companies", catTransVolTiposUnidades: "Unit Types", catTransVolTiposAditamentos: "Attachment Types",
@@ -97,7 +97,19 @@ const EMBEDDED_TRANSLATIONS = {
             noPlans: "No plans yet. Add the first one above.",
             confirmDeletePlan: "Delete this plan? This doesn't affect clients already assigned to it.",
             planNameExists: "A plan with that name already exists.",
-            selectPlanPlaceholder: "Choose a plan..."
+            selectPlanPlaceholder: "Choose a plan...",
+            bigDateNumber: "Unique Big Date No.", rfc: "Company RFC", companyNickname: "Company Nickname", companyAbbreviation: "Company Abbreviation",
+            ownerName: "Owner", billingEmail: "Billing Contact Email", contractStartDate: "Contract Start Date", contractRegisteredDate: "Contract Registration Date",
+            contractEndDate: "Contract End Date", contractedCost: "Contracted Cost $", monthlyPayment: "Monthly Payment", contractFile: "Contract",
+            removeContract: "Remove", viewContract: "View contract", noContractFile: "No contract uploaded", anexosPayment: "Anexos Payment",
+            activate: "Activate", deactivate: "Deactivate", rfcExists: "A client with that RFC already exists.",
+            anexoStarLegend: "★ included in the contracted plan — no star: added as an anexo", anexoRequestedBy: "Requested by", anexoRequestedAt: "Request date",
+            anexoContractedDuration: "Contracted duration", anexoChanges: "Anexos Changes", anexoChangesTitle: "Anexos Changes", anexoChangesEmpty: "No changes recorded yet.",
+            anexoChangeAdded: "Added", anexoChangeRemoved: "Removed", activeTree: "Active permission tree", activeTreeTitle: "Active permission tree",
+            activeTreeHint: "Everything this client has enabled right now: what their plan contracts (★) plus what was added as an anexo.",
+            colModule: "Module", colAction: "Action", colRequestedBy: "Requested by", colRequestedAt: "Request date", colChangedAt: "Change date", colDuration: "Contracted duration",
+            moduleCostsTitle: "Module Costs", moduleCostsSubtitle: "Set the cost of each button/module — used to compute each client's Anexos Payment in Our Clients.",
+            moduleCostsSaved: "Costs updated.", costLabel: "Cost $"
         },
         business: {
             usersTitle: "Users", usersSubtitle: "Manage the people who use this SGN instance.",
@@ -150,7 +162,7 @@ const EMBEDDED_TRANSLATIONS = {
             certifications: "Certificaciones",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
             area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transportVolume: "Transporte Volumen", transportLastMile: "Transporte Última Milla", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015" },
-            clientesRegistrados: "Clientes Registrados", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Planes Registrados", addPlanNew: "+ Agregar Plan Nuevo", mainSection: "General",
+            clientesRegistrados: "Nuestros Clientes", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Planes Registrados", addPlanNew: "+ Agregar Plan Nuevo", moduleCosts: "Costos de Módulos", mainSection: "General",
             catCatalogos: "Catálogos", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operaciones", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clientes", catTransVolSitiosOrigen: "Sitios Origen", catTransVolSitiosDestino: "Sitios Destino", catTransVolRutas: "Rutas", catTransVolTiposServicio: "Tipos Servicio", catTransVolTiposTraslado: "Tipos Traslado", catTransVolContactos: "Contactos", catTransVolEmpresasAsociadas: "Empresas Asociadas", catTransVolTiposUnidades: "Tipos Unidades", catTransVolTiposAditamentos: "Tipos Aditamentos",
@@ -203,7 +215,19 @@ const EMBEDDED_TRANSLATIONS = {
             noPlans: "Aún no hay planes. Agrega el primero arriba.",
             confirmDeletePlan: "¿Eliminar este plan? Esto no afecta a los clientes que ya lo tienen asignado.",
             planNameExists: "Ya existe un plan con ese nombre.",
-            selectPlanPlaceholder: "Selecciona un plan..."
+            selectPlanPlaceholder: "Selecciona un plan...",
+            bigDateNumber: "No. Único de Big Date", rfc: "RFC de la empresa", companyNickname: "Apodo Empresa", companyAbbreviation: "Abrev Empresa",
+            ownerName: "Dueño", billingEmail: "Correo de contacto de cobro", contractStartDate: "Fecha inicio contractual", contractRegisteredDate: "Fecha Alta contrato",
+            contractEndDate: "Fecha fin contrato", contractedCost: "Costo $ Contratado", monthlyPayment: "Pago Mensual", contractFile: "Contrato",
+            removeContract: "Quitar", viewContract: "Ver contrato", noContractFile: "Sin contrato cargado", anexosPayment: "Pago por Anexos",
+            activate: "Activar", deactivate: "Desactivar", rfcExists: "Ya existe un cliente con ese RFC.",
+            anexoStarLegend: "★ incluido en el plan contratado — sin estrella: agregado como anexo", anexoRequestedBy: "¿Quién solicitó?", anexoRequestedAt: "Fecha de solicitud",
+            anexoContractedDuration: "Tiempo contratado", anexoChanges: "Cambios de Anexos", anexoChangesTitle: "Cambios de Anexos", anexoChangesEmpty: "Aún no hay cambios registrados.",
+            anexoChangeAdded: "Agregado", anexoChangeRemoved: "Quitado", activeTree: "Árbol de permisos activo", activeTreeTitle: "Árbol de permisos activo",
+            activeTreeHint: "Todo lo que este cliente tiene habilitado ahora mismo: lo contratado por su plan (★) más lo agregado como anexo.",
+            colModule: "Módulo", colAction: "Acción", colRequestedBy: "Solicitó", colRequestedAt: "Fecha solicitud", colChangedAt: "Fecha cambio", colDuration: "Tiempo contratado",
+            moduleCostsTitle: "Costos de Módulos", moduleCostsSubtitle: "Define el costo de cada botón/módulo — se usa para calcular el Pago por Anexos de cada cliente en Nuestros Clientes.",
+            moduleCostsSaved: "Costos actualizados.", costLabel: "Costo $"
         },
         business: {
             usersTitle: "Usuarios", usersSubtitle: "Administra las personas que usan esta instancia de SGN.",
@@ -361,7 +385,8 @@ function buildSidebarData(data, role, activePage) {
             { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html' },
             { id: 'admin-cliente-nuevo', labelKey: 'menu.addClientNew', href: 'Admin-ClienteNuevo.html' },
             { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html' },
-            { id: 'admin-plan-nuevo', labelKey: 'menu.addPlanNew', href: 'Admin-PlanNuevo.html' }
+            { id: 'admin-plan-nuevo', labelKey: 'menu.addPlanNew', href: 'Admin-PlanNuevo.html' },
+            { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html' }
         ]
     };
     if (role !== 'admin') return data;

@@ -44,6 +44,12 @@ const {
     updateClient,
     updateClientBranding,
     deleteClient,
+    findClientByRfc,
+    getModuleCosts,
+    setModuleCosts,
+    getAnexosPaymentTotal,
+    getAnexoChanges,
+    recordAnexoChange,
     getClientModules,
     setClientModules,
     setClientCostCentersLimit,
@@ -117,9 +123,12 @@ app.use(helmet({
     },
 }));
 // Default express.json() caps requests at 100kb — too small for a base64
-// logo image (see MAX_LOGO_DATA_URL_LENGTH below). validateClientBody still
-// enforces the real ~350KB cap; this just raises the hard ceiling above it.
-app.use(express.json({ limit: '1mb' }));
+// logo image or contract PDF (see MAX_LOGO_DATA_URL_LENGTH/
+// MAX_CONTRACT_DATA_URL_LENGTH below). A client save can carry both at once,
+// and base64 adds ~33% overhead on top of the ~5MB contract cap — 10mb
+// leaves real headroom. validateClientBody still enforces the actual caps;
+// this just raises the hard ceiling above them.
+app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 // --- Static frontend ---------------------------------------------------------
@@ -304,7 +313,9 @@ app.put('/api/me/defaults', requireAuth, (req, res) => {
 // req.user exists, then requireAdmin checks the role in that token).
 const CLIENT_STATUSES = ['activo', 'inactivo', 'prospecto'];
 const MAX_LOGO_DATA_URL_LENGTH = 500 * 1024; // ~350KB image once base64-decoded
+const MAX_CONTRACT_DATA_URL_LENGTH = 7 * 1024 * 1024; // ~5MB PDF once base64-decoded
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const PALETTE_KEYS = ['bg', 'surface', 'border', 'textPrimary', 'textSecondary', 'accent', 'accentText', 'tooltipBg', 'tooltipText'];
 
@@ -315,6 +326,36 @@ function validateLogo(logoDataUrl) {
     }
     if (logoDataUrl.length > MAX_LOGO_DATA_URL_LENGTH) {
         return 'Logo image is too large (max ~350KB).';
+    }
+    return null;
+}
+
+// Contrato: stored the same way as the logo (a data: URL in the same row),
+// just a bigger size cap (real PDFs, not small branding images) and a
+// different accepted MIME.
+function validateContractFile(contractFileDataUrl) {
+    if (!contractFileDataUrl) return null;
+    if (typeof contractFileDataUrl !== 'string' || !contractFileDataUrl.startsWith('data:application/pdf')) {
+        return 'contractFileDataUrl must be a PDF data URL.';
+    }
+    if (contractFileDataUrl.length > MAX_CONTRACT_DATA_URL_LENGTH) {
+        return 'Contract file is too large (max ~5MB).';
+    }
+    return null;
+}
+
+function validateOptionalDate(value, fieldName) {
+    if (!value) return null;
+    if (typeof value !== 'string' || !DATE_RE.test(value)) {
+        return `${fieldName} must be a date in YYYY-MM-DD format.`;
+    }
+    return null;
+}
+
+function validateOptionalMoney(value, fieldName) {
+    if (value === undefined || value === null || value === '') return null;
+    if (typeof value !== 'number' || Number.isNaN(value) || value < 0) {
+        return `${fieldName} must be a number >= 0.`;
     }
     return null;
 }
@@ -339,7 +380,11 @@ function validateColorPalette(colorPalette) {
 }
 
 function validateClientBody(body) {
-    const { companyName, contactName, email, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette } = body || {};
+    const {
+        companyName, contactName, email, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+        billingEmail, contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl,
+        contractedCost, monthlyPayment,
+    } = body || {};
     if (!companyName || !contactName || !email) {
         return 'companyName, contactName and email are required.';
     }
@@ -352,7 +397,16 @@ function validateClientBody(body) {
     if (secondaryColor && !HEX_COLOR_RE.test(secondaryColor)) {
         return 'secondaryColor must be a hex color like #1a73e8.';
     }
-    return validateLogo(logoDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette);
+    if (billingEmail && !/^\S+@\S+\.\S+$/.test(billingEmail)) {
+        return 'billingEmail must be a valid email address.';
+    }
+    return validateLogo(logoDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette)
+        || validateContractFile(contractFileDataUrl)
+        || validateOptionalDate(contractStartDate, 'contractStartDate')
+        || validateOptionalDate(contractRegisteredDate, 'contractRegisteredDate')
+        || validateOptionalDate(contractEndDate, 'contractEndDate')
+        || validateOptionalMoney(contractedCost, 'contractedCost')
+        || validateOptionalMoney(monthlyPayment, 'monthlyPayment');
 }
 
 app.get('/api/admin/modules', requireAuth, requireAdmin, (req, res) => {
@@ -360,7 +414,11 @@ app.get('/api/admin/modules', requireAuth, requireAdmin, (req, res) => {
 });
 
 app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
-    res.json({ clients: listClients() });
+    const clients = listClients().map((client) => ({
+        ...client,
+        anexosPayment: getAnexosPaymentTotal(client.id),
+    }));
+    res.json({ clients });
 });
 
 // Runs after every create/update: 'activo' provisions (or reactivates) the
@@ -405,11 +463,34 @@ function applyEffectiveEntitlements(clientId) {
     setClientCostCentersLimit(clientId, baseCostCenters + addenda.extraCostCenters);
 }
 
+// Extracts every field createClient/updateClient know how to persist, in one
+// place, so the create and update routes below (and any future one) can't
+// drift out of sync with each other on which fields get passed through.
+function extractClientFields(body) {
+    const {
+        companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+        mission, vision, coreValues, history,
+        rfc, companyNickname, companyAbbreviation, ownerName, billingEmail,
+        contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
+        contractedCost, monthlyPayment,
+    } = body;
+    return {
+        companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+        mission, vision, coreValues, history,
+        rfc, companyNickname, companyAbbreviation, ownerName, billingEmail,
+        contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
+        contractedCost, monthlyPayment,
+    };
+}
+
 app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history } = req.body;
-    const client = createClient({ companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history });
+    const rfc = (req.body.rfc || '').trim();
+    if (rfc && findClientByRfc(rfc)) {
+        return res.status(409).json({ message: 'A client with that RFC already exists.' });
+    }
+    const client = createClient(extractClientFields(req.body));
     applyEffectiveEntitlements(client.id);
     const generatedAdmin = await applyClientLifecycle(client);
     res.status(201).json({ client: getClientById(client.id), generatedAdmin });
@@ -420,8 +501,11 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history } = req.body;
-    const client = updateClient(req.params.id, { companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette, mission, vision, coreValues, history });
+    const rfc = (req.body.rfc || '').trim();
+    if (rfc && findClientByRfc(rfc, existing.id)) {
+        return res.status(409).json({ message: 'A client with that RFC already exists.' });
+    }
+    const client = updateClient(req.params.id, extractClientFields(req.body));
     applyEffectiveEntitlements(client.id);
     const generatedAdmin = await applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
@@ -531,23 +615,76 @@ app.get('/api/admin/clients/:id/addenda', requireAuth, requireAdmin, (req, res) 
 app.put('/api/admin/clients/:id/addenda', requireAuth, requireAdmin, (req, res) => {
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
-    const { extraModules, extraCostCenters } = req.body || {};
+    const { extraModules, extraCostCenters, requestedBy, requestedAt, contractedDuration } = req.body || {};
     if (extraModules !== undefined && !Array.isArray(extraModules)) {
         return res.status(400).json({ message: 'extraModules must be an array.' });
     }
     if (extraCostCenters !== undefined && (!Number.isInteger(extraCostCenters) || extraCostCenters < 0)) {
         return res.status(400).json({ message: 'extraCostCenters must be a non-negative integer.' });
     }
+    const dateError = validateOptionalDate(requestedAt, 'requestedAt');
+    if (dateError) return res.status(400).json({ message: dateError });
+
+    // "Cambios de Anexos": one audit row per módulo that actually enters or
+    // leaves extra_modules on this save — diffed against what was there
+    // right before, not against the plan's own modules (those were never
+    // anexos to begin with, so toggling the plan itself doesn't log here).
+    const previousModules = getClientAddenda(req.params.id).extraModules;
+    const nextModules = sanitizePlanModules(extraModules);
+    const added = nextModules.filter((key) => !previousModules.includes(key));
+    const removed = previousModules.filter((key) => !nextModules.includes(key));
+
     setClientAddenda(req.params.id, {
-        extraModules: sanitizePlanModules(extraModules),
+        extraModules: nextModules,
         extraCostCenters: extraCostCenters || 0,
     });
     applyEffectiveEntitlements(req.params.id);
+
+    added.forEach((moduleKey) => recordAnexoChange(req.params.id, {
+        moduleKey, action: 'added', requestedBy, requestedAt, contractedDuration,
+    }));
+    removed.forEach((moduleKey) => recordAnexoChange(req.params.id, {
+        moduleKey, action: 'removed', requestedBy, requestedAt, contractedDuration,
+    }));
+
     res.json({
         addenda: getClientAddenda(req.params.id),
         modules: getClientModules(req.params.id),
         costCentersLimit: getClientById(req.params.id).cost_centers_limit,
     });
+});
+
+// Cambios de Anexos: read-only history for the modal that shows who
+// requested each anexo change and when — the actual writes happen inside
+// the addenda PUT above, never directly.
+app.get('/api/admin/clients/:id/anexo-changes', requireAuth, requireAdmin, (req, res) => {
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    res.json({ changes: getAnexoChanges(req.params.id) });
+});
+
+// --- SaaS admin: costo por módulo (Costos de Módulos) ------------------------
+// Used to compute "Pago por Anexos" per client (see getAnexosPaymentTotal) —
+// completely separate from Planes y Paquetes, which only decides which
+// módulos a plan includes, not what any of them cost.
+app.get('/api/admin/module-costs', requireAuth, requireAdmin, (req, res) => {
+    const costByKey = new Map(getModuleCosts().map((c) => [c.module_key, c.cost]));
+    res.json({ costs: MODULE_CATALOG.map((m) => ({ ...m, cost: costByKey.get(m.key) || 0 })) });
+});
+
+app.put('/api/admin/module-costs', requireAuth, requireAdmin, (req, res) => {
+    const { costs } = req.body || {};
+    if (!Array.isArray(costs)) return res.status(400).json({ message: 'costs must be an array.' });
+    const validKeys = new Set(MODULE_CATALOG.map((m) => m.key));
+    for (const { key, cost } of costs) {
+        if (!validKeys.has(key)) return res.status(400).json({ message: `Unknown module key: ${key}.` });
+        if (typeof cost !== 'number' || Number.isNaN(cost) || cost < 0) {
+            return res.status(400).json({ message: `cost for ${key} must be a number >= 0.` });
+        }
+    }
+    setModuleCosts(costs);
+    const costByKey = new Map(getModuleCosts().map((c) => [c.module_key, c.cost]));
+    res.json({ costs: MODULE_CATALOG.map((m) => ({ ...m, cost: costByKey.get(m.key) || 0 })) });
 });
 
 // --- SaaS admin: plans / packages (Planes y Paquetes) ------------------------
