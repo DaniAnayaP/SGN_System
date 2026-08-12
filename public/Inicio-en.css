@@ -1702,12 +1702,44 @@
         background-color: var(--color-surface);
         overflow: auto;
     }
+    /* Font-size zoom (see Dashboard.js renderDataTableZoomControls) — one
+       shared --data-table-font-size custom property set on :root, so every
+       table on the page (and, since it's persisted, every table on every
+       page) zooms together instead of each needing its own control. */
+    .data-table-zoom{
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.4rem;
+        margin-bottom: 0.5rem;
+    }
+    .data-table-zoom-btn{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.7rem;
+        height: 1.7rem;
+        border: 1px solid var(--color-border);
+        border-radius: 50%;
+        background-color: var(--color-surface);
+        color: var(--color-text-secondary);
+        font-size: 0.9rem;
+        cursor: pointer;
+    }
+    .data-table-zoom-btn:hover:not(:disabled){
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .data-table-zoom-btn:disabled{
+        opacity: 0.4;
+        cursor: default;
+    }
     .data-table{
         border-collapse: separate;
         border-spacing: 0;
         width: 100%;
         min-width: max-content;
-        font-size: 0.85rem;
+        font-size: var(--data-table-font-size, 0.85rem);
     }
     .data-table th,
     .data-table td{

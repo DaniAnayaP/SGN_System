@@ -449,6 +449,8 @@
     "breadcrumbExpand": "Expandir ruta de acceso",
     "breadcrumbCollapse": "Contraer ruta de acceso",
     "topBarExpand": "Expandir barra superior",
-    "topBarCollapse": "Contraer barra superior"
+    "topBarCollapse": "Contraer barra superior",
+    "decreaseFontSize": "Reducir tamaño de letra",
+    "increaseFontSize": "Aumentar tamaño de letra"
   }
 }

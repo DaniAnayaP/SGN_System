@@ -449,6 +449,8 @@
     "breadcrumbExpand": "Expand breadcrumb",
     "breadcrumbCollapse": "Collapse breadcrumb",
     "topBarExpand": "Expand top bar",
-    "topBarCollapse": "Collapse top bar"
+    "topBarCollapse": "Collapse top bar",
+    "decreaseFontSize": "Decrease font size",
+    "increaseFontSize": "Increase font size"
   }
 }
