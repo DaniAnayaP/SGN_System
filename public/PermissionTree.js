@@ -58,6 +58,24 @@
         return res.json();
     }
 
+    // The grant model has no "área" dimension (a department section here
+    // covers every área within it) — so an área-specific submenu override
+    // (see Dashboard.js effectiveAreaCategories, same areaOverrides data)
+    // is APPENDED to that category's grantable items here instead of
+    // swapped in, since the department's other áreas still show the
+    // original ones and those must stay grantable too.
+    function withAreaOverrides(sectionId, categories, areaOverrides) {
+        if (!areaOverrides) return categories;
+        const extraByCategory = Object.entries(areaOverrides)
+            .filter(([key]) => key.startsWith(`${sectionId}/`))
+            .map(([, overrides]) => overrides);
+        if (!extraByCategory.length) return categories;
+        return categories.map((cat) => {
+            const extra = extraByCategory.flatMap((overrides) => overrides[cat.id] || []);
+            return extra.length ? { ...cat, submenu: [...cat.submenu, ...extra] } : cat;
+        });
+    }
+
     // A submenu entry can itself have a submenu (e.g. "Administración del
     // Negocio" nested inside "Configuración", with its own 9 pantallas) —
     // that third level's leaf keys normally use a compound "parentId/leafId"
@@ -258,7 +276,7 @@
 
         return {
             async init(initialGrants) {
-                const { sections: allSections, areaCategories } = await loadMenuData();
+                const { sections: allSections, areaCategories, areaOverrides } = await loadMenuData();
                 // 'main' (Inicio, Tablero, Administración del Negocio, etc.)
                 // is core navigation, not a contracted module — always shown
                 // regardless of which módulos the client has contracted.
@@ -314,7 +332,9 @@
                     }
                     : null;
                 sectionsData = filtered.map((s) => {
-                    if (s.id !== 'main') return { ...s, items: [...generalItems, ...(areaCategories || [])] };
+                    if (s.id !== 'main') {
+                        return { ...s, items: [...generalItems, ...withAreaOverrides(s.id, areaCategories || [], areaOverrides)] };
+                    }
                     const items = s.items
                         .filter((i) => i.id !== 'admin-business' && !BUTTON_CONFIG_ITEM_IDS.includes(i.id))
                         .map((i) => {

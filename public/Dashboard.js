@@ -47,6 +47,7 @@ const EMBEDDED_TRANSLATIONS = {
             clientesRegistrados: "Registered Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Registered Plans", addPlanNew: "+ Add New Plan", mainSection: "General",
             catCatalogos: "Catalogs", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operations", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
+            opTransVolTraslados: "Transfer Log", opTransVolCombustible: "Fuel Log", opTransVolIngresos: "Income", opTransVolGastos: "Expenses", opTransVolInventario: "Inventory",
             catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
             catGestion: "Management", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
             catReportes: "Reports", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
@@ -151,6 +152,7 @@ const EMBEDDED_TRANSLATIONS = {
             clientesRegistrados: "Clientes Registrados", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Planes Registrados", addPlanNew: "+ Agregar Plan Nuevo", mainSection: "General",
             catCatalogos: "Catálogos", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operaciones", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
+            opTransVolTraslados: "Registro de traslados", opTransVolCombustible: "Registro Combustible", opTransVolIngresos: "Ingresos", opTransVolGastos: "Gastos", opTransVolInventario: "Inventario",
             catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
             catGestion: "Gestión", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
             catReportes: "Reportes", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
@@ -479,12 +481,26 @@ let selectedArea = getStoredArea();
 // Operaciones/Admin/Gestión/Reportes/Material Apoyo) instead of per-area
 // content. Real screens replace today's placeholders inside that one array
 // as they're built, rather than needing edits in every department section.
+//
+// A specific área can instead need its own real submenu for one of those
+// categories (e.g. Cadena de Suministro > Transporte Volumen's own
+// Operaciones items) — data.areaOverrides["dept/área"][categoryId] swaps
+// that one category's submenu in, leaving every other área/categoría on
+// the shared template untouched. See PermissionTree.js for the matching
+// (department-wide, not área-scoped) grant side of the same data.
+function effectiveAreaCategories(data) {
+    const base = data.areaCategories || [];
+    const overrides = (data.areaOverrides || {})[`${selectedDepartment}/${selectedArea}`];
+    if (!overrides) return base;
+    return base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat));
+}
+
 function applyAreaFilter(data) {
     return {
         ...data,
         sections: data.sections.map((s) => {
             if (s.id !== selectedDepartment) return s;
-            return { ...s, items: selectedArea ? (data.areaCategories || []) : [] };
+            return { ...s, items: selectedArea ? effectiveAreaCategories(data) : [] };
         })
     };
 }
