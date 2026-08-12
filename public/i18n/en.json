@@ -261,7 +261,11 @@
     "moduleCostsTitle": "Module Costs",
     "moduleCostsSubtitle": "Set the cost of each button/module — used to compute each client's Anexos Payment in Our Clients.",
     "moduleCostsSaved": "Costs updated.",
-    "costLabel": "Cost $"
+    "costLabel": "Cost $",
+    "institutionalColor": "Institutional color",
+    "noLogo": "No logo",
+    "noColorSet": "No color set",
+    "editColor": "Edit color"
   },
   "business": {
     "usersTitle": "Users",

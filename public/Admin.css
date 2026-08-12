@@ -141,6 +141,45 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Nuestros Clientes table: small logo thumbnail + clickable color swatch,
+   compact enough to sit inline in a table cell instead of the full-size
+   preview/picker used in the edit form. */
+.admin-table-logo{
+    width: 1.8rem;
+    height: 1.8rem;
+    object-fit: contain;
+    border-radius: 0.3rem;
+    background-color: var(--color-bg);
+    box-shadow: 0 0 0 1px var(--color-border);
+    display: block;
+}
+.admin-table-logo-empty{
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 0.3rem;
+    background-color: var(--color-bg);
+    box-shadow: 0 0 0 1px var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    font-size: 1rem;
+}
+.admin-color-swatch{
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    padding: 0;
+}
+.admin-color-swatch-empty{
+    background-color: var(--color-bg);
+    background-image: linear-gradient(45deg, var(--color-border) 25%, transparent 25%, transparent 75%, var(--color-border) 75%),
+        linear-gradient(45deg, var(--color-border) 25%, transparent 25%, transparent 75%, var(--color-border) 75%);
+    background-size: 6px 6px;
+    background-position: 0 0, 3px 3px;
+}
 .admin-field input[type="color"]{
     padding: 0.2rem;
     height: 2.4rem;

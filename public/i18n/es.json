@@ -261,7 +261,11 @@
     "moduleCostsTitle": "Costos de Módulos",
     "moduleCostsSubtitle": "Define el costo de cada botón/módulo — se usa para calcular el Pago por Anexos de cada cliente en Nuestros Clientes.",
     "moduleCostsSaved": "Costos actualizados.",
-    "costLabel": "Costo $"
+    "costLabel": "Costo $",
+    "institutionalColor": "Color institucional",
+    "noLogo": "Sin logo",
+    "noColorSet": "Sin color asignado",
+    "editColor": "Editar color"
   },
   "business": {
     "usersTitle": "Usuarios",

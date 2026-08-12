@@ -205,6 +205,31 @@ function renderClients() {
             window.open(client.contract_file_data_url, '_blank');
         }, { disabled: !client.contract_file_data_url, title: client.contract_file_data_url ? '' : Dashboard.t('admin.noContractFile') }));
 
+        const tdLogo = document.createElement('td');
+        if (client.logo_data_url) {
+            const img = document.createElement('img');
+            img.className = 'admin-table-logo';
+            img.src = client.logo_data_url;
+            img.alt = '';
+            tdLogo.appendChild(img);
+        } else {
+            const placeholder = document.createElement('span');
+            placeholder.className = 'admin-table-logo-empty';
+            placeholder.title = Dashboard.t('admin.noLogo');
+            placeholder.innerHTML = '<i class="bx bx-image" aria-hidden="true"></i>';
+            tdLogo.appendChild(placeholder);
+        }
+
+        const tdColor = document.createElement('td');
+        const colorSwatch = document.createElement('button');
+        colorSwatch.type = 'button';
+        colorSwatch.className = client.seed_color ? 'admin-color-swatch' : 'admin-color-swatch admin-color-swatch-empty';
+        if (client.seed_color) colorSwatch.style.backgroundColor = client.seed_color;
+        colorSwatch.setAttribute('aria-label', Dashboard.t('admin.editColor'));
+        colorSwatch.title = client.seed_color || Dashboard.t('admin.noColorSet');
+        colorSwatch.addEventListener('click', () => openColorModal(client));
+        tdColor.appendChild(colorSwatch);
+
         const tdAddenda = document.createElement('td');
         tdAddenda.appendChild(iconButton('bx-file-plus', Dashboard.t('admin.addenda'), () => openAddendaModal(client)));
 
@@ -234,6 +259,8 @@ function renderClients() {
             textCell(client.rfc),
             textCell(client.company_nickname),
             textCell(client.company_abbreviation),
+            tdLogo,
+            tdColor,
             textCell(client.owner_name),
             textCell(client.contact_name),
             textCell(client.billing_email),
@@ -256,33 +283,47 @@ function renderClients() {
     });
 }
 
-// Activar/Desactivar is the day-to-day lifecycle toggle — Eliminar (still
-// available for now, see removeClient) stays separate and destructive.
+// Turns a client record (as returned by GET /api/admin/clients, snake_case
+// column names) back into the camelCase shape PATCH /api/admin/clients/:id
+// expects — every row-level action below (status toggle, color-only edit)
+// needs to resend the fields it ISN'T changing, since PATCH replaces the
+// whole record rather than merging partial updates server-side.
+function clientToPayload(client) {
+    return {
+        companyName: client.company_name, contactName: client.contact_name, email: client.email,
+        phone: client.phone, plan: client.plan, status: client.status,
+        logoDataUrl: client.logo_data_url, seedColor: client.seed_color,
+        colorPalette: client.color_palette ? JSON.parse(client.color_palette) : null,
+        mission: client.mission, vision: client.vision, coreValues: client.core_values, history: client.history,
+        rfc: client.rfc, companyNickname: client.company_nickname, companyAbbreviation: client.company_abbreviation,
+        ownerName: client.owner_name, billingEmail: client.billing_email,
+        contractStartDate: client.contract_start_date, contractRegisteredDate: client.contract_registered_date,
+        contractEndDate: client.contract_end_date, contractFileDataUrl: client.contract_file_data_url, contractFileName: client.contract_file_name,
+        contractedCost: client.contracted_cost, monthlyPayment: client.monthly_payment,
+    };
+}
+
+async function patchClient(client, overrides) {
+    const res = await fetch(`/api/admin/clients/${client.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ...clientToPayload(client), ...overrides }),
+    });
+    if (!res.ok) throw new Error('save failed');
+    const { client: updated } = await res.json();
+    clients = clients.map((c) => (c.id === updated.id ? { ...updated, anexosPayment: c.anexosPayment } : c));
+    renderClients();
+    populateClientSelect();
+    return updated;
+}
+
+// Activar/Desactivar is the day-to-day lifecycle toggle — clients can no
+// longer be deleted (see server.js), only edited or (de)activated.
 async function toggleClientStatus(client) {
     const nextStatus = client.status === 'inactivo' ? 'activo' : 'inactivo';
     try {
-        const res = await fetch(`/api/admin/clients/${client.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-                companyName: client.company_name, contactName: client.contact_name, email: client.email,
-                phone: client.phone, plan: client.plan, status: nextStatus,
-                logoDataUrl: client.logo_data_url, seedColor: client.seed_color,
-                colorPalette: client.color_palette ? JSON.parse(client.color_palette) : null,
-                mission: client.mission, vision: client.vision, coreValues: client.core_values, history: client.history,
-                rfc: client.rfc, companyNickname: client.company_nickname, companyAbbreviation: client.company_abbreviation,
-                ownerName: client.owner_name, billingEmail: client.billing_email,
-                contractStartDate: client.contract_start_date, contractRegisteredDate: client.contract_registered_date,
-                contractEndDate: client.contract_end_date, contractFileDataUrl: client.contract_file_data_url, contractFileName: client.contract_file_name,
-                contractedCost: client.contracted_cost, monthlyPayment: client.monthly_payment,
-            }),
-        });
-        if (!res.ok) throw new Error('status change failed');
-        const { client: updated } = await res.json();
-        clients = clients.map((c) => (c.id === updated.id ? { ...updated, anexosPayment: c.anexosPayment } : c));
-        renderClients();
-        populateClientSelect();
+        await patchClient(client, { status: nextStatus });
     } catch {
         alert(Dashboard.t('admin.saveError'));
     }
@@ -705,6 +746,66 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !activeTreeModal.hidden) closeActiveTreeModal();
 });
 
+// --- Color Institucional: quick edit straight from the table, without
+// opening the full Editar form — its own ColorPalette instance (separate
+// from the one in #client-color-palette used by startEdit) so editing one
+// doesn't clobber the other's in-progress state. Still the exact same
+// widget, "Sugerir paleta" and all, just in a smaller dialog. ------------
+const colorModal = document.getElementById('color-modal');
+const colorModalSubtitle = document.getElementById('color-modal-subtitle');
+const colorModalPaletteContainer = document.getElementById('color-modal-palette');
+const colorModalError = document.getElementById('color-modal-error');
+const colorModalSaveBtn = document.getElementById('color-modal-save');
+const colorModalCancelBtn = document.getElementById('color-modal-cancel');
+
+let colorModalPaletteWidget = null;
+let colorModalClient = null;
+
+function closeColorModal() {
+    colorModal.hidden = true;
+    colorModalClient = null;
+}
+
+function openColorModal(client) {
+    colorModalClient = client;
+    colorModalError.hidden = true;
+    colorModalSubtitle.textContent = client.company_name;
+    if (!colorModalPaletteWidget) {
+        colorModalPaletteWidget = window.ColorPalette.create(colorModalPaletteContainer);
+    }
+    let existingPalette = null;
+    if (client.color_palette) {
+        try { existingPalette = JSON.parse(client.color_palette); } catch { existingPalette = null; }
+    }
+    if (existingPalette) existingPalette.seed = client.seed_color || existingPalette.seed;
+    else if (client.seed_color) existingPalette = window.ColorPalette.suggestPalette(client.seed_color);
+    colorModalPaletteWidget.setPalette(existingPalette);
+    colorModal.hidden = false;
+}
+
+colorModalSaveBtn.addEventListener('click', async () => {
+    if (!colorModalClient || !colorModalPaletteWidget) return;
+    const { seed, ...currentPalette } = colorModalPaletteWidget.getPalette();
+    colorModalSaveBtn.disabled = true;
+    try {
+        await patchClient(colorModalClient, { seedColor: seed, colorPalette: currentPalette });
+        closeColorModal();
+    } catch {
+        colorModalError.textContent = Dashboard.t('admin.saveError');
+        colorModalError.hidden = false;
+    } finally {
+        colorModalSaveBtn.disabled = false;
+    }
+});
+
+colorModalCancelBtn.addEventListener('click', closeColorModal);
+colorModal.addEventListener('click', (event) => {
+    if (event.target === colorModal) closeColorModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !colorModal.hidden) closeColorModal();
+});
+
 // --- Accesos del Administrador: GEIPSA-only override for the auto-
 // provisioned client admin, who otherwise sees everything the client has
 // contracted by default (see hasButtonPermission/hasMainButtonPermission's
@@ -919,6 +1020,7 @@ document.addEventListener('dashboard:language-changed', () => {
         const checked = Array.from(addendaModulesList.querySelectorAll('input[type="checkbox"]:checked')).map((i) => i.dataset.moduleKey);
         renderAddendaModules(checked);
     }
+    if (!colorModal.hidden) colorModalPaletteWidget?.refreshLabels();
 });
 
 (async function init() {

@@ -467,6 +467,8 @@
                                 <th data-i18n="admin.rfc">Company RFC</th>
                                 <th data-i18n="admin.companyNickname">Company nickname</th>
                                 <th data-i18n="admin.companyAbbreviation">Company abbreviation</th>
+                                <th data-i18n="admin.logo">Logo</th>
+                                <th data-i18n="admin.institutionalColor">Institutional color</th>
                                 <th data-i18n="admin.ownerName">Owner</th>
                                 <th data-i18n="admin.contactName">Contact name</th>
                                 <th data-i18n="admin.billingEmail">Billing contact email</th>
@@ -599,6 +601,19 @@
             </div>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
                 <button type="button" class="btn btn-secondary" id="active-tree-close" data-i18n="admin.cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="color-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="color-modal-title">
+            <h3 id="color-modal-title" data-i18n="admin.institutionalColor">Institutional color</h3>
+            <p id="color-modal-subtitle" class="admin-subtitle"></p>
+            <div id="color-modal-palette"></div>
+            <div id="color-modal-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="color-modal-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="color-modal-cancel" data-i18n="admin.cancel">Cancel</button>
             </div>
         </div>
     </div>

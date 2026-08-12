@@ -109,7 +109,8 @@ const EMBEDDED_TRANSLATIONS = {
             activeTreeHint: "Everything this client has enabled right now: what their plan contracts (★) plus what was added as an anexo.",
             colModule: "Module", colAction: "Action", colRequestedBy: "Requested by", colRequestedAt: "Request date", colChangedAt: "Change date", colDuration: "Contracted duration",
             moduleCostsTitle: "Module Costs", moduleCostsSubtitle: "Set the cost of each button/module — used to compute each client's Anexos Payment in Our Clients.",
-            moduleCostsSaved: "Costs updated.", costLabel: "Cost $"
+            moduleCostsSaved: "Costs updated.", costLabel: "Cost $",
+            institutionalColor: "Institutional color", noLogo: "No logo", noColorSet: "No color set", editColor: "Edit color"
         },
         business: {
             usersTitle: "Users", usersSubtitle: "Manage the people who use this SGN instance.",
@@ -227,7 +228,8 @@ const EMBEDDED_TRANSLATIONS = {
             activeTreeHint: "Todo lo que este cliente tiene habilitado ahora mismo: lo contratado por su plan (★) más lo agregado como anexo.",
             colModule: "Módulo", colAction: "Acción", colRequestedBy: "Solicitó", colRequestedAt: "Fecha solicitud", colChangedAt: "Fecha cambio", colDuration: "Tiempo contratado",
             moduleCostsTitle: "Costos de Módulos", moduleCostsSubtitle: "Define el costo de cada botón/módulo — se usa para calcular el Pago por Anexos de cada cliente en Nuestros Clientes.",
-            moduleCostsSaved: "Costos actualizados.", costLabel: "Costo $"
+            moduleCostsSaved: "Costos actualizados.", costLabel: "Costo $",
+            institutionalColor: "Color institucional", noLogo: "Sin logo", noColorSet: "Sin color asignado", editColor: "Editar color"
         },
         business: {
             usersTitle: "Usuarios", usersSubtitle: "Administra las personas que usan esta instancia de SGN.",
