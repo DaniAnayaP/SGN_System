@@ -1747,6 +1747,18 @@
         text-align: left;
         white-space: nowrap;
         border-bottom: 1px solid var(--color-border);
+        /* Faint column divider — color-mix keeps it theme-aware (fades
+           correctly in dark mode too, since --color-border itself changes
+           per theme) without needing a second border color variable. Wide
+           tables like Registro de traslados (48 columns) get hard to track
+           across a row without SOME vertical separation, but a full-
+           strength border here would compete with the sticky first
+           column's own (intentionally stronger) divider below. */
+        border-right: 1px solid color-mix(in srgb, var(--color-border) 35%, transparent);
+    }
+    .data-table th:last-child,
+    .data-table td:last-child{
+        border-right: none;
     }
     /* A different background than the body rows (--color-bg, the page's own
        "recessed" tone, instead of --color-surface which the rows and the
