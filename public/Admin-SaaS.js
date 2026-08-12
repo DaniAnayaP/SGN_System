@@ -231,7 +231,7 @@ function renderClients() {
         tdColor.appendChild(colorSwatch);
 
         const tdAddenda = document.createElement('td');
-        tdAddenda.appendChild(iconButton('bx-file-plus', Dashboard.t('admin.addenda'), () => openAddendaModal(client)));
+        tdAddenda.appendChild(iconButton('bx-paperclip', Dashboard.t('admin.addenda'), () => openAddendaModal(client)));
 
         const tdAnexoChanges = document.createElement('td');
         tdAnexoChanges.appendChild(iconButton('bx-history', Dashboard.t('admin.anexoChanges'), () => openAnexoChangesModal(client)));
