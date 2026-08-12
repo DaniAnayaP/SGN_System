@@ -59,20 +59,22 @@
     }
 
     // The grant model has no "área" dimension (a department section here
-    // covers every área within it) — so an área-specific submenu override
-    // (see Dashboard.js effectiveAreaCategories, same areaOverrides data)
-    // is APPENDED to that category's grantable items here instead of
-    // swapped in, since the department's other áreas still show the
-    // original ones and those must stay grantable too.
+    // covers every área within it) — an área-specific submenu override (see
+    // Dashboard.js effectiveAreaCategories, same areaOverrides data) REPLACES
+    // that category's generic Cat 1/Cat 2-style placeholders here too, same
+    // as the sidebar: once a category has real content anywhere in the
+    // department, the placeholder is no longer meaningful to grant. If more
+    // than one área overrides the same category, their real items are
+    // combined (still replacing the placeholder, not adding to it).
     function withAreaOverrides(sectionId, categories, areaOverrides) {
         if (!areaOverrides) return categories;
-        const extraByCategory = Object.entries(areaOverrides)
+        const overridesForSection = Object.entries(areaOverrides)
             .filter(([key]) => key.startsWith(`${sectionId}/`))
             .map(([, overrides]) => overrides);
-        if (!extraByCategory.length) return categories;
+        if (!overridesForSection.length) return categories;
         return categories.map((cat) => {
-            const extra = extraByCategory.flatMap((overrides) => overrides[cat.id] || []);
-            return extra.length ? { ...cat, submenu: [...cat.submenu, ...extra] } : cat;
+            const extra = overridesForSection.flatMap((overrides) => overrides[cat.id] || []);
+            return extra.length ? { ...cat, submenu: extra } : cat;
         });
     }
 
