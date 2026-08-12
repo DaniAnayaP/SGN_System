@@ -1697,16 +1697,16 @@
     .data-table thead th:first-child{
         z-index: 3;
     }
-    /* The empty-state row's single colspan cell already spans the full
-       table width, so pinning it like a real first column would just make
-       its centered message drift left on horizontal scroll instead. Needs
-       the wrapper-scoped selector to outrank .data-table td:first-child at
-       equal specificity otherwise. */
-    .data-table-wrapper td.data-table-empty-cell{
-        position: static;
-        text-align: center;
+    /* The empty-state row's single colspan cell renders as wide as all 10
+       columns combined — centering the message in that width would put it
+       off past the right edge until the user scrolls horizontally first.
+       It's already sticky/left:0 via .data-table td:first-child (colspan
+       doesn't change which selector matches), which is exactly what's
+       wanted here too: keep it left-aligned and pinned in view instead. */
+    .data-table td.data-table-empty-cell{
+        text-align: left;
         color: var(--color-text-secondary);
-        padding: 2.5rem 1rem;
+        padding: 2.5rem 1.5rem;
         border-right: none;
     }
 
