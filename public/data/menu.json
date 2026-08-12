@@ -114,6 +114,18 @@
   ],
   "areaOverrides": {
     "supply-chain/sc-area-transport-1": {
+      "cat-catalogos": [
+        { "id": "cat-catalogos-transporte-vol-clientes", "labelKey": "menu.catTransVolClientes", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-sitios-origen", "labelKey": "menu.catTransVolSitiosOrigen", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-sitios-destino", "labelKey": "menu.catTransVolSitiosDestino", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-rutas", "labelKey": "menu.catTransVolRutas", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-servicio", "labelKey": "menu.catTransVolTiposServicio", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-traslado", "labelKey": "menu.catTransVolTiposTraslado", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-contactos", "labelKey": "menu.catTransVolContactos", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-empresas-asociadas", "labelKey": "menu.catTransVolEmpresasAsociadas", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-unidades", "labelKey": "menu.catTransVolTiposUnidades", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-aditamentos", "labelKey": "menu.catTransVolTiposAditamentos", "icon": "bx-window", "href": "#" }
+      ],
       "cat-operaciones": [
         { "id": "cat-operaciones-transporte-vol-traslados", "labelKey": "menu.opTransVolTraslados", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-combustible", "labelKey": "menu.opTransVolCombustible", "icon": "bx-window", "href": "#" },
