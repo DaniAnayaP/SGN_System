@@ -1675,18 +1675,24 @@
         white-space: nowrap;
         border-bottom: 1px solid var(--color-border);
     }
+    /* A different background than the body rows (--color-bg, the page's own
+       "recessed" tone, instead of --color-surface which the rows and the
+       wrapper itself already use) is what actually makes the header read as
+       a header instead of just another row — the smaller uppercase text and
+       bottom border alone weren't enough contrast on their own. Applies to
+       every table built on this shared component, not just one screen. */
     .data-table thead th{
         position: sticky;
         top: 0;
         z-index: 2;
-        background-color: var(--color-surface);
+        background-color: var(--color-bg);
         font-size: 0.72rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.02em;
         color: var(--color-text-secondary);
+        border-bottom: 2px solid var(--color-border);
     }
-    .data-table th:first-child,
     .data-table td:first-child{
         position: sticky;
         left: 0;
@@ -1694,8 +1700,11 @@
         background-color: var(--color-surface);
         border-right: 1px solid var(--color-border);
     }
-    .data-table thead th:first-child{
+    .data-table th:first-child{
+        position: sticky;
+        left: 0;
         z-index: 3;
+        border-right: 1px solid var(--color-border);
     }
     /* The empty-state row's single colspan cell renders as wide as all 10
        columns combined. position:sticky on the <td> itself doesn't reliably
