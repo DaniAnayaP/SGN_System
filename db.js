@@ -720,25 +720,6 @@ function updateClientBranding(clientId, { logoDataUrl, seedColor, colorPalette }
     return getClientBranding(clientId);
 }
 
-// Deleting a client is different from deactivating one: deactivation keeps
-// everything and just locks people out (see deactivateClientUsers); deleting
-// the client record removes its users and profiles too — there's no client
-// left for them to belong to. Deleted explicitly rather than relying on
-// ON DELETE CASCADE: profiles.client_id was added via ALTER TABLE on
-// already-deployed databases, and SQLite can't attach a cascade action to a
-// column after the fact, only on tables created fresh with it already there.
-function deleteClient(id) {
-    const cleanup = db.transaction(() => {
-        // Must clear this first: clients.admin_user_id points at a user we're
-        // about to delete, and that FK has no cascade action.
-        db.prepare('UPDATE clients SET admin_user_id = NULL WHERE id = ?').run(id);
-        db.prepare('DELETE FROM profiles WHERE client_id = ?').run(id);
-        db.prepare('DELETE FROM users WHERE client_id = ?').run(id);
-        db.prepare('DELETE FROM clients WHERE id = ?').run(id);
-    });
-    cleanup();
-}
-
 // --- Query helpers: client module entitlements ("Contrataciones") ------------
 function getClientModules(clientId) {
     const rows = db
@@ -1114,7 +1095,6 @@ module.exports = {
     createClient,
     updateClient,
     updateClientBranding,
-    deleteClient,
     findClientByRfc,
     getModuleCosts,
     setModuleCosts,

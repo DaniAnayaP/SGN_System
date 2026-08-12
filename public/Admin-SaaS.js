@@ -227,7 +227,6 @@ function renderClients() {
                 Dashboard.t(client.status === 'inactivo' ? 'admin.activate' : 'admin.deactivate'),
                 () => toggleClientStatus(client),
             ),
-            iconButton('bx-trash', Dashboard.t('admin.delete'), () => removeClient(client), { danger: true }),
         );
 
         tr.append(
@@ -328,22 +327,6 @@ function startEdit(client) {
     form.hidden = false;
     clearError();
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-async function removeClient(client) {
-    if (!confirm(Dashboard.t('admin.confirmDelete'))) return;
-    try {
-        const res = await fetch(`/api/admin/clients/${client.id}`, {
-            method: 'DELETE',
-            credentials: 'include',
-        });
-        if (!res.ok) throw new Error('delete failed');
-        clients = clients.filter((c) => c.id !== client.id);
-        renderClients();
-        populateClientSelect();
-    } catch {
-        alert(Dashboard.t('admin.saveError'));
-    }
 }
 
 async function loadClients() {

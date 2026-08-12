@@ -43,7 +43,6 @@ const {
     createClient,
     updateClient,
     updateClientBranding,
-    deleteClient,
     findClientByRfc,
     getModuleCosts,
     setModuleCosts,
@@ -511,12 +510,11 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     res.json({ client: getClientById(client.id), generatedAdmin });
 });
 
-app.delete('/api/admin/clients/:id', requireAuth, requireAdmin, (req, res) => {
-    const existing = getClientById(req.params.id);
-    if (!existing) return res.status(404).json({ message: 'Client not found.' });
-    deleteClient(req.params.id);
-    res.status(204).end();
-});
+// No hard-delete route: a client can only ever be Edited or Activado/
+// Desactivado (see PATCH above, status field) — once a client is on file it
+// stays on file. Deleting also isn't possible from the UI (see Admin-SaaS.js
+// renderClients) — this comment is the one remaining trace of the old
+// DELETE /api/admin/clients/:id route.
 
 app.get('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
     const existing = getClientById(req.params.id);
