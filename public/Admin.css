@@ -647,6 +647,14 @@ body.dark-mode .admin-save-status{
    every "pantalla alterna" (modal dialog) in the app, since they all share
    this one .modal-panel/h3 structure. */
 .modal-panel h3{
+    position: sticky;
+    /* .modal-panel is the scrolling container (overflow-y:auto) and the
+       negative margin above already pulls the title flush with its top
+       border edge, ahead of the 1.5rem padding — top must cancel that same
+       1.5rem so the sticky trigger point lines up with where the title
+       already sits, instead of "sticking" 1.5rem below the visible top. */
+    top: -1.5rem;
+    z-index: 1;
     margin: -1.5rem -1.5rem 1rem -1.5rem;
     padding: 1rem 1.5rem;
     border-radius: 0.6rem 0.6rem 0 0;
