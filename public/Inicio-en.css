@@ -1698,16 +1698,21 @@
         z-index: 3;
     }
     /* The empty-state row's single colspan cell renders as wide as all 10
-       columns combined — centering the message in that width would put it
-       off past the right edge until the user scrolls horizontally first.
-       It's already sticky/left:0 via .data-table td:first-child (colspan
-       doesn't change which selector matches), which is exactly what's
-       wanted here too: keep it left-aligned and pinned in view instead. */
+       columns combined. position:sticky on the <td> itself doesn't reliably
+       stick in this case (a colspan cell that wide breaks table sticky
+       positioning in some browsers) — so the message lives in a plain
+       inner <div> instead, sticky against .data-table-wrapper on its own,
+       which isn't subject to that table-layout quirk. */
     .data-table td.data-table-empty-cell{
-        text-align: left;
-        color: var(--color-text-secondary);
-        padding: 2.5rem 1.5rem;
+        padding: 0;
         border-right: none;
+    }
+    .data-table-empty-inner{
+        position: sticky;
+        left: 0;
+        display: inline-block;
+        padding: 2.5rem 1.5rem;
+        color: var(--color-text-secondary);
     }
 
     /*border: 2px solid red; -- Borde colorido*/
