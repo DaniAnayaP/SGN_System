@@ -265,7 +265,8 @@
     "institutionalColor": "Color institucional",
     "noLogo": "Sin logo",
     "noColorSet": "Sin color asignado",
-    "editColor": "Editar color"
+    "editColor": "Editar color",
+    "costCenters": "Centro Costos"
   },
   "business": {
     "usersTitle": "Usuarios",

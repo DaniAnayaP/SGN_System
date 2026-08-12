@@ -269,6 +269,7 @@ function renderClients() {
             textCell(client.plan),
             textCell(formatMoney(client.contracted_cost)),
             textCell(formatMoney(client.monthly_payment)),
+            textCell(`${client.costCentersUsed ?? 0} / ${client.cost_centers_limit ?? 0}`),
             tdAddenda,
             textCell(formatMoney(client.anexosPayment)),
             tdAnexoChanges,

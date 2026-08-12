@@ -265,7 +265,8 @@
     "institutionalColor": "Institutional color",
     "noLogo": "No logo",
     "noColorSet": "No color set",
-    "editColor": "Edit color"
+    "editColor": "Edit color",
+    "costCenters": "Cost Centers"
   },
   "business": {
     "usersTitle": "Users",

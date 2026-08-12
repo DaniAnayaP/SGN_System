@@ -416,6 +416,7 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
     const clients = listClients().map((client) => ({
         ...client,
         anexosPayment: getAnexosPaymentTotal(client.id),
+        costCentersUsed: countCostCenters(client.id),
     }));
     res.json({ clients });
 });
