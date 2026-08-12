@@ -630,6 +630,47 @@
         border-radius: 0.5rem;
         background-color: var(--color-surface);
         box-shadow: 0 0 0 1px var(--color-border);
+        transition: padding 0.15s ease;
+    }
+    /* Collapsible top bar (see Dashboard.js renderTopBarCollapseToggle) —
+       "optimizar la pantalla, solo cuando se requiera": everything in the
+       bar (pickers, welcome text, action icons) hides, leaving only a small
+       arrow to bring it back. .top-bar already establishes a positioning
+       context via position:sticky, so the toggle can anchor to it directly
+       without an extra wrapper. */
+    .top-bar-collapse-toggle{
+        position: absolute;
+        top: 50%;
+        right: 1.5rem;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.8rem;
+        height: 1.8rem;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        z-index: 5;
+    }
+    .top-bar-collapse-toggle:hover{
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .top-bar.top-bar-collapsed{
+        padding-top: 0.35rem;
+        padding-bottom: 0.35rem;
+    }
+    .top-bar.top-bar-collapsed .top-bar-title,
+    .top-bar.top-bar-collapsed .top-bar-actions{
+        display: none;
+    }
+    .top-bar.top-bar-collapsed .top-bar-collapse-toggle{
+        position: static;
+        transform: none;
+        margin: 0 auto;
     }
     .top-bar .welcome-text{
         color: var(--color-text-primary);

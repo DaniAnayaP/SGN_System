@@ -405,6 +405,8 @@
     "colEstatus": "Status",
     "breadcrumbLabel": "Path",
     "breadcrumbExpand": "Expand breadcrumb",
-    "breadcrumbCollapse": "Collapse breadcrumb"
+    "breadcrumbCollapse": "Collapse breadcrumb",
+    "topBarExpand": "Expand top bar",
+    "topBarCollapse": "Collapse top bar"
   }
 }

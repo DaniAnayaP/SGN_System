@@ -405,6 +405,8 @@
     "colEstatus": "Estatus",
     "breadcrumbLabel": "Ruta",
     "breadcrumbExpand": "Expandir ruta de acceso",
-    "breadcrumbCollapse": "Contraer ruta de acceso"
+    "breadcrumbCollapse": "Contraer ruta de acceso",
+    "topBarExpand": "Expandir barra superior",
+    "topBarCollapse": "Contraer barra superior"
   }
 }
