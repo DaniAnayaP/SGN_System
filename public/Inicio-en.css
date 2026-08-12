@@ -1648,4 +1648,66 @@
         display: inline;
     }
 
+    /* Data table — record grids like Registro de traslados. The wrapper's
+       max-height is set at runtime (see Dashboard.js sizeDataTableWrappers)
+       to whatever space is actually left in the viewport below it, so the
+       PAGE never scrolls for this — only the rows inside the wrapper do.
+       The header row stays pinned via position:sticky while those rows
+       scroll past it, and the first column stays pinned the same way while
+       the rest of the columns scroll past it horizontally. */
+    .data-table-wrapper{
+        border: 1px solid var(--color-border);
+        border-radius: 0.6rem;
+        background-color: var(--color-surface);
+        overflow: auto;
+    }
+    .data-table{
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+        min-width: max-content;
+        font-size: 0.85rem;
+    }
+    .data-table th,
+    .data-table td{
+        padding: 0.6rem 0.9rem;
+        text-align: left;
+        white-space: nowrap;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .data-table thead th{
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background-color: var(--color-surface);
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: var(--color-text-secondary);
+    }
+    .data-table th:first-child,
+    .data-table td:first-child{
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background-color: var(--color-surface);
+        border-right: 1px solid var(--color-border);
+    }
+    .data-table thead th:first-child{
+        z-index: 3;
+    }
+    /* The empty-state row's single colspan cell already spans the full
+       table width, so pinning it like a real first column would just make
+       its centered message drift left on horizontal scroll instead. Needs
+       the wrapper-scoped selector to outrank .data-table td:first-child at
+       equal specificity otherwise. */
+    .data-table-wrapper td.data-table-empty-cell{
+        position: static;
+        text-align: center;
+        color: var(--color-text-secondary);
+        padding: 2.5rem 1rem;
+        border-right: none;
+    }
+
     /*border: 2px solid red; -- Borde colorido*/

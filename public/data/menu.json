@@ -127,7 +127,7 @@
         { "id": "cat-catalogos-transporte-vol-tipos-aditamentos", "labelKey": "menu.catTransVolTiposAditamentos", "icon": "bx-window", "href": "#" }
       ],
       "cat-operaciones": [
-        { "id": "cat-operaciones-transporte-vol-traslados", "labelKey": "menu.opTransVolTraslados", "icon": "bx-window", "href": "#" },
+        { "id": "cat-operaciones-transporte-vol-traslados", "labelKey": "menu.opTransVolTraslados", "icon": "bx-window", "href": "OpTransVolTraslados.html" },
         { "id": "cat-operaciones-transporte-vol-combustible", "labelKey": "menu.opTransVolCombustible", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-ingresos", "labelKey": "menu.opTransVolIngresos", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-gastos", "labelKey": "menu.opTransVolGastos", "icon": "bx-window", "href": "#" },
