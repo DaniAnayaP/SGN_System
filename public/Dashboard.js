@@ -860,6 +860,25 @@ function checkWindowSize() {
 }
 window.addEventListener('resize', checkWindowSize);
 
+// Every dropdown/panel below (top-bar-actions overflow, Configuración,
+// Datos de Usuario, Datos de Usuario del Negocio, chatbot, Departamento/
+// Área/Centro de Costos pickers, sidebar search results) has its own toggle
+// button that calls event.stopPropagation() so opening it doesn't
+// immediately trigger ITS OWN "click outside closes it" listener below —
+// but that stopPropagation also stops the click from ever reaching
+// document, so every OTHER menu's "click outside" listener never runs
+// either. That's why clicking one top-bar button while another's dropdown
+// is open used to leave both open at once. Each toggle now closes every
+// registered dropdown first (see closeAllTopBarDropdowns) before deciding
+// whether to open itself.
+const topBarDropdownClosers = [];
+function registerTopBarDropdown(closeFn) {
+    topBarDropdownClosers.push(closeFn);
+}
+function closeAllTopBarDropdowns() {
+    topBarDropdownClosers.forEach((closeFn) => closeFn());
+}
+
 // --- Top-bar actions collapse (mobile only) ----------------------------------
 // On phones, Messages/Chatbot/Notifications/Bookmarks/Settings/Add-user don't
 // all fit next to the page title, so they collapse behind a single toggle
@@ -872,11 +891,16 @@ function closeTopBarActions() {
     topBarActions?.classList.remove('open');
     topBarActionsToggle?.setAttribute('aria-expanded', 'false');
 }
+registerTopBarDropdown(closeTopBarActions);
 
 topBarActionsToggle?.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = topBarActions.classList.toggle('open');
-    topBarActionsToggle.setAttribute('aria-expanded', String(isOpen));
+    const wasOpen = topBarActions.classList.contains('open');
+    closeAllTopBarDropdowns();
+    if (!wasOpen) {
+        topBarActions.classList.add('open');
+        topBarActionsToggle.setAttribute('aria-expanded', 'true');
+    }
 });
 
 document.addEventListener('click', (event) => {
@@ -902,11 +926,16 @@ function closeSettingsMenu() {
         if (submenu) submenu.style.height = '0';
     });
 }
+registerTopBarDropdown(closeSettingsMenu);
 
 settingsBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = settingsMenu.classList.toggle('open');
-    settingsBtn.setAttribute('aria-expanded', String(isOpen));
+    const wasOpen = settingsMenu.classList.contains('open');
+    closeAllTopBarDropdowns();
+    if (!wasOpen) {
+        settingsMenu.classList.add('open');
+        settingsBtn.setAttribute('aria-expanded', 'true');
+    }
 });
 
 document.addEventListener('click', (event) => {
@@ -932,6 +961,7 @@ function closeUserInfoMenu() {
     userInfoMenu?.classList.remove('open');
     userInfoBtn?.setAttribute('aria-expanded', 'false');
 }
+registerTopBarDropdown(closeUserInfoMenu);
 
 // Re-run on language change too (see loadLanguage) so an already-fetched
 // profile's fallback text ("Sin correo institucional" / "No registrado")
@@ -969,9 +999,13 @@ async function loadUserProfile() {
 
 userInfoBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = userInfoMenu.classList.toggle('open');
-    userInfoBtn.setAttribute('aria-expanded', String(isOpen));
-    if (isOpen) loadUserProfile();
+    const wasOpen = userInfoMenu.classList.contains('open');
+    closeAllTopBarDropdowns();
+    if (!wasOpen) {
+        userInfoMenu.classList.add('open');
+        userInfoBtn.setAttribute('aria-expanded', 'true');
+        loadUserProfile();
+    }
 });
 
 document.addEventListener('click', (event) => {
@@ -995,6 +1029,7 @@ function closeBusinessProfileMenu() {
     businessProfileMenu?.classList.remove('open');
     businessProfileBtn?.setAttribute('aria-expanded', 'false');
 }
+registerTopBarDropdown(closeBusinessProfileMenu);
 
 // Section id -> menu.* label key, same map PermissionTree.js uses — needed
 // here too since that file isn't loaded on every page that shows the
@@ -1165,9 +1200,13 @@ async function loadBusinessProfile() {
 
 businessProfileBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = businessProfileMenu.classList.toggle('open');
-    businessProfileBtn.setAttribute('aria-expanded', String(isOpen));
-    if (isOpen) loadBusinessProfile();
+    const wasOpen = businessProfileMenu.classList.contains('open');
+    closeAllTopBarDropdowns();
+    if (!wasOpen) {
+        businessProfileMenu.classList.add('open');
+        businessProfileBtn.setAttribute('aria-expanded', 'true');
+        loadBusinessProfile();
+    }
 });
 
 document.addEventListener('click', (event) => {
@@ -2044,6 +2083,7 @@ function openChatbot() {
 function closeChatbot() {
     chatbotPanel?.classList.remove('open');
 }
+registerTopBarDropdown(closeChatbot);
 
 document.addEventListener('click', (event) => {
     if (!chatbotPanel?.classList.contains('open')) return;
@@ -2069,11 +2109,9 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     chatbotBtn.innerHTML = '<i class="bx bx-bot" aria-hidden="true"></i>';
     chatbotBtn.addEventListener('click', (event) => {
         event.stopPropagation();
-        if (chatbotPanel?.classList.contains('open')) {
-            closeChatbot();
-        } else {
-            openChatbot();
-        }
+        const wasOpen = chatbotPanel?.classList.contains('open');
+        closeAllTopBarDropdowns();
+        if (!wasOpen) openChatbot();
     });
     if (messagesBtn) {
         messagesBtn.insertAdjacentElement('afterend', chatbotBtn);
@@ -2119,6 +2157,7 @@ function getSidebarSearchResultsEl() {
 function closeSidebarSearchResults() {
     sidebarSearchResultsEl?.classList.remove('open');
 }
+registerTopBarDropdown(closeSidebarSearchResults);
 
 function selectSidebarSearchResult(anchor) {
     if (sidebarSearchInput) sidebarSearchInput.value = '';
@@ -2190,11 +2229,16 @@ function closeDeptPicker() {
     deptPicker?.classList.remove('open');
     deptPickerBtn?.setAttribute('aria-expanded', 'false');
 }
+registerTopBarDropdown(closeDeptPicker);
 
 deptPickerBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = deptPicker.classList.toggle('open');
-    deptPickerBtn.setAttribute('aria-expanded', String(isOpen));
+    const wasOpen = deptPicker.classList.contains('open');
+    closeAllTopBarDropdowns();
+    if (!wasOpen) {
+        deptPicker.classList.add('open');
+        deptPickerBtn.setAttribute('aria-expanded', 'true');
+    }
 });
 
 document.addEventListener('click', (event) => {
@@ -2260,11 +2304,16 @@ function closeAreaPicker() {
     areaPicker?.classList.remove('open');
     areaPickerBtn?.setAttribute('aria-expanded', 'false');
 }
+registerTopBarDropdown(closeAreaPicker);
 
 areaPickerBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = areaPicker.classList.toggle('open');
-    areaPickerBtn.setAttribute('aria-expanded', String(isOpen));
+    const wasOpen = areaPicker.classList.contains('open');
+    closeAllTopBarDropdowns();
+    if (!wasOpen) {
+        areaPicker.classList.add('open');
+        areaPickerBtn.setAttribute('aria-expanded', 'true');
+    }
 });
 
 document.addEventListener('click', (event) => {
@@ -2356,6 +2405,7 @@ function closeCcPicker() {
     ccPicker?.classList.remove('open');
     ccPickerBtn?.setAttribute('aria-expanded', 'false');
 }
+registerTopBarDropdown(closeCcPicker);
 
 function renderCostCenterPicker() {
     if (!ccPicker || !ccPickerDropdown) return;
@@ -2437,8 +2487,12 @@ async function initCostCenterPicker() {
 
 ccPickerBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = ccPicker.classList.toggle('open');
-    ccPickerBtn.setAttribute('aria-expanded', String(isOpen));
+    const wasOpen = ccPicker.classList.contains('open');
+    closeAllTopBarDropdowns();
+    if (!wasOpen) {
+        ccPicker.classList.add('open');
+        ccPickerBtn.setAttribute('aria-expanded', 'true');
+    }
 });
 
 document.addEventListener('click', (event) => {
