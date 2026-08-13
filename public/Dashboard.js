@@ -1393,7 +1393,12 @@ function applyDataTableColumnLayout(tableId) {
         if (col) {
             colgroup.appendChild(col);
             col.style.width = `${config.widths[key] || DATA_TABLE_COL_MIN_WIDTH}px`;
-            col.style.display = hiddenSet.has(key) ? 'none' : '';
+            // visibility:collapse, not display:none — <col display:none>
+            // doesn't reliably collapse the column's rendered width under
+            // border-collapse:separate (confirmed live: cells kept their
+            // natural width). visibility:collapse is the CSS-Tables-spec
+            // property made for exactly this and does collapse it to 0.
+            col.style.visibility = hiddenSet.has(key) ? 'collapse' : '';
         }
         const th = Array.from(headerRow.cells).find((c) => c.dataset.col === key);
         if (th) headerRow.appendChild(th);
