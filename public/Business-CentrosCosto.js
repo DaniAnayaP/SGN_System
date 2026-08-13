@@ -57,15 +57,20 @@ function renderCostCenters() {
         const tr = document.createElement('tr');
 
         const tdCode = document.createElement('td');
+        tdCode.dataset.col = 'ccCode';
         tdCode.textContent = cc.code;
         const tdName = document.createElement('td');
+        tdName.dataset.col = 'ccName';
         tdName.textContent = cc.name;
         const tdResponsible = document.createElement('td');
+        tdResponsible.dataset.col = 'ccResponsible';
         tdResponsible.textContent = cc.responsible || '—';
         const tdDescription = document.createElement('td');
+        tdDescription.dataset.col = 'ccDescription';
         tdDescription.textContent = cc.description || '—';
 
         const tdActions = document.createElement('td');
+        tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
