@@ -469,6 +469,11 @@
     "uiScaleDecrease": "Decrease size",
     "uiScaleIncrease": "Increase size",
     "newRecord": "New Record",
+    "newRecordHint": "The rest of the fields can be filled in later, directly from the table row.",
+    "fuelAddValue": "+ Add",
+    "fuelClickToEdit": "Click to edit",
+    "fuelSelectReason": "Select...",
+    "fuelUploadTicket": "Upload ticket evidence",
     "colFuelDbId": "Unique Database #",
     "colFuelRecordId": "Unique Consumption Record #",
     "colFuelDate": "Date",
@@ -487,7 +492,6 @@
     "colFuelTotal": "Total",
     "colFuelReason": "Load Reason",
     "colFuelTransferService": "Transfer Service",
-    "colFuelInternalMovement": "Internal Movement",
-    "fuelNoTicket": "No ticket evidence"
+    "colFuelInternalMovement": "Internal Movement"
   }
 }

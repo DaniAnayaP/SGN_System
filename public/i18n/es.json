@@ -469,6 +469,11 @@
     "uiScaleDecrease": "Disminuir tamaño",
     "uiScaleIncrease": "Aumentar tamaño",
     "newRecord": "Nuevo Registro",
+    "newRecordHint": "Los demás datos se pueden llenar después, directamente desde la fila en la tabla.",
+    "fuelAddValue": "+ Agregar",
+    "fuelClickToEdit": "Clic para editar",
+    "fuelSelectReason": "Seleccionar...",
+    "fuelUploadTicket": "Subir evidencia de ticket",
     "colFuelDbId": "# Único de Base de Datos",
     "colFuelRecordId": "# Único de Registro de Consumo",
     "colFuelDate": "Fecha",
@@ -487,7 +492,6 @@
     "colFuelTotal": "Total",
     "colFuelReason": "Motivo Carga",
     "colFuelTransferService": "Servicio Traslado",
-    "colFuelInternalMovement": "Movimiento Interno",
-    "fuelNoTicket": "Sin evidencia de ticket"
+    "colFuelInternalMovement": "Movimiento Interno"
   }
 }

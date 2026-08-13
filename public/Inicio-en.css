@@ -1819,6 +1819,36 @@
     .data-table-new-record-btn i{
         font-size: 0.95rem;
     }
+    /* Inline-editable table cells (see OpTransVolCombustible.js
+       attachInlineEdit) — "+ Nuevo Registro" only asks for the handful of
+       fields that make a row identifiable; everything else starts empty and
+       gets filled in by clicking the cell directly, right where the data
+       will live, instead of a bigger up-front form. */
+    .data-table td.editable-cell{
+        cursor: pointer;
+    }
+    .data-table td.editable-cell:hover{
+        background-color: var(--color-bg);
+    }
+    .data-table td.editable-cell-disabled{
+        color: var(--color-text-secondary);
+    }
+    .editable-cell-placeholder{
+        color: var(--color-text-secondary);
+        font-style: italic;
+    }
+    .editable-cell-input,
+    .editable-cell-select{
+        width: 100%;
+        min-width: 6rem;
+        padding: 0.2rem 0.4rem;
+        border: 1px solid var(--color-text-primary);
+        border-radius: 0.3rem;
+        background-color: var(--color-surface);
+        color: var(--color-text-primary);
+        font: inherit;
+        font-size: inherit;
+    }
     .data-table{
         border-collapse: separate;
         border-spacing: 0;

@@ -437,6 +437,7 @@
     <div class="modal-overlay" id="new-record-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-record-modal-title">
             <h3 id="new-record-modal-title" data-i18n="main.newRecord">New Record</h3>
+            <p class="admin-hint" data-i18n="main.newRecordHint">The rest of the fields can be filled in later, directly from the table row.</p>
             <div class="admin-form-grid">
                 <div class="admin-field">
                     <label for="new-record-date" data-i18n="main.colFuelDate">Date</label>
@@ -444,50 +445,15 @@
                 </div>
                 <div class="admin-field">
                     <label for="new-record-eco-unit" data-i18n="main.colFuelEcoUnit">Fleet Unit #</label>
-                    <input type="text" id="new-record-eco-unit">
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-plates" data-i18n="main.colFuelPlates">Unit Plates</label>
-                    <input type="text" id="new-record-plates">
+                    <input type="text" id="new-record-eco-unit" required>
                 </div>
                 <div class="admin-field">
                     <label for="new-record-driver" data-i18n="main.colFuelDriver">Driver</label>
-                    <input type="text" id="new-record-driver">
+                    <input type="text" id="new-record-driver" required>
                 </div>
                 <div class="admin-field">
                     <label for="new-record-coordinator" data-i18n="main.colFuelCoordinator">Coordinator</label>
-                    <input type="text" id="new-record-coordinator">
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-ticket" data-i18n="main.colFuelTicketEvidence">Ticket Evidence</label>
-                    <input type="file" id="new-record-ticket" accept="image/*">
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-subtotal" data-i18n="main.colFuelSubtotal">Subtotal</label>
-                    <input type="number" id="new-record-subtotal" min="0" step="0.01">
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-vat" data-i18n="main.colFuelVat">VAT</label>
-                    <input type="number" id="new-record-vat" min="0" step="0.01">
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-total" data-i18n="main.colFuelTotal">Total</label>
-                    <input type="text" id="new-record-total" disabled value="$0.00">
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-reason" data-i18n="main.colFuelReason">Load Reason</label>
-                    <select id="new-record-reason">
-                        <option value="traslado" data-i18n="main.colFuelTransferService">Transfer Service</option>
-                        <option value="interno" data-i18n="main.colFuelInternalMovement">Internal Movement</option>
-                    </select>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-transfer-service" data-i18n="main.colFuelTransferService">Transfer Service</label>
-                    <input type="text" id="new-record-transfer-service" placeholder="V-0001">
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-internal-movement" data-i18n="main.colFuelInternalMovement">Internal Movement</label>
-                    <input type="text" id="new-record-internal-movement" placeholder="M-0001">
+                    <input type="text" id="new-record-coordinator" required>
                 </div>
             </div>
             <div id="new-record-error" class="admin-error" role="alert" hidden></div>
