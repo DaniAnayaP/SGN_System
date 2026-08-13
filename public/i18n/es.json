@@ -104,7 +104,15 @@
       "endCustomer": "Cliente Final",
       "customerComplaints": "Quejas de Cliente",
       "iso9001": "ISO 9001:2015 Sistema de Gestión de Calidad",
-      "iso9001Abbr": "SGC 9001:2015"
+      "iso9001Abbr": "SGC 9001:2015",
+      "recruitment": "Reclutamiento y Selección",
+      "personnelAdmin": "Administración de Personal",
+      "trainingDevelopment": "Formación y Desarrollo",
+      "compensationBenefits": "Compensaciones y Beneficios",
+      "organizationalDevelopment": "Desarrollo Organizacional",
+      "occupationalHealthSafety": "Seguridad y Salud Laboral",
+      "hris": "Sistema de Información de RRHH (SIRH)",
+      "hrAnalytics": "Analítica Recursos Humanos (RH Analytics)"
     },
     "clientesRegistrados": "Nuestros Clientes",
     "addClientNew": "+ Agregar Cliente Nuevo",
@@ -138,6 +146,7 @@
     "opTransVolIngresos": "Ingresos",
     "opTransVolGastos": "Gastos",
     "opTransVolInventario": "Inventario",
+    "opRrhhMiRecursoHumano": "Mi Recurso Humano",
     "catAdmin": "Admin",
     "catAdminItem1": "Adm 1",
     "catAdminItem2": "Adm 2",
@@ -492,6 +501,17 @@
     "colFuelTotal": "Total",
     "colFuelReason": "Motivo Carga",
     "colFuelTransferService": "Servicio Traslado",
-    "colFuelInternalMovement": "Movimiento Interno"
+    "colFuelInternalMovement": "Movimiento Interno",
+    "newHireRecord": "Nuevo Registro",
+    "colHrDbId": "# Único de Base de Datos",
+    "colHrRecordId": "# Único de Registro",
+    "colHrFullName": "Nombre Completo",
+    "colHrPosition": "Puesto",
+    "colHrStartDate": "Fecha de Ingreso",
+    "colHrDepartment": "Departamento Asignado",
+    "colHrArea": "Área Asignada",
+    "colHrEmail": "Correo Electrónico",
+    "colHrPhone": "Teléfono",
+    "colHrStatus": "Estatus"
   }
 }

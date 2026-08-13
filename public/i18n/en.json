@@ -104,7 +104,15 @@
       "endCustomer": "End Customer",
       "customerComplaints": "Customer Complaints",
       "iso9001": "ISO 9001:2015 Quality Management System",
-      "iso9001Abbr": "QMS 9001:2015"
+      "iso9001Abbr": "QMS 9001:2015",
+      "recruitment": "Recruitment and Selection",
+      "personnelAdmin": "Personnel Administration",
+      "trainingDevelopment": "Training and Development",
+      "compensationBenefits": "Compensation and Benefits",
+      "organizationalDevelopment": "Organizational Development",
+      "occupationalHealthSafety": "Occupational Health and Safety",
+      "hris": "HR Information System (HRIS)",
+      "hrAnalytics": "HR Analytics"
     },
     "clientesRegistrados": "Our Clients",
     "addClientNew": "+ Add New Client",
@@ -138,6 +146,7 @@
     "opTransVolIngresos": "Income",
     "opTransVolGastos": "Expenses",
     "opTransVolInventario": "Inventory",
+    "opRrhhMiRecursoHumano": "My Human Resource",
     "catAdmin": "Admin",
     "catAdminItem1": "Adm 1",
     "catAdminItem2": "Adm 2",
@@ -492,6 +501,17 @@
     "colFuelTotal": "Total",
     "colFuelReason": "Load Reason",
     "colFuelTransferService": "Transfer Service",
-    "colFuelInternalMovement": "Internal Movement"
+    "colFuelInternalMovement": "Internal Movement",
+    "newHireRecord": "New Record",
+    "colHrDbId": "Unique Database #",
+    "colHrRecordId": "Unique Record #",
+    "colHrFullName": "Full Name",
+    "colHrPosition": "Position",
+    "colHrStartDate": "Start Date",
+    "colHrDepartment": "Assigned Department",
+    "colHrArea": "Assigned Area",
+    "colHrEmail": "Email",
+    "colHrPhone": "Phone",
+    "colHrStatus": "Status"
   }
 }

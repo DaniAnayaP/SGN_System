@@ -43,12 +43,12 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             certifications: "Certifications",
             deptArea: "Dept. Area {n}", option: "Option {n}",
-            area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transportVolume: "Volume Transport", transportLastMile: "Last-Mile Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015" },
+            area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transportVolume: "Volume Transport", transportLastMile: "Last-Mile Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015", recruitment: "Recruitment and Selection", personnelAdmin: "Personnel Administration", trainingDevelopment: "Training and Development", compensationBenefits: "Compensation and Benefits", organizationalDevelopment: "Organizational Development", occupationalHealthSafety: "Occupational Health and Safety", hris: "HR Information System (HRIS)", hrAnalytics: "HR Analytics" },
             clientesRegistrados: "Our Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Registered Plans", addPlanNew: "+ Add New Plan", moduleCosts: "Module Costs", mainSection: "General",
             catCatalogos: "Catalogs", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operations", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clients", catTransVolSitiosOrigen: "Origin Sites", catTransVolSitiosDestino: "Destination Sites", catTransVolRutas: "Routes", catTransVolTiposServicio: "Service Types", catTransVolTiposTraslado: "Transfer Types", catTransVolContactos: "Contacts", catTransVolEmpresasAsociadas: "Partner Companies", catTransVolTiposUnidades: "Unit Types", catTransVolTiposAditamentos: "Attachment Types", catCentroDistCodigos: "Codes", catCentroDistCategorias: "Categories", catCentroDistUdm: "UOM",
-            opTransVolTraslados: "Transfer Log", opTransVolCombustible: "Fuel Log", opTransVolIngresos: "Income", opTransVolGastos: "Expenses", opTransVolInventario: "Inventory",
+            opTransVolTraslados: "Transfer Log", opTransVolCombustible: "Fuel Log", opTransVolIngresos: "Income", opTransVolGastos: "Expenses", opTransVolInventario: "Inventory", opRrhhMiRecursoHumano: "My Human Resource",
             catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
             catGestion: "Management", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
             catReportes: "Reports", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
@@ -150,7 +150,8 @@ const EMBEDDED_TRANSLATIONS = {
             pinColumns: "Pin columns", pinColumnsTitle: "Pin columns", pinColumnsHint: "Choose up to 4 columns to pin to the left. Drag to reorder them.", pinColumnsLimitReached: "You can pin up to 4 columns.", pinColumnsOther: "Other columns", columnVisibility: "Show/hide columns", columnVisibilityTitle: "Show/hide columns", columnVisibilityHint: "Choose which columns to show.", dragToReorder: "Drag to reorder",
             uiScale: "System size", uiScaleIdeal: "Ideal", uiScaleDecrease: "Decrease size", uiScaleIncrease: "Increase size", newRecord: "New Record",
             newRecordHint: "The rest of the fields can be filled in later, directly from the table row.", fuelAddValue: "+ Add", fuelClickToEdit: "Click to edit", fuelSelectReason: "Select...", fuelUploadTicket: "Upload ticket evidence",
-            colFuelDbId: "Unique Database #", colFuelRecordId: "Unique Consumption Record #", colFuelDate: "Date", colFuelYear: "Year", colFuelMonth: "Month", colFuelWeek: "Week #", colFuelDayNum: "Day #", colFuelDayText: "Day", colFuelEcoUnit: "Fleet Unit #", colFuelPlates: "Unit Plates", colFuelDriver: "Driver", colFuelCoordinator: "Coordinator", colFuelTicketEvidence: "Ticket Evidence", colFuelSubtotal: "Subtotal", colFuelVat: "VAT", colFuelTotal: "Total", colFuelReason: "Load Reason", colFuelTransferService: "Transfer Service", colFuelInternalMovement: "Internal Movement" }
+            colFuelDbId: "Unique Database #", colFuelRecordId: "Unique Consumption Record #", colFuelDate: "Date", colFuelYear: "Year", colFuelMonth: "Month", colFuelWeek: "Week #", colFuelDayNum: "Day #", colFuelDayText: "Day", colFuelEcoUnit: "Fleet Unit #", colFuelPlates: "Unit Plates", colFuelDriver: "Driver", colFuelCoordinator: "Coordinator", colFuelTicketEvidence: "Ticket Evidence", colFuelSubtotal: "Subtotal", colFuelVat: "VAT", colFuelTotal: "Total", colFuelReason: "Load Reason", colFuelTransferService: "Transfer Service", colFuelInternalMovement: "Internal Movement",
+            newHireRecord: "New Record", colHrDbId: "Unique Database #", colHrRecordId: "Unique Record #", colHrFullName: "Full Name", colHrPosition: "Position", colHrStartDate: "Start Date", colHrDepartment: "Assigned Department", colHrArea: "Assigned Area", colHrEmail: "Email", colHrPhone: "Phone", colHrStatus: "Status" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -169,12 +170,12 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             certifications: "Certificaciones",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
-            area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transportVolume: "Transporte Volumen", transportLastMile: "Transporte Última Milla", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015" },
+            area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transportVolume: "Transporte Volumen", transportLastMile: "Transporte Última Milla", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015", recruitment: "Reclutamiento y Selección", personnelAdmin: "Administración de Personal", trainingDevelopment: "Formación y Desarrollo", compensationBenefits: "Compensaciones y Beneficios", organizationalDevelopment: "Desarrollo Organizacional", occupationalHealthSafety: "Seguridad y Salud Laboral", hris: "Sistema de Información de RRHH (SIRH)", hrAnalytics: "Analítica Recursos Humanos (RH Analytics)" },
             clientesRegistrados: "Nuestros Clientes", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Planes Registrados", addPlanNew: "+ Agregar Plan Nuevo", moduleCosts: "Costos de Módulos", mainSection: "General",
             catCatalogos: "Catálogos", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operaciones", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clientes", catTransVolSitiosOrigen: "Sitios Origen", catTransVolSitiosDestino: "Sitios Destino", catTransVolRutas: "Rutas", catTransVolTiposServicio: "Tipos Servicio", catTransVolTiposTraslado: "Tipos Traslado", catTransVolContactos: "Contactos", catTransVolEmpresasAsociadas: "Empresas Asociadas", catTransVolTiposUnidades: "Tipos Unidades", catTransVolTiposAditamentos: "Tipos Aditamentos", catCentroDistCodigos: "Códigos", catCentroDistCategorias: "Categorías", catCentroDistUdm: "UDM",
-            opTransVolTraslados: "Registro de traslados", opTransVolCombustible: "Registro Combustible", opTransVolIngresos: "Ingresos", opTransVolGastos: "Gastos", opTransVolInventario: "Inventario",
+            opTransVolTraslados: "Registro de traslados", opTransVolCombustible: "Registro Combustible", opTransVolIngresos: "Ingresos", opTransVolGastos: "Gastos", opTransVolInventario: "Inventario", opRrhhMiRecursoHumano: "Mi Recurso Humano",
             catAdmin: "Admin", catAdminItem1: "Adm 1", catAdminItem2: "Adm 2",
             catGestion: "Gestión", catGestionItem1: "Gest 1", catGestionItem2: "Gest 2",
             catReportes: "Reportes", catReportesItem1: "Report 1", catReportesItem2: "Report 2",
@@ -276,7 +277,8 @@ const EMBEDDED_TRANSLATIONS = {
             pinColumns: "Fijar columnas", pinColumnsTitle: "Fijar columnas", pinColumnsHint: "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.", pinColumnsLimitReached: "Puedes fijar hasta 4 columnas.", pinColumnsOther: "Otras columnas", columnVisibility: "Mostrar/ocultar columnas", columnVisibilityTitle: "Mostrar/ocultar columnas", columnVisibilityHint: "Elige qué columnas mostrar.", dragToReorder: "Arrastrar para reordenar",
             uiScale: "Tamaño del sistema", uiScaleIdeal: "Ideal", uiScaleDecrease: "Disminuir tamaño", uiScaleIncrease: "Aumentar tamaño", newRecord: "Nuevo Registro",
             newRecordHint: "Los demás datos se pueden llenar después, directamente desde la fila en la tabla.", fuelAddValue: "+ Agregar", fuelClickToEdit: "Clic para editar", fuelSelectReason: "Seleccionar...", fuelUploadTicket: "Subir evidencia de ticket",
-            colFuelDbId: "# Único de Base de Datos", colFuelRecordId: "# Único de Registro de Consumo", colFuelDate: "Fecha", colFuelYear: "Año", colFuelMonth: "Mes", colFuelWeek: "# Semana", colFuelDayNum: "# Día", colFuelDayText: "Día", colFuelEcoUnit: "# Eco Unidad", colFuelPlates: "Placas Unidad", colFuelDriver: "Chofer", colFuelCoordinator: "Coordinador", colFuelTicketEvidence: "Evidencia Ticket", colFuelSubtotal: "Subtotal", colFuelVat: "IVA", colFuelTotal: "Total", colFuelReason: "Motivo Carga", colFuelTransferService: "Servicio Traslado", colFuelInternalMovement: "Movimiento Interno" }
+            colFuelDbId: "# Único de Base de Datos", colFuelRecordId: "# Único de Registro de Consumo", colFuelDate: "Fecha", colFuelYear: "Año", colFuelMonth: "Mes", colFuelWeek: "# Semana", colFuelDayNum: "# Día", colFuelDayText: "Día", colFuelEcoUnit: "# Eco Unidad", colFuelPlates: "Placas Unidad", colFuelDriver: "Chofer", colFuelCoordinator: "Coordinador", colFuelTicketEvidence: "Evidencia Ticket", colFuelSubtotal: "Subtotal", colFuelVat: "IVA", colFuelTotal: "Total", colFuelReason: "Motivo Carga", colFuelTransferService: "Servicio Traslado", colFuelInternalMovement: "Movimiento Interno",
+            newHireRecord: "Nuevo Registro", colHrDbId: "# Único de Base de Datos", colHrRecordId: "# Único de Registro", colHrFullName: "Nombre Completo", colHrPosition: "Puesto", colHrStartDate: "Fecha de Ingreso", colHrDepartment: "Departamento Asignado", colHrArea: "Área Asignada", colHrEmail: "Correo Electrónico", colHrPhone: "Teléfono", colHrStatus: "Estatus" }
     }
 };
 
@@ -498,7 +500,16 @@ const AREAS_BY_DEPARTMENT = {
     ],
     finance: GENERIC_AREAS,
     accounting: GENERIC_AREAS,
-    'human-resources': GENERIC_AREAS,
+    'human-resources': [
+        { key: 'hr-area-recruitment', labelKey: 'menu.area.recruitment', icon: 'bx-user-plus' },
+        { key: 'hr-area-personnel-admin', labelKey: 'menu.area.personnelAdmin', icon: 'bx-id-card' },
+        { key: 'hr-area-training-development', labelKey: 'menu.area.trainingDevelopment', icon: 'bx-book-open' },
+        { key: 'hr-area-compensation-benefits', labelKey: 'menu.area.compensationBenefits', icon: 'bx-money' },
+        { key: 'hr-area-organizational-development', labelKey: 'menu.area.organizationalDevelopment', icon: 'bx-sitemap' },
+        { key: 'hr-area-occupational-health-safety', labelKey: 'menu.area.occupationalHealthSafety', icon: 'bx-plus-medical' },
+        { key: 'hr-area-hris', labelKey: 'menu.area.hris', icon: 'bx-server' },
+        { key: 'hr-area-hr-analytics', labelKey: 'menu.area.hrAnalytics', icon: 'bx-line-chart' }
+    ],
     marketing: GENERIC_AREAS,
     commercial: GENERIC_AREAS,
     purchasing: GENERIC_AREAS,

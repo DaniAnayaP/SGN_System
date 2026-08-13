@@ -142,6 +142,11 @@
         { "id": "cat-catalogos-centro-dist-categorias", "labelKey": "menu.catCentroDistCategorias", "icon": "bx-window", "href": "#" },
         { "id": "cat-catalogos-centro-dist-udm", "labelKey": "menu.catCentroDistUdm", "icon": "bx-window", "href": "#" }
       ]
+    },
+    "human-resources/hr-area-personnel-admin": {
+      "cat-operaciones": [
+        { "id": "cat-operaciones-rrhh-mi-recurso-humano", "labelKey": "menu.opRrhhMiRecursoHumano", "icon": "bx-window", "href": "OpRRHHMiRecursoHumano.html" }
+      ]
     }
   },
   "footer": []
