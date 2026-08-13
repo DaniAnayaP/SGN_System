@@ -512,6 +512,7 @@
     "colHrArea": "Área Asignada",
     "colHrEmail": "Correo Electrónico",
     "colHrPhone": "Teléfono",
-    "colHrStatus": "Estatus"
+    "colHrStatus": "Estatus",
+    "recordDeleteConfirm": "¿Eliminar este registro?"
   }
 }

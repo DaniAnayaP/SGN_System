@@ -72,6 +72,52 @@ async function patchWorker(id, patch) {
     }
 }
 
+// Empty-state row shown when the table has zero workers — mirrors the
+// static placeholder from OpRRHHMiRecursoHumano.html so deleting the last
+// remaining row doesn't leave a headerless-looking empty tbody.
+function ensureEmptyState() {
+    const tbody = getTbody();
+    if (tbody.querySelectorAll('tr').length) return;
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className = 'data-table-empty-cell';
+    td.colSpan = 11;
+    const inner = document.createElement('div');
+    inner.className = 'data-table-empty-inner';
+    inner.textContent = Dashboard.t('main.emptyStateText');
+    td.appendChild(inner);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+}
+
+async function deleteWorker(id, tr) {
+    if (!confirm(Dashboard.t('main.recordDeleteConfirm'))) return;
+    try {
+        const res = await fetch(`/api/business/hr-workers/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) throw new Error('delete failed');
+        tr.remove();
+        ensureEmptyState();
+    } catch (err) {
+        console.error('Mi Recurso Humano: failed to delete record', err);
+        alert(Dashboard.t('admin.saveError'));
+    }
+}
+
+function buildActionsCell(worker, tr) {
+    const td = document.createElement('td');
+    td.dataset.col = 'actions';
+    td.className = 'admin-table-actions';
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+    deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+    deleteBtn.title = Dashboard.t('admin.delete');
+    deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+    deleteBtn.addEventListener('click', () => deleteWorker(worker.id, tr));
+    td.appendChild(deleteBtn);
+    return td;
+}
+
 // --- Inline cell editing (Área/Correo/Teléfono) ------------------------------
 // Click a cell to turn it into an <input>; Enter or blur commits back to
 // plain text, Escape discards. Same mechanism as Registro Combustible's
@@ -168,6 +214,7 @@ function buildRow(worker) {
         tdEmail,
         tdPhone,
         buildStatusCell(worker),
+        buildActionsCell(worker, tr),
     );
     return tr;
 }

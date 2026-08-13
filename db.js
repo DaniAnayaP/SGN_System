@@ -917,6 +917,10 @@ function updateFuelRecord(id, clientId, patch) {
     return getFuelRecordById(id, clientId);
 }
 
+function deleteFuelRecord(id, clientId) {
+    db.prepare('DELETE FROM fuel_records WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
 // --- Query helpers: Mi Recurso Humano (hr_workers, scoped to a client) ------
 function listHrWorkers(clientId) {
     return db.prepare('SELECT * FROM hr_workers WHERE client_id = ? ORDER BY record_number ASC').all(clientId);
@@ -959,6 +963,10 @@ function updateHrWorker(id, clientId, patch) {
         db.prepare(`UPDATE hr_workers SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
     }
     return getHrWorkerById(id, clientId);
+}
+
+function deleteHrWorker(id, clientId) {
+    db.prepare('DELETE FROM hr_workers WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
 // --- Query helpers: plans (Planes y Paquetes, GEIPSA-wide, not per-client) ---
@@ -1277,10 +1285,12 @@ module.exports = {
     getFuelRecordById,
     createFuelRecord,
     updateFuelRecord,
+    deleteFuelRecord,
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,
     updateHrWorker,
+    deleteHrWorker,
     listPlans,
     getPlanById,
     getPlanByName,

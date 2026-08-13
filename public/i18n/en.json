@@ -512,6 +512,7 @@
     "colHrArea": "Assigned Area",
     "colHrEmail": "Email",
     "colHrPhone": "Phone",
-    "colHrStatus": "Status"
+    "colHrStatus": "Status",
+    "recordDeleteConfirm": "Delete this record?"
   }
 }

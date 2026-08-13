@@ -65,10 +65,12 @@ const {
     getFuelRecordById,
     createFuelRecord,
     updateFuelRecord,
+    deleteFuelRecord,
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,
     updateHrWorker,
+    deleteHrWorker,
     listPlans,
     getPlanById,
     getPlanByName,
@@ -1068,6 +1070,14 @@ app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     res.json({ record: mapFuelRecord(record) });
 });
 
+app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFuelRecordById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
+    deleteFuelRecord(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
 // --- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de --
 // --- Personal) — same access model as fuel records above. ------------------
 function mapHrWorker(row) {
@@ -1114,6 +1124,14 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
     const worker = updateHrWorker(req.params.id, req.user.clientId, req.body || {});
     res.json({ worker: mapHrWorker(worker) });
+});
+
+app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getHrWorkerById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Worker not found.' });
+    deleteHrWorker(req.params.id, req.user.clientId);
+    res.status(204).end();
 });
 
 const PORT = process.env.PORT || 3000;
