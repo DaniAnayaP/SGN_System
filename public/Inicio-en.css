@@ -1771,7 +1771,11 @@
         top: 0;
         z-index: 2;
         background-color: var(--color-bg);
-        font-size: 0.72rem;
+        /* Scales with the same --data-table-font-size zoom control as the
+           body cells (calc keeps the header proportionally smaller, same
+           ratio as the old fixed 0.72rem/0.85rem default) instead of a
+           fixed size that ignored the A-/A+ buttons. */
+        font-size: calc(var(--data-table-font-size, 0.85rem) * 0.847);
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.02em;
