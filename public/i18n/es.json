@@ -496,6 +496,9 @@
     "colFuelDriver": "Chofer",
     "colFuelCoordinator": "Coordinador",
     "colFuelTicketEvidence": "Evidencia Ticket",
+    "colFuelTripKmBefore": "TRIP KM antes carga",
+    "colFuelTripKmAfter": "TRIP KM después carga",
+    "colFuelTripKmTotal": "Total TRIP KM adquiridos",
     "colFuelSubtotal": "Subtotal",
     "colFuelVat": "IVA",
     "colFuelTotal": "Total",
@@ -513,6 +516,15 @@
     "colHrEmail": "Correo Electrónico",
     "colHrPhone": "Teléfono",
     "colHrStatus": "Estatus",
-    "recordDeleteConfirm": "¿Eliminar este registro?"
+    "recordDeleteConfirm": "¿Eliminar este registro?",
+    "changeHistory": "Historial de cambios",
+    "changeHistoryTitle": "Historial de cambios",
+    "changeHistoryEmpty": "Aún no hay cambios registrados.",
+    "changeHistoryCreated": "Registro creado",
+    "changeHistoryDeleted": "Registro eliminado",
+    "changeHistoryDate": "Fecha",
+    "changeHistoryUser": "Usuario",
+    "changeHistoryRecord": "Registro",
+    "changeHistoryChange": "Cambio"
   }
 }

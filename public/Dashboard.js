@@ -151,7 +151,9 @@ const EMBEDDED_TRANSLATIONS = {
             uiScale: "System size", uiScaleIdeal: "Ideal", uiScaleDecrease: "Decrease size", uiScaleIncrease: "Increase size", newRecord: "New Record",
             newRecordHint: "The rest of the fields can be filled in later, directly from the table row.", fuelAddValue: "+ Add", fuelClickToEdit: "Click to edit", fuelSelectReason: "Select...", fuelUploadTicket: "Upload ticket evidence",
             colFuelDbId: "Unique Database #", colFuelRecordId: "Unique Consumption Record #", colFuelDate: "Date", colFuelYear: "Year", colFuelMonth: "Month", colFuelWeek: "Week #", colFuelDayNum: "Day #", colFuelDayText: "Day", colFuelEcoUnit: "Fleet Unit #", colFuelPlates: "Unit Plates", colFuelDriver: "Driver", colFuelCoordinator: "Coordinator", colFuelTicketEvidence: "Ticket Evidence", colFuelSubtotal: "Subtotal", colFuelVat: "VAT", colFuelTotal: "Total", colFuelReason: "Load Reason", colFuelTransferService: "Transfer Service", colFuelInternalMovement: "Internal Movement",
-            newHireRecord: "New Record", colHrDbId: "Unique Database #", colHrRecordId: "Unique Record #", colHrFullName: "Full Name", colHrPosition: "Position", colHrStartDate: "Start Date", colHrDepartment: "Assigned Department", colHrArea: "Assigned Area", colHrEmail: "Email", colHrPhone: "Phone", colHrStatus: "Status", recordDeleteConfirm: "Delete this record?" }
+            newHireRecord: "New Record", colHrDbId: "Unique Database #", colHrRecordId: "Unique Record #", colHrFullName: "Full Name", colHrPosition: "Position", colHrStartDate: "Start Date", colHrDepartment: "Assigned Department", colHrArea: "Assigned Area", colHrEmail: "Email", colHrPhone: "Phone", colHrStatus: "Status", recordDeleteConfirm: "Delete this record?",
+            colFuelTripKmBefore: "Trip KM Before Load", colFuelTripKmAfter: "Trip KM After Load", colFuelTripKmTotal: "Total Trip KM Acquired",
+            changeHistory: "Change history", changeHistoryTitle: "Change history", changeHistoryEmpty: "No changes recorded yet.", changeHistoryCreated: "Record created", changeHistoryDeleted: "Record deleted", changeHistoryDate: "Date", changeHistoryUser: "User", changeHistoryRecord: "Record", changeHistoryChange: "Change" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -278,7 +280,9 @@ const EMBEDDED_TRANSLATIONS = {
             uiScale: "Tamaño del sistema", uiScaleIdeal: "Ideal", uiScaleDecrease: "Disminuir tamaño", uiScaleIncrease: "Aumentar tamaño", newRecord: "Nuevo Registro",
             newRecordHint: "Los demás datos se pueden llenar después, directamente desde la fila en la tabla.", fuelAddValue: "+ Agregar", fuelClickToEdit: "Clic para editar", fuelSelectReason: "Seleccionar...", fuelUploadTicket: "Subir evidencia de ticket",
             colFuelDbId: "# Único de Base de Datos", colFuelRecordId: "# Único de Registro de Consumo", colFuelDate: "Fecha", colFuelYear: "Año", colFuelMonth: "Mes", colFuelWeek: "# Semana", colFuelDayNum: "# Día", colFuelDayText: "Día", colFuelEcoUnit: "# Eco Unidad", colFuelPlates: "Placas Unidad", colFuelDriver: "Chofer", colFuelCoordinator: "Coordinador", colFuelTicketEvidence: "Evidencia Ticket", colFuelSubtotal: "Subtotal", colFuelVat: "IVA", colFuelTotal: "Total", colFuelReason: "Motivo Carga", colFuelTransferService: "Servicio Traslado", colFuelInternalMovement: "Movimiento Interno",
-            newHireRecord: "Nuevo Registro", colHrDbId: "# Único de Base de Datos", colHrRecordId: "# Único de Registro", colHrFullName: "Nombre Completo", colHrPosition: "Puesto", colHrStartDate: "Fecha de Ingreso", colHrDepartment: "Departamento Asignado", colHrArea: "Área Asignada", colHrEmail: "Correo Electrónico", colHrPhone: "Teléfono", colHrStatus: "Estatus", recordDeleteConfirm: "¿Eliminar este registro?" }
+            newHireRecord: "Nuevo Registro", colHrDbId: "# Único de Base de Datos", colHrRecordId: "# Único de Registro", colHrFullName: "Nombre Completo", colHrPosition: "Puesto", colHrStartDate: "Fecha de Ingreso", colHrDepartment: "Departamento Asignado", colHrArea: "Área Asignada", colHrEmail: "Correo Electrónico", colHrPhone: "Teléfono", colHrStatus: "Estatus", recordDeleteConfirm: "¿Eliminar este registro?",
+            colFuelTripKmBefore: "TRIP KM antes carga", colFuelTripKmAfter: "TRIP KM después carga", colFuelTripKmTotal: "Total TRIP KM adquiridos",
+            changeHistory: "Historial de cambios", changeHistoryTitle: "Historial de cambios", changeHistoryEmpty: "Aún no hay cambios registrados.", changeHistoryCreated: "Registro creado", changeHistoryDeleted: "Registro eliminado", changeHistoryDate: "Fecha", changeHistoryUser: "Usuario", changeHistoryRecord: "Registro", changeHistoryChange: "Cambio" }
     }
 };
 
@@ -1912,7 +1916,83 @@ function openVisibilityPicker(tableId) {
     visibilityPickerModal.hidden = false;
 }
 
-// Adds the 2 new toolbar buttons into the SAME .data-table-zoom bar that
+// Historial de cambios ("control de cambios") — read-only modal listing
+// every create/update/delete logged server-side for a given table (see
+// GET /api/business/table-changes/:tableKey). Same singleton-modal pattern
+// as the pin/visibility pickers, but built with .admin-table-wrap/.admin-table
+// (NOT .data-table-wrapper) so it never picks up its own history button.
+let changeHistoryModal = null;
+let changeHistoryList = null;
+
+function ensureChangeHistoryModal() {
+    if (changeHistoryModal) return;
+    changeHistoryModal = document.createElement('div');
+    changeHistoryModal.className = 'modal-overlay';
+    changeHistoryModal.hidden = true;
+    changeHistoryModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-history-title">
+            <h3 id="data-table-history-title">${t('main.changeHistoryTitle')}</h3>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>${t('main.changeHistoryDate')}</th>
+                            <th>${t('main.changeHistoryUser')}</th>
+                            <th>${t('main.changeHistoryRecord')}</th>
+                            <th>${t('main.changeHistoryChange')}</th>
+                        </tr>
+                    </thead>
+                    <tbody data-role="list"></tbody>
+                </table>
+            </div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(changeHistoryModal);
+    changeHistoryList = changeHistoryModal.querySelector('[data-role="list"]');
+    const close = () => { changeHistoryModal.hidden = true; };
+    changeHistoryModal.querySelector('[data-role="close"]').addEventListener('click', close);
+    wireModalDismiss(changeHistoryModal, close);
+}
+
+function renderChangeHistoryRow(cells) {
+    const tr = document.createElement('tr');
+    cells.forEach((text) => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+    });
+    return tr;
+}
+
+async function openChangeHistory(tableId) {
+    ensureChangeHistoryModal();
+    changeHistoryModal.hidden = false;
+    changeHistoryList.innerHTML = '';
+    changeHistoryList.appendChild(renderChangeHistoryRow([t('main.changeHistoryEmpty'), '', '', '']));
+    try {
+        const res = await fetch(`/api/business/table-changes/${encodeURIComponent(tableId)}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const { changes } = await res.json();
+        if (!changes || !changes.length) return;
+        changeHistoryList.innerHTML = '';
+        changes.forEach((change) => {
+            let description;
+            if (change.action === 'create') description = t('main.changeHistoryCreated');
+            else if (change.action === 'delete') description = t('main.changeHistoryDeleted');
+            else description = `${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+            changeHistoryList.appendChild(renderChangeHistoryRow([
+                change.changed_at, change.changed_by || '—', change.record_label || '—', description,
+            ]));
+        });
+    } catch {
+        // Leave the empty-state row in place — no network/parse errors surfaced here.
+    }
+}
+
+// Adds the 3 new toolbar buttons into the SAME .data-table-zoom bar that
 // renderDataTableZoomControls() already inserts (must run after it), then
 // lazily boots column management for each table the first time it reports
 // a nonzero width — see initDataTableColumns for why that's deferred.
@@ -1938,7 +2018,16 @@ function renderDataTableColumnControls() {
             visBtn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
             visBtn.addEventListener('click', () => openVisibilityPicker(getTableId(wrapper, index)));
 
-            zoom.append(pinBtn, visBtn);
+            const historyBtn = document.createElement('button');
+            historyBtn.type = 'button';
+            historyBtn.className = 'data-table-zoom-btn';
+            historyBtn.dataset.colAction = 'history';
+            historyBtn.setAttribute('aria-label', t('main.changeHistory'));
+            historyBtn.title = t('main.changeHistory');
+            historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+            historyBtn.addEventListener('click', () => openChangeHistory(getTableId(wrapper, index)));
+
+            zoom.append(pinBtn, visBtn, historyBtn);
         }
 
         if (wrapper.dataset.colObserverAttached) return;

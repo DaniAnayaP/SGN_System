@@ -496,6 +496,9 @@
     "colFuelDriver": "Driver",
     "colFuelCoordinator": "Coordinator",
     "colFuelTicketEvidence": "Ticket Evidence",
+    "colFuelTripKmBefore": "Trip KM Before Load",
+    "colFuelTripKmAfter": "Trip KM After Load",
+    "colFuelTripKmTotal": "Total Trip KM Acquired",
     "colFuelSubtotal": "Subtotal",
     "colFuelVat": "VAT",
     "colFuelTotal": "Total",
@@ -513,6 +516,15 @@
     "colHrEmail": "Email",
     "colHrPhone": "Phone",
     "colHrStatus": "Status",
-    "recordDeleteConfirm": "Delete this record?"
+    "recordDeleteConfirm": "Delete this record?",
+    "changeHistory": "Change history",
+    "changeHistoryTitle": "Change history",
+    "changeHistoryEmpty": "No changes recorded yet.",
+    "changeHistoryCreated": "Record created",
+    "changeHistoryDeleted": "Record deleted",
+    "changeHistoryDate": "Date",
+    "changeHistoryUser": "User",
+    "changeHistoryRecord": "Record",
+    "changeHistoryChange": "Change"
   }
 }

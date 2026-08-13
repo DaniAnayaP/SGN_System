@@ -71,6 +71,12 @@ const {
     createHrWorker,
     updateHrWorker,
     deleteHrWorker,
+    getTableChanges,
+    logTableChange,
+    logFieldChanges,
+    COST_CENTER_FIELDS,
+    FUEL_PATCHABLE_FIELDS,
+    HR_WORKER_PATCHABLE_FIELDS,
     listPlans,
     getPlanById,
     getPlanByName,
@@ -981,6 +987,10 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
     const { code, name, description, responsible } = req.body;
     try {
         const costCenter = createCostCenter({ clientId: req.user.clientId, code, name, description, responsible });
+        logTableChange({
+            clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
+            recordLabel: costCenter.code, action: 'create', changedBy: req.user.name,
+        });
         res.status(201).json({ costCenter });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -997,6 +1007,7 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     if (error) return res.status(400).json({ message: error });
     const { code, name, description, responsible } = req.body;
     try {
+        logFieldChanges('centros-costo', existing.id, existing.code, req.user.name, COST_CENTER_FIELDS, existing, { code, name, description, responsible });
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, { code, name, description, responsible });
         res.json({ costCenter });
     } catch (err) {
@@ -1010,6 +1021,10 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
 app.delete('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (req, res) => {
     const existing = getCostCenterById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'centros-costo', recordId: existing.id,
+        recordLabel: existing.code, action: 'delete', changedBy: req.user.name,
+    });
     deleteCostCenter(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -1033,6 +1048,8 @@ function mapFuelRecord(row) {
         driver: row.driver,
         coordinator: row.coordinator,
         ticketEvidence: row.ticket_evidence,
+        tripKmBefore: row.trip_km_before,
+        tripKmAfter: row.trip_km_after,
         subtotal: row.subtotal,
         vat: row.vat,
         reason: row.reason,
@@ -1059,6 +1076,10 @@ app.post('/api/business/fuel-records', requireAuth, (req, res) => {
         driver: driver.trim(),
         coordinator: coordinator.trim(),
     });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: record.id,
+        recordLabel: record.eco_unit, action: 'create', changedBy: req.user.name,
+    });
     res.status(201).json({ record: mapFuelRecord(record) });
 });
 
@@ -1066,7 +1087,15 @@ app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getFuelRecordById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
-    const record = updateFuelRecord(req.params.id, req.user.clientId, req.body || {});
+    const patch = req.body || {};
+    // Never log the raw base64 ticket photo into the audit table — just
+    // whether one is present, before and after.
+    const loggablePatch = Object.prototype.hasOwnProperty.call(patch, 'ticketEvidence')
+        ? { ...patch, ticketEvidence: patch.ticketEvidence ? '[imagen]' : '' }
+        : patch;
+    const loggableExisting = { ...existing, ticket_evidence: existing.ticket_evidence ? '[imagen]' : '' };
+    logFieldChanges('registro-combustible', existing.id, existing.eco_unit, req.user.name, FUEL_PATCHABLE_FIELDS, loggableExisting, loggablePatch);
+    const record = updateFuelRecord(req.params.id, req.user.clientId, patch);
     res.json({ record: mapFuelRecord(record) });
 });
 
@@ -1074,6 +1103,10 @@ app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getFuelRecordById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: existing.id,
+        recordLabel: existing.eco_unit, action: 'delete', changedBy: req.user.name,
+    });
     deleteFuelRecord(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -1115,6 +1148,10 @@ app.post('/api/business/hr-workers', requireAuth, (req, res) => {
         startDate,
         department: department.trim(),
     });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: worker.id,
+        recordLabel: worker.full_name, action: 'create', changedBy: req.user.name,
+    });
     res.status(201).json({ worker: mapHrWorker(worker) });
 });
 
@@ -1122,6 +1159,7 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getHrWorkerById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
+    logFieldChanges('mi-recurso-humano', existing.id, existing.full_name, req.user.name, HR_WORKER_PATCHABLE_FIELDS, existing, req.body || {});
     const worker = updateHrWorker(req.params.id, req.user.clientId, req.body || {});
     res.json({ worker: mapHrWorker(worker) });
 });
@@ -1130,8 +1168,23 @@ app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getHrWorkerById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,
+        recordLabel: existing.full_name, action: 'delete', changedBy: req.user.name,
+    });
     deleteHrWorker(req.params.id, req.user.clientId);
     res.status(204).end();
+});
+
+// --- Historial de cambios (control de cambios icon, generic across every ---
+// --- .data-table — see openChangeHistory in Dashboard.js) -------------------
+// tableKey is whatever data-table-id the caller is looking at; tables with
+// no business backend yet (or GEIPSA-admin-only ones, which have no
+// req.user.clientId) simply degrade to a 404/empty list, same as
+// contracted-modules/branding above.
+app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey) });
 });
 
 const PORT = process.env.PORT || 3000;

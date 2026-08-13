@@ -55,6 +55,10 @@ function formatMoney(n) {
     return `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function formatKm(n) {
+    return `${(Number(n) || 0).toLocaleString()} km`;
+}
+
 function textCell(key, value) {
     const td = document.createElement('td');
     td.dataset.col = key;
@@ -303,6 +307,31 @@ function buildRow(record) {
         onCommit: (val) => patchFuelRecord(record.id, { plates: val }),
     });
 
+    const tdTripKmTotal = textCell('colFuelTripKmTotal', formatKm(Math.max((parseFloat(record.tripKmAfter) || 0) - (parseFloat(record.tripKmBefore) || 0), 0)));
+    function recomputeTripKm() {
+        const before = parseFloat(tripKmBeforeCtrl.getValue()) || 0;
+        const after = parseFloat(tripKmAfterCtrl.getValue()) || 0;
+        tdTripKmTotal.textContent = formatKm(Math.max(after - before, 0));
+    }
+
+    const tdTripKmBefore = document.createElement('td');
+    tdTripKmBefore.dataset.col = 'colFuelTripKmBefore';
+    const tripKmBeforeCtrl = attachInlineEdit(tdTripKmBefore, {
+        value: record.tripKmBefore ? String(record.tripKmBefore) : '',
+        inputType: 'number',
+        formatDisplay: formatKm,
+        onCommit: (val) => { recomputeTripKm(); patchFuelRecord(record.id, { tripKmBefore: parseFloat(val) || 0 }); },
+    });
+
+    const tdTripKmAfter = document.createElement('td');
+    tdTripKmAfter.dataset.col = 'colFuelTripKmAfter';
+    const tripKmAfterCtrl = attachInlineEdit(tdTripKmAfter, {
+        value: record.tripKmAfter ? String(record.tripKmAfter) : '',
+        inputType: 'number',
+        formatDisplay: formatKm,
+        onCommit: (val) => { recomputeTripKm(); patchFuelRecord(record.id, { tripKmAfter: parseFloat(val) || 0 }); },
+    });
+
     const tdSubtotal = document.createElement('td');
     tdSubtotal.dataset.col = 'colFuelSubtotal';
     const subtotalCtrl = attachInlineEdit(tdSubtotal, {
@@ -339,6 +368,9 @@ function buildRow(record) {
         textCell('colFuelDriver', record.driver),
         textCell('colFuelCoordinator', record.coordinator),
         buildTicketCell(record),
+        tdTripKmBefore,
+        tdTripKmAfter,
+        tdTripKmTotal,
         tdSubtotal,
         tdVat,
         tdTotal,

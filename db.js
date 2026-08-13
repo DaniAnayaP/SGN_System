@@ -137,6 +137,8 @@ db.exec(`
         driver              TEXT NOT NULL,
         coordinator         TEXT NOT NULL,
         ticket_evidence     TEXT NOT NULL DEFAULT '',
+        trip_km_before      REAL NOT NULL DEFAULT 0,
+        trip_km_after       REAL NOT NULL DEFAULT 0,
         subtotal            REAL NOT NULL DEFAULT 0,
         vat                 REAL NOT NULL DEFAULT 0,
         reason              TEXT NOT NULL DEFAULT '',
@@ -164,6 +166,26 @@ db.exec(`
         phone          TEXT NOT NULL DEFAULT '',
         status         TEXT NOT NULL DEFAULT 'active',
         created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Historial de cambios ("control de cambios" icon on every .data-table):
+    -- one row per created/updated/deleted record on any client-scoped
+    -- business table. table_key matches that table's data-table-id.
+    -- field_key is the FULL dotted i18n key (e.g. "main.colFuelPlates") so
+    -- the frontend can call Dashboard.t(field_key) directly regardless of
+    -- which i18n namespace that table uses — empty for create/delete rows.
+    CREATE TABLE IF NOT EXISTS data_table_changes (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        table_key     TEXT NOT NULL,
+        record_id     INTEGER NOT NULL,
+        record_label  TEXT NOT NULL DEFAULT '',
+        action        TEXT NOT NULL,
+        field_key     TEXT NOT NULL DEFAULT '',
+        old_value     TEXT NOT NULL DEFAULT '',
+        new_value     TEXT NOT NULL DEFAULT '',
+        changed_by    TEXT NOT NULL DEFAULT '',
+        changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 `);
 
@@ -434,6 +456,16 @@ db.exec(`
 const profileColumns = db.prepare('PRAGMA table_info(profiles)').all();
 if (!profileColumns.some((c) => c.name === 'client_id')) {
     db.exec('ALTER TABLE profiles ADD COLUMN client_id INTEGER REFERENCES clients(id)');
+}
+
+// TRIP KM (odómetro antes/después de carga) added after fuel_records already
+// shipped once.
+const fuelRecordColumns = db.prepare('PRAGMA table_info(fuel_records)').all();
+if (!fuelRecordColumns.some((c) => c.name === 'trip_km_before')) {
+    db.exec('ALTER TABLE fuel_records ADD COLUMN trip_km_before REAL NOT NULL DEFAULT 0');
+}
+if (!fuelRecordColumns.some((c) => c.name === 'trip_km_after')) {
+    db.exec('ALTER TABLE fuel_records ADD COLUMN trip_km_after REAL NOT NULL DEFAULT 0');
 }
 
 // --- Indexes -------------------------------------------------------------
@@ -761,6 +793,48 @@ function recordAnexoChange(clientId, { moduleKey, action, requestedBy, requested
     });
 }
 
+// --- Historial de cambios (generic "control de cambios" icon on every ------
+// --- .data-table — see renderDataTableColumnControls in Dashboard.js) -------
+// table_key matches that table's data-table-id. field_key is the FULL
+// dotted i18n key (e.g. "main.colFuelPlates") so the frontend can call
+// Dashboard.t(field_key) directly no matter which i18n namespace that table
+// uses — left empty for create/delete rows, which have no single field.
+function getTableChanges(clientId, tableKey) {
+    return db
+        .prepare('SELECT * FROM data_table_changes WHERE client_id = ? AND table_key = ? ORDER BY changed_at DESC, id DESC')
+        .all(clientId, tableKey);
+}
+
+function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy }) {
+    db.prepare(`
+        INSERT INTO data_table_changes (client_id, table_key, record_id, record_label, action, field_key, old_value, new_value, changed_by)
+        VALUES (@clientId, @tableKey, @recordId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy)
+    `).run({
+        clientId, tableKey, recordId, recordLabel: recordLabel || '', action,
+        fieldKey: fieldKey || '',
+        oldValue: oldValue == null ? '' : String(oldValue),
+        newValue: newValue == null ? '' : String(newValue),
+        changedBy: changedBy || '',
+    });
+}
+
+// Shared "update" logger for the 3 client business tables: walks fieldsMap
+// (the same {bodyKey: {column, fieldKey}} map each table's update* function
+// uses to know what a PATCH may touch), and logs one row per key present in
+// patch whose value actually differs from what's already in `existing`.
+function logFieldChanges(tableKey, recordId, recordLabel, changedBy, fieldsMap, existing, patch) {
+    for (const [key, { column, fieldKey }] of Object.entries(fieldsMap)) {
+        if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+        const oldValue = existing[column];
+        const newValue = patch[key];
+        if (String(oldValue ?? '') === String(newValue ?? '')) continue;
+        logTableChange({
+            clientId: existing.client_id, tableKey, recordId, recordLabel, action: 'update', fieldKey,
+            oldValue, newValue, changedBy,
+        });
+    }
+}
+
 // Self-service version for the client's own admin (Business-Config page):
 // only branding fields, never company_name/status/plan/etc.
 function updateClientBranding(clientId, { logoDataUrl, seedColor, colorPalette }) {
@@ -854,6 +928,15 @@ function createCostCenter({ clientId, code, name, description, responsible }) {
     return getCostCenterById(result.lastInsertRowid, clientId);
 }
 
+// Used only for change-history diffing (see logFieldChanges) — updateCostCenter
+// itself always overwrites all 4 columns, same as before this map existed.
+const COST_CENTER_FIELDS = {
+    code: { column: 'code', fieldKey: 'business.ccCode' },
+    name: { column: 'name', fieldKey: 'business.ccName' },
+    responsible: { column: 'responsible', fieldKey: 'business.ccResponsible' },
+    description: { column: 'description', fieldKey: 'business.ccDescription' },
+};
+
 function updateCostCenter(id, clientId, { code, name, description, responsible }) {
     db.prepare(`
         UPDATE cost_centers
@@ -891,21 +974,24 @@ function createFuelRecord({ clientId, date, ecoUnit, driver, coordinator }) {
 
 // Whitelist of columns a PATCH may touch — everything filled in later via
 // inline edit in the table. code/eco_unit/driver/coordinator/record_date are
-// set once at creation and never patched.
+// set once at creation and never patched. fieldKey is the dotted i18n key
+// used for change-history labels (see logFieldChanges).
 const FUEL_PATCHABLE_FIELDS = {
-    plates: 'plates',
-    ticketEvidence: 'ticket_evidence',
-    subtotal: 'subtotal',
-    vat: 'vat',
-    reason: 'reason',
-    transferService: 'transfer_service',
-    internalMovement: 'internal_movement',
+    plates: { column: 'plates', fieldKey: 'main.colFuelPlates' },
+    ticketEvidence: { column: 'ticket_evidence', fieldKey: 'main.colFuelTicketEvidence' },
+    tripKmBefore: { column: 'trip_km_before', fieldKey: 'main.colFuelTripKmBefore' },
+    tripKmAfter: { column: 'trip_km_after', fieldKey: 'main.colFuelTripKmAfter' },
+    subtotal: { column: 'subtotal', fieldKey: 'main.colFuelSubtotal' },
+    vat: { column: 'vat', fieldKey: 'main.colFuelVat' },
+    reason: { column: 'reason', fieldKey: 'main.colFuelReason' },
+    transferService: { column: 'transfer_service', fieldKey: 'main.colFuelTransferService' },
+    internalMovement: { column: 'internal_movement', fieldKey: 'main.colFuelInternalMovement' },
 };
 
 function updateFuelRecord(id, clientId, patch) {
     const sets = [];
     const params = { id, clientId };
-    for (const [key, column] of Object.entries(FUEL_PATCHABLE_FIELDS)) {
+    for (const [key, { column }] of Object.entries(FUEL_PATCHABLE_FIELDS)) {
         if (Object.prototype.hasOwnProperty.call(patch, key)) {
             sets.push(`${column} = @${key}`);
             params[key] = patch[key];
@@ -944,16 +1030,16 @@ function createHrWorker({ clientId, fullName, position, startDate, department })
 }
 
 const HR_WORKER_PATCHABLE_FIELDS = {
-    area: 'area',
-    email: 'email',
-    phone: 'phone',
-    status: 'status',
+    area: { column: 'area', fieldKey: 'main.colHrArea' },
+    email: { column: 'email', fieldKey: 'main.colHrEmail' },
+    phone: { column: 'phone', fieldKey: 'main.colHrPhone' },
+    status: { column: 'status', fieldKey: 'main.colHrStatus' },
 };
 
 function updateHrWorker(id, clientId, patch) {
     const sets = [];
     const params = { id, clientId };
-    for (const [key, column] of Object.entries(HR_WORKER_PATCHABLE_FIELDS)) {
+    for (const [key, { column }] of Object.entries(HR_WORKER_PATCHABLE_FIELDS)) {
         if (Object.prototype.hasOwnProperty.call(patch, key)) {
             sets.push(`${column} = @${key}`);
             params[key] = patch[key];
@@ -1269,6 +1355,12 @@ module.exports = {
     getAnexosPaymentTotal,
     getAnexoChanges,
     recordAnexoChange,
+    getTableChanges,
+    logTableChange,
+    logFieldChanges,
+    COST_CENTER_FIELDS,
+    FUEL_PATCHABLE_FIELDS,
+    HR_WORKER_PATCHABLE_FIELDS,
     getClientModules,
     setClientModules,
     setClientCostCentersLimit,
