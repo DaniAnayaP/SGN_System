@@ -682,7 +682,11 @@
         width: 1.3rem;
         height: 1.3rem;
         font-size: 0.8rem;
-        margin: 0 auto;
+        /* margin-left:auto (not margin:0 auto) — stays flush against the
+           right edge, the same spot it sits in when expanded (right after
+           .top-bar-actions), instead of jumping to the middle of the bar. */
+        margin-left: auto;
+        margin-right: 0;
     }
     .top-bar .welcome-text{
         color: var(--color-text-primary);
