@@ -324,7 +324,19 @@
                             const key = subSm.standalone
                                 ? keyOf(section.id, subSm.id, null)
                                 : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
-                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, itemBlocked);
+                            // standalone rows (Departamento/Área/C. Costos —
+                            // see BUTTON_CONFIG_ITEM_IDS below) are only
+                            // DISPLAYED nested here; they're each their own
+                            // real 'main' item with their own module key, so
+                            // (unlike the ab-* Administración del Negocio
+                            // screens next to them, which have no module key
+                            // of their own) they need their own check on top
+                            // of whatever their parent already inherited —
+                            // otherwise they always showed enabled just
+                            // because "Configuración" itself was.
+                            const subBlocked = itemBlocked
+                                || (readOnly && subSm.standalone && MAIN_MODULE_ITEM_IDS.includes(subSm.id) && !isModuleEnabled(subSm.id));
+                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, subBlocked);
                             if (!readOnly) {
                                 subRow.input.checked = grantSet.has(key);
                                 subRow.input.addEventListener('change', () => {
