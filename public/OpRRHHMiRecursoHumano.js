@@ -14,17 +14,19 @@
 // attachInlineEdit pattern as Registro Combustible — see
 // OpTransVolCombustible.js for the original).
 //
-// There is no backend table/API for worker records yet, and this does NOT
-// yet create an actual system user (that's the eventual goal per "los
-// Usuarios se deben crear desde que se da de alta en Recursos Humanos" —
-// a separate, bigger step once this screen's shape is confirmed). Rows only
-// live in this tab's DOM, not persisted across a reload.
+// Persisted via /api/business/hr-workers (see server.js + db.js hr_workers
+// table): POST on "+ Nuevo Registro", PATCH per field the moment an inline
+// edit commits. This does NOT yet create an actual system user (that's the
+// eventual goal per "los Usuarios se deben crear desde que se da de alta en
+// Recursos Humanos" — a separate, bigger step once this screen's shape is
+// confirmed).
 // ---------------------------------------------------------------------------
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-rrhh-mi-recurso-humano' });
         if (!role) return;
         renderNewRecordButton();
+        await loadWorkers();
     } catch (err) {
         console.error('Mi Recurso Humano failed to initialize:', err);
     }
@@ -48,16 +50,26 @@ function pad(n, len = 2) {
     return String(n).padStart(len, '0');
 }
 
-function generateUniqueId() {
-    const d = new Date();
-    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${pad(d.getMilliseconds(), 3)}`;
-}
-
 function textCell(key, value) {
     const td = document.createElement('td');
     td.dataset.col = key;
     td.textContent = value || '—';
     return td;
+}
+
+async function patchWorker(id, patch) {
+    try {
+        const res = await fetch(`/api/business/hr-workers/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error('patch failed');
+    } catch (err) {
+        console.error('Mi Recurso Humano: failed to save change', err);
+        alert(Dashboard.t('admin.saveError'));
+    }
 }
 
 // --- Inline cell editing (Área/Correo/Teléfono) ------------------------------
@@ -66,7 +78,7 @@ function textCell(key, value) {
 // attachInlineEdit — kept as its own copy here rather than a shared file
 // since this is only the second screen using it; worth factoring out once a
 // third one needs it too.
-function attachInlineEdit(td, { value = '', inputType = 'text' } = {}) {
+function attachInlineEdit(td, { value = '', inputType = 'text', onCommit } = {}) {
     let current = value;
 
     function renderDisplay() {
@@ -93,6 +105,7 @@ function attachInlineEdit(td, { value = '', inputType = 'text' } = {}) {
         input.select();
         const commit = () => {
             current = input.value;
+            if (onCommit) onCommit(current);
             renderDisplay();
         };
         input.addEventListener('blur', commit);
@@ -108,7 +121,7 @@ function attachInlineEdit(td, { value = '', inputType = 'text' } = {}) {
 // Estatus — a real <select>, always live in the cell (not click-to-edit),
 // defaulting to Activo since a worker is, by definition, active the moment
 // they're registered — still changeable inline afterwards.
-function buildStatusCell() {
+function buildStatusCell(worker) {
     const td = document.createElement('td');
     td.dataset.col = 'colHrStatus';
     const select = document.createElement('select');
@@ -119,8 +132,63 @@ function buildStatusCell() {
         opt.textContent = Dashboard.t(key);
         select.appendChild(opt);
     });
+    select.value = worker.status || 'active';
+    select.addEventListener('change', () => patchWorker(worker.id, { status: select.value }));
     td.appendChild(select);
     return td;
+}
+
+// Builds one <tr> from a worker record as returned by the API (GET, POST or
+// freshly created) — the single source of truth for row markup.
+function buildRow(worker) {
+    const [year, month, day] = worker.startDate.split('-').map(Number);
+
+    const tdArea = document.createElement('td');
+    tdArea.dataset.col = 'colHrArea';
+    attachInlineEdit(tdArea, { value: worker.area || '', onCommit: (val) => patchWorker(worker.id, { area: val }) });
+
+    const tdEmail = document.createElement('td');
+    tdEmail.dataset.col = 'colHrEmail';
+    attachInlineEdit(tdEmail, { value: worker.email || '', inputType: 'email', onCommit: (val) => patchWorker(worker.id, { email: val }) });
+
+    const tdPhone = document.createElement('td');
+    tdPhone.dataset.col = 'colHrPhone';
+    attachInlineEdit(tdPhone, { value: worker.phone || '', inputType: 'tel', onCommit: (val) => patchWorker(worker.id, { phone: val }) });
+
+    const tr = document.createElement('tr');
+    tr.dataset.recordId = String(worker.id);
+    tr.append(
+        textCell('colHrDbId', worker.dbId),
+        textCell('colHrRecordId', String(worker.recordNumber)),
+        textCell('colHrFullName', worker.fullName),
+        textCell('colHrPosition', worker.position),
+        textCell('colHrStartDate', `${pad(day)}/${pad(month)}/${year}`),
+        textCell('colHrDepartment', Dashboard.t(DEPARTMENT_LABEL_KEYS[worker.department] || worker.department)),
+        tdArea,
+        tdEmail,
+        tdPhone,
+        buildStatusCell(worker),
+    );
+    return tr;
+}
+
+function getTbody() {
+    return document.querySelector('[data-table-id="mi-recurso-humano"] table.data-table').tBodies[0];
+}
+
+async function loadWorkers() {
+    try {
+        const res = await fetch('/api/business/hr-workers', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { workers } = await res.json();
+        if (!workers.length) return;
+        const tbody = getTbody();
+        const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
+        if (emptyRow) emptyRow.remove();
+        workers.forEach((worker) => tbody.appendChild(buildRow(worker)));
+    } catch (err) {
+        console.error('Mi Recurso Humano: failed to load records', err);
+    }
 }
 
 const newRecordModal = document.getElementById('new-record-modal');
@@ -146,7 +214,7 @@ function openNewRecordModal() {
     fullNameInput.focus();
 }
 
-function saveNewRecord() {
+async function saveNewRecord() {
     const missing = [fullNameInput, positionInput, startDateInput, departmentSelect].some((el) => !el.value.trim());
     if (missing) {
         newRecordError.textContent = Dashboard.t('login.fieldRequired');
@@ -154,42 +222,32 @@ function saveNewRecord() {
         return;
     }
     newRecordError.hidden = true;
-
-    const [year, month, day] = startDateInput.value.split('-').map(Number);
-
-    const table = document.querySelector('[data-table-id="mi-recurso-humano"] table.data-table');
-    const tbody = table.tBodies[0];
-    const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
-    if (emptyRow) emptyRow.remove();
-    const recordNumber = tbody.querySelectorAll('tr').length + 1;
-
-    const tdArea = document.createElement('td');
-    tdArea.dataset.col = 'colHrArea';
-    attachInlineEdit(tdArea, {});
-
-    const tdEmail = document.createElement('td');
-    tdEmail.dataset.col = 'colHrEmail';
-    attachInlineEdit(tdEmail, { inputType: 'email' });
-
-    const tdPhone = document.createElement('td');
-    tdPhone.dataset.col = 'colHrPhone';
-    attachInlineEdit(tdPhone, { inputType: 'tel' });
-
-    const tr = document.createElement('tr');
-    tr.append(
-        textCell('colHrDbId', generateUniqueId()),
-        textCell('colHrRecordId', String(recordNumber)),
-        textCell('colHrFullName', fullNameInput.value),
-        textCell('colHrPosition', positionInput.value),
-        textCell('colHrStartDate', `${pad(day)}/${pad(month)}/${year}`),
-        textCell('colHrDepartment', Dashboard.t(DEPARTMENT_LABEL_KEYS[departmentSelect.value] || departmentSelect.value)),
-        tdArea,
-        tdEmail,
-        tdPhone,
-        buildStatusCell(),
-    );
-    tbody.appendChild(tr);
-    closeNewRecordModal();
+    newRecordSaveBtn.disabled = true;
+    try {
+        const res = await fetch('/api/business/hr-workers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                fullName: fullNameInput.value.trim(),
+                position: positionInput.value.trim(),
+                startDate: startDateInput.value,
+                department: departmentSelect.value,
+            }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const { worker } = await res.json();
+        const tbody = getTbody();
+        const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
+        if (emptyRow) emptyRow.remove();
+        tbody.appendChild(buildRow(worker));
+        closeNewRecordModal();
+    } catch (err) {
+        newRecordError.textContent = Dashboard.t('admin.saveError');
+        newRecordError.hidden = false;
+    } finally {
+        newRecordSaveBtn.disabled = false;
+    }
 }
 
 newRecordSaveBtn.addEventListener('click', saveNewRecord);

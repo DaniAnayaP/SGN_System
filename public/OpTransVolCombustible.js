@@ -13,17 +13,17 @@
 // consecutivos) starts empty and gets filled in later by clicking directly
 // on that cell in the table (see attachInlineEdit below).
 //
-// There is no backend table/API for fuel records yet — rows (and any inline
-// edit made to them) live only in this tab's DOM, not persisted across a
-// reload. That's enough to exercise the shared column reorder/pin/hide/
-// resize/zoom features against real rows instead of just the empty-state
-// placeholder.
+// Persisted via /api/business/fuel-records (see server.js + db.js
+// fuel_records table): POST on "+ Nuevo Registro", PATCH per field the
+// moment an inline edit commits. year/month/week/day/dayText are NOT stored
+// server-side — they're derived from record_date on every render, here.
 // ---------------------------------------------------------------------------
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-transporte-vol-combustible' });
         if (!role) return;
         renderNewRecordButton();
+        await loadRecords();
     } catch (err) {
         console.error('Registro Combustible failed to initialize:', err);
     }
@@ -40,11 +40,6 @@ const DAY_ABBR = {
 
 function pad(n, len = 2) {
     return String(n).padStart(len, '0');
-}
-
-function generateUniqueId() {
-    const d = new Date();
-    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${pad(d.getMilliseconds(), 3)}`;
 }
 
 // Not ISO-8601 strict (doesn't handle the Dec 29-31 / Jan 1-3 edge weeks
@@ -65,6 +60,21 @@ function textCell(key, value) {
     td.dataset.col = key;
     td.textContent = value || '—';
     return td;
+}
+
+async function patchFuelRecord(id, patch) {
+    try {
+        const res = await fetch(`/api/business/fuel-records/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error('patch failed');
+    } catch (err) {
+        console.error('Registro Combustible: failed to save change', err);
+        alert(Dashboard.t('admin.saveError'));
+    }
 }
 
 // --- Inline cell editing (Placas/Subtotal/IVA/consecutivos) ------------------
@@ -133,7 +143,7 @@ function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, o
 // like the plain text/number ones) plus its two mutually exclusive
 // consecutivos: only the one matching the selected reason is editable, the
 // other locks to N/A. Built together since they share state.
-function buildReasonCells() {
+function buildReasonCells(record) {
     const tdReason = document.createElement('td');
     tdReason.dataset.col = 'colFuelReason';
     const select = document.createElement('select');
@@ -149,6 +159,7 @@ function buildReasonCells() {
         opt.textContent = Dashboard.t(key);
         select.appendChild(opt);
     });
+    select.value = record.reason || '';
     tdReason.appendChild(select);
 
     const tdTransfer = document.createElement('td');
@@ -156,12 +167,27 @@ function buildReasonCells() {
     const tdInternal = document.createElement('td');
     tdInternal.dataset.col = 'colFuelInternalMovement';
 
-    const transferCtrl = attachInlineEdit(tdTransfer, { disabled: true, disabledText: 'N/A' });
-    const internalCtrl = attachInlineEdit(tdInternal, { disabled: true, disabledText: 'N/A' });
+    const transferCtrl = attachInlineEdit(tdTransfer, {
+        value: record.transferService || '',
+        disabled: record.reason !== 'traslado',
+        disabledText: 'N/A',
+        onCommit: (val) => patchFuelRecord(record.id, { transferService: val }),
+    });
+    const internalCtrl = attachInlineEdit(tdInternal, {
+        value: record.internalMovement || '',
+        disabled: record.reason !== 'interno',
+        disabledText: 'N/A',
+        onCommit: (val) => patchFuelRecord(record.id, { internalMovement: val }),
+    });
 
     select.addEventListener('change', () => {
         transferCtrl.setDisabled(select.value !== 'traslado');
         internalCtrl.setDisabled(select.value !== 'interno');
+        patchFuelRecord(record.id, {
+            reason: select.value,
+            transferService: select.value === 'traslado' ? transferCtrl.getValue() : '',
+            internalMovement: select.value === 'interno' ? internalCtrl.getValue() : '',
+        });
     });
 
     return { tdReason, tdTransfer, tdInternal };
@@ -169,9 +195,9 @@ function buildReasonCells() {
 
 // Evidencia Ticket — an icon button, always clickable (unlike a disabled
 // placeholder icon): with no photo yet, it opens the file picker; once one
-// is attached, it opens it in a new tab instead. There's no backend to
-// store this, so the photo only lives as a data: URL in this tab's memory.
-function buildTicketCell() {
+// is attached, it opens it in a new tab instead. Persisted as a data: URL
+// via PATCH the moment a photo is picked.
+function buildTicketCell(record) {
     const td = document.createElement('td');
     td.dataset.col = 'colFuelTicketEvidence';
     const btn = document.createElement('button');
@@ -182,7 +208,7 @@ function buildTicketCell() {
     fileInput.accept = 'image/*';
     fileInput.hidden = true;
 
-    let dataUrl = null;
+    let dataUrl = record.ticketEvidence || null;
     function render() {
         btn.innerHTML = `<i class="bx ${dataUrl ? 'bx-receipt' : 'bx-image-add'}" aria-hidden="true"></i>`;
         btn.setAttribute('aria-label', Dashboard.t(dataUrl ? 'main.colFuelTicketEvidence' : 'main.fuelUploadTicket'));
@@ -199,12 +225,101 @@ function buildTicketCell() {
         reader.onload = () => {
             dataUrl = reader.result;
             render();
+            patchFuelRecord(record.id, { ticketEvidence: dataUrl });
         };
         reader.readAsDataURL(file);
     });
     render();
     td.append(btn, fileInput);
     return td;
+}
+
+// Builds one <tr> from a fuel record as returned by the API (GET, POST or
+// freshly created) — the single source of truth for row markup, used both
+// for records loaded at page load and for one just saved via "+ Nuevo
+// Registro".
+function buildRow(record) {
+    const lang = Dashboard.lang === 'es' ? 'es' : 'en';
+    const [year, month, day] = record.date.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
+
+    const tdTotal = textCell('colFuelTotal', formatMoney((parseFloat(record.subtotal) || 0) + (parseFloat(record.vat) || 0)));
+    function recomputeTotal() {
+        const subtotal = parseFloat(subtotalCtrl.getValue()) || 0;
+        const vat = parseFloat(vatCtrl.getValue()) || 0;
+        tdTotal.textContent = formatMoney(subtotal + vat);
+    }
+
+    const tdPlates = document.createElement('td');
+    tdPlates.dataset.col = 'colFuelPlates';
+    attachInlineEdit(tdPlates, {
+        value: record.plates || '',
+        onCommit: (val) => patchFuelRecord(record.id, { plates: val }),
+    });
+
+    const tdSubtotal = document.createElement('td');
+    tdSubtotal.dataset.col = 'colFuelSubtotal';
+    const subtotalCtrl = attachInlineEdit(tdSubtotal, {
+        value: record.subtotal ? String(record.subtotal) : '',
+        inputType: 'number',
+        formatDisplay: formatMoney,
+        onCommit: (val) => { recomputeTotal(); patchFuelRecord(record.id, { subtotal: parseFloat(val) || 0 }); },
+    });
+
+    const tdVat = document.createElement('td');
+    tdVat.dataset.col = 'colFuelVat';
+    const vatCtrl = attachInlineEdit(tdVat, {
+        value: record.vat ? String(record.vat) : '',
+        inputType: 'number',
+        formatDisplay: formatMoney,
+        onCommit: (val) => { recomputeTotal(); patchFuelRecord(record.id, { vat: parseFloat(val) || 0 }); },
+    });
+
+    const { tdReason, tdTransfer, tdInternal } = buildReasonCells(record);
+
+    const tr = document.createElement('tr');
+    tr.dataset.recordId = String(record.id);
+    tr.append(
+        textCell('colFuelDbId', record.dbId),
+        textCell('colFuelRecordId', String(record.recordNumber)),
+        textCell('colFuelDate', `${pad(day)}-${pad(month)}-${pad(year % 100)}`),
+        textCell('colFuelYear', String(year)),
+        textCell('colFuelMonth', MONTH_ABBR[lang][month - 1]),
+        textCell('colFuelWeek', `Sem${weekOfYear(dateObj)}+${year}`),
+        textCell('colFuelDayNum', String(day)),
+        textCell('colFuelDayText', DAY_ABBR[lang][dateObj.getDay()]),
+        textCell('colFuelEcoUnit', record.ecoUnit),
+        tdPlates,
+        textCell('colFuelDriver', record.driver),
+        textCell('colFuelCoordinator', record.coordinator),
+        buildTicketCell(record),
+        tdSubtotal,
+        tdVat,
+        tdTotal,
+        tdReason,
+        tdTransfer,
+        tdInternal,
+    );
+    return tr;
+}
+
+function getTbody() {
+    return document.querySelector('[data-table-id="registro-combustible"] table.data-table').tBodies[0];
+}
+
+async function loadRecords() {
+    try {
+        const res = await fetch('/api/business/fuel-records', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { records } = await res.json();
+        if (!records.length) return;
+        const tbody = getTbody();
+        const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
+        if (emptyRow) emptyRow.remove();
+        records.forEach((record) => tbody.appendChild(buildRow(record)));
+    } catch (err) {
+        console.error('Registro Combustible: failed to load records', err);
+    }
 }
 
 const newRecordModal = document.getElementById('new-record-modal');
@@ -230,7 +345,7 @@ function openNewRecordModal() {
     dateInput.focus();
 }
 
-function saveNewRecord() {
+async function saveNewRecord() {
     const missing = [dateInput, ecoUnitInput, driverInput, coordinatorInput].some((el) => !el.value.trim());
     if (missing) {
         newRecordError.textContent = Dashboard.t('login.fieldRequired');
@@ -238,62 +353,32 @@ function saveNewRecord() {
         return;
     }
     newRecordError.hidden = true;
-
-    const lang = Dashboard.lang === 'es' ? 'es' : 'en';
-    const [year, month, day] = dateInput.value.split('-').map(Number);
-    const dateObj = new Date(year, month - 1, day);
-
-    const table = document.querySelector('[data-table-id="registro-combustible"] table.data-table');
-    const tbody = table.tBodies[0];
-    const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
-    if (emptyRow) emptyRow.remove();
-    const recordNumber = tbody.querySelectorAll('tr').length + 1;
-
-    const tdTotal = textCell('colFuelTotal', formatMoney(0));
-    function recomputeTotal() {
-        const subtotal = parseFloat(subtotalCtrl.getValue()) || 0;
-        const vat = parseFloat(vatCtrl.getValue()) || 0;
-        tdTotal.textContent = formatMoney(subtotal + vat);
+    newRecordSaveBtn.disabled = true;
+    try {
+        const res = await fetch('/api/business/fuel-records', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                date: dateInput.value,
+                ecoUnit: ecoUnitInput.value.trim(),
+                driver: driverInput.value.trim(),
+                coordinator: coordinatorInput.value.trim(),
+            }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const { record } = await res.json();
+        const tbody = getTbody();
+        const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
+        if (emptyRow) emptyRow.remove();
+        tbody.appendChild(buildRow(record));
+        closeNewRecordModal();
+    } catch (err) {
+        newRecordError.textContent = Dashboard.t('admin.saveError');
+        newRecordError.hidden = false;
+    } finally {
+        newRecordSaveBtn.disabled = false;
     }
-
-    const tdPlates = document.createElement('td');
-    tdPlates.dataset.col = 'colFuelPlates';
-    attachInlineEdit(tdPlates, {});
-
-    const tdSubtotal = document.createElement('td');
-    tdSubtotal.dataset.col = 'colFuelSubtotal';
-    const subtotalCtrl = attachInlineEdit(tdSubtotal, { inputType: 'number', formatDisplay: formatMoney, onCommit: recomputeTotal });
-
-    const tdVat = document.createElement('td');
-    tdVat.dataset.col = 'colFuelVat';
-    const vatCtrl = attachInlineEdit(tdVat, { inputType: 'number', formatDisplay: formatMoney, onCommit: recomputeTotal });
-
-    const { tdReason, tdTransfer, tdInternal } = buildReasonCells();
-
-    const tr = document.createElement('tr');
-    tr.append(
-        textCell('colFuelDbId', generateUniqueId()),
-        textCell('colFuelRecordId', String(recordNumber)),
-        textCell('colFuelDate', `${pad(day)}-${pad(month)}-${pad(year % 100)}`),
-        textCell('colFuelYear', String(year)),
-        textCell('colFuelMonth', MONTH_ABBR[lang][month - 1]),
-        textCell('colFuelWeek', `Sem${weekOfYear(dateObj)}+${year}`),
-        textCell('colFuelDayNum', String(day)),
-        textCell('colFuelDayText', DAY_ABBR[lang][dateObj.getDay()]),
-        textCell('colFuelEcoUnit', ecoUnitInput.value),
-        tdPlates,
-        textCell('colFuelDriver', driverInput.value),
-        textCell('colFuelCoordinator', coordinatorInput.value),
-        buildTicketCell(),
-        tdSubtotal,
-        tdVat,
-        tdTotal,
-        tdReason,
-        tdTransfer,
-        tdInternal,
-    );
-    tbody.appendChild(tr);
-    closeNewRecordModal();
 }
 
 newRecordSaveBtn.addEventListener('click', saveNewRecord);

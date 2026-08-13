@@ -61,6 +61,14 @@ const {
     createCostCenter,
     updateCostCenter,
     deleteCostCenter,
+    listFuelRecords,
+    getFuelRecordById,
+    createFuelRecord,
+    updateFuelRecord,
+    listHrWorkers,
+    getHrWorkerById,
+    createHrWorker,
+    updateHrWorker,
     listPlans,
     getPlanById,
     getPlanByName,
@@ -1002,6 +1010,110 @@ app.delete('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (r
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
     deleteCostCenter(req.params.id, req.user.clientId);
     res.status(204).end();
+});
+
+// --- Registro Combustible (Operaciones > Transporte Volumen) ----------------
+// Any authenticated staff member at a client can read/create/edit these —
+// unlike cost centers, this is day-to-day operational data entry, not
+// account administration, so it's not gated by requireClientAdmin. Page-level
+// access is already enforced by the sidebar/menu grant system on the client
+// (Dashboard.initDashboard); these routes only require the caller to belong
+// to a client at all.
+function mapFuelRecord(row) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        dbId: row.db_id,
+        recordNumber: row.record_number,
+        date: row.record_date,
+        ecoUnit: row.eco_unit,
+        plates: row.plates,
+        driver: row.driver,
+        coordinator: row.coordinator,
+        ticketEvidence: row.ticket_evidence,
+        subtotal: row.subtotal,
+        vat: row.vat,
+        reason: row.reason,
+        transferService: row.transfer_service,
+        internalMovement: row.internal_movement,
+    };
+}
+
+app.get('/api/business/fuel-records', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ records: listFuelRecords(req.user.clientId).map(mapFuelRecord) });
+});
+
+app.post('/api/business/fuel-records', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { date, ecoUnit, driver, coordinator } = req.body || {};
+    if (!date || !ecoUnit?.trim() || !driver?.trim() || !coordinator?.trim()) {
+        return res.status(400).json({ message: 'date, ecoUnit, driver and coordinator are required.' });
+    }
+    const record = createFuelRecord({
+        clientId: req.user.clientId,
+        date,
+        ecoUnit: ecoUnit.trim(),
+        driver: driver.trim(),
+        coordinator: coordinator.trim(),
+    });
+    res.status(201).json({ record: mapFuelRecord(record) });
+});
+
+app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFuelRecordById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
+    const record = updateFuelRecord(req.params.id, req.user.clientId, req.body || {});
+    res.json({ record: mapFuelRecord(record) });
+});
+
+// --- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de --
+// --- Personal) — same access model as fuel records above. ------------------
+function mapHrWorker(row) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        dbId: row.db_id,
+        recordNumber: row.record_number,
+        fullName: row.full_name,
+        position: row.position,
+        startDate: row.start_date,
+        department: row.department,
+        area: row.area,
+        email: row.email,
+        phone: row.phone,
+        status: row.status,
+    };
+}
+
+app.get('/api/business/hr-workers', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ workers: listHrWorkers(req.user.clientId).map(mapHrWorker) });
+});
+
+app.post('/api/business/hr-workers', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { fullName, position, startDate, department } = req.body || {};
+    if (!fullName?.trim() || !position?.trim() || !startDate || !department?.trim()) {
+        return res.status(400).json({ message: 'fullName, position, startDate and department are required.' });
+    }
+    const worker = createHrWorker({
+        clientId: req.user.clientId,
+        fullName: fullName.trim(),
+        position: position.trim(),
+        startDate,
+        department: department.trim(),
+    });
+    res.status(201).json({ worker: mapHrWorker(worker) });
+});
+
+app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getHrWorkerById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Worker not found.' });
+    const worker = updateHrWorker(req.params.id, req.user.clientId, req.body || {});
+    res.json({ worker: mapHrWorker(worker) });
 });
 
 const PORT = process.env.PORT || 3000;

@@ -119,6 +119,52 @@ db.exec(`
         changed_at           TEXT NOT NULL DEFAULT (datetime('now')),
         contracted_duration  TEXT NOT NULL DEFAULT ''
     );
+
+    -- Registro Combustible (Operaciones > Transporte Volumen): one row per
+    -- fuel ticket. Only record_date/eco_unit/driver/coordinator are required
+    -- at creation ("+ Nuevo Registro"); everything else starts empty and is
+    -- filled in later via inline edits in the table (PATCH). year/month/week/
+    -- day are deliberately NOT stored — they're derived from record_date on
+    -- the client, same as before this table existed.
+    CREATE TABLE IF NOT EXISTS fuel_records (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id           INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id               TEXT NOT NULL,
+        record_number       INTEGER NOT NULL,
+        record_date         TEXT NOT NULL,
+        eco_unit            TEXT NOT NULL,
+        plates              TEXT NOT NULL DEFAULT '',
+        driver              TEXT NOT NULL,
+        coordinator         TEXT NOT NULL,
+        ticket_evidence     TEXT NOT NULL DEFAULT '',
+        subtotal            REAL NOT NULL DEFAULT 0,
+        vat                 REAL NOT NULL DEFAULT 0,
+        reason              TEXT NOT NULL DEFAULT '',
+        transfer_service    TEXT NOT NULL DEFAULT '',
+        internal_movement   TEXT NOT NULL DEFAULT '',
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de
+    -- Personal): one row per worker registration. Only full_name/position/
+    -- start_date/department are required at creation; area/email/phone are
+    -- filled in later via inline edits, status defaults to 'active'. Does
+    -- NOT create an actual system user yet (see OpRRHHMiRecursoHumano.js).
+    CREATE TABLE IF NOT EXISTS hr_workers (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id          TEXT NOT NULL,
+        record_number  INTEGER NOT NULL,
+        full_name      TEXT NOT NULL,
+        position       TEXT NOT NULL,
+        start_date     TEXT NOT NULL,
+        department     TEXT NOT NULL,
+        area           TEXT NOT NULL DEFAULT '',
+        email          TEXT NOT NULL DEFAULT '',
+        phone          TEXT NOT NULL DEFAULT '',
+        status         TEXT NOT NULL DEFAULT 'active',
+        created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 `);
 
 // A big, date-derived unique identifier shown as "No. Único de Big Date" on
@@ -821,6 +867,100 @@ function deleteCostCenter(id, clientId) {
     db.prepare('DELETE FROM cost_centers WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
+// --- Query helpers: Registro Combustible (fuel_records, scoped to a client) -
+function listFuelRecords(clientId) {
+    return db.prepare('SELECT * FROM fuel_records WHERE client_id = ? ORDER BY record_number ASC').all(clientId);
+}
+
+function getFuelRecordById(id, clientId) {
+    return db.prepare('SELECT * FROM fuel_records WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function createFuelRecord({ clientId, date, ecoUnit, driver, coordinator }) {
+    const recordNumber = db
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fuel_records WHERE client_id = ?')
+        .get(clientId).n;
+    const result = db
+        .prepare(`
+            INSERT INTO fuel_records (client_id, db_id, record_number, record_date, eco_unit, driver, coordinator)
+            VALUES (@clientId, @dbId, @recordNumber, @date, @ecoUnit, @driver, @coordinator)
+        `)
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, date, ecoUnit, driver, coordinator });
+    return getFuelRecordById(result.lastInsertRowid, clientId);
+}
+
+// Whitelist of columns a PATCH may touch — everything filled in later via
+// inline edit in the table. code/eco_unit/driver/coordinator/record_date are
+// set once at creation and never patched.
+const FUEL_PATCHABLE_FIELDS = {
+    plates: 'plates',
+    ticketEvidence: 'ticket_evidence',
+    subtotal: 'subtotal',
+    vat: 'vat',
+    reason: 'reason',
+    transferService: 'transfer_service',
+    internalMovement: 'internal_movement',
+};
+
+function updateFuelRecord(id, clientId, patch) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, column] of Object.entries(FUEL_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE fuel_records SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getFuelRecordById(id, clientId);
+}
+
+// --- Query helpers: Mi Recurso Humano (hr_workers, scoped to a client) ------
+function listHrWorkers(clientId) {
+    return db.prepare('SELECT * FROM hr_workers WHERE client_id = ? ORDER BY record_number ASC').all(clientId);
+}
+
+function getHrWorkerById(id, clientId) {
+    return db.prepare('SELECT * FROM hr_workers WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function createHrWorker({ clientId, fullName, position, startDate, department }) {
+    const recordNumber = db
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM hr_workers WHERE client_id = ?')
+        .get(clientId).n;
+    const result = db
+        .prepare(`
+            INSERT INTO hr_workers (client_id, db_id, record_number, full_name, position, start_date, department)
+            VALUES (@clientId, @dbId, @recordNumber, @fullName, @position, @startDate, @department)
+        `)
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, fullName, position, startDate, department });
+    return getHrWorkerById(result.lastInsertRowid, clientId);
+}
+
+const HR_WORKER_PATCHABLE_FIELDS = {
+    area: 'area',
+    email: 'email',
+    phone: 'phone',
+    status: 'status',
+};
+
+function updateHrWorker(id, clientId, patch) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, column] of Object.entries(HR_WORKER_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE hr_workers SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getHrWorkerById(id, clientId);
+}
+
 // --- Query helpers: plans (Planes y Paquetes, GEIPSA-wide, not per-client) ---
 // modules is stored as a JSON array of MODULE_CATALOG keys; costCentersLimit
 // mirrors clients.cost_centers_limit. Together they're the same shape
@@ -1133,6 +1273,14 @@ module.exports = {
     createCostCenter,
     updateCostCenter,
     deleteCostCenter,
+    listFuelRecords,
+    getFuelRecordById,
+    createFuelRecord,
+    updateFuelRecord,
+    listHrWorkers,
+    getHrWorkerById,
+    createHrWorker,
+    updateHrWorker,
     listPlans,
     getPlanById,
     getPlanByName,
