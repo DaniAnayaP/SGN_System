@@ -532,6 +532,9 @@
     "changeHistoryDate": "Date",
     "changeHistoryUser": "User",
     "changeHistoryRecord": "Record",
-    "changeHistoryChange": "Change"
+    "changeHistoryChange": "Change",
+    "fieldLocked": "Already saved — you need permission to edit it",
+    "columnPermissionsTitle": "Permissions to edit saved columns",
+    "columnPermissionsHint": "Check which already-saved columns this profile/user can edit again."
   }
 }

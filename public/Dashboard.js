@@ -154,7 +154,8 @@ const EMBEDDED_TRANSLATIONS = {
             newHireRecord: "New Record", colHrDbId: "Unique Database #", colHrRecordId: "Unique Record #", colHrFullName: "Full Name", colHrPosition: "Position", colHrStartDate: "Start Date", colHrDepartment: "Assigned Department", colHrArea: "Assigned Area", colHrEmail: "Email", colHrPhone: "Phone", colHrStatus: "Status", recordDeleteConfirm: "Delete this record?",
             colFuelTripKmBefore: "Trip KM Before Load", colFuelTripKmAfter: "Trip KM After Load", colFuelTripKmTotal: "Total Trip KM Acquired",
             colFuelType: "Fuel Type", colFuelLiters: "Liters", colFuelCostPerLiter: "Cost per Liter", fuelTypeSelect: "Select...", fuelTypeDiesel: "Diesel", fuelTypeMagna: "Regular", fuelTypePremium: "Premium",
-            changeHistory: "Change history", changeHistoryTitle: "Change history", changeHistoryEmpty: "No changes recorded yet.", changeHistoryCreated: "Record created", changeHistoryDeleted: "Record deleted", changeHistoryDate: "Date", changeHistoryUser: "User", changeHistoryRecord: "Record", changeHistoryChange: "Change" }
+            changeHistory: "Change history", changeHistoryTitle: "Change history", changeHistoryEmpty: "No changes recorded yet.", changeHistoryCreated: "Record created", changeHistoryDeleted: "Record deleted", changeHistoryDate: "Date", changeHistoryUser: "User", changeHistoryRecord: "Record", changeHistoryChange: "Change",
+            fieldLocked: "Already saved — you need permission to edit it", columnPermissionsTitle: "Permissions to edit saved columns", columnPermissionsHint: "Check which already-saved columns this profile/user can edit again." }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -284,7 +285,8 @@ const EMBEDDED_TRANSLATIONS = {
             newHireRecord: "Nuevo Registro", colHrDbId: "# Único de Base de Datos", colHrRecordId: "# Único de Registro", colHrFullName: "Nombre Completo", colHrPosition: "Puesto", colHrStartDate: "Fecha de Ingreso", colHrDepartment: "Departamento Asignado", colHrArea: "Área Asignada", colHrEmail: "Correo Electrónico", colHrPhone: "Teléfono", colHrStatus: "Estatus", recordDeleteConfirm: "¿Eliminar este registro?",
             colFuelTripKmBefore: "TRIP KM antes carga", colFuelTripKmAfter: "TRIP KM después carga", colFuelTripKmTotal: "Total TRIP KM adquiridos",
             colFuelType: "Tipo Combustible", colFuelLiters: "Cant Litros", colFuelCostPerLiter: "Costo x Litro", fuelTypeSelect: "Seleccionar...", fuelTypeDiesel: "Diésel", fuelTypeMagna: "Magna", fuelTypePremium: "Premium",
-            changeHistory: "Historial de cambios", changeHistoryTitle: "Historial de cambios", changeHistoryEmpty: "Aún no hay cambios registrados.", changeHistoryCreated: "Registro creado", changeHistoryDeleted: "Registro eliminado", changeHistoryDate: "Fecha", changeHistoryUser: "Usuario", changeHistoryRecord: "Registro", changeHistoryChange: "Cambio" }
+            changeHistory: "Historial de cambios", changeHistoryTitle: "Historial de cambios", changeHistoryEmpty: "Aún no hay cambios registrados.", changeHistoryCreated: "Registro creado", changeHistoryDeleted: "Registro eliminado", changeHistoryDate: "Fecha", changeHistoryUser: "Usuario", changeHistoryRecord: "Registro", changeHistoryChange: "Cambio",
+            fieldLocked: "Ya se guardó — necesitas permiso para modificarlo", columnPermissionsTitle: "Permisos para modificar columnas guardadas", columnPermissionsHint: "Marca qué columnas, ya guardadas, puede volver a modificar este perfil/usuario." }
     }
 };
 
@@ -3536,10 +3538,115 @@ async function initDashboard({ activePage } = {}) {
     return role;
 }
 
+// "Modificar columna guardada" — a cell whose value is already saved stays
+// locked (visible, not editable) unless the viewer is the client's own admin
+// (unconditional bypass, confirmed product decision) or their effective
+// grants include { sectionId: 'col-edit:<tableKey>', itemId: '<colKey>' }
+// (same profile_grants/user_grants rows the menu permission tree already
+// uses — see ColumnPermissionTree.js for how that grant gets set). The
+// actual enforcement is server-side (server.js's checkAndLogFieldChanges) —
+// this is purely UI convenience so a locked cell never even offers to edit.
+function hasColumnEditGrant(tableKey, colKey) {
+    if (!!currentUser?.isClientAdmin) return true;
+    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === `col-edit:${tableKey}` && g.itemId === colKey);
+}
+function canEditField(tableKey, colKey, currentValue) {
+    const hasValue = currentValue !== '' && currentValue != null && currentValue !== 0;
+    return !hasValue || hasColumnEditGrant(tableKey, colKey);
+}
+
+// --- Inline cell editing (shared by Registro Combustible, Mi Recurso -------
+// --- Humano, and any future .data-table with click-to-edit cells) ----------
+// Click a cell to turn it into an <input>; Enter or blur commits back to
+// plain text, Escape discards. `disabled`/`setDisabled` are for page-owned
+// business logic (e.g. Registro Combustible's Motivo Carga <-> consecutivos
+// relationship) — separate from the `tableKey`/`colKey` lock, which is
+// permission-driven and applies automatically the moment a cell has a value:
+// pass both to opt a cell into locking, omit them and it never locks (so
+// older/simpler callers keep working unchanged).
+function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, onCommit, disabled = false, disabledText, tableKey, colKey } = {}) {
+    let current = value;
+    let isDisabled = disabled;
+
+    function isLocked() {
+        if (!tableKey || !colKey) return false;
+        return !canEditField(tableKey, colKey, current);
+    }
+
+    function renderDisplay() {
+        td.innerHTML = '';
+        if (isDisabled) {
+            td.classList.remove('editable-cell', 'editable-cell-locked');
+            td.classList.add('editable-cell-disabled');
+            td.textContent = disabledText ?? '—';
+            td.onclick = null;
+            return;
+        }
+        const hasValue = current !== '' && current != null;
+        const span = document.createElement('span');
+        span.className = hasValue ? 'editable-cell-value' : 'editable-cell-value editable-cell-placeholder';
+        span.textContent = hasValue ? (formatDisplay ? formatDisplay(current) : current) : t('main.fuelAddValue');
+        if (isLocked()) {
+            td.classList.remove('editable-cell', 'editable-cell-disabled');
+            td.classList.add('editable-cell-locked');
+            td.appendChild(span);
+            const lock = document.createElement('i');
+            lock.className = 'bx bx-lock-alt editable-cell-lock-icon';
+            lock.setAttribute('aria-hidden', 'true');
+            td.appendChild(lock);
+            td.title = t('main.fieldLocked');
+            td.onclick = null;
+            return;
+        }
+        td.classList.remove('editable-cell-disabled', 'editable-cell-locked');
+        td.classList.add('editable-cell');
+        td.appendChild(span);
+        td.title = t('main.fuelClickToEdit');
+        td.onclick = enterEditMode;
+    }
+
+    function enterEditMode() {
+        td.onclick = null;
+        td.innerHTML = '';
+        const input = document.createElement('input');
+        input.type = inputType;
+        input.className = 'editable-cell-input';
+        input.value = current;
+        if (inputType === 'number') { input.step = '0.01'; input.min = '0'; }
+        td.appendChild(input);
+        input.focus();
+        input.select();
+        const commit = () => {
+            current = input.value;
+            if (onCommit) onCommit(current);
+            renderDisplay();
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') input.blur();
+            if (event.key === 'Escape') renderDisplay();
+        });
+    }
+
+    renderDisplay();
+    return {
+        getValue: () => current,
+        setDisabled(next, text) {
+            isDisabled = next;
+            if (isDisabled) current = '';
+            disabledText = text ?? disabledText;
+            renderDisplay();
+        },
+    };
+}
+
 window.Dashboard = {
     initDashboard,
     t,
     svgifyLogo,
+    attachInlineEdit,
+    hasColumnEditGrant,
+    canEditField,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },

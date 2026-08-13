@@ -613,6 +613,15 @@ body.dark-mode .admin-badge-prospecto{
     color: var(--color-text-primary);
     font-weight: 500;
 }
+.admin-module-group-title{
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 1.25rem 0 0.25rem;
+}
+.admin-module-group-title:first-child{
+    margin-top: 0.5rem;
+}
 
 /* Toggle switch */
 .admin-switch{

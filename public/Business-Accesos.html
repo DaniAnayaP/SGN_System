@@ -323,6 +323,9 @@
             <div id="access-panel" hidden>
                 <p class="admin-subtitle" data-i18n="business.extraAccessHint">This is in addition to whatever their assigned profiles already grant — it never removes access.</p>
                 <div id="permission-tree-container"></div>
+                <h3 style="margin-top: 2rem; margin-bottom: 0.25rem; font-size: 0.95rem;" data-i18n="main.columnPermissionsTitle">Permissions to edit saved columns</h3>
+                <p class="admin-hint" data-i18n="main.columnPermissionsHint">Check which already-saved columns this profile/user can edit again.</p>
+                <div id="column-permission-tree-container"></div>
                 <div class="admin-form-actions" style="margin-top: 1.25rem;">
                     <button type="button" class="btn" id="access-save" data-i18n="admin.save">Save</button>
                 </div>
@@ -387,6 +390,7 @@
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
     <script src="PermissionTree.js"></script>
+    <script src="ColumnPermissionTree.js"></script>
     <script src="Business-Accesos.js"></script>
 </body>
 </html>

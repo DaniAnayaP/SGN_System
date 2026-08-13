@@ -830,21 +830,16 @@ function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fie
     });
 }
 
-// Shared "update" logger for the 3 client business tables: walks fieldsMap
-// (the same {bodyKey: {column, fieldKey}} map each table's update* function
-// uses to know what a PATCH may touch), and logs one row per key present in
-// patch whose value actually differs from what's already in `existing`.
-function logFieldChanges(tableKey, recordId, recordLabel, changedBy, fieldsMap, existing, patch) {
-    for (const [key, { column, fieldKey }] of Object.entries(fieldsMap)) {
-        if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
-        const oldValue = existing[column];
-        const newValue = patch[key];
-        if (String(oldValue ?? '') === String(newValue ?? '')) continue;
-        logTableChange({
-            clientId: existing.client_id, tableKey, recordId, recordLabel, action: 'update', fieldKey,
-            oldValue, newValue, changedBy,
-        });
-    }
+// "Modificar columna guardada" permission — a grant of
+// { sectionId: 'col-edit:<tableKey>', itemId: '<colKey>' } in the SAME
+// profile_grants/user_grants tables used by the menu permission tree (no
+// schema change — validateGrants only requires a non-empty sectionId).
+// colKey is fieldKey's last segment (e.g. "main.colFuelPlates" -> "colFuelPlates"),
+// reusing FUEL_PATCHABLE_FIELDS/HR_WORKER_PATCHABLE_FIELDS/COST_CENTER_FIELDS
+// as the single source of truth for column identity — see server.js's
+// checkAndLogFieldChanges, the actual enforcement point.
+function hasColumnEditGrant(grants, tableKey, colKey) {
+    return grants.some((g) => g.sectionId === `col-edit:${tableKey}` && g.itemId === colKey);
 }
 
 // Self-service version for the client's own admin (Business-Config page):
@@ -1371,7 +1366,7 @@ module.exports = {
     recordAnexoChange,
     getTableChanges,
     logTableChange,
-    logFieldChanges,
+    hasColumnEditGrant,
     COST_CENTER_FIELDS,
     FUEL_PATCHABLE_FIELDS,
     HR_WORKER_PATCHABLE_FIELDS,

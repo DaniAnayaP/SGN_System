@@ -1833,6 +1833,18 @@
     .data-table td.editable-cell-disabled{
         color: var(--color-text-secondary);
     }
+    /* Already-saved value, permission-locked (see Dashboard.js
+       attachInlineEdit / canEditField) — value stays visible, unlike
+       editable-cell-disabled, which hides it behind disabledText. */
+    .data-table td.editable-cell-locked{
+        cursor: not-allowed;
+    }
+    .editable-cell-lock-icon{
+        margin-left: 0.35rem;
+        font-size: 0.85em;
+        opacity: 0.6;
+        vertical-align: middle;
+    }
     .editable-cell-placeholder{
         color: var(--color-text-secondary);
         font-style: italic;

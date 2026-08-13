@@ -23,7 +23,7 @@
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-transporte-vol-combustible' });
         if (!role) return;
         renderNewRecordButton();
-        await loadRecords();
+        await refreshTable();
     } catch (err) {
         console.error('Registro Combustible failed to initialize:', err);
     }
@@ -82,10 +82,20 @@ async function patchFuelRecord(id, patch) {
             credentials: 'include',
             body: JSON.stringify(patch),
         });
-        if (!res.ok) throw new Error('patch failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            alert(body.message || Dashboard.t('admin.saveError'));
+            // The cell/select the user just touched may already show the
+            // rejected value (e.g. a 403 from the "modificar columna
+            // guardada" permission) — reload the table from the server so
+            // the UI never drifts from what actually got saved.
+            await refreshTable();
+            return;
+        }
     } catch (err) {
         console.error('Registro Combustible: failed to save change', err);
         alert(Dashboard.t('admin.saveError'));
+        await refreshTable();
     }
 }
 
@@ -135,67 +145,7 @@ function buildActionsCell(record, tr) {
     return td;
 }
 
-// --- Inline cell editing (Placas/Subtotal/IVA/consecutivos) ------------------
-// Click a cell to turn it into an <input>; Enter or blur commits back to
-// plain text, Escape discards. Returns a small controller so callers that
-// need to react to a value (Total recompute) or toggle availability (the
-// Motivo Carga <-> consecutivos relationship) can do so without re-querying
-// the DOM.
-function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, onCommit, disabled = false, disabledText } = {}) {
-    let current = value;
-    let isDisabled = disabled;
-
-    function renderDisplay() {
-        td.innerHTML = '';
-        td.classList.toggle('editable-cell', !isDisabled);
-        td.classList.toggle('editable-cell-disabled', isDisabled);
-        if (isDisabled) {
-            td.textContent = disabledText ?? '—';
-            return;
-        }
-        const span = document.createElement('span');
-        const hasValue = current !== '' && current != null;
-        span.className = hasValue ? 'editable-cell-value' : 'editable-cell-value editable-cell-placeholder';
-        span.textContent = hasValue ? (formatDisplay ? formatDisplay(current) : current) : Dashboard.t('main.fuelAddValue');
-        td.title = Dashboard.t('main.fuelClickToEdit');
-        td.appendChild(span);
-        td.onclick = enterEditMode;
-    }
-
-    function enterEditMode() {
-        td.onclick = null;
-        td.innerHTML = '';
-        const input = document.createElement('input');
-        input.type = inputType;
-        input.className = 'editable-cell-input';
-        input.value = current;
-        if (inputType === 'number') { input.step = '0.01'; input.min = '0'; }
-        td.appendChild(input);
-        input.focus();
-        input.select();
-        const commit = () => {
-            current = input.value;
-            if (onCommit) onCommit(current);
-            renderDisplay();
-        };
-        input.addEventListener('blur', commit);
-        input.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') input.blur();
-            if (event.key === 'Escape') renderDisplay();
-        });
-    }
-
-    renderDisplay();
-    return {
-        getValue: () => current,
-        setDisabled(next, text) {
-            isDisabled = next;
-            if (isDisabled) current = '';
-            disabledText = text ?? disabledText;
-            renderDisplay();
-        },
-    };
-}
+const TABLE_KEY = 'registro-combustible';
 
 // Motivo Carga (a real <select>, always live in the cell — not click-to-edit
 // like the plain text/number ones) plus its two mutually exclusive
@@ -218,6 +168,8 @@ function buildReasonCells(record) {
         select.appendChild(opt);
     });
     select.value = record.reason || '';
+    select.disabled = !Dashboard.canEditField(TABLE_KEY, 'colFuelReason', record.reason || '');
+    if (select.disabled) select.title = Dashboard.t('main.fieldLocked');
     tdReason.appendChild(select);
 
     const tdTransfer = document.createElement('td');
@@ -225,16 +177,20 @@ function buildReasonCells(record) {
     const tdInternal = document.createElement('td');
     tdInternal.dataset.col = 'colFuelInternalMovement';
 
-    const transferCtrl = attachInlineEdit(tdTransfer, {
+    const transferCtrl = Dashboard.attachInlineEdit(tdTransfer, {
         value: record.transferService || '',
         disabled: record.reason !== 'traslado',
         disabledText: 'N/A',
+        tableKey: TABLE_KEY,
+        colKey: 'colFuelTransferService',
         onCommit: (val) => patchFuelRecord(record.id, { transferService: val }),
     });
-    const internalCtrl = attachInlineEdit(tdInternal, {
+    const internalCtrl = Dashboard.attachInlineEdit(tdInternal, {
         value: record.internalMovement || '',
         disabled: record.reason !== 'interno',
         disabledText: 'N/A',
+        tableKey: TABLE_KEY,
+        colKey: 'colFuelInternalMovement',
         onCommit: (val) => patchFuelRecord(record.id, { internalMovement: val }),
     });
 
@@ -312,6 +268,8 @@ function buildFuelTypeCell(record) {
         select.appendChild(opt);
     });
     select.value = record.fuelType || '';
+    select.disabled = !Dashboard.canEditField(TABLE_KEY, 'colFuelType', record.fuelType || '');
+    if (select.disabled) select.title = Dashboard.t('main.fieldLocked');
     select.addEventListener('change', () => patchFuelRecord(record.id, { fuelType: select.value }));
     td.appendChild(select);
     return td;
@@ -335,8 +293,10 @@ function buildRow(record) {
 
     const tdPlates = document.createElement('td');
     tdPlates.dataset.col = 'colFuelPlates';
-    attachInlineEdit(tdPlates, {
+    Dashboard.attachInlineEdit(tdPlates, {
         value: record.plates || '',
+        tableKey: TABLE_KEY,
+        colKey: 'colFuelPlates',
         onCommit: (val) => patchFuelRecord(record.id, { plates: val }),
     });
 
@@ -349,19 +309,23 @@ function buildRow(record) {
 
     const tdTripKmBefore = document.createElement('td');
     tdTripKmBefore.dataset.col = 'colFuelTripKmBefore';
-    const tripKmBeforeCtrl = attachInlineEdit(tdTripKmBefore, {
+    const tripKmBeforeCtrl = Dashboard.attachInlineEdit(tdTripKmBefore, {
         value: record.tripKmBefore ? String(record.tripKmBefore) : '',
         inputType: 'number',
         formatDisplay: formatKm,
+        tableKey: TABLE_KEY,
+        colKey: 'colFuelTripKmBefore',
         onCommit: (val) => { recomputeTripKm(); patchFuelRecord(record.id, { tripKmBefore: parseFloat(val) || 0 }); },
     });
 
     const tdTripKmAfter = document.createElement('td');
     tdTripKmAfter.dataset.col = 'colFuelTripKmAfter';
-    const tripKmAfterCtrl = attachInlineEdit(tdTripKmAfter, {
+    const tripKmAfterCtrl = Dashboard.attachInlineEdit(tdTripKmAfter, {
         value: record.tripKmAfter ? String(record.tripKmAfter) : '',
         inputType: 'number',
         formatDisplay: formatKm,
+        tableKey: TABLE_KEY,
+        colKey: 'colFuelTripKmAfter',
         onCommit: (val) => { recomputeTripKm(); patchFuelRecord(record.id, { tripKmAfter: parseFloat(val) || 0 }); },
     });
 
@@ -376,28 +340,34 @@ function buildRow(record) {
 
     const tdLiters = document.createElement('td');
     tdLiters.dataset.col = 'colFuelLiters';
-    const litersCtrl = attachInlineEdit(tdLiters, {
+    const litersCtrl = Dashboard.attachInlineEdit(tdLiters, {
         value: record.liters ? String(record.liters) : '',
         inputType: 'number',
         formatDisplay: formatLiters,
+        tableKey: TABLE_KEY,
+        colKey: 'colFuelLiters',
         onCommit: (val) => { recomputeCostPerLiter(); patchFuelRecord(record.id, { liters: parseFloat(val) || 0 }); },
     });
 
     const tdSubtotal = document.createElement('td');
     tdSubtotal.dataset.col = 'colFuelSubtotal';
-    const subtotalCtrl = attachInlineEdit(tdSubtotal, {
+    const subtotalCtrl = Dashboard.attachInlineEdit(tdSubtotal, {
         value: record.subtotal ? String(record.subtotal) : '',
         inputType: 'number',
         formatDisplay: formatMoney,
+        tableKey: TABLE_KEY,
+        colKey: 'colFuelSubtotal',
         onCommit: (val) => { recomputeTotal(); recomputeCostPerLiter(); patchFuelRecord(record.id, { subtotal: parseFloat(val) || 0 }); },
     });
 
     const tdVat = document.createElement('td');
     tdVat.dataset.col = 'colFuelVat';
-    const vatCtrl = attachInlineEdit(tdVat, {
+    const vatCtrl = Dashboard.attachInlineEdit(tdVat, {
         value: record.vat ? String(record.vat) : '',
         inputType: 'number',
         formatDisplay: formatMoney,
+        tableKey: TABLE_KEY,
+        colKey: 'colFuelVat',
         onCommit: (val) => { recomputeTotal(); patchFuelRecord(record.id, { vat: parseFloat(val) || 0 }); },
     });
 
@@ -440,15 +410,14 @@ function getTbody() {
     return document.querySelector('[data-table-id="registro-combustible"] table.data-table').tBodies[0];
 }
 
-async function loadRecords() {
+async function refreshTable() {
     try {
         const res = await fetch('/api/business/fuel-records', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { records } = await res.json();
-        if (!records.length) return;
         const tbody = getTbody();
-        const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
-        if (emptyRow) emptyRow.remove();
+        tbody.innerHTML = '';
+        if (!records.length) { ensureEmptyState(); return; }
         records.forEach((record) => tbody.appendChild(buildRow(record)));
     } catch (err) {
         console.error('Registro Combustible: failed to load records', err);

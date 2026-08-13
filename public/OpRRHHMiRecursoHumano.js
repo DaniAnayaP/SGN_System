@@ -26,7 +26,7 @@
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-rrhh-mi-recurso-humano' });
         if (!role) return;
         renderNewRecordButton();
-        await loadWorkers();
+        await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano failed to initialize:', err);
     }
@@ -57,6 +57,8 @@ function textCell(key, value) {
     return td;
 }
 
+const TABLE_KEY = 'mi-recurso-humano';
+
 async function patchWorker(id, patch) {
     try {
         const res = await fetch(`/api/business/hr-workers/${id}`, {
@@ -65,10 +67,16 @@ async function patchWorker(id, patch) {
             credentials: 'include',
             body: JSON.stringify(patch),
         });
-        if (!res.ok) throw new Error('patch failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            alert(body.message || Dashboard.t('admin.saveError'));
+            await refreshTable();
+            return;
+        }
     } catch (err) {
         console.error('Mi Recurso Humano: failed to save change', err);
         alert(Dashboard.t('admin.saveError'));
+        await refreshTable();
     }
 }
 
@@ -118,52 +126,6 @@ function buildActionsCell(worker, tr) {
     return td;
 }
 
-// --- Inline cell editing (Área/Correo/Teléfono) ------------------------------
-// Click a cell to turn it into an <input>; Enter or blur commits back to
-// plain text, Escape discards. Same mechanism as Registro Combustible's
-// attachInlineEdit — kept as its own copy here rather than a shared file
-// since this is only the second screen using it; worth factoring out once a
-// third one needs it too.
-function attachInlineEdit(td, { value = '', inputType = 'text', onCommit } = {}) {
-    let current = value;
-
-    function renderDisplay() {
-        td.innerHTML = '';
-        td.classList.add('editable-cell');
-        const span = document.createElement('span');
-        const hasValue = current !== '' && current != null;
-        span.className = hasValue ? 'editable-cell-value' : 'editable-cell-value editable-cell-placeholder';
-        span.textContent = hasValue ? current : Dashboard.t('main.fuelAddValue');
-        td.title = Dashboard.t('main.fuelClickToEdit');
-        td.appendChild(span);
-        td.onclick = enterEditMode;
-    }
-
-    function enterEditMode() {
-        td.onclick = null;
-        td.innerHTML = '';
-        const input = document.createElement('input');
-        input.type = inputType;
-        input.className = 'editable-cell-input';
-        input.value = current;
-        td.appendChild(input);
-        input.focus();
-        input.select();
-        const commit = () => {
-            current = input.value;
-            if (onCommit) onCommit(current);
-            renderDisplay();
-        };
-        input.addEventListener('blur', commit);
-        input.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') input.blur();
-            if (event.key === 'Escape') renderDisplay();
-        });
-    }
-
-    renderDisplay();
-}
-
 // Estatus — a real <select>, always live in the cell (not click-to-edit),
 // defaulting to Activo since a worker is, by definition, active the moment
 // they're registered — still changeable inline afterwards.
@@ -179,6 +141,8 @@ function buildStatusCell(worker) {
         select.appendChild(opt);
     });
     select.value = worker.status || 'active';
+    select.disabled = !Dashboard.canEditField(TABLE_KEY, 'colHrStatus', worker.status || '');
+    if (select.disabled) select.title = Dashboard.t('main.fieldLocked');
     select.addEventListener('change', () => patchWorker(worker.id, { status: select.value }));
     td.appendChild(select);
     return td;
@@ -191,15 +155,24 @@ function buildRow(worker) {
 
     const tdArea = document.createElement('td');
     tdArea.dataset.col = 'colHrArea';
-    attachInlineEdit(tdArea, { value: worker.area || '', onCommit: (val) => patchWorker(worker.id, { area: val }) });
+    Dashboard.attachInlineEdit(tdArea, {
+        value: worker.area || '', tableKey: TABLE_KEY, colKey: 'colHrArea',
+        onCommit: (val) => patchWorker(worker.id, { area: val }),
+    });
 
     const tdEmail = document.createElement('td');
     tdEmail.dataset.col = 'colHrEmail';
-    attachInlineEdit(tdEmail, { value: worker.email || '', inputType: 'email', onCommit: (val) => patchWorker(worker.id, { email: val }) });
+    Dashboard.attachInlineEdit(tdEmail, {
+        value: worker.email || '', inputType: 'email', tableKey: TABLE_KEY, colKey: 'colHrEmail',
+        onCommit: (val) => patchWorker(worker.id, { email: val }),
+    });
 
     const tdPhone = document.createElement('td');
     tdPhone.dataset.col = 'colHrPhone';
-    attachInlineEdit(tdPhone, { value: worker.phone || '', inputType: 'tel', onCommit: (val) => patchWorker(worker.id, { phone: val }) });
+    Dashboard.attachInlineEdit(tdPhone, {
+        value: worker.phone || '', inputType: 'tel', tableKey: TABLE_KEY, colKey: 'colHrPhone',
+        onCommit: (val) => patchWorker(worker.id, { phone: val }),
+    });
 
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(worker.id);
@@ -223,15 +196,14 @@ function getTbody() {
     return document.querySelector('[data-table-id="mi-recurso-humano"] table.data-table').tBodies[0];
 }
 
-async function loadWorkers() {
+async function refreshTable() {
     try {
         const res = await fetch('/api/business/hr-workers', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { workers } = await res.json();
-        if (!workers.length) return;
         const tbody = getTbody();
-        const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
-        if (emptyRow) emptyRow.remove();
+        tbody.innerHTML = '';
+        if (!workers.length) { ensureEmptyState(); return; }
         workers.forEach((worker) => tbody.appendChild(buildRow(worker)));
     } catch (err) {
         console.error('Mi Recurso Humano: failed to load records', err);

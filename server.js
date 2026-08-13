@@ -73,7 +73,7 @@ const {
     deleteHrWorker,
     getTableChanges,
     logTableChange,
-    logFieldChanges,
+    hasColumnEditGrant,
     COST_CENTER_FIELDS,
     FUEL_PATCHABLE_FIELDS,
     HR_WORKER_PATCHABLE_FIELDS,
@@ -959,6 +959,52 @@ app.put('/api/business/profiles/:id/grants', requireAuth, requireClientAdmin, (r
     res.json({ grants: setProfileGrants(req.params.id, grants) });
 });
 
+// --- "Modificar columna guardada" enforcement --------------------------------
+// The FIRST real server-side grant check in this app (menu/section grants
+// are otherwise only enforced client-side by hiding UI — see PermissionTree.js).
+// Diffs `patch` against `existing` per fieldsMap entry (the same
+// {bodyKey: {column, fieldKey}} maps each table's update* function already
+// uses); a field that already has a value and actually changes requires the
+// requester to either be the client's own admin (unconditional bypass, per
+// explicit product decision) or hold a
+// { sectionId: 'col-edit:<tableKey>', itemId: '<colKey>' } grant (see
+// hasColumnEditGrant in db.js). All-or-nothing: the first locked field
+// without permission aborts before anything is logged or written.
+//
+// The diff always runs on the RAW existing/patch values — `sanitizers[key]`
+// only transforms what gets written to the change-history log (used by
+// fuel-records' ticketEvidence, so the base64 photo never hits the audit
+// table) — never the value used to decide whether something actually
+// changed, or the lock would silently bypass whenever two different photos
+// both sanitize to the same placeholder string.
+function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, recordLabel, sanitizers = {}) {
+    const changes = [];
+    let grants = null;
+    for (const [key, { column, fieldKey }] of Object.entries(fieldsMap)) {
+        if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+        const oldValue = existing[column];
+        const newValue = patch[key];
+        if (String(oldValue ?? '') === String(newValue ?? '')) continue;
+        if (oldValue && !req.user.isClientAdmin) {
+            grants = grants || getUserEffectiveGrants(req.user.sub);
+            if (!hasColumnEditGrant(grants, tableKey, fieldKey.split('.').pop())) {
+                return { error: fieldKey };
+            }
+        }
+        const sanitize = sanitizers[key];
+        changes.push({
+            fieldKey,
+            oldValue: sanitize ? sanitize(oldValue) : oldValue,
+            newValue: sanitize ? sanitize(newValue) : newValue,
+        });
+    }
+    changes.forEach((c) => logTableChange({
+        clientId: existing.client_id, tableKey, recordId: existing.id, recordLabel, action: 'update',
+        fieldKey: c.fieldKey, oldValue: c.oldValue, newValue: c.newValue, changedBy: req.user.name,
+    }));
+    return { error: null };
+}
+
 // --- Centros de Costo (cost centers, scoped to one client) -------------------
 // Capped by clients.cost_centers_limit, which GEIPSA sets from Contrataciones
 // (Admin-SaaS) — see setClientCostCentersLimit. Managing the catalog (create/
@@ -1006,8 +1052,9 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     const error = validateCostCenterBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { code, name, description, responsible } = req.body;
+    const lockCheck = checkAndLogFieldChanges(req, existing, { code, name, description, responsible }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
+    if (lockCheck.error) return res.status(403).json({ message: `No tienes permiso para modificar este campo.`, field: lockCheck.error });
     try {
-        logFieldChanges('centros-costo', existing.id, existing.code, req.user.name, COST_CENTER_FIELDS, existing, { code, name, description, responsible });
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, { code, name, description, responsible });
         res.json({ costCenter });
     } catch (err) {
@@ -1090,13 +1137,14 @@ app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     const existing = getFuelRecordById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
     const patch = req.body || {};
-    // Never log the raw base64 ticket photo into the audit table — just
-    // whether one is present, before and after.
-    const loggablePatch = Object.prototype.hasOwnProperty.call(patch, 'ticketEvidence')
-        ? { ...patch, ticketEvidence: patch.ticketEvidence ? '[imagen]' : '' }
-        : patch;
-    const loggableExisting = { ...existing, ticket_evidence: existing.ticket_evidence ? '[imagen]' : '' };
-    logFieldChanges('registro-combustible', existing.id, existing.eco_unit, req.user.name, FUEL_PATCHABLE_FIELDS, loggableExisting, loggablePatch);
+    // The lock/diff check runs on the raw patch (never sanitized — see
+    // checkAndLogFieldChanges' own note); only what gets WRITTEN to the
+    // change-history log is sanitized, so the raw base64 ticket photo never
+    // lands in the audit table.
+    const lockCheck = checkAndLogFieldChanges(req, existing, patch, FUEL_PATCHABLE_FIELDS, 'registro-combustible', existing.eco_unit, {
+        ticketEvidence: (v) => (v ? '[imagen]' : ''),
+    });
+    if (lockCheck.error) return res.status(403).json({ message: 'No tienes permiso para modificar este campo.', field: lockCheck.error });
     const record = updateFuelRecord(req.params.id, req.user.clientId, patch);
     res.json({ record: mapFuelRecord(record) });
 });
@@ -1161,7 +1209,8 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getHrWorkerById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
-    logFieldChanges('mi-recurso-humano', existing.id, existing.full_name, req.user.name, HR_WORKER_PATCHABLE_FIELDS, existing, req.body || {});
+    const lockCheck = checkAndLogFieldChanges(req, existing, req.body || {}, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
+    if (lockCheck.error) return res.status(403).json({ message: 'No tienes permiso para modificar este campo.', field: lockCheck.error });
     const worker = updateHrWorker(req.params.id, req.user.clientId, req.body || {});
     res.json({ worker: mapHrWorker(worker) });
 });
@@ -1187,6 +1236,27 @@ app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
 app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey) });
+});
+
+// --- "Modificar columna guardada" grant tree — reuses each table's own -----
+// *_FIELDS map (already required for change-history) as the single source of
+// truth for what columns exist, so a future table only needs its own
+// *_FIELDS map plus one line here to show up in the permission tree — same
+// cost as already registering it for change-history.
+const EDITABLE_TABLE_REGISTRY = [
+    { tableKey: 'centros-costo', labelKey: 'menu.contractedService', fields: COST_CENTER_FIELDS },
+    { tableKey: 'registro-combustible', labelKey: 'menu.opTransVolCombustible', fields: FUEL_PATCHABLE_FIELDS },
+    { tableKey: 'mi-recurso-humano', labelKey: 'menu.opRrhhMiRecursoHumano', fields: HR_WORKER_PATCHABLE_FIELDS },
+];
+
+app.get('/api/business/editable-columns', requireAuth, requireClientAdmin, (req, res) => {
+    res.json({
+        tables: EDITABLE_TABLE_REGISTRY.map(({ tableKey, labelKey, fields }) => ({
+            tableKey,
+            labelKey,
+            columns: Object.values(fields).map(({ fieldKey }) => ({ key: fieldKey.split('.').pop(), fieldKey })),
+        })),
+    });
 });
 
 const PORT = process.env.PORT || 3000;
