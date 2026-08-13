@@ -1050,6 +1050,8 @@ function mapFuelRecord(row) {
         ticketEvidence: row.ticket_evidence,
         tripKmBefore: row.trip_km_before,
         tripKmAfter: row.trip_km_after,
+        fuelType: row.fuel_type,
+        liters: row.liters,
         subtotal: row.subtotal,
         vat: row.vat,
         reason: row.reason,

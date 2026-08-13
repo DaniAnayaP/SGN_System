@@ -59,6 +59,14 @@ function formatKm(n) {
     return `${(Number(n) || 0).toLocaleString()} km`;
 }
 
+function formatLiters(n) {
+    return `${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L`;
+}
+
+function formatCostPerLiter(n) {
+    return `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/L`;
+}
+
 function textCell(key, value) {
     const td = document.createElement('td');
     td.dataset.col = key;
@@ -284,6 +292,31 @@ function buildTicketCell(record) {
     return td;
 }
 
+// Tipo Combustible — a real <select>, always live in the cell (not
+// click-to-edit), same pattern as Motivo Carga.
+function buildFuelTypeCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colFuelType';
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    const options = [
+        ['', 'main.fuelTypeSelect'],
+        ['diesel', 'main.fuelTypeDiesel'],
+        ['magna', 'main.fuelTypeMagna'],
+        ['premium', 'main.fuelTypePremium'],
+    ];
+    options.forEach(([val, key]) => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = Dashboard.t(key);
+        select.appendChild(opt);
+    });
+    select.value = record.fuelType || '';
+    select.addEventListener('change', () => patchFuelRecord(record.id, { fuelType: select.value }));
+    td.appendChild(select);
+    return td;
+}
+
 // Builds one <tr> from a fuel record as returned by the API (GET, POST or
 // freshly created) — the single source of truth for row markup, used both
 // for records loaded at page load and for one just saved via "+ Nuevo
@@ -332,13 +365,31 @@ function buildRow(record) {
         onCommit: (val) => { recomputeTripKm(); patchFuelRecord(record.id, { tripKmAfter: parseFloat(val) || 0 }); },
     });
 
+    const tdCostPerLiter = textCell('colFuelCostPerLiter', formatCostPerLiter(
+        (parseFloat(record.liters) || 0) > 0 ? (parseFloat(record.subtotal) || 0) / parseFloat(record.liters) : 0,
+    ));
+    function recomputeCostPerLiter() {
+        const subtotal = parseFloat(subtotalCtrl.getValue()) || 0;
+        const liters = parseFloat(litersCtrl.getValue()) || 0;
+        tdCostPerLiter.textContent = formatCostPerLiter(liters > 0 ? subtotal / liters : 0);
+    }
+
+    const tdLiters = document.createElement('td');
+    tdLiters.dataset.col = 'colFuelLiters';
+    const litersCtrl = attachInlineEdit(tdLiters, {
+        value: record.liters ? String(record.liters) : '',
+        inputType: 'number',
+        formatDisplay: formatLiters,
+        onCommit: (val) => { recomputeCostPerLiter(); patchFuelRecord(record.id, { liters: parseFloat(val) || 0 }); },
+    });
+
     const tdSubtotal = document.createElement('td');
     tdSubtotal.dataset.col = 'colFuelSubtotal';
     const subtotalCtrl = attachInlineEdit(tdSubtotal, {
         value: record.subtotal ? String(record.subtotal) : '',
         inputType: 'number',
         formatDisplay: formatMoney,
-        onCommit: (val) => { recomputeTotal(); patchFuelRecord(record.id, { subtotal: parseFloat(val) || 0 }); },
+        onCommit: (val) => { recomputeTotal(); recomputeCostPerLiter(); patchFuelRecord(record.id, { subtotal: parseFloat(val) || 0 }); },
     });
 
     const tdVat = document.createElement('td');
@@ -371,6 +422,9 @@ function buildRow(record) {
         tdTripKmBefore,
         tdTripKmAfter,
         tdTripKmTotal,
+        buildFuelTypeCell(record),
+        tdLiters,
+        tdCostPerLiter,
         tdSubtotal,
         tdVat,
         tdTotal,

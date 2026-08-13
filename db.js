@@ -139,6 +139,8 @@ db.exec(`
         ticket_evidence     TEXT NOT NULL DEFAULT '',
         trip_km_before      REAL NOT NULL DEFAULT 0,
         trip_km_after       REAL NOT NULL DEFAULT 0,
+        fuel_type           TEXT NOT NULL DEFAULT '',
+        liters              REAL NOT NULL DEFAULT 0,
         subtotal            REAL NOT NULL DEFAULT 0,
         vat                 REAL NOT NULL DEFAULT 0,
         reason              TEXT NOT NULL DEFAULT '',
@@ -466,6 +468,16 @@ if (!fuelRecordColumns.some((c) => c.name === 'trip_km_before')) {
 }
 if (!fuelRecordColumns.some((c) => c.name === 'trip_km_after')) {
     db.exec('ALTER TABLE fuel_records ADD COLUMN trip_km_after REAL NOT NULL DEFAULT 0');
+}
+
+// Tipo Combustible / Cant Litros added after fuel_records already shipped
+// once. Costo x Litro is NOT stored — computed from subtotal/liters on the
+// client, same as Total and Total TRIP KM.
+if (!fuelRecordColumns.some((c) => c.name === 'fuel_type')) {
+    db.exec("ALTER TABLE fuel_records ADD COLUMN fuel_type TEXT NOT NULL DEFAULT ''");
+}
+if (!fuelRecordColumns.some((c) => c.name === 'liters')) {
+    db.exec('ALTER TABLE fuel_records ADD COLUMN liters REAL NOT NULL DEFAULT 0');
 }
 
 // --- Indexes -------------------------------------------------------------
@@ -981,6 +993,8 @@ const FUEL_PATCHABLE_FIELDS = {
     ticketEvidence: { column: 'ticket_evidence', fieldKey: 'main.colFuelTicketEvidence' },
     tripKmBefore: { column: 'trip_km_before', fieldKey: 'main.colFuelTripKmBefore' },
     tripKmAfter: { column: 'trip_km_after', fieldKey: 'main.colFuelTripKmAfter' },
+    fuelType: { column: 'fuel_type', fieldKey: 'main.colFuelType' },
+    liters: { column: 'liters', fieldKey: 'main.colFuelLiters' },
     subtotal: { column: 'subtotal', fieldKey: 'main.colFuelSubtotal' },
     vat: { column: 'vat', fieldKey: 'main.colFuelVat' },
     reason: { column: 'reason', fieldKey: 'main.colFuelReason' },
