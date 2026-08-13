@@ -468,6 +468,26 @@
     "uiScaleIdeal": "Ideal",
     "uiScaleDecrease": "Disminuir tamaño",
     "uiScaleIncrease": "Aumentar tamaño",
-    "newRecord": "Nuevo Registro"
+    "newRecord": "Nuevo Registro",
+    "colFuelDbId": "# Único de Base de Datos",
+    "colFuelRecordId": "# Único de Registro de Consumo",
+    "colFuelDate": "Fecha",
+    "colFuelYear": "Año",
+    "colFuelMonth": "Mes",
+    "colFuelWeek": "# Semana",
+    "colFuelDayNum": "# Día",
+    "colFuelDayText": "Día",
+    "colFuelEcoUnit": "# Eco Unidad",
+    "colFuelPlates": "Placas Unidad",
+    "colFuelDriver": "Chofer",
+    "colFuelCoordinator": "Coordinador",
+    "colFuelTicketEvidence": "Evidencia Ticket",
+    "colFuelSubtotal": "Subtotal",
+    "colFuelVat": "IVA",
+    "colFuelTotal": "Total",
+    "colFuelReason": "Motivo Carga",
+    "colFuelTransferService": "Servicio Traslado",
+    "colFuelInternalMovement": "Movimiento Interno",
+    "fuelNoTicket": "Sin evidencia de ticket"
   }
 }

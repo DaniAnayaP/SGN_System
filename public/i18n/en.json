@@ -468,6 +468,26 @@
     "uiScaleIdeal": "Ideal",
     "uiScaleDecrease": "Decrease size",
     "uiScaleIncrease": "Increase size",
-    "newRecord": "New Record"
+    "newRecord": "New Record",
+    "colFuelDbId": "Unique Database #",
+    "colFuelRecordId": "Unique Consumption Record #",
+    "colFuelDate": "Date",
+    "colFuelYear": "Year",
+    "colFuelMonth": "Month",
+    "colFuelWeek": "Week #",
+    "colFuelDayNum": "Day #",
+    "colFuelDayText": "Day",
+    "colFuelEcoUnit": "Fleet Unit #",
+    "colFuelPlates": "Unit Plates",
+    "colFuelDriver": "Driver",
+    "colFuelCoordinator": "Coordinator",
+    "colFuelTicketEvidence": "Ticket Evidence",
+    "colFuelSubtotal": "Subtotal",
+    "colFuelVat": "VAT",
+    "colFuelTotal": "Total",
+    "colFuelReason": "Load Reason",
+    "colFuelTransferService": "Transfer Service",
+    "colFuelInternalMovement": "Internal Movement",
+    "fuelNoTicket": "No ticket evidence"
   }
 }
