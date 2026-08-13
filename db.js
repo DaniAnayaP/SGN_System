@@ -187,6 +187,14 @@ for (const col of ['default_department', 'default_area', 'default_cost_centers']
         db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
     }
 }
+// System-wide UI scale ("aumentar/disminuir el tamaño de todo el sistema")
+// — per ACCOUNT, not per browser/localStorage like lang/style/etc., so two
+// different users sharing the same computer never affect each other's size.
+// Stored as a 1-8 level index into UI_SCALE_LEVELS (Dashboard.js); 4 is the
+// default (100%, labeled "Ideal" in the UI — today's normal look).
+if (!userColumns.some((c) => c.name === 'ui_scale')) {
+    db.exec('ALTER TABLE users ADD COLUMN ui_scale INTEGER NOT NULL DEFAULT 4');
+}
 
 const clientColumns = db.prepare('PRAGMA table_info(clients)').all();
 if (!clientColumns.some((c) => c.name === 'admin_user_id')) {
@@ -966,6 +974,18 @@ function setUserDefaults(userId, { department, area, costCenters }) {
     return getUserDefaults(userId);
 }
 
+// System-wide UI scale, per account (see the ui_scale migration above for
+// why this isn't just another localStorage key like lang/style).
+function getUserUiScale(userId) {
+    const row = db.prepare('SELECT ui_scale FROM users WHERE id = ?').get(userId);
+    return row ? row.ui_scale : 4;
+}
+
+function setUserUiScale(userId, level) {
+    db.prepare('UPDATE users SET ui_scale = ? WHERE id = ?').run(level, userId);
+    return getUserUiScale(userId);
+}
+
 // --- Query helpers: profiles (perfiles, scoped to one client) ----------------
 function listProfiles(clientId) {
     return db.prepare('SELECT * FROM profiles WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
@@ -1128,6 +1148,8 @@ module.exports = {
     getUserEffectiveGrants,
     getUserDefaults,
     setUserDefaults,
+    getUserUiScale,
+    setUserUiScale,
     listProfiles,
     getProfileById,
     createProfile,

@@ -463,6 +463,10 @@
     "columnVisibility": "Mostrar/ocultar columnas",
     "columnVisibilityTitle": "Mostrar/ocultar columnas",
     "columnVisibilityHint": "Elige qué columnas mostrar.",
-    "dragToReorder": "Arrastrar para reordenar"
+    "dragToReorder": "Arrastrar para reordenar",
+    "uiScale": "Tamaño del sistema",
+    "uiScaleIdeal": "Ideal",
+    "uiScaleDecrease": "Disminuir tamaño",
+    "uiScaleIncrease": "Aumentar tamaño"
   }
 }

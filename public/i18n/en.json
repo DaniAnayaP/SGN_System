@@ -463,6 +463,10 @@
     "columnVisibility": "Show/hide columns",
     "columnVisibilityTitle": "Show/hide columns",
     "columnVisibilityHint": "Choose which columns to show.",
-    "dragToReorder": "Drag to reorder"
+    "dragToReorder": "Drag to reorder",
+    "uiScale": "System size",
+    "uiScaleIdeal": "Ideal",
+    "uiScaleDecrease": "Decrease size",
+    "uiScaleIncrease": "Increase size"
   }
 }

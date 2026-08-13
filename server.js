@@ -76,6 +76,8 @@ const {
     getUserEffectiveGrants,
     getUserDefaults,
     setUserDefaults,
+    getUserUiScale,
+    setUserUiScale,
     listProfiles,
     getProfileById,
     createProfile,
@@ -305,6 +307,24 @@ app.put('/api/me/defaults', requireAuth, (req, res) => {
         return res.status(400).json({ message: "costCenters must be 'all', null, or an array." });
     }
     res.json({ defaults: setUserDefaults(req.user.sub, { department, area, costCenters }) });
+});
+
+// System-wide UI scale ("aumentar/disminuir el tamaño de todo el sistema",
+// top-bar control) — per account like the defaults above, not localStorage,
+// so it never leaks between different users on a shared browser/computer.
+const UI_SCALE_MIN = 1;
+const UI_SCALE_MAX = 8;
+
+app.get('/api/me/ui-scale', requireAuth, (req, res) => {
+    res.json({ scale: getUserUiScale(req.user.sub) });
+});
+
+app.put('/api/me/ui-scale', requireAuth, (req, res) => {
+    const { scale } = req.body || {};
+    if (!Number.isInteger(scale) || scale < UI_SCALE_MIN || scale > UI_SCALE_MAX) {
+        return res.status(400).json({ message: `scale must be an integer between ${UI_SCALE_MIN} and ${UI_SCALE_MAX}.` });
+    }
+    res.json({ scale: setUserUiScale(req.user.sub, scale) });
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -

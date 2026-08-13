@@ -1278,6 +1278,24 @@
         color: var(--color-text-primary);
         overflow-wrap: break-word;
     }
+    /* System-wide UI scale dropdown (see Dashboard.js) — reuses
+       .user-info-menu/.user-info-dropdown for the toggle+panel mechanics
+       and .data-table-zoom-btn for the -/+ buttons, only the row layout
+       inside is new. */
+    .ui-scale-dropdown{
+        width: 12rem;
+    }
+    .ui-scale-panel{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+    .ui-scale-label{
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+    }
     /* Datos de Usuario del Negocio — Departamentos/Áreas/Centro Costos/
        Permisos are condensed into one summary button ("3 Dep. - 6 Áreas -
        1 C. Costos - 15 Permisos"); clicking it opens business-summary-modal

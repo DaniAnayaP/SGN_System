@@ -147,7 +147,8 @@ const EMBEDDED_TRANSLATIONS = {
         main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", emptyStateText: "No data yet.", breadcrumbLabel: "Path", breadcrumbExpand: "Expand breadcrumb", breadcrumbCollapse: "Collapse breadcrumb", colUniqueBigDate: "# Unique Big Date", colRegistro: "# Record", colAnio: "Year", colMes: "Month", colDiaNum: "Day (Num)", colDiaTexto: "Day (Text)", colNoSemCobro: "Collection Week No.", colFecha: "Date", colTipoServicios: "Service Type", colEstatus: "Status",
             colCliente: "Client", colTipoUnidadSolicitada: "Requested Unit Type", colCotizacionServicio: "Service Quote $", colRequisitosServicio: "Service Requirements", colRequisitosSeguridad: "Security Requirements", colRequisitosCobro: "Billing Requirements", colOrigen: "Origin", colHoraCita: "Appointment Time", colUbicacion: "Location", colLinkUbicacion: "Location Link", colEmpresaCliente: "Client's Company", colNomContactoOrigen: "Origin Contact Name", colNoContacto: "Contact No.", colNoColaboradorDriver: "Employee No. (Driver)", colNombreDriver: "Driver Name(s)", colNoColaboradorAuxiliar: "Employee No. (Assistant)", colNombreAuxiliar: "Assistant Name(s)", colRutaAsignada: "Assigned Route", colZona: "Zone", colCantPallets: "Pallet Qty.", colCantUdm: "UOM Qty.", colCantParadas: "Stop Qty.", colParadasVisitadas: "Stops Visited", colCantUmEntregadas: "Units Delivered Qty.", colPorcentajeVisitas: "% Visits", colPorcentajeEntrega: "% Delivery", colDevolucionCantUdm: "Return (UOM Qty.)", colPorcentajeDevolucion: "% Return", colCoordinador: "Coordinator", colEcoUnidad: "Unit Fleet No.", colPlacas: "License Plates", colRutaSubtotal: "Route Subtotal $", colPenalizacion: "Penalty $", colRutaSubtotalCobro: "Route Billing Subtotal $", colIva: "VAT $", colCobroTotalRuta: "Total Route Billing $", colNoFactura: "Invoice No.", colFechaGeneraFactura: "Invoice Generation Date",
             topBarExpand: "Expand top bar", topBarCollapse: "Collapse top bar", decreaseFontSize: "Decrease font size", increaseFontSize: "Increase font size",
-            pinColumns: "Pin columns", pinColumnsTitle: "Pin columns", pinColumnsHint: "Choose up to 4 columns to pin to the left. Drag to reorder them.", pinColumnsLimitReached: "You can pin up to 4 columns.", pinColumnsOther: "Other columns", columnVisibility: "Show/hide columns", columnVisibilityTitle: "Show/hide columns", columnVisibilityHint: "Choose which columns to show.", dragToReorder: "Drag to reorder" }
+            pinColumns: "Pin columns", pinColumnsTitle: "Pin columns", pinColumnsHint: "Choose up to 4 columns to pin to the left. Drag to reorder them.", pinColumnsLimitReached: "You can pin up to 4 columns.", pinColumnsOther: "Other columns", columnVisibility: "Show/hide columns", columnVisibilityTitle: "Show/hide columns", columnVisibilityHint: "Choose which columns to show.", dragToReorder: "Drag to reorder",
+            uiScale: "System size", uiScaleIdeal: "Ideal", uiScaleDecrease: "Decrease size", uiScaleIncrease: "Increase size" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -270,7 +271,8 @@ const EMBEDDED_TRANSLATIONS = {
         main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", emptyStateText: "Aún no hay datos.", breadcrumbLabel: "Ruta", breadcrumbExpand: "Expandir ruta de acceso", breadcrumbCollapse: "Contraer ruta de acceso", colUniqueBigDate: "# Único Big Date", colRegistro: "# Registro", colAnio: "Año", colMes: "Mes", colDiaNum: "Día (Num)", colDiaTexto: "Día (texto)", colNoSemCobro: "No. Sem Cobro", colFecha: "Fecha", colTipoServicios: "Tipo Servicios", colEstatus: "Estatus",
             colCliente: "Cliente", colTipoUnidadSolicitada: "Tipo Unidad Solicitada", colCotizacionServicio: "Cotización $ Servicio", colRequisitosServicio: "Requisitos Servicio", colRequisitosSeguridad: "Requisitos Seguridad", colRequisitosCobro: "Requisitos Cobro", colOrigen: "Origen", colHoraCita: "Hora Cita", colUbicacion: "Ubicación", colLinkUbicacion: "Link Ubicación", colEmpresaCliente: "Empresa del cliente", colNomContactoOrigen: "Nom Contacto Origen", colNoContacto: "No. Contacto", colNoColaboradorDriver: "No. Colaborador", colNombreDriver: "Nombre(s) Driver", colNoColaboradorAuxiliar: "No. Colaborador", colNombreAuxiliar: "Nombre(s) Auxiliar", colRutaAsignada: "Ruta Asignada", colZona: "Zona", colCantPallets: "Cant. Pallets", colCantUdm: "Cant. UDM", colCantParadas: "Cant. Paradas", colParadasVisitadas: "Paradas visitadas", colCantUmEntregadas: "Cant UM Entregadas", colPorcentajeVisitas: "% Visitas", colPorcentajeEntrega: "% Entrega", colDevolucionCantUdm: "Devolución (Cant UDM)", colPorcentajeDevolucion: "% Devolución", colCoordinador: "Coordinador", colEcoUnidad: "Eco Unidad", colPlacas: "Placas", colRutaSubtotal: "$ Ruta Subtotal", colPenalizacion: "Penalización $", colRutaSubtotalCobro: "$ Ruta Subtotal Cobro", colIva: "$ IVA", colCobroTotalRuta: "$ Cobro Total Ruta", colNoFactura: "No. Factura", colFechaGeneraFactura: "F. Genera Factura",
             topBarExpand: "Expandir barra superior", topBarCollapse: "Contraer barra superior", decreaseFontSize: "Reducir tamaño de letra", increaseFontSize: "Aumentar tamaño de letra",
-            pinColumns: "Fijar columnas", pinColumnsTitle: "Fijar columnas", pinColumnsHint: "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.", pinColumnsLimitReached: "Puedes fijar hasta 4 columnas.", pinColumnsOther: "Otras columnas", columnVisibility: "Mostrar/ocultar columnas", columnVisibilityTitle: "Mostrar/ocultar columnas", columnVisibilityHint: "Elige qué columnas mostrar.", dragToReorder: "Arrastrar para reordenar" }
+            pinColumns: "Fijar columnas", pinColumnsTitle: "Fijar columnas", pinColumnsHint: "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.", pinColumnsLimitReached: "Puedes fijar hasta 4 columnas.", pinColumnsOther: "Otras columnas", columnVisibility: "Mostrar/ocultar columnas", columnVisibilityTitle: "Mostrar/ocultar columnas", columnVisibilityHint: "Elige qué columnas mostrar.", dragToReorder: "Arrastrar para reordenar",
+            uiScale: "Tamaño del sistema", uiScaleIdeal: "Ideal", uiScaleDecrease: "Disminuir tamaño", uiScaleIncrease: "Aumentar tamaño" }
     }
 };
 
@@ -2122,6 +2124,114 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     }
 });
 
+// --- System-wide UI scale ("aumentar/disminuir el tamaño de todo el
+// sistema") — unlike lang/style/dataTableFontSize/etc., which are plain
+// localStorage keys shared by whoever is using this browser, this is
+// per ACCOUNT (see /api/me/ui-scale, users.ui_scale in db.js): if user A
+// sets level 8, only user A sees it — logging in as user B on the same
+// computer stays at whatever B has saved, never A's. Applied by setting
+// the ROOT font-size, which every rem-based measurement in this app's CSS
+// (paddings, gaps, icon sizes, the sidebar's own width...) scales from, so
+// "the whole system" really does grow/shrink together, not just text.
+const UI_SCALE_LEVELS = [70, 80, 90, 100, 110, 120, 130, 140]; // percent, index 0 = level 1
+const UI_SCALE_DEFAULT_LEVEL = 4; // UI_SCALE_LEVELS[3] === 100, "Ideal"
+let currentUiScaleLevel = UI_SCALE_DEFAULT_LEVEL;
+
+function uiScaleLabelFor(level) {
+    return level === UI_SCALE_DEFAULT_LEVEL ? t('main.uiScaleIdeal') : `${UI_SCALE_LEVELS[level - 1]}%`;
+}
+
+function applyUiScaleLevel(level) {
+    currentUiScaleLevel = level;
+    document.documentElement.style.fontSize = `${UI_SCALE_LEVELS[level - 1]}%`;
+    document.querySelectorAll('.ui-scale-label').forEach((el) => { el.textContent = uiScaleLabelFor(level); });
+    document.querySelectorAll('#ui-scale-decrease').forEach((btn) => { btn.disabled = level <= 1; });
+    document.querySelectorAll('#ui-scale-increase').forEach((btn) => { btn.disabled = level >= UI_SCALE_LEVELS.length; });
+}
+
+async function fetchUiScaleLevel() {
+    try {
+        const res = await fetch('/api/me/ui-scale', { credentials: 'include' });
+        if (!res.ok) return UI_SCALE_DEFAULT_LEVEL;
+        const { scale } = await res.json();
+        return Number.isInteger(scale) && scale >= 1 && scale <= UI_SCALE_LEVELS.length ? scale : UI_SCALE_DEFAULT_LEVEL;
+    } catch {
+        return UI_SCALE_DEFAULT_LEVEL;
+    }
+}
+
+async function saveUiScaleLevel(level) {
+    applyUiScaleLevel(level); // reflect the change immediately, don't wait on the round-trip
+    try {
+        await fetch('/api/me/ui-scale', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ scale: level }),
+        });
+    } catch {
+        // Worst case it doesn't persist server-side and reverts to the old
+        // level on next login — not worth blocking the UI over.
+    }
+}
+
+function closeUiScaleMenu() {
+    document.querySelectorAll('#ui-scale-menu').forEach((menu) => menu.classList.remove('open'));
+    document.querySelectorAll('#ui-scale-btn').forEach((btn) => btn.setAttribute('aria-expanded', 'false'));
+}
+registerTopBarDropdown(closeUiScaleMenu);
+
+document.querySelectorAll('.top-bar-actions').forEach((container) => {
+    if (container.querySelector('#ui-scale-menu')) return;
+    const settingsMenuEl = container.querySelector('#settings-menu');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'user-info-menu';
+    wrapper.id = 'ui-scale-menu';
+    wrapper.innerHTML = `
+        <button type="button" id="ui-scale-btn" aria-haspopup="true" aria-expanded="false" data-i18n-aria="main.uiScale" aria-label="System size">
+            <i class="bx bx-text" aria-hidden="true"></i>
+        </button>
+        <div class="user-info-dropdown ui-scale-dropdown">
+            <div class="user-info-group">
+                <h4 data-i18n="main.uiScale">System size</h4>
+                <div class="ui-scale-panel">
+                    <button type="button" class="data-table-zoom-btn" id="ui-scale-decrease" data-i18n-aria="main.uiScaleDecrease" aria-label="Decrease size"><i class="bx bx-minus" aria-hidden="true"></i></button>
+                    <span class="ui-scale-label">Ideal</span>
+                    <button type="button" class="data-table-zoom-btn" id="ui-scale-increase" data-i18n-aria="main.uiScaleIncrease" aria-label="Increase size"><i class="bx bx-plus" aria-hidden="true"></i></button>
+                </div>
+            </div>
+        </div>
+    `;
+    const toggleBtn = wrapper.querySelector('#ui-scale-btn');
+    toggleBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const wasOpen = wrapper.classList.contains('open');
+        closeAllTopBarDropdowns();
+        if (!wasOpen) {
+            wrapper.classList.add('open');
+            toggleBtn.setAttribute('aria-expanded', 'true');
+        }
+    });
+    wrapper.querySelector('#ui-scale-decrease').addEventListener('click', () => {
+        if (currentUiScaleLevel > 1) saveUiScaleLevel(currentUiScaleLevel - 1);
+    });
+    wrapper.querySelector('#ui-scale-increase').addEventListener('click', () => {
+        if (currentUiScaleLevel < UI_SCALE_LEVELS.length) saveUiScaleLevel(currentUiScaleLevel + 1);
+    });
+    if (settingsMenuEl) {
+        settingsMenuEl.insertAdjacentElement('beforebegin', wrapper);
+    } else {
+        container.appendChild(wrapper);
+    }
+});
+
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('#ui-scale-menu')) closeUiScaleMenu();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeUiScaleMenu();
+});
+
 // --- Sidebar search: live-filters the menu items actually rendered right
 // now (respecting the current department filter, role-based sidebar, and
 // language) instead of a separate hardcoded index, so results always match
@@ -3235,7 +3345,8 @@ async function initDashboard({ activePage } = {}) {
     const role = await authGuard();
     if (!role) return null;
     currentRole = role;
-    await loadLanguage(getStoredLang());
+    const [, uiScaleLevel] = await Promise.all([loadLanguage(getStoredLang()), fetchUiScaleLevel()]);
+    applyUiScaleLevel(uiScaleLevel);
     if (role !== 'admin') {
         // Right after a fresh login (flag set by login.js), the account's
         // saved default Departamento/Área/Centro de Costos overrides
