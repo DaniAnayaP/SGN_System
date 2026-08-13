@@ -624,7 +624,13 @@
         z-index: 30;
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        /* Not space-between — the collapse toggle below is a real third
+           flex child (appended last by Dashboard.js renderTopBarCollapseToggle),
+           and space-between would push IT all the way to the right edge on
+           top of .top-bar-actions' own icons instead of just after them.
+           .top-bar-title's own margin-right:auto below reproduces the old
+           "title left, everything else right" layout without that overlap. */
+        justify-content: flex-start;
         width: 100%;
         padding: 0.75rem 1.5rem;
         border-radius: 0.5rem;
@@ -635,41 +641,47 @@
     /* Collapsible top bar (see Dashboard.js renderTopBarCollapseToggle) —
        "optimizar la pantalla, solo cuando se requiera": everything in the
        bar (pickers, welcome text, action icons) hides, leaving only a small
-       arrow to bring it back. .top-bar already establishes a positioning
-       context via position:sticky, so the toggle can anchor to it directly
-       without an extra wrapper. */
+       arrow to bring it back. A normal (non-absolute) flex item, appended
+       right after .top-bar-actions, so it never overlaps those icons — it
+       used to be position:absolute;right:1.5rem, which sat exactly on top
+       of the last action icon since .top-bar-actions also hugs that same
+       right edge. */
     .top-bar-collapse-toggle{
-        position: absolute;
-        top: 50%;
-        right: 1.5rem;
-        transform: translateY(-50%);
         display: flex;
         align-items: center;
         justify-content: center;
         width: 1.8rem;
         height: 1.8rem;
+        margin-left: 0.5rem;
+        flex-shrink: 0;
         border: none;
         border-radius: 50%;
         background: transparent;
         color: var(--color-text-secondary);
         cursor: pointer;
-        z-index: 5;
+        transition: width 0.15s ease, height 0.15s ease, font-size 0.15s ease;
     }
     .top-bar-collapse-toggle:hover{
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
     .top-bar.top-bar-collapsed{
-        padding-top: 0.35rem;
-        padding-bottom: 0.35rem;
+        padding-top: 0.15rem;
+        padding-bottom: 0.15rem;
     }
     .top-bar.top-bar-collapsed .top-bar-title,
     .top-bar.top-bar-collapsed .top-bar-actions{
         display: none;
     }
+    /* Smaller than the expanded-state toggle too — "casi no se contrae":
+       once title/actions are hidden this button is the only thing left
+       setting the bar's height, so shrinking IT is what actually lets the
+       bar collapse down to a thin strip instead of just losing a bit of
+       padding around an unchanged, still fairly tall button. */
     .top-bar.top-bar-collapsed .top-bar-collapse-toggle{
-        position: static;
-        transform: none;
+        width: 1.3rem;
+        height: 1.3rem;
+        font-size: 0.8rem;
         margin: 0 auto;
     }
     .top-bar .welcome-text{
@@ -679,13 +691,16 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    /* Wraps the cost-center picker + page title as one flex item so
-       .top-bar's justify-content:space-between still only has two children
-       (this group on the left, .top-bar-actions on the right). */
+    /* Absorbs all the row's extra space, pinning .top-bar-title to the left
+       edge and pushing .top-bar-actions + the collapse toggle to the right
+       edge as a group — replaces .top-bar's old justify-content:space-between
+       now that the toggle is a real (3rd) flex child instead of an
+       absolutely-positioned overlay. */
     .top-bar-title{
         display: flex;
         align-items: center;
         gap: 0.7rem;
+        margin-right: auto;
     }
 
     /* Cost center picker (top bar): compact pill with icon + label on
