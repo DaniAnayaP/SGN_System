@@ -2630,6 +2630,13 @@ function hasSettingsSubPermission(submenuId) {
 }
 
 function syncSettingsSubmenuVisibility() {
+    // GEIPSA staff (role 'admin') aren't a client profile with grants — this
+    // permission gating only applies to client-side users. Missing this
+    // bypass (syncTopBarButtonVisibility already has it) hid ALL FIVE
+    // groups for admin, not just one: cachedBusinessProfile is never
+    // fetched for this role, so hasSettingsSubPermission's effectiveGrants
+    // lookup always came back empty and every group got hidden.
+    if (currentRole === 'admin') return;
     const languageGroup = document.getElementById('language-group');
     const styleGroup = document.getElementById('style-group');
     const businessAdminGroup = document.getElementById('business-admin-group');
