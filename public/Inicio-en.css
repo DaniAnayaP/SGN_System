@@ -1278,6 +1278,16 @@
         color: var(--color-text-primary);
         overflow-wrap: break-word;
     }
+    /* Suppresses every CSS transition for one frame while the system-wide
+       UI scale is being applied (see Dashboard.js applyUiScaleLevel) — a
+       rem-cascade change from :root's font-size doesn't reliably restart an
+       element's own `transition: <rem-based-property>` (e.g. .top-bar's
+       padding transition) in every browser, which can otherwise leave that
+       one property visually stuck at its pre-change size. */
+    html.ui-scale-transitioning,
+    html.ui-scale-transitioning *{
+        transition: none !important;
+    }
     /* System-wide UI scale dropdown (see Dashboard.js) — reuses
        .user-info-menu/.user-info-dropdown for the toggle+panel mechanics
        and .data-table-zoom-btn for the -/+ buttons, only the row layout

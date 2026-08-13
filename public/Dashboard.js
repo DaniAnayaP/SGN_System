@@ -2143,7 +2143,22 @@ function uiScaleLabelFor(level) {
 
 function applyUiScaleLevel(level) {
     currentUiScaleLevel = level;
+    // rem-based sizes (paddings, gaps...) are supposed to recompute the
+    // instant :root's font-size changes, but any element with its own CSS
+    // transition on one of those properties (e.g. .top-bar's
+    // `transition: padding`, there for its collapse/expand animation) can
+    // end up visually stuck showing the PRE-change size — some browsers
+    // don't treat a rem-cascade change as a fresh transition start the same
+    // way they do a direct style/class change. Suppressing every
+    // transition site-wide for one frame around the font-size change avoids
+    // that whole class of bug instead of hunting down each transitioned
+    // property one at a time.
+    document.documentElement.classList.add('ui-scale-transitioning');
     document.documentElement.style.fontSize = `${UI_SCALE_LEVELS[level - 1]}%`;
+    void document.documentElement.offsetHeight; // force layout before re-enabling transitions
+    requestAnimationFrame(() => {
+        document.documentElement.classList.remove('ui-scale-transitioning');
+    });
     document.querySelectorAll('.ui-scale-label').forEach((el) => { el.textContent = uiScaleLabelFor(level); });
     document.querySelectorAll('#ui-scale-decrease').forEach((btn) => { btn.disabled = level <= 1; });
     document.querySelectorAll('#ui-scale-increase').forEach((btn) => { btn.disabled = level >= UI_SCALE_LEVELS.length; });
