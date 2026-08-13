@@ -1519,9 +1519,12 @@
 
     /* Category placeholder screens (Cat 1/2, Ope 1/2, etc.) — page title +
        collapsible filter/search bar + empty state, until each screen gets
-       its own real content. */
+       its own real content. Top padding kept minimal on purpose: the
+       breadcrumb bar right above already has its own padding/border, so a
+       full 1.5rem on top of that read as a big empty gap before the filter
+       bar (left/right/bottom padding unaffected). */
     .page-content{
-        padding: 1.5rem 2rem;
+        padding: 0.4rem 2rem 1.5rem;
     }
     .page-header{
         margin-bottom: 1rem;
