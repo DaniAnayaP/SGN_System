@@ -104,7 +104,25 @@
         return [keyOf(section.id, item.id, null)];
     }
 
-    function create(container, { allowedSectionIds = null, costCenters = [] } = {}) {
+    // Module keys that gate an individual 'main'-section top-bar button —
+    // same catalog as MODULE_CATALOG in db.js minus the department keys
+    // (those gate a whole section instead, handled separately below). Only
+    // consulted in readOnly mode, to mark a button "bloqueado" when the
+    // client hasn't contracted it, same double-gate Dashboard.js's
+    // TOP_BAR_BUTTONS already enforces at render time for real users.
+    const MAIN_MODULE_ITEM_IDS = [
+        'btn-mensajes', 'btn-chatbot', 'btn-notificaciones', 'btn-marcadores',
+        'btn-configuracion', 'btn-datos-usuario', 'btn-datos-usuario-negocio',
+        'btn-departamento', 'btn-area', 'btn-cc',
+    ];
+
+    // readOnly + enabledModuleKeys turn this into a pure "what does this
+    // client have contracted" viewer (see Admin-SaaS.js openAdminAccessModal)
+    // — every checkbox becomes a non-interactive habilitado/bloqueado status
+    // badge instead, and allowedSectionIds is ignored (the whole tree shows,
+    // not just the contracted slice), since the point is to see what's
+    // blocked too, not just what's available.
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null } = {}) {
         let sectionsData = [];
         let grantSet = new Set();
         // Which depth-0 sections and depth-1 items are expanded — set once
@@ -114,6 +132,10 @@
         // touches grantSet, so it can't change what's actually saved.
         let expandedSections = new Set();
         let expandedItems = new Set();
+
+        function isModuleEnabled(moduleKey) {
+            return !enabledModuleKeys || enabledModuleKeys.includes(moduleKey);
+        }
 
         function expand(grants) {
             const rawSet = new Set(grants.map((g) => keyOf(g.sectionId, g.itemId, g.submenuId)));
@@ -132,11 +154,15 @@
         }
 
         // toggle is null for leaf rows (no children to expand) — they get an
-        // invisible spacer instead, so every row's checkbox still lines up
-        // regardless of depth.
-        function buildRow(labelText, depth, toggle) {
+        // invisible spacer instead, so every row's checkbox/status badge
+        // still lines up regardless of depth. `blocked` is only meaningful
+        // in readOnly mode (see create()'s readOnly option) — draws a
+        // habilitado/bloqueado status badge instead of a checkbox, and
+        // returns input:null since there's nothing to check/toggle.
+        function buildRow(labelText, depth, toggle, blocked) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
+            if (readOnly && blocked) row.classList.add('perm-tree-row-blocked');
 
             if (toggle) {
                 const btn = document.createElement('button');
@@ -158,6 +184,20 @@
                 row.appendChild(spacer);
             }
 
+            if (readOnly) {
+                const status = document.createElement('span');
+                status.className = `perm-tree-status ${blocked ? 'perm-tree-status-blocked' : 'perm-tree-status-enabled'}`;
+                const statusIcon = document.createElement('i');
+                statusIcon.className = blocked ? 'bx bx-lock-alt' : 'bx bx-check';
+                statusIcon.setAttribute('aria-hidden', 'true');
+                status.appendChild(statusIcon);
+                const label = document.createElement('span');
+                label.className = 'perm-tree-status-label';
+                label.textContent = labelText;
+                row.append(status, label);
+                return { row, input: null };
+            }
+
             const label = document.createElement('label');
             label.className = 'perm-tree-check';
             const input = document.createElement('input');
@@ -177,6 +217,11 @@
         function render() {
             container.innerHTML = '';
             sectionsData.forEach((section) => {
+                // A department section (anything but 'main') is gated as a
+                // whole by its own MODULE_CATALOG key — 'main' itself is
+                // core navigation and never blocked (individual buttons
+                // inside it are gated one at a time below instead).
+                const sectionBlocked = readOnly && section.id !== 'main' && !isModuleEnabled(section.id);
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
                 const sectionChecked = sectionLeafKeys.filter((k) => grantSet.has(k)).length;
                 const sectionExpanded = expandedSections.has(section.id);
@@ -186,17 +231,27 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null);
-                sectionRow.input.checked = sectionChecked === sectionLeafKeys.length && sectionLeafKeys.length > 0;
-                sectionRow.input.indeterminate = sectionChecked > 0 && sectionChecked < sectionLeafKeys.length;
-                sectionRow.input.addEventListener('change', () => {
-                    setKeys(sectionLeafKeys, sectionRow.input.checked);
-                    render();
-                });
+                } : null, sectionBlocked);
+                if (!readOnly) {
+                    sectionRow.input.checked = sectionChecked === sectionLeafKeys.length && sectionLeafKeys.length > 0;
+                    sectionRow.input.indeterminate = sectionChecked > 0 && sectionChecked < sectionLeafKeys.length;
+                    sectionRow.input.addEventListener('change', () => {
+                        setKeys(sectionLeafKeys, sectionRow.input.checked);
+                        render();
+                    });
+                }
                 container.appendChild(sectionRow.row);
                 if (!sectionExpanded) return;
 
                 section.items.forEach((item) => {
+                    // Only a handful of 'main' buttons are individually
+                    // module-gated (MAIN_MODULE_ITEM_IDS) — everything else
+                    // (Inicio, Panel, Tablero, and every department's own
+                    // Catálogos/Operaciones/... items) only inherits its
+                    // section's blocked state, since there's no finer-grained
+                    // contract below the module/department level.
+                    const itemBlocked = sectionBlocked
+                        || (readOnly && section.id === 'main' && MAIN_MODULE_ITEM_IDS.includes(item.id) && !isModuleEnabled(item.id));
                     const itemLeafKeys = leafKeysUnder(section, item);
                     const itemChecked = itemLeafKeys.filter((k) => grantSet.has(k)).length;
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
@@ -208,13 +263,15 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null);
-                    itemRow.input.checked = itemChecked === itemLeafKeys.length;
-                    itemRow.input.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
-                    itemRow.input.addEventListener('change', () => {
-                        setKeys(itemLeafKeys, itemRow.input.checked);
-                        render();
-                    });
+                    } : null, itemBlocked);
+                    if (!readOnly) {
+                        itemRow.input.checked = itemChecked === itemLeafKeys.length;
+                        itemRow.input.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
+                        itemRow.input.addEventListener('change', () => {
+                            setKeys(itemLeafKeys, itemRow.input.checked);
+                            render();
+                        });
+                    }
                     container.appendChild(itemRow.row);
                     if (!hasSubmenu || !itemExpanded) return;
 
@@ -222,12 +279,14 @@
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
                         if (!hasSubSubmenu) {
                             const key = keyOf(section.id, item.id, sm.id);
-                            const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2);
-                            smRow.input.checked = grantSet.has(key);
-                            smRow.input.addEventListener('change', () => {
-                                setKeys([key], smRow.input.checked);
-                                render();
-                            });
+                            const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2, null, itemBlocked);
+                            if (!readOnly) {
+                                smRow.input.checked = grantSet.has(key);
+                                smRow.input.addEventListener('change', () => {
+                                    setKeys([key], smRow.input.checked);
+                                    render();
+                                });
+                            }
                             container.appendChild(smRow.row);
                             return;
                         }
@@ -249,13 +308,15 @@
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        });
-                        smRow.input.checked = smChecked === smLeafKeys.length;
-                        smRow.input.indeterminate = smChecked > 0 && smChecked < smLeafKeys.length;
-                        smRow.input.addEventListener('change', () => {
-                            setKeys(smLeafKeys, smRow.input.checked);
-                            render();
-                        });
+                        }, itemBlocked);
+                        if (!readOnly) {
+                            smRow.input.checked = smChecked === smLeafKeys.length;
+                            smRow.input.indeterminate = smChecked > 0 && smChecked < smLeafKeys.length;
+                            smRow.input.addEventListener('change', () => {
+                                setKeys(smLeafKeys, smRow.input.checked);
+                                render();
+                            });
+                        }
                         container.appendChild(smRow.row);
                         if (!smExpandedNow) return;
 
@@ -263,12 +324,14 @@
                             const key = subSm.standalone
                                 ? keyOf(section.id, subSm.id, null)
                                 : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
-                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3);
-                            subRow.input.checked = grantSet.has(key);
-                            subRow.input.addEventListener('change', () => {
-                                setKeys([key], subRow.input.checked);
-                                render();
-                            });
+                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, itemBlocked);
+                            if (!readOnly) {
+                                subRow.input.checked = grantSet.has(key);
+                                subRow.input.addEventListener('change', () => {
+                                    setKeys([key], subRow.input.checked);
+                                    render();
+                                });
+                            }
                             container.appendChild(subRow.row);
                         });
                     });

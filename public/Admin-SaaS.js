@@ -826,90 +826,54 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !colorModal.hidden) closeColorModal();
 });
 
-// --- Accesos del Administrador: GEIPSA-only override for the auto-
-// provisioned client admin, who otherwise sees everything the client has
-// contracted by default (see hasButtonPermission/hasMainButtonPermission's
-// unrestricted-client-admin bypass in Dashboard.js). Reuses the shared
-// PermissionTree component, scoped to that client's own contracted
-// departments so GEIPSA can't grant something the client never bought. An
-// empty grants array (the default, or after "Clear overrides") means "no
-// override" client-side, not "nothing" — that's what gives the admin full
-// access by default. ------------------------------------------------------
+// --- Accesos del Administrador: read-only viewer of what the auto-
+// provisioned client admin sees — always everything the client has
+// contracted, automatically (see hasButtonPermission/hasMainButtonPermission's
+// unrestricted-client-admin bypass in Dashboard.js). Used to be an editable
+// override (check items to restrict the admin below "everything contracted"),
+// but that Save path was the actual bug: opening the tree and hitting Save —
+// even without meaning to restrict anything — froze the admin into whatever
+// happened to be checked at that moment, and future anexos never got added
+// to that frozen snapshot automatically. Read-only removes that risk
+// entirely: nothing here is selectable, so nothing can ever be saved by
+// accident. Reuses the shared PermissionTree component in its readOnly mode
+// (see PermissionTree.js create()), showing the FULL tree (not just the
+// contracted slice) with each row marked habilitado/bloqueado, so GEIPSA can
+// see both what the client has and what they're missing.
 const adminAccessModal = document.getElementById('admin-access-modal');
 const adminAccessSubtitle = document.getElementById('admin-access-subtitle');
 const adminAccessTreeContainer = document.getElementById('admin-access-tree-container');
 const adminAccessError = document.getElementById('admin-access-error');
-const adminAccessSaveBtn = document.getElementById('admin-access-save');
-const adminAccessClearBtn = document.getElementById('admin-access-clear');
 const adminAccessCancelBtn = document.getElementById('admin-access-cancel');
-
-let adminAccessClientId = null;
-let adminAccessTree = null;
 
 function closeAdminAccessModal() {
     adminAccessModal.hidden = true;
-    adminAccessClientId = null;
-    adminAccessTree = null;
 }
 
 async function openAdminAccessModal(client) {
     if (!client.adminUsername) return;
-    adminAccessClientId = client.id;
     adminAccessSubtitle.textContent = `${client.company_name} — ${client.adminUsername}`;
     adminAccessError.hidden = true;
     try {
-        const [modulesRes, accessRes, costCentersRes] = await Promise.all([
+        const [modulesRes, costCentersRes] = await Promise.all([
             fetch(`/api/admin/clients/${client.id}/modules`, { credentials: 'include' }),
-            fetch(`/api/admin/clients/${client.id}/admin-access`, { credentials: 'include' }),
             fetch(`/api/admin/clients/${client.id}/cost-centers`, { credentials: 'include' }),
         ]);
-        if (!modulesRes.ok || !accessRes.ok || !costCentersRes.ok) throw new Error('load failed');
+        if (!modulesRes.ok || !costCentersRes.ok) throw new Error('load failed');
         const modulesData = await modulesRes.json();
-        const accessData = await accessRes.json();
         const costCentersData = await costCentersRes.json();
-        const allowedSectionIds = (modulesData.modules || []).filter((m) => m.enabled).map((m) => m.key);
-        adminAccessTree = window.PermissionTree.create(adminAccessTreeContainer, {
-            allowedSectionIds,
+        const enabledModuleKeys = (modulesData.modules || []).filter((m) => m.enabled).map((m) => m.key);
+        const tree = window.PermissionTree.create(adminAccessTreeContainer, {
+            readOnly: true,
+            enabledModuleKeys,
             costCenters: costCentersData.costCenters || [],
         });
-        await adminAccessTree.init(accessData.grants || []);
+        await tree.init([]);
         adminAccessModal.hidden = false;
     } catch {
         showError(Dashboard.t('admin.loadError'));
     }
 }
-
-async function saveAdminAccess(grants) {
-    if (!adminAccessClientId) return;
-    adminAccessSaveBtn.disabled = true;
-    try {
-        const res = await fetch(`/api/admin/clients/${adminAccessClientId}/admin-access`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ grants }),
-        });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            adminAccessError.textContent = body.message || Dashboard.t('admin.saveError');
-            adminAccessError.hidden = false;
-            return;
-        }
-        closeAdminAccessModal();
-    } catch {
-        adminAccessError.textContent = Dashboard.t('admin.saveError');
-        adminAccessError.hidden = false;
-    } finally {
-        adminAccessSaveBtn.disabled = false;
-    }
-}
-
-adminAccessSaveBtn.addEventListener('click', () => {
-    if (!adminAccessTree) return;
-    saveAdminAccess(adminAccessTree.getGrants());
-});
-
-adminAccessClearBtn.addEventListener('click', () => saveAdminAccess([]));
 
 adminAccessCancelBtn.addEventListener('click', closeAdminAccessModal);
 adminAccessModal.addEventListener('click', (event) => {

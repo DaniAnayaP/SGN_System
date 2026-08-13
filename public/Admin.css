@@ -503,6 +503,45 @@ body.dark-mode .admin-badge-prospecto{
     min-width: 0;
     cursor: pointer;
 }
+/* Read-only habilitado/bloqueado status badge (PermissionTree.js create's
+   readOnly option) — replaces the checkbox entirely, so there's nothing to
+   click/toggle/accidentally save. */
+.perm-tree-status{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+.perm-tree-status i{
+    font-size: 0.8rem;
+}
+.perm-tree-status-enabled{
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+}
+.perm-tree-status-blocked{
+    background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
+    color: var(--color-text-secondary);
+}
+.perm-tree-status-label{
+    flex: 1;
+    min-width: 0;
+}
+.perm-tree-row-blocked{
+    opacity: 0.55;
+}
+.perm-tree-row-blocked:hover{
+    opacity: 0.85;
+}
+.perm-tree-legend{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
 
 /* Contrataciones */
 .admin-module-list{

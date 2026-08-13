@@ -623,13 +623,17 @@
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="admin-access-modal-title">
             <h3 id="admin-access-modal-title" data-i18n="admin.adminAccessTitle">Administrator Access</h3>
             <p id="admin-access-subtitle" class="admin-subtitle"></p>
-            <p id="admin-access-hint" class="admin-hint" data-i18n="admin.adminAccessHint">No overrides yet — this administrator sees everything the client has contracted. Check specific items below to restrict them to only those.</p>
+            <p id="admin-access-hint" class="admin-hint" data-i18n="admin.adminAccessHint">Read-only — shows everything this client has contracted (habilitado) vs. not contracted (bloqueado). This administrator always sees everything habilitado automatically; nothing here can be selected or saved.</p>
+            <p class="admin-hint perm-tree-legend">
+                <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
+                <span data-i18n="admin.adminAccessEnabled">Contratado / habilitado</span>
+                <span class="perm-tree-status perm-tree-status-blocked"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>
+                <span data-i18n="admin.adminAccessBlocked">No contratado / bloqueado</span>
+            </p>
             <div id="admin-access-tree-container"></div>
             <div id="admin-access-error" class="admin-error" role="alert" hidden></div>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="admin-access-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="admin-access-clear" data-i18n="admin.adminAccessClear">Clear overrides</button>
-                <button type="button" class="btn btn-secondary" id="admin-access-cancel" data-i18n="admin.cancel">Cancel</button>
+                <button type="button" class="btn btn-secondary" id="admin-access-cancel" data-i18n="admin.cancel">Close</button>
             </div>
         </div>
     </div>
