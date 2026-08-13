@@ -362,14 +362,64 @@ body.dark-mode .admin-badge-prospecto{
     max-width: 40rem;
     margin-bottom: 1rem;
 }
-.palette-grid{
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-    gap: 0.9rem;
+.palette-table-wrapper{
     margin-bottom: 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    overflow: hidden;
 }
-.palette-field label{
+.palette-table{
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.palette-table th,
+.palette-table td{
+    padding: 0.55rem 0.9rem;
+    text-align: left;
+    font-size: 0.82rem;
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border);
+}
+.palette-table thead th{
+    background-color: var(--color-bg);
     font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-text-secondary);
+}
+.palette-table tbody tr:last-child td{
+    border-bottom: none;
+}
+/* "Valor" column — a round swatch button (also opens the picker, same as
+   the Editar button in the next column) plus the hex code as text, and the
+   actual native color input hidden but still functionally clickable via
+   .click() from either trigger. */
+.palette-swatch{
+    display: inline-block;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    border: none;
+    box-shadow: 0 0 0 1px var(--color-border);
+    cursor: pointer;
+    vertical-align: middle;
+    margin-right: 0.6rem;
+    padding: 0;
+}
+.palette-hex{
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+    vertical-align: middle;
+}
+.palette-color-input{
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
 }
 .palette-preview{
     max-width: 20rem;

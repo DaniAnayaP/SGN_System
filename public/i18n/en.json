@@ -171,6 +171,8 @@
     "paletteAccent": "Accent (buttons, active items)",
     "paletteTooltipBg": "Tooltip background",
     "paletteTooltipText": "Tooltip text",
+    "paletteColorColumn": "Color",
+    "paletteValueColumn": "Value",
     "contactName": "Contact name",
     "email": "Email",
     "phone": "Phone",

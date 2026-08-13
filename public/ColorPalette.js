@@ -155,7 +155,7 @@
         container.appendChild(hint);
 
         const grid = document.createElement('div');
-        grid.className = 'palette-grid';
+        grid.className = 'palette-table-wrapper';
         container.appendChild(grid);
 
         const preview = document.createElement('div');
@@ -192,22 +192,72 @@
 
         function renderGrid() {
             grid.innerHTML = '';
+            const table = document.createElement('table');
+            table.className = 'palette-table';
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            [t('admin.paletteColorColumn'), t('admin.paletteValueColumn'), t('admin.edit')].forEach((text) => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headRow.appendChild(th);
+            });
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
             ROLE_FIELDS.forEach(({ key, labelKey }) => {
-                const field = document.createElement('div');
-                field.className = 'admin-field palette-field';
-                const label = document.createElement('label');
-                label.textContent = t(labelKey);
+                const tr = document.createElement('tr');
+
+                const tdRole = document.createElement('td');
+                tdRole.textContent = t(labelKey);
+
+                // Hidden (visually, not functionally) native color input —
+                // still the actual OS color picker, just triggered by the
+                // swatch or the Editar button instead of being the only
+                // visible control in its own grid cell like before.
                 const input = document.createElement('input');
                 input.type = 'color';
+                input.className = 'palette-color-input';
                 input.value = palette[key] || '#000000';
+
+                const tdValue = document.createElement('td');
+                const swatch = document.createElement('button');
+                swatch.type = 'button';
+                swatch.className = 'palette-swatch';
+                swatch.setAttribute('aria-label', t('admin.edit'));
+                const hexText = document.createElement('span');
+                hexText.className = 'palette-hex';
+                tdValue.append(swatch, hexText, input);
+
+                const tdEdit = document.createElement('td');
+                const editBtn = document.createElement('button');
+                editBtn.type = 'button';
+                editBtn.className = 'admin-icon-btn';
+                editBtn.setAttribute('aria-label', t('admin.edit'));
+                editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+                tdEdit.appendChild(editBtn);
+
+                function syncValueDisplay() {
+                    swatch.style.backgroundColor = input.value;
+                    hexText.textContent = input.value.toUpperCase();
+                }
+                syncValueDisplay();
+
+                const openPicker = () => input.click();
+                swatch.addEventListener('click', openPicker);
+                editBtn.addEventListener('click', openPicker);
                 input.addEventListener('input', () => {
                     palette = { ...palette, [key]: input.value };
+                    syncValueDisplay();
                     renderPreview();
                 });
+
                 fieldInputs[key] = input;
-                field.append(label, input);
-                grid.appendChild(field);
+                tr.append(tdRole, tdValue, tdEdit);
+                tbody.appendChild(tr);
             });
+            table.appendChild(tbody);
+            grid.appendChild(table);
             renderPreview();
         }
 
