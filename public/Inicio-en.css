@@ -1522,9 +1522,12 @@
        its own real content. Top padding kept minimal on purpose: the
        breadcrumb bar right above already has its own padding/border, so a
        full 1.5rem on top of that read as a big empty gap before the filter
-       bar (left/right/bottom padding unaffected). */
+       bar. Left/right match .top-bar's own 1.5rem (and .admin-panel's,
+       Admin.css:5) exactly — used to be 2rem, which inset the filter bar
+       and data table 8px further in than the top bar above them, making
+       both read as narrower instead of lining up edge-to-edge. */
     .page-content{
-        padding: 0.4rem 2rem 1.5rem;
+        padding: 0.4rem 1.5rem 1.5rem;
     }
     .page-header{
         margin-bottom: 1rem;
@@ -1633,7 +1636,10 @@
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.4rem 2rem;
+        /* Left/right match .top-bar's own 1.5rem padding — was 2rem, which
+           inset the breadcrumb text 8px further in than the top bar right
+           above it. */
+        padding: 0.4rem 1.5rem;
         border-bottom: 1px solid var(--color-border);
         background-color: var(--color-bg);
         min-height: 1.9rem;
