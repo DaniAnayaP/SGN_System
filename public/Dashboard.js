@@ -145,7 +145,8 @@ const EMBEDDED_TRANSLATIONS = {
         },
         main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", emptyStateText: "No data yet.", breadcrumbLabel: "Path", breadcrumbExpand: "Expand breadcrumb", breadcrumbCollapse: "Collapse breadcrumb", colUniqueBigDate: "# Unique Big Date", colRegistro: "# Record", colAnio: "Year", colMes: "Month", colDiaNum: "Day (Num)", colDiaTexto: "Day (Text)", colNoSemCobro: "Collection Week No.", colFecha: "Date", colTipoServicios: "Service Type", colEstatus: "Status",
             colCliente: "Client", colTipoUnidadSolicitada: "Requested Unit Type", colCotizacionServicio: "Service Quote $", colRequisitosServicio: "Service Requirements", colRequisitosSeguridad: "Security Requirements", colRequisitosCobro: "Billing Requirements", colOrigen: "Origin", colHoraCita: "Appointment Time", colUbicacion: "Location", colLinkUbicacion: "Location Link", colEmpresaCliente: "Client's Company", colNomContactoOrigen: "Origin Contact Name", colNoContacto: "Contact No.", colNoColaboradorDriver: "Employee No. (Driver)", colNombreDriver: "Driver Name(s)", colNoColaboradorAuxiliar: "Employee No. (Assistant)", colNombreAuxiliar: "Assistant Name(s)", colRutaAsignada: "Assigned Route", colZona: "Zone", colCantPallets: "Pallet Qty.", colCantUdm: "UOM Qty.", colCantParadas: "Stop Qty.", colParadasVisitadas: "Stops Visited", colCantUmEntregadas: "Units Delivered Qty.", colPorcentajeVisitas: "% Visits", colPorcentajeEntrega: "% Delivery", colDevolucionCantUdm: "Return (UOM Qty.)", colPorcentajeDevolucion: "% Return", colCoordinador: "Coordinator", colEcoUnidad: "Unit Fleet No.", colPlacas: "License Plates", colRutaSubtotal: "Route Subtotal $", colPenalizacion: "Penalty $", colRutaSubtotalCobro: "Route Billing Subtotal $", colIva: "VAT $", colCobroTotalRuta: "Total Route Billing $", colNoFactura: "Invoice No.", colFechaGeneraFactura: "Invoice Generation Date",
-            topBarExpand: "Expand top bar", topBarCollapse: "Collapse top bar", decreaseFontSize: "Decrease font size", increaseFontSize: "Increase font size" }
+            topBarExpand: "Expand top bar", topBarCollapse: "Collapse top bar", decreaseFontSize: "Decrease font size", increaseFontSize: "Increase font size",
+            pinColumns: "Pin columns", pinColumnsTitle: "Pin columns", pinColumnsHint: "Choose up to 4 columns to pin to the left. Drag to reorder them.", pinColumnsLimitReached: "You can pin up to 4 columns.", pinColumnsOther: "Other columns", columnVisibility: "Show/hide columns", columnVisibilityTitle: "Show/hide columns", columnVisibilityHint: "Choose which columns to show.", dragToReorder: "Drag to reorder" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -266,7 +267,8 @@ const EMBEDDED_TRANSLATIONS = {
         },
         main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", emptyStateText: "Aún no hay datos.", breadcrumbLabel: "Ruta", breadcrumbExpand: "Expandir ruta de acceso", breadcrumbCollapse: "Contraer ruta de acceso", colUniqueBigDate: "# Único Big Date", colRegistro: "# Registro", colAnio: "Año", colMes: "Mes", colDiaNum: "Día (Num)", colDiaTexto: "Día (texto)", colNoSemCobro: "No. Sem Cobro", colFecha: "Fecha", colTipoServicios: "Tipo Servicios", colEstatus: "Estatus",
             colCliente: "Cliente", colTipoUnidadSolicitada: "Tipo Unidad Solicitada", colCotizacionServicio: "Cotización $ Servicio", colRequisitosServicio: "Requisitos Servicio", colRequisitosSeguridad: "Requisitos Seguridad", colRequisitosCobro: "Requisitos Cobro", colOrigen: "Origen", colHoraCita: "Hora Cita", colUbicacion: "Ubicación", colLinkUbicacion: "Link Ubicación", colEmpresaCliente: "Empresa del cliente", colNomContactoOrigen: "Nom Contacto Origen", colNoContacto: "No. Contacto", colNoColaboradorDriver: "No. Colaborador", colNombreDriver: "Nombre(s) Driver", colNoColaboradorAuxiliar: "No. Colaborador", colNombreAuxiliar: "Nombre(s) Auxiliar", colRutaAsignada: "Ruta Asignada", colZona: "Zona", colCantPallets: "Cant. Pallets", colCantUdm: "Cant. UDM", colCantParadas: "Cant. Paradas", colParadasVisitadas: "Paradas visitadas", colCantUmEntregadas: "Cant UM Entregadas", colPorcentajeVisitas: "% Visitas", colPorcentajeEntrega: "% Entrega", colDevolucionCantUdm: "Devolución (Cant UDM)", colPorcentajeDevolucion: "% Devolución", colCoordinador: "Coordinador", colEcoUnidad: "Eco Unidad", colPlacas: "Placas", colRutaSubtotal: "$ Ruta Subtotal", colPenalizacion: "Penalización $", colRutaSubtotalCobro: "$ Ruta Subtotal Cobro", colIva: "$ IVA", colCobroTotalRuta: "$ Cobro Total Ruta", colNoFactura: "No. Factura", colFechaGeneraFactura: "F. Genera Factura",
-            topBarExpand: "Expandir barra superior", topBarCollapse: "Contraer barra superior", decreaseFontSize: "Reducir tamaño de letra", increaseFontSize: "Aumentar tamaño de letra" }
+            topBarExpand: "Expandir barra superior", topBarCollapse: "Contraer barra superior", decreaseFontSize: "Reducir tamaño de letra", increaseFontSize: "Aumentar tamaño de letra",
+            pinColumns: "Fijar columnas", pinColumnsTitle: "Fijar columnas", pinColumnsHint: "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.", pinColumnsLimitReached: "Puedes fijar hasta 4 columnas.", pinColumnsOther: "Otras columnas", columnVisibility: "Mostrar/ocultar columnas", columnVisibilityTitle: "Mostrar/ocultar columnas", columnVisibilityHint: "Elige qué columnas mostrar.", dragToReorder: "Arrastrar para reordenar" }
     }
 };
 
@@ -1266,6 +1268,629 @@ function renderDataTableZoomControls() {
         wrapper.insertAdjacentElement('beforebegin', zoom);
     });
     setDataTableFontSize(getDataTableFontSize());
+}
+
+// Column reorder / pin (up to 4, sticky-left) / show-hide / resize — same
+// "generic, works on every .data-table automatically" philosophy as the
+// font-size zoom above, but per-table instead of one shared preference
+// (different tables have different columns). Requires each <th> (and every
+// dynamically-built <td>) to carry a stable data-col="<key>" attribute —
+// see OpTransVolTraslados.html / Admin-SaaS.html / Admin-SaaS.js for the
+// convention any future table must follow to get this for free.
+const DATA_TABLE_COLUMNS_KEY_PREFIX = 'dataTableColumns:';
+const DATA_TABLE_PIN_MAX = 4;
+const DATA_TABLE_COL_MIN_WIDTH = 80; // px floor — narrower risks clipping icon buttons/logos/swatches
+// tableId -> { table, wrapper, colgroup, columnKeys, labels, config, pinnedLeft, visiblePinned }
+const dataTableColumnState = new Map();
+
+function getTableId(wrapper, index) {
+    return wrapper.dataset.tableId || `auto:${location.pathname}:${index}`;
+}
+
+function getDataTableColumnKeys(table) {
+    return Array.from(table.tHead.rows[0].cells).map((th) => th.dataset.col).filter(Boolean);
+}
+
+function dataTableConfigStorageKey(tableId) {
+    return `${DATA_TABLE_COLUMNS_KEY_PREFIX}${tableId}`;
+}
+
+// Reconciles stored config against the table's LIVE columns, so a future
+// change to which columns a table has (added/removed/renamed in the HTML)
+// never leaves a user with a broken or silently-lossy customization: unknown
+// stored keys are dropped, live keys missing from the stored order are
+// appended (never hidden by surprise).
+function loadDataTableConfig(tableId, columnKeys) {
+    let stored = null;
+    try {
+        stored = JSON.parse(localStorage.getItem(dataTableConfigStorageKey(tableId)) || 'null');
+    } catch {
+        stored = null;
+    }
+    const keySet = new Set(columnKeys);
+    const order = Array.isArray(stored?.order) ? stored.order.filter((k) => keySet.has(k)) : [];
+    columnKeys.forEach((k) => { if (!order.includes(k)) order.push(k); });
+    const hidden = Array.isArray(stored?.hidden) ? stored.hidden.filter((k) => keySet.has(k)) : [];
+    const widths = (stored?.widths && typeof stored.widths === 'object') ? { ...stored.widths } : {};
+    Object.keys(widths).forEach((k) => { if (!keySet.has(k)) delete widths[k]; });
+    let pinned = Array.isArray(stored?.pinned) ? stored.pinned.filter((k) => keySet.has(k)) : null;
+    // Default: pin just the first column, reproducing the old hardcoded
+    // :first-child behavior until the user customizes it via the picker.
+    if (!pinned) pinned = columnKeys[0] ? [columnKeys[0]] : [];
+    pinned = pinned.slice(0, DATA_TABLE_PIN_MAX);
+    return { order, hidden, widths, pinned };
+}
+
+function saveDataTableConfig(tableId, config) {
+    localStorage.setItem(dataTableConfigStorageKey(tableId), JSON.stringify(config));
+}
+
+// Pinned columns always render as a leftmost prefix, in their own order —
+// decoupled from the general drag order, which is what lets the main
+// header's drag-reorder and the pin picker's own drag-reorder each own a
+// separate axis without stepping on each other.
+function getVisualColumnOrder(config) {
+    return [...config.pinned, ...config.order.filter((k) => !config.pinned.includes(k))];
+}
+
+function buildOrGetColgroup(table) {
+    let colgroup = table.querySelector('colgroup');
+    if (!colgroup) {
+        colgroup = document.createElement('colgroup');
+        table.insertBefore(colgroup, table.firstChild);
+    }
+    return colgroup;
+}
+
+function measureNaturalColumnWidths(table) {
+    const widths = {};
+    Array.from(table.tHead.rows[0].cells).forEach((th) => {
+        if (th.dataset.col) widths[th.dataset.col] = Math.max(DATA_TABLE_COL_MIN_WIDTH, Math.round(th.getBoundingClientRect().width));
+    });
+    return widths;
+}
+
+function applyPinStyle(cell, key, state) {
+    const isPinned = state.visiblePinned.includes(key);
+    cell.classList.toggle('data-table-col-pinned', isPinned);
+    cell.classList.toggle('data-table-col-pinned-edge', isPinned && key === state.visiblePinned[state.visiblePinned.length - 1]);
+    cell.style.left = isPinned ? `${state.pinnedLeft[key]}px` : '';
+}
+
+// Re-applies the current order/pin/hidden state to one row's cells, found
+// via their own data-col (not DOM index) — this is the one function shared
+// between the initial full-table pass below and the tbody MutationObserver,
+// which is what lets page-specific renderers (renderClients(), a future
+// Registro de traslados renderer, etc.) rebuild rows from scratch with zero
+// awareness of column customization; they only need to tag cells with
+// data-col.
+function applyRowColumnState(tr, tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const visualOrder = getVisualColumnOrder(state.config);
+    const cellByKey = new Map();
+    Array.from(tr.children).forEach((td) => { if (td.dataset.col) cellByKey.set(td.dataset.col, td); });
+    visualOrder.forEach((key) => {
+        const td = cellByKey.get(key);
+        if (!td) return;
+        tr.appendChild(td);
+        applyPinStyle(td, key, state);
+    });
+}
+
+function applyDataTableColumnLayout(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const { table, colgroup, config } = state;
+    const visualOrder = getVisualColumnOrder(config);
+    const headerRow = table.tHead.rows[0];
+    const hiddenSet = new Set(config.hidden);
+    const visiblePinned = config.pinned.filter((k) => !hiddenSet.has(k));
+    state.visiblePinned = visiblePinned;
+
+    visualOrder.forEach((key) => {
+        const col = Array.from(colgroup.children).find((c) => c.dataset.col === key);
+        if (col) {
+            colgroup.appendChild(col);
+            col.style.width = `${config.widths[key] || DATA_TABLE_COL_MIN_WIDTH}px`;
+            col.style.display = hiddenSet.has(key) ? 'none' : '';
+        }
+        const th = Array.from(headerRow.cells).find((c) => c.dataset.col === key);
+        if (th) headerRow.appendChild(th);
+    });
+
+    const pinnedLeft = {};
+    let cumulative = 0;
+    visiblePinned.forEach((key) => {
+        pinnedLeft[key] = cumulative;
+        cumulative += config.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
+    });
+    state.pinnedLeft = pinnedLeft;
+
+    Array.from(headerRow.cells).forEach((th) => {
+        applyPinStyle(th, th.dataset.col, state);
+        th.draggable = !config.pinned.includes(th.dataset.col);
+    });
+
+    // <col display:none> already shrinks the empty-state colspan cell's
+    // rendered width on its own, but keeping the attribute value itself
+    // truthful (visible count, not total) avoids a misleading DOM.
+    const visibleCount = visualOrder.filter((k) => !hiddenSet.has(k)).length;
+    table.querySelectorAll('tbody > tr > td.data-table-empty-cell').forEach((td) => {
+        td.colSpan = visibleCount;
+    });
+
+    const totalWidth = visualOrder.filter((k) => !hiddenSet.has(k))
+        .reduce((sum, k) => sum + (config.widths[k] || DATA_TABLE_COL_MIN_WIDTH), 0);
+    table.style.tableLayout = 'fixed';
+    table.style.width = `${totalWidth}px`;
+    table.style.minWidth = `${totalWidth}px`;
+
+    Array.from(table.tBodies[0]?.rows || []).forEach((tr) => {
+        if (!tr.querySelector('td.data-table-empty-cell')) applyRowColumnState(tr, tableId);
+    });
+}
+
+function observeTableBody(table, tableId) {
+    const tbody = table.tBodies[0];
+    if (!tbody || tbody.dataset.colObserved) return;
+    tbody.dataset.colObserved = '1';
+    // renderClients()/openAnexoChangesModal() (and any future renderer)
+    // fully tear down and rebuild <tbody> from scratch on every data change
+    // rather than patching individual rows — watching for added rows here
+    // means those renderers never need to know about column customization.
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === 1 && node.tagName === 'TR' && !node.querySelector('td.data-table-empty-cell')) {
+                    applyRowColumnState(node, tableId);
+                }
+            });
+        });
+    });
+    observer.observe(tbody, { childList: true });
+}
+
+let dataTableDropIndicatorEl = null;
+function showDataTableDropIndicator(th, before) {
+    if (!dataTableDropIndicatorEl) {
+        dataTableDropIndicatorEl = document.createElement('div');
+        dataTableDropIndicatorEl.className = 'data-table-col-drop-indicator';
+    }
+    dataTableDropIndicatorEl.style.left = before ? '0' : 'auto';
+    dataTableDropIndicatorEl.style.right = before ? 'auto' : '0';
+    th.appendChild(dataTableDropIndicatorEl);
+}
+function hideDataTableDropIndicator() {
+    dataTableDropIndicatorEl?.remove();
+}
+
+function reorderColumn(tableId, sourceKey, targetKey, before) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const order = state.config.order.filter((k) => k !== sourceKey);
+    let idx = order.indexOf(targetKey);
+    if (idx === -1) idx = order.length;
+    order.splice(before ? idx : idx + 1, 0, sourceKey);
+    state.config.order = order;
+    saveDataTableConfig(tableId, state.config);
+    applyDataTableColumnLayout(tableId);
+}
+
+// Horizontal drag-reorder across the header row. Pinned columns are
+// excluded as both source AND drop target — their order only changes via
+// the pin picker's own (vertical, separate) drag-reorder below, avoiding
+// ambiguous cross-region drags between the fixed and scrolling zones.
+function enableHeaderDragReorder(table, tableId) {
+    const headerRow = table.tHead.rows[0];
+    if (headerRow.dataset.dragBound) return;
+    headerRow.dataset.dragBound = '1';
+    let draggedKey = null;
+    headerRow.addEventListener('dragstart', (event) => {
+        const th = event.target.closest('th');
+        if (!th || th.draggable !== true) return;
+        draggedKey = th.dataset.col;
+        th.classList.add('data-table-col-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+    });
+    headerRow.addEventListener('dragover', (event) => {
+        if (!draggedKey) return;
+        const th = event.target.closest('th');
+        if (!th || th.dataset.col === draggedKey) return;
+        const state = dataTableColumnState.get(tableId);
+        if (!state || state.config.pinned.includes(th.dataset.col)) return;
+        event.preventDefault();
+        const rect = th.getBoundingClientRect();
+        showDataTableDropIndicator(th, (event.clientX - rect.left) < rect.width / 2);
+    });
+    headerRow.addEventListener('drop', (event) => {
+        if (!draggedKey) return;
+        event.preventDefault();
+        const th = event.target.closest('th');
+        hideDataTableDropIndicator();
+        const key = draggedKey;
+        draggedKey = null;
+        if (!th || th.dataset.col === key) return;
+        const state = dataTableColumnState.get(tableId);
+        if (!state || state.config.pinned.includes(th.dataset.col)) return;
+        const rect = th.getBoundingClientRect();
+        reorderColumn(tableId, key, th.dataset.col, (event.clientX - rect.left) < rect.width / 2);
+    });
+    headerRow.addEventListener('dragend', () => {
+        headerRow.querySelectorAll('.data-table-col-dragging').forEach((el) => el.classList.remove('data-table-col-dragging'));
+        hideDataTableDropIndicator();
+        draggedKey = null;
+    });
+}
+
+// Small vertical-list reorder used only by the pin picker's "Pinned"
+// section — different axis and DOM shape than the header's horizontal
+// reorder above, not worth forcing into one shared abstraction.
+function enableListDragReorder(listEl, onReorder) {
+    if (listEl.dataset.dragBound) return;
+    listEl.dataset.dragBound = '1';
+    let draggedEl = null;
+    listEl.addEventListener('dragstart', (event) => {
+        const row = event.target.closest('[draggable="true"]');
+        if (!row || row.parentElement !== listEl) return;
+        draggedEl = row;
+        row.classList.add('data-table-col-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+    });
+    listEl.addEventListener('dragover', (event) => {
+        if (!draggedEl) return;
+        event.preventDefault();
+        const target = event.target.closest('[draggable="true"]');
+        if (!target || target === draggedEl || target.parentElement !== listEl) return;
+        const rect = target.getBoundingClientRect();
+        const before = (event.clientY - rect.top) < rect.height / 2;
+        listEl.insertBefore(draggedEl, before ? target : target.nextSibling);
+    });
+    listEl.addEventListener('dragend', () => {
+        if (!draggedEl) return;
+        draggedEl.classList.remove('data-table-col-dragging');
+        const newOrder = Array.from(listEl.children).map((el) => el.dataset.col);
+        draggedEl = null;
+        onReorder(newOrder);
+    });
+}
+
+function liveResizeColumn(tableId, key, widthPx) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const col = Array.from(state.colgroup.children).find((c) => c.dataset.col === key);
+    if (col) col.style.width = `${widthPx}px`;
+    const previousWidth = state.config.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
+    const delta = widthPx - previousWidth;
+    state.config.widths[key] = widthPx;
+    const currentTotal = parseFloat(state.table.style.width) || 0;
+    state.table.style.width = `${currentTotal + delta}px`;
+    state.table.style.minWidth = state.table.style.width;
+    // Only pinned columns need their `left` offset touched live — this is
+    // the one part of a resize that's O(rows) rather than O(1), since every
+    // pinned cell in every row after this column needs to shift. Throttled
+    // via requestAnimationFrame in attachResizeHandle so it isn't janky on
+    // a large tbody while actively dragging.
+    if (state.visiblePinned.includes(key)) {
+        let cumulative = 0;
+        const pinnedLeft = {};
+        state.visiblePinned.forEach((k) => {
+            pinnedLeft[k] = cumulative;
+            cumulative += state.config.widths[k] || DATA_TABLE_COL_MIN_WIDTH;
+        });
+        state.pinnedLeft = pinnedLeft;
+        state.table.querySelectorAll('[data-col]').forEach((cell) => {
+            const k = cell.dataset.col;
+            if (state.visiblePinned.includes(k)) cell.style.left = `${pinnedLeft[k]}px`;
+        });
+    }
+}
+
+function attachResizeHandle(th, tableId) {
+    if (th.querySelector('.data-table-col-resize-handle')) return;
+    const handle = document.createElement('div');
+    handle.className = 'data-table-col-resize-handle';
+    handle.draggable = false;
+    handle.addEventListener('mousedown', (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        const key = th.dataset.col;
+        const state = dataTableColumnState.get(tableId);
+        if (!state) return;
+        const startX = event.clientX;
+        const startWidth = state.config.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
+        handle.classList.add('data-table-col-resizing');
+        let pendingWidth = startWidth;
+        let rafId = null;
+        const applyPending = () => {
+            rafId = null;
+            liveResizeColumn(tableId, key, pendingWidth);
+        };
+        const onMove = (moveEvent) => {
+            pendingWidth = Math.max(DATA_TABLE_COL_MIN_WIDTH, startWidth + (moveEvent.clientX - startX));
+            if (rafId == null) rafId = requestAnimationFrame(applyPending);
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            handle.classList.remove('data-table-col-resizing');
+            if (rafId != null) cancelAnimationFrame(rafId);
+            state.config.widths[key] = pendingWidth;
+            saveDataTableConfig(tableId, state.config);
+            applyDataTableColumnLayout(tableId);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+    th.appendChild(handle);
+}
+
+// One-time-per-table setup. Gated behind a ResizeObserver (rather than
+// running straight from initDashboard()) because a table can be inside a
+// hidden modal at page-load time (e.g. the Anexos Changes history table) —
+// measuring column widths while display:none would give 0 for everything.
+// ResizeObserver fires its callback once immediately upon observe() even
+// for already-visible elements, so this one code path correctly covers both
+// "visible at load" and "hidden until opened" tables with no per-page
+// special-casing.
+function initDataTableColumns(wrapper, index) {
+    const table = wrapper.querySelector('table.data-table');
+    if (!table || table.dataset.colInit) return;
+    const columnKeys = getDataTableColumnKeys(table);
+    if (!columnKeys.length) return;
+    table.dataset.colInit = '1';
+    const tableId = getTableId(wrapper, index);
+    const labels = {};
+    Array.from(table.tHead.rows[0].cells).forEach((th) => { labels[th.dataset.col] = th.textContent.trim(); });
+    const colgroup = buildOrGetColgroup(table);
+    columnKeys.forEach((key) => {
+        if (!colgroup.querySelector(`col[data-col="${key}"]`)) {
+            const col = document.createElement('col');
+            col.dataset.col = key;
+            colgroup.appendChild(col);
+        }
+    });
+    const config = loadDataTableConfig(tableId, columnKeys);
+    const naturalWidths = measureNaturalColumnWidths(table);
+    columnKeys.forEach((key) => {
+        if (config.widths[key] == null) config.widths[key] = naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
+    });
+    dataTableColumnState.set(tableId, { table, wrapper, colgroup, columnKeys, labels, config });
+    applyDataTableColumnLayout(tableId);
+    enableHeaderDragReorder(table, tableId);
+    Array.from(table.tHead.rows[0].cells).forEach((th) => attachResizeHandle(th, tableId));
+    observeTableBody(table, tableId);
+}
+
+function wireModalDismiss(overlay, onClose) {
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) onClose(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !overlay.hidden) onClose(); });
+}
+
+let pinPickerModal = null;
+let pinPickerPinnedList = null;
+let pinPickerOtherList = null;
+let pinPickerLimitMsg = null;
+let pinPickerState = null; // { tableId, pinnedOrder: [key,...] }
+
+function buildColumnPickerRow(key, label, { pinned = null } = {}) {
+    const row = document.createElement('div');
+    row.className = 'admin-module-row';
+    row.dataset.col = key;
+    const name = document.createElement('span');
+    name.className = 'admin-module-name';
+    name.style.flex = '1';
+    if (pinned !== null) {
+        row.draggable = pinned;
+        if (pinned) {
+            const handle = document.createElement('i');
+            handle.className = 'bx bx-menu data-table-col-picker-handle';
+            handle.setAttribute('aria-hidden', 'true');
+            row.appendChild(handle);
+        }
+    }
+    name.textContent = label;
+    row.appendChild(name);
+    const toggle = document.createElement('label');
+    toggle.className = 'admin-switch';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    const track = document.createElement('span');
+    track.className = 'admin-switch-track';
+    toggle.append(input, track);
+    row.appendChild(toggle);
+    return { row, input };
+}
+
+function ensurePinPickerModal() {
+    if (pinPickerModal) return;
+    pinPickerModal = document.createElement('div');
+    pinPickerModal.className = 'modal-overlay';
+    pinPickerModal.hidden = true;
+    pinPickerModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-pin-title">
+            <h3 id="data-table-pin-title">${t('main.pinColumnsTitle')}</h3>
+            <p class="admin-hint">${t('main.pinColumnsHint')}</p>
+            <div class="admin-module-list" data-role="pinned-list"></div>
+            <p class="admin-hint" style="margin-top:1rem;">${t('main.pinColumnsOther')}</p>
+            <div class="admin-module-list" data-role="other-list"></div>
+            <p class="admin-hint" data-role="limit-msg" hidden>${t('main.pinColumnsLimitReached')}</p>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
+                <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(pinPickerModal);
+    pinPickerPinnedList = pinPickerModal.querySelector('[data-role="pinned-list"]');
+    pinPickerOtherList = pinPickerModal.querySelector('[data-role="other-list"]');
+    pinPickerLimitMsg = pinPickerModal.querySelector('[data-role="limit-msg"]');
+    const close = () => { pinPickerModal.hidden = true; pinPickerState = null; };
+    pinPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
+    pinPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
+        if (!pinPickerState) return;
+        const state = dataTableColumnState.get(pinPickerState.tableId);
+        if (state) {
+            state.config.pinned = [...pinPickerState.pinnedOrder];
+            saveDataTableConfig(pinPickerState.tableId, state.config);
+            applyDataTableColumnLayout(pinPickerState.tableId);
+        }
+        close();
+    });
+    wireModalDismiss(pinPickerModal, close);
+}
+
+function renderPinPickerLists() {
+    const state = dataTableColumnState.get(pinPickerState.tableId);
+    if (!state) return;
+    pinPickerPinnedList.innerHTML = '';
+    pinPickerState.pinnedOrder.forEach((key) => {
+        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, { pinned: true });
+        input.checked = true;
+        input.addEventListener('change', () => {
+            pinPickerState.pinnedOrder = pinPickerState.pinnedOrder.filter((k) => k !== key);
+            renderPinPickerLists();
+        });
+        pinPickerPinnedList.appendChild(row);
+    });
+    pinPickerOtherList.innerHTML = '';
+    state.columnKeys.filter((k) => !pinPickerState.pinnedOrder.includes(k)).forEach((key) => {
+        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, { pinned: false });
+        const atMax = pinPickerState.pinnedOrder.length >= DATA_TABLE_PIN_MAX;
+        input.checked = false;
+        input.disabled = atMax;
+        input.addEventListener('change', () => {
+            if (pinPickerState.pinnedOrder.length < DATA_TABLE_PIN_MAX) {
+                pinPickerState.pinnedOrder = [...pinPickerState.pinnedOrder, key];
+                renderPinPickerLists();
+            }
+        });
+        pinPickerOtherList.appendChild(row);
+    });
+    pinPickerLimitMsg.hidden = pinPickerState.pinnedOrder.length < DATA_TABLE_PIN_MAX;
+    enableListDragReorder(pinPickerPinnedList, (newOrder) => {
+        pinPickerState.pinnedOrder = newOrder;
+    });
+}
+
+function openPinPicker(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    ensurePinPickerModal();
+    pinPickerState = { tableId, pinnedOrder: [...state.config.pinned] };
+    renderPinPickerLists();
+    pinPickerModal.hidden = false;
+}
+
+let visibilityPickerModal = null;
+let visibilityPickerList = null;
+let visibilityPickerState = null; // { tableId, hiddenSet: Set<key> }
+
+function ensureVisibilityPickerModal() {
+    if (visibilityPickerModal) return;
+    visibilityPickerModal = document.createElement('div');
+    visibilityPickerModal.className = 'modal-overlay';
+    visibilityPickerModal.hidden = true;
+    visibilityPickerModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 24rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-vis-title">
+            <h3 id="data-table-vis-title">${t('main.columnVisibilityTitle')}</h3>
+            <p class="admin-hint">${t('main.columnVisibilityHint')}</p>
+            <div class="admin-module-list" data-role="list"></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
+                <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(visibilityPickerModal);
+    visibilityPickerList = visibilityPickerModal.querySelector('[data-role="list"]');
+    const close = () => { visibilityPickerModal.hidden = true; visibilityPickerState = null; };
+    visibilityPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
+    visibilityPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
+        if (!visibilityPickerState) return;
+        const state = dataTableColumnState.get(visibilityPickerState.tableId);
+        if (state) {
+            state.config.hidden = state.columnKeys.filter((k) => visibilityPickerState.hiddenSet.has(k));
+            saveDataTableConfig(visibilityPickerState.tableId, state.config);
+            applyDataTableColumnLayout(visibilityPickerState.tableId);
+        }
+        close();
+    });
+    wireModalDismiss(visibilityPickerModal, close);
+}
+
+function renderVisibilityPickerList() {
+    const state = dataTableColumnState.get(visibilityPickerState.tableId);
+    if (!state) return;
+    visibilityPickerList.innerHTML = '';
+    state.columnKeys.forEach((key) => {
+        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key);
+        input.checked = !visibilityPickerState.hiddenSet.has(key);
+        input.addEventListener('change', () => {
+            // Never allow hiding the last remaining visible column.
+            const visibleCount = state.columnKeys.length - visibilityPickerState.hiddenSet.size;
+            if (!input.checked && visibleCount <= 1) {
+                input.checked = true;
+                return;
+            }
+            if (input.checked) visibilityPickerState.hiddenSet.delete(key);
+            else visibilityPickerState.hiddenSet.add(key);
+        });
+        visibilityPickerList.appendChild(row);
+    });
+}
+
+function openVisibilityPicker(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    ensureVisibilityPickerModal();
+    visibilityPickerState = { tableId, hiddenSet: new Set(state.config.hidden) };
+    renderVisibilityPickerList();
+    visibilityPickerModal.hidden = false;
+}
+
+// Adds the 2 new toolbar buttons into the SAME .data-table-zoom bar that
+// renderDataTableZoomControls() already inserts (must run after it), then
+// lazily boots column management for each table the first time it reports
+// a nonzero width — see initDataTableColumns for why that's deferred.
+function renderDataTableColumnControls() {
+    document.querySelectorAll('.data-table-wrapper').forEach((wrapper, index) => {
+        const zoom = wrapper.previousElementSibling;
+        if (zoom?.classList?.contains('data-table-zoom') && !zoom.querySelector('[data-col-action]')) {
+            const pinBtn = document.createElement('button');
+            pinBtn.type = 'button';
+            pinBtn.className = 'data-table-zoom-btn';
+            pinBtn.dataset.colAction = 'pin';
+            pinBtn.setAttribute('aria-label', t('main.pinColumns'));
+            pinBtn.title = t('main.pinColumns');
+            pinBtn.innerHTML = '<i class="bx bx-pin" aria-hidden="true"></i>';
+            pinBtn.addEventListener('click', () => openPinPicker(getTableId(wrapper, index)));
+
+            const visBtn = document.createElement('button');
+            visBtn.type = 'button';
+            visBtn.className = 'data-table-zoom-btn';
+            visBtn.dataset.colAction = 'visibility';
+            visBtn.setAttribute('aria-label', t('main.columnVisibility'));
+            visBtn.title = t('main.columnVisibility');
+            visBtn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
+            visBtn.addEventListener('click', () => openVisibilityPicker(getTableId(wrapper, index)));
+
+            zoom.append(pinBtn, visBtn);
+        }
+
+        if (wrapper.dataset.colObserverAttached) return;
+        wrapper.dataset.colObserverAttached = '1';
+        const ro = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.contentRect.width > 0) {
+                    initDataTableColumns(wrapper, index);
+                    ro.disconnect();
+                    break;
+                }
+            }
+        });
+        ro.observe(wrapper);
+    });
 }
 
 document.querySelectorAll('.filter-bar').forEach((bar) => {
@@ -2606,6 +3231,7 @@ async function initDashboard({ activePage } = {}) {
     renderBreadcrumbBar();
     renderTopBarCollapseToggle();
     renderDataTableZoomControls();
+    renderDataTableColumnControls();
     sizeDataTableWrappers();
     return role;
 }

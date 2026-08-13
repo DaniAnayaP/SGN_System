@@ -451,6 +451,15 @@
     "topBarExpand": "Expand top bar",
     "topBarCollapse": "Collapse top bar",
     "decreaseFontSize": "Decrease font size",
-    "increaseFontSize": "Increase font size"
+    "increaseFontSize": "Increase font size",
+    "pinColumns": "Pin columns",
+    "pinColumnsTitle": "Pin columns",
+    "pinColumnsHint": "Choose up to 4 columns to pin to the left. Drag to reorder them.",
+    "pinColumnsLimitReached": "You can pin up to 4 columns.",
+    "pinColumnsOther": "Other columns",
+    "columnVisibility": "Show/hide columns",
+    "columnVisibilityTitle": "Show/hide columns",
+    "columnVisibilityHint": "Choose which columns to show.",
+    "dragToReorder": "Drag to reorder"
   }
 }

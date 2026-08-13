@@ -176,6 +176,15 @@ function textCell(value) {
     return td;
 }
 
+// Matches, in order, the <th data-col> values in the "Nuestros Clientes"
+// table (Admin-SaaS.html) and the tr.append(...) call in renderClients().
+const DATA_TABLE_CLIENT_COLUMNS = [
+    'bigDateNumber', 'rfc', 'companyNickname', 'companyAbbreviation', 'logo', 'institutionalColor',
+    'ownerName', 'contactName', 'billingEmail', 'contractStartDate', 'contractFile', 'plan',
+    'contractedCost', 'monthlyPayment', 'costCenters', 'addenda', 'anexosPayment', 'anexoChanges',
+    'contractRegisteredDate', 'contractEndDate', 'activeTree', 'username', 'status', 'actions',
+];
+
 function iconButton(iconClass, label, onClick, { disabled = false, title = '', danger = false } = {}) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -280,6 +289,15 @@ function renderClients() {
             tdStatus,
             tdActions,
         );
+        // Tags each cell with which logical column it is, in the same order
+        // as tr.append(...) above (which itself matches the <th data-col>
+        // order in Admin-SaaS.html) — this is what lets Dashboard.js's
+        // generic column reorder/pin/hide/resize feature find and move the
+        // right cell in a freshly-rebuilt row without renderClients() itself
+        // knowing anything about column customization.
+        DATA_TABLE_CLIENT_COLUMNS.forEach((key, i) => {
+            tr.children[i].dataset.col = key;
+        });
         tableBody.appendChild(tr);
     });
 }
@@ -670,14 +688,15 @@ async function openAnexoChangesModal(client) {
                 const moduleDef = moduleCatalog.find((m) => m.key === change.module_key);
                 const tr = document.createElement('tr');
                 [
-                    moduleDef ? Dashboard.t(moduleDef.labelKey) : change.module_key,
-                    Dashboard.t(change.action === 'added' ? 'admin.anexoChangeAdded' : 'admin.anexoChangeRemoved'),
-                    change.requested_by || '—',
-                    change.requested_at || '—',
-                    change.changed_at,
-                    change.contracted_duration || '—',
-                ].forEach((value) => {
+                    ['colModule', moduleDef ? Dashboard.t(moduleDef.labelKey) : change.module_key],
+                    ['colAction', Dashboard.t(change.action === 'added' ? 'admin.anexoChangeAdded' : 'admin.anexoChangeRemoved')],
+                    ['colRequestedBy', change.requested_by || '—'],
+                    ['colRequestedAt', change.requested_at || '—'],
+                    ['colChangedAt', change.changed_at],
+                    ['colDuration', change.contracted_duration || '—'],
+                ].forEach(([key, value]) => {
                     const td = document.createElement('td');
+                    td.dataset.col = key;
                     td.textContent = value;
                     tr.appendChild(td);
                 });

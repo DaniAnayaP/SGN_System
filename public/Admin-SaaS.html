@@ -459,34 +459,34 @@
                     <button type="button" class="btn btn-secondary" id="generated-admin-dismiss" data-i18n="admin.dismiss">Dismiss</button>
                 </div>
 
-                <div class="data-table-wrapper">
+                <div class="data-table-wrapper" data-table-id="nuestros-clientes">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th data-i18n="admin.bigDateNumber">Unique Big Date No.</th>
-                                <th data-i18n="admin.rfc">Company RFC</th>
-                                <th data-i18n="admin.companyNickname">Company nickname</th>
-                                <th data-i18n="admin.companyAbbreviation">Company abbreviation</th>
-                                <th data-i18n="admin.logo">Logo</th>
-                                <th data-i18n="admin.institutionalColor">Institutional color</th>
-                                <th data-i18n="admin.ownerName">Owner</th>
-                                <th data-i18n="admin.contactName">Contact name</th>
-                                <th data-i18n="admin.billingEmail">Billing contact email</th>
-                                <th data-i18n="admin.contractStartDate">Contract start date</th>
-                                <th data-i18n="admin.contractFile">Contract</th>
-                                <th data-i18n="admin.plan">Plan / package</th>
-                                <th data-i18n="admin.contractedCost">Contracted cost $</th>
-                                <th data-i18n="admin.monthlyPayment">Monthly payment</th>
-                                <th data-i18n="admin.costCenters">Cost Centers</th>
-                                <th data-i18n="admin.addenda">Anexos</th>
-                                <th data-i18n="admin.anexosPayment">Anexos payment</th>
-                                <th data-i18n="admin.anexoChanges">Anexos changes</th>
-                                <th data-i18n="admin.contractRegisteredDate">Contract registration date</th>
-                                <th data-i18n="admin.contractEndDate">Contract end date</th>
-                                <th data-i18n="admin.activeTree">Active permission tree</th>
-                                <th data-i18n="business.username">Username</th>
-                                <th data-i18n="admin.status">Status</th>
-                                <th></th>
+                                <th data-i18n="admin.bigDateNumber" data-col="bigDateNumber">Unique Big Date No.</th>
+                                <th data-i18n="admin.rfc" data-col="rfc">Company RFC</th>
+                                <th data-i18n="admin.companyNickname" data-col="companyNickname">Company nickname</th>
+                                <th data-i18n="admin.companyAbbreviation" data-col="companyAbbreviation">Company abbreviation</th>
+                                <th data-i18n="admin.logo" data-col="logo">Logo</th>
+                                <th data-i18n="admin.institutionalColor" data-col="institutionalColor">Institutional color</th>
+                                <th data-i18n="admin.ownerName" data-col="ownerName">Owner</th>
+                                <th data-i18n="admin.contactName" data-col="contactName">Contact name</th>
+                                <th data-i18n="admin.billingEmail" data-col="billingEmail">Billing contact email</th>
+                                <th data-i18n="admin.contractStartDate" data-col="contractStartDate">Contract start date</th>
+                                <th data-i18n="admin.contractFile" data-col="contractFile">Contract</th>
+                                <th data-i18n="admin.plan" data-col="plan">Plan / package</th>
+                                <th data-i18n="admin.contractedCost" data-col="contractedCost">Contracted cost $</th>
+                                <th data-i18n="admin.monthlyPayment" data-col="monthlyPayment">Monthly payment</th>
+                                <th data-i18n="admin.costCenters" data-col="costCenters">Cost Centers</th>
+                                <th data-i18n="admin.addenda" data-col="addenda">Anexos</th>
+                                <th data-i18n="admin.anexosPayment" data-col="anexosPayment">Anexos payment</th>
+                                <th data-i18n="admin.anexoChanges" data-col="anexoChanges">Anexos changes</th>
+                                <th data-i18n="admin.contractRegisteredDate" data-col="contractRegisteredDate">Contract registration date</th>
+                                <th data-i18n="admin.contractEndDate" data-col="contractEndDate">Contract end date</th>
+                                <th data-i18n="admin.activeTree" data-col="activeTree">Active permission tree</th>
+                                <th data-i18n="business.username" data-col="username">Username</th>
+                                <th data-i18n="admin.status" data-col="status">Status</th>
+                                <th data-col="actions"></th>
                             </tr>
                         </thead>
                         <tbody id="clients-table-body">
@@ -569,16 +569,16 @@
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="anexo-changes-modal-title">
             <h3 id="anexo-changes-modal-title" data-i18n="admin.anexoChangesTitle">Anexos Changes</h3>
             <p id="anexo-changes-subtitle" class="admin-subtitle"></p>
-            <div class="data-table-wrapper" style="max-height: 60vh;">
+            <div class="data-table-wrapper" data-table-id="anexos-changes" style="max-height: 60vh;">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="admin.colModule">Module</th>
-                            <th data-i18n="admin.colAction">Action</th>
-                            <th data-i18n="admin.colRequestedBy">Requested by</th>
-                            <th data-i18n="admin.colRequestedAt">Request date</th>
-                            <th data-i18n="admin.colChangedAt">Change date</th>
-                            <th data-i18n="admin.colDuration">Contracted duration</th>
+                            <th data-i18n="admin.colModule" data-col="colModule">Module</th>
+                            <th data-i18n="admin.colAction" data-col="colAction">Action</th>
+                            <th data-i18n="admin.colRequestedBy" data-col="colRequestedBy">Requested by</th>
+                            <th data-i18n="admin.colRequestedAt" data-col="colRequestedAt">Request date</th>
+                            <th data-i18n="admin.colChangedAt" data-col="colChangedAt">Change date</th>
+                            <th data-i18n="admin.colDuration" data-col="colDuration">Contracted duration</th>
                         </tr>
                     </thead>
                     <tbody id="anexo-changes-table-body">

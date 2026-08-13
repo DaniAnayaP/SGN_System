@@ -1746,6 +1746,12 @@
         padding: 0.6rem 0.9rem;
         text-align: left;
         white-space: nowrap;
+        /* Only bites once a column is actually resized narrower than its
+           content (see Dashboard.js attachResizeHandle) — with the default
+           auto widths nothing overflows, so this has zero visual effect
+           until the user drags a column narrower. */
+        overflow: hidden;
+        text-overflow: ellipsis;
         border-bottom: 1px solid var(--color-border);
         /* Faint column divider — color-mix keeps it theme-aware (fades
            correctly in dark mode too, since --color-border itself changes
@@ -1782,17 +1788,29 @@
         color: var(--color-text-secondary);
         border-bottom: 2px solid var(--color-border);
     }
-    .data-table td:first-child{
+    /* Pinned columns (see Dashboard.js: renderDataTableColumnControls /
+       applyDataTableColumnLayout) — generalizes what used to be a hardcoded
+       "first column only" sticky rule into up to 4 user-chosen columns.
+       `left` varies per column (cumulative width of the pinned columns
+       before it) so it's set inline by JS, not here. Same z-index scheme as
+       before: header row (2) < pinned body cells (1) < pinned header cells
+       (3, since a pinned header cell is sticky on BOTH axes and must win
+       the top-left overlap against both the plain sticky header and other
+       pinned body cells scrolling under it). */
+    .data-table td.data-table-col-pinned{
         position: sticky;
-        left: 0;
         z-index: 1;
         background-color: var(--color-surface);
-        border-right: 1px solid var(--color-border);
     }
-    .data-table th:first-child{
+    .data-table th.data-table-col-pinned{
         position: sticky;
-        left: 0;
         z-index: 3;
+    }
+    /* Only the LAST pinned column gets the strong opaque divider — matches
+       the old first-column look; pinned-to-pinned edges in between keep the
+       regular faint divider from the th/td rule above. */
+    .data-table th.data-table-col-pinned-edge,
+    .data-table td.data-table-col-pinned-edge{
         border-right: 1px solid var(--color-border);
     }
     /* The empty-state row's single colspan cell renders as wide as all 10
@@ -1811,6 +1829,50 @@
         display: inline-block;
         padding: 2.5rem 1.5rem;
         color: var(--color-text-secondary);
+    }
+    /* Column resize handle (Dashboard.js attachResizeHandle) — a thin strip
+       on the right edge of each header cell. The header cell is already
+       position:sticky (see .data-table thead th above), which establishes
+       a valid containing block for this position:absolute child, so no
+       extra positioning context is needed here. */
+    .data-table-col-resize-handle{
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 6px;
+        cursor: col-resize;
+        z-index: 4;
+        touch-action: none;
+    }
+    .data-table-col-resize-handle:hover,
+    .data-table-col-resize-handle.data-table-col-resizing{
+        background-color: var(--color-border);
+    }
+    /* Drag-to-reorder — shared by both the header's horizontal reorder
+       (Dashboard.js enableHeaderDragReorder, applies to <th>) and the pin
+       picker modal's vertical reorder (enableListDragReorder, applies to
+       plain .admin-module-row divs), hence not scoped to .data-table. */
+    .data-table-col-dragging{
+        opacity: 0.4;
+    }
+    .data-table-col-drop-indicator{
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background-color: var(--color-text-primary);
+        z-index: 5;
+        pointer-events: none;
+    }
+    /* Drag handle icon shown next to each row in the "pin columns" picker
+       modal's own (vertical, unrelated to the header's horizontal one)
+       reorder list. */
+    .data-table-col-picker-handle{
+        cursor: grab;
+        color: var(--color-text-secondary);
+        margin-right: 0.5rem;
+        flex-shrink: 0;
     }
 
     /*border: 2px solid red; -- Borde colorido*/

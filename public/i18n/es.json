@@ -451,6 +451,15 @@
     "topBarExpand": "Expandir barra superior",
     "topBarCollapse": "Contraer barra superior",
     "decreaseFontSize": "Reducir tamaño de letra",
-    "increaseFontSize": "Aumentar tamaño de letra"
+    "increaseFontSize": "Aumentar tamaño de letra",
+    "pinColumns": "Fijar columnas",
+    "pinColumnsTitle": "Fijar columnas",
+    "pinColumnsHint": "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.",
+    "pinColumnsLimitReached": "Puedes fijar hasta 4 columnas.",
+    "pinColumnsOther": "Otras columnas",
+    "columnVisibility": "Mostrar/ocultar columnas",
+    "columnVisibilityTitle": "Mostrar/ocultar columnas",
+    "columnVisibilityHint": "Elige qué columnas mostrar.",
+    "dragToReorder": "Arrastrar para reordenar"
   }
 }
