@@ -1790,6 +1790,35 @@
         opacity: 0.4;
         cursor: default;
     }
+    /* "+ Nuevo Registro"-style button — same toolbar row as the zoom/pin/
+       visibility controls, but pinned to the LEFT via margin-right:auto
+       (that bar is justify-content:flex-end, so without this it would just
+       join the other buttons on the right) since it needs visible text,
+       not just an icon like its siblings. Page-specific (injected by that
+       page's own script, e.g. OpTransVolCombustible.js), not part of the
+       generic Dashboard.js renderer that every table gets automatically. */
+    .data-table-new-record-btn{
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin-right: auto;
+        padding: 0.4rem 0.9rem;
+        border: 1px solid var(--color-border);
+        border-radius: 1rem;
+        background-color: var(--color-surface);
+        color: var(--color-text-secondary);
+        font: inherit;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .data-table-new-record-btn:hover{
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .data-table-new-record-btn i{
+        font-size: 0.95rem;
+    }
     .data-table{
         border-collapse: separate;
         border-spacing: 0;

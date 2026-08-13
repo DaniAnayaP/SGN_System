@@ -467,6 +467,7 @@
     "uiScale": "System size",
     "uiScaleIdeal": "Ideal",
     "uiScaleDecrease": "Decrease size",
-    "uiScaleIncrease": "Increase size"
+    "uiScaleIncrease": "Increase size",
+    "newRecord": "New Record"
   }
 }

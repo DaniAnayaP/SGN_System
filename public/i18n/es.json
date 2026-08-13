@@ -467,6 +467,7 @@
     "uiScale": "Tamaño del sistema",
     "uiScaleIdeal": "Ideal",
     "uiScaleDecrease": "Disminuir tamaño",
-    "uiScaleIncrease": "Aumentar tamaño"
+    "uiScaleIncrease": "Aumentar tamaño",
+    "newRecord": "Nuevo Registro"
   }
 }

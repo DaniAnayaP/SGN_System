@@ -425,8 +425,40 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="new-record-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-record-modal-title">
+            <h3 id="new-record-modal-title" data-i18n="main.newRecord">New Record</h3>
+            <div class="admin-form-grid">
+                <div class="admin-field">
+                    <label for="new-record-date" data-i18n="main.colFecha">Date</label>
+                    <input type="date" id="new-record-date" required>
+                </div>
+                <div class="admin-field">
+                    <label for="new-record-week" data-i18n="main.colNoSemCobro">Collection Week No.</label>
+                    <input type="number" id="new-record-week" min="1" step="1">
+                </div>
+                <div class="admin-field">
+                    <label for="new-record-service-type" data-i18n="main.colTipoServicios">Service Type</label>
+                    <input type="text" id="new-record-service-type">
+                </div>
+                <div class="admin-field">
+                    <label for="new-record-status" data-i18n="main.filterStatus">Status</label>
+                    <select id="new-record-status">
+                        <option value="active" data-i18n="main.filterActive">Active</option>
+                        <option value="inactive" data-i18n="main.filterInactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            <div id="new-record-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="new-record-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="new-record-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="CategoryScreen.js"></script>
+    <script src="OpTransVolCombustible.js"></script>
 </body>
 </html>
