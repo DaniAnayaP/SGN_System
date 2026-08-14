@@ -1290,7 +1290,8 @@ app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
 // contracted-modules/branding above.
 app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey) });
+    const recordId = req.query.recordId ? Number(req.query.recordId) : undefined;
+    res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey, recordId) });
 });
 
 // --- Pending changes (Autorizar approval workflow) --------------------------

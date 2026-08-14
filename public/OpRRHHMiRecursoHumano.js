@@ -130,6 +130,14 @@ function buildActionsCell(worker, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
+    const historyBtn = document.createElement('button');
+    historyBtn.type = 'button';
+    historyBtn.className = 'admin-icon-btn';
+    historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+    historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+    historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+    historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, worker.id));
+    td.appendChild(historyBtn);
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';

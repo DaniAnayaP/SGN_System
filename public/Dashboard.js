@@ -154,7 +154,7 @@ const EMBEDDED_TRANSLATIONS = {
             newHireRecord: "New Record", colHrDbId: "Unique Database #", colHrRecordId: "Unique Record #", colHrFullName: "Full Name", colHrPosition: "Position", colHrStartDate: "Start Date", colHrDepartment: "Assigned Department", colHrArea: "Assigned Area", colHrEmail: "Email", colHrPhone: "Phone", colHrStatus: "Status", recordDeleteConfirm: "Delete this record?",
             colFuelTripKmBefore: "Trip KM Before Load", colFuelTripKmAfter: "Trip KM After Load", colFuelTripKmTotal: "Total Trip KM Acquired",
             colFuelType: "Fuel Type", colFuelLiters: "Liters", colFuelCostPerLiter: "Cost per Liter", fuelTypeSelect: "Select...", fuelTypeDiesel: "Diesel", fuelTypeMagna: "Regular", fuelTypePremium: "Premium",
-            changeHistory: "Change history", changeHistoryTitle: "Change history", changeHistoryEmpty: "No changes recorded yet.", changeHistoryCreated: "Record created", changeHistoryDeleted: "Record deleted", changeHistoryDate: "Date", changeHistoryUser: "User", changeHistoryRecord: "Record", changeHistoryChange: "Change",
+            changeHistory: "Change history", changeHistoryTitle: "Change history", changeHistoryTitleRecord: "Change history for this record", changeHistoryEmpty: "No changes recorded yet.", changeHistoryCreated: "Record created", changeHistoryDeleted: "Record deleted", changeHistoryDate: "Date", changeHistoryUser: "User", changeHistoryRecord: "Record", changeHistoryChange: "Change",
             fieldLocked: "Already saved — you need permission to edit it",
             tablePrefix: "Table", permSoloVer: "View Only", permVerYOperar: "View & Operate", permEditar: "Edit", permAutorizar: "Authorize",
             changePending: "Pending authorization", changeHistoryRequestedBy: "Requested by", changeHistoryAuthorizedBy: "Authorized by",
@@ -288,7 +288,7 @@ const EMBEDDED_TRANSLATIONS = {
             newHireRecord: "Nuevo Registro", colHrDbId: "# Único de Base de Datos", colHrRecordId: "# Único de Registro", colHrFullName: "Nombre Completo", colHrPosition: "Puesto", colHrStartDate: "Fecha de Ingreso", colHrDepartment: "Departamento Asignado", colHrArea: "Área Asignada", colHrEmail: "Correo Electrónico", colHrPhone: "Teléfono", colHrStatus: "Estatus", recordDeleteConfirm: "¿Eliminar este registro?",
             colFuelTripKmBefore: "TRIP KM antes carga", colFuelTripKmAfter: "TRIP KM después carga", colFuelTripKmTotal: "Total TRIP KM adquiridos",
             colFuelType: "Tipo Combustible", colFuelLiters: "Cant Litros", colFuelCostPerLiter: "Costo x Litro", fuelTypeSelect: "Seleccionar...", fuelTypeDiesel: "Diésel", fuelTypeMagna: "Magna", fuelTypePremium: "Premium",
-            changeHistory: "Historial de cambios", changeHistoryTitle: "Historial de cambios", changeHistoryEmpty: "Aún no hay cambios registrados.", changeHistoryCreated: "Registro creado", changeHistoryDeleted: "Registro eliminado", changeHistoryDate: "Fecha", changeHistoryUser: "Usuario", changeHistoryRecord: "Registro", changeHistoryChange: "Cambio",
+            changeHistory: "Historial de cambios", changeHistoryTitle: "Historial de cambios", changeHistoryTitleRecord: "Historial de cambios de este registro", changeHistoryEmpty: "Aún no hay cambios registrados.", changeHistoryCreated: "Registro creado", changeHistoryDeleted: "Registro eliminado", changeHistoryDate: "Fecha", changeHistoryUser: "Usuario", changeHistoryRecord: "Registro", changeHistoryChange: "Cambio",
             fieldLocked: "Ya se guardó — necesitas permiso para modificarlo",
             tablePrefix: "Tabla", permSoloVer: "Solo Ver", permVerYOperar: "Ver y Operar", permEditar: "Editar", permAutorizar: "Autorizar",
             changePending: "Pendiente de autorización", changeHistoryRequestedBy: "Solicitó", changeHistoryAuthorizedBy: "Autorizó",
@@ -573,8 +573,39 @@ function applyAreaFilter(data) {
     };
 }
 
+// "Pantalla habilitada" gate for the department sidebar — runs after
+// applyAreaFilter, when `s.items` for the selected department is already
+// the flat list of categorías (Catálogos/Operaciones/...) for the
+// currently-selected área. Filters each categoría's pantallas down to the
+// ones this user's grants actually cover (hasScreenGrant, same 3-tier
+// match the permission tree itself uses), then drops any categoría left
+// with zero pantallas so an admin restricting a profile doesn't leave a
+// dangling empty heading in the sidebar. selectedDepartment/selectedArea
+// are read directly (not threaded through `data`) since this only ever
+// runs against the currently-selected department's own section.
+function applyScreenGrantFilter(data) {
+    if (!selectedDepartment || !selectedArea) return data;
+    return {
+        ...data,
+        sections: data.sections.map((s) => {
+            if (s.id !== selectedDepartment) return s;
+            return {
+                ...s,
+                items: s.items
+                    .map((cat) => ({
+                        ...cat,
+                        submenu: (cat.submenu || []).filter((pantalla) => (
+                            pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.id}`)
+                        )),
+                    }))
+                    .filter((cat) => (cat.submenu || []).length > 0),
+            };
+        }),
+    };
+}
+
 function renderFilteredMenu() {
-    if (menuData) renderMenu(applyAreaFilter(applyDepartmentFilter(menuData)));
+    if (menuData) renderMenu(applyScreenGrantFilter(applyAreaFilter(applyDepartmentFilter(menuData))));
 }
 
 // Most areas' full names are already short enough to show as-is; a few
@@ -2013,13 +2044,20 @@ function renderChangeHistoryRow(cells) {
     return tr;
 }
 
-async function openChangeHistory(tableId) {
+// `recordId`, when passed (from a per-row history icon — see
+// buildHistoryButton below), scopes the same modal/endpoint to just that
+// record instead of the whole table — same UI, same data source, just a
+// narrower ?recordId= query param server-side.
+async function openChangeHistory(tableId, recordId) {
     ensureChangeHistoryModal();
     changeHistoryModal.hidden = false;
+    const titleEl = changeHistoryModal.querySelector('#data-table-history-title');
+    if (titleEl) titleEl.textContent = recordId ? t('main.changeHistoryTitleRecord') : t('main.changeHistoryTitle');
     changeHistoryList.innerHTML = '';
     changeHistoryList.appendChild(renderChangeHistoryRow([t('main.changeHistoryEmpty'), '', '', '', '', '']));
     try {
-        const res = await fetch(`/api/business/table-changes/${encodeURIComponent(tableId)}`, { credentials: 'include' });
+        const url = `/api/business/table-changes/${encodeURIComponent(tableId)}${recordId ? `?recordId=${encodeURIComponent(recordId)}` : ''}`;
+        const res = await fetch(url, { credentials: 'include' });
         if (!res.ok) return;
         const { changes } = await res.json();
         if (!changes || !changes.length) return;
@@ -2929,6 +2967,23 @@ function isUnrestrictedClientAdmin() {
     return !!currentUser?.isClientAdmin && (cachedBusinessProfile?.effectiveGrants || []).length === 0;
 }
 
+// "Pantalla habilitada" — whether this specific {sectionId, itemId,
+// submenuId} leaf is covered by the user's grants, using the SAME 3-tier
+// fallback as PermissionTree.js's own isGranted() (exact leaf, OR a
+// broader item-level grant, OR a broader section-level grant) — so a
+// profile configured with a broad "select all" at Área or Departamento
+// level already covers every pantalla under it, no different from how
+// that same grant already works inside the permission tree editor itself.
+function hasScreenGrant(sectionId, itemId, submenuId) {
+    if (isUnrestrictedClientAdmin()) return true;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    return grants.some((g) => (
+        (g.sectionId === sectionId && g.itemId === itemId && g.submenuId === submenuId)
+        || (g.sectionId === sectionId && g.itemId === itemId && !g.submenuId)
+        || (g.sectionId === sectionId && !g.itemId && !g.submenuId)
+    ));
+}
+
 // Every plain General item (the 7 top-bar buttons, plus Departamento/Área/
 // C. Costos below) lives at itemId level directly under 'main' — no submenu
 // nesting — so its grant is keyed by itemId (sectionId 'main', submenuId
@@ -3663,6 +3718,14 @@ async function initDashboard({ activePage } = {}) {
         // permissions ready before the first render, not just whenever they
         // happen to open the "Datos de Usuario del Negocio" panel.
         [contractedModuleKeys] = await Promise.all([fetchContractedModuleKeys(), loadBusinessProfile()]);
+        // "Pantalla habilitada" — direct-URL block for the handful of real
+        // pages mapped in SCREEN_GRANT_PATHS (sidebar-hiding alone doesn't
+        // stop someone who already knows/bookmarked the URL). cachedBusinessProfile
+        // is populated by loadBusinessProfile() above, so this check is safe here.
+        if (activePage && !hasScreenAccess(activePage)) {
+            window.location.replace('Inicio-en.html');
+            return null;
+        }
         availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
         if (!availableDepartments.some((d) => d.key === selectedDepartment)) {
             selectedDepartment = availableDepartments.length === 1 ? availableDepartments[0].key : null;
@@ -3741,6 +3804,26 @@ const TABLE_GRANT_PATHS = {
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
 };
+
+// "Pantalla habilitada" — direct-URL page-load block, on top of the
+// sidebar-hiding applyScreenGrantFilter already does. Only mapped for
+// pantallas with a REAL page behind them and an UNAMBIGUOUS single spot in
+// the tree (an área override, not the shared areaCategories template —
+// something like "cat-catalogos-1" is reused verbatim under ~40 different
+// áreas, so a bare activePage id alone can't say which one a given session
+// is even in; those stay sidebar-filtered only, not URL-blocked). Keyed by
+// the same `activePage` id every page.js already passes to initDashboard.
+const SCREEN_GRANT_PATHS = {
+    'cat-operaciones-transporte-vol-combustible': TABLE_GRANT_PATHS['registro-combustible'],
+    'cat-operaciones-rrhh-mi-recurso-humano': TABLE_GRANT_PATHS['mi-recurso-humano'],
+    'cat-operaciones-transporte-vol-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-admin/cat-operaciones-transporte-vol-traslados' },
+};
+
+function hasScreenAccess(activePage) {
+    const path = SCREEN_GRANT_PATHS[activePage];
+    if (!path) return true; // not one of the mapped pages — unaffected, same as today
+    return hasScreenGrant(path.sectionId, path.itemId, path.submenuPrefix);
+}
 
 // No grant at all on a column behaves as 'solo-ver' — mirrors
 // getColumnGrantLevel in db.js exactly (kept in sync by hand, same as
@@ -3884,6 +3967,7 @@ window.Dashboard = {
     attachInlineEdit,
     hasColumnEditGrant,
     canEditField,
+    openChangeHistory,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },

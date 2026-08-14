@@ -72,6 +72,13 @@ function renderCostCenters() {
         const tdActions = document.createElement('td');
         tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
+        const historyBtn = document.createElement('button');
+        historyBtn.type = 'button';
+        historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+        historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+        historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+        historyBtn.addEventListener('click', () => Dashboard.openChangeHistory('centros-costo', cc.id));
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'admin-icon-btn';
@@ -84,7 +91,7 @@ function renderCostCenters() {
         deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
         deleteBtn.addEventListener('click', () => removeCostCenter(cc));
-        tdActions.append(editBtn, deleteBtn);
+        tdActions.append(historyBtn, editBtn, deleteBtn);
 
         tr.append(tdCode, tdName, tdResponsible, tdDescription, tdActions);
         tableBody.appendChild(tr);

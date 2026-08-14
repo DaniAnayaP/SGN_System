@@ -526,6 +526,7 @@
     "recordDeleteConfirm": "Delete this record?",
     "changeHistory": "Change history",
     "changeHistoryTitle": "Change history",
+    "changeHistoryTitleRecord": "Change history for this record",
     "changeHistoryEmpty": "No changes recorded yet.",
     "changeHistoryCreated": "Record created",
     "changeHistoryDeleted": "Record deleted",

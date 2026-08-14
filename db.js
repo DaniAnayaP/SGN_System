@@ -864,7 +864,15 @@ function recordAnexoChange(clientId, { moduleKey, action, requestedBy, requested
 // dotted i18n key (e.g. "main.colFuelPlates") so the frontend can call
 // Dashboard.t(field_key) directly no matter which i18n namespace that table
 // uses — left empty for create/delete rows, which have no single field.
-function getTableChanges(clientId, tableKey) {
+// recordId is optional — pass it to scope the same query to a single row's
+// history (the per-row "control de cambios" icon), omit it for the
+// table-wide one (the toolbar icon).
+function getTableChanges(clientId, tableKey, recordId) {
+    if (recordId != null) {
+        return db
+            .prepare('SELECT * FROM data_table_changes WHERE client_id = ? AND table_key = ? AND record_id = ? ORDER BY changed_at DESC, id DESC')
+            .all(clientId, tableKey, recordId);
+    }
     return db
         .prepare('SELECT * FROM data_table_changes WHERE client_id = ? AND table_key = ? ORDER BY changed_at DESC, id DESC')
         .all(clientId, tableKey);
@@ -1291,6 +1299,95 @@ function seedColumnLevelGrants() {
     console.log('[db] Seeded Ver y Operar for pre-existing column access (one-time migration).');
 }
 seedColumnLevelGrants();
+
+// --- One-time data migration: seed pantalla-visibility for pre-existing --
+// --- access ("Pantalla habilitada" in the permission tree) ---------------
+// Before this round, the department sidebar showed every pantalla (real
+// and placeholder) inside a contracted department to any user, regardless
+// of their profile's grants — the pantalla checkbox in the tree was purely
+// informational. Now the sidebar (and, for the handful of pantallas with a
+// real page, direct URL navigation too — see SCREEN_GRANT_PATHS in
+// Dashboard.js) filters by grant. Without this seed, every existing
+// profile/user would suddenly see an empty (or near-empty) sidebar for
+// departments they use today, since almost none were ever configured
+// leaf-by-leaf at the pantalla level — it had no effect before now, so
+// there was no reason to.
+//
+// For every profile/user that already has SOME grant intersecting a given
+// {sectionId, areaId} (any submenuId under it, or a broader área/
+// departamento "select all"), seeds full pantalla-leaf visibility for
+// EVERY pantalla under that área — walking the same areaCategories/
+// areaOverrides template PermissionTree.js and Dashboard.js's own sidebar
+// chain already use, read directly from public/data/menu.json (the single
+// source of truth for the tree shape, not a hand-copied duplicate). Runs
+// exactly once (schema_migrations_data), same reasoning as
+// seedColumnLevelGrants above: an admin who later intentionally restricts
+// a profile's screens must not be silently re-granted on the next restart.
+const SCREEN_VISIBILITY_SEED_KEY = 'seed-screen-visibility-v1';
+// Must match GENERIC_AREAS in PermissionTree.js/Dashboard.js exactly — the
+// fallback área list for any department with no real named áreas.
+const GENERIC_AREA_IDS = ['area-1', 'area-2', 'area-3'];
+
+function categoriesForAreaServer(sectionId, areaId, categories, areaOverrides) {
+    const overrides = areaOverrides && areaOverrides[`${sectionId}/${areaId}`];
+    if (!overrides) return categories;
+    return categories.map((cat) => (
+        overrides[cat.id] && overrides[cat.id].length ? { ...cat, submenu: overrides[cat.id] } : cat
+    ));
+}
+
+function seedScreenVisibilityGrants() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SCREEN_VISIBILITY_SEED_KEY)) return;
+
+    let menuJson;
+    try {
+        menuJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'data', 'menu.json'), 'utf8'));
+    } catch (err) {
+        console.error('[db] Could not read menu.json for screen-visibility migration, skipping:', err.message);
+        return;
+    }
+    const departmentIds = (menuJson.sections || []).map((s) => s.id).filter((id) => id !== 'main');
+    const areaCategories = menuJson.areaCategories || [];
+    const areaOverrides = menuJson.areaOverrides || {};
+    const areasByDept = menuJson.areas || {};
+
+    const seed = db.transaction(() => {
+        for (const [ownerTable, ownerColumn] of [['profile_grants', 'profile_id'], ['user_grants', 'user_id']]) {
+            for (const sectionId of departmentIds) {
+                const areaIds = areasByDept[sectionId] ? areasByDept[sectionId].map((a) => a.id) : GENERIC_AREA_IDS;
+                for (const itemId of areaIds) {
+                    // Owners with ANY existing grant intersecting this área
+                    // (exact leaf under it, OR the whole área/department
+                    // broadly "select all"-ed).
+                    const owners = db.prepare(`
+                        SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${ownerTable}
+                        WHERE (section_id = ? AND item_id = ?)
+                           OR (section_id = ? AND item_id IS NULL AND submenu_id IS NULL)
+                    `).all(sectionId, itemId, sectionId);
+                    if (!owners.length) continue;
+
+                    const categories = categoriesForAreaServer(sectionId, itemId, areaCategories, areaOverrides);
+                    const submenuIds = categories.flatMap((cat) => (cat.submenu || []).map((pantalla) => `${cat.id}/${pantalla.id}`));
+                    if (!submenuIds.length) continue;
+
+                    const hasGrant = db.prepare(`SELECT 1 FROM ${ownerTable} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
+                    const insertGrant = db.prepare(`INSERT INTO ${ownerTable} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
+                    owners.forEach(({ ownerId }) => {
+                        submenuIds.forEach((submenuId) => {
+                            if (!hasGrant.get(ownerId, sectionId, itemId, submenuId)) {
+                                insertGrant.run(ownerId, sectionId, itemId, submenuId);
+                            }
+                        });
+                    });
+                }
+            }
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SCREEN_VISIBILITY_SEED_KEY);
+    });
+    seed();
+    console.log('[db] Seeded pantalla visibility for pre-existing department/área access (one-time migration).');
+}
+seedScreenVisibilityGrants();
 
 // --- Query helpers: plans (Planes y Paquetes, GEIPSA-wide, not per-client) ---
 // modules is stored as a JSON array of MODULE_CATALOG keys; costCentersLimit

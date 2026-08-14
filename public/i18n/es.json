@@ -526,6 +526,7 @@
     "recordDeleteConfirm": "¿Eliminar este registro?",
     "changeHistory": "Historial de cambios",
     "changeHistoryTitle": "Historial de cambios",
+    "changeHistoryTitleRecord": "Historial de cambios de este registro",
     "changeHistoryEmpty": "Aún no hay cambios registrados.",
     "changeHistoryCreated": "Registro creado",
     "changeHistoryDeleted": "Registro eliminado",
