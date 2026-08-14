@@ -475,6 +475,26 @@ async function openPlanChangeHistory(plan) {
     }
 }
 
+// "+ Nuevo Plan" — same toolbar-button placement/style as "+ Nuevo
+// Registro" on Registro Combustible (Inicio-en.css .data-table-new-record-btn,
+// prepended into the .data-table-zoom bar Dashboard.js already renders for
+// every .data-table-wrapper), but this one just navigates to the existing
+// dedicated creation page (Admin-PlanNuevo.html) instead of opening a
+// modal — Mis Planes never had an inline create flow, no reason to build
+// one now just for this button.
+function renderNewPlanButton() {
+    const wrapper = document.querySelector('[data-table-id="mis-planes"]');
+    const toolbar = wrapper?.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    if (toolbar.querySelector('.data-table-new-record-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-new-record-btn';
+    btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="menu.addPlanNew">${Dashboard.t('menu.addPlanNew')}</span>`;
+    btn.addEventListener('click', () => { window.location.href = 'Admin-PlanNuevo.html'; });
+    toolbar.prepend(btn);
+}
+
 document.addEventListener('dashboard:language-changed', () => {
     renderPlans();
     renderModuleToggles(getCheckedModuleKeys());
@@ -488,6 +508,7 @@ document.addEventListener('dashboard:language-changed', () => {
             window.location.replace('Inicio-en.html');
             return;
         }
+        renderNewPlanButton();
         await Promise.all([loadPlans(), loadModuleCatalog()]);
     } catch (err) {
         console.error('Admin (Planes) failed to initialize:', err);
