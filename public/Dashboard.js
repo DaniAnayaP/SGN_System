@@ -1074,31 +1074,65 @@ const SECTION_LABEL_KEYS = {
     'steering-committee': 'menu.steeringCommittee',
     certifications: 'menu.certifications',
 };
-const GENERAL_ITEM_IDS = ['home', 'panel', 'dashboard'];
-
 function sectionGrantLabel(sectionId) {
     if (sectionId === 'main') return t('menu.mainSection');
     return t(SECTION_LABEL_KEYS[sectionId] || sectionId);
 }
 
+// Walks a compound submenuId ("a/b/c") down a chain of `.submenu` arrays,
+// returning the joined labels (falling back to the raw id segment wherever
+// a node can't be found — same graceful-degradation as t() on an unknown
+// key). Shared by both the 'main' branch (btn-configuracion > ... > column)
+// and the department branch (categoría > pantalla > columna) below — same
+// compound-key convention PermissionTree.js's render() produces.
+function walkSubmenuChain(startNode, submenuId) {
+    const labels = [];
+    let node = startNode;
+    for (const part of submenuId.split('/')) {
+        const next = (node?.submenu || []).find((s) => s.id === part);
+        labels.push(next ? t(next.labelKey, next.labelParams) : part);
+        node = next;
+    }
+    return labels;
+}
+
 // Resolves one { sectionId, itemId, submenuId } grant row into a readable
-// "Departamento > Categoría > Pantalla" string. Inicio/Panel/Tablero live
-// under menuData.sections' main section; every other item id comes from the
-// shared areaCategories template (see PermissionTree.js for the same split).
+// "Departamento > Área > Categoría > Pantalla[ > Columna]" string (or
+// "Departamento > Apartado > ..." for 'main'-section grants, which have no
+// área dimension). Inicio/Panel/Tablero live under menuData.sections' main
+// section; every department grant's itemId is now an área id (see
+// PermissionTree.js — each área carries its OWN resolved category list),
+// so it's resolved against AREAS_BY_DEPARTMENT/GENERIC_AREAS (the same
+// catalog the área picker already uses) rather than menuData.areaCategories.
 function resolveGrantLabel(grant) {
     const sectionLabel = sectionGrantLabel(grant.sectionId);
     if (!grant.itemId) return sectionLabel;
 
-    const item = GENERAL_ITEM_IDS.includes(grant.itemId)
-        ? (menuData?.sections?.find((s) => s.id === 'main')?.items || []).find((i) => i.id === grant.itemId)
-        : (menuData?.areaCategories || []).find((i) => i.id === grant.itemId);
-    if (!item) return sectionLabel;
+    if (grant.sectionId === 'main') {
+        const item = (menuData?.sections?.find((s) => s.id === 'main')?.items || []).find((i) => i.id === grant.itemId);
+        if (!item) return sectionLabel;
+        const itemLabel = t(item.labelKey, item.labelParams);
+        if (!grant.submenuId) return `${sectionLabel} > ${itemLabel}`;
+        return `${sectionLabel} > ${itemLabel} > ${walkSubmenuChain(item, grant.submenuId).join(' > ')}`;
+    }
 
-    const itemLabel = t(item.labelKey, item.labelParams);
-    if (!grant.submenuId) return `${sectionLabel} > ${itemLabel}`;
+    const area = (AREAS_BY_DEPARTMENT[grant.sectionId] || GENERIC_AREAS).find((a) => a.key === grant.itemId);
+    if (!area) return sectionLabel;
+    const areaLabel = t(area.labelKey, area.labelParams);
+    if (!grant.submenuId) return `${sectionLabel} > ${areaLabel}`;
 
-    const sm = (item.submenu || []).find((s) => s.id === grant.submenuId);
-    return `${sectionLabel} > ${itemLabel} > ${sm ? t(sm.labelKey, sm.labelParams) : grant.submenuId}`;
+    const [categoryId, ...rest] = grant.submenuId.split('/');
+    const category = (menuData?.areaCategories || []).find((c) => c.id === categoryId);
+    if (!category) return `${sectionLabel} > ${areaLabel} > ${categoryId}`;
+    const categoryLabel = t(category.labelKey, category.labelParams);
+    if (!rest.length) return `${sectionLabel} > ${areaLabel} > ${categoryLabel}`;
+
+    // The category's pantallas are área-specific (menu.json's areaOverrides,
+    // same lookup categoriesForArea does in PermissionTree.js) — fall back
+    // to the shared placeholder template if this área has no override.
+    const override = menuData?.areaOverrides?.[`${grant.sectionId}/${grant.itemId}`]?.[categoryId];
+    const categoryForLookup = override && override.length ? { ...category, submenu: override } : category;
+    return `${sectionLabel} > ${areaLabel} > ${categoryLabel} > ${walkSubmenuChain(categoryForLookup, rest.join('/')).join(' > ')}`;
 }
 
 // Departments this user actually has some access to, derived from their
@@ -3554,8 +3588,8 @@ async function initDashboard({ activePage } = {}) {
 // by hand when a table's pantalla moves in the tree or a new table is added.
 const TABLE_GRANT_PATHS = {
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service' },
-    'registro-combustible': { sectionId: 'supply-chain', itemId: 'cat-operaciones', submenuPrefix: 'cat-operaciones-transporte-vol-combustible' },
-    'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'cat-operaciones', submenuPrefix: 'cat-operaciones-rrhh-mi-recurso-humano' },
+    'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
+    'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
 };
 
 function hasColumnEditGrant(tableKey, colKey) {

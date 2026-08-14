@@ -845,8 +845,8 @@ function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fie
 // that pantalla's column entries in menu.json exactly.
 const TABLE_GRANT_PATHS = {
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service' },
-    'registro-combustible': { sectionId: 'supply-chain', itemId: 'cat-operaciones', submenuPrefix: 'cat-operaciones-transporte-vol-combustible' },
-    'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'cat-operaciones', submenuPrefix: 'cat-operaciones-rrhh-mi-recurso-humano' },
+    'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
+    'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
 };
 
 function hasColumnEditGrant(grants, tableKey, colKey) {

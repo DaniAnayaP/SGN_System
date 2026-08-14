@@ -180,5 +180,31 @@
       ]
     }
   },
+  "areas": {
+    "supply-chain": [
+      { "id": "sc-area-raw-material", "labelKey": "menu.area.rawMaterial" },
+      { "id": "sc-area-production", "labelKey": "menu.area.production" },
+      { "id": "sc-area-transport-1", "labelKey": "menu.area.transportVolume" },
+      { "id": "sc-area-distribution-center", "labelKey": "menu.area.distributionCenter" },
+      { "id": "sc-area-transport-2", "labelKey": "menu.area.transportLastMile" },
+      { "id": "sc-area-point-of-sale", "labelKey": "menu.area.pointOfSale" },
+      { "id": "sc-area-delivery", "labelKey": "menu.area.delivery" },
+      { "id": "sc-area-end-customer", "labelKey": "menu.area.endCustomer" },
+      { "id": "sc-area-customer-complaints", "labelKey": "menu.area.customerComplaints" }
+    ],
+    "human-resources": [
+      { "id": "hr-area-recruitment", "labelKey": "menu.area.recruitment" },
+      { "id": "hr-area-personnel-admin", "labelKey": "menu.area.personnelAdmin" },
+      { "id": "hr-area-training-development", "labelKey": "menu.area.trainingDevelopment" },
+      { "id": "hr-area-compensation-benefits", "labelKey": "menu.area.compensationBenefits" },
+      { "id": "hr-area-organizational-development", "labelKey": "menu.area.organizationalDevelopment" },
+      { "id": "hr-area-occupational-health-safety", "labelKey": "menu.area.occupationalHealthSafety" },
+      { "id": "hr-area-hris", "labelKey": "menu.area.hris" },
+      { "id": "hr-area-hr-analytics", "labelKey": "menu.area.hrAnalytics" }
+    ],
+    "certifications": [
+      { "id": "cert-area-iso-9001", "labelKey": "menu.area.iso9001" }
+    ]
+  },
   "footer": []
 }

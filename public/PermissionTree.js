@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// Reusable módulo/apartado/pantalla checkbox tree, built from data/menu.json.
-// Used by both Business-Roles.html (profile grants) and
-// Business-Accesos.html (per-user extra grants).
+// Reusable Departamento > Área > Apartado > Pantalla > Columna checkbox
+// tree, built from data/menu.json. Used by both Business-Roles.html
+// (profile grants) and Business-Accesos.html (per-user extra grants).
 //
 // Internally, state is always stored EXPANDED at the leaf (pantalla) level —
 // simpler and more robust than trying to track partial/broad grants during
@@ -58,24 +58,30 @@
         return res.json();
     }
 
-    // The grant model has no "área" dimension (a department section here
-    // covers every área within it) — an área-specific submenu override (see
-    // Dashboard.js effectiveAreaCategories, same areaOverrides data) REPLACES
-    // that category's generic Cat 1/Cat 2-style placeholders here too, same
-    // as the sidebar: once a category has real content anywhere in the
-    // department, the placeholder is no longer meaningful to grant. If more
-    // than one área overrides the same category, their real items are
-    // combined (still replacing the placeholder, not adding to it).
-    function withAreaOverrides(sectionId, categories, areaOverrides) {
-        if (!areaOverrides) return categories;
-        const overridesForSection = Object.entries(areaOverrides)
-            .filter(([key]) => key.startsWith(`${sectionId}/`))
-            .map(([, overrides]) => overrides);
-        if (!overridesForSection.length) return categories;
-        return categories.map((cat) => {
-            const extra = overridesForSection.flatMap((overrides) => overrides[cat.id] || []);
-            return extra.length ? { ...cat, submenu: extra } : cat;
-        });
+    // Fallback área list for the 8 departments with no named areas of their
+    // own (see AREAS_BY_DEPARTMENT/GENERIC_AREAS in Dashboard.js — this is a
+    // deliberate hand-kept-in-sync duplicate, same as data/menu.json's own
+    // "areas" key for the 3 departments that DO have real areas; touching
+    // Dashboard.js's own live, synchronous área picker to source this from
+    // menu.json instead was judged more risk than it's worth for this task).
+    const GENERIC_AREAS = [
+        { id: 'area-1', labelKey: 'menu.area.generic', labelParams: { n: 1 } },
+        { id: 'area-2', labelKey: 'menu.area.generic', labelParams: { n: 2 } },
+        { id: 'area-3', labelKey: 'menu.area.generic', labelParams: { n: 3 } },
+    ];
+
+    // Each área within a department gets its OWN resolved category list —
+    // an área-specific submenu override (menu.json's areaOverrides, keyed
+    // "<sectionId>/<areaId>") REPLACES that category's generic Cat 1/Cat
+    // 2-style placeholder for THIS área only (unlike the old
+    // department-wide merge, a given pantalla now belongs to exactly one
+    // área, matching the real sidebar/breadcrumb).
+    function categoriesForArea(sectionId, areaId, categories, areaOverrides) {
+        const overrides = areaOverrides && areaOverrides[`${sectionId}/${areaId}`];
+        if (!overrides) return categories;
+        return categories.map((cat) => (
+            overrides[cat.id] && overrides[cat.id].length ? { ...cat, submenu: overrides[cat.id] } : cat
+        ));
     }
 
     // A submenu entry can itself have a submenu (e.g. "Administración del
@@ -412,7 +418,7 @@
 
         return {
             async init(initialGrants) {
-                const { sections: allSections, areaCategories, areaOverrides } = await loadMenuData();
+                const { sections: allSections, areaCategories, areaOverrides, areas } = await loadMenuData();
                 // 'main' (Inicio, Tablero, Administración del Negocio, etc.)
                 // is core navigation, not a contracted module — always shown
                 // regardless of which módulos the client has contracted.
@@ -469,7 +475,19 @@
                     : null;
                 sectionsData = filtered.map((s) => {
                     if (s.id !== 'main') {
-                        return { ...s, items: [...generalItems, ...withAreaOverrides(s.id, areaCategories || [], areaOverrides)] };
+                        // Área is a real level now (Departamento > Área >
+                        // Apartado > Pantalla > Columna): each área in this
+                        // department becomes its own item, carrying its OWN
+                        // resolved category list — a pantalla belongs to
+                        // exactly one área, not merged across all of them.
+                        const deptAreas = (areas && areas[s.id]) || GENERIC_AREAS;
+                        const areaItems = deptAreas.map((area) => ({
+                            id: area.id,
+                            labelKey: area.labelKey,
+                            labelParams: area.labelParams,
+                            submenu: categoriesForArea(s.id, area.id, areaCategories || [], areaOverrides),
+                        }));
+                        return { ...s, items: [...generalItems, ...areaItems] };
                     }
                     const items = s.items
                         .filter((i) => i.id !== 'admin-business' && !BUTTON_CONFIG_ITEM_IDS.includes(i.id))
