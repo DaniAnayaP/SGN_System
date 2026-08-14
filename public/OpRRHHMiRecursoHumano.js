@@ -59,6 +59,14 @@ function textCell(key, value) {
 
 const TABLE_KEY = 'mi-recurso-humano';
 
+// Whether `key` (a PATCH bodyKey, e.g. "area") has an outstanding approval
+// request on this specific worker — comes straight from the server's GET
+// response (see getPendingColumnsByRecord in db.js), never decided
+// client-side.
+function isPending(worker, key) {
+    return (worker.pendingFields || []).includes(key);
+}
+
 async function patchWorker(id, patch) {
     try {
         const res = await fetch(`/api/business/hr-workers/${id}`, {
@@ -73,6 +81,13 @@ async function patchWorker(id, patch) {
             await refreshTable();
             return;
         }
+        const body = await res.json().catch(() => ({}));
+        if (body.rejectedFields?.length) {
+            alert(`${Dashboard.t('main.fieldLocked')}: ${body.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`);
+        } else if (body.pendingFields?.length) {
+            alert(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`);
+        }
+        await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano: failed to save change', err);
         alert(Dashboard.t('admin.saveError'));
@@ -141,8 +156,8 @@ function buildStatusCell(worker) {
         select.appendChild(opt);
     });
     select.value = worker.status || 'active';
-    select.disabled = !Dashboard.canEditField(TABLE_KEY, 'colHrStatus', worker.status || '');
-    if (select.disabled) select.title = Dashboard.t('main.fieldLocked');
+    select.disabled = isPending(worker, 'status') || !Dashboard.canEditField(TABLE_KEY, 'colHrStatus', worker.status || '');
+    if (select.disabled) select.title = Dashboard.t(isPending(worker, 'status') ? 'main.changePending' : 'main.fieldLocked');
     select.addEventListener('change', () => patchWorker(worker.id, { status: select.value }));
     td.appendChild(select);
     return td;
@@ -157,6 +172,7 @@ function buildRow(worker) {
     tdArea.dataset.col = 'colHrArea';
     Dashboard.attachInlineEdit(tdArea, {
         value: worker.area || '', tableKey: TABLE_KEY, colKey: 'colHrArea',
+        pending: isPending(worker, 'area'),
         onCommit: (val) => patchWorker(worker.id, { area: val }),
     });
 
@@ -164,6 +180,7 @@ function buildRow(worker) {
     tdEmail.dataset.col = 'colHrEmail';
     Dashboard.attachInlineEdit(tdEmail, {
         value: worker.email || '', inputType: 'email', tableKey: TABLE_KEY, colKey: 'colHrEmail',
+        pending: isPending(worker, 'email'),
         onCommit: (val) => patchWorker(worker.id, { email: val }),
     });
 
@@ -171,6 +188,7 @@ function buildRow(worker) {
     tdPhone.dataset.col = 'colHrPhone';
     Dashboard.attachInlineEdit(tdPhone, {
         value: worker.phone || '', inputType: 'tel', tableKey: TABLE_KEY, colKey: 'colHrPhone',
+        pending: isPending(worker, 'phone'),
         onCommit: (val) => patchWorker(worker.id, { phone: val }),
     });
 
@@ -197,11 +215,15 @@ function getTbody() {
 }
 
 async function refreshTable() {
+    // Skip while the user has an <input> open in a different cell — this now
+    // runs after every patch (not just failures), see OpTransVolCombustible.js's
+    // refreshTable for the full rationale.
+    const tbody = getTbody();
+    if (tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
     try {
         const res = await fetch('/api/business/hr-workers', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { workers } = await res.json();
-        const tbody = getTbody();
         tbody.innerHTML = '';
         if (!workers.length) { ensureEmptyState(); return; }
         workers.forEach((worker) => tbody.appendChild(buildRow(worker)));

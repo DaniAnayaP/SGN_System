@@ -85,13 +85,20 @@ async function patchFuelRecord(id, patch) {
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
             alert(body.message || Dashboard.t('admin.saveError'));
-            // The cell/select the user just touched may already show the
-            // rejected value (e.g. a 403 from the "modificar columna
-            // guardada" permission) — reload the table from the server so
-            // the UI never drifts from what actually got saved.
             await refreshTable();
             return;
         }
+        const body = await res.json().catch(() => ({}));
+        if (body.rejectedFields?.length) {
+            alert(`${Dashboard.t('main.fieldLocked')}: ${body.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`);
+        } else if (body.pendingFields?.length) {
+            alert(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`);
+        }
+        // No longer optimistic-only: the cell may have just been diverted to
+        // a pending approval (still showing the OLD value) or partially
+        // rejected — reload the table from the server so the UI always
+        // reflects what actually got written, not what the user typed.
+        await refreshTable();
     } catch (err) {
         console.error('Registro Combustible: failed to save change', err);
         alert(Dashboard.t('admin.saveError'));
@@ -147,6 +154,14 @@ function buildActionsCell(record, tr) {
 
 const TABLE_KEY = 'registro-combustible';
 
+// Whether `key` (a PATCH bodyKey, e.g. "subtotal") has an outstanding
+// approval request on this specific record — comes straight from the
+// server's GET response (see getPendingColumnsByRecord in db.js), never
+// decided client-side.
+function isPending(record, key) {
+    return (record.pendingFields || []).includes(key);
+}
+
 // Motivo Carga (a real <select>, always live in the cell — not click-to-edit
 // like the plain text/number ones) plus its two mutually exclusive
 // consecutivos: only the one matching the selected reason is editable, the
@@ -168,8 +183,8 @@ function buildReasonCells(record) {
         select.appendChild(opt);
     });
     select.value = record.reason || '';
-    select.disabled = !Dashboard.canEditField(TABLE_KEY, 'colFuelReason', record.reason || '');
-    if (select.disabled) select.title = Dashboard.t('main.fieldLocked');
+    select.disabled = isPending(record, 'reason') || !Dashboard.canEditField(TABLE_KEY, 'colFuelReason', record.reason || '');
+    if (select.disabled) select.title = Dashboard.t(isPending(record, 'reason') ? 'main.changePending' : 'main.fieldLocked');
     tdReason.appendChild(select);
 
     const tdTransfer = document.createElement('td');
@@ -183,6 +198,7 @@ function buildReasonCells(record) {
         disabledText: 'N/A',
         tableKey: TABLE_KEY,
         colKey: 'colFuelTransferService',
+        pending: isPending(record, 'transferService'),
         onCommit: (val) => patchFuelRecord(record.id, { transferService: val }),
     });
     const internalCtrl = Dashboard.attachInlineEdit(tdInternal, {
@@ -191,6 +207,7 @@ function buildReasonCells(record) {
         disabledText: 'N/A',
         tableKey: TABLE_KEY,
         colKey: 'colFuelInternalMovement',
+        pending: isPending(record, 'internalMovement'),
         onCommit: (val) => patchFuelRecord(record.id, { internalMovement: val }),
     });
 
@@ -223,12 +240,15 @@ function buildTicketCell(record) {
     fileInput.hidden = true;
 
     let dataUrl = record.ticketEvidence || null;
+    const pending = isPending(record, 'ticketEvidence');
     function render() {
-        btn.innerHTML = `<i class="bx ${dataUrl ? 'bx-receipt' : 'bx-image-add'}" aria-hidden="true"></i>`;
-        btn.setAttribute('aria-label', Dashboard.t(dataUrl ? 'main.colFuelTicketEvidence' : 'main.fuelUploadTicket'));
-        btn.title = Dashboard.t(dataUrl ? 'main.colFuelTicketEvidence' : 'main.fuelUploadTicket');
+        btn.innerHTML = `<i class="bx ${pending ? 'bx-time-five' : (dataUrl ? 'bx-receipt' : 'bx-image-add')}" aria-hidden="true"></i>`;
+        const label = pending ? 'main.changePending' : (dataUrl ? 'main.colFuelTicketEvidence' : 'main.fuelUploadTicket');
+        btn.setAttribute('aria-label', Dashboard.t(label));
+        btn.title = Dashboard.t(label);
     }
     btn.addEventListener('click', () => {
+        if (pending) return;
         if (dataUrl) window.open(dataUrl, '_blank');
         else fileInput.click();
     });
@@ -268,8 +288,8 @@ function buildFuelTypeCell(record) {
         select.appendChild(opt);
     });
     select.value = record.fuelType || '';
-    select.disabled = !Dashboard.canEditField(TABLE_KEY, 'colFuelType', record.fuelType || '');
-    if (select.disabled) select.title = Dashboard.t('main.fieldLocked');
+    select.disabled = isPending(record, 'fuelType') || !Dashboard.canEditField(TABLE_KEY, 'colFuelType', record.fuelType || '');
+    if (select.disabled) select.title = Dashboard.t(isPending(record, 'fuelType') ? 'main.changePending' : 'main.fieldLocked');
     select.addEventListener('change', () => patchFuelRecord(record.id, { fuelType: select.value }));
     td.appendChild(select);
     return td;
@@ -297,6 +317,7 @@ function buildRow(record) {
         value: record.plates || '',
         tableKey: TABLE_KEY,
         colKey: 'colFuelPlates',
+        pending: isPending(record, 'plates'),
         onCommit: (val) => patchFuelRecord(record.id, { plates: val }),
     });
 
@@ -315,6 +336,7 @@ function buildRow(record) {
         formatDisplay: formatKm,
         tableKey: TABLE_KEY,
         colKey: 'colFuelTripKmBefore',
+        pending: isPending(record, 'tripKmBefore'),
         onCommit: (val) => { recomputeTripKm(); patchFuelRecord(record.id, { tripKmBefore: parseFloat(val) || 0 }); },
     });
 
@@ -326,6 +348,7 @@ function buildRow(record) {
         formatDisplay: formatKm,
         tableKey: TABLE_KEY,
         colKey: 'colFuelTripKmAfter',
+        pending: isPending(record, 'tripKmAfter'),
         onCommit: (val) => { recomputeTripKm(); patchFuelRecord(record.id, { tripKmAfter: parseFloat(val) || 0 }); },
     });
 
@@ -346,6 +369,7 @@ function buildRow(record) {
         formatDisplay: formatLiters,
         tableKey: TABLE_KEY,
         colKey: 'colFuelLiters',
+        pending: isPending(record, 'liters'),
         onCommit: (val) => { recomputeCostPerLiter(); patchFuelRecord(record.id, { liters: parseFloat(val) || 0 }); },
     });
 
@@ -357,6 +381,7 @@ function buildRow(record) {
         formatDisplay: formatMoney,
         tableKey: TABLE_KEY,
         colKey: 'colFuelSubtotal',
+        pending: isPending(record, 'subtotal'),
         onCommit: (val) => { recomputeTotal(); recomputeCostPerLiter(); patchFuelRecord(record.id, { subtotal: parseFloat(val) || 0 }); },
     });
 
@@ -368,6 +393,7 @@ function buildRow(record) {
         formatDisplay: formatMoney,
         tableKey: TABLE_KEY,
         colKey: 'colFuelVat',
+        pending: isPending(record, 'vat'),
         onCommit: (val) => { recomputeTotal(); patchFuelRecord(record.id, { vat: parseFloat(val) || 0 }); },
     });
 
@@ -411,11 +437,17 @@ function getTbody() {
 }
 
 async function refreshTable() {
+    // A full tbody rebuild would wipe an <input> the user has open in a
+    // DIFFERENT cell mid-edit — this now runs after every patch (not just
+    // failures), so that's a realistic case (tabbing through cells in one
+    // row faster than each PATCH round-trip resolves). Skip this pass; the
+    // next commit/blur elsewhere will trigger another refresh anyway.
+    const tbody = getTbody();
+    if (tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
     try {
         const res = await fetch('/api/business/fuel-records', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { records } = await res.json();
-        const tbody = getTbody();
         tbody.innerHTML = '';
         if (!records.length) { ensureEmptyState(); return; }
         records.forEach((record) => tbody.appendChild(buildRow(record)));

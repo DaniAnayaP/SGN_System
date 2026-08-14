@@ -73,7 +73,14 @@ const {
     deleteHrWorker,
     getTableChanges,
     logTableChange,
-    hasColumnEditGrant,
+    getColumnGrantLevel,
+    canAuthorizeColumn,
+    createPendingChange,
+    getPendingChangeById,
+    hasPendingChangeForField,
+    listPendingChangesForClient,
+    getPendingColumnsByRecord,
+    resolvePendingChange,
     COST_CENTER_FIELDS,
     FUEL_PATCHABLE_FIELDS,
     HR_WORKER_PATCHABLE_FIELDS,
@@ -959,51 +966,89 @@ app.put('/api/business/profiles/:id/grants', requireAuth, requireClientAdmin, (r
     res.json({ grants: setProfileGrants(req.params.id, grants) });
 });
 
-// --- "Modificar columna guardada" enforcement --------------------------------
+// --- Column-level permission enforcement (Solo Ver / Ver y Operar / -------
+// --- Editar + Autorizar approval workflow) ----------------------------------
 // The FIRST real server-side grant check in this app (menu/section grants
 // are otherwise only enforced client-side by hiding UI — see PermissionTree.js).
-// Diffs `patch` against `existing` per fieldsMap entry (the same
-// {bodyKey: {column, fieldKey}} maps each table's update* function already
-// uses); a field that already has a value and actually changes requires the
-// requester to either be the client's own admin (unconditional bypass, per
-// explicit product decision) or hold that column's grant — the same real
-// menu-tree leaf PermissionTree.js already renders one level under that
-// pantalla's own node (see hasColumnEditGrant/TABLE_GRANT_PATHS in db.js,
-// and public/data/menu.json). All-or-nothing: the first locked field
-// without permission aborts before anything is logged or written.
+// Per-field, NOT all-or-nothing: every field in `patch` is evaluated on its
+// own against its own column-level grant, so one locked field in a PATCH
+// never blocks the others in the same request. For each field that actually
+// changed (comparing RAW values — see below):
+//   - the client's own admin: always applied immediately, no exceptions.
+//   - empty -> filled: applied only with 'ver-y-operar' or 'editar' on that
+//     column, otherwise rejected (no approval flow for a first-time fill —
+//     only touching an already-saved value needs a second person's OK).
+//   - filled -> different, level 'editar': NOT applied now — diverted into
+//     a pending_changes row (see Parte C) for whoever holds Autorizar on
+//     that column to approve/reject; the field is dropped from what
+//     actually gets written to the record right now.
+//   - filled -> different, any other level ('solo-ver'/'ver-y-operar'/none):
+//     rejected outright, same as an empty-fill without permission.
+//   - a field with an ALREADY-pending change for the same record+column is
+//     rejected too (not queued again) — avoids 2 competing pending rows for
+//     one field.
 //
 // The diff always runs on the RAW existing/patch values — `sanitizers[key]`
 // only transforms what gets written to the change-history log (used by
 // fuel-records' ticketEvidence, so the base64 photo never hits the audit
 // table) — never the value used to decide whether something actually
-// changed, or the lock would silently bypass whenever two different photos
-// both sanitize to the same placeholder string.
+// changed, and never what's stored in pending_changes (which needs the raw
+// value to actually reconstruct the field once approved).
 function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, recordLabel, sanitizers = {}) {
-    const changes = [];
+    const applied = [];
+    const pending = [];
+    const rejected = [];
     let grants = null;
     for (const [key, { column, fieldKey }] of Object.entries(fieldsMap)) {
         if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
         const oldValue = existing[column];
         const newValue = patch[key];
         if (String(oldValue ?? '') === String(newValue ?? '')) continue;
-        if (oldValue && !req.user.isClientAdmin) {
-            grants = grants || getUserEffectiveGrants(req.user.sub);
-            if (!hasColumnEditGrant(grants, tableKey, fieldKey.split('.').pop())) {
-                return { error: fieldKey };
-            }
+
+        if (req.user.isClientAdmin) {
+            applied.push({ key, fieldKey, oldValue, newValue });
+            continue;
         }
-        const sanitize = sanitizers[key];
-        changes.push({
-            fieldKey,
-            oldValue: sanitize ? sanitize(oldValue) : oldValue,
-            newValue: sanitize ? sanitize(newValue) : newValue,
-        });
+
+        grants = grants || getUserEffectiveGrants(req.user.sub);
+        const colKey = fieldKey.split('.').pop();
+        const level = getColumnGrantLevel(grants, tableKey, colKey);
+
+        if (!oldValue) {
+            if (level === 'ver-y-operar' || level === 'editar') {
+                applied.push({ key, fieldKey, oldValue, newValue });
+            } else {
+                rejected.push(fieldKey);
+            }
+            continue;
+        }
+
+        if (level === 'editar' && !hasPendingChangeForField(existing.client_id, tableKey, existing.id, key)) {
+            pending.push({ key, fieldKey, oldValue, newValue });
+        } else {
+            rejected.push(fieldKey);
+        }
     }
-    changes.forEach((c) => logTableChange({
-        clientId: existing.client_id, tableKey, recordId: existing.id, recordLabel, action: 'update',
-        fieldKey: c.fieldKey, oldValue: c.oldValue, newValue: c.newValue, changedBy: req.user.name,
+
+    const appliedPatch = {};
+    applied.forEach(({ key, newValue }) => { appliedPatch[key] = newValue; });
+    applied.forEach((c) => {
+        const sanitize = sanitizers[c.key];
+        logTableChange({
+            clientId: existing.client_id, tableKey, recordId: existing.id, recordLabel, action: 'update',
+            fieldKey: c.fieldKey,
+            oldValue: sanitize ? sanitize(c.oldValue) : c.oldValue,
+            newValue: sanitize ? sanitize(c.newValue) : c.newValue,
+            changedBy: req.user.name,
+        });
+    });
+    pending.forEach((c) => createPendingChange({
+        clientId: existing.client_id, tableKey, recordId: existing.id, recordLabel,
+        fieldKey: c.fieldKey, columnKey: c.key, oldValue: c.oldValue, newValue: c.newValue,
+        requestedBy: req.user.name, requestedByUserId: req.user.sub,
     }));
-    return { error: null };
+
+    return { appliedPatch, pendingFields: pending.map((c) => c.fieldKey), rejectedFields: rejected };
 }
 
 // --- Centros de Costo (cost centers, scoped to one client) -------------------
@@ -1053,8 +1098,13 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     const error = validateCostCenterBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { code, name, description, responsible } = req.body;
-    const lockCheck = checkAndLogFieldChanges(req, existing, { code, name, description, responsible }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
-    if (lockCheck.error) return res.status(403).json({ message: `No tienes permiso para modificar este campo.`, field: lockCheck.error });
+    // requireClientAdmin-gated route: req.user.isClientAdmin is always true
+    // here, so every field always lands in appliedPatch and pending/rejected
+    // are always empty — this call only exists for its logTableChange side
+    // effect. updateCostCenter always overwrites all 4 columns regardless
+    // (not a partial-SET builder like the other 2 tables), so it's still
+    // called with the original full body, not appliedPatch.
+    checkAndLogFieldChanges(req, existing, { code, name, description, responsible }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
     try {
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, { code, name, description, responsible });
         res.json({ costCenter });
@@ -1084,7 +1134,7 @@ app.delete('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (r
 // access is already enforced by the sidebar/menu grant system on the client
 // (Dashboard.initDashboard); these routes only require the caller to belong
 // to a client at all.
-function mapFuelRecord(row) {
+function mapFuelRecord(row, pendingByRecord) {
     if (!row) return row;
     return {
         id: row.id,
@@ -1105,12 +1155,14 @@ function mapFuelRecord(row) {
         reason: row.reason,
         transferService: row.transfer_service,
         internalMovement: row.internal_movement,
+        pendingFields: pendingByRecord?.get(row.id) || [],
     };
 }
 
 app.get('/api/business/fuel-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    res.json({ records: listFuelRecords(req.user.clientId).map(mapFuelRecord) });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'registro-combustible');
+    res.json({ records: listFuelRecords(req.user.clientId).map((r) => mapFuelRecord(r, pendingByRecord)) });
 });
 
 app.post('/api/business/fuel-records', requireAuth, (req, res) => {
@@ -1141,13 +1193,14 @@ app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     // The lock/diff check runs on the raw patch (never sanitized — see
     // checkAndLogFieldChanges' own note); only what gets WRITTEN to the
     // change-history log is sanitized, so the raw base64 ticket photo never
-    // lands in the audit table.
-    const lockCheck = checkAndLogFieldChanges(req, existing, patch, FUEL_PATCHABLE_FIELDS, 'registro-combustible', existing.eco_unit, {
+    // lands in the audit table. No longer all-or-nothing: appliedPatch may
+    // be a subset of `patch` — anything diverted to pendingFields or
+    // rejectedFields is simply excluded from what actually gets written.
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FUEL_PATCHABLE_FIELDS, 'registro-combustible', existing.eco_unit, {
         ticketEvidence: (v) => (v ? '[imagen]' : ''),
     });
-    if (lockCheck.error) return res.status(403).json({ message: 'No tienes permiso para modificar este campo.', field: lockCheck.error });
-    const record = updateFuelRecord(req.params.id, req.user.clientId, patch);
-    res.json({ record: mapFuelRecord(record) });
+    const record = updateFuelRecord(req.params.id, req.user.clientId, appliedPatch);
+    res.json({ record: mapFuelRecord(record), pendingFields, rejectedFields });
 });
 
 app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
@@ -1164,7 +1217,7 @@ app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
 
 // --- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de --
 // --- Personal) — same access model as fuel records above. ------------------
-function mapHrWorker(row) {
+function mapHrWorker(row, pendingByRecord) {
     if (!row) return row;
     return {
         id: row.id,
@@ -1178,12 +1231,14 @@ function mapHrWorker(row) {
         email: row.email,
         phone: row.phone,
         status: row.status,
+        pendingFields: pendingByRecord?.get(row.id) || [],
     };
 }
 
 app.get('/api/business/hr-workers', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    res.json({ workers: listHrWorkers(req.user.clientId).map(mapHrWorker) });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'mi-recurso-humano');
+    res.json({ workers: listHrWorkers(req.user.clientId).map((w) => mapHrWorker(w, pendingByRecord)) });
 });
 
 app.post('/api/business/hr-workers', requireAuth, (req, res) => {
@@ -1210,10 +1265,9 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getHrWorkerById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
-    const lockCheck = checkAndLogFieldChanges(req, existing, req.body || {}, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
-    if (lockCheck.error) return res.status(403).json({ message: 'No tienes permiso para modificar este campo.', field: lockCheck.error });
-    const worker = updateHrWorker(req.params.id, req.user.clientId, req.body || {});
-    res.json({ worker: mapHrWorker(worker) });
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, req.body || {}, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
+    const worker = updateHrWorker(req.params.id, req.user.clientId, appliedPatch);
+    res.json({ worker: mapHrWorker(worker), pendingFields, rejectedFields });
 });
 
 app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
@@ -1237,6 +1291,75 @@ app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
 app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey) });
+});
+
+// --- Pending changes (Autorizar approval workflow) --------------------------
+// Applies an approved pending_changes row back onto its real record — one
+// entry per patchable table, mirroring FUEL_PATCHABLE_FIELDS/
+// HR_WORKER_PATCHABLE_FIELDS' partial-SET update* functions (cost centers
+// isn't listed: its PATCH route is requireClientAdmin-only and the admin
+// bypass means a pending row can never be created for it in the first
+// place). Sanitizers here mirror each PATCH route's own — approving a
+// pending change must sanitize the audit-log write exactly like a direct
+// edit does, or the raw value (e.g. a ticketEvidence base64 photo) would
+// leak into data_table_changes at approval time even though the direct-edit
+// path already protects against that.
+const PENDING_CHANGE_APPLIERS = {
+    'registro-combustible': (recordId, clientId, patch) => updateFuelRecord(recordId, clientId, patch),
+    'mi-recurso-humano': (recordId, clientId, patch) => updateHrWorker(recordId, clientId, patch),
+};
+const PENDING_CHANGE_SANITIZERS = {
+    'registro-combustible': { ticketEvidence: (v) => (v ? '[imagen]' : '') },
+};
+
+app.get('/api/business/pending-changes', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const all = listPendingChangesForClient(req.user.clientId);
+    if (req.user.isClientAdmin) return res.json({ changes: all });
+    const grants = getUserEffectiveGrants(req.user.sub);
+    res.json({ changes: all.filter((c) => canAuthorizeColumn(grants, c.table_key, c.field_key.split('.').pop())) });
+});
+
+app.post('/api/business/pending-changes/:id/approve', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pc = getPendingChangeById(req.params.id);
+    if (!pc || pc.client_id !== req.user.clientId) return res.status(404).json({ message: 'Pending change not found.' });
+    if (pc.status !== 'pending') return res.status(409).json({ message: 'This change was already resolved.' });
+    const colKey = pc.field_key.split('.').pop();
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canAuthorizeColumn(grants, pc.table_key, colKey)) {
+            return res.status(403).json({ message: 'No tienes permiso para autorizar esta columna.' });
+        }
+    }
+    const apply = PENDING_CHANGE_APPLIERS[pc.table_key];
+    if (!apply) return res.status(500).json({ message: `No hay forma de aplicar cambios de la tabla "${pc.table_key}".` });
+    apply(pc.record_id, pc.client_id, { [pc.column_key]: pc.new_value });
+    const sanitize = PENDING_CHANGE_SANITIZERS[pc.table_key]?.[pc.column_key];
+    logTableChange({
+        clientId: pc.client_id, tableKey: pc.table_key, recordId: pc.record_id, recordLabel: pc.record_label, action: 'update',
+        fieldKey: pc.field_key,
+        oldValue: sanitize ? sanitize(pc.old_value) : pc.old_value,
+        newValue: sanitize ? sanitize(pc.new_value) : pc.new_value,
+        changedBy: pc.requested_by, requestedBy: pc.requested_by, authorizedBy: req.user.name,
+    });
+    resolvePendingChange(pc.id, { status: 'approved', resolvedBy: req.user.name, resolvedByUserId: req.user.sub });
+    res.json({ ok: true });
+});
+
+app.post('/api/business/pending-changes/:id/reject', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pc = getPendingChangeById(req.params.id);
+    if (!pc || pc.client_id !== req.user.clientId) return res.status(404).json({ message: 'Pending change not found.' });
+    if (pc.status !== 'pending') return res.status(409).json({ message: 'This change was already resolved.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canAuthorizeColumn(grants, pc.table_key, pc.field_key.split('.').pop())) {
+            return res.status(403).json({ message: 'No tienes permiso para rechazar esta columna.' });
+        }
+    }
+    resolvePendingChange(pc.id, { status: 'rejected', resolvedBy: req.user.name, resolvedByUserId: req.user.sub });
+    res.json({ ok: true });
 });
 
 const PORT = process.env.PORT || 3000;

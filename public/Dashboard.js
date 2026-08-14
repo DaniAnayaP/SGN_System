@@ -1984,6 +1984,8 @@ function ensureChangeHistoryModal() {
                             <th>${t('main.changeHistoryUser')}</th>
                             <th>${t('main.changeHistoryRecord')}</th>
                             <th>${t('main.changeHistoryChange')}</th>
+                            <th>${t('main.changeHistoryRequestedBy')}</th>
+                            <th>${t('main.changeHistoryAuthorizedBy')}</th>
                         </tr>
                     </thead>
                     <tbody data-role="list"></tbody>
@@ -2015,7 +2017,7 @@ async function openChangeHistory(tableId) {
     ensureChangeHistoryModal();
     changeHistoryModal.hidden = false;
     changeHistoryList.innerHTML = '';
-    changeHistoryList.appendChild(renderChangeHistoryRow([t('main.changeHistoryEmpty'), '', '', '']));
+    changeHistoryList.appendChild(renderChangeHistoryRow([t('main.changeHistoryEmpty'), '', '', '', '', '']));
     try {
         const res = await fetch(`/api/business/table-changes/${encodeURIComponent(tableId)}`, { credentials: 'include' });
         if (!res.ok) return;
@@ -2029,6 +2031,7 @@ async function openChangeHistory(tableId) {
             else description = `${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
             changeHistoryList.appendChild(renderChangeHistoryRow([
                 change.changed_at, change.changed_by || '—', change.record_label || '—', description,
+                change.requested_by || '—', change.authorized_by || '—',
             ]));
         });
     } catch {
@@ -2394,6 +2397,137 @@ document.addEventListener('click', (event) => {
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeUiScaleMenu();
 });
+
+// --- Notifications dropdown (Autorizar approval alerts) ---------------------
+// Converts the existing static #notifications-btn (already present, plain,
+// in every page's top bar) into a proper dropdown — same JS-built pattern
+// as #ui-scale-menu above, reusing .user-info-menu/.user-info-dropdown for
+// the toggle+panel mechanics. Badge + list come from
+// GET /api/business/pending-changes, already filtered server-side to
+// whatever THIS user can actually authorize (admin: everything at the
+// client; else: only columns they hold Autorizar on) — an empty badge here
+// just means "nothing for you to approve", not "nothing pending anywhere".
+const PENDING_CHANGE_TABLE_LABELS = {
+    'registro-combustible': 'menu.opTransVolCombustible',
+    'mi-recurso-humano': 'menu.opRrhhMiRecursoHumano',
+};
+let notificationsListEl = null;
+
+function closeNotificationsMenu() {
+    document.querySelectorAll('#notifications-menu').forEach((menu) => menu.classList.remove('open'));
+    document.querySelectorAll('#notifications-btn').forEach((btn) => btn.setAttribute('aria-expanded', 'false'));
+}
+registerTopBarDropdown(closeNotificationsMenu);
+
+function setNotificationsBadge(count) {
+    document.querySelectorAll('.notifications-badge').forEach((badge) => {
+        badge.hidden = count <= 0;
+        badge.textContent = count > 99 ? '99+' : String(count);
+    });
+}
+
+function renderNotificationRow(change) {
+    const row = document.createElement('div');
+    row.className = 'notifications-item';
+    const tableLabel = t(PENDING_CHANGE_TABLE_LABELS[change.table_key] || change.table_key);
+    row.innerHTML = `
+        <div class="notifications-item-meta">${tableLabel} · ${change.record_label || '—'}</div>
+        <div class="notifications-item-desc">${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"</div>
+        <div class="notifications-item-meta">${t('main.changeHistoryRequestedBy')}: ${change.requested_by || '—'}</div>
+        <div class="notifications-item-actions">
+            <button type="button" class="btn btn-secondary" data-action="reject">${t('main.notificationReject')}</button>
+            <button type="button" class="btn" data-action="approve">${t('main.notificationApprove')}</button>
+        </div>
+    `;
+    row.querySelector('[data-action="approve"]').addEventListener('click', () => resolvePendingNotification(change.id, 'approve', row));
+    row.querySelector('[data-action="reject"]').addEventListener('click', () => resolvePendingNotification(change.id, 'reject', row));
+    return row;
+}
+
+async function resolvePendingNotification(id, action, row) {
+    try {
+        const res = await fetch(`/api/business/pending-changes/${id}/${action}`, { method: 'POST', credentials: 'include' });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            alert(body.message || t('admin.saveError'));
+            return;
+        }
+        row.remove();
+        alert(action === 'approve' ? t('main.notificationApproved') : t('main.notificationRejected'));
+        loadPendingChanges();
+    } catch {
+        alert(t('admin.saveError'));
+    }
+}
+
+async function loadPendingChanges() {
+    if (!notificationsListEl) return;
+    try {
+        const res = await fetch('/api/business/pending-changes', { credentials: 'include' });
+        if (!res.ok) return;
+        const { changes } = await res.json();
+        setNotificationsBadge(changes.length);
+        notificationsListEl.innerHTML = '';
+        if (!changes.length) {
+            const empty = document.createElement('div');
+            empty.className = 'notifications-empty';
+            empty.textContent = t('main.notificationsEmpty');
+            notificationsListEl.appendChild(empty);
+            return;
+        }
+        changes.forEach((change) => notificationsListEl.appendChild(renderNotificationRow(change)));
+    } catch {
+        // Leave whatever was already rendered — no network/parse errors surfaced here.
+    }
+}
+
+document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
+    const btn = container.querySelector('#notifications-btn');
+    if (!btn || btn.dataset.dropdownMounted) return;
+    btn.dataset.dropdownMounted = '1';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'user-info-menu';
+    wrapper.id = 'notifications-menu';
+    btn.replaceWith(wrapper);
+    wrapper.appendChild(btn);
+    btn.setAttribute('aria-haspopup', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+    const badge = document.createElement('span');
+    badge.className = 'notifications-badge';
+    badge.hidden = true;
+    btn.appendChild(badge);
+    const dropdown = document.createElement('div');
+    dropdown.className = 'user-info-dropdown notifications-dropdown';
+    dropdown.innerHTML = `
+        <div class="user-info-group">
+            <h4>${t('main.notificationsTitle')}</h4>
+            <div class="notifications-list" data-role="list"></div>
+        </div>
+    `;
+    wrapper.appendChild(dropdown);
+    notificationsListEl = dropdown.querySelector('[data-role="list"]');
+    btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const wasOpen = wrapper.classList.contains('open');
+        closeAllTopBarDropdowns();
+        if (!wasOpen) {
+            wrapper.classList.add('open');
+            btn.setAttribute('aria-expanded', 'true');
+            loadPendingChanges();
+        }
+    });
+});
+
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('#notifications-menu')) closeNotificationsMenu();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeNotificationsMenu();
+});
+
+if (document.getElementById('notifications-menu')) {
+    loadPendingChanges();
+}
 
 // --- Sidebar search: live-filters the menu items actually rendered right
 // now (respecting the current department filter, role-based sidebar, and
@@ -2858,7 +2992,7 @@ function hasSettingsAccess() {
 const TOP_BAR_BUTTONS = [
     { moduleKey: 'btn-mensajes', elementId: 'messages-btn', check: () => hasMainButtonPermission('btn-mensajes') },
     { moduleKey: 'btn-chatbot', elementId: 'chatbot-btn', check: () => hasMainButtonPermission('btn-chatbot') },
-    { moduleKey: 'btn-notificaciones', elementId: 'notifications-btn', check: () => hasMainButtonPermission('btn-notificaciones') },
+    { moduleKey: 'btn-notificaciones', elementId: 'notifications-menu', check: () => hasMainButtonPermission('btn-notificaciones') },
     { moduleKey: 'btn-marcadores', elementId: 'bookmarks-btn', check: () => hasMainButtonPermission('btn-marcadores') },
     { moduleKey: 'btn-configuracion', elementId: 'settings-menu', check: hasSettingsAccess },
     { moduleKey: 'btn-datos-usuario', elementId: 'user-info-menu', check: () => hasMainButtonPermission('btn-datos-usuario') },
@@ -3586,18 +3720,20 @@ async function initDashboard({ activePage } = {}) {
     return role;
 }
 
-// "Modificar columna guardada" — a cell whose value is already saved stays
-// locked (visible, not editable) unless the viewer is the client's own admin
-// (unconditional bypass, confirmed product decision) or their effective
-// grants include that column's leaf — the pantalla's own node in the menu
-// tree, one level deeper (see PermissionTree.js's 4th-level rendering and
-// public/data/menu.json). The actual enforcement is server-side (server.js's
+// Column-level permission (Solo Ver / Ver y Operar / Editar + Autorizar) —
+// a cell whose value is already saved stays locked (visible, not editable)
+// unless the viewer is the client's own admin (unconditional bypass,
+// confirmed product decision), holds 'ver-y-operar'/'editar' to fill an
+// EMPTY cell, or holds 'editar' to request a change on an already-filled
+// one (which then waits for approval — see the `pending` option on
+// attachInlineEdit below, driven by the server's own pendingFields, never
+// decided client-side). The actual enforcement is server-side (server.js's
 // checkAndLogFieldChanges) — this is purely UI convenience so a locked cell
 // never even offers to edit.
 // Mirrors TABLE_GRANT_PATHS in db.js — each editable pantalla's column
 // grants live as ordinary leaves of its OWN node in the menu tree (see
-// public/data/menu.json, PermissionTree.js's 4th-level rendering), not a
-// separate namespace, so this must point at the exact same
+// public/data/menu.json, PermissionTree.js's Tabla/Columna rendering), not
+// a separate namespace, so this must point at the exact same
 // {sectionId, itemId, submenuPrefix} the server checks. Keep both in sync
 // by hand when a table's pantalla moves in the tree or a new table is added.
 const TABLE_GRANT_PATHS = {
@@ -3606,16 +3742,37 @@ const TABLE_GRANT_PATHS = {
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
 };
 
-function hasColumnEditGrant(tableKey, colKey) {
-    if (!!currentUser?.isClientAdmin) return true;
+// No grant at all on a column behaves as 'solo-ver' — mirrors
+// getColumnGrantLevel in db.js exactly (kept in sync by hand, same as
+// TABLE_GRANT_PATHS itself).
+function getColumnGrantLevel(tableKey, colKey) {
+    if (!!currentUser?.isClientAdmin) return 'editar';
     const path = TABLE_GRANT_PATHS[tableKey];
-    if (!path) return false;
-    const submenuId = `${path.submenuPrefix}/${colKey}`;
-    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === submenuId);
+    if (!path) return 'solo-ver';
+    const base = `${path.submenuPrefix}/${colKey}`;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
+    if (has('editar')) return 'editar';
+    if (has('ver-y-operar')) return 'ver-y-operar';
+    return 'solo-ver';
 }
-function canEditField(tableKey, colKey, currentValue) {
+function hasColumnEditGrant(tableKey, colKey) {
+    return getColumnGrantLevel(tableKey, colKey) === 'editar';
+}
+// `pending` (whether the SERVER already reported this exact field as
+// awaiting approval, via GET .../fuel-records|hr-workers' pendingFields)
+// always wins — a field under review can't be touched again until it
+// resolves, regardless of grant level.
+function canEditField(tableKey, colKey, currentValue, pending = false) {
+    if (pending) return false;
+    if (!!currentUser?.isClientAdmin) return true;
     const hasValue = currentValue !== '' && currentValue != null && currentValue !== 0;
-    return !hasValue || hasColumnEditGrant(tableKey, colKey);
+    const level = getColumnGrantLevel(tableKey, colKey);
+    if (!hasValue) return level === 'ver-y-operar' || level === 'editar';
+    // Filled + 'editar': still clickable — submitting goes through the
+    // server's pending-approval flow instead of applying immediately, it
+    // isn't blocked outright like 'solo-ver'/'ver-y-operar' are here.
+    return level === 'editar';
 }
 
 // --- Inline cell editing (shared by Registro Combustible, Mi Recurso -------
@@ -3627,19 +3784,20 @@ function canEditField(tableKey, colKey, currentValue) {
 // permission-driven and applies automatically the moment a cell has a value:
 // pass both to opt a cell into locking, omit them and it never locks (so
 // older/simpler callers keep working unchanged).
-function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, onCommit, disabled = false, disabledText, tableKey, colKey } = {}) {
+function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, onCommit, disabled = false, disabledText, tableKey, colKey, pending = false } = {}) {
     let current = value;
     let isDisabled = disabled;
+    let isPending = pending;
 
     function isLocked() {
         if (!tableKey || !colKey) return false;
-        return !canEditField(tableKey, colKey, current);
+        return !canEditField(tableKey, colKey, current, isPending);
     }
 
     function renderDisplay() {
         td.innerHTML = '';
         if (isDisabled) {
-            td.classList.remove('editable-cell', 'editable-cell-locked');
+            td.classList.remove('editable-cell', 'editable-cell-locked', 'editable-cell-pending');
             td.classList.add('editable-cell-disabled');
             td.textContent = disabledText ?? '—';
             td.onclick = null;
@@ -3649,8 +3807,20 @@ function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, o
         const span = document.createElement('span');
         span.className = hasValue ? 'editable-cell-value' : 'editable-cell-value editable-cell-placeholder';
         span.textContent = hasValue ? (formatDisplay ? formatDisplay(current) : current) : t('main.fuelAddValue');
+        if (isPending) {
+            td.classList.remove('editable-cell', 'editable-cell-disabled', 'editable-cell-locked');
+            td.classList.add('editable-cell-pending');
+            td.appendChild(span);
+            const clock = document.createElement('i');
+            clock.className = 'bx bx-time-five editable-cell-lock-icon';
+            clock.setAttribute('aria-hidden', 'true');
+            td.appendChild(clock);
+            td.title = t('main.changePending');
+            td.onclick = null;
+            return;
+        }
         if (isLocked()) {
-            td.classList.remove('editable-cell', 'editable-cell-disabled');
+            td.classList.remove('editable-cell', 'editable-cell-disabled', 'editable-cell-pending');
             td.classList.add('editable-cell-locked');
             td.appendChild(span);
             const lock = document.createElement('i');
@@ -3661,7 +3831,7 @@ function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, o
             td.onclick = null;
             return;
         }
-        td.classList.remove('editable-cell-disabled', 'editable-cell-locked');
+        td.classList.remove('editable-cell-disabled', 'editable-cell-locked', 'editable-cell-pending');
         td.classList.add('editable-cell');
         td.appendChild(span);
         td.title = t('main.fuelClickToEdit');
@@ -3698,6 +3868,10 @@ function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, o
             isDisabled = next;
             if (isDisabled) current = '';
             disabledText = text ?? disabledText;
+            renderDisplay();
+        },
+        setPending(next) {
+            isPending = next;
             renderDisplay();
         },
     };

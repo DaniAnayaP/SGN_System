@@ -189,6 +189,45 @@ db.exec(`
         changed_by    TEXT NOT NULL DEFAULT '',
         changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Flujo de aprobación real para cambios "Editar" sobre columnas ya
+    -- guardadas (ver Autorizar en el árbol de permisos) — una fila por
+    -- campo que queda pendiente hasta que alguien con Autorizar en esa
+    -- columna lo aprueba o rechaza. column_key es la clave que la función
+    -- update* de esa tabla espera en su patch (ej. "subtotal"); field_key
+    -- es la clave i18n punteada completa (ej. "main.colFuelSubtotal"),
+    -- usada tanto para mostrarlo como para derivar el colKey de
+    -- canAuthorizeColumn (su último segmento) — son claves DISTINTAS a
+    -- propósito, una identifica la columna de negocio, la otra el permiso.
+    CREATE TABLE IF NOT EXISTS pending_changes (
+        id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id             INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        table_key             TEXT NOT NULL,
+        record_id             INTEGER NOT NULL,
+        record_label          TEXT NOT NULL DEFAULT '',
+        field_key             TEXT NOT NULL,
+        column_key            TEXT NOT NULL,
+        old_value             TEXT NOT NULL DEFAULT '',
+        new_value             TEXT NOT NULL,
+        status                TEXT NOT NULL DEFAULT 'pending',
+        requested_by          TEXT NOT NULL DEFAULT '',
+        requested_by_user_id  INTEGER NOT NULL,
+        requested_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        resolved_by           TEXT,
+        resolved_by_user_id   INTEGER,
+        resolved_at           TEXT
+    );
+
+    -- Marca de migraciones de DATOS de una sola vez (a diferencia de las
+    -- migraciones de ESQUEMA de más abajo, que se auto-verifican con PRAGMA
+    -- table_info) — para operaciones tipo "sembrar Ver y Operar" que sólo
+    -- deben correr una vez en la vida de la base, nunca reaplicarse (si se
+    -- re-derivaran del estado actual, revocar un permiso a propósito más
+    -- tarde se volvería a sembrar solo en el siguiente reinicio).
+    CREATE TABLE IF NOT EXISTS schema_migrations_data (
+        key         TEXT PRIMARY KEY,
+        applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 `);
 
 // A big, date-derived unique identifier shown as "No. Único de Big Date" on
@@ -480,6 +519,19 @@ if (!fuelRecordColumns.some((c) => c.name === 'liters')) {
     db.exec('ALTER TABLE fuel_records ADD COLUMN liters REAL NOT NULL DEFAULT 0');
 }
 
+// requested_by/authorized_by added after data_table_changes already shipped
+// once — nullable, only ever filled for rows created via an approved
+// pending_changes row (see resolvePendingChange's caller in server.js);
+// changed_by alone still covers every direct (non-approval) edit, same as
+// before these 2 columns existed.
+const dataTableChangesColumns = db.prepare('PRAGMA table_info(data_table_changes)').all();
+if (!dataTableChangesColumns.some((c) => c.name === 'requested_by')) {
+    db.exec('ALTER TABLE data_table_changes ADD COLUMN requested_by TEXT');
+}
+if (!dataTableChangesColumns.some((c) => c.name === 'authorized_by')) {
+    db.exec('ALTER TABLE data_table_changes ADD COLUMN authorized_by TEXT');
+}
+
 // --- Indexes -------------------------------------------------------------
 // Only for FK/lookup columns that actually appear in a WHERE clause below
 // and aren't already covered by a UNIQUE constraint's implicit index (e.g.
@@ -492,6 +544,7 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_profiles_client_id ON profiles(client_id);
     CREATE INDEX IF NOT EXISTS idx_profile_grants_profile_id ON profile_grants(profile_id);
     CREATE INDEX IF NOT EXISTS idx_user_grants_user_id ON user_grants(user_id);
+    CREATE INDEX IF NOT EXISTS idx_pending_changes_client_status ON pending_changes(client_id, status);
 `);
 
 // --- One-time seed: create the demo admin/admin user if the table is empty.
@@ -817,28 +870,33 @@ function getTableChanges(clientId, tableKey) {
         .all(clientId, tableKey);
 }
 
-function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy }) {
+function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy, requestedBy, authorizedBy }) {
     db.prepare(`
-        INSERT INTO data_table_changes (client_id, table_key, record_id, record_label, action, field_key, old_value, new_value, changed_by)
-        VALUES (@clientId, @tableKey, @recordId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy)
+        INSERT INTO data_table_changes (client_id, table_key, record_id, record_label, action, field_key, old_value, new_value, changed_by, requested_by, authorized_by)
+        VALUES (@clientId, @tableKey, @recordId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy, @requestedBy, @authorizedBy)
     `).run({
         clientId, tableKey, recordId, recordLabel: recordLabel || '', action,
         fieldKey: fieldKey || '',
         oldValue: oldValue == null ? '' : String(oldValue),
         newValue: newValue == null ? '' : String(newValue),
         changedBy: changedBy || '',
+        requestedBy: requestedBy || null,
+        authorizedBy: authorizedBy || null,
     });
 }
 
-// "Modificar columna guardada" permission — each editable pantalla is a
-// real node in the SAME menu tree PermissionTree.js already renders (see
-// public/data/menu.json — the pantalla's own entry now carries a `submenu`
-// of its columns), so a column's grant is just that pantalla's normal
-// {sectionId, itemId, submenuId} leaf, one level deeper, with NO new
-// sectionId namespace and no schema change. TABLE_GRANT_PATHS mirrors each
-// table's actual position in menu.json — kept in sync by hand (a future
-// table just needs its own entry here, matching wherever its pantalla
-// already lives in the tree).
+// Column-level permission ("Solo Ver" / "Ver y Operar" / "Editar" +
+// "Autorizar") — each editable pantalla is a real node in the SAME menu
+// tree PermissionTree.js already renders (see public/data/menu.json — the
+// pantalla's own entry carries a `submenu` of its columns, and
+// PermissionTree.js renders a "Tabla <Nombre>" sub-tree under it), so each
+// level is just that pantalla's normal {sectionId, itemId, submenuId} leaf,
+// two levels deeper: `${submenuPrefix}/${colKey}/${level}`. The pantalla's
+// OWN visibility leaf is `submenuId === submenuPrefix` exactly (no column
+// suffix) — used by the Parte F migration below to find who already sees a
+// table's screen. TABLE_GRANT_PATHS mirrors each table's actual position in
+// menu.json — kept in sync by hand (a future table just needs its own entry
+// here, matching wherever its pantalla already lives in the tree).
 // colKey is fieldKey's last segment (e.g. "main.colFuelPlates" ->
 // "colFuelPlates") — reused from FUEL_PATCHABLE_FIELDS/
 // HR_WORKER_PATCHABLE_FIELDS/COST_CENTER_FIELDS, and must match the `id` of
@@ -849,11 +907,84 @@ const TABLE_GRANT_PATHS = {
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
 };
 
-function hasColumnEditGrant(grants, tableKey, colKey) {
+// No grant at all on a column behaves as 'solo-ver' (confirmed product
+// default). The 3 levels are mutually exclusive by UI convention only —
+// PermissionTree.js enforces that in its own checkbox-group handler — so
+// 'editar' takes priority here only as defensive ordering in case a grant
+// row was ever written any other way (direct API, old data, etc.).
+function getColumnGrantLevel(grants, tableKey, colKey) {
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return 'solo-ver';
+    const base = `${path.submenuPrefix}/${colKey}`;
+    const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
+    if (has('editar')) return 'editar';
+    if (has('ver-y-operar')) return 'ver-y-operar';
+    return 'solo-ver';
+}
+
+function canAuthorizeColumn(grants, tableKey, colKey) {
     const path = TABLE_GRANT_PATHS[tableKey];
     if (!path) return false;
-    const submenuId = `${path.submenuPrefix}/${colKey}`;
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === submenuId);
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${colKey}/autorizar`);
+}
+
+// --- Pending changes (real approval workflow for "Editar" on an ---------
+// --- already-saved value — see checkAndLogFieldChanges in server.js) -----
+function createPendingChange({ clientId, tableKey, recordId, recordLabel, fieldKey, columnKey, oldValue, newValue, requestedBy, requestedByUserId }) {
+    const result = db.prepare(`
+        INSERT INTO pending_changes (client_id, table_key, record_id, record_label, field_key, column_key, old_value, new_value, requested_by, requested_by_user_id)
+        VALUES (@clientId, @tableKey, @recordId, @recordLabel, @fieldKey, @columnKey, @oldValue, @newValue, @requestedBy, @requestedByUserId)
+    `).run({
+        clientId, tableKey, recordId, recordLabel: recordLabel || '', fieldKey, columnKey,
+        oldValue: oldValue == null ? '' : String(oldValue),
+        newValue: newValue == null ? '' : String(newValue),
+        requestedBy: requestedBy || '', requestedByUserId,
+    });
+    return getPendingChangeById(result.lastInsertRowid);
+}
+
+function getPendingChangeById(id) {
+    return db.prepare('SELECT * FROM pending_changes WHERE id = ?').get(id);
+}
+
+// Whether this exact field already has an outstanding pending request —
+// checked before creating a new one, so 2 back-to-back "Editar" attempts on
+// the same field (e.g. a user retrying, or 2 different users) never create
+// 2 competing pending rows for the same value.
+function hasPendingChangeForField(clientId, tableKey, recordId, columnKey) {
+    return !!db.prepare(`
+        SELECT 1 FROM pending_changes
+        WHERE client_id = ? AND table_key = ? AND record_id = ? AND column_key = ? AND status = 'pending'
+    `).get(clientId, tableKey, recordId, columnKey);
+}
+
+function listPendingChangesForClient(clientId, status = 'pending') {
+    return db.prepare('SELECT * FROM pending_changes WHERE client_id = ? AND status = ? ORDER BY requested_at DESC, id DESC').all(clientId, status);
+}
+
+// Column bodyKeys (e.g. "subtotal") currently pending per record, grouped
+// by table — used by the fuel-records/hr-workers GET routes to flag each
+// record's pending fields for the frontend (see attachInlineEdit's
+// `pending` option in Dashboard.js).
+function getPendingColumnsByRecord(clientId, tableKey) {
+    const rows = db.prepare(`
+        SELECT record_id AS recordId, column_key AS columnKey FROM pending_changes
+        WHERE client_id = ? AND table_key = ? AND status = 'pending'
+    `).all(clientId, tableKey);
+    const byRecord = new Map();
+    rows.forEach(({ recordId, columnKey }) => {
+        if (!byRecord.has(recordId)) byRecord.set(recordId, []);
+        byRecord.get(recordId).push(columnKey);
+    });
+    return byRecord;
+}
+
+function resolvePendingChange(id, { status, resolvedBy, resolvedByUserId }) {
+    db.prepare(`
+        UPDATE pending_changes SET status = @status, resolved_by = @resolvedBy, resolved_by_user_id = @resolvedByUserId, resolved_at = datetime('now')
+        WHERE id = @id
+    `).run({ id, status, resolvedBy: resolvedBy || '', resolvedByUserId });
+    return getPendingChangeById(id);
 }
 
 // Self-service version for the client's own admin (Business-Config page):
@@ -1077,6 +1208,89 @@ function updateHrWorker(id, clientId, patch) {
 function deleteHrWorker(id, clientId) {
     db.prepare('DELETE FROM hr_workers WHERE id = ? AND client_id = ?').run(id, clientId);
 }
+
+// --- One-time data migration: seed "Ver y Operar" for pre-existing access --
+// Before this round, filling an EMPTY cell in these tables was always
+// unrestricted for anyone who could see the pantalla at all (no grant check
+// server-side, ever), and "can re-edit an already-saved value" was a single
+// flat leaf (`${submenuPrefix}/${colKey}`, no level). Both branches of
+// checkAndLogFieldChanges now require an explicit Ver y Operar/Editar grant
+// per column — without this one-time seed, every profile/user that could
+// already use these tables would suddenly be unable to fill so much as an
+// empty cell. Confirmed with the user: seed Ver y Operar for anyone who
+// already sees the pantalla (its own visibility leaf) OR still holds the
+// old flat single-checkbox column grant.
+//
+// A grant can cover a leaf via 3 tiers, same as PermissionTree.js's own
+// isGranted()/Dashboard.js's hasSettingsSubPermission: an exact match, OR a
+// broader item-level grant (submenu_id IS NULL), OR a broader section-level
+// grant (item_id IS NULL AND submenu_id IS NULL) — a lingering grant from
+// before Área/Apartado/Pantalla existed would otherwise be invisible to
+// this migration and silently lose today's blanket fill-access.
+//
+// Runs exactly ONCE, ever (tracked in schema_migrations_data, never
+// re-derived from current grant state) — an admin who later intentionally
+// revokes a column's access must not be silently re-granted on the next
+// server restart. The legacy flat-shape grant is deleted as part of the
+// same seed, which is what makes that guarantee hold: once deleted, the
+// "still holds the old flat grant" trigger can never fire again for that
+// owner+table on a later run (moot anyway once the marker row exists, but
+// keeps this function safe to call more than once if that ever changes).
+const COLUMN_LEVEL_SEED_KEY = 'seed-ver-y-operar-column-levels-v1';
+function seedColumnLevelGrants() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(COLUMN_LEVEL_SEED_KEY)) return;
+
+    const tableColumns = {
+        'registro-combustible': Object.values(FUEL_PATCHABLE_FIELDS).map((f) => f.fieldKey.split('.').pop()),
+        'mi-recurso-humano': Object.values(HR_WORKER_PATCHABLE_FIELDS).map((f) => f.fieldKey.split('.').pop()),
+        'centros-costo': Object.values(COST_CENTER_FIELDS).map((f) => f.fieldKey.split('.').pop()),
+    };
+
+    const seed = db.transaction(() => {
+        for (const [ownerTable, ownerColumn] of [['profile_grants', 'profile_id'], ['user_grants', 'user_id']]) {
+            for (const [tableKey, path] of Object.entries(TABLE_GRANT_PATHS)) {
+                const columns = tableColumns[tableKey] || [];
+                if (!columns.length) continue;
+
+                const legacyIds = columns.map((c) => `${path.submenuPrefix}/${c}`);
+                const owners = db.prepare(`
+                    SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${ownerTable}
+                    WHERE section_id = ? AND (
+                        (item_id = ? AND (submenu_id = ? OR submenu_id IN (${legacyIds.map(() => '?').join(',')})))
+                        OR (item_id = ? AND submenu_id IS NULL)
+                        OR (item_id IS NULL AND submenu_id IS NULL)
+                    )
+                `).all(path.sectionId, path.itemId, path.submenuPrefix, ...legacyIds, path.itemId);
+
+                if (!owners.length) continue;
+
+                const hasGrant = db.prepare(`SELECT 1 FROM ${ownerTable} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
+                const insertGrant = db.prepare(`INSERT INTO ${ownerTable} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
+                const deleteLegacy = db.prepare(`DELETE FROM ${ownerTable} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
+
+                owners.forEach(({ ownerId }) => {
+                    if (!hasGrant.get(ownerId, path.sectionId, path.itemId, path.submenuPrefix)) {
+                        insertGrant.run(ownerId, path.sectionId, path.itemId, path.submenuPrefix);
+                    }
+                    columns.forEach((colKey) => {
+                        const base = `${path.submenuPrefix}/${colKey}`;
+                        const hasAnyLevel = ['solo-ver', 'ver-y-operar', 'editar'].some((level) => (
+                            hasGrant.get(ownerId, path.sectionId, path.itemId, `${base}/${level}`)
+                        ));
+                        if (!hasAnyLevel) {
+                            insertGrant.run(ownerId, path.sectionId, path.itemId, `${base}/ver-y-operar`);
+                        }
+                        deleteLegacy.run(ownerId, path.sectionId, path.itemId, base);
+                    });
+                });
+            }
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(COLUMN_LEVEL_SEED_KEY);
+    });
+    seed();
+    console.log('[db] Seeded Ver y Operar for pre-existing column access (one-time migration).');
+}
+seedColumnLevelGrants();
 
 // --- Query helpers: plans (Planes y Paquetes, GEIPSA-wide, not per-client) ---
 // modules is stored as a JSON array of MODULE_CATALOG keys; costCentersLimit
@@ -1380,7 +1594,14 @@ module.exports = {
     recordAnexoChange,
     getTableChanges,
     logTableChange,
-    hasColumnEditGrant,
+    getColumnGrantLevel,
+    canAuthorizeColumn,
+    createPendingChange,
+    getPendingChangeById,
+    hasPendingChangeForField,
+    listPendingChangesForClient,
+    getPendingColumnsByRecord,
+    resolvePendingChange,
     COST_CENTER_FIELDS,
     FUEL_PATCHABLE_FIELDS,
     HR_WORKER_PATCHABLE_FIELDS,

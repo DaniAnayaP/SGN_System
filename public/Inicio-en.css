@@ -1306,6 +1306,66 @@
         font-weight: 600;
         color: var(--color-text-primary);
     }
+    /* Notifications dropdown (see Dashboard.js) — same reuse of
+       .user-info-menu/.user-info-dropdown as the UI-scale one above. */
+    #notifications-menu #notifications-btn{
+        position: relative;
+    }
+    .notifications-badge{
+        position: absolute;
+        top: 0.1rem;
+        right: 0.1rem;
+        min-width: 1.1rem;
+        height: 1.1rem;
+        padding: 0 0.3rem;
+        border-radius: 999px;
+        background: #d64545;
+        color: #fff;
+        font-size: 0.62rem;
+        font-weight: 700;
+        line-height: 1.1rem;
+        text-align: center;
+    }
+    .notifications-dropdown{
+        width: 20rem;
+    }
+    .notifications-list{
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+    .notifications-empty{
+        font-size: 0.8rem;
+        color: var(--color-text-secondary);
+        padding: 0.5rem 0;
+    }
+    .notifications-item{
+        padding: 0.55rem 0.6rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.4rem;
+        background: var(--color-bg);
+    }
+    .notifications-item-meta{
+        font-size: 0.68rem;
+        color: var(--color-text-secondary);
+    }
+    .notifications-item-desc{
+        margin: 0.25rem 0 0.4rem;
+        font-size: 0.78rem;
+        color: var(--color-text-primary);
+        word-break: break-word;
+    }
+    .notifications-item-actions{
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.4rem;
+    }
+    .notifications-item-actions .btn,
+    .notifications-item-actions .btn-secondary{
+        height: auto;
+        padding: 0.3rem 0.6rem;
+        font-size: 0.72rem;
+    }
     /* Datos de Usuario del Negocio — Departamentos/Áreas/Centro Costos/
        Permisos are condensed into one summary button ("3 Dep. - 6 Áreas -
        1 C. Costos - 15 Permisos"); clicking it opens business-summary-modal
@@ -1838,6 +1898,13 @@
        editable-cell-disabled, which hides it behind disabledText. */
     .data-table td.editable-cell-locked{
         cursor: not-allowed;
+    }
+    .data-table td.editable-cell-pending{
+        cursor: not-allowed;
+    }
+    .data-table td.editable-cell-pending .editable-cell-lock-icon{
+        color: #d08a1e;
+        opacity: 0.85;
     }
     .editable-cell-lock-icon{
         margin-left: 0.35rem;
