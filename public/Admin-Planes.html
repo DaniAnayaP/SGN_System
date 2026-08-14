@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.plansRegistered">Registered Plans</title>
+    <title data-i18n="menu.plansRegistered">My Plans</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="menu.plansRegistered">Registered Plans</p>
+                <p class="welcome-text" data-i18n="menu.plansRegistered">My Plans</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -339,13 +339,18 @@
                 </div>
             </form>
 
-            <div class="admin-table-wrap">
-                <table class="admin-table">
+            <div class="data-table-wrapper" data-table-id="mis-planes">
+                <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="admin.planName">Plan name</th>
-                            <th data-i18n="admin.planDescription">Description</th>
-                            <th></th>
+                            <th data-i18n="admin.planName" data-col="name">Plan name</th>
+                            <th data-i18n="admin.planDescription" data-col="description">Description</th>
+                            <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
+                            <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
+                            <th data-i18n="admin.planEndDate" data-col="endDate">End date</th>
+                            <th data-i18n="admin.planStatus" data-col="status">Status</th>
+                            <th data-i18n="admin.planLocked" data-col="locked">Locked</th>
+                            <th data-col="actions"></th>
                         </tr>
                     </thead>
                     <tbody id="plan-table-body">
@@ -353,6 +358,17 @@
                     </tbody>
                 </table>
                 <p id="plan-empty" class="admin-empty" data-i18n="admin.noPlans" hidden>No plans yet. Add the first one above.</p>
+            </div>
+
+            <h3 id="plan-tree-heading" style="margin-top: 2rem; margin-bottom: 0.5rem; font-size: 0.95rem;" data-i18n="admin.planTreeTitle">Access tree for this plan</h3>
+            <p id="plan-tree-hint" class="admin-hint" data-i18n="admin.planTreeHint">Select a plan above to configure what it includes.</p>
+            <div id="plan-tree-panel" hidden>
+                <p id="plan-tree-locked-note" class="admin-hint" hidden></p>
+                <div id="plan-tree-container"></div>
+                <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                    <button type="button" class="btn" id="plan-tree-save" data-i18n="admin.save">Save</button>
+                </div>
+                <p id="plan-tree-save-status" class="admin-save-status"></p>
             </div>
         </section>
     </main>

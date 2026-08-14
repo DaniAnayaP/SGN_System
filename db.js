@@ -417,6 +417,51 @@ if (!planColumns.some((c) => c.name === 'modules')) {
 if (!planColumns.some((c) => c.name === 'cost_centers_limit')) {
     db.exec('ALTER TABLE plans ADD COLUMN cost_centers_limit INTEGER NOT NULL DEFAULT 0');
 }
+if (!planColumns.some((c) => c.name === 'created_by')) {
+    db.exec("ALTER TABLE plans ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+}
+if (!planColumns.some((c) => c.name === 'end_date')) {
+    db.exec('ALTER TABLE plans ADD COLUMN end_date TEXT');
+}
+if (!planColumns.some((c) => c.name === 'status')) {
+    db.exec("ALTER TABLE plans ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+}
+if (!planColumns.some((c) => c.name === 'locked')) {
+    db.exec('ALTER TABLE plans ADD COLUMN locked INTEGER NOT NULL DEFAULT 0');
+}
+
+// plan_grants: same {sectionId, itemId, submenuId} shape as profile_grants —
+// what a Plan bundles in (which departamentos/áreas/apartados/pantallas/
+// columnas it includes), edited with the SAME PermissionTree.js component,
+// just mounted against a plan instead of a client's profile. Separate table
+// (not reusing profile_grants) since a plan isn't a profile and isn't
+// scoped to any one client.
+//
+// plan_changes: same idea as data_table_changes, but plans are GEIPSA-wide
+// (not owned by any client), so it can't reuse that table — data_table_changes.client_id
+// is NOT NULL. Kept minimal on purpose, no requested_by/authorized_by
+// (plans have no approval workflow).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS plan_grants (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id     INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        section_id  TEXT NOT NULL,
+        item_id     TEXT,
+        submenu_id  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_plan_grants_plan_id ON plan_grants(plan_id);
+
+    CREATE TABLE IF NOT EXISTS plan_changes (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id       INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        action        TEXT NOT NULL,
+        field_key     TEXT NOT NULL DEFAULT '',
+        old_value     TEXT NOT NULL DEFAULT '',
+        new_value     TEXT NOT NULL DEFAULT '',
+        changed_by    TEXT NOT NULL DEFAULT '',
+        changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+`);
 
 const MODULE_CATALOG = [
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
@@ -1395,10 +1440,17 @@ seedScreenVisibilityGrants();
 // Contrataciones edits per-client — see applyPlanToClient in server.js.
 function deserializePlan(row) {
     if (!row) return row;
-    const { modules, cost_centers_limit, ...rest } = row;
+    const { modules, cost_centers_limit, created_by, end_date, locked, ...rest } = row;
     let parsedModules = [];
     try { parsedModules = JSON.parse(modules) || []; } catch { parsedModules = []; }
-    return { ...rest, modules: parsedModules, costCentersLimit: cost_centers_limit };
+    return {
+        ...rest,
+        modules: parsedModules,
+        costCentersLimit: cost_centers_limit,
+        createdBy: created_by || '',
+        endDate: end_date || '',
+        locked: !!locked,
+    };
 }
 
 function listPlans() {
@@ -1413,27 +1465,90 @@ function getPlanByName(name) {
     return deserializePlan(db.prepare('SELECT * FROM plans WHERE name = ?').get(name));
 }
 
-function createPlan({ name, description, modules, costCentersLimit }) {
+function createPlan({ name, description, modules, costCentersLimit, createdBy }) {
     const result = db
-        .prepare('INSERT INTO plans (name, description, modules, cost_centers_limit) VALUES (@name, @description, @modules, @costCentersLimit)')
+        .prepare(`
+            INSERT INTO plans (name, description, modules, cost_centers_limit, created_by)
+            VALUES (@name, @description, @modules, @costCentersLimit, @createdBy)
+        `)
         .run({
             name, description: description || '',
             modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0,
+            createdBy: createdBy || '',
         });
     return getPlanById(result.lastInsertRowid);
 }
 
-function updatePlan(id, { name, description, modules, costCentersLimit }) {
-    db.prepare('UPDATE plans SET name = @name, description = @description, modules = @modules, cost_centers_limit = @costCentersLimit WHERE id = @id')
-        .run({
-            id, name, description: description || '',
-            modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0,
-        });
+// Definition fields (name/description/modules/costCentersLimit) are the
+// caller's responsibility to block once a plan is locked — see
+// server.js's PATCH route, which checks `locked` before calling this at
+// all. status/endDate are lifecycle fields and stay editable regardless
+// (marking a plan Inactivo, or giving it an end date, isn't "redefining
+// what it grants").
+function updatePlan(id, { name, description, modules, costCentersLimit, status, endDate }) {
+    const existing = getPlanById(id);
+    db.prepare(`
+        UPDATE plans SET name = @name, description = @description, modules = @modules,
+            cost_centers_limit = @costCentersLimit, status = @status, end_date = @endDate
+        WHERE id = @id
+    `).run({
+        id,
+        name: name ?? existing.name,
+        description: (description ?? existing.description) || '',
+        modules: JSON.stringify(modules ?? existing.modules ?? []),
+        costCentersLimit: costCentersLimit ?? existing.costCentersLimit ?? 0,
+        status: status ?? existing.status ?? 'active',
+        endDate: endDate ?? existing.end_date ?? null,
+    });
+    return getPlanById(id);
+}
+
+function lockPlan(id) {
+    db.prepare('UPDATE plans SET locked = 1 WHERE id = ?').run(id);
     return getPlanById(id);
 }
 
 function deletePlan(id) {
     db.prepare('DELETE FROM plans WHERE id = ?').run(id);
+}
+
+function getPlanGrants(planId) {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM plan_grants WHERE plan_id = ?')
+        .all(planId);
+}
+
+function setPlanGrants(planId, grants) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM plan_grants WHERE plan_id = ?').run(planId);
+        const insert = db.prepare(`
+            INSERT INTO plan_grants (plan_id, section_id, item_id, submenu_id)
+            VALUES (@planId, @sectionId, @itemId, @submenuId)
+        `);
+        for (const g of rows) {
+            insert.run({ planId, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
+        }
+    });
+    replace(grants);
+    return getPlanGrants(planId);
+}
+
+function getPlanChanges(planId) {
+    return db
+        .prepare('SELECT * FROM plan_changes WHERE plan_id = ? ORDER BY changed_at DESC, id DESC')
+        .all(planId);
+}
+
+function logPlanChange({ planId, action, fieldKey, oldValue, newValue, changedBy }) {
+    db.prepare(`
+        INSERT INTO plan_changes (plan_id, action, field_key, old_value, new_value, changed_by)
+        VALUES (@planId, @action, @fieldKey, @oldValue, @newValue, @changedBy)
+    `).run({
+        planId, action, fieldKey: fieldKey || '',
+        oldValue: oldValue == null ? '' : String(oldValue),
+        newValue: newValue == null ? '' : String(newValue),
+        changedBy: changedBy || '',
+    });
 }
 
 // --- Query helpers: business users (scoped to one client) --------------------
@@ -1729,7 +1844,12 @@ module.exports = {
     getPlanByName,
     createPlan,
     updatePlan,
+    lockPlan,
     deletePlan,
+    getPlanGrants,
+    setPlanGrants,
+    getPlanChanges,
+    logPlanChange,
     activateClient,
     deactivateClientUsers,
     listBusinessUsers,

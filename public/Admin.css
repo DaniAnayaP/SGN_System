@@ -614,6 +614,13 @@ body.dark-mode .admin-badge-prospecto{
 .perm-tree-row-blocked:hover{
     opacity: 0.85;
 }
+/* Locked plan's access tree (Mis Planes) — fully interactive markup stays
+   in the DOM (so grantSet's checked state renders correctly, unlike
+   readOnly mode), just non-interactive: browsable, not editable. */
+.perm-tree-view-only{
+    pointer-events: none;
+    opacity: 0.7;
+}
 .perm-tree-legend{
     display: flex;
     align-items: center;

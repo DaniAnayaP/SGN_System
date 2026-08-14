@@ -89,7 +89,12 @@ const {
     getPlanByName,
     createPlan,
     updatePlan,
+    lockPlan,
     deletePlan,
+    getPlanGrants,
+    setPlanGrants,
+    getPlanChanges,
+    logPlanChange,
     activateClient,
     deactivateClientUsers,
     listBusinessUsers,
@@ -750,8 +755,17 @@ function sanitizePlanModules(modules) {
     return Array.isArray(modules) ? modules.filter((key) => validKeys.has(key)) : [];
 }
 
+// Once a plan's access tree is saved, it's meant to be final ("al generar
+// un plan es para siempre" — a plan's DEFINITION shouldn't shift under
+// clients already assigned to it). While the project is still being built,
+// that lock is relaxed so plans can keep being iterated on — flip this to
+// false before launch, and every plan saved with a full access tree from
+// then on locks for real. Never read from an env var on purpose: this is a
+// one-time, deliberate release switch, not a per-environment setting.
+const DEV_MODE_ALLOW_LOCKED_PLAN_EDITS = true;
+
 app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
-    res.json({ plans: listPlans() });
+    res.json({ plans: listPlans(), devModeOverride: DEV_MODE_ALLOW_LOCKED_PLAN_EDITS });
 });
 
 app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
@@ -762,7 +776,9 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
         const plan = createPlan({
             name: name.trim(), description,
             modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0,
+            createdBy: req.user.name,
         });
+        logPlanChange({ planId: plan.id, action: 'create', changedBy: req.user.name });
         res.status(201).json({ plan });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -775,14 +791,27 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
 app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    const error = validatePlanBody(req.body);
-    if (error) return res.status(400).json({ message: error });
+    const { status, endDate } = req.body || {};
+    // Lifecycle-only patch (status/endDate) — always allowed, even locked.
+    const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit'].some((k) => Object.prototype.hasOwnProperty.call(req.body || {}, k));
+    if (isDefinitionChange && existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
+        return res.status(409).json({ message: 'Este plan ya fue guardado y no puede modificarse.' });
+    }
+    if (isDefinitionChange) {
+        const error = validatePlanBody({ ...existing, ...req.body });
+        if (error) return res.status(400).json({ message: error });
+    }
     const { name, description, modules, costCentersLimit } = req.body;
     try {
         const plan = updatePlan(req.params.id, {
-            name: name.trim(), description,
-            modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0,
+            name: name != null ? name.trim() : undefined,
+            description,
+            modules: modules != null ? sanitizePlanModules(modules) : undefined,
+            costCentersLimit,
+            status,
+            endDate,
         });
+        logPlanChange({ planId: plan.id, action: 'update', changedBy: req.user.name });
         res.json({ plan });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -797,6 +826,40 @@ app.delete('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     deletePlan(req.params.id);
     res.status(204).end();
+});
+
+// --- Plan access tree ("Mis Planes" — árbol de accesos por plan) -----------
+// Same {sectionId, itemId, submenuId} grant shape PermissionTree.js already
+// saves for a client's profiles, mounted here against a plan instead. The
+// first save locks the plan (see DEV_MODE_ALLOW_LOCKED_PLAN_EDITS above).
+app.get('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    res.json({ grants: getPlanGrants(req.params.id), locked: existing.locked });
+});
+
+app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    if (existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
+        return res.status(409).json({ message: 'Este plan ya fue guardado y no puede modificarse.' });
+    }
+    const { grants } = req.body || {};
+    const error = validateGrants(grants);
+    if (error) return res.status(400).json({ message: error });
+    const saved = setPlanGrants(req.params.id, grants);
+    if (!existing.locked) lockPlan(req.params.id);
+    logPlanChange({
+        planId: req.params.id, action: 'update', fieldKey: 'admin.activeTree',
+        oldValue: '', newValue: `${saved.length}`, changedBy: req.user.name,
+    });
+    res.json({ grants: saved, locked: true });
+});
+
+app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    res.json({ changes: getPlanChanges(req.params.id) });
 });
 
 // --- Business admin: users, profiles, and permission grants ------------------
