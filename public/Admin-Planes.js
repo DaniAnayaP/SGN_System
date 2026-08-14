@@ -208,6 +208,7 @@ function renderPlans() {
         tdCreatedBy.textContent = plan.createdBy || '—';
 
         const tdActions = document.createElement('td');
+        tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
         const treeBtn = document.createElement('button');
         treeBtn.type = 'button';
