@@ -390,10 +390,13 @@ treeSaveBtn.addEventListener('click', async () => {
             treeSaveStatus.textContent = body.message || Dashboard.t('admin.saveError');
             return;
         }
-        treeSaveStatus.textContent = Dashboard.t('admin.planTreeSaved');
         await loadPlans();
         const plan = plans.find((p) => p.id === selectedPlanId);
-        if (plan) selectPlanForTree(plan);
+        // selectPlanForTree() resets treeSaveStatus itself (it's a full
+        // re-mount) — set the success message AFTER it settles, not before,
+        // or the re-mount wipes it before anyone sees it.
+        if (plan) await selectPlanForTree(plan);
+        treeSaveStatus.textContent = Dashboard.t('admin.planTreeSaved');
     } catch {
         treeSaveStatus.textContent = Dashboard.t('admin.saveError');
     } finally {
