@@ -1007,6 +1007,25 @@ document.addEventListener('dashboard:language-changed', () => {
     if (!colorModal.hidden) colorModalPaletteWidget?.refreshLabels();
 });
 
+// "+ Nuevo Cliente" — same toolbar-button placement/style as Mis Planes'
+// "+ Agregar Plan Nuevo" (Inicio-en.css .data-table-new-record-btn,
+// prepended into the .data-table-zoom bar Dashboard.js already renders for
+// every .data-table-wrapper), navigating to the existing dedicated
+// creation page (Admin-ClienteNuevo.html) — Nuestros Clientes never had an
+// inline create flow, no reason to build one now just for this button.
+function renderNewClientButton() {
+    const wrapper = document.querySelector('[data-table-id="nuestros-clientes"]');
+    const toolbar = wrapper?.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    if (toolbar.querySelector('.data-table-new-record-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-new-record-btn';
+    btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="menu.addClientNew">${Dashboard.t('menu.addClientNew')}</span>`;
+    btn.addEventListener('click', () => { window.location.href = 'Admin-ClienteNuevo.html'; });
+    toolbar.prepend(btn);
+}
+
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'admin-saas' });
@@ -1017,6 +1036,7 @@ document.addEventListener('dashboard:language-changed', () => {
         }
         paletteWidget = window.ColorPalette.create(paletteContainer);
         document.addEventListener('dashboard:language-changed', () => paletteWidget.refreshLabels());
+        renderNewClientButton();
         await Promise.all([loadClients(), loadPlans(), loadModuleCatalog()]);
     } catch (err) {
         console.error('Admin (SaaS) failed to initialize:', err);
