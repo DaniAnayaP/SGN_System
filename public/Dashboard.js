@@ -155,7 +155,7 @@ const EMBEDDED_TRANSLATIONS = {
             colFuelTripKmBefore: "Trip KM Before Load", colFuelTripKmAfter: "Trip KM After Load", colFuelTripKmTotal: "Total Trip KM Acquired",
             colFuelType: "Fuel Type", colFuelLiters: "Liters", colFuelCostPerLiter: "Cost per Liter", fuelTypeSelect: "Select...", fuelTypeDiesel: "Diesel", fuelTypeMagna: "Regular", fuelTypePremium: "Premium",
             changeHistory: "Change history", changeHistoryTitle: "Change history", changeHistoryEmpty: "No changes recorded yet.", changeHistoryCreated: "Record created", changeHistoryDeleted: "Record deleted", changeHistoryDate: "Date", changeHistoryUser: "User", changeHistoryRecord: "Record", changeHistoryChange: "Change",
-            fieldLocked: "Already saved — you need permission to edit it", columnPermissionsTitle: "Permissions to edit saved columns", columnPermissionsHint: "Check which already-saved columns this profile/user can edit again." }
+            fieldLocked: "Already saved — you need permission to edit it" }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -286,7 +286,7 @@ const EMBEDDED_TRANSLATIONS = {
             colFuelTripKmBefore: "TRIP KM antes carga", colFuelTripKmAfter: "TRIP KM después carga", colFuelTripKmTotal: "Total TRIP KM adquiridos",
             colFuelType: "Tipo Combustible", colFuelLiters: "Cant Litros", colFuelCostPerLiter: "Costo x Litro", fuelTypeSelect: "Seleccionar...", fuelTypeDiesel: "Diésel", fuelTypeMagna: "Magna", fuelTypePremium: "Premium",
             changeHistory: "Historial de cambios", changeHistoryTitle: "Historial de cambios", changeHistoryEmpty: "Aún no hay cambios registrados.", changeHistoryCreated: "Registro creado", changeHistoryDeleted: "Registro eliminado", changeHistoryDate: "Fecha", changeHistoryUser: "Usuario", changeHistoryRecord: "Registro", changeHistoryChange: "Cambio",
-            fieldLocked: "Ya se guardó — necesitas permiso para modificarlo", columnPermissionsTitle: "Permisos para modificar columnas guardadas", columnPermissionsHint: "Marca qué columnas, ya guardadas, puede volver a modificar este perfil/usuario." }
+            fieldLocked: "Ya se guardó — necesitas permiso para modificarlo" }
     }
 };
 
@@ -3541,14 +3541,29 @@ async function initDashboard({ activePage } = {}) {
 // "Modificar columna guardada" — a cell whose value is already saved stays
 // locked (visible, not editable) unless the viewer is the client's own admin
 // (unconditional bypass, confirmed product decision) or their effective
-// grants include { sectionId: 'col-edit:<tableKey>', itemId: '<colKey>' }
-// (same profile_grants/user_grants rows the menu permission tree already
-// uses — see ColumnPermissionTree.js for how that grant gets set). The
-// actual enforcement is server-side (server.js's checkAndLogFieldChanges) —
-// this is purely UI convenience so a locked cell never even offers to edit.
+// grants include that column's leaf — the pantalla's own node in the menu
+// tree, one level deeper (see PermissionTree.js's 4th-level rendering and
+// public/data/menu.json). The actual enforcement is server-side (server.js's
+// checkAndLogFieldChanges) — this is purely UI convenience so a locked cell
+// never even offers to edit.
+// Mirrors TABLE_GRANT_PATHS in db.js — each editable pantalla's column
+// grants live as ordinary leaves of its OWN node in the menu tree (see
+// public/data/menu.json, PermissionTree.js's 4th-level rendering), not a
+// separate namespace, so this must point at the exact same
+// {sectionId, itemId, submenuPrefix} the server checks. Keep both in sync
+// by hand when a table's pantalla moves in the tree or a new table is added.
+const TABLE_GRANT_PATHS = {
+    'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service' },
+    'registro-combustible': { sectionId: 'supply-chain', itemId: 'cat-operaciones', submenuPrefix: 'cat-operaciones-transporte-vol-combustible' },
+    'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'cat-operaciones', submenuPrefix: 'cat-operaciones-rrhh-mi-recurso-humano' },
+};
+
 function hasColumnEditGrant(tableKey, colKey) {
     if (!!currentUser?.isClientAdmin) return true;
-    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === `col-edit:${tableKey}` && g.itemId === colKey);
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return false;
+    const submenuId = `${path.submenuPrefix}/${colKey}`;
+    return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === submenuId);
 }
 function canEditField(tableKey, colKey, currentValue) {
     const hasValue = currentValue !== '' && currentValue != null && currentValue !== 0;

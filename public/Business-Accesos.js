@@ -8,30 +8,12 @@ const userSelect = document.getElementById('access-user-select');
 const hint = document.getElementById('access-hint');
 const panel = document.getElementById('access-panel');
 const treeContainer = document.getElementById('permission-tree-container');
-const columnTreeContainer = document.getElementById('column-permission-tree-container');
 const saveBtn = document.getElementById('access-save');
 const saveStatus = document.getElementById('access-save-status');
 
 let tree = null;
-let columnTree = null;
-let editableTables = null;
 let allowedSectionIds = null;
 let costCenters = [];
-
-// Fetched once and cached — same registry backs every user's column-edit
-// grants on this page.
-async function loadEditableTables() {
-    if (editableTables) return editableTables;
-    try {
-        const res = await fetch('/api/business/editable-columns', { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        editableTables = data.tables || [];
-    } catch {
-        editableTables = [];
-    }
-    return editableTables;
-}
 
 async function loadContractedModules() {
     try {
@@ -80,8 +62,6 @@ async function loadGrantsForUser(userId) {
         const data = await res.json();
         tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters });
         await tree.init(data.grants || []);
-        columnTree = window.ColumnPermissionTree.create(columnTreeContainer, { tables: await loadEditableTables() });
-        columnTree.init(data.grants || []);
         panel.hidden = false;
         hint.hidden = true;
     } catch {
@@ -111,7 +91,7 @@ saveBtn.addEventListener('click', async () => {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ grants: [...tree.getGrants(), ...(columnTree ? columnTree.getGrants() : [])] }),
+            body: JSON.stringify({ grants: tree.getGrants() }),
         });
         if (!res.ok) throw new Error('save failed');
         saveStatus.textContent = Dashboard.t('business.accessSaved');

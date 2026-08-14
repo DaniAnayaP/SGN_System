@@ -830,16 +830,30 @@ function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fie
     });
 }
 
-// "Modificar columna guardada" permission — a grant of
-// { sectionId: 'col-edit:<tableKey>', itemId: '<colKey>' } in the SAME
-// profile_grants/user_grants tables used by the menu permission tree (no
-// schema change — validateGrants only requires a non-empty sectionId).
-// colKey is fieldKey's last segment (e.g. "main.colFuelPlates" -> "colFuelPlates"),
-// reusing FUEL_PATCHABLE_FIELDS/HR_WORKER_PATCHABLE_FIELDS/COST_CENTER_FIELDS
-// as the single source of truth for column identity — see server.js's
-// checkAndLogFieldChanges, the actual enforcement point.
+// "Modificar columna guardada" permission — each editable pantalla is a
+// real node in the SAME menu tree PermissionTree.js already renders (see
+// public/data/menu.json — the pantalla's own entry now carries a `submenu`
+// of its columns), so a column's grant is just that pantalla's normal
+// {sectionId, itemId, submenuId} leaf, one level deeper, with NO new
+// sectionId namespace and no schema change. TABLE_GRANT_PATHS mirrors each
+// table's actual position in menu.json — kept in sync by hand (a future
+// table just needs its own entry here, matching wherever its pantalla
+// already lives in the tree).
+// colKey is fieldKey's last segment (e.g. "main.colFuelPlates" ->
+// "colFuelPlates") — reused from FUEL_PATCHABLE_FIELDS/
+// HR_WORKER_PATCHABLE_FIELDS/COST_CENTER_FIELDS, and must match the `id` of
+// that pantalla's column entries in menu.json exactly.
+const TABLE_GRANT_PATHS = {
+    'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service' },
+    'registro-combustible': { sectionId: 'supply-chain', itemId: 'cat-operaciones', submenuPrefix: 'cat-operaciones-transporte-vol-combustible' },
+    'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'cat-operaciones', submenuPrefix: 'cat-operaciones-rrhh-mi-recurso-humano' },
+};
+
 function hasColumnEditGrant(grants, tableKey, colKey) {
-    return grants.some((g) => g.sectionId === `col-edit:${tableKey}` && g.itemId === colKey);
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return false;
+    const submenuId = `${path.submenuPrefix}/${colKey}`;
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === submenuId);
 }
 
 // Self-service version for the client's own admin (Business-Config page):

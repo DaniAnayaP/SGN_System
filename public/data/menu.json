@@ -31,7 +31,15 @@
           "labelKey": "menu.adminBusiness",
           "icon": "bx-shopping-bag",
           "submenu": [
-            { "id": "ab-contracted-service", "labelKey": "menu.contractedService", "href": "Business-CentrosCosto.html", "icon": "bx-purchase-tag-alt" },
+            {
+              "id": "ab-contracted-service", "labelKey": "menu.contractedService", "href": "Business-CentrosCosto.html", "icon": "bx-purchase-tag-alt",
+              "submenu": [
+                { "id": "ccCode", "labelKey": "business.ccCode", "permissionOnly": true },
+                { "id": "ccName", "labelKey": "business.ccName", "permissionOnly": true },
+                { "id": "ccResponsible", "labelKey": "business.ccResponsible", "permissionOnly": true },
+                { "id": "ccDescription", "labelKey": "business.ccDescription", "permissionOnly": true }
+              ]
+            },
             { "id": "ab-expansions", "labelKey": "menu.expansions", "href": "#", "icon": "bx-trending-up" },
             { "id": "ab-business-config", "labelKey": "menu.businessConfig", "href": "Business-Config.html", "icon": "bx-palette" },
             { "id": "ab-client-data", "labelKey": "menu.clientData", "href": "Business-DatosCliente.html", "icon": "bx-id-card" },
@@ -127,7 +135,22 @@
         { "id": "cat-catalogos-transporte-vol-tipos-aditamentos", "labelKey": "menu.catTransVolTiposAditamentos", "icon": "bx-window", "href": "#" }
       ],
       "cat-operaciones": [
-        { "id": "cat-operaciones-transporte-vol-combustible", "labelKey": "menu.opTransVolCombustible", "icon": "bx-window", "href": "OpTransVolCombustible.html" },
+        {
+          "id": "cat-operaciones-transporte-vol-combustible", "labelKey": "menu.opTransVolCombustible", "icon": "bx-window", "href": "OpTransVolCombustible.html",
+          "submenu": [
+            { "id": "colFuelPlates", "labelKey": "main.colFuelPlates", "permissionOnly": true },
+            { "id": "colFuelTicketEvidence", "labelKey": "main.colFuelTicketEvidence", "permissionOnly": true },
+            { "id": "colFuelTripKmBefore", "labelKey": "main.colFuelTripKmBefore", "permissionOnly": true },
+            { "id": "colFuelTripKmAfter", "labelKey": "main.colFuelTripKmAfter", "permissionOnly": true },
+            { "id": "colFuelType", "labelKey": "main.colFuelType", "permissionOnly": true },
+            { "id": "colFuelLiters", "labelKey": "main.colFuelLiters", "permissionOnly": true },
+            { "id": "colFuelSubtotal", "labelKey": "main.colFuelSubtotal", "permissionOnly": true },
+            { "id": "colFuelVat", "labelKey": "main.colFuelVat", "permissionOnly": true },
+            { "id": "colFuelReason", "labelKey": "main.colFuelReason", "permissionOnly": true },
+            { "id": "colFuelTransferService", "labelKey": "main.colFuelTransferService", "permissionOnly": true },
+            { "id": "colFuelInternalMovement", "labelKey": "main.colFuelInternalMovement", "permissionOnly": true }
+          ]
+        },
         { "id": "cat-operaciones-transporte-vol-ingresos", "labelKey": "menu.opTransVolIngresos", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-gastos", "labelKey": "menu.opTransVolGastos", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-inventario", "labelKey": "menu.opTransVolInventario", "icon": "bx-window", "href": "#" }
@@ -145,7 +168,15 @@
     },
     "human-resources/hr-area-personnel-admin": {
       "cat-operaciones": [
-        { "id": "cat-operaciones-rrhh-mi-recurso-humano", "labelKey": "menu.opRrhhMiRecursoHumano", "icon": "bx-window", "href": "OpRRHHMiRecursoHumano.html" }
+        {
+          "id": "cat-operaciones-rrhh-mi-recurso-humano", "labelKey": "menu.opRrhhMiRecursoHumano", "icon": "bx-window", "href": "OpRRHHMiRecursoHumano.html",
+          "submenu": [
+            { "id": "colHrArea", "labelKey": "main.colHrArea", "permissionOnly": true },
+            { "id": "colHrEmail", "labelKey": "main.colHrEmail", "permissionOnly": true },
+            { "id": "colHrPhone", "labelKey": "main.colHrPhone", "permissionOnly": true },
+            { "id": "colHrStatus", "labelKey": "main.colHrStatus", "permissionOnly": true }
+          ]
+        }
       ]
     }
   },

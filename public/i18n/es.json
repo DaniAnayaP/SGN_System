@@ -533,8 +533,6 @@
     "changeHistoryUser": "Usuario",
     "changeHistoryRecord": "Registro",
     "changeHistoryChange": "Cambio",
-    "fieldLocked": "Ya se guardó — necesitas permiso para modificarlo",
-    "columnPermissionsTitle": "Permisos para modificar columnas guardadas",
-    "columnPermissionsHint": "Marca qué columnas, ya guardadas, puede volver a modificar este perfil/usuario."
+    "fieldLocked": "Ya se guardó — necesitas permiso para modificarlo"
   }
 }

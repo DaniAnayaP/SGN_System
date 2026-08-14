@@ -966,9 +966,10 @@ app.put('/api/business/profiles/:id/grants', requireAuth, requireClientAdmin, (r
 // {bodyKey: {column, fieldKey}} maps each table's update* function already
 // uses); a field that already has a value and actually changes requires the
 // requester to either be the client's own admin (unconditional bypass, per
-// explicit product decision) or hold a
-// { sectionId: 'col-edit:<tableKey>', itemId: '<colKey>' } grant (see
-// hasColumnEditGrant in db.js). All-or-nothing: the first locked field
+// explicit product decision) or hold that column's grant — the same real
+// menu-tree leaf PermissionTree.js already renders one level under that
+// pantalla's own node (see hasColumnEditGrant/TABLE_GRANT_PATHS in db.js,
+// and public/data/menu.json). All-or-nothing: the first locked field
 // without permission aborts before anything is logged or written.
 //
 // The diff always runs on the RAW existing/patch values — `sanitizers[key]`
@@ -1236,27 +1237,6 @@ app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
 app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey) });
-});
-
-// --- "Modificar columna guardada" grant tree — reuses each table's own -----
-// *_FIELDS map (already required for change-history) as the single source of
-// truth for what columns exist, so a future table only needs its own
-// *_FIELDS map plus one line here to show up in the permission tree — same
-// cost as already registering it for change-history.
-const EDITABLE_TABLE_REGISTRY = [
-    { tableKey: 'centros-costo', labelKey: 'menu.contractedService', fields: COST_CENTER_FIELDS },
-    { tableKey: 'registro-combustible', labelKey: 'menu.opTransVolCombustible', fields: FUEL_PATCHABLE_FIELDS },
-    { tableKey: 'mi-recurso-humano', labelKey: 'menu.opRrhhMiRecursoHumano', fields: HR_WORKER_PATCHABLE_FIELDS },
-];
-
-app.get('/api/business/editable-columns', requireAuth, requireClientAdmin, (req, res) => {
-    res.json({
-        tables: EDITABLE_TABLE_REGISTRY.map(({ tableKey, labelKey, fields }) => ({
-            tableKey,
-            labelKey,
-            columns: Object.values(fields).map(({ fieldKey }) => ({ key: fieldKey.split('.').pop(), fieldKey })),
-        })),
-    });
 });
 
 const PORT = process.env.PORT || 3000;

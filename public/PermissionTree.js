@@ -89,15 +89,22 @@
     // key instead of the compound form, so it stays interchangeable with
     // whatever else already checks that same grant (e.g. the double-gate
     // with MODULE_CATALOG in Dashboard.js).
+    // A subSm can itself have a submenu too (e.g. "Registros de Combustible"
+    // nested inside "Centros de Costo" ... "Configuración de Botones" —
+    // one column per leaf, "convirtiendo la opción pantalla en un menú y las
+    // columnas en la opción" per the product ask). Same compound-key rule
+    // applies one level further down: `${sm.id}/${subSm.id}/${leaf.id}`.
     function leafKeysUnder(section, item) {
         if (item.submenu && item.submenu.length) {
             return item.submenu.flatMap((sm) => (
                 sm.submenu && sm.submenu.length
-                    ? sm.submenu.map((subSm) => (
-                        subSm.standalone
-                            ? keyOf(section.id, subSm.id, null)
-                            : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
-                    ))
+                    ? sm.submenu.flatMap((subSm) => {
+                        if (subSm.standalone) return [keyOf(section.id, subSm.id, null)];
+                        if (subSm.submenu && subSm.submenu.length) {
+                            return subSm.submenu.map((leaf) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${leaf.id}`));
+                        }
+                        return [keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)];
+                    })
                     : [keyOf(section.id, item.id, sm.id)]
             ));
         }
@@ -296,9 +303,13 @@
                         // inside "Configuración") — reuses expandedItems
                         // with a 3-part key, distinct from the 2-part
                         // item-level keys above.
-                        const smLeafKeys = sm.submenu.map((subSm) => (
-                            subSm.standalone ? keyOf(section.id, subSm.id, null) : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
-                        ));
+                        const smLeafKeys = sm.submenu.flatMap((subSm) => {
+                            if (subSm.standalone) return [keyOf(section.id, subSm.id, null)];
+                            if (subSm.submenu && subSm.submenu.length) {
+                                return subSm.submenu.map((leaf) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${leaf.id}`));
+                            }
+                            return [keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)];
+                        });
                         const smChecked = smLeafKeys.filter((k) => grantSet.has(k)).length;
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
                         const smExpandedNow = expandedItems.has(smKey);
@@ -336,15 +347,63 @@
                             // because "Configuración" itself was.
                             const subBlocked = itemBlocked
                                 || (readOnly && subSm.standalone && MAIN_MODULE_ITEM_IDS.includes(subSm.id) && !isModuleEnabled(subSm.id));
-                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, subBlocked);
+                            const hasColumns = !!(subSm.submenu && subSm.submenu.length);
+
+                            if (!hasColumns) {
+                                const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, subBlocked);
+                                if (!readOnly) {
+                                    subRow.input.checked = grantSet.has(key);
+                                    subRow.input.addEventListener('change', () => {
+                                        setKeys([key], subRow.input.checked);
+                                        render();
+                                    });
+                                }
+                                container.appendChild(subRow.row);
+                                return;
+                            }
+
+                            // A 4th level down: a pantalla's own columns
+                            // ("modificar columna guardada" — see
+                            // checkAndLogFieldChanges in server.js). Each
+                            // column keeps the pantalla's own itemId, with a
+                            // 3-segment compound submenuId (never
+                            // `standalone` — a column isn't a real
+                            // navigable item elsewhere, unlike Departamento/
+                            // Área/C. Costos above).
+                            const subLeafKeys = subSm.submenu.map((leaf) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${leaf.id}`));
+                            const subChecked = subLeafKeys.filter((k) => grantSet.has(k)).length;
+                            const subKey = `${section.id}::${item.id}::${sm.id}::${subSm.id}`;
+                            const subExpandedNow = expandedItems.has(subKey);
+                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, {
+                                expanded: subExpandedNow,
+                                onToggle: () => {
+                                    if (subExpandedNow) expandedItems.delete(subKey);
+                                    else expandedItems.add(subKey);
+                                },
+                            }, subBlocked);
                             if (!readOnly) {
-                                subRow.input.checked = grantSet.has(key);
+                                subRow.input.checked = subChecked === subLeafKeys.length;
+                                subRow.input.indeterminate = subChecked > 0 && subChecked < subLeafKeys.length;
                                 subRow.input.addEventListener('change', () => {
-                                    setKeys([key], subRow.input.checked);
+                                    setKeys(subLeafKeys, subRow.input.checked);
                                     render();
                                 });
                             }
                             container.appendChild(subRow.row);
+                            if (!subExpandedNow) return;
+
+                            subSm.submenu.forEach((leaf) => {
+                                const leafKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${leaf.id}`);
+                                const leafRow = buildRow(t(leaf.labelKey, leaf.labelParams), 4, null, subBlocked);
+                                if (!readOnly) {
+                                    leafRow.input.checked = grantSet.has(leafKey);
+                                    leafRow.input.addEventListener('change', () => {
+                                        setKeys([leafKey], leafRow.input.checked);
+                                        render();
+                                    });
+                                }
+                                container.appendChild(leafRow.row);
+                            });
                         });
                     });
                 });

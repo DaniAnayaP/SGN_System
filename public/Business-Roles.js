@@ -18,32 +18,14 @@ const permissionsHeading = document.getElementById('permissions-heading');
 const permissionsHint = document.getElementById('permissions-hint');
 const permissionsPanel = document.getElementById('permissions-panel');
 const treeContainer = document.getElementById('permission-tree-container');
-const columnTreeContainer = document.getElementById('column-permission-tree-container');
 const permissionsSaveBtn = document.getElementById('permissions-save');
 const permissionsSaveStatus = document.getElementById('permissions-save-status');
 
 let profiles = [];
 let selectedProfileId = null;
 let tree = null;
-let columnTree = null;
-let editableTables = null;
 let allowedSectionIds = null;
 let costCenters = [];
-
-// Fetched once and cached — the same registry backs "Modificar columna
-// guardada" for every profile/user this page edits.
-async function loadEditableTables() {
-    if (editableTables) return editableTables;
-    try {
-        const res = await fetch('/api/business/editable-columns', { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        editableTables = data.tables || [];
-    } catch {
-        editableTables = [];
-    }
-    return editableTables;
-}
 
 async function loadContractedModules() {
     try {
@@ -219,8 +201,6 @@ async function selectProfileForPermissions(profile) {
         const data = await res.json();
         tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters });
         await tree.init(data.grants || []);
-        columnTree = window.ColumnPermissionTree.create(columnTreeContainer, { tables: await loadEditableTables() });
-        columnTree.init(data.grants || []);
         permissionsPanel.hidden = false;
         permissionsHint.hidden = true;
         permissionsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -239,7 +219,7 @@ permissionsSaveBtn.addEventListener('click', async () => {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ grants: [...tree.getGrants(), ...(columnTree ? columnTree.getGrants() : [])] }),
+            body: JSON.stringify({ grants: tree.getGrants() }),
         });
         if (!res.ok) throw new Error('save failed');
         permissionsSaveStatus.textContent = Dashboard.t('business.profileSaved');

@@ -508,6 +508,11 @@ body.dark-mode .admin-badge-prospecto{
     font-size: 0.75rem;
     color: var(--color-text-secondary);
 }
+.perm-tree-depth-4{
+    padding-left: 6rem;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
 .perm-tree-row input[type="checkbox"]{
     width: 1rem;
     height: 1rem;
@@ -612,15 +617,6 @@ body.dark-mode .admin-badge-prospecto{
     font-size: 0.85rem;
     color: var(--color-text-primary);
     font-weight: 500;
-}
-.admin-module-group-title{
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin: 1.25rem 0 0.25rem;
-}
-.admin-module-group-title:first-child{
-    margin-top: 0.5rem;
 }
 
 /* Toggle switch */
