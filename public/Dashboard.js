@@ -3534,6 +3534,14 @@ async function initDashboard({ activePage } = {}) {
     }
     menuData = await loadMenu();
     menuData = buildSidebarData(menuData, role, activePage);
+    // loadBusinessProfile() above already rendered the "Datos de Usuario del
+    // Negocio" summary once, but at that point menuData was still null —
+    // any department-level grant's resolveGrantLabel() call degraded to
+    // just the department name (or, before Área existed in the tree, a raw
+    // id). Re-render now that menuData is actually populated. No-op for
+    // admin/no-profile accounts (renderBusinessProfile() itself no-ops
+    // without cachedBusinessProfile).
+    renderBusinessProfile();
     renderFilteredMenu();
     updateDeptPickerLabel();
     renderAreaPickerOptions();
