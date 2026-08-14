@@ -416,8 +416,12 @@ function buildSidebarData(data, role, activePage) {
         submenu: [
             { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html' },
             { id: 'admin-cliente-nuevo', labelKey: 'menu.addClientNew', href: 'Admin-ClienteNuevo.html' },
+            // "+ Agregar Plan Nuevo" ya no vive aquí — Mis Planes tiene su
+            // propio botón "+ Agregar Plan Nuevo" en el toolbar de la tabla
+            // (ver renderNewPlanButton en Admin-Planes.js), que lleva a la
+            // MISMA página (Admin-PlanNuevo.html, sigue existiendo tal
+            // cual) — este ítem del sidebar quedaría redundante.
             { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html' },
-            { id: 'admin-plan-nuevo', labelKey: 'menu.addPlanNew', href: 'Admin-PlanNuevo.html' },
             { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html' }
         ]
     };
