@@ -513,6 +513,29 @@ body.dark-mode .admin-badge-prospecto{
     font-size: 0.72rem;
     color: var(--color-text-secondary);
 }
+.perm-tree-depth-5{
+    padding-left: 7.5rem;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+.perm-tree-depth-6{
+    padding-left: 9rem;
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+}
+/* "Tabla <X>" heading — no checkbox, no toggle, purely organizational. */
+.perm-tree-row-static{
+    opacity: 0.75;
+}
+.perm-tree-static-label{
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.68rem;
+}
+.perm-tree-toggle-label{
+    color: var(--color-text-primary);
+}
 .perm-tree-row input[type="checkbox"]{
     width: 1rem;
     height: 1rem;

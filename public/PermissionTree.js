@@ -97,20 +97,25 @@
     // with MODULE_CATALOG in Dashboard.js).
     // A subSm can itself have a submenu too (e.g. "Registros de Combustible"
     // nested inside "Centros de Costo" ... "Configuración de Botones" —
-    // one column per leaf, "convirtiendo la opción pantalla en un menú y las
-    // columnas en la opción" per the product ask). Same compound-key rule
-    // applies one level further down: `${sm.id}/${subSm.id}/${leaf.id}`.
+    // A pantalla that has its own "Tabla" of columns (colFuelPlates etc.)
+    // does NOT expand into per-column leaves here — a column's 4
+    // permission options (Solo Ver/Ver y Operar/Editar/Autorizar) are a
+    // fundamentally different kind of choice (at most 1-2 of them make
+    // sense checked at once, never "all of them") and would break every
+    // ancestor's all-checked/indeterminate math if counted the same way as
+    // a normal grantable leaf. The pantalla itself stays exactly one leaf,
+    // same as any pantalla without a table — see renderTableColumns(),
+    // which renders and tracks that whole sub-tree completely separately,
+    // outside of leafKeysUnder/expand/the section-and-up rollup chain.
     function leafKeysUnder(section, item) {
         if (item.submenu && item.submenu.length) {
             return item.submenu.flatMap((sm) => (
                 sm.submenu && sm.submenu.length
-                    ? sm.submenu.flatMap((subSm) => {
-                        if (subSm.standalone) return [keyOf(section.id, subSm.id, null)];
-                        if (subSm.submenu && subSm.submenu.length) {
-                            return subSm.submenu.map((leaf) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${leaf.id}`));
-                        }
-                        return [keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)];
-                    })
+                    ? sm.submenu.map((subSm) => (
+                        subSm.standalone
+                            ? keyOf(section.id, subSm.id, null)
+                            : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
+                    ))
                     : [keyOf(section.id, item.id, sm.id)]
             ));
         }
@@ -227,6 +232,115 @@
             keys.forEach((k) => (checked ? grantSet.add(k) : grantSet.delete(k)));
         }
 
+        // A plain, non-interactive label row — used for the "Tabla <X>"
+        // heading, which has no grant of its own (a pantalla's table is
+        // always exactly one; nothing meaningful to select/deselect at
+        // that level).
+        function buildStaticRow(labelText, depth) {
+            const row = document.createElement('div');
+            row.className = `perm-tree-row perm-tree-depth-${depth} perm-tree-row-static`;
+            const spacer = document.createElement('span');
+            spacer.className = 'perm-tree-toggle-spacer';
+            row.appendChild(spacer);
+            const label = document.createElement('span');
+            label.className = 'perm-tree-static-label';
+            label.textContent = labelText;
+            row.appendChild(label);
+            return row;
+        }
+
+        // A row with an expand/collapse toggle but no checkbox — used for
+        // each Columna row, which (unlike every other node in this tree)
+        // has no "granted or not" meaning of its own; only its 4 children
+        // (Solo Ver/Ver y Operar/Editar/Autorizar) are real grants.
+        function buildToggleOnlyRow(labelText, depth, toggle) {
+            const row = document.createElement('div');
+            row.className = `perm-tree-row perm-tree-depth-${depth}`;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'perm-tree-toggle';
+            btn.setAttribute('aria-expanded', String(toggle.expanded));
+            const icon = document.createElement('i');
+            icon.className = 'bx bx-chevron-down';
+            icon.setAttribute('aria-hidden', 'true');
+            btn.appendChild(icon);
+            btn.addEventListener('click', () => { toggle.onToggle(); render(); });
+            row.appendChild(btn);
+            const label = document.createElement('span');
+            label.className = 'perm-tree-toggle-label';
+            label.textContent = labelText;
+            row.appendChild(label);
+            return row;
+        }
+
+        // "Solo Ver"/"Ver y Operar"/"Editar" are mutually exclusive (a
+        // column can be in at most one of these 3 modes at a time) —
+        // "Autorizar" is a fully independent 4th toggle, combinable with
+        // any of the 3 (or with none). All 4 are still ordinary grant
+        // leaves in profile_grants/user_grants — the mutual exclusion is
+        // purely a UI behavior here, not a different storage shape.
+        const COLUMN_LEVELS = [
+            { id: 'solo-ver', labelKey: 'main.permSoloVer' },
+            { id: 'ver-y-operar', labelKey: 'main.permVerYOperar' },
+            { id: 'editar', labelKey: 'main.permEditar' },
+        ];
+        const COLUMN_AUTHORIZE = { id: 'autorizar', labelKey: 'main.permAutorizar' };
+
+        // Renders the "Tabla <pantalla>" heading + one toggle row per
+        // column + (when a column is expanded) its 4 permission leaves —
+        // entirely separate from leafKeysUnder/expand/the section-and-up
+        // rollup chain (see leafKeysUnder's comment for why). Local expand
+        // state reuses `expandedItems` with a distinctive 6-part key so it
+        // can't collide with the 2-part/3-part keys used elsewhere in it.
+        function renderTableColumns(container, section, item, sm, subSm, subBlocked) {
+            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4));
+            subSm.submenu.forEach((col) => {
+                const base = `${sm.id}/${subSm.id}/${col.id}`;
+                const colTreeKey = `col::${section.id}::${item.id}::${sm.id}::${subSm.id}::${col.id}`;
+                const colExpanded = expandedItems.has(colTreeKey);
+                const colRow = buildToggleOnlyRow(t(col.labelKey, col.labelParams), 5, {
+                    expanded: colExpanded,
+                    onToggle: () => {
+                        if (colExpanded) expandedItems.delete(colTreeKey);
+                        else expandedItems.add(colTreeKey);
+                    },
+                });
+                container.appendChild(colRow);
+                if (!colExpanded) return;
+
+                COLUMN_LEVELS.forEach((level) => {
+                    const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                    const levelRow = buildRow(t(level.labelKey), 6, null, subBlocked);
+                    if (!readOnly) {
+                        levelRow.input.checked = grantSet.has(levelKey);
+                        levelRow.input.addEventListener('change', () => {
+                            if (levelRow.input.checked) {
+                                // Uncheck the other 2 mutually-exclusive levels for this column.
+                                COLUMN_LEVELS.forEach((other) => {
+                                    if (other.id === level.id) return;
+                                    grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
+                                });
+                            }
+                            setKeys([levelKey], levelRow.input.checked);
+                            render();
+                        });
+                    }
+                    container.appendChild(levelRow.row);
+                });
+
+                const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
+                const authRow = buildRow(t(COLUMN_AUTHORIZE.labelKey), 6, null, subBlocked);
+                if (!readOnly) {
+                    authRow.input.checked = grantSet.has(authKey);
+                    authRow.input.addEventListener('change', () => {
+                        setKeys([authKey], authRow.input.checked);
+                        render();
+                    });
+                }
+                container.appendChild(authRow.row);
+            });
+        }
+
         function render() {
             container.innerHTML = '';
             sectionsData.forEach((section) => {
@@ -308,14 +422,13 @@
                         // Negocio" or "Configuración de Botones" nested
                         // inside "Configuración") — reuses expandedItems
                         // with a 3-part key, distinct from the 2-part
-                        // item-level keys above.
-                        const smLeafKeys = sm.submenu.flatMap((subSm) => {
-                            if (subSm.standalone) return [keyOf(section.id, subSm.id, null)];
-                            if (subSm.submenu && subSm.submenu.length) {
-                                return subSm.submenu.map((leaf) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${leaf.id}`));
-                            }
-                            return [keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)];
-                        });
+                        // item-level keys above. subSm's own key is always
+                        // its plain compound form — a pantalla's table
+                        // columns (see renderTableColumns below) are
+                        // rendered separately and never count toward this.
+                        const smLeafKeys = sm.submenu.map((subSm) => (
+                            subSm.standalone ? keyOf(section.id, subSm.id, null) : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
+                        ));
                         const smChecked = smLeafKeys.filter((k) => grantSet.has(k)).length;
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
                         const smExpandedNow = expandedItems.has(smKey);
@@ -353,63 +466,25 @@
                             // because "Configuración" itself was.
                             const subBlocked = itemBlocked
                                 || (readOnly && subSm.standalone && MAIN_MODULE_ITEM_IDS.includes(subSm.id) && !isModuleEnabled(subSm.id));
-                            const hasColumns = !!(subSm.submenu && subSm.submenu.length);
 
-                            if (!hasColumns) {
-                                const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, subBlocked);
-                                if (!readOnly) {
-                                    subRow.input.checked = grantSet.has(key);
-                                    subRow.input.addEventListener('change', () => {
-                                        setKeys([key], subRow.input.checked);
-                                        render();
-                                    });
-                                }
-                                container.appendChild(subRow.row);
-                                return;
-                            }
-
-                            // A 4th level down: a pantalla's own columns
-                            // ("modificar columna guardada" — see
-                            // checkAndLogFieldChanges in server.js). Each
-                            // column keeps the pantalla's own itemId, with a
-                            // 3-segment compound submenuId (never
-                            // `standalone` — a column isn't a real
-                            // navigable item elsewhere, unlike Departamento/
-                            // Área/C. Costos above).
-                            const subLeafKeys = subSm.submenu.map((leaf) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${leaf.id}`));
-                            const subChecked = subLeafKeys.filter((k) => grantSet.has(k)).length;
-                            const subKey = `${section.id}::${item.id}::${sm.id}::${subSm.id}`;
-                            const subExpandedNow = expandedItems.has(subKey);
-                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, {
-                                expanded: subExpandedNow,
-                                onToggle: () => {
-                                    if (subExpandedNow) expandedItems.delete(subKey);
-                                    else expandedItems.add(subKey);
-                                },
-                            }, subBlocked);
+                            // subSm's OWN checkbox is always a plain,
+                            // independent leaf — "can see this pantalla" —
+                            // regardless of whether it also has a Tabla of
+                            // columns. Never a rollup of its columns (see
+                            // leafKeysUnder's comment for why).
+                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, subBlocked);
                             if (!readOnly) {
-                                subRow.input.checked = subChecked === subLeafKeys.length;
-                                subRow.input.indeterminate = subChecked > 0 && subChecked < subLeafKeys.length;
+                                subRow.input.checked = grantSet.has(key);
                                 subRow.input.addEventListener('change', () => {
-                                    setKeys(subLeafKeys, subRow.input.checked);
+                                    setKeys([key], subRow.input.checked);
                                     render();
                                 });
                             }
                             container.appendChild(subRow.row);
-                            if (!subExpandedNow) return;
 
-                            subSm.submenu.forEach((leaf) => {
-                                const leafKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${leaf.id}`);
-                                const leafRow = buildRow(t(leaf.labelKey, leaf.labelParams), 4, null, subBlocked);
-                                if (!readOnly) {
-                                    leafRow.input.checked = grantSet.has(leafKey);
-                                    leafRow.input.addEventListener('change', () => {
-                                        setKeys([leafKey], leafRow.input.checked);
-                                        render();
-                                    });
-                                }
-                                container.appendChild(leafRow.row);
-                            });
+                            if (subSm.submenu && subSm.submenu.length) {
+                                renderTableColumns(container, section, item, sm, subSm, subBlocked);
+                            }
                         });
                     });
                 });
@@ -509,6 +584,14 @@
                     return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };
                 });
                 grantSet = expand(initialGrants || []);
+                // Column-permission grants (Solo Ver/Ver y Operar/Editar/
+                // Autorizar) are always already leaf-level, and their
+                // section/item never go through leafKeysUnder/expand()
+                // (see renderTableColumns) — union them in directly so
+                // they still render checked. Harmless no-op for every
+                // other already-leaf grant, since expand() would already
+                // have added those via its exact-match branch.
+                (initialGrants || []).forEach((g) => grantSet.add(keyOf(g.sectionId, g.itemId, g.submenuId)));
                 // Everything starts collapsed, even sections/items that
                 // already have a grant — simpler and more predictable than
                 // guessing which rows to auto-open.

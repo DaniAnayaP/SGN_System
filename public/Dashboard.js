@@ -155,7 +155,10 @@ const EMBEDDED_TRANSLATIONS = {
             colFuelTripKmBefore: "Trip KM Before Load", colFuelTripKmAfter: "Trip KM After Load", colFuelTripKmTotal: "Total Trip KM Acquired",
             colFuelType: "Fuel Type", colFuelLiters: "Liters", colFuelCostPerLiter: "Cost per Liter", fuelTypeSelect: "Select...", fuelTypeDiesel: "Diesel", fuelTypeMagna: "Regular", fuelTypePremium: "Premium",
             changeHistory: "Change history", changeHistoryTitle: "Change history", changeHistoryEmpty: "No changes recorded yet.", changeHistoryCreated: "Record created", changeHistoryDeleted: "Record deleted", changeHistoryDate: "Date", changeHistoryUser: "User", changeHistoryRecord: "Record", changeHistoryChange: "Change",
-            fieldLocked: "Already saved — you need permission to edit it" }
+            fieldLocked: "Already saved — you need permission to edit it",
+            tablePrefix: "Table", permSoloVer: "View Only", permVerYOperar: "View & Operate", permEditar: "Edit", permAutorizar: "Authorize",
+            changePending: "Pending authorization", changeHistoryRequestedBy: "Requested by", changeHistoryAuthorizedBy: "Authorized by",
+            notificationsTitle: "Notifications", notificationsEmpty: "No changes pending authorization.", notificationApprove: "Approve", notificationReject: "Reject", notificationApproved: "Change applied.", notificationRejected: "Change rejected." }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
@@ -286,7 +289,10 @@ const EMBEDDED_TRANSLATIONS = {
             colFuelTripKmBefore: "TRIP KM antes carga", colFuelTripKmAfter: "TRIP KM después carga", colFuelTripKmTotal: "Total TRIP KM adquiridos",
             colFuelType: "Tipo Combustible", colFuelLiters: "Cant Litros", colFuelCostPerLiter: "Costo x Litro", fuelTypeSelect: "Seleccionar...", fuelTypeDiesel: "Diésel", fuelTypeMagna: "Magna", fuelTypePremium: "Premium",
             changeHistory: "Historial de cambios", changeHistoryTitle: "Historial de cambios", changeHistoryEmpty: "Aún no hay cambios registrados.", changeHistoryCreated: "Registro creado", changeHistoryDeleted: "Registro eliminado", changeHistoryDate: "Fecha", changeHistoryUser: "Usuario", changeHistoryRecord: "Registro", changeHistoryChange: "Cambio",
-            fieldLocked: "Ya se guardó — necesitas permiso para modificarlo" }
+            fieldLocked: "Ya se guardó — necesitas permiso para modificarlo",
+            tablePrefix: "Tabla", permSoloVer: "Solo Ver", permVerYOperar: "Ver y Operar", permEditar: "Editar", permAutorizar: "Autorizar",
+            changePending: "Pendiente de autorización", changeHistoryRequestedBy: "Solicitó", changeHistoryAuthorizedBy: "Autorizó",
+            notificationsTitle: "Notificaciones", notificationsEmpty: "No hay cambios pendientes de autorización.", notificationApprove: "Aprobar", notificationReject: "Rechazar", notificationApproved: "Cambio aplicado.", notificationRejected: "Cambio rechazado." }
     }
 };
 

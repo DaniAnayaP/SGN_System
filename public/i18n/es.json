@@ -533,6 +533,20 @@
     "changeHistoryUser": "Usuario",
     "changeHistoryRecord": "Registro",
     "changeHistoryChange": "Cambio",
-    "fieldLocked": "Ya se guardó — necesitas permiso para modificarlo"
+    "fieldLocked": "Ya se guardó — necesitas permiso para modificarlo",
+    "tablePrefix": "Tabla",
+    "permSoloVer": "Solo Ver",
+    "permVerYOperar": "Ver y Operar",
+    "permEditar": "Editar",
+    "permAutorizar": "Autorizar",
+    "changePending": "Pendiente de autorización",
+    "changeHistoryRequestedBy": "Solicitó",
+    "changeHistoryAuthorizedBy": "Autorizó",
+    "notificationsTitle": "Notificaciones",
+    "notificationsEmpty": "No hay cambios pendientes de autorización.",
+    "notificationApprove": "Aprobar",
+    "notificationReject": "Rechazar",
+    "notificationApproved": "Cambio aplicado.",
+    "notificationRejected": "Cambio rechazado."
   }
 }
