@@ -1633,32 +1633,16 @@
         margin-bottom: 1.5rem;
         overflow: hidden;
     }
-    .filter-bar-toggle{
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        width: 100%;
-        border: none;
-        background: transparent;
-        padding: 0.75rem 1rem;
-        font: inherit;
-        font-weight: 500;
+    .filter-bar-title{
+        margin: 0;
+        padding: 1rem 1rem 0;
+        font-size: 0.95rem;
+        font-weight: 700;
         color: var(--color-text-primary);
-        text-align: left;
-        cursor: pointer;
-    }
-    .filter-bar-toggle i{
-        font-size: 1rem;
-        color: var(--color-text-secondary);
-        transition: transform 0.15s ease;
-    }
-    .filter-bar.filter-bar-expanded .filter-bar-toggle i.bx-chevron-down{
-        transform: rotate(180deg);
     }
     .filter-bar-panel{
         display: none;
         padding: 0 1rem 1rem;
-        border-top: 1px solid var(--color-border);
     }
     .filter-bar.filter-bar-expanded .filter-bar-panel{
         display: block;
@@ -1817,6 +1801,25 @@
         border-radius: 0.6rem;
         background-color: var(--color-surface);
         overflow: auto;
+    }
+    /* Row-editable legend (see Dashboard.js renderDataTableColumnControls)
+       — reuses the same .perm-tree-status-enabled badge already used for
+       "habilitado" in the admin access tree, so the two screens read the
+       same visual language. */
+    .data-table-legend{
+        margin: 0.6rem 0 0;
+        font-size: 0.8rem;
+    }
+    /* Mixed into --color-surface (opaque), not transparent — a pinned
+       column's td needs a solid background to hide content scrolling
+       underneath it, so the tint has to stay solid too (see the pinned-
+       column override right below, which needs to win over
+       .data-table td.data-table-col-pinned's own opaque background). */
+    .data-table-row-editable td{
+        background-color: color-mix(in srgb, #2c8f4a 8%, var(--color-surface));
+    }
+    .data-table tr.data-table-row-editable td.data-table-col-pinned{
+        background-color: color-mix(in srgb, #2c8f4a 8%, var(--color-surface));
     }
     /* Font-size zoom (see Dashboard.js renderDataTableZoomControls) — one
        shared --data-table-font-size custom property set on :root, so every
@@ -2042,6 +2045,33 @@
     .data-table-col-resize-handle:hover,
     .data-table-col-resize-handle.data-table-col-resizing{
         background-color: var(--color-border);
+    }
+    /* Click-to-sort (Dashboard.js attachSortHandler/sortTableByColumn) —
+       the arrow is a ::after, not an appended child: data-i18n's
+       `el.textContent = ...` wipes every child of a <th> on language
+       change, and every sortable <th> here has data-i18n. Positioned just
+       left of the resize handle's 6px strip so the two never overlap. */
+    .data-table-col-sortable{
+        cursor: pointer;
+        padding-right: 1.5rem;
+    }
+    .data-table-col-sortable:hover{
+        color: var(--color-text-primary);
+    }
+    .data-table-col-sort-asc::after,
+    .data-table-col-sort-desc::after{
+        position: absolute;
+        top: 50%;
+        right: 0.65rem;
+        transform: translateY(-50%);
+        font-size: 0.7rem;
+        color: var(--color-text-primary);
+    }
+    .data-table-col-sort-asc::after{
+        content: "▲";
+    }
+    .data-table-col-sort-desc::after{
+        content: "▼";
     }
     /* Drag-to-reorder — shared by both the header's horizontal reorder
        (Dashboard.js enableHeaderDragReorder, applies to <th>) and the pin
