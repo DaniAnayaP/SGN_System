@@ -90,11 +90,16 @@ const {
     createPlan,
     updatePlan,
     lockPlan,
+    activatePlan,
     deletePlan,
     getPlanGrants,
     setPlanGrants,
     getPlanChanges,
     logPlanChange,
+    listSaasAdmins,
+    getSaasUserGrants,
+    setSaasUserGrants,
+    hasSaasGrant,
     activateClient,
     deactivateClientUsers,
     listBusinessUsers,
@@ -792,6 +797,15 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     const { status, endDate } = req.body || {};
+    // The FIRST Revisión -> Activo transition only ever happens through the
+    // gated POST .../activate below (requires the 'activate' SaaS grant) —
+    // this plain PATCH can never do that one. Once a plan has been through
+    // that gate at least once (existing.locked), its definition is already
+    // frozen, so freely toggling active <-> inactive afterward needs no
+    // further authorization — it's just a visibility flag at that point.
+    if (status === 'active' && !existing.locked) {
+        return res.status(400).json({ message: 'Usa el botón Activar para pasar un plan a Activo.' });
+    }
     // Lifecycle-only patch (status/endDate) — always allowed, even locked.
     const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit'].some((k) => Object.prototype.hasOwnProperty.call(req.body || {}, k));
     if (isDefinitionChange && existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
@@ -821,6 +835,29 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     }
 });
 
+// The one-time Revisión -> Activo gate (Tarea 4): only an admin holding
+// the 'activate' grant under 'saas-plans' (or an unrestricted admin — see
+// hasSaasGrant) can flip this. Locks the plan's definition + access tree
+// for good in the same step (activatePlan in db.js) — matches "al generar
+// un plan es para siempre".
+app.post('/api/admin/plans/:id/activate', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    if (existing.status !== 'revision') {
+        return res.status(409).json({ message: 'Solo un plan en Revisión puede activarse.' });
+    }
+    const grants = getSaasUserGrants(req.user.sub);
+    if (!hasSaasGrant(grants, 'saas-plans', 'activate')) {
+        return res.status(403).json({ message: 'No tienes permiso para autorizar planes.' });
+    }
+    const plan = activatePlan(req.params.id);
+    logPlanChange({
+        planId: plan.id, action: 'update', fieldKey: 'admin.planStatus',
+        oldValue: 'revision', newValue: 'active', changedBy: req.user.name,
+    });
+    res.json({ plan });
+});
+
 app.delete('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
@@ -838,28 +875,83 @@ app.get('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
     res.json({ grants: getPlanGrants(req.params.id), locked: existing.locked });
 });
 
+// Editable freely while the plan is in Revisión (any number of saves) —
+// locked for good the moment it's Activo (see POST .../activate above,
+// which is the ONLY thing that ever locks a plan now; saving the tree by
+// itself no longer locks anything, unlike the earlier version of this
+// route).
 app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     if (existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
-        return res.status(409).json({ message: 'Este plan ya fue guardado y no puede modificarse.' });
+        return res.status(409).json({ message: 'Este plan ya está activo y no puede modificarse.' });
     }
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
     const saved = setPlanGrants(req.params.id, grants);
-    if (!existing.locked) lockPlan(req.params.id);
     logPlanChange({
         planId: req.params.id, action: 'update', fieldKey: 'admin.activeTree',
         oldValue: '', newValue: `${saved.length}`, changedBy: req.user.name,
     });
-    res.json({ grants: saved, locked: true });
+    res.json({ grants: saved });
 });
 
 app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     res.json({ changes: getPlanChanges(req.params.id) });
+});
+
+// --- Equipo SaaS (GEIPSA's own staff — role='admin' accounts) ---------------
+// Before this, the only way to have a role='admin' account was the seeded
+// admin/admin user — no endpoint ever created another one. This is the
+// first: any existing admin can create more (requireAdmin, not a narrower
+// "can manage staff" grant — that would need a grant to bootstrap itself
+// out of, a chicken-and-egg problem this small a team doesn't need solved).
+app.get('/api/admin/saas-users', requireAuth, requireAdmin, (req, res) => {
+    res.json({ users: listSaasAdmins() });
+});
+
+app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) => {
+    const { username, email, password, name } = req.body || {};
+    if (!username || !email || !name || !password || password.length < 8) {
+        return res.status(400).json({ message: 'username, email, name and a password of at least 8 characters are required.' });
+    }
+    if (usernameOrEmailExists(username, email)) {
+        return res.status(409).json({ message: 'Username or email already taken.' });
+    }
+    const user = createUser({ username, email, passwordHash: await hashPassword(password), name, role: 'admin' });
+    res.status(201).json({
+        user: { id: user.id, username: user.username, email: user.email, name: user.name, active: user.active, created_at: user.created_at },
+    });
+});
+
+function validateSaasGrants(grants) {
+    if (!Array.isArray(grants)) return 'grants must be an array.';
+    for (const g of grants) {
+        if (!g || typeof g.itemId !== 'string' || !g.itemId) return 'Each grant needs a non-empty itemId.';
+    }
+    return null;
+}
+
+app.get('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    res.json({ grants: getSaasUserGrants(req.params.id) });
+});
+
+app.put('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    const { grants } = req.body || {};
+    const error = validateSaasGrants(grants);
+    if (error) return res.status(400).json({ message: error });
+    res.json({ grants: setSaasUserGrants(req.params.id, grants) });
+});
+
+// The current admin's own SaaS grants — used by Dashboard.js to filter the
+// sidebar/block direct URLs, and by Nuestros Planes to decide whether to
+// even show the Activar button. Not client-scoped (this is a role='admin'
+// account, never has a clientId).
+app.get('/api/me/saas-grants', requireAuth, requireAdmin, (req, res) => {
+    res.json({ grants: getSaasUserGrants(req.user.sub) });
 });
 
 // --- Business admin: users, profiles, and permission grants ------------------

@@ -461,6 +461,26 @@ db.exec(`
         changed_by    TEXT NOT NULL DEFAULT '',
         changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Access tree for GEIPSA's own SaaS-side staff (role='admin' users) —
+    -- a much smaller, flat namespace than the client-side department tree
+    -- (PermissionTree.js): itemId is one of the 3 SaaS screens
+    -- ('saas-clients' | 'saas-plans' | 'saas-module-costs'), subItemId is
+    -- an optional granular action under that screen (today only
+    -- 'activate', under 'saas-plans' — "Autorizar Planes"). No
+    -- profiles/roles layer on purpose (direct per-admin grants) — there
+    -- are only ever a handful of GEIPSA staff accounts, a whole reusable-
+    -- profile system would be overkill for that scale. An admin with ZERO
+    -- rows here is UNRESTRICTED (sees/can do everything) — same convention
+    -- as isUnrestrictedClientAdmin on the client side: empty means "no
+    -- override was ever set", not "nothing granted".
+    CREATE TABLE IF NOT EXISTS saas_user_grants (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_id      TEXT NOT NULL,
+        sub_item_id  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_user_grants_user_id ON saas_user_grants(user_id);
 `);
 
 const MODULE_CATALOG = [
@@ -625,13 +645,13 @@ function usernameOrEmailExists(username, email) {
         .get(username, email);
 }
 
-function createUser({ username, email, passwordHash, name, clientId = null, isClientAdmin = false }) {
+function createUser({ username, email, passwordHash, name, clientId = null, isClientAdmin = false, role = 'user' }) {
     const result = db
         .prepare(`
-            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin)
-            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin)
+            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin, role)
+            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin, @role)
         `)
-        .run({ username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0 });
+        .run({ username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0, role });
     return db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 }
 
@@ -1465,11 +1485,14 @@ function getPlanByName(name) {
     return deserializePlan(db.prepare('SELECT * FROM plans WHERE name = ?').get(name));
 }
 
+// New plans start in 'revision' — they only reach 'active' through the
+// dedicated activatePlan() below (gated server-side by the 'activate'
+// SaaS grant), never directly via a plain field edit.
 function createPlan({ name, description, modules, costCentersLimit, createdBy }) {
     const result = db
         .prepare(`
-            INSERT INTO plans (name, description, modules, cost_centers_limit, created_by)
-            VALUES (@name, @description, @modules, @costCentersLimit, @createdBy)
+            INSERT INTO plans (name, description, modules, cost_centers_limit, created_by, status)
+            VALUES (@name, @description, @modules, @costCentersLimit, @createdBy, 'revision')
         `)
         .run({
             name, description: description || '',
@@ -1505,6 +1528,16 @@ function updatePlan(id, { name, description, modules, costCentersLimit, status, 
 
 function lockPlan(id) {
     db.prepare('UPDATE plans SET locked = 1 WHERE id = ?').run(id);
+    return getPlanById(id);
+}
+
+// The one-time gate: 'revision' -> 'active'. Locks the plan's definition
+// (name/description/modules/costCentersLimit/access tree) for good in the
+// same step — once a plan has gone live, its shape is final, even if it's
+// later marked Inactivo (status can still move active <-> inactive freely
+// after this, see updatePlan — but locked never clears).
+function activatePlan(id) {
+    db.prepare("UPDATE plans SET status = 'active', locked = 1 WHERE id = ?").run(id);
     return getPlanById(id);
 }
 
@@ -1556,6 +1589,43 @@ function logPlanChange({ planId, action, fieldKey, oldValue, newValue, changedBy
 // user isn't part of the client's own team management; their access is
 // contracted-by-default and only editable from GEIPSA's Admin-SaaS (see
 // /api/admin/clients/:id/admin-access in server.js).
+// --- Query helpers: GEIPSA's own SaaS-side staff (Equipo SaaS) ---------------
+// Plain role='admin' users, same `users` table as everything else — no
+// separate table needed, "SaaS admin" is just what that role already means.
+function listSaasAdmins() {
+    return db
+        .prepare("SELECT id, username, email, name, active, created_at FROM users WHERE role = 'admin' ORDER BY created_at ASC")
+        .all();
+}
+
+function getSaasUserGrants(userId) {
+    return db
+        .prepare('SELECT item_id AS itemId, sub_item_id AS subItemId FROM saas_user_grants WHERE user_id = ?')
+        .all(userId);
+}
+
+function setSaasUserGrants(userId, grants) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM saas_user_grants WHERE user_id = ?').run(userId);
+        const insert = db.prepare('INSERT INTO saas_user_grants (user_id, item_id, sub_item_id) VALUES (@userId, @itemId, @subItemId)');
+        for (const g of rows) {
+            insert.run({ userId, itemId: g.itemId, subItemId: g.subItemId || null });
+        }
+    });
+    replace(grants);
+    return getSaasUserGrants(userId);
+}
+
+// grants.length === 0 means unrestricted (see saas_user_grants' own
+// comment) — mirrors isUnrestrictedClientAdmin's exact convention on the
+// client side. subItemId null matches the screen-level grant itself
+// (itemId with no sub-permission) OR is used to check a specific granular
+// action (e.g. itemId:'saas-plans', subItemId:'activate').
+function hasSaasGrant(grants, itemId, subItemId = null) {
+    if (!grants.length) return true;
+    return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
+}
+
 function listBusinessUsers(clientId) {
     return db
         .prepare(`
@@ -1845,11 +1915,16 @@ module.exports = {
     createPlan,
     updatePlan,
     lockPlan,
+    activatePlan,
     deletePlan,
     getPlanGrants,
     setPlanGrants,
     getPlanChanges,
     logPlanChange,
+    listSaasAdmins,
+    getSaasUserGrants,
+    setSaasUserGrants,
+    hasSaasGrant,
     activateClient,
     deactivateClientUsers,
     listBusinessUsers,

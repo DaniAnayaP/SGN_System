@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.plansRegistered">Our Plans</title>
+    <title data-i18n="menu.saasTeam">SaaS Team</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="menu.plansRegistered">Our Plans</p>
+                <p class="welcome-text" data-i18n="menu.saasTeam">SaaS Team</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -309,83 +309,77 @@
         </div>
 
         <section class="admin-panel">
-            <p class="admin-subtitle" data-i18n="admin.plansSubtitle">Manage the plan or package types you can assign to your clients.</p>
+            <p class="admin-subtitle" data-i18n="admin.saasTeamSubtitle">Manage the GEIPSA staff accounts that can access this control panel.</p>
 
-            <div class="data-table-wrapper" data-table-id="mis-planes">
+            <div class="data-table-wrapper" data-table-id="equipo-saas">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="admin.planName" data-col="name">Plan name</th>
-                            <th data-i18n="admin.planDescription" data-col="description">Description</th>
+                            <th data-i18n="business.username" data-col="username">Username</th>
+                            <th data-i18n="admin.saasUserName" data-col="name">Name</th>
+                            <th data-i18n="admin.saasUserEmail" data-col="email">Email</th>
                             <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
-                            <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
-                            <th data-i18n="admin.planEndDate" data-col="endDate">End date</th>
-                            <th data-i18n="admin.planStatus" data-col="status">Status</th>
-                            <th data-i18n="admin.planLocked" data-col="locked">Locked</th>
                             <th data-col="actions"></th>
                         </tr>
                     </thead>
-                    <tbody id="plan-table-body">
+                    <tbody id="saas-user-table-body">
                         <!-- rendered at runtime -->
                     </tbody>
                 </table>
-                <p id="plan-empty" class="admin-empty" data-i18n="admin.noPlans" hidden>No plans yet. Add the first one above.</p>
+                <p id="saas-user-empty" class="admin-empty" data-i18n="admin.noSaasUsers" hidden>No other SaaS accounts yet.</p>
             </div>
         </section>
     </main>
 
-    <!-- "Editar" — plan ROW DATA only (name/description/costCentersLimit/
-         modules), never the access tree — see plan-tree-modal below for
-         that, a completely separate flow. -->
-    <div class="modal-overlay" id="plan-edit-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-edit-modal-title">
-            <h3 id="plan-edit-modal-title" data-i18n="admin.planEditTitle">Edit plan</h3>
-            <form id="plan-form" class="admin-form" novalidate>
-                <input type="hidden" id="plan-id" value="">
+    <!-- "+ Nuevo Admin SaaS" — no separate creation page for this yet
+         (unlike Clientes/Planes), so it's just a modal. -->
+    <div class="modal-overlay" id="saas-user-new-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="saas-user-new-modal-title">
+            <h3 id="saas-user-new-modal-title" data-i18n="admin.saasUserNewTitle">New SaaS account</h3>
+            <form id="saas-user-form" class="admin-form" novalidate>
                 <div class="admin-form-grid">
                     <div class="admin-field">
-                        <label for="plan-name" data-i18n="admin.planName">Plan name</label>
-                        <input id="plan-name" name="name" type="text" required>
+                        <label for="saas-user-name" data-i18n="admin.saasUserName">Name</label>
+                        <input id="saas-user-name" name="name" type="text" required>
                     </div>
                     <div class="admin-field">
-                        <label for="plan-description" data-i18n="admin.planDescription">Description</label>
-                        <input id="plan-description" name="description" type="text">
+                        <label for="saas-user-username" data-i18n="business.username">Username</label>
+                        <input id="saas-user-username" name="username" type="text" required>
+                    </div>
+                    <div class="admin-field">
+                        <label for="saas-user-email" data-i18n="admin.saasUserEmail">Email</label>
+                        <input id="saas-user-email" name="email" type="email" required>
+                    </div>
+                    <div class="admin-field">
+                        <label for="saas-user-password" data-i18n="business.password">Password</label>
+                        <input id="saas-user-password" name="password" type="text" required minlength="8">
                     </div>
                 </div>
-
-                <div class="admin-field" style="max-width: 20rem; margin-bottom: 1rem;">
-                    <label for="plan-cost-centers-limit" data-i18n="admin.costCentersLimit">Allowed cost centers</label>
-                    <input id="plan-cost-centers-limit" type="number" min="0" step="1" value="0">
-                </div>
-                <div class="admin-module-list" id="plan-modules-list">
-                    <!-- module toggles rendered at runtime -->
-                </div>
-
-                <div id="plan-form-error" class="admin-error" role="alert" hidden></div>
+                <div id="saas-user-form-error" class="admin-error" role="alert" hidden></div>
                 <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="plan-form-submit" data-i18n="admin.save">Save</button>
-                    <button type="button" class="btn btn-secondary" id="plan-form-cancel" data-i18n="admin.cancel">Cancel</button>
+                    <button type="submit" class="btn" id="saas-user-form-submit" data-i18n="admin.save">Save</button>
+                    <button type="button" class="btn btn-secondary" id="saas-user-form-cancel" data-i18n="admin.cancel">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Árbol de accesos de este plan — editable mientras está en Revisión,
-         de solo lectura para siempre en cuanto pasa a Activo (ver
-         perm-tree-view-only en Admin.css). Su propia pantalla alterna, no
-         un panel debajo de la tabla — mismo patrón que "Accesos del
-         Administrador" en Nuestros Clientes. -->
-    <div class="modal-overlay" id="plan-tree-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-tree-modal-title" style="max-width: 48rem;">
-            <h3 id="plan-tree-modal-title" data-i18n="admin.planTreeTitle">Access tree for this plan</h3>
-            <p id="plan-tree-locked-note" class="admin-hint" hidden></p>
-            <div id="plan-tree-container"></div>
-            <div id="plan-tree-error" class="admin-error" role="alert" hidden></div>
+    <!-- Árbol de accesos del SaaS por cuenta — lista plana (no hay
+         departamentos/áreas aquí, solo las 3 pantallas del SaaS + el
+         permiso granular "Autorizar Planes"). -->
+    <div class="modal-overlay" id="saas-user-tree-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="saas-user-tree-modal-title">
+            <h3 id="saas-user-tree-modal-title" data-i18n="admin.saasTreeTitle">Access for this SaaS account</h3>
+            <p class="admin-hint" data-i18n="admin.saasTreeHint">Check nothing to leave this account unrestricted (sees/does everything) — same as admin/admin today.</p>
+            <ul class="admin-module-list" id="saas-user-tree-list">
+                <!-- rendered at runtime -->
+            </ul>
+            <div id="saas-user-tree-error" class="admin-error" role="alert" hidden></div>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="plan-tree-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="plan-tree-close" data-i18n="admin.cancel">Close</button>
+                <button type="button" class="btn" id="saas-user-tree-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="saas-user-tree-close" data-i18n="admin.cancel">Close</button>
             </div>
-            <p id="plan-tree-save-status" class="admin-save-status"></p>
+            <p id="saas-user-tree-save-status" class="admin-save-status"></p>
         </div>
     </div>
 
@@ -443,7 +437,6 @@
     </div>
 
     <script src="Dashboard.js"></script>
-    <script src="PermissionTree.js"></script>
-    <script src="Admin-Planes.js"></script>
+    <script src="Admin-EquipoSaaS.js"></script>
 </body>
 </html>

@@ -44,7 +44,7 @@ const EMBEDDED_TRANSLATIONS = {
             certifications: "Certifications",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transportVolume: "Volume Transport", transportLastMile: "Last-Mile Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015", recruitment: "Recruitment and Selection", personnelAdmin: "Personnel Administration", trainingDevelopment: "Training and Development", compensationBenefits: "Compensation and Benefits", organizationalDevelopment: "Organizational Development", occupationalHealthSafety: "Occupational Health and Safety", hris: "HR Information System (HRIS)", hrAnalytics: "HR Analytics" },
-            clientesRegistrados: "Our Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "My Plans", addPlanNew: "+ Add New Plan", moduleCosts: "Module Costs", mainSection: "General",
+            clientesRegistrados: "Our Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Our Plans", addPlanNew: "+ Add New Plan", moduleCosts: "Module Costs", saasTeam: "SaaS Team", mainSection: "General",
             catCatalogos: "Catalogs", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operations", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clients", catTransVolSitiosOrigen: "Origin Sites", catTransVolSitiosDestino: "Destination Sites", catTransVolRutas: "Routes", catTransVolTiposServicio: "Service Types", catTransVolTiposTraslado: "Transfer Types", catTransVolContactos: "Contacts", catTransVolEmpresasAsociadas: "Partner Companies", catTransVolTiposUnidades: "Unit Types", catTransVolTiposAditamentos: "Attachment Types", catCentroDistCodigos: "Codes", catCentroDistCategorias: "Categories", catCentroDistUdm: "UOM",
@@ -178,7 +178,7 @@ const EMBEDDED_TRANSLATIONS = {
             certifications: "Certificaciones",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
             area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transportVolume: "Transporte Volumen", transportLastMile: "Transporte Última Milla", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015", recruitment: "Reclutamiento y Selección", personnelAdmin: "Administración de Personal", trainingDevelopment: "Formación y Desarrollo", compensationBenefits: "Compensaciones y Beneficios", organizationalDevelopment: "Desarrollo Organizacional", occupationalHealthSafety: "Seguridad y Salud Laboral", hris: "Sistema de Información de RRHH (SIRH)", hrAnalytics: "Analítica Recursos Humanos (RH Analytics)" },
-            clientesRegistrados: "Nuestros Clientes", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Mis Planes", addPlanNew: "+ Agregar Plan Nuevo", moduleCosts: "Costos de Módulos", mainSection: "General",
+            clientesRegistrados: "Nuestros Clientes", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Nuestros Planes", addPlanNew: "+ Agregar Plan Nuevo", moduleCosts: "Costos de Módulos", saasTeam: "Equipo SaaS", mainSection: "General",
             catCatalogos: "Catálogos", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operaciones", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clientes", catTransVolSitiosOrigen: "Sitios Origen", catTransVolSitiosDestino: "Sitios Destino", catTransVolRutas: "Rutas", catTransVolTiposServicio: "Tipos Servicio", catTransVolTiposTraslado: "Tipos Traslado", catTransVolContactos: "Contactos", catTransVolEmpresasAsociadas: "Empresas Asociadas", catTransVolTiposUnidades: "Tipos Unidades", catTransVolTiposAditamentos: "Tipos Aditamentos", catCentroDistCodigos: "Códigos", catCentroDistCategorias: "Categorías", catCentroDistUdm: "UDM",
@@ -410,23 +410,64 @@ async function loadMenu() {
 // Tablero, and Administración de Clientes, nothing else. Client users (any
 // non-admin, including a client's own isClientAdmin account) keep the full
 // menu.json-driven sidebar untouched.
+// "Pantalla habilitada" for GEIPSA's own SaaS-side screens (Equipo SaaS) —
+// mirrors hasScreenGrant's client-side counterpart, but against
+// cachedSaasGrants (GET /api/me/saas-grants) instead of a business
+// profile's effectiveGrants. Zero grants = unrestricted (see
+// saas_user_grants' own comment in db.js) — same convention as
+// isUnrestrictedClientAdmin, so the very first admin/admin account (which
+// starts with no rows here) isn't accidentally locked out of its own
+// screens the moment this ships.
+let cachedSaasGrants = null;
+async function loadSaasGrants() {
+    try {
+        const res = await fetch(`${API_BASE}/me/saas-grants`, { credentials: 'include' });
+        if (!res.ok) { cachedSaasGrants = []; return; }
+        const data = await res.json();
+        cachedSaasGrants = data.grants || [];
+    } catch {
+        cachedSaasGrants = [];
+    }
+}
+function hasSaasScreenGrant(itemId, subItemId = null) {
+    const grants = cachedSaasGrants || [];
+    if (!grants.length) return true;
+    return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
+}
+// Equipo SaaS itself isn't gated by this tree — restricting who can see it
+// would need to be granted BY someone who can already see it, a
+// bootstrapping problem this small a team doesn't need. Kept as its own
+// map (not folded into SCREEN_GRANT_PATHS) since it's a completely
+// separate namespace (flat itemId, no {sectionId,itemId,submenuId} triple).
+const SAAS_SCREEN_GRANT_PATHS = {
+    'admin-saas': 'saas-clients',
+    'admin-cliente-nuevo': 'saas-clients',
+    'admin-planes': 'saas-plans',
+    'admin-plan-nuevo': 'saas-plans',
+    'admin-costos-modulos': 'saas-module-costs',
+};
+function hasSaasScreenAccess(activePage) {
+    const itemId = SAAS_SCREEN_GRANT_PATHS[activePage];
+    if (!itemId) return true;
+    return hasSaasScreenGrant(itemId);
+}
+
 function buildSidebarData(data, role, activePage) {
-    const adminItem = {
-        id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings',
-        submenu: [
-            // "+ Agregar Cliente Nuevo" y "+ Agregar Plan Nuevo" ya no
-            // viven aquí — Nuestros Clientes y Mis Planes tienen su propio
-            // botón "+ Agregar ... Nuevo" en el toolbar de su tabla (ver
-            // renderNewClientButton en Admin-SaaS.js / renderNewPlanButton
-            // en Admin-Planes.js), que lleva a las MISMAS páginas
-            // (Admin-ClienteNuevo.html / Admin-PlanNuevo.html, siguen
-            // existiendo tal cual) — estos ítems del sidebar quedarían
-            // redundantes.
-            { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html' },
-            { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html' },
-            { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html' }
-        ]
-    };
+    const adminSubmenu = [
+        // "+ Agregar Cliente Nuevo" y "+ Agregar Plan Nuevo" ya no viven
+        // aquí — Nuestros Clientes y Nuestros Planes tienen su propio
+        // botón "+ Agregar ... Nuevo" en el toolbar de su tabla (ver
+        // renderNewClientButton en Admin-SaaS.js / renderNewPlanButton en
+        // Admin-Planes.js), que lleva a las MISMAS páginas
+        // (Admin-ClienteNuevo.html / Admin-PlanNuevo.html, siguen
+        // existiendo tal cual) — estos ítems del sidebar quedarían
+        // redundantes.
+        { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', saasItemId: 'saas-clients' },
+        { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', saasItemId: 'saas-plans' },
+        { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', saasItemId: 'saas-module-costs' },
+        { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html' },
+    ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
+    const adminItem = { id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings', submenu: adminSubmenu };
     if (role !== 'admin') return data;
 
     const mainSection = data.sections.find((s) => s.id === 'main');
@@ -3740,6 +3781,16 @@ async function initDashboard({ activePage } = {}) {
             localStorage.setItem('area', '');
         }
         renderDeptPickerOptions();
+    } else {
+        // GEIPSA staff (role 'admin') — load this account's own SaaS
+        // grants (Equipo SaaS) before the sidebar renders, same reasoning
+        // as loadBusinessProfile() above for client users, then block
+        // direct URL access to a SaaS screen this admin isn't granted.
+        await loadSaasGrants();
+        if (activePage && !hasSaasScreenAccess(activePage)) {
+            window.location.replace('Inicio-en.html');
+            return null;
+        }
     }
     menuData = await loadMenu();
     menuData = buildSidebarData(menuData, role, activePage);
@@ -3974,6 +4025,7 @@ window.Dashboard = {
     hasColumnEditGrant,
     canEditField,
     openChangeHistory,
+    hasSaasScreenGrant,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },

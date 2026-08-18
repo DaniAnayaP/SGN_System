@@ -1,31 +1,43 @@
 // ---------------------------------------------------------------------------
-// "Mis Planes" (formerly "Planes Registrados") — view/edit/delete GEIPSA's
-// existing plan/package catalog, plus configure each plan's OWN access tree
-// (which departamentos/áreas/apartados/pantallas/columnas it bundles in —
-// same PermissionTree.js component Business-Roles.js already uses for a
-// client's profiles, mounted here against a plan instead). These names are
-// what populate the "Plan / paquete" select on Clientes Nuevos
-// (Admin-SaaS.html). Creating a brand new plan lives on its own page
-// instead (+ Agregar Plan Nuevo, Admin-PlanNuevo.js) — the edit form here
-// only ever appears via startEdit(). Shell (sidebar, i18n, settings,
-// logout) comes from Dashboard.js.
+// "Nuestros Planes" (formerly "Planes Registrados"/"Mis Planes") — view/
+// edit/delete GEIPSA's existing plan/package catalog, plus configure each
+// plan's OWN access tree (which departamentos/áreas/apartados/pantallas/
+// columnas it bundles in — same PermissionTree.js component
+// Business-Roles.js already uses for a client's profiles, mounted here
+// against a plan instead). These names are what populate the "Plan /
+// paquete" select on Clientes Nuevos (Admin-SaaS.html). Creating a brand
+// new plan lives on its own page instead (+ Agregar Plan Nuevo,
+// Admin-PlanNuevo.js). Shell (sidebar, i18n, settings, logout) comes from
+// Dashboard.js.
 //
-// Locking: the FIRST time a plan's access tree is saved, the plan locks —
-// name/description/modules/costCentersLimit and the tree itself become
-// read-only from then on (a plan's definition is meant to be final once
-// clients start getting assigned to it). Status/end date are lifecycle
-// fields and stay editable regardless. While the project is still in
-// development, the server relaxes this (see DEV_MODE_ALLOW_LOCKED_PLAN_EDITS
-// in server.js) — `devModeOverride` (from GET /api/admin/plans) reflects
-// that here so the UI can say so instead of silently allowing edits with no
-// explanation.
+// Lifecycle: a new plan starts in Revisión. Its access tree is editable
+// (any number of saves) while it stays in Revisión. Moving to Activo only
+// happens through the dedicated "Activar" action (POST .../activate),
+// gated server-side by the 'activate' SaaS grant under 'saas-plans' (see
+// Admin-EquipoSaaS.js) — NOT a plain status edit. The moment a plan goes
+// Activo, its definition (name/description/modules/costCentersLimit) AND
+// its access tree lock for good (`locked`) — status can still freely
+// toggle Activo <-> Inactivo afterward (a lifecycle flag, not a
+// redefinition), but the tree/definition never unlock again. While the
+// project is still in development, the server relaxes the lock itself
+// (see DEV_MODE_ALLOW_LOCKED_PLAN_EDITS in server.js) — `devModeOverride`
+// (from GET /api/admin/plans) reflects that here so the UI can say so
+// instead of silently allowing edits with no explanation.
 //
-// Access note: the sidebar only shows this page's link to admins, and the
-// redirect below covers anyone who lands here directly without the role —
-// but the actual enforcement is server-side (requireAdmin on every
-// /api/admin/* route in server.js). This redirect is UX only.
+// "Editar" only ever touches ROW DATA (name/description/costCentersLimit/
+// modules) — the access tree is a completely separate flow (the shield
+// icon), never reachable from the edit form. Both open as their own modal
+// ("pantalla alterna"), not a panel stacked under the table — same pattern
+// as "Accesos del Administrador" on Nuestros Clientes.
+//
+// Access note: the sidebar only shows this page's link to admins with the
+// 'saas-clients'/'saas-plans' grant (see SAAS_SCREEN_GRANT_PATHS in
+// Dashboard.js), and initDashboard() redirects anyone who lands here
+// directly without it — real enforcement either way is server-side
+// (requireAdmin + the grant checks on every /api/admin/* route below).
 // ---------------------------------------------------------------------------
 
+const editModal = document.getElementById('plan-edit-modal');
 const form = document.getElementById('plan-form');
 const idField = document.getElementById('plan-id');
 const nameField = document.getElementById('plan-name');
@@ -38,12 +50,13 @@ const cancelBtn = document.getElementById('plan-form-cancel');
 const tableBody = document.getElementById('plan-table-body');
 const emptyMsg = document.getElementById('plan-empty');
 
-const treeHeading = document.getElementById('plan-tree-heading');
-const treeHint = document.getElementById('plan-tree-hint');
-const treePanel = document.getElementById('plan-tree-panel');
+const treeModal = document.getElementById('plan-tree-modal');
+const treeModalTitle = document.getElementById('plan-tree-modal-title');
 const treeContainer = document.getElementById('plan-tree-container');
 const treeLockedNote = document.getElementById('plan-tree-locked-note');
+const treeError = document.getElementById('plan-tree-error');
 const treeSaveBtn = document.getElementById('plan-tree-save');
+const treeCloseBtn = document.getElementById('plan-tree-close');
 const treeSaveStatus = document.getElementById('plan-tree-save-status');
 
 let plans = [];
@@ -102,12 +115,9 @@ function clearError() {
     errorBanner.textContent = '';
 }
 
-// This form is edit-only here (creating a plan lives on its own page, +
-// Agregar Plan Nuevo) — it only ever appears via startEdit, and hides
-// again once you're done with it.
-function resetForm() {
+function closeEditModal() {
+    editModal.hidden = true;
     form.reset();
-    form.hidden = true;
     idField.value = '';
     costCentersLimitField.value = 0;
     renderModuleToggles([]);
@@ -119,6 +129,9 @@ function formatDate(value) {
     return value.slice(0, 10);
 }
 
+// A plan's definition/tree is frozen for good once `locked` — dev mode
+// (DEV_MODE_ALLOW_LOCKED_PLAN_EDITS in server.js) relaxes that server-side
+// while the project's still being built, `devModeOverride` mirrors it here.
 function isHardLocked(plan) {
     return plan.locked && !devModeOverride;
 }
@@ -139,15 +152,27 @@ async function patchPlanField(plan, patch) {
         }
         const { plan: updated } = await res.json();
         plans = plans.map((p) => (p.id === updated.id ? updated : p));
+        renderPlans();
     } catch {
         alert(Dashboard.t('admin.saveError'));
         await loadPlans();
     }
 }
 
+// A plan still in Revisión has no status cell to edit directly — just a
+// static badge. Only a plan that's already gone through Activar at least
+// once (`locked`) gets the free-toggling Activo/Inactivo <select> (its
+// definition is already final by then, so this is a lifecycle flag, not a
+// new decision needing authorization — see server.js's PATCH guard).
 function buildStatusCell(plan) {
     const td = document.createElement('td');
     td.dataset.col = 'status';
+    if (!plan.locked) {
+        const badge = document.createElement('span');
+        badge.textContent = Dashboard.t('admin.planStatusRevision');
+        td.appendChild(badge);
+        return td;
+    }
     const select = document.createElement('select');
     select.className = 'editable-cell-select';
     [['active', 'admin.planStatusActive'], ['inactive', 'admin.planStatusInactive']].forEach(([val, key]) => {
@@ -157,8 +182,7 @@ function buildStatusCell(plan) {
         select.appendChild(opt);
     });
     select.value = plan.status || 'active';
-    // Status is a lifecycle field — always editable, even on a locked plan.
-    select.addEventListener('change', () => patchPlanField(plan, { status: select.value }).then(renderPlans));
+    select.addEventListener('change', () => patchPlanField(plan, { status: select.value }));
     td.appendChild(select);
     return td;
 }
@@ -188,9 +212,27 @@ function buildLockedCell(plan) {
     return td;
 }
 
+async function activatePlan(plan) {
+    if (!confirm(Dashboard.t('admin.planActivateConfirm'))) return;
+    try {
+        const res = await fetch(`/api/admin/plans/${plan.id}/activate`, { method: 'POST', credentials: 'include' });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            alert(body.message || Dashboard.t('admin.saveError'));
+            return;
+        }
+        const { plan: updated } = await res.json();
+        plans = plans.map((p) => (p.id === updated.id ? updated : p));
+        renderPlans();
+    } catch {
+        alert(Dashboard.t('admin.saveError'));
+    }
+}
+
 function renderPlans() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = plans.length > 0;
+    const canActivate = Dashboard.hasSaasScreenGrant('saas-plans', 'activate');
     plans.forEach((plan) => {
         const tr = document.createElement('tr');
 
@@ -233,30 +275,47 @@ function renderPlans() {
             editBtn.disabled = true;
             editBtn.title = Dashboard.t('admin.planLockedHardNote');
         } else {
-            editBtn.addEventListener('click', () => startEdit(plan));
+            editBtn.addEventListener('click', () => openEditModal(plan));
         }
+        tdActions.append(treeBtn, historyBtn, editBtn);
+
+        if (!plan.locked) {
+            const activateBtn = document.createElement('button');
+            activateBtn.type = 'button';
+            activateBtn.className = 'admin-icon-btn';
+            activateBtn.innerHTML = '<i class="bx bx-check-shield" aria-hidden="true"></i>';
+            if (canActivate) {
+                activateBtn.setAttribute('aria-label', Dashboard.t('admin.planActivate'));
+                activateBtn.title = Dashboard.t('admin.planActivate');
+                activateBtn.addEventListener('click', () => activatePlan(plan));
+            } else {
+                activateBtn.disabled = true;
+                activateBtn.title = Dashboard.t('admin.planActivateNoPermission');
+            }
+            tdActions.appendChild(activateBtn);
+        }
+
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
         deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
         deleteBtn.addEventListener('click', () => removePlan(plan));
-        tdActions.append(treeBtn, historyBtn, editBtn, deleteBtn);
+        tdActions.appendChild(deleteBtn);
 
         tr.append(tdName, tdDescription, tdCreatedAt, tdCreatedBy, buildEndDateCell(plan), buildStatusCell(plan), buildLockedCell(plan), tdActions);
         tableBody.appendChild(tr);
     });
 }
 
-function startEdit(plan) {
+function openEditModal(plan) {
     idField.value = plan.id;
     nameField.value = plan.name;
     descriptionField.value = plan.description || '';
     costCentersLimitField.value = plan.costCentersLimit || 0;
     renderModuleToggles(plan.modules || []);
-    form.hidden = false;
     clearError();
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    editModal.hidden = false;
 }
 
 async function removePlan(plan) {
@@ -271,8 +330,7 @@ async function removePlan(plan) {
         renderPlans();
         if (selectedPlanId === plan.id) {
             selectedPlanId = null;
-            treePanel.hidden = true;
-            treeHint.hidden = false;
+            treeModal.hidden = true;
         }
     } catch {
         alert(Dashboard.t('admin.saveError'));
@@ -288,7 +346,7 @@ async function loadPlans() {
         devModeOverride = !!data.devModeOverride;
         renderPlans();
     } catch {
-        showError(Dashboard.t('admin.loadError'));
+        alert(Dashboard.t('admin.loadError'));
     }
 }
 
@@ -327,7 +385,7 @@ form.addEventListener('submit', async (event) => {
         const { plan } = await res.json();
         plans = plans.map((p) => (p.id === plan.id ? plan : p));
         renderPlans();
-        resetForm();
+        closeEditModal();
     } catch {
         showError(Dashboard.t('admin.saveError'));
     } finally {
@@ -335,17 +393,20 @@ form.addEventListener('submit', async (event) => {
     }
 });
 
-cancelBtn.addEventListener('click', resetForm);
+cancelBtn.addEventListener('click', closeEditModal);
+editModal.addEventListener('click', (event) => { if (event.target === editModal) closeEditModal(); });
 
-// --- Access tree per plan (mirrors Business-Roles.js's per-profile panel) --
+// --- Access tree per plan (mirrors Business-Roles.js's per-profile panel,
+// opened as a modal instead of an inline panel — "pantalla alterna") ------
 async function selectPlanForTree(plan) {
     selectedPlanId = plan.id;
-    treeHeading.textContent = `${Dashboard.t('admin.planTreeTitle')} — ${plan.name}`;
+    treeModalTitle.textContent = `${Dashboard.t('admin.planTreeTitle')} — ${plan.name}`;
     treeSaveStatus.textContent = '';
+    treeError.hidden = true;
     const locked = isHardLocked(plan);
     treeLockedNote.hidden = !plan.locked;
     if (plan.locked) {
-        treeLockedNote.textContent = Dashboard.t(locked ? 'admin.planLockedHardNote' : 'admin.planLockedDevNote');
+        treeLockedNote.textContent = Dashboard.t(locked ? 'admin.planTreeLockedActive' : 'admin.planLockedDevNote');
     }
     treeSaveBtn.hidden = locked;
     try {
@@ -362,22 +423,26 @@ async function selectPlanForTree(plan) {
         // locked plan needs to display (exactly what it grants, just
         // non-editable) — so it stays fully interactive and a CSS class
         // disables interaction instead, when locked.
+        treeContainer.innerHTML = '';
         tree = window.PermissionTree.create(treeContainer, { allowedSectionIds: null, costCenters: [] });
         await tree.init(data.grants || []);
         treeContainer.classList.toggle('perm-tree-view-only', locked);
-        treePanel.hidden = false;
-        treeHint.hidden = true;
-        treePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        treeModal.hidden = false;
     } catch {
-        treeHint.textContent = Dashboard.t('admin.loadError');
-        treeHint.hidden = false;
-        treePanel.hidden = true;
+        alert(Dashboard.t('admin.loadError'));
     }
 }
+
+function closeTreeModal() {
+    treeModal.hidden = true;
+}
+treeCloseBtn.addEventListener('click', closeTreeModal);
+treeModal.addEventListener('click', (event) => { if (event.target === treeModal) closeTreeModal(); });
 
 treeSaveBtn.addEventListener('click', async () => {
     if (!selectedPlanId || !tree) return;
     treeSaveBtn.disabled = true;
+    treeError.hidden = true;
     try {
         const res = await fetch(`/api/admin/plans/${selectedPlanId}/grants`, {
             method: 'PUT',
@@ -387,22 +452,22 @@ treeSaveBtn.addEventListener('click', async () => {
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            treeSaveStatus.textContent = body.message || Dashboard.t('admin.saveError');
+            showTreeError(treeError, body.message || Dashboard.t('admin.saveError'));
             return;
         }
         await loadPlans();
-        const plan = plans.find((p) => p.id === selectedPlanId);
-        // selectPlanForTree() resets treeSaveStatus itself (it's a full
-        // re-mount) — set the success message AFTER it settles, not before,
-        // or the re-mount wipes it before anyone sees it.
-        if (plan) await selectPlanForTree(plan);
         treeSaveStatus.textContent = Dashboard.t('admin.planTreeSaved');
     } catch {
-        treeSaveStatus.textContent = Dashboard.t('admin.saveError');
+        showTreeError(treeError, Dashboard.t('admin.saveError'));
     } finally {
         treeSaveBtn.disabled = false;
     }
 });
+
+function showTreeError(el, message) {
+    el.textContent = message;
+    el.hidden = false;
+}
 
 // --- Per-plan change history (plans are GEIPSA-wide, not client-scoped, so
 // they can't use Dashboard's client-scoped table-changes modal/endpoint) ---
@@ -480,8 +545,8 @@ async function openPlanChangeHistory(plan) {
 // prepended into the .data-table-zoom bar Dashboard.js already renders for
 // every .data-table-wrapper), but this one just navigates to the existing
 // dedicated creation page (Admin-PlanNuevo.html) instead of opening a
-// modal — Mis Planes never had an inline create flow, no reason to build
-// one now just for this button.
+// modal — Nuestros Planes never had an inline create flow, no reason to
+// build one now just for this button.
 function renderNewPlanButton() {
     const wrapper = document.querySelector('[data-table-id="mis-planes"]');
     const toolbar = wrapper?.previousElementSibling;
