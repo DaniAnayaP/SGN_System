@@ -314,8 +314,25 @@
                     <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
                     <div class="filter-bar-fields">
                         <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterSearchPlaceholder">Search...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterSearchPlaceholder" placeholder="Search...">
+                            <label for="filter-search-text" data-i18n="main.filterHrSearchHint">Name, position, email, phone...</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterHrSearchHint" placeholder="Name, position, email, phone...">
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-department" data-i18n="main.colHrDepartment">Assigned Department</label>
+                            <select id="filter-department">
+                                <option value="" data-i18n="main.filterAll">All</option>
+                                <option value="steering-committee" data-i18n="menu.steeringCommittee">Steering Committee</option>
+                                <option value="general-management" data-i18n="menu.generalManagement">General Management</option>
+                                <option value="management-control" data-i18n="menu.managementControl">Management Control</option>
+                                <option value="supply-chain" data-i18n="menu.supplyChain">Supply Chain</option>
+                                <option value="purchasing" data-i18n="menu.purchasing">Purchasing</option>
+                                <option value="commercial" data-i18n="menu.commercial">Commercial</option>
+                                <option value="marketing" data-i18n="menu.marketing">Marketing</option>
+                                <option value="human-resources" data-i18n="menu.humanResources">Human Resources</option>
+                                <option value="accounting" data-i18n="menu.accounting">Accounting</option>
+                                <option value="finance" data-i18n="menu.finance">Finance</option>
+                                <option value="certifications" data-i18n="menu.certifications">Certifications</option>
+                            </select>
                         </div>
                         <div class="filter-field">
                             <label for="filter-status" data-i18n="main.filterStatus">Status</label>
@@ -323,13 +340,6 @@
                                 <option value="" data-i18n="main.filterAll">All</option>
                                 <option value="active" data-i18n="main.filterActive">Active</option>
                                 <option value="inactive" data-i18n="main.filterInactive">Inactive</option>
-                            </select>
-                        </div>
-                        <div class="filter-field">
-                            <label for="filter-sort" data-i18n="main.filterSort">Sort by</label>
-                            <select id="filter-sort">
-                                <option value="recent" data-i18n="main.filterSortRecent">Most recent</option>
-                                <option value="name" data-i18n="main.filterSortName">Name</option>
                             </select>
                         </div>
                     </div>

@@ -314,22 +314,23 @@
                     <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
                     <div class="filter-bar-fields">
                         <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterSearchPlaceholder">Search...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterSearchPlaceholder" placeholder="Search...">
+                            <label for="filter-search-text" data-i18n="main.filterFuelSearchHint">Unit, plates, driver, coordinator...</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterFuelSearchHint" placeholder="Unit, plates, driver, coordinator...">
                         </div>
                         <div class="filter-field">
-                            <label for="filter-status" data-i18n="main.filterStatus">Status</label>
-                            <select id="filter-status">
+                            <label for="filter-date-from" data-i18n="main.filterDateFrom">From date</label>
+                            <input type="date" id="filter-date-from">
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-date-to" data-i18n="main.filterDateTo">To date</label>
+                            <input type="date" id="filter-date-to">
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-reason" data-i18n="main.colFuelReason">Load Reason</label>
+                            <select id="filter-reason">
                                 <option value="" data-i18n="main.filterAll">All</option>
-                                <option value="active" data-i18n="main.filterActive">Active</option>
-                                <option value="inactive" data-i18n="main.filterInactive">Inactive</option>
-                            </select>
-                        </div>
-                        <div class="filter-field">
-                            <label for="filter-sort" data-i18n="main.filterSort">Sort by</label>
-                            <select id="filter-sort">
-                                <option value="recent" data-i18n="main.filterSortRecent">Most recent</option>
-                                <option value="name" data-i18n="main.filterSortName">Name</option>
+                                <option value="traslado" data-i18n="main.colFuelTransferService">Transfer Service</option>
+                                <option value="interno" data-i18n="main.colFuelInternalMovement">Internal Movement</option>
                             </select>
                         </div>
                     </div>

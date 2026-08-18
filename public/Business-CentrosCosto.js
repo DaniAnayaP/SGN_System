@@ -55,6 +55,11 @@ function renderCostCenters() {
     emptyMsg.hidden = costCenters.length > 0;
     costCenters.forEach((cc) => {
         const tr = document.createElement('tr');
+        // This whole screen is admin-only (see Dashboard.js's "pantalla
+        // habilitada" gate) and every row here is editable via the form
+        // above (startEdit) — no per-column permission model like the
+        // operational tables, so every row qualifies for the legend.
+        tr.classList.add('data-table-row-editable');
 
         const tdCode = document.createElement('td');
         tdCode.dataset.col = 'ccCode';
@@ -97,7 +102,25 @@ function renderCostCenters() {
         tableBody.appendChild(tr);
     });
     refreshLimitStatus();
+    applyCcFilters();
 }
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the field means).
+// Client-side row hiding, re-applied after every renderCostCenters() so a
+// filter stays active across edits instead of silently resetting.
+function applyCcFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    tableBody.querySelectorAll('tr').forEach((tr) => {
+        if (!text) { tr.hidden = false; return; }
+        const haystack = ['ccCode', 'ccName', 'ccResponsible', 'ccDescription']
+            .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+            .join(' ');
+        tr.hidden = !haystack.includes(text);
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyCcFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyCcFilters);
 
 function startEdit(cc) {
     idField.value = cc.id;

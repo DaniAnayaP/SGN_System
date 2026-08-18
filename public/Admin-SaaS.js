@@ -202,6 +202,12 @@ function renderClients() {
     emptyMsg.hidden = clients.length > 0;
     clients.forEach((client) => {
         const tr = document.createElement('tr');
+        tr.dataset.status = client.status;
+        // Every row on this screen is editable by whoever can see it — this
+        // table has no per-column permission model like the operational
+        // tables, only the "puede ver esta pantalla" gate already enforced
+        // by Dashboard.js before this page even loads.
+        tr.classList.add('data-table-row-editable');
 
         const tdStatus = document.createElement('td');
         const statusBadge = document.createElement('span');
@@ -300,7 +306,30 @@ function renderClients() {
         });
         tableBody.appendChild(tr);
     });
+    applyClientFilters();
 }
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the fields mean).
+// Client-side row hiding, re-applied after every renderClients() so a filter
+// stays active across edits instead of silently resetting.
+function applyClientFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    const status = document.getElementById('filter-status')?.value || '';
+    tableBody.querySelectorAll('tr').forEach((tr) => {
+        let visible = true;
+        if (text) {
+            const haystack = ['rfc', 'companyNickname', 'companyAbbreviation', 'ownerName', 'contactName']
+                .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+                .join(' ');
+            if (!haystack.includes(text)) visible = false;
+        }
+        if (status && tr.dataset.status !== status) visible = false;
+        tr.hidden = !visible;
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyClientFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyClientFilters);
 
 // Turns a client record (as returned by GET /api/admin/clients, snake_case
 // column names) back into the camelCase shape PATCH /api/admin/clients/:id

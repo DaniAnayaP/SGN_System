@@ -311,6 +311,30 @@
         <section class="admin-panel">
             <p class="admin-subtitle" data-i18n="admin.plansSubtitle">Manage the plan or package types you can assign to your clients.</p>
 
+            <div class="filter-bar" id="filter-bar">
+                <div class="filter-bar-panel">
+                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
+                    <div class="filter-bar-fields">
+                        <div class="filter-field">
+                            <label for="filter-search-text" data-i18n="main.filterPlansSearchHint">Name, description, created by...</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterPlansSearchHint" placeholder="Name, description, created by...">
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-status" data-i18n="admin.planStatus">Status</label>
+                            <select id="filter-status">
+                                <option value="" data-i18n="main.filterAll">All</option>
+                                <option value="revision" data-i18n="admin.planStatusRevision">Under Review</option>
+                                <option value="active" data-i18n="admin.planStatusActive">Active</option>
+                                <option value="inactive" data-i18n="admin.planStatusInactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-bar-actions">
+                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="data-table-wrapper" data-table-id="mis-planes">
                 <table class="data-table">
                     <thead>

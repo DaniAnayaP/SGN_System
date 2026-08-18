@@ -311,6 +311,21 @@
         <section class="admin-panel">
             <p class="admin-subtitle" data-i18n="admin.saasTeamSubtitle">Manage the GEIPSA staff accounts that can access this control panel.</p>
 
+            <div class="filter-bar" id="filter-bar">
+                <div class="filter-bar-panel">
+                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
+                    <div class="filter-bar-fields">
+                        <div class="filter-field">
+                            <label for="filter-search-text" data-i18n="main.filterSaasTeamSearchHint">Username, name, email...</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterSaasTeamSearchHint" placeholder="Username, name, email...">
+                        </div>
+                    </div>
+                    <div class="filter-bar-actions">
+                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="data-table-wrapper" data-table-id="equipo-saas">
                 <table class="data-table">
                     <thead>

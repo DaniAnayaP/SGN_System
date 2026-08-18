@@ -235,6 +235,12 @@ function renderPlans() {
     const canActivate = Dashboard.hasSaasScreenGrant('saas-plans', 'activate');
     plans.forEach((plan) => {
         const tr = document.createElement('tr');
+        tr.dataset.planStatus = !plan.locked ? 'revision' : (plan.status || 'active');
+        // Mirrors editBtn's own disabled condition below (isHardLocked) —
+        // that's the one real "can this row still be edited" signal on this
+        // screen; everything else here is either always-on or gated by a
+        // per-action grant (Activar) rather than per-row editability.
+        tr.classList.toggle('data-table-row-editable', !isHardLocked(plan));
 
         const tdName = document.createElement('td');
         tdName.dataset.col = 'name';
@@ -306,7 +312,30 @@ function renderPlans() {
         tr.append(tdName, tdDescription, tdCreatedAt, tdCreatedBy, buildEndDateCell(plan), buildStatusCell(plan), buildLockedCell(plan), tdActions);
         tableBody.appendChild(tr);
     });
+    applyPlanFilters();
 }
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the fields mean).
+// Client-side row hiding, re-applied after every renderPlans() so a filter
+// stays active across edits instead of silently resetting.
+function applyPlanFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    const status = document.getElementById('filter-status')?.value || '';
+    tableBody.querySelectorAll('tr').forEach((tr) => {
+        let visible = true;
+        if (text) {
+            const haystack = ['name', 'description', 'createdBy']
+                .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+                .join(' ');
+            if (!haystack.includes(text)) visible = false;
+        }
+        if (status && tr.dataset.planStatus !== status) visible = false;
+        tr.hidden = !visible;
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyPlanFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyPlanFilters);
 
 function openEditModal(plan) {
     idField.value = plan.id;

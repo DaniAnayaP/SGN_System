@@ -67,6 +67,10 @@ function renderSaasUsers() {
     emptyMsg.hidden = saasUsers.length > 0;
     saasUsers.forEach((user) => {
         const tr = document.createElement('tr');
+        // This whole screen is admin-only (role check in init() below) and
+        // every row's access tree is always open to edit — no per-row lock
+        // like Nuestros Planes has.
+        tr.classList.add('data-table-row-editable');
 
         const tdUsername = document.createElement('td');
         tdUsername.dataset.col = 'username';
@@ -96,7 +100,25 @@ function renderSaasUsers() {
         tr.append(tdUsername, tdName, tdEmail, tdCreatedAt, tdActions);
         tableBody.appendChild(tr);
     });
+    applySaasTeamFilters();
 }
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the field means).
+// Client-side row hiding, re-applied after every renderSaasUsers() so a
+// filter stays active across edits instead of silently resetting.
+function applySaasTeamFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    tableBody.querySelectorAll('tr').forEach((tr) => {
+        if (!text) { tr.hidden = false; return; }
+        const haystack = ['username', 'name', 'email']
+            .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+            .join(' ');
+        tr.hidden = !haystack.includes(text);
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applySaasTeamFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applySaasTeamFilters);
 
 async function loadSaasUsers() {
     try {

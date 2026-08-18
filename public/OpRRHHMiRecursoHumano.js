@@ -202,6 +202,8 @@ function buildRow(worker) {
 
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(worker.id);
+    tr.dataset.department = worker.department || '';
+    tr.dataset.status = worker.status || 'active';
     tr.append(
         textCell('colHrDbId', worker.dbId),
         textCell('colHrRecordId', String(worker.recordNumber)),
@@ -215,6 +217,11 @@ function buildRow(worker) {
         buildStatusCell(worker),
         buildActionsCell(worker, tr),
     );
+    // Row-editable legend (see Dashboard.js renderDataTableColumnControls) —
+    // same reasoning as OpTransVolCombustible.js: a row counts as editable
+    // if attachInlineEdit resolved at least one cell as unlocked, or Estatus
+    // (a raw <select>) isn't disabled.
+    tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell') || !!tr.querySelector('select:not(:disabled)'));
     return tr;
 }
 
@@ -235,10 +242,43 @@ async function refreshTable() {
         tbody.innerHTML = '';
         if (!workers.length) { ensureEmptyState(); return; }
         workers.forEach((worker) => tbody.appendChild(buildRow(worker)));
+        applyHrFilters();
     } catch (err) {
         console.error('Mi Recurso Humano: failed to load records', err);
     }
 }
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the fields mean).
+// Client-side row hiding, re-applied after every refreshTable() so a filter
+// stays active across inline edits instead of silently resetting.
+function getHrFilterValues() {
+    return {
+        text: (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase(),
+        department: document.getElementById('filter-department')?.value || '',
+        status: document.getElementById('filter-status')?.value || '',
+    };
+}
+function hrRowMatchesFilters(tr, filters) {
+    if (filters.text) {
+        const haystack = ['colHrFullName', 'colHrPosition', 'colHrEmail', 'colHrPhone']
+            .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+            .join(' ');
+        if (!haystack.includes(filters.text)) return false;
+    }
+    if (filters.department && tr.dataset.department !== filters.department) return false;
+    if (filters.status && tr.dataset.status !== filters.status) return false;
+    return true;
+}
+function applyHrFilters() {
+    const filters = getHrFilterValues();
+    getTbody().querySelectorAll('tr').forEach((tr) => {
+        if (tr.querySelector('td.data-table-empty-cell')) return;
+        tr.hidden = !hrRowMatchesFilters(tr, filters);
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyHrFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyHrFilters);
 
 const newRecordModal = document.getElementById('new-record-modal');
 const fullNameInput = document.getElementById('new-record-full-name');

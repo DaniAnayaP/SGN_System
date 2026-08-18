@@ -409,6 +409,7 @@ function buildRow(record) {
 
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(record.id);
+    tr.dataset.recordDate = record.date;
     tr.append(
         textCell('colFuelDbId', record.dbId),
         textCell('colFuelRecordId', String(record.recordNumber)),
@@ -437,6 +438,15 @@ function buildRow(record) {
         tdInternal,
         buildActionsCell(record, tr),
     );
+    // Row-editable legend (see Dashboard.js renderDataTableColumnControls) —
+    // a row counts as "editable by you" if at least one of its cells ended
+    // up unlocked: attachInlineEdit only adds the plain .editable-cell class
+    // (no -locked/-disabled/-pending suffix) once it's already resolved
+    // canEditField for that cell, and Motivo Carga/Tipo Combustible are raw
+    // <select> elements outside attachInlineEdit that disable themselves the
+    // same way — checking both after the row is fully built covers every
+    // editable field on this table without re-deriving permissions here.
+    tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell') || !!tr.querySelector('select:not(:disabled)'));
     return tr;
 }
 
@@ -459,10 +469,49 @@ async function refreshTable() {
         tbody.innerHTML = '';
         if (!records.length) { ensureEmptyState(); return; }
         records.forEach((record) => tbody.appendChild(buildRow(record)));
+        applyFuelFilters();
     } catch (err) {
         console.error('Registro Combustible: failed to load records', err);
     }
 }
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the fields mean).
+// Client-side row hiding rather than a re-fetch: everything's already loaded
+// and rendered, and re-applying after every refreshTable() keeps a filter
+// active across inline edits instead of it silently resetting.
+function getFuelFilterValues() {
+    return {
+        text: (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase(),
+        dateFrom: document.getElementById('filter-date-from')?.value || '',
+        dateTo: document.getElementById('filter-date-to')?.value || '',
+        reason: document.getElementById('filter-reason')?.value || '',
+    };
+}
+function fuelRowMatchesFilters(tr, filters) {
+    if (filters.text) {
+        const haystack = ['colFuelEcoUnit', 'colFuelPlates', 'colFuelDriver', 'colFuelCoordinator']
+            .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+            .join(' ');
+        if (!haystack.includes(filters.text)) return false;
+    }
+    if (filters.dateFrom && tr.dataset.recordDate < filters.dateFrom) return false;
+    if (filters.dateTo && tr.dataset.recordDate > filters.dateTo) return false;
+    if (filters.reason) {
+        const select = tr.querySelector('[data-col="colFuelReason"] select');
+        if ((select?.value || '') !== filters.reason) return false;
+    }
+    return true;
+}
+function applyFuelFilters() {
+    const filters = getFuelFilterValues();
+    getTbody().querySelectorAll('tr').forEach((tr) => {
+        if (tr.querySelector('td.data-table-empty-cell')) return;
+        tr.hidden = !fuelRowMatchesFilters(tr, filters);
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFuelFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFuelFilters);
 
 const newRecordModal = document.getElementById('new-record-modal');
 const dateInput = document.getElementById('new-record-date');

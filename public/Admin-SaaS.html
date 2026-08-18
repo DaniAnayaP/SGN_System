@@ -459,6 +459,30 @@
                     <button type="button" class="btn btn-secondary" id="generated-admin-dismiss" data-i18n="admin.dismiss">Dismiss</button>
                 </div>
 
+                <div class="filter-bar" id="filter-bar">
+                    <div class="filter-bar-panel">
+                        <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
+                        <div class="filter-bar-fields">
+                            <div class="filter-field">
+                                <label for="filter-search-text" data-i18n="main.filterClientsSearchHint">RFC, nickname, owner, contact...</label>
+                                <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterClientsSearchHint" placeholder="RFC, nickname, owner, contact...">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter-status" data-i18n="admin.status">Status</label>
+                                <select id="filter-status">
+                                    <option value="" data-i18n="main.filterAll">All</option>
+                                    <option value="activo" data-i18n="admin.statusActivo">Active</option>
+                                    <option value="inactivo" data-i18n="admin.statusInactivo">Inactive</option>
+                                    <option value="prospecto" data-i18n="admin.statusProspecto">Prospect</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="filter-bar-actions">
+                            <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="data-table-wrapper" data-table-id="nuestros-clientes">
                     <table class="data-table">
                         <thead>
