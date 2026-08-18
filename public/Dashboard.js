@@ -2330,7 +2330,7 @@ function renderDataTableColumnControls() {
             legend.className = 'admin-hint perm-tree-legend data-table-legend';
             legend.innerHTML = `
                 <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
-                <span data-i18n="main.rowEditableLegend">Row with at least one field you can still edit</span>
+                <span data-i18n="main.rowEditableLegend">${t('main.rowEditableLegend')}</span>
             `;
             wrapper.insertAdjacentElement('afterend', legend);
         }
