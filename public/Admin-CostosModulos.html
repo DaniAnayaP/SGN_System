@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="admin.moduleCostsTitle">Module Costs</title>
+    <title data-i18n="admin.accessPermCostsTitle">Access &amp; Permissions Cost</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="admin.moduleCostsTitle">Module Costs</p>
+                <p class="welcome-text" data-i18n="admin.accessPermCostsTitle">Access &amp; Permissions Cost</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -309,19 +309,73 @@
         </div>
 
         <section class="admin-panel">
-            <p class="admin-subtitle" data-i18n="admin.moduleCostsSubtitle">Set the cost of each button/module — used to compute each client's Anexos Payment in Our Clients.</p>
+            <p class="admin-subtitle" data-i18n="admin.accessPermCostsSubtitle">Set a price for each node of a plan's access tree.</p>
 
-            <div class="admin-module-list" id="module-costs-list">
-                <!-- rendered at runtime -->
+            <div class="filter-bar" id="filter-bar">
+                <div class="filter-bar-panel">
+                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
+                    <div class="filter-bar-fields">
+                        <div class="filter-field">
+                            <label for="filter-search-text" data-i18n="admin.planName">Plan name</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="admin.planName" placeholder="Plan name">
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-status" data-i18n="admin.planStatus">Status</label>
+                            <select id="filter-status">
+                                <option value="" data-i18n="main.filterAll">All</option>
+                                <option value="revision" data-i18n="admin.planStatusRevision">Under Review</option>
+                                <option value="active" data-i18n="admin.planStatusActive">Active</option>
+                                <option value="inactive" data-i18n="admin.planStatusInactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-bar-actions">
+                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
+                    </div>
+                </div>
             </div>
 
-            <div id="module-costs-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="module-costs-save" data-i18n="admin.save">Save</button>
+            <div class="data-table-wrapper" data-table-id="costo-accesos-permisos">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="admin.planName" data-col="name">Plan name</th>
+                            <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
+                            <th data-i18n="admin.accessPermCostColumn" data-col="accessPermCost">Access/Permissions cost</th>
+                            <th data-i18n="admin.costPerCostCenterColumn" data-col="costPerCostCenter">Cost per cost center</th>
+                            <th data-i18n="admin.planStatus" data-col="status">Status</th>
+                            <th data-col="actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="pct-table-body">
+                        <!-- rendered at runtime -->
+                    </tbody>
+                </table>
+                <p id="pct-empty" class="admin-empty" data-i18n="admin.noPlans" hidden>No plans yet.</p>
             </div>
-            <p id="module-costs-save-status" class="admin-save-status"></p>
         </section>
     </main>
+
+    <div class="modal-overlay" id="pct-cost-modal" hidden>
+        <div class="modal-panel" style="max-width: 48rem;" role="dialog" aria-modal="true" aria-labelledby="pct-cost-modal-title">
+            <h3 id="pct-cost-modal-title">—</h3>
+            <div class="admin-form-actions">
+                <button type="button" class="btn" id="pct-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="pct-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+            <p id="pct-save-status" class="admin-save-status"></p>
+            <div class="admin-select-row">
+                <label for="pct-currency" data-i18n="admin.planCurrency">Currency</label>
+                <select id="pct-currency">
+                    <option value="MXN">MXN</option>
+                    <option value="USD">USD</option>
+                </select>
+            </div>
+            <p class="admin-hint" data-i18n="admin.accessPermCostOverlapHint">A price set on a container level (Department/Area/Category) is counted separately from — and on top of — the prices of what's underneath it.</p>
+            <div id="pct-cost-container" class="perm-tree"></div>
+            <div id="pct-cost-error" class="admin-error" role="alert" hidden></div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -377,6 +431,7 @@
     </div>
 
     <script src="Dashboard.js"></script>
+    <script src="PermissionCostTree.js"></script>
     <script src="Admin-CostosModulos.js"></script>
 </body>
 </html>

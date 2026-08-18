@@ -627,6 +627,40 @@ body.dark-mode .admin-badge-prospecto{
     gap: 0.4rem;
     flex-wrap: wrap;
 }
+/* PermissionCostTree.js (Costo Accesos-Permisos / Nuestros Planes' own
+   tree) — plain non-interactive label used in costEdit mode instead of
+   .perm-tree-check's checkbox+label, same flex/spacing so rows still line
+   up with the checkbox-based rows in grantReadonlyCost mode. */
+.perm-tree-label-plain{
+    flex: 1;
+    min-width: 0;
+}
+/* margin-left:auto pushes this to the row's right edge regardless of
+   which label variant (.perm-tree-check/.perm-tree-label-plain/
+   .perm-tree-toggle-label) precedes it — avoids having to add flex:1 to
+   .perm-tree-toggle-label, which PermissionTree.js's OWN Columna rows
+   also use elsewhere and shouldn't be touched. */
+.perm-tree-cost-input{
+    width: 6.5rem;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--color-text-primary);
+    border-radius: 0.3rem;
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    font: inherit;
+    font-size: inherit;
+    text-align: right;
+}
+.perm-tree-cost-readonly{
+    width: 6.5rem;
+    flex-shrink: 0;
+    margin-left: auto;
+    text-align: right;
+    color: var(--color-text-secondary);
+    font-size: 0.85em;
+}
 
 /* Contrataciones */
 .admin-module-list{

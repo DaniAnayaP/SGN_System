@@ -44,7 +44,7 @@ const EMBEDDED_TRANSLATIONS = {
             certifications: "Certifications",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transportVolume: "Volume Transport", transportLastMile: "Last-Mile Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015", recruitment: "Recruitment and Selection", personnelAdmin: "Personnel Administration", trainingDevelopment: "Training and Development", compensationBenefits: "Compensation and Benefits", organizationalDevelopment: "Organizational Development", occupationalHealthSafety: "Occupational Health and Safety", hris: "HR Information System (HRIS)", hrAnalytics: "HR Analytics" },
-            clientesRegistrados: "Our Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Our Plans", addPlanNew: "+ Add New Plan", moduleCosts: "Module Costs", saasTeam: "SaaS Team", mainSection: "General",
+            clientesRegistrados: "Our Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Our Plans", addPlanNew: "+ Add New Plan", moduleCosts: "Access & Permissions Cost", saasTeam: "SaaS Team", mainSection: "General",
             catCatalogos: "Catalogs", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operations", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clients", catTransVolSitiosOrigen: "Origin Sites", catTransVolSitiosDestino: "Destination Sites", catTransVolRutas: "Routes", catTransVolTiposServicio: "Service Types", catTransVolTiposTraslado: "Transfer Types", catTransVolContactos: "Contacts", catTransVolEmpresasAsociadas: "Partner Companies", catTransVolTiposUnidades: "Unit Types", catTransVolTiposAditamentos: "Attachment Types", catCentroDistCodigos: "Codes", catCentroDistCategorias: "Categories", catCentroDistUdm: "UOM",
@@ -109,8 +109,11 @@ const EMBEDDED_TRANSLATIONS = {
             anexoChangeAdded: "Added", anexoChangeRemoved: "Removed", activeTree: "Active permission tree", activeTreeTitle: "Active permission tree",
             activeTreeHint: "Everything this client has enabled right now: what their plan contracts (★) plus what was added as an anexo.",
             colModule: "Module", colAction: "Action", colRequestedBy: "Requested by", colRequestedAt: "Request date", colChangedAt: "Change date", colDuration: "Contracted duration",
-            moduleCostsTitle: "Module Costs", moduleCostsSubtitle: "Set the cost of each button/module — used to compute each client's Anexos Payment in Our Clients.",
-            moduleCostsSaved: "Costs updated.", costLabel: "Cost $",
+            accessPermCostsTitle: "Access & Permissions Cost", accessPermCostsSubtitle: "Set a cost for each node of every plan's access tree.",
+            accessPermCostsSaved: "Costs updated.", accessPermCostColumn: "Access/Permissions Cost", costPerCostCenterColumn: "Cost Per Cost Center",
+            costCenterTotalColumn: "Cost Center Total", planCurrency: "Currency",
+            accessPermCostOverlapHint: "A price set on a container level (Department/Area/Category) is counted separately from — and on top of — the prices of what's underneath it.",
+            costLabel: "Cost $",
             institutionalColor: "Institutional color", noLogo: "No logo", noColorSet: "No color set", editColor: "Edit color", costCenters: "Cost Centers"
         },
         business: {
@@ -178,7 +181,7 @@ const EMBEDDED_TRANSLATIONS = {
             certifications: "Certificaciones",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
             area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transportVolume: "Transporte Volumen", transportLastMile: "Transporte Última Milla", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015", recruitment: "Reclutamiento y Selección", personnelAdmin: "Administración de Personal", trainingDevelopment: "Formación y Desarrollo", compensationBenefits: "Compensaciones y Beneficios", organizationalDevelopment: "Desarrollo Organizacional", occupationalHealthSafety: "Seguridad y Salud Laboral", hris: "Sistema de Información de RRHH (SIRH)", hrAnalytics: "Analítica Recursos Humanos (RH Analytics)" },
-            clientesRegistrados: "Nuestros Clientes", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Nuestros Planes", addPlanNew: "+ Agregar Plan Nuevo", moduleCosts: "Costos de Módulos", saasTeam: "Equipo SaaS", mainSection: "General",
+            clientesRegistrados: "Nuestros Clientes", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Nuestros Planes", addPlanNew: "+ Agregar Plan Nuevo", moduleCosts: "Costo Accesos-Permisos", saasTeam: "Equipo SaaS", mainSection: "General",
             catCatalogos: "Catálogos", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operaciones", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clientes", catTransVolSitiosOrigen: "Sitios Origen", catTransVolSitiosDestino: "Sitios Destino", catTransVolRutas: "Rutas", catTransVolTiposServicio: "Tipos Servicio", catTransVolTiposTraslado: "Tipos Traslado", catTransVolContactos: "Contactos", catTransVolEmpresasAsociadas: "Empresas Asociadas", catTransVolTiposUnidades: "Tipos Unidades", catTransVolTiposAditamentos: "Tipos Aditamentos", catCentroDistCodigos: "Códigos", catCentroDistCategorias: "Categorías", catCentroDistUdm: "UDM",
@@ -243,8 +246,11 @@ const EMBEDDED_TRANSLATIONS = {
             anexoChangeAdded: "Agregado", anexoChangeRemoved: "Quitado", activeTree: "Árbol de permisos activo", activeTreeTitle: "Árbol de permisos activo",
             activeTreeHint: "Todo lo que este cliente tiene habilitado ahora mismo: lo contratado por su plan (★) más lo agregado como anexo.",
             colModule: "Módulo", colAction: "Acción", colRequestedBy: "Solicitó", colRequestedAt: "Fecha solicitud", colChangedAt: "Fecha cambio", colDuration: "Tiempo contratado",
-            moduleCostsTitle: "Costos de Módulos", moduleCostsSubtitle: "Define el costo de cada botón/módulo — se usa para calcular el Pago por Anexos de cada cliente en Nuestros Clientes.",
-            moduleCostsSaved: "Costos actualizados.", costLabel: "Costo $",
+            accessPermCostsTitle: "Costo Accesos-Permisos", accessPermCostsSubtitle: "Define un costo para cada nodo del árbol de accesos de cada plan.",
+            accessPermCostsSaved: "Costos actualizados.", accessPermCostColumn: "Costo Accesos-Permisos", costPerCostCenterColumn: "Costo Por Centro de Costos",
+            costCenterTotalColumn: "Costo de Centro de Costos", planCurrency: "Moneda",
+            accessPermCostOverlapHint: "Un costo puesto en un nivel contenedor (Departamento/Área/Categoría) se cuenta aparte de — y además de — los costos de lo que tiene debajo.",
+            costLabel: "Costo $",
             institutionalColor: "Color institucional", noLogo: "Sin logo", noColorSet: "Sin color asignado", editColor: "Editar color", costCenters: "Centro Costos"
         },
         business: {
@@ -4194,6 +4200,89 @@ function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, o
     };
 }
 
+// Costo Accesos-Permisos / Nuestros Planes — no currency concept exists
+// anywhere else in the app; MXN/USD is the whole catalog for now (see
+// PATCH /api/admin/plans/:id's validation, server.js).
+function formatCurrency(amount, currency = 'MXN') {
+    const symbol = currency === 'USD' ? 'US$' : '$';
+    return `${symbol}${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+// Per-plan change history (plans are GEIPSA-wide, not client-scoped, so
+// they can't use openChangeHistory's client-scoped table-changes endpoint)
+// — shared by Admin-Planes.js and Admin-CostosModulos.js, both of which
+// show a Cambios icon per plan row against the exact same
+// GET /api/admin/plans/:id/changes data.
+let planHistoryModal = null;
+let planHistoryList = null;
+
+function ensurePlanHistoryModal() {
+    if (planHistoryModal) return;
+    planHistoryModal = document.createElement('div');
+    planHistoryModal.className = 'modal-overlay';
+    planHistoryModal.hidden = true;
+    planHistoryModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="plan-history-title">
+            <h3 id="plan-history-title">${t('admin.planChangeHistory')}</h3>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>${t('main.changeHistoryDate')}</th>
+                            <th>${t('main.changeHistoryUser')}</th>
+                            <th>${t('main.changeHistoryChange')}</th>
+                        </tr>
+                    </thead>
+                    <tbody data-role="list"></tbody>
+                </table>
+            </div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(planHistoryModal);
+    planHistoryList = planHistoryModal.querySelector('[data-role="list"]');
+    const close = () => { planHistoryModal.hidden = true; };
+    planHistoryModal.querySelector('[data-role="close"]').addEventListener('click', close);
+    planHistoryModal.addEventListener('click', (event) => { if (event.target === planHistoryModal) close(); });
+}
+
+function planHistoryRow(cells) {
+    const tr = document.createElement('tr');
+    cells.forEach((text) => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+    });
+    return tr;
+}
+
+async function openPlanChangeHistory(plan) {
+    ensurePlanHistoryModal();
+    planHistoryModal.hidden = false;
+    planHistoryList.innerHTML = '';
+    planHistoryList.appendChild(planHistoryRow([t('main.changeHistoryEmpty'), '', '']));
+    try {
+        const res = await fetch(`/api/admin/plans/${plan.id}/changes`, { credentials: 'include' });
+        if (!res.ok) return;
+        const { changes } = await res.json();
+        if (!changes || !changes.length) return;
+        planHistoryList.innerHTML = '';
+        changes.forEach((change) => {
+            let description;
+            if (change.action === 'create') description = t('main.changeHistoryCreated');
+            else if (change.action === 'delete') description = t('main.changeHistoryDeleted');
+            else if (change.field_key === 'admin.activeTree') description = `${t('admin.planTreeTitle')}: ${change.new_value} permisos`;
+            else if (change.field_key === 'admin.accessPermissionsCost') description = `${t('admin.accessPermCostColumn')}: ${change.new_value} costos`;
+            else description = `${t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+            planHistoryList.appendChild(planHistoryRow([change.changed_at, change.changed_by || '—', description]));
+        });
+    } catch {
+        // Leave the empty-state row in place — no network/parse errors surfaced here.
+    }
+}
+
 window.Dashboard = {
     initDashboard,
     t,
@@ -4203,6 +4292,8 @@ window.Dashboard = {
     canEditField,
     openChangeHistory,
     hasSaasScreenGrant,
+    formatCurrency,
+    openPlanChangeHistory,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },

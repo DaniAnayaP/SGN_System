@@ -181,7 +181,7 @@ function textCell(value) {
 const DATA_TABLE_CLIENT_COLUMNS = [
     'bigDateNumber', 'rfc', 'companyNickname', 'companyAbbreviation', 'logo', 'institutionalColor',
     'ownerName', 'contactName', 'billingEmail', 'contractStartDate', 'contractFile', 'plan',
-    'contractedCost', 'monthlyPayment', 'costCenters', 'addenda', 'anexosPayment', 'anexoChanges',
+    'contractedCost', 'monthlyPayment', 'costCenters', 'addenda', 'anexoChanges',
     'contractRegisteredDate', 'contractEndDate', 'activeTree', 'username', 'status', 'actions',
 ];
 
@@ -286,7 +286,6 @@ function renderClients() {
             textCell(formatMoney(client.monthly_payment)),
             textCell(`${client.costCentersUsed ?? 0} / ${client.cost_centers_limit ?? 0}`),
             tdAddenda,
-            textCell(formatMoney(client.anexosPayment)),
             tdAnexoChanges,
             textCell(client.contract_registered_date),
             textCell(client.contract_end_date),
@@ -360,7 +359,7 @@ async function patchClient(client, overrides) {
     });
     if (!res.ok) throw new Error('save failed');
     const { client: updated } = await res.json();
-    clients = clients.map((c) => (c.id === updated.id ? { ...updated, anexosPayment: c.anexosPayment } : c));
+    clients = clients.map((c) => (c.id === updated.id ? updated : c));
     renderClients();
     populateClientSelect();
     return updated;

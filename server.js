@@ -94,6 +94,9 @@ const {
     deletePlan,
     getPlanGrants,
     setPlanGrants,
+    getPlanPermissionCosts,
+    setPlanPermissionCosts,
+    computeAccessCostTotal,
     getPlanChanges,
     logPlanChange,
     listSaasAdmins,
@@ -770,7 +773,8 @@ function sanitizePlanModules(modules) {
 const DEV_MODE_ALLOW_LOCKED_PLAN_EDITS = true;
 
 app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
-    res.json({ plans: listPlans(), devModeOverride: DEV_MODE_ALLOW_LOCKED_PLAN_EDITS });
+    const plans = listPlans().map((plan) => ({ ...plan, accessPermissionsCost: computeAccessCostTotal(plan.id) }));
+    res.json({ plans, devModeOverride: DEV_MODE_ALLOW_LOCKED_PLAN_EDITS });
 });
 
 app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
@@ -796,7 +800,7 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
 app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    const { status, endDate } = req.body || {};
+    const { status, endDate, currency, costPerCostCenter } = req.body || {};
     // The FIRST Revisión -> Activo transition only ever happens through the
     // gated POST .../activate below (requires the 'activate' SaaS grant) —
     // this plain PATCH can never do that one. Once a plan has been through
@@ -806,7 +810,16 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     if (status === 'active' && !existing.locked) {
         return res.status(400).json({ message: 'Usa el botón Activar para pasar un plan a Activo.' });
     }
-    // Lifecycle-only patch (status/endDate) — always allowed, even locked.
+    if (currency !== undefined && !['MXN', 'USD'].includes(currency)) {
+        return res.status(400).json({ message: 'currency must be MXN or USD.' });
+    }
+    if (costPerCostCenter !== undefined && (typeof costPerCostCenter !== 'number' || Number.isNaN(costPerCostCenter) || costPerCostCenter < 0)) {
+        return res.status(400).json({ message: 'costPerCostCenter must be a number >= 0.' });
+    }
+    // Lifecycle-only patch (status/endDate) and pricing (currency/
+    // costPerCostCenter) — always allowed, even locked. Pricing is a
+    // separate, ongoing commercial concern from the frozen access-tree
+    // definition (see Costo Accesos-Permisos) — never gated by `locked`.
     const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit'].some((k) => Object.prototype.hasOwnProperty.call(req.body || {}, k));
     if (isDefinitionChange && existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
         return res.status(409).json({ message: 'Este plan ya fue guardado y no puede modificarse.' });
@@ -824,9 +837,17 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
             costCentersLimit,
             status,
             endDate,
+            currency,
+            costPerCostCenter,
         });
         logPlanChange({ planId: plan.id, action: 'update', changedBy: req.user.name });
-        res.json({ plan });
+        if (currency !== undefined && currency !== existing.currency) {
+            logPlanChange({ planId: plan.id, action: 'update', fieldKey: 'admin.planCurrency', oldValue: existing.currency, newValue: currency, changedBy: req.user.name });
+        }
+        if (costPerCostCenter !== undefined && costPerCostCenter !== existing.costPerCostCenter) {
+            logPlanChange({ planId: plan.id, action: 'update', fieldKey: 'admin.costPerCostCenter', oldValue: String(existing.costPerCostCenter), newValue: String(costPerCostCenter), changedBy: req.user.name });
+        }
+        res.json({ plan: { ...plan, accessPermissionsCost: computeAccessCostTotal(plan.id) } });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(409).json({ message: 'A plan with that name already exists.' });
@@ -895,6 +916,51 @@ app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
         oldValue: '', newValue: `${saved.length}`, changedBy: req.user.name,
     });
     res.json({ grants: saved });
+});
+
+function validatePlanPermissionCosts(costs) {
+    if (!Array.isArray(costs)) return 'costs must be an array.';
+    for (const c of costs) {
+        if (!c || typeof c.sectionId !== 'string' || !c.sectionId) return 'each cost row needs a sectionId.';
+        if (typeof c.cost !== 'number' || Number.isNaN(c.cost) || c.cost < 0) return 'cost must be a number >= 0.';
+    }
+    return null;
+}
+
+// --- Costo Accesos-Permisos ("Nuestros Planes" — precio por nodo del árbol,
+// por plan) ------------------------------------------------------------
+// Never lock-gated (see updatePlan's comment) — pricing stays editable even
+// once a plan is Activo/bloqueado, unlike name/description/modules/
+// costCentersLimit/the grant tree itself.
+app.get('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    res.json({ costs: getPlanPermissionCosts(req.params.id), currency: existing.currency });
+});
+
+app.put('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    const { costs, currency } = req.body || {};
+    const error = validatePlanPermissionCosts(costs);
+    if (error) return res.status(400).json({ message: error });
+    if (currency !== undefined && !['MXN', 'USD'].includes(currency)) {
+        return res.status(400).json({ message: 'currency must be MXN or USD.' });
+    }
+    const saved = setPlanPermissionCosts(req.params.id, costs);
+    let plan = existing;
+    if (currency !== undefined && currency !== existing.currency) {
+        plan = updatePlan(req.params.id, { currency });
+        logPlanChange({
+            planId: req.params.id, action: 'update', fieldKey: 'admin.planCurrency',
+            oldValue: existing.currency, newValue: currency, changedBy: req.user.name,
+        });
+    }
+    logPlanChange({
+        planId: req.params.id, action: 'update', fieldKey: 'admin.accessPermissionsCost',
+        oldValue: '', newValue: `${saved.length}`, changedBy: req.user.name,
+    });
+    res.json({ costs: saved, plan: { ...plan, accessPermissionsCost: computeAccessCostTotal(req.params.id) } });
 });
 
 app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) => {

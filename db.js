@@ -429,6 +429,15 @@ if (!planColumns.some((c) => c.name === 'status')) {
 if (!planColumns.some((c) => c.name === 'locked')) {
     db.exec('ALTER TABLE plans ADD COLUMN locked INTEGER NOT NULL DEFAULT 0');
 }
+// Costo Accesos-Permisos: unlike name/description/modules/costCentersLimit
+// (frozen forever once a plan is activated), pricing stays editable always
+// — see updatePlan/PATCH /api/admin/plans/:id, never gated by `locked`.
+if (!planColumns.some((c) => c.name === 'currency')) {
+    db.exec("ALTER TABLE plans ADD COLUMN currency TEXT NOT NULL DEFAULT 'MXN'");
+}
+if (!planColumns.some((c) => c.name === 'cost_per_cost_center')) {
+    db.exec('ALTER TABLE plans ADD COLUMN cost_per_cost_center REAL NOT NULL DEFAULT 0');
+}
 
 // plan_grants: same {sectionId, itemId, submenuId} shape as profile_grants —
 // what a Plan bundles in (which departamentos/áreas/apartados/pantallas/
@@ -461,6 +470,28 @@ db.exec(`
         changed_by    TEXT NOT NULL DEFAULT '',
         changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Costo Accesos-Permisos: a price per plan per tree node, at EVERY
+    -- level (Departamento/Área/Categoría/Pantalla/Columna), stored and
+    -- summed independently per level ON PURPOSE (a fully-checked
+    -- Departamento AND a priced Pantalla underneath it both count toward
+    -- the total if both are priced and both are granted — see
+    -- computeAccessCostTotal). Departamento/Área/Categoría-con-hijos/
+    -- Columna have no grant row of their own in plan_grants (checking
+    -- them just fans out to their descendant leaves), so their cost rows
+    -- use a synthetic (sectionId, itemId, submenuId) key that can never
+    -- collide with a real plan_grants tuple — see computeAccessCostTotal
+    -- for the exact key scheme and the "selected" rule per level.
+    CREATE TABLE IF NOT EXISTS plan_permission_costs (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id     INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        section_id  TEXT NOT NULL,
+        item_id     TEXT,
+        submenu_id  TEXT,
+        cost        REAL NOT NULL DEFAULT 0,
+        UNIQUE(plan_id, section_id, item_id, submenu_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_plan_permission_costs_plan_id ON plan_permission_costs(plan_id);
 
     -- Access tree for GEIPSA's own SaaS-side staff (role='admin' users) —
     -- a much smaller, flat namespace than the client-side department tree
@@ -1460,16 +1491,17 @@ seedScreenVisibilityGrants();
 // Contrataciones edits per-client — see applyPlanToClient in server.js.
 function deserializePlan(row) {
     if (!row) return row;
-    const { modules, cost_centers_limit, created_by, end_date, locked, ...rest } = row;
+    const { modules, cost_centers_limit, created_by, end_date, locked, cost_per_cost_center, ...rest } = row;
     let parsedModules = [];
     try { parsedModules = JSON.parse(modules) || []; } catch { parsedModules = []; }
     return {
-        ...rest,
+        ...rest, // currency passes through as-is (already camelCase-compatible column name)
         modules: parsedModules,
         costCentersLimit: cost_centers_limit,
         createdBy: created_by || '',
         endDate: end_date || '',
         locked: !!locked,
+        costPerCostCenter: cost_per_cost_center || 0,
     };
 }
 
@@ -1505,14 +1537,17 @@ function createPlan({ name, description, modules, costCentersLimit, createdBy })
 // Definition fields (name/description/modules/costCentersLimit) are the
 // caller's responsibility to block once a plan is locked — see
 // server.js's PATCH route, which checks `locked` before calling this at
-// all. status/endDate are lifecycle fields and stay editable regardless
-// (marking a plan Inactivo, or giving it an end date, isn't "redefining
-// what it grants").
-function updatePlan(id, { name, description, modules, costCentersLimit, status, endDate }) {
+// all. status/endDate/currency/costPerCostCenter are always editable
+// regardless of lock — status/endDate are lifecycle fields (marking a plan
+// Inactivo, or giving it an end date, isn't "redefining what it grants"),
+// and currency/costPerCostCenter are pricing, a separate ongoing commercial
+// concern from the frozen access-tree definition (see Costo Accesos-Permisos).
+function updatePlan(id, { name, description, modules, costCentersLimit, status, endDate, currency, costPerCostCenter }) {
     const existing = getPlanById(id);
     db.prepare(`
         UPDATE plans SET name = @name, description = @description, modules = @modules,
-            cost_centers_limit = @costCentersLimit, status = @status, end_date = @endDate
+            cost_centers_limit = @costCentersLimit, status = @status, end_date = @endDate,
+            currency = @currency, cost_per_cost_center = @costPerCostCenter
         WHERE id = @id
     `).run({
         id,
@@ -1522,6 +1557,8 @@ function updatePlan(id, { name, description, modules, costCentersLimit, status, 
         costCentersLimit: costCentersLimit ?? existing.costCentersLimit ?? 0,
         status: status ?? existing.status ?? 'active',
         endDate: endDate ?? existing.end_date ?? null,
+        currency: currency ?? existing.currency ?? 'MXN',
+        costPerCostCenter: costPerCostCenter ?? existing.costPerCostCenter ?? 0,
     });
     return getPlanById(id);
 }
@@ -1564,6 +1601,154 @@ function setPlanGrants(planId, grants) {
     });
     replace(grants);
     return getPlanGrants(planId);
+}
+
+function getPlanPermissionCosts(planId) {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId, cost FROM plan_permission_costs WHERE plan_id = ?')
+        .all(planId);
+}
+
+function setPlanPermissionCosts(planId, costs) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM plan_permission_costs WHERE plan_id = ?').run(planId);
+        const insert = db.prepare(`
+            INSERT INTO plan_permission_costs (plan_id, section_id, item_id, submenu_id, cost)
+            VALUES (@planId, @sectionId, @itemId, @submenuId, @cost)
+        `);
+        for (const c of rows) {
+            if (!(Number(c.cost) > 0)) continue; // sparse storage, same convention as plan_grants (no zero-value rows)
+            insert.run({
+                planId, sectionId: c.sectionId, itemId: c.itemId || null, submenuId: c.submenuId || null,
+                cost: Math.max(0, Number(c.cost) || 0),
+            });
+        }
+    });
+    replace(costs);
+    return getPlanPermissionCosts(planId);
+}
+
+// --- computeAccessCostTotal: the "Costo de Accesos/Permisos" sum for one --
+// --- plan, walking the SAME universal tree PermissionTree.js builds -------
+// This is a hand-kept-in-sync port of PermissionTree.js's init()/render()
+// tree-construction logic (browser code can't be required from Node in this
+// bundler-less multi-page app — same reasoning as categoriesForAreaServer
+// above). A plan's tree is ALWAYS the full universal one (allowedSectionIds:
+// null, costCenters: []), so this only needs to port that one code path, not
+// the allowedSectionIds-filtering / costCenters-injection branches.
+//
+// Cost is priced AND summed independently at every level (Departamento,
+// Área, Categoría, Pantalla, Columna) on purpose — see plan_permission_costs'
+// own comment. "Selected" for a level with descendants (Departamento/Área/
+// Categoría-with-children) means fully checked (every descendant leaf
+// granted, non-empty) — the exact same rollup math PermissionTree.js's
+// render() already computes for indeterminate/checked display. A Columna
+// (whose real grants are its 4 Solo Ver/Ver y Operar/Editar/Autorizar
+// sub-permissions, never the column itself) counts as selected if AT LEAST
+// ONE of those 4 is granted.
+let cachedPlanTreeSections = null;
+const PLAN_TREE_BUTTON_CONFIG_ITEM_IDS = ['btn-salir', 'btn-departamento', 'btn-area', 'btn-cc'];
+
+function buildPlanTreeSections() {
+    if (cachedPlanTreeSections) return cachedPlanTreeSections;
+    const menuJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'data', 'menu.json'), 'utf8'));
+    const allSections = menuJson.sections || [];
+    const areaCategories = menuJson.areaCategories || [];
+    const areaOverrides = menuJson.areaOverrides || {};
+    const areasByDept = menuJson.areas || {};
+    const mainSection = allSections.find((s) => s.id === 'main');
+    const adminBusinessItem = mainSection?.items.find((i) => i.id === 'admin-business');
+    const buttonConfigItems = PLAN_TREE_BUTTON_CONFIG_ITEM_IDS
+        .map((id) => mainSection?.items.find((i) => i.id === id))
+        .filter(Boolean)
+        .map((i) => ({ ...i, standalone: true }));
+
+    cachedPlanTreeSections = allSections.map((s) => {
+        if (s.id !== 'main') {
+            const deptAreaIds = areasByDept[s.id] ? areasByDept[s.id].map((a) => a.id) : GENERIC_AREA_IDS;
+            const areaItems = deptAreaIds.map((areaId) => ({
+                id: areaId,
+                submenu: categoriesForAreaServer(s.id, areaId, areaCategories, areaOverrides),
+            }));
+            return { id: s.id, items: areaItems };
+        }
+        const items = s.items
+            .filter((i) => i.id !== 'admin-business' && !PLAN_TREE_BUTTON_CONFIG_ITEM_IDS.includes(i.id))
+            .map((i) => {
+                if (i.id !== 'btn-configuracion' || !i.submenu) return i;
+                return {
+                    ...i,
+                    submenu: i.submenu.map((sm) => {
+                        if (sm.id === 'btn-admin-negocio' && adminBusinessItem) return { id: 'btn-admin-negocio', submenu: adminBusinessItem.submenu };
+                        if (sm.id === 'btn-config-botones' && buttonConfigItems.length) return { id: 'btn-config-botones', submenu: buttonConfigItems };
+                        return sm;
+                    }),
+                };
+            });
+        return { id: 'main', items };
+    });
+    return cachedPlanTreeSections;
+}
+
+function planTupleKey(sectionId, itemId, submenuId) {
+    return `${sectionId}::${itemId || ''}::${submenuId || ''}`;
+}
+
+// Mirrors leafKeysUnder(section, item) in PermissionTree.js exactly.
+function planItemLeafKeys(section, item) {
+    if (item.submenu && item.submenu.length) {
+        return item.submenu.flatMap((sm) => planSmLeafKeys(section, item, sm));
+    }
+    return [planTupleKey(section.id, item.id, null)];
+}
+
+// Mirrors the inline smLeafKeys computed in render() for a categoría with
+// children, but also handles the leaf case (no 3rd level) by degenerating
+// to a single-element list — fullyChecked() over a 1-element list is
+// exactly the same as an exact-match check, so callers don't need to branch.
+function planSmLeafKeys(section, item, sm) {
+    if (sm.submenu && sm.submenu.length) {
+        return sm.submenu.map((subSm) => (
+            subSm.standalone ? planTupleKey(section.id, subSm.id, null) : planTupleKey(section.id, item.id, `${sm.id}/${subSm.id}`)
+        ));
+    }
+    return [planTupleKey(section.id, item.id, sm.id)];
+}
+
+function computeAccessCostTotal(planId) {
+    const grantSet = new Set(getPlanGrants(planId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
+    const costMap = new Map(getPlanPermissionCosts(planId).map((c) => [planTupleKey(c.sectionId, c.itemId, c.submenuId), c.cost]));
+    const costOf = (sectionId, itemId, submenuId) => costMap.get(planTupleKey(sectionId, itemId, submenuId)) || 0;
+    const fullyChecked = (keys) => keys.length > 0 && keys.every((k) => grantSet.has(k));
+
+    let total = 0;
+    buildPlanTreeSections().forEach((section) => {
+        const sectionLeafKeys = section.items.flatMap((item) => planItemLeafKeys(section, item));
+        if (fullyChecked(sectionLeafKeys)) total += costOf(section.id, null, null);
+
+        section.items.forEach((item) => {
+            const itemLeafKeys = planItemLeafKeys(section, item);
+            if (fullyChecked(itemLeafKeys)) total += costOf(section.id, item.id, null);
+            if (!(item.submenu && item.submenu.length)) return;
+
+            item.submenu.forEach((sm) => {
+                const smLeafKeys = planSmLeafKeys(section, item, sm);
+                if (fullyChecked(smLeafKeys)) total += costOf(section.id, item.id, sm.id);
+                if (!(sm.submenu && sm.submenu.length)) return;
+
+                sm.submenu.forEach((subSm) => {
+                    if (!(subSm.submenu && subSm.submenu.length)) return;
+                    subSm.submenu.forEach((col) => {
+                        const base = `${sm.id}/${subSm.id}/${col.id}`;
+                        const colSelected = ['solo-ver', 'ver-y-operar', 'editar', 'autorizar']
+                            .some((lvl) => grantSet.has(planTupleKey(section.id, item.id, `${base}/${lvl}`)));
+                        if (colSelected) total += costOf(section.id, item.id, base);
+                    });
+                });
+            });
+        });
+    });
+    return total;
 }
 
 function getPlanChanges(planId) {
@@ -1919,6 +2104,9 @@ module.exports = {
     deletePlan,
     getPlanGrants,
     setPlanGrants,
+    getPlanPermissionCosts,
+    setPlanPermissionCosts,
+    computeAccessCostTotal,
     getPlanChanges,
     logPlanChange,
     listSaasAdmins,

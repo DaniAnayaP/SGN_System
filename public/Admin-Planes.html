@@ -343,6 +343,9 @@
                             <th data-i18n="admin.planDescription" data-col="description">Description</th>
                             <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
                             <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
+                            <th data-i18n="admin.costCentersLimit" data-col="costCentersLimit">Cost centers limit</th>
+                            <th data-i18n="admin.accessPermCostColumn" data-col="accessPermCost">Access/Permissions cost</th>
+                            <th data-i18n="admin.costCenterTotalColumn" data-col="costCenterTotal">Cost center total</th>
                             <th data-i18n="admin.planEndDate" data-col="endDate">End date</th>
                             <th data-i18n="admin.planStatus" data-col="status">Status</th>
                             <th data-i18n="admin.planLocked" data-col="locked">Locked</th>
@@ -402,14 +405,14 @@
     <div class="modal-overlay" id="plan-tree-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-tree-modal-title" style="max-width: 48rem;">
             <h3 id="plan-tree-modal-title" data-i18n="admin.planTreeTitle">Access tree for this plan</h3>
-            <p id="plan-tree-locked-note" class="admin-hint" hidden></p>
-            <div id="plan-tree-container"></div>
-            <div id="plan-tree-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+            <div class="admin-form-actions">
                 <button type="button" class="btn" id="plan-tree-save" data-i18n="admin.save">Save</button>
                 <button type="button" class="btn btn-secondary" id="plan-tree-close" data-i18n="admin.cancel">Close</button>
             </div>
             <p id="plan-tree-save-status" class="admin-save-status"></p>
+            <p id="plan-tree-locked-note" class="admin-hint" hidden></p>
+            <div id="plan-tree-container"></div>
+            <div id="plan-tree-error" class="admin-error" role="alert" hidden></div>
         </div>
     </div>
 
@@ -467,7 +470,7 @@
     </div>
 
     <script src="Dashboard.js"></script>
-    <script src="PermissionTree.js"></script>
+    <script src="PermissionCostTree.js"></script>
     <script src="Admin-Planes.js"></script>
 </body>
 </html>

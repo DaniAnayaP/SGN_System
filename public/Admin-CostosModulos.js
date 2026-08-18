@@ -1,89 +1,207 @@
 // ---------------------------------------------------------------------------
-// "Costos de Módulos" — GEIPSA-only catalog of what each button/module costs,
-// separate from Planes y Paquetes (which only decides which módulos a plan
-// includes, never what they cost). Used to compute "Pago por Anexos" per
-// client in Nuestros Clientes (Admin-SaaS.js/getAnexosPaymentTotal). Shell
-// (sidebar, i18n, settings, logout) comes from Dashboard.js.
+// "Costo Accesos-Permisos" — GEIPSA-only pricing screen, one row per plan
+// (same plans/GET /api/admin/plans as Nuestros Planes, never a separate
+// catalog). Lets GEIPSA attach a price to every node of a plan's own access
+// tree (Departamento/Área/Categoría/Pantalla/Columna, each priced and
+// summed independently — see db.js computeAccessCostTotal) plus a flat
+// "Costo Por Centro de Costos" rate and a currency, both always editable
+// regardless of the plan's Activo/bloqueado lock (pricing is an ongoing
+// commercial concern, separate from the frozen access-tree definition).
 //
-// Access note: the sidebar only shows this page's link to admins, and the
-// redirect below covers anyone who lands here directly without the role —
-// but the actual enforcement is server-side (requireAdmin on every
-// /api/admin/* route in server.js). This redirect is UX only.
+// Replaces the old flat "Costos de Módulos" screen (module_costs,
+// MODULE_CATALOG) — that backend/table stays intact but has no UI to edit
+// it anymore; "Pago por Anexos" was removed from Nuestros Clientes for now.
+// Shell (sidebar, i18n, settings, logout) comes from Dashboard.js.
 // ---------------------------------------------------------------------------
 
-const listEl = document.getElementById('module-costs-list');
-const errorBanner = document.getElementById('module-costs-error');
-const saveBtn = document.getElementById('module-costs-save');
-const saveStatus = document.getElementById('module-costs-save-status');
+const tableBody = document.getElementById('pct-table-body');
+const emptyMsg = document.getElementById('pct-empty');
 
-let costs = [];
+const costModal = document.getElementById('pct-cost-modal');
+const costModalTitle = document.getElementById('pct-cost-modal-title');
+const costContainer = document.getElementById('pct-cost-container');
+const currencySelect = document.getElementById('pct-currency');
+const costSaveBtn = document.getElementById('pct-save');
+const costCancelBtn = document.getElementById('pct-cancel');
+const costSaveStatus = document.getElementById('pct-save-status');
+const costError = document.getElementById('pct-cost-error');
 
-function showError(message) {
-    errorBanner.textContent = message;
-    errorBanner.hidden = false;
+let plans = [];
+let selectedPlanId = null;
+let tree = null;
+
+function formatDate(value) {
+    return value ? String(value).slice(0, 10) : '—';
 }
 
-function renderCosts() {
-    listEl.innerHTML = '';
-    costs.forEach((mod) => {
-        const row = document.createElement('div');
-        row.className = 'admin-module-row';
-        const name = document.createElement('span');
-        name.className = 'admin-module-name';
-        name.textContent = Dashboard.t(mod.labelKey);
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.min = '0';
-        input.step = '0.01';
-        input.value = mod.cost || 0;
-        input.dataset.moduleKey = mod.key;
-        input.style.maxWidth = '8rem';
-        row.append(name, input);
-        listEl.appendChild(row);
+function renderPlans() {
+    tableBody.innerHTML = '';
+    emptyMsg.hidden = plans.length > 0;
+    plans.forEach((plan) => {
+        const tr = document.createElement('tr');
+        tr.dataset.planStatus = !plan.locked ? 'revision' : (plan.status || 'active');
+        // This whole screen is admin-only, and pricing is always editable
+        // (never lock-gated) — every row qualifies for the legend.
+        tr.classList.add('data-table-row-editable');
+
+        const tdName = document.createElement('td');
+        tdName.dataset.col = 'name';
+        tdName.textContent = plan.name;
+
+        const tdCreatedAt = document.createElement('td');
+        tdCreatedAt.dataset.col = 'createdAt';
+        tdCreatedAt.textContent = formatDate(plan.created_at);
+
+        const tdCost = document.createElement('td');
+        tdCost.dataset.col = 'accessPermCost';
+        tdCost.className = 'editable-cell';
+        tdCost.textContent = Dashboard.formatCurrency(plan.accessPermissionsCost, plan.currency);
+        tdCost.title = Dashboard.t('main.fuelClickToEdit');
+        tdCost.onclick = () => openCostModal(plan);
+
+        const tdCostPerCC = document.createElement('td');
+        tdCostPerCC.dataset.col = 'costPerCostCenter';
+        Dashboard.attachInlineEdit(tdCostPerCC, {
+            value: plan.costPerCostCenter ? String(plan.costPerCostCenter) : '',
+            inputType: 'number',
+            formatDisplay: (v) => Dashboard.formatCurrency(v, plan.currency),
+            onCommit: (val) => patchPlanField(plan, { costPerCostCenter: Math.max(0, Number(val) || 0) }),
+        });
+
+        const tdStatus = document.createElement('td');
+        tdStatus.dataset.col = 'status';
+        tdStatus.textContent = !plan.locked
+            ? Dashboard.t('admin.planStatusRevision')
+            : Dashboard.t(plan.status === 'inactive' ? 'admin.planStatusInactive' : 'admin.planStatusActive');
+
+        const tdActions = document.createElement('td');
+        tdActions.dataset.col = 'actions';
+        tdActions.className = 'admin-table-actions';
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'admin-icon-btn';
+        editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
+        editBtn.title = Dashboard.t('admin.edit');
+        editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+        editBtn.addEventListener('click', () => openCostModal(plan));
+        const historyBtn = document.createElement('button');
+        historyBtn.type = 'button';
+        historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('aria-label', Dashboard.t('admin.planChangeHistory'));
+        historyBtn.title = Dashboard.t('admin.planChangeHistory');
+        historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+        historyBtn.addEventListener('click', () => Dashboard.openPlanChangeHistory(plan));
+        tdActions.append(editBtn, historyBtn);
+
+        tr.append(tdName, tdCreatedAt, tdCost, tdCostPerCC, tdStatus, tdActions);
+        tableBody.appendChild(tr);
     });
+    applyPlanFilters();
 }
 
-async function loadCosts() {
+async function patchPlanField(plan, patch) {
     try {
-        const res = await fetch('/api/admin/module-costs', { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        costs = data.costs || [];
-        renderCosts();
+        const res = await fetch(`/api/admin/plans/${plan.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const { plan: updated } = await res.json();
+        plans = plans.map((p) => (p.id === updated.id ? updated : p));
+        renderPlans();
     } catch {
-        showError(Dashboard.t('admin.loadError'));
+        alert(Dashboard.t('admin.saveError'));
+        await loadPlans();
     }
 }
 
-saveBtn.addEventListener('click', async () => {
-    saveStatus.textContent = '';
-    errorBanner.hidden = true;
-    const states = Array.from(listEl.querySelectorAll('input[type="number"]')).map((input) => ({
-        key: input.dataset.moduleKey,
-        cost: Math.max(0, Number(input.value) || 0),
-    }));
-    saveBtn.disabled = true;
+async function loadPlans() {
     try {
-        const res = await fetch('/api/admin/module-costs', {
+        const res = await fetch('/api/admin/plans', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        plans = data.plans || [];
+        renderPlans();
+    } catch (err) {
+        console.error('Costo Accesos-Permisos: failed to load plans', err);
+    }
+}
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the fields mean).
+function applyPlanFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    const status = document.getElementById('filter-status')?.value || '';
+    tableBody.querySelectorAll('tr').forEach((tr) => {
+        let visible = true;
+        if (text && !(tr.querySelector('[data-col="name"]')?.textContent || '').toLowerCase().includes(text)) visible = false;
+        if (status && tr.dataset.planStatus !== status) visible = false;
+        tr.hidden = !visible;
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyPlanFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyPlanFilters);
+
+// --- Cost tree modal (costEdit mode — see PermissionCostTree.js) ----------
+async function openCostModal(plan) {
+    selectedPlanId = plan.id;
+    costModalTitle.textContent = `${Dashboard.t('admin.accessPermCostColumn')} — ${plan.name}`;
+    costSaveStatus.textContent = '';
+    costError.hidden = true;
+    currencySelect.value = plan.currency || 'MXN';
+    try {
+        const res = await fetch(`/api/admin/plans/${plan.id}/permission-costs`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        tree = window.PermissionCostTree.create(costContainer, { mode: 'costEdit', currency: data.currency || 'MXN' });
+        await tree.init([], data.costs || []);
+        costModal.hidden = false;
+    } catch {
+        alert(Dashboard.t('admin.loadError'));
+    }
+}
+function closeCostModal() {
+    costModal.hidden = true;
+}
+costCancelBtn.addEventListener('click', closeCostModal);
+costModal.addEventListener('click', (event) => { if (event.target === costModal) closeCostModal(); });
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !costModal.hidden) closeCostModal();
+});
+
+costSaveBtn.addEventListener('click', async () => {
+    if (!selectedPlanId || !tree) return;
+    costError.hidden = true;
+    costSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/plans/${selectedPlanId}/permission-costs`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ costs: states }),
+            body: JSON.stringify({ costs: tree.getCosts(), currency: currencySelect.value }),
         });
-        if (!res.ok) throw new Error('save failed');
-        const data = await res.json();
-        costs = data.costs || [];
-        renderCosts();
-        saveStatus.textContent = Dashboard.t('admin.moduleCostsSaved');
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            costError.textContent = body.message || Dashboard.t('admin.saveError');
+            costError.hidden = false;
+            return;
+        }
+        const { plan: updated } = await res.json();
+        plans = plans.map((p) => (p.id === updated.id ? updated : p));
+        renderPlans();
+        costSaveStatus.textContent = Dashboard.t('admin.accessPermCostsSaved');
     } catch {
-        showError(Dashboard.t('admin.saveError'));
+        costError.textContent = Dashboard.t('admin.saveError');
+        costError.hidden = false;
     } finally {
-        saveBtn.disabled = false;
+        costSaveBtn.disabled = false;
     }
 });
 
 document.addEventListener('dashboard:language-changed', () => {
-    if (costs.length) renderCosts();
+    if (plans.length) renderPlans();
 });
 
 (async function init() {
@@ -94,8 +212,8 @@ document.addEventListener('dashboard:language-changed', () => {
             window.location.replace('Inicio-en.html');
             return;
         }
-        await loadCosts();
+        await loadPlans();
     } catch (err) {
-        console.error('Admin (Costos de Módulos) failed to initialize:', err);
+        console.error('Costo Accesos-Permisos failed to initialize:', err);
     }
 })();

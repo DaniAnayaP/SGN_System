@@ -199,6 +199,23 @@ function buildEndDateCell(plan) {
     return td;
 }
 
+// Costo Accesos-Permisos columns — Límite Centros de Costos still follows
+// the normal definition lock (same field the Editar modal already edits),
+// unlike accessPermCost/costCenterTotal below, which are pure display of
+// values that stay editable forever from Costo Accesos-Permisos.
+function buildCostCentersLimitCell(plan) {
+    const td = document.createElement('td');
+    td.dataset.col = 'costCentersLimit';
+    Dashboard.attachInlineEdit(td, {
+        value: plan.costCentersLimit ? String(plan.costCentersLimit) : '',
+        inputType: 'number',
+        disabled: isHardLocked(plan),
+        disabledText: String(plan.costCentersLimit || 0),
+        onCommit: (val) => patchPlanField(plan, { costCentersLimit: Math.max(0, parseInt(val, 10) || 0) }),
+    });
+    return td;
+}
+
 function buildLockedCell(plan) {
     const td = document.createElement('td');
     td.dataset.col = 'locked';
@@ -255,6 +272,14 @@ function renderPlans() {
         tdCreatedBy.dataset.col = 'createdBy';
         tdCreatedBy.textContent = plan.createdBy || '—';
 
+        const tdAccessPermCost = document.createElement('td');
+        tdAccessPermCost.dataset.col = 'accessPermCost';
+        tdAccessPermCost.textContent = Dashboard.formatCurrency(plan.accessPermissionsCost, plan.currency);
+
+        const tdCostCenterTotal = document.createElement('td');
+        tdCostCenterTotal.dataset.col = 'costCenterTotal';
+        tdCostCenterTotal.textContent = Dashboard.formatCurrency((plan.costCentersLimit || 0) * (plan.costPerCostCenter || 0), plan.currency);
+
         const tdActions = document.createElement('td');
         tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
@@ -271,19 +296,17 @@ function renderPlans() {
         historyBtn.setAttribute('aria-label', Dashboard.t('admin.planChangeHistory'));
         historyBtn.title = Dashboard.t('admin.planChangeHistory');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-        historyBtn.addEventListener('click', () => openPlanChangeHistory(plan));
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'admin-icon-btn';
-        editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
-        editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
-        if (isHardLocked(plan)) {
-            editBtn.disabled = true;
-            editBtn.title = Dashboard.t('admin.planLockedHardNote');
-        } else {
+        historyBtn.addEventListener('click', () => Dashboard.openPlanChangeHistory(plan));
+        tdActions.append(treeBtn, historyBtn);
+        if (!isHardLocked(plan)) {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'admin-icon-btn';
+            editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
+            editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
             editBtn.addEventListener('click', () => openEditModal(plan));
+            tdActions.appendChild(editBtn);
         }
-        tdActions.append(treeBtn, historyBtn, editBtn);
 
         if (!plan.locked) {
             const activateBtn = document.createElement('button');
@@ -309,7 +332,11 @@ function renderPlans() {
         deleteBtn.addEventListener('click', () => removePlan(plan));
         tdActions.appendChild(deleteBtn);
 
-        tr.append(tdName, tdDescription, tdCreatedAt, tdCreatedBy, buildEndDateCell(plan), buildStatusCell(plan), buildLockedCell(plan), tdActions);
+        tr.append(
+            tdName, tdDescription, tdCreatedAt, tdCreatedBy,
+            buildCostCentersLimitCell(plan), tdAccessPermCost, tdCostCenterTotal,
+            buildEndDateCell(plan), buildStatusCell(plan), buildLockedCell(plan), tdActions,
+        );
         tableBody.appendChild(tr);
     });
     applyPlanFilters();
@@ -439,22 +466,26 @@ async function selectPlanForTree(plan) {
     }
     treeSaveBtn.hidden = locked;
     try {
-        const res = await fetch(`/api/admin/plans/${plan.id}/grants`, { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        // A plan's tree covers the FULL catalog, not just one client's
-        // contracted subset (allowedSectionIds: null), and has no notion of
-        // a client's own named cost centers (costCenters: []) — it only
-        // needs the static Centro de Costo leaf (ccCode/ccName/...), same
-        // as any other table's columns. NOT mounted with readOnly:true —
-        // that mode shows a contracted/blocked module badge instead of the
-        // actual grantSet checked-state, which is the opposite of what a
-        // locked plan needs to display (exactly what it grants, just
-        // non-editable) — so it stays fully interactive and a CSS class
-        // disables interaction instead, when locked.
+        const [grantsRes, costsRes] = await Promise.all([
+            fetch(`/api/admin/plans/${plan.id}/grants`, { credentials: 'include' }),
+            fetch(`/api/admin/plans/${plan.id}/permission-costs`, { credentials: 'include' }),
+        ]);
+        if (!grantsRes.ok || !costsRes.ok) throw new Error('load failed');
+        const grantsData = await grantsRes.json();
+        const costsData = await costsRes.json();
+        // Checkboxes here are exactly as interactive as before (nothing
+        // about granting changes) — the only difference from the old plain
+        // PermissionTree.js is a read-only cost value shown alongside each
+        // row, sourced from this same plan's own prices (Costo
+        // Accesos-Permisos). NOT mounted with readOnly:true — that mode
+        // shows a contracted/blocked module badge instead of the actual
+        // grantSet checked-state, the opposite of what a locked plan needs
+        // to display (exactly what it grants, just non-editable) — so it
+        // stays fully interactive and a CSS class disables interaction
+        // instead, when locked.
         treeContainer.innerHTML = '';
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds: null, costCenters: [] });
-        await tree.init(data.grants || []);
+        tree = window.PermissionCostTree.create(treeContainer, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN' });
+        await tree.init(grantsData.grants || [], costsData.costs || []);
         treeContainer.classList.toggle('perm-tree-view-only', locked);
         treeModal.hidden = false;
     } catch {
@@ -498,76 +529,8 @@ function showTreeError(el, message) {
     el.hidden = false;
 }
 
-// --- Per-plan change history (plans are GEIPSA-wide, not client-scoped, so
-// they can't use Dashboard's client-scoped table-changes modal/endpoint) ---
-let planHistoryModal = null;
-let planHistoryList = null;
-
-function ensurePlanHistoryModal() {
-    if (planHistoryModal) return;
-    planHistoryModal = document.createElement('div');
-    planHistoryModal.className = 'modal-overlay';
-    planHistoryModal.hidden = true;
-    planHistoryModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="plan-history-title">
-            <h3 id="plan-history-title">${Dashboard.t('admin.planChangeHistory')}</h3>
-            <div class="admin-table-wrap">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>${Dashboard.t('main.changeHistoryDate')}</th>
-                            <th>${Dashboard.t('main.changeHistoryUser')}</th>
-                            <th>${Dashboard.t('main.changeHistoryChange')}</th>
-                        </tr>
-                    </thead>
-                    <tbody data-role="list"></tbody>
-                </table>
-            </div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn btn-secondary" data-role="close">${Dashboard.t('admin.cancel')}</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(planHistoryModal);
-    planHistoryList = planHistoryModal.querySelector('[data-role="list"]');
-    const close = () => { planHistoryModal.hidden = true; };
-    planHistoryModal.querySelector('[data-role="close"]').addEventListener('click', close);
-    planHistoryModal.addEventListener('click', (event) => { if (event.target === planHistoryModal) close(); });
-}
-
-function historyRow(cells) {
-    const tr = document.createElement('tr');
-    cells.forEach((text) => {
-        const td = document.createElement('td');
-        td.textContent = text;
-        tr.appendChild(td);
-    });
-    return tr;
-}
-
-async function openPlanChangeHistory(plan) {
-    ensurePlanHistoryModal();
-    planHistoryModal.hidden = false;
-    planHistoryList.innerHTML = '';
-    planHistoryList.appendChild(historyRow([Dashboard.t('main.changeHistoryEmpty'), '', '']));
-    try {
-        const res = await fetch(`/api/admin/plans/${plan.id}/changes`, { credentials: 'include' });
-        if (!res.ok) return;
-        const { changes } = await res.json();
-        if (!changes || !changes.length) return;
-        planHistoryList.innerHTML = '';
-        changes.forEach((change) => {
-            let description;
-            if (change.action === 'create') description = Dashboard.t('main.changeHistoryCreated');
-            else if (change.action === 'delete') description = Dashboard.t('main.changeHistoryDeleted');
-            else if (change.field_key === 'admin.activeTree') description = `${Dashboard.t('admin.planTreeTitle')}: ${change.new_value} permisos`;
-            else description = `${Dashboard.t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-            planHistoryList.appendChild(historyRow([change.changed_at, change.changed_by || '—', description]));
-        });
-    } catch {
-        // Leave the empty-state row in place — no network/parse errors surfaced here.
-    }
-}
+// Per-plan change history modal is shared with Admin-CostosModulos.js —
+// see Dashboard.openPlanChangeHistory (Dashboard.js).
 
 // "+ Nuevo Plan" — same toolbar-button placement/style as "+ Nuevo
 // Registro" on Registro Combustible (Inicio-en.css .data-table-new-record-btn,
