@@ -1654,6 +1654,12 @@ function observeTableBody(table, tableId) {
         }
     });
     observer.observe(tbody, { childList: true });
+    // applyTableSort needs to pause/resume this same observer around its own
+    // reordering (see there) — otherwise moving already-attached rows via
+    // appendChild fires this observer too, and it can't tell that apart from
+    // a real rebuild.
+    const state = dataTableColumnState.get(tableId);
+    if (state) state.tbodyObserver = observer;
 }
 
 let dataTableDropIndicatorEl = null;
@@ -1877,18 +1883,25 @@ function applyTableSort(tableId) {
     if (!tbody) return;
     const rows = Array.from(tbody.rows).filter((r) => !r.querySelector('td.data-table-empty-cell'));
     if (!rows.length) return;
+    // Moving already-attached rows via appendChild below still fires
+    // observeTableBody's own childList observer, which would otherwise read
+    // that as a real rebuild and wipe originalRowOrder right back out from
+    // under us — pause it for just this reorder, not for the whole function,
+    // so a genuine rebuild that happens to interleave is still caught.
+    state.tbodyObserver?.disconnect();
     if (!state.sortKey) {
         if (state.originalRowOrder) state.originalRowOrder.forEach((row) => { if (tbody.contains(row)) tbody.appendChild(row); });
-        return;
+    } else {
+        if (!state.originalRowOrder) state.originalRowOrder = rows.slice();
+        const dir = state.sortDir === 'asc' ? 1 : -1;
+        const sorted = rows.slice().sort((rowA, rowB) => {
+            const cellA = rowA.querySelector(`[data-col="${state.sortKey}"]`);
+            const cellB = rowB.querySelector(`[data-col="${state.sortKey}"]`);
+            return compareSortCells(cellA ? getCellSortValue(cellA) : '', cellB ? getCellSortValue(cellB) : '') * dir;
+        });
+        sorted.forEach((row) => tbody.appendChild(row));
     }
-    if (!state.originalRowOrder) state.originalRowOrder = rows.slice();
-    const dir = state.sortDir === 'asc' ? 1 : -1;
-    const sorted = rows.slice().sort((rowA, rowB) => {
-        const cellA = rowA.querySelector(`[data-col="${state.sortKey}"]`);
-        const cellB = rowB.querySelector(`[data-col="${state.sortKey}"]`);
-        return compareSortCells(cellA ? getCellSortValue(cellA) : '', cellB ? getCellSortValue(cellB) : '') * dir;
-    });
-    sorted.forEach((row) => tbody.appendChild(row));
+    state.tbodyObserver?.observe(tbody, { childList: true });
 }
 function sortTableByColumn(tableId, key) {
     const state = dataTableColumnState.get(tableId);
