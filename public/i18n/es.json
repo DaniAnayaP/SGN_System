@@ -314,6 +314,7 @@
     "accessPermCostOverlapHint": "Un costo puesto en un nivel contenedor (Departamento/Área/Categoría) se cuenta aparte de — y además de — los costos de lo que tiene debajo.",
     "accessPermTreeColumn": "Accesos / Permisos",
     "accessPermTreeCostColumn": "$ Costo",
+    "accessPermCostsNewPlanHint": "Recuerda que para poder ver y editar un nuevo plan aquí, primero debes crearlo en Nuestros Planes — te aparecerá aquí para modificar sus costos.",
     "costLabel": "Costo $",
     "institutionalColor": "Color institucional",
     "noLogo": "Sin logo",

@@ -1591,12 +1591,16 @@ function createPlan({ name, description, modules, costCentersLimit, createdBy })
 // Inactivo, or giving it an end date, isn't "redefining what it grants"),
 // and currency/costPerCostCenter are pricing, a separate ongoing commercial
 // concern from the frozen access-tree definition (see Costo Accesos-Permisos).
-function updatePlan(id, { name, description, modules, costCentersLimit, status, endDate, currency, costPerCostCenter }) {
+function updatePlan(id, {
+    name, description, modules, costCentersLimit, status, endDate, currency, costPerCostCenter,
+    createdAt, createdBy,
+}) {
     const existing = getPlanById(id);
     db.prepare(`
         UPDATE plans SET name = @name, description = @description, modules = @modules,
             cost_centers_limit = @costCentersLimit, status = @status, end_date = @endDate,
-            currency = @currency, cost_per_cost_center = @costPerCostCenter
+            currency = @currency, cost_per_cost_center = @costPerCostCenter,
+            created_at = @createdAt, created_by = @createdBy
         WHERE id = @id
     `).run({
         id,
@@ -1608,6 +1612,8 @@ function updatePlan(id, { name, description, modules, costCentersLimit, status, 
         endDate: endDate ?? existing.end_date ?? null,
         currency: currency ?? existing.currency ?? 'MXN',
         costPerCostCenter: costPerCostCenter ?? existing.costPerCostCenter ?? 0,
+        createdAt: createdAt ?? existing.created_at,
+        createdBy: (createdBy ?? existing.createdBy) || '',
     });
     return getPlanById(id);
 }
@@ -1650,6 +1656,33 @@ function setPlanGrants(planId, grants) {
     });
     replace(grants);
     return getPlanGrants(planId);
+}
+
+// Replaces the old manual module-toggle checklist on "Editar plan" — a
+// MODULE_CATALOG key (department, or a 'main'-section button like
+// btn-mensajes) turns on automatically the moment ANY permission under it
+// gets granted in this plan's access tree (the shield-icon modal), not
+// only when everything under it is fully granted (unlike
+// syncClientModulesFromPermissionGrants below, which requires 100%
+// coverage — a PLAN's own module list is meant to be a coarse "does this
+// plan touch this department at all" flag, not a billing gate). Only ever
+// ADDS — never auto-disables a module an admin already turned on, so
+// unchecking every grant under a department doesn't silently revoke it.
+function syncPlanModulesFromGrants(planId) {
+    const plan = getPlanById(planId);
+    if (!plan) return false;
+    const grants = getPlanGrants(planId);
+    const modulesSet = new Set(plan.modules);
+    let changed = false;
+
+    MODULE_CATALOG.forEach((m) => {
+        if (modulesSet.has(m.key)) return;
+        const hasAnyGrant = grants.some((g) => g.sectionId === m.key || (g.sectionId === 'main' && g.itemId === m.key));
+        if (hasAnyGrant) { modulesSet.add(m.key); changed = true; }
+    });
+
+    if (changed) updatePlan(planId, { modules: Array.from(modulesSet) });
+    return changed;
 }
 
 function getPlanPermissionCosts(planId) {
@@ -2277,6 +2310,7 @@ module.exports = {
     deletePlan,
     getPlanGrants,
     setPlanGrants,
+    syncPlanModulesFromGrants,
     getPlanPermissionCosts,
     setPlanPermissionCosts,
     computeAccessCostTotal,

@@ -92,6 +92,7 @@ const {
     deletePlan,
     getPlanGrants,
     setPlanGrants,
+    syncPlanModulesFromGrants,
     getPlanPermissionCosts,
     setPlanPermissionCosts,
     computeAccessCostTotal,
@@ -819,11 +820,14 @@ app.put('/api/admin/module-costs', requireAuth, requireAdmin, (req, res) => {
 // paquete" field in Clientes Nuevos. Not tied to module entitlements —
 // clients.plan just stores the chosen name as free text (see db.js).
 function validatePlanBody(body) {
-    const { name, modules, costCentersLimit } = body || {};
+    const { name, modules, costCentersLimit, createdAt } = body || {};
     if (!name || !name.trim()) return 'name is required.';
     if (modules !== undefined && !Array.isArray(modules)) return 'modules must be an array.';
     if (costCentersLimit !== undefined && (!Number.isInteger(costCentersLimit) || costCentersLimit < 0)) {
         return 'costCentersLimit must be a non-negative integer.';
+    }
+    if (createdAt !== undefined && createdAt !== null && (typeof createdAt !== 'string' || !DATE_RE.test(createdAt))) {
+        return 'createdAt must be a date in YYYY-MM-DD format.';
     }
     return null;
 }
@@ -872,7 +876,7 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
 app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    const { status, endDate, currency, costPerCostCenter } = req.body || {};
+    const { status, endDate, currency, costPerCostCenter, createdAt, createdBy } = req.body || {};
     // The FIRST Revisión -> Activo transition only ever happens through the
     // gated POST .../activate below (requires the 'activate' SaaS grant) —
     // this plain PATCH can never do that one. Once a plan has been through
@@ -892,7 +896,8 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     // costPerCostCenter) — always allowed, even locked. Pricing is a
     // separate, ongoing commercial concern from the frozen access-tree
     // definition (see Costo Accesos-Permisos) — never gated by `locked`.
-    const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit'].some((k) => Object.prototype.hasOwnProperty.call(req.body || {}, k));
+    const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit', 'createdAt', 'createdBy']
+        .some((k) => Object.prototype.hasOwnProperty.call(req.body || {}, k));
     if (isDefinitionChange && existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
         return res.status(409).json({ message: 'Este plan ya fue guardado y no puede modificarse.' });
     }
@@ -911,6 +916,8 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
             endDate,
             currency,
             costPerCostCenter,
+            createdAt,
+            createdBy: createdBy != null ? createdBy.trim() : undefined,
         });
         logPlanChange({ planId: plan.id, action: 'update', changedBy: req.user.name });
         if (currency !== undefined && currency !== existing.currency) {
@@ -983,6 +990,11 @@ app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
     const saved = setPlanGrants(req.params.id, grants);
+    // The old manual module checklist on "Editar plan" is gone — a
+    // department/button now turns on for real the moment ANY permission
+    // under it is granted here, so a plan never ends up feature-complete in
+    // its access tree but invisible everywhere modules gate real behavior.
+    syncPlanModulesFromGrants(req.params.id);
     logPlanChange({
         planId: req.params.id, action: 'update', fieldKey: 'admin.activeTree',
         oldValue: '', newValue: `${saved.length}`, changedBy: req.user.name,

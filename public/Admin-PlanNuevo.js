@@ -13,49 +13,9 @@
 const form = document.getElementById('plan-form');
 const nameField = document.getElementById('plan-name');
 const descriptionField = document.getElementById('plan-description');
-const costCentersLimitField = document.getElementById('plan-cost-centers-limit');
-const modulesList = document.getElementById('plan-modules-list');
 const errorBanner = document.getElementById('plan-form-error');
 const submitBtn = document.getElementById('plan-form-submit');
-
-let moduleCatalog = []; // { key, labelKey } — same catalog Contrataciones/Planes Registrados use
-
-function renderModuleToggles(checkedKeys) {
-    modulesList.innerHTML = '';
-    moduleCatalog.forEach((mod) => {
-        const row = document.createElement('div');
-        row.className = 'admin-module-row';
-
-        const name = document.createElement('span');
-        name.className = 'admin-module-name';
-        name.textContent = Dashboard.t(mod.labelKey);
-
-        const label = document.createElement('label');
-        label.className = 'admin-switch';
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.checked = checkedKeys.includes(mod.key);
-        input.dataset.moduleKey = mod.key;
-        const track = document.createElement('span');
-        track.className = 'admin-switch-track';
-        label.append(input, track);
-
-        row.append(name, label);
-        modulesList.appendChild(row);
-    });
-}
-
-function getCheckedModuleKeys() {
-    return Array.from(modulesList.querySelectorAll('input[type="checkbox"]:checked')).map((i) => i.dataset.moduleKey);
-}
-
-async function loadModuleCatalog() {
-    const res = await fetch('/api/admin/modules', { credentials: 'include' });
-    if (!res.ok) throw new Error('load failed');
-    const data = await res.json();
-    moduleCatalog = data.modules || [];
-    renderModuleToggles([]);
-}
+const cancelBtn = document.getElementById('plan-form-cancel');
 
 function showError(message) {
     errorBanner.textContent = message;
@@ -68,8 +28,6 @@ function clearError() {
 
 function resetForm() {
     form.reset();
-    costCentersLimitField.value = 0;
-    renderModuleToggles([]);
     clearError();
 }
 
@@ -83,8 +41,6 @@ form.addEventListener('submit', async (event) => {
         return;
     }
     const description = descriptionField.value.trim();
-    const modules = getCheckedModuleKeys();
-    const costCentersLimit = Math.max(0, parseInt(costCentersLimitField.value, 10) || 0);
 
     submitBtn.disabled = true;
     try {
@@ -92,7 +48,7 @@ form.addEventListener('submit', async (event) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, description, modules, costCentersLimit }),
+            body: JSON.stringify({ name, description }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -111,8 +67,11 @@ form.addEventListener('submit', async (event) => {
     }
 });
 
-document.addEventListener('dashboard:language-changed', () => {
-    renderModuleToggles(getCheckedModuleKeys());
+// "Cancelar" — no inline create flow to reset here (this whole page IS the
+// create flow), so it just goes back to Nuestros Planes, same destination
+// as after a successful save would make sense to end up at.
+cancelBtn.addEventListener('click', () => {
+    window.location.href = 'Admin-Planes.html';
 });
 
 (async function init() {
@@ -123,7 +82,6 @@ document.addEventListener('dashboard:language-changed', () => {
             window.location.replace('Inicio-en.html');
             return;
         }
-        await loadModuleCatalog();
     } catch (err) {
         console.error('Admin (Plan Nuevo) failed to initialize:', err);
     }

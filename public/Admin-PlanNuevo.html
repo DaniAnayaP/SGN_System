@@ -311,6 +311,9 @@
         <section class="admin-panel">
             <p class="admin-subtitle" data-i18n="admin.addPlanSubtitle">Register a new plan or package type.</p>
 
+            <!-- Everything else (centros de costo permitidos, arbol de accesos,
+                 precios, modulos) se configura despues desde Nuestros Planes
+                 -- crear un plan solo pide lo minimo para que exista. -->
             <form id="plan-form" class="admin-form" novalidate>
                 <div class="admin-form-grid">
                     <div class="admin-field">
@@ -323,17 +326,10 @@
                     </div>
                 </div>
 
-                <div class="admin-field" style="max-width: 20rem; margin-bottom: 1rem;">
-                    <label for="plan-cost-centers-limit" data-i18n="admin.costCentersLimit">Allowed cost centers</label>
-                    <input id="plan-cost-centers-limit" type="number" min="0" step="1" value="0">
-                </div>
-                <div class="admin-module-list" id="plan-modules-list">
-                    <!-- module toggles rendered at runtime -->
-                </div>
-
                 <div id="plan-form-error" class="admin-error" role="alert" hidden></div>
                 <div class="admin-form-actions">
                     <button type="submit" class="btn" id="plan-form-submit" data-i18n="admin.addPlan">Add plan</button>
+                    <button type="button" class="btn btn-secondary" id="plan-form-cancel" data-i18n="admin.cancel">Cancel</button>
                 </div>
             </form>
         </section>

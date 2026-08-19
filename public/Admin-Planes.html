@@ -361,9 +361,13 @@
         </section>
     </main>
 
-    <!-- "Editar" — plan ROW DATA only (name/description/costCentersLimit/
-         modules), never the access tree — see plan-tree-modal below for
-         that, a completely separate flow. -->
+    <!-- "Editar" — plan ROW DATA only (name/description/createdAt/createdBy/
+         endDate/costCentersLimit), never the access tree — see
+         plan-tree-modal below for that, a completely separate flow. The
+         module list used to live here too, but a department/button now
+         turns on automatically the moment any permission under it is
+         granted in the access tree (see syncPlanModulesFromGrants in
+         db.js) — nothing left here to toggle by hand. -->
     <div class="modal-overlay" id="plan-edit-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-edit-modal-title">
             <h3 id="plan-edit-modal-title" data-i18n="admin.planEditTitle">Edit plan</h3>
@@ -378,14 +382,22 @@
                         <label for="plan-description" data-i18n="admin.planDescription">Description</label>
                         <input id="plan-description" name="description" type="text">
                     </div>
-                </div>
-
-                <div class="admin-field" style="max-width: 20rem; margin-bottom: 1rem;">
-                    <label for="plan-cost-centers-limit" data-i18n="admin.costCentersLimit">Allowed cost centers</label>
-                    <input id="plan-cost-centers-limit" type="number" min="0" step="1" value="0">
-                </div>
-                <div class="admin-module-list" id="plan-modules-list">
-                    <!-- module toggles rendered at runtime -->
+                    <div class="admin-field">
+                        <label for="plan-created-at" data-i18n="admin.planCreatedAt">Creation date</label>
+                        <input id="plan-created-at" name="createdAt" type="date">
+                    </div>
+                    <div class="admin-field">
+                        <label for="plan-created-by" data-i18n="admin.planCreatedBy">Created by</label>
+                        <input id="plan-created-by" name="createdBy" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="plan-end-date" data-i18n="admin.planEndDate">End date</label>
+                        <input id="plan-end-date" name="endDate" type="date">
+                    </div>
+                    <div class="admin-field">
+                        <label for="plan-cost-centers-limit" data-i18n="admin.costCentersLimit">Allowed cost centers</label>
+                        <input id="plan-cost-centers-limit" type="number" min="0" step="1" value="0">
+                    </div>
                 </div>
 
                 <div id="plan-form-error" class="admin-error" role="alert" hidden></div>
