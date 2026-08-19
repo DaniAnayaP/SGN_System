@@ -2122,7 +2122,7 @@ function attachColumnFilterTrigger(th, tableId) {
     btn.type = 'button';
     btn.className = 'data-table-col-filter-trigger';
     btn.setAttribute('aria-label', t('main.filterColumn'));
-    btn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
+    btn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
         openColumnFilterMenu(th, tableId, th.dataset.col);
