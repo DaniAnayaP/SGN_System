@@ -2098,6 +2098,13 @@ function openColumnFilterMenu(th, tableId, key) {
         ];
         let searchMode = 'contains';
 
+        // Shows which mode is active without having to reopen the dropdown
+        // to check — updated in the option click handler below.
+        const modeCurrentLabel = document.createElement('div');
+        modeCurrentLabel.className = 'data-table-col-filter-mode-current';
+        modeCurrentLabel.textContent = t('main.filterModeContains');
+        menu.appendChild(modeCurrentLabel);
+
         const modeBtn = document.createElement('button');
         modeBtn.type = 'button';
         modeBtn.className = 'data-table-col-filter-mode-btn';
@@ -2127,6 +2134,7 @@ function openColumnFilterMenu(th, tableId, key) {
                 searchMode = mode.id;
                 modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
                 btn.classList.add('data-table-col-filter-mode-option-active');
+                modeCurrentLabel.textContent = t(mode.labelKey);
                 modeMenu.hidden = true;
                 searchInputChanged();
             });

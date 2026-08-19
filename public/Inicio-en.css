@@ -2152,6 +2152,16 @@
         gap: 0.35rem;
         padding: 0 0.8rem 0.4rem;
     }
+    /* Shows which of Inicia con/Contiene/Igual que is active without
+       having to reopen the dropdown to check (see modeCurrentLabel in
+       openColumnFilterMenu). */
+    .data-table-col-filter-mode-current{
+        padding: 0 0.8rem 0.3rem;
+        color: var(--color-text-secondary);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+    }
     .data-table-col-filter-search{
         flex: 1;
         min-width: 0;
@@ -2198,6 +2208,15 @@
         box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.18);
         overflow: hidden;
         min-width: 8rem;
+    }
+    /* An author stylesheet's `display` always beats the UA stylesheet's
+       `[hidden] { display: none }`, even at equal specificity — so the rule
+       above left this always visible regardless of the .hidden JS toggle
+       (openColumnFilterMenu's modeMenu.hidden = true/false never had any
+       visual effect). This one explicitly re-adds the attribute to the
+       selector so it actually wins. */
+    .data-table-col-filter-mode-menu[hidden]{
+        display: none;
     }
     .data-table-col-filter-mode-option{
         border: none;
