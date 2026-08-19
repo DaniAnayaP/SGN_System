@@ -661,6 +661,30 @@ if (!fuelRecordColumns.some((c) => c.name === 'liters')) {
     db.exec('ALTER TABLE fuel_records ADD COLUMN liters REAL NOT NULL DEFAULT 0');
 }
 
+// given_names/surnames (separate from full_name, needed to compute the
+// auto-generated username — see computeHrUsername), departments (JSON
+// array, replacing the old single `department` column so a worker can
+// belong to more than one), cost_center_id (which Centro de Costos this
+// worker is billed against), and user_id (the login account auto-created
+// alongside this worker — see createHrWorker) all added after hr_workers
+// already shipped once.
+const hrWorkerColumns = db.prepare('PRAGMA table_info(hr_workers)').all();
+if (!hrWorkerColumns.some((c) => c.name === 'given_names')) {
+    db.exec("ALTER TABLE hr_workers ADD COLUMN given_names TEXT NOT NULL DEFAULT ''");
+}
+if (!hrWorkerColumns.some((c) => c.name === 'surnames')) {
+    db.exec("ALTER TABLE hr_workers ADD COLUMN surnames TEXT NOT NULL DEFAULT ''");
+}
+if (!hrWorkerColumns.some((c) => c.name === 'departments')) {
+    db.exec("ALTER TABLE hr_workers ADD COLUMN departments TEXT NOT NULL DEFAULT '[]'");
+}
+if (!hrWorkerColumns.some((c) => c.name === 'cost_center_id')) {
+    db.exec('ALTER TABLE hr_workers ADD COLUMN cost_center_id INTEGER REFERENCES cost_centers(id)');
+}
+if (!hrWorkerColumns.some((c) => c.name === 'user_id')) {
+    db.exec('ALTER TABLE hr_workers ADD COLUMN user_id INTEGER REFERENCES users(id)');
+}
+
 // requested_by/authorized_by added after data_table_changes already shipped
 // once — nullable, only ever filled for rows created via an approved
 // pending_changes row (see resolvePendingChange's caller in server.js);
@@ -722,13 +746,13 @@ function usernameOrEmailExists(username, email) {
         .get(username, email);
 }
 
-function createUser({ username, email, passwordHash, name, clientId = null, isClientAdmin = false, role = 'user' }) {
+function createUser({ username, email, passwordHash, name, clientId = null, isClientAdmin = false, role = 'user', active = true }) {
     const result = db
         .prepare(`
-            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin, role)
-            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin, @role)
+            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin, role, active)
+            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin, @role, @active)
         `)
-        .run({ username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0, role });
+        .run({ username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0, role, active: active ? 1 : 0 });
     return db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 }
 
@@ -1328,25 +1352,111 @@ function deleteFuelRecord(id, clientId) {
 }
 
 // --- Query helpers: Mi Recurso Humano (hr_workers, scoped to a client) ------
+// LEFT JOIN so the auto-created account's username/active state rides along
+// wherever a worker record is fetched — same pattern as listClients'
+// adminUsername join.
 function listHrWorkers(clientId) {
-    return db.prepare('SELECT * FROM hr_workers WHERE client_id = ? ORDER BY record_number ASC').all(clientId);
+    return db
+        .prepare(`
+            SELECT hr_workers.*, users.username AS username, users.active AS userActive
+            FROM hr_workers LEFT JOIN users ON users.id = hr_workers.user_id
+            WHERE hr_workers.client_id = ?
+            ORDER BY hr_workers.record_number ASC
+        `)
+        .all(clientId);
 }
 
 function getHrWorkerById(id, clientId) {
-    return db.prepare('SELECT * FROM hr_workers WHERE id = ? AND client_id = ?').get(id, clientId);
+    return db
+        .prepare(`
+            SELECT hr_workers.*, users.username AS username, users.active AS userActive
+            FROM hr_workers LEFT JOIN users ON users.id = hr_workers.user_id
+            WHERE hr_workers.id = ? AND hr_workers.client_id = ?
+        `)
+        .get(id, clientId);
 }
 
-function createHrWorker({ clientId, fullName, position, startDate, department }) {
+// First-name-initial + second-name-initial (duplicated if there's only one
+// given name; a 3rd+ given name is ignored) + first-2-letters of each of
+// up to 2 apellidos (the 2nd duplicated if there's only one apellido) +
+// "HRP" (Recurso Humano Propio). Confirmed with the user: "Daniel Anaya
+// Pérez" (one given name, 2 apellidos) -> "DDANPEHRP". Collisions are
+// resolved by the caller via generateUniqueUsername, same as every other
+// auto-provisioned username in this app — this only computes the base.
+// Strips accents (é -> e, ñ -> n, ...) so "Pérez" contributes "PE", not
+// "PÉ" — confirmed by the user's own example, which uses plain ASCII.
+function stripAccents(word) {
+    return (word || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function computeHrUsername(givenNames, surnames) {
+    const given = (givenNames || '').trim().split(/\s+/).filter(Boolean);
+    const sur = (surnames || '').trim().split(/\s+/).filter(Boolean);
+    const initial = (word) => stripAccents(word).charAt(0).toUpperCase();
+    const first2 = (word) => stripAccents(word).slice(0, 2).toUpperCase();
+    const g1 = initial(given[0]);
+    const g2 = initial(given[1] || given[0]);
+    const s1 = first2(sur[0]);
+    const s2 = first2(sur[1] || sur[0]);
+    return `${g1}${g2}${s1}${s2}HRP`;
+}
+
+// Also creates the worker's own login account in the same step — "en
+// automático se crea el único Usuario asignado" — but INACTIVE with an
+// unusable throwaway password until activateHrWorkerUser below is called
+// from the table (that's the only place a real, usable password ever gets
+// issued). async because hashing can't happen inside db.transaction()
+// (must stay fully synchronous — see activateClient's own note above).
+async function createHrWorker({ clientId, givenNames, surnames, position, startDate, departments, costCenterId, email }) {
+    const fullName = `${givenNames} ${surnames}`.replace(/\s+/g, ' ').trim();
+    const username = generateUniqueUsername(computeHrUsername(givenNames, surnames));
+    const passwordHash = await hashPassword(generateRandomPassword());
+
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM hr_workers WHERE client_id = ?')
         .get(clientId).n;
-    const result = db
-        .prepare(`
-            INSERT INTO hr_workers (client_id, db_id, record_number, full_name, position, start_date, department)
-            VALUES (@clientId, @dbId, @recordNumber, @fullName, @position, @startDate, @department)
-        `)
-        .run({ clientId, dbId: generateBigDateId(), recordNumber, fullName, position, startDate, department });
-    return getHrWorkerById(result.lastInsertRowid, clientId);
+
+    const create = db.transaction(() => {
+        const user = createUser({
+            username, email, passwordHash, name: fullName,
+            clientId, isClientAdmin: false, active: false,
+        });
+        const result = db
+            .prepare(`
+                INSERT INTO hr_workers (
+                    client_id, db_id, record_number, given_names, surnames, full_name,
+                    position, start_date, departments, cost_center_id, email, user_id
+                )
+                VALUES (
+                    @clientId, @dbId, @recordNumber, @givenNames, @surnames, @fullName,
+                    @position, @startDate, @departments, @costCenterId, @email, @userId
+                )
+            `)
+            .run({
+                clientId, dbId: generateBigDateId(), recordNumber, givenNames, surnames, fullName,
+                position, startDate, departments: JSON.stringify(departments || []),
+                costCenterId: costCenterId || null, email, userId: user.id,
+            });
+        return result.lastInsertRowid;
+    });
+    return getHrWorkerById(create(), clientId);
+}
+
+// Issues a brand-new password and turns on login for this worker's account
+// — the only way it ever becomes usable, since createHrWorker always
+// leaves it inactive. Safe to call again later too (e.g. the employee
+// forgot their password): always issues a fresh one and returns it
+// exactly once, same convention as every other auto-provisioned account
+// in this app (see activateClient). Returns null if this worker has no
+// linked account (shouldn't happen for anything created after this
+// feature shipped).
+async function activateHrWorkerUser(workerId, clientId) {
+    const worker = getHrWorkerById(workerId, clientId);
+    if (!worker || !worker.user_id) return null;
+    const password = generateRandomPassword();
+    const passwordHash = await hashPassword(password);
+    db.prepare('UPDATE users SET password_hash = ?, active = 1 WHERE id = ?').run(passwordHash, worker.user_id);
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(worker.user_id);
+    return { username: user.username, password };
 }
 
 const HR_WORKER_PATCHABLE_FIELDS = {
@@ -1354,8 +1464,13 @@ const HR_WORKER_PATCHABLE_FIELDS = {
     email: { column: 'email', fieldKey: 'main.colHrEmail' },
     phone: { column: 'phone', fieldKey: 'main.colHrPhone' },
     status: { column: 'status', fieldKey: 'main.colHrStatus' },
+    departments: { column: 'departments', fieldKey: 'main.colHrDepartment' },
+    costCenterId: { column: 'cost_center_id', fieldKey: 'main.colHrCostCenter' },
 };
 
+// departments arrives already JSON-stringified by the caller (server.js) —
+// never re-serialized here, so it diffs/compares as a plain string exactly
+// like every other column (see checkAndLogFieldChanges' raw-value diff).
 function updateHrWorker(id, clientId, patch) {
     const sets = [];
     const params = { id, clientId };
@@ -1367,6 +1482,14 @@ function updateHrWorker(id, clientId, patch) {
     }
     if (sets.length) {
         db.prepare(`UPDATE hr_workers SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    // Deactivating a worker also revokes their login, matching the
+    // client-level cascade (deactivateClientUsers). Does NOT auto-reactivate
+    // on the way back to 'active' — restoring login needs an explicit
+    // "Activar" click, same as a brand-new worker.
+    if (Object.prototype.hasOwnProperty.call(patch, 'status') && patch.status === 'inactive') {
+        const worker = getHrWorkerById(id, clientId);
+        if (worker?.user_id) db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(worker.user_id);
     }
     return getHrWorkerById(id, clientId);
 }
@@ -2090,6 +2213,13 @@ function getUserById(id, clientId) {
         .get(id, clientId);
 }
 
+// The Habilitar/Deshabilitar toggle on Business-Usuarios.html — independent
+// of deactivateClientUsers (which flips every user at a client at once when
+// the CLIENT itself is deactivated); this is the one-user-at-a-time version.
+function setUserActive(id, active) {
+    db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+}
+
 // Unscoped by client_id on purpose — this is always called with the caller's
 // own id straight from their verified session token (see GET /api/me/profile
 // in server.js), never an id supplied by the client, so there's no
@@ -2353,6 +2483,8 @@ module.exports = {
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,
+    computeHrUsername,
+    activateHrWorkerUser,
     updateHrWorker,
     deleteHrWorker,
     listPlans,
@@ -2384,6 +2516,7 @@ module.exports = {
     deactivateClientUsers,
     listBusinessUsers,
     getUserById,
+    setUserActive,
     getUserProfileById,
     getUserBusinessProfileById,
     getUserEffectiveGrants,

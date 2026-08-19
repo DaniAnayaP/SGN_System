@@ -67,6 +67,7 @@ const {
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,
+    activateHrWorkerUser,
     updateHrWorker,
     deleteHrWorker,
     getTableChanges,
@@ -111,6 +112,7 @@ const {
     deactivateClientUsers,
     listBusinessUsers,
     getUserById,
+    setUserActive,
     getUserProfileById,
     getUserBusinessProfileById,
     getUserEffectiveGrants,
@@ -1222,21 +1224,20 @@ app.get('/api/business/users', requireAuth, requireClientAdmin, (req, res) => {
     res.json({ users: listBusinessUsers(req.user.clientId) });
 });
 
-app.post('/api/business/users', requireAuth, requireClientAdmin, async (req, res) => {
-    const { username, email, password, name } = req.body || {};
-    if (!username || !email || !name || !password || password.length < 8) {
-        return res.status(400).json({ message: 'username, email, name and a password of at least 8 characters are required.' });
+// No POST here — users are never created directly on this screen. Each one
+// is auto-provisioned the moment its person is registered in Mi Recurso
+// Humano (see createHrWorker in db.js); this screen only enables/disables
+// the account and assigns its profiles/permissions below.
+app.patch('/api/business/users/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const user = getUserById(req.params.id, req.user.clientId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
+    const { active } = req.body || {};
+    if (typeof active !== 'boolean') {
+        return res.status(400).json({ message: 'active must be a boolean.' });
     }
-    if (usernameOrEmailExists(username, email)) {
-        return res.status(409).json({ message: 'Username or email already taken.' });
-    }
-    const user = createUser({
-        username, email, passwordHash: await hashPassword(password), name,
-        clientId: req.user.clientId, isClientAdmin: false,
-    });
-    res.status(201).json({
-        user: { id: user.id, username: user.username, email: user.email, name: user.name, role: user.role, created_at: user.created_at },
-    });
+    setUserActive(req.params.id, active);
+    res.json({ user: { ...user, active: active ? 1 : 0 } });
 });
 
 // The auto-provisioned client admin (is_client_admin) is managed from the
@@ -1584,14 +1585,21 @@ function mapHrWorker(row, pendingByRecord) {
         id: row.id,
         dbId: row.db_id,
         recordNumber: row.record_number,
+        givenNames: row.given_names,
+        surnames: row.surnames,
         fullName: row.full_name,
         position: row.position,
         startDate: row.start_date,
-        department: row.department,
+        departments: JSON.parse(row.departments || '[]'),
+        costCenterId: row.cost_center_id,
         area: row.area,
         email: row.email,
         phone: row.phone,
         status: row.status,
+        username: row.username,
+        // NULL (no linked account, shouldn't happen for anything created
+        // after this feature shipped) reads as false, same as inactive.
+        userActive: !!row.userActive,
         pendingFields: pendingByRecord?.get(row.id) || [],
     };
 }
@@ -1602,18 +1610,30 @@ app.get('/api/business/hr-workers', requireAuth, (req, res) => {
     res.json({ workers: listHrWorkers(req.user.clientId).map((w) => mapHrWorker(w, pendingByRecord)) });
 });
 
-app.post('/api/business/hr-workers', requireAuth, (req, res) => {
+app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const { fullName, position, startDate, department } = req.body || {};
-    if (!fullName?.trim() || !position?.trim() || !startDate || !department?.trim()) {
-        return res.status(400).json({ message: 'fullName, position, startDate and department are required.' });
+    const { givenNames, surnames, position, startDate, departments, costCenterId, email } = req.body || {};
+    if (!givenNames?.trim() || !surnames?.trim() || !position?.trim() || !startDate || !Array.isArray(departments) || !departments.length || !email?.trim()) {
+        return res.status(400).json({ message: 'givenNames, surnames, position, startDate, at least one department, and email are required.' });
     }
-    const worker = createHrWorker({
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+        return res.status(400).json({ message: 'email must be a valid email address.' });
+    }
+    if (usernameOrEmailExists(null, email.trim())) {
+        return res.status(409).json({ message: 'That email is already in use by another account.' });
+    }
+    if (costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId)) {
+        return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
+    }
+    const worker = await createHrWorker({
         clientId: req.user.clientId,
-        fullName: fullName.trim(),
+        givenNames: givenNames.trim(),
+        surnames: surnames.trim(),
         position: position.trim(),
         startDate,
-        department: department.trim(),
+        departments,
+        costCenterId: costCenterId || null,
+        email: email.trim(),
     });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: worker.id,
@@ -1626,9 +1646,42 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getHrWorkerById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
-    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, req.body || {}, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
+    const patch = { ...req.body };
+    if (Object.prototype.hasOwnProperty.call(patch, 'departments')) {
+        if (!Array.isArray(patch.departments) || !patch.departments.length) {
+            return res.status(400).json({ message: 'departments must be a non-empty array.' });
+        }
+        // Stringified up front so it diffs/compares as a plain string
+        // against existing.departments (also a JSON string) in
+        // checkAndLogFieldChanges — an array would never equal that via
+        // its raw-value String() comparison.
+        patch.departments = JSON.stringify(patch.departments);
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'costCenterId') && patch.costCenterId != null
+        && !getCostCenterById(patch.costCenterId, req.user.clientId)) {
+        return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
+    }
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
     const worker = updateHrWorker(req.params.id, req.user.clientId, appliedPatch);
     res.json({ worker: mapHrWorker(worker), pendingFields, rejectedFields });
+});
+
+// Issues this worker's login for the first time (or resets it later, e.g.
+// a forgotten password) — the ONLY place a real password for their
+// auto-created account (see createHrWorker) ever gets generated, shown
+// once in the response, same one-time-credentials convention as
+// activating a client (see applyClientLifecycle).
+app.post('/api/business/hr-workers/:id/activate-user', requireAuth, async (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getHrWorkerById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Worker not found.' });
+    const generated = await activateHrWorkerUser(req.params.id, req.user.clientId);
+    if (!generated) return res.status(409).json({ message: 'This worker has no linked account.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,
+        recordLabel: existing.full_name, action: 'update', fieldKey: 'main.colHrUserActivated', changedBy: req.user.name,
+    });
+    res.json({ worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId)), generated });
 });
 
 app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {

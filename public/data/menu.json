@@ -176,7 +176,9 @@
             { "id": "colHrArea", "labelKey": "main.colHrArea", "permissionOnly": true },
             { "id": "colHrEmail", "labelKey": "main.colHrEmail", "permissionOnly": true },
             { "id": "colHrPhone", "labelKey": "main.colHrPhone", "permissionOnly": true },
-            { "id": "colHrStatus", "labelKey": "main.colHrStatus", "permissionOnly": true }
+            { "id": "colHrStatus", "labelKey": "main.colHrStatus", "permissionOnly": true },
+            { "id": "colHrDepartment", "labelKey": "main.colHrDepartment", "permissionOnly": true },
+            { "id": "colHrCostCenter", "labelKey": "main.colHrCostCenter", "permissionOnly": true }
           ]
         }
       ]

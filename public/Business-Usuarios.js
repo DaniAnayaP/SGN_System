@@ -1,16 +1,10 @@
 // ---------------------------------------------------------------------------
-// "Usuarios" — Administración del Negocio: create users and assign one or
-// more profiles (perfiles) to each. Shell (sidebar, i18n, settings, logout)
-// comes from Dashboard.js.
+// "Usuarios" — Administración del Negocio: enable/disable existing accounts
+// (every one of them auto-created from Mi Recurso Humano, never from here —
+// see OpRRHHMiRecursoHumano.js) and assign one or more profiles (perfiles)
+// to each. Shell (sidebar, i18n, settings, logout) comes from Dashboard.js.
 // ---------------------------------------------------------------------------
 
-const form = document.getElementById('user-form');
-const usernameField = document.getElementById('user-username');
-const nameField = document.getElementById('user-name');
-const emailField = document.getElementById('user-email');
-const passwordField = document.getElementById('user-password');
-const errorBanner = document.getElementById('user-form-error');
-const submitBtn = document.getElementById('user-form-submit');
 const tableBody = document.getElementById('users-table-body');
 const emptyMsg = document.getElementById('users-empty');
 
@@ -24,13 +18,19 @@ const assignSaveStatus = document.getElementById('assign-save-status');
 let users = [];
 let profiles = [];
 
-function showError(message) {
-    errorBanner.textContent = message;
-    errorBanner.hidden = false;
-}
-function clearError() {
-    errorBanner.hidden = true;
-    errorBanner.textContent = '';
+async function toggleUserActive(user) {
+    try {
+        const res = await fetch(`/api/business/users/${user.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ active: !user.active }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        await loadUsers();
+    } catch {
+        alert(Dashboard.t('admin.saveError'));
+    }
 }
 
 async function renderUsersTable() {
@@ -48,7 +48,19 @@ async function renderUsersTable() {
         tdProfiles.textContent = '…';
         const tdCreated = document.createElement('td');
         tdCreated.textContent = (user.created_at || '').slice(0, 10);
-        tr.append(tdUsername, tdName, tdEmail, tdProfiles, tdCreated);
+        const tdStatus = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = `admin-badge admin-badge-${user.active ? 'activo' : 'inactivo'}`;
+        badge.textContent = Dashboard.t(user.active ? 'main.filterActive' : 'main.filterInactive');
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'admin-icon-btn';
+        toggleBtn.innerHTML = `<i class="bx ${user.active ? 'bx-x-circle' : 'bx-check-circle'}" aria-hidden="true"></i>`;
+        toggleBtn.setAttribute('aria-label', Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate'));
+        toggleBtn.title = Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate');
+        toggleBtn.addEventListener('click', () => toggleUserActive(user));
+        tdStatus.append(badge, toggleBtn);
+        tr.append(tdUsername, tdName, tdEmail, tdProfiles, tdCreated, tdStatus);
         tableBody.appendChild(tr);
 
         fetch(`/api/business/users/${user.id}/profiles`, { credentials: 'include' })
@@ -86,7 +98,7 @@ async function loadUsers() {
         await renderUsersTable();
         populateAssignSelect();
     } catch {
-        showError(Dashboard.t('admin.loadError'));
+        alert(Dashboard.t('admin.loadError'));
     }
 }
 
@@ -100,44 +112,6 @@ async function loadProfiles() {
         profiles = [];
     }
 }
-
-form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    clearError();
-
-    const username = usernameField.value.trim();
-    const name = nameField.value.trim();
-    const email = emailField.value.trim();
-    const password = passwordField.value;
-    if (!username || !name || !email || password.length < 8) {
-        showError(Dashboard.t('admin.requiredFields'));
-        return;
-    }
-
-    submitBtn.disabled = true;
-    try {
-        const res = await fetch('/api/business/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ username, name, email, password }),
-        });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            showError(body.message || Dashboard.t('admin.saveError'));
-            return;
-        }
-        const { user } = await res.json();
-        users = [user, ...users];
-        await renderUsersTable();
-        populateAssignSelect();
-        form.reset();
-    } catch {
-        showError(Dashboard.t('admin.saveError'));
-    } finally {
-        submitBtn.disabled = false;
-    }
-});
 
 function renderAssignList(assignedIds) {
     assignList.innerHTML = '';

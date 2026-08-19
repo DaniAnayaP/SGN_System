@@ -7,25 +7,27 @@
 // shared by every .data-table, this button is not, so it's added here
 // instead of in Dashboard.js).
 //
-// "+ Nuevo Registro" only asks for what actually identifies a new hire
-// (Nombre completo, Puesto, Fecha de Ingreso, Departamento asignado) —
-// everything else (Área, Correo, Teléfono, Estatus) starts empty and gets
-// filled in later by clicking directly on that cell in the table (same
-// attachInlineEdit pattern as Registro Combustible — see
-// OpTransVolCombustible.js for the original).
+// "+ Nuevo Registro" asks for Nombre(s)/Apellidos (separate, not one "Nombre
+// Completo" — the auto-generated username needs to know exactly which words
+// are given names vs. apellidos), Correo, Puesto, Fecha de Ingreso, and at
+// least one Departamento; Centro de Costos is optional. Teléfono and Estatus
+// still start empty and get filled in later from the table row.
 //
 // Persisted via /api/business/hr-workers (see server.js + db.js hr_workers
-// table): POST on "+ Nuevo Registro", PATCH per field the moment an inline
-// edit commits. This does NOT yet create an actual system user (that's the
-// eventual goal per "los Usuarios se deben crear desde que se da de alta en
-// Recursos Humanos" — a separate, bigger step once this screen's shape is
-// confirmed).
+// table): POST on "+ Nuevo Registro" ALSO creates this worker's own login
+// account in the same step (see createHrWorker in db.js) — inactive, with
+// an auto-generated username, until "Activar" is clicked from the Estado de
+// Usuario column (POST .../activate-user), which is the only place a real,
+// usable password ever gets issued (shown once). Business-Usuarios.html no
+// longer creates users directly — this screen is the only place that
+// happens now.
 // ---------------------------------------------------------------------------
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-rrhh-mi-recurso-humano' });
         if (!role) return;
         renderNewRecordButton();
+        await loadCostCenters();
         await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano failed to initialize:', err);
@@ -45,6 +47,7 @@ const DEPARTMENT_LABEL_KEYS = {
     finance: 'menu.finance',
     certifications: 'menu.certifications',
 };
+const DEPARTMENT_OPTIONS = Object.entries(DEPARTMENT_LABEL_KEYS).map(([value, labelKey]) => ({ value, labelKey }));
 
 function pad(n, len = 2) {
     return String(n).padStart(len, '0');
@@ -95,6 +98,60 @@ async function patchWorker(id, patch) {
     }
 }
 
+// --- Centros de Costo (for the Cost Center column/field — reused catalog,
+// not owned by this screen) --------------------------------------------
+let costCenters = [];
+async function loadCostCenters() {
+    try {
+        const res = await fetch('/api/business/cost-centers', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        costCenters = data.costCenters || [];
+    } catch (err) {
+        console.error('Mi Recurso Humano: failed to load cost centers', err);
+        costCenters = [];
+    }
+}
+function populateCostCenterSelect(select, selectedId) {
+    select.innerHTML = '';
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = Dashboard.t('main.hrNoCostCenter');
+    select.appendChild(noneOpt);
+    costCenters.forEach((cc) => {
+        const opt = document.createElement('option');
+        opt.value = cc.id;
+        opt.textContent = `${cc.code} - ${cc.name}`;
+        select.appendChild(opt);
+    });
+    select.value = selectedId ? String(selectedId) : '';
+}
+
+// --- Departamento(s) Asignado(s) — multi-select checklist, shared by the
+// "+ Nuevo Registro" modal and the click-to-edit modal on an existing row.
+function buildDepartmentChecklist(container, selectedValues) {
+    container.innerHTML = '';
+    const selected = new Set(selectedValues || []);
+    DEPARTMENT_OPTIONS.forEach((opt) => {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = opt.value;
+        input.checked = selected.has(opt.value);
+        const span = document.createElement('span');
+        span.textContent = Dashboard.t(opt.labelKey);
+        label.append(input, span);
+        container.appendChild(label);
+    });
+}
+function getChecklistValues(container) {
+    return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value);
+}
+function formatDepartments(departments) {
+    if (!departments || !departments.length) return '—';
+    return departments.map((d) => Dashboard.t(DEPARTMENT_LABEL_KEYS[d] || d)).join(', ');
+}
+
 // Empty-state row shown when the table has zero workers — mirrors the
 // static placeholder from OpRRHHMiRecursoHumano.html so deleting the last
 // remaining row doesn't leave a headerless-looking empty tbody.
@@ -104,7 +161,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 11;
+    td.colSpan = 14;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
@@ -151,7 +208,10 @@ function buildActionsCell(worker, tr) {
 
 // Estatus — a real <select>, always live in the cell (not click-to-edit),
 // defaulting to Activo since a worker is, by definition, active the moment
-// they're registered — still changeable inline afterwards.
+// they're registered — still changeable inline afterwards. Flipping this to
+// Inactivo also revokes the worker's own login (see updateHrWorker's status
+// cascade in db.js) — the row refresh after the PATCH picks up the new
+// Estado de Usuario automatically.
 function buildStatusCell(worker) {
     const td = document.createElement('td');
     td.dataset.col = 'colHrStatus';
@@ -168,6 +228,65 @@ function buildStatusCell(worker) {
     if (select.disabled) select.title = Dashboard.t(isPending(worker, 'status') ? 'main.changePending' : 'main.fieldLocked');
     select.addEventListener('change', () => patchWorker(worker.id, { status: select.value }));
     td.appendChild(select);
+    return td;
+}
+
+// Departamento(s) — click-to-edit, opens edit-departments-modal (a plain
+// text cell can't represent "more than one selected" well, so this isn't
+// the usual attachInlineEdit text-input pattern).
+function buildDepartmentCell(worker) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colHrDepartment';
+    td.textContent = formatDepartments(worker.departments);
+    const editable = Dashboard.canEditField(TABLE_KEY, 'colHrDepartment', (worker.departments || []).join(','));
+    if (isPending(worker, 'departments')) {
+        td.classList.add('editable-cell-pending');
+        td.title = Dashboard.t('main.changePending');
+    } else if (!editable) {
+        td.classList.add('editable-cell-locked');
+        td.title = Dashboard.t('main.fieldLocked');
+    } else {
+        td.classList.add('editable-cell');
+        td.title = Dashboard.t('main.fuelClickToEdit');
+        td.onclick = () => openEditDepartmentsModal(worker);
+    }
+    return td;
+}
+
+// Centro de Costos — a real <select>, always live in the cell, same pattern
+// as Estatus/Tipo Combustible elsewhere in this app.
+function buildCostCenterCell(worker) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colHrCostCenter';
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    populateCostCenterSelect(select, worker.costCenterId);
+    select.disabled = isPending(worker, 'costCenterId') || !Dashboard.canEditField(TABLE_KEY, 'colHrCostCenter', worker.costCenterId ? String(worker.costCenterId) : '');
+    if (select.disabled) select.title = Dashboard.t(isPending(worker, 'costCenterId') ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => patchWorker(worker.id, { costCenterId: select.value ? Number(select.value) : null }));
+    td.appendChild(select);
+    return td;
+}
+
+// Usuario / Estado de Usuario — the login account auto-created alongside
+// this worker (see createHrWorker). Estado de Usuario shows Activo/
+// Inactivo plus an "Activar" icon that issues a brand-new password (see
+// activateHrWorkerUser) — the only place that ever happens, shown exactly
+// once in hr-credentials-modal.
+function buildUserStatusCell(worker) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colHrUserStatus';
+    const badge = document.createElement('span');
+    badge.className = `admin-badge admin-badge-${worker.userActive ? 'activo' : 'inactivo'}`;
+    badge.textContent = Dashboard.t(worker.userActive ? 'main.filterActive' : 'main.filterInactive');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'admin-icon-btn';
+    btn.innerHTML = `<i class="bx ${worker.userActive ? 'bx-key' : 'bx-check-shield'}" aria-hidden="true"></i>`;
+    btn.setAttribute('aria-label', Dashboard.t(worker.userActive ? 'main.hrResetPassword' : 'main.hrActivateUser'));
+    btn.title = Dashboard.t(worker.userActive ? 'main.hrResetPassword' : 'main.hrActivateUser');
+    btn.addEventListener('click', () => activateWorkerUser(worker.id));
+    td.append(badge, btn);
     return td;
 }
 
@@ -202,7 +321,7 @@ function buildRow(worker) {
 
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(worker.id);
-    tr.dataset.department = worker.department || '';
+    tr.dataset.departments = JSON.stringify(worker.departments || []);
     tr.dataset.status = worker.status || 'active';
     tr.append(
         textCell('colHrDbId', worker.dbId),
@@ -210,18 +329,24 @@ function buildRow(worker) {
         textCell('colHrFullName', worker.fullName),
         textCell('colHrPosition', worker.position),
         textCell('colHrStartDate', `${pad(day)}/${pad(month)}/${year}`),
-        textCell('colHrDepartment', Dashboard.t(DEPARTMENT_LABEL_KEYS[worker.department] || worker.department)),
+        buildDepartmentCell(worker),
         tdArea,
+        buildCostCenterCell(worker),
         tdEmail,
         tdPhone,
         buildStatusCell(worker),
+        textCell('colHrUsername', worker.username),
+        buildUserStatusCell(worker),
         buildActionsCell(worker, tr),
     );
     // Row-editable legend (see Dashboard.js renderDataTableColumnControls) —
     // same reasoning as OpTransVolCombustible.js: a row counts as editable
-    // if attachInlineEdit resolved at least one cell as unlocked, or Estatus
-    // (a raw <select>) isn't disabled.
-    tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell') || !!tr.querySelector('select:not(:disabled)'));
+    // if attachInlineEdit resolved at least one cell as unlocked, or a
+    // <select>/click-to-edit cell isn't disabled/locked.
+    tr.classList.toggle(
+        'data-table-row-editable',
+        !!tr.querySelector('td.editable-cell') || !!tr.querySelector('select:not(:disabled)'),
+    );
     return tr;
 }
 
@@ -266,7 +391,10 @@ function hrRowMatchesFilters(tr, filters) {
             .join(' ');
         if (!haystack.includes(filters.text)) return false;
     }
-    if (filters.department && tr.dataset.department !== filters.department) return false;
+    if (filters.department) {
+        const departments = JSON.parse(tr.dataset.departments || '[]');
+        if (!departments.includes(filters.department)) return false;
+    }
     if (filters.status && tr.dataset.status !== filters.status) return false;
     return true;
 }
@@ -280,11 +408,15 @@ function applyHrFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyHrFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyHrFilters);
 
+// --- "+ Nuevo Registro" ---------------------------------------------------
 const newRecordModal = document.getElementById('new-record-modal');
-const fullNameInput = document.getElementById('new-record-full-name');
+const givenNamesInput = document.getElementById('new-record-given-names');
+const surnamesInput = document.getElementById('new-record-surnames');
+const emailInput = document.getElementById('new-record-email');
 const positionInput = document.getElementById('new-record-position');
 const startDateInput = document.getElementById('new-record-start-date');
-const departmentSelect = document.getElementById('new-record-department');
+const costCenterSelect = document.getElementById('new-record-cost-center');
+const departmentsChecklist = document.getElementById('new-record-departments');
 const newRecordError = document.getElementById('new-record-error');
 const newRecordSaveBtn = document.getElementById('new-record-save');
 const newRecordCancelBtn = document.getElementById('new-record-cancel');
@@ -294,17 +426,22 @@ function closeNewRecordModal() {
 }
 
 function openNewRecordModal() {
-    fullNameInput.value = '';
+    givenNamesInput.value = '';
+    surnamesInput.value = '';
+    emailInput.value = '';
     positionInput.value = '';
     startDateInput.value = '';
-    departmentSelect.value = '';
+    populateCostCenterSelect(costCenterSelect, null);
+    buildDepartmentChecklist(departmentsChecklist, []);
     newRecordError.hidden = true;
     newRecordModal.hidden = false;
-    fullNameInput.focus();
+    givenNamesInput.focus();
 }
 
 async function saveNewRecord() {
-    const missing = [fullNameInput, positionInput, startDateInput, departmentSelect].some((el) => !el.value.trim());
+    const departments = getChecklistValues(departmentsChecklist);
+    const missing = [givenNamesInput, surnamesInput, emailInput, positionInput, startDateInput].some((el) => !el.value.trim())
+        || !departments.length;
     if (missing) {
         newRecordError.textContent = Dashboard.t('login.fieldRequired');
         newRecordError.hidden = false;
@@ -318,13 +455,21 @@ async function saveNewRecord() {
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
-                fullName: fullNameInput.value.trim(),
+                givenNames: givenNamesInput.value.trim(),
+                surnames: surnamesInput.value.trim(),
+                email: emailInput.value.trim(),
                 position: positionInput.value.trim(),
                 startDate: startDateInput.value,
-                department: departmentSelect.value,
+                departments,
+                costCenterId: costCenterSelect.value ? Number(costCenterSelect.value) : null,
             }),
         });
-        if (!res.ok) throw new Error('save failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            newRecordError.textContent = body.message || Dashboard.t('admin.saveError');
+            newRecordError.hidden = false;
+            return;
+        }
         const { worker } = await res.json();
         const tbody = getTbody();
         const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
@@ -346,6 +491,73 @@ newRecordModal.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !newRecordModal.hidden) closeNewRecordModal();
+});
+
+// --- Departamento(s) click-to-edit ----------------------------------------
+const editDepartmentsModal = document.getElementById('edit-departments-modal');
+const editDepartmentsList = document.getElementById('edit-departments-list');
+const editDepartmentsError = document.getElementById('edit-departments-error');
+const editDepartmentsSaveBtn = document.getElementById('edit-departments-save');
+const editDepartmentsCancelBtn = document.getElementById('edit-departments-cancel');
+let editingDepartmentsWorkerId = null;
+
+function openEditDepartmentsModal(worker) {
+    editingDepartmentsWorkerId = worker.id;
+    buildDepartmentChecklist(editDepartmentsList, worker.departments || []);
+    editDepartmentsError.hidden = true;
+    editDepartmentsModal.hidden = false;
+}
+function closeEditDepartmentsModal() {
+    editDepartmentsModal.hidden = true;
+    editingDepartmentsWorkerId = null;
+}
+editDepartmentsCancelBtn.addEventListener('click', closeEditDepartmentsModal);
+editDepartmentsModal.addEventListener('click', (event) => {
+    if (event.target === editDepartmentsModal) closeEditDepartmentsModal();
+});
+editDepartmentsSaveBtn.addEventListener('click', async () => {
+    const departments = getChecklistValues(editDepartmentsList);
+    if (!departments.length) {
+        editDepartmentsError.textContent = Dashboard.t('login.fieldRequired');
+        editDepartmentsError.hidden = false;
+        return;
+    }
+    editDepartmentsSaveBtn.disabled = true;
+    try {
+        await patchWorker(editingDepartmentsWorkerId, { departments });
+        closeEditDepartmentsModal();
+    } finally {
+        editDepartmentsSaveBtn.disabled = false;
+    }
+});
+
+// --- Activar Usuario / credenciales generadas -----------------------------
+const credentialsModal = document.getElementById('hr-credentials-modal');
+const credentialsUsername = document.getElementById('hr-credentials-username');
+const credentialsPassword = document.getElementById('hr-credentials-password');
+const credentialsCloseBtn = document.getElementById('hr-credentials-close');
+
+async function activateWorkerUser(workerId) {
+    try {
+        const res = await fetch(`/api/business/hr-workers/${workerId}/activate-user`, { method: 'POST', credentials: 'include' });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            alert(body.message || Dashboard.t('admin.saveError'));
+            return;
+        }
+        const { generated } = await res.json();
+        credentialsUsername.textContent = generated.username;
+        credentialsPassword.textContent = generated.password;
+        credentialsModal.hidden = false;
+        await refreshTable();
+    } catch (err) {
+        console.error('Mi Recurso Humano: failed to activate user', err);
+        alert(Dashboard.t('admin.saveError'));
+    }
+}
+credentialsCloseBtn.addEventListener('click', () => { credentialsModal.hidden = true; });
+credentialsModal.addEventListener('click', (event) => {
+    if (event.target === credentialsModal) credentialsModal.hidden = true;
 });
 
 // Inserted at the LEFT of the zoom/pin/visibility toolbar Dashboard.js

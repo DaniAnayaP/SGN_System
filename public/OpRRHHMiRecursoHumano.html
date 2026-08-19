@@ -360,15 +360,18 @@
                             <th data-i18n="main.colHrStartDate" data-col="colHrStartDate">Start Date</th>
                             <th data-i18n="main.colHrDepartment" data-col="colHrDepartment">Assigned Department</th>
                             <th data-i18n="main.colHrArea" data-col="colHrArea">Assigned Area</th>
+                            <th data-i18n="main.colHrCostCenter" data-col="colHrCostCenter">Cost Center</th>
                             <th data-i18n="main.colHrEmail" data-col="colHrEmail">Email</th>
                             <th data-i18n="main.colHrPhone" data-col="colHrPhone">Phone</th>
                             <th data-i18n="main.colHrStatus" data-col="colHrStatus">Status</th>
+                            <th data-i18n="main.colHrUsername" data-col="colHrUsername">User</th>
+                            <th data-i18n="main.colHrUserStatus" data-col="colHrUserStatus">User Status</th>
                             <th data-col="actions"></th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="data-table-empty-cell" colspan="11">
+                            <td class="data-table-empty-cell" colspan="14">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -431,14 +434,28 @@
         </div>
     </div>
 
+    <!-- Nombre(s)/Apellidos are separate fields (not one "Nombre Completo")
+         because the auto-generated username needs to know exactly which
+         words are given names vs. apellidos — see computeHrUsername in
+         db.js. Correo is required up front too, unlike the rest of this
+         form's "fill in later" fields, since the linked login account
+         (created in this same save, see createHrWorker) needs one. -->
     <div class="modal-overlay" id="new-record-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-record-modal-title">
             <h3 id="new-record-modal-title" data-i18n="main.newHireRecord">New Hire</h3>
-            <p class="admin-hint" data-i18n="main.newRecordHint">The rest of the fields can be filled in later, directly from the table row.</p>
+            <p class="admin-hint" data-i18n="main.hrNewRecordHint">Phone and status can be filled in later, directly from the table row.</p>
             <div class="admin-form-grid">
                 <div class="admin-field">
-                    <label for="new-record-full-name" data-i18n="main.colHrFullName">Full Name</label>
-                    <input type="text" id="new-record-full-name" required>
+                    <label for="new-record-given-names" data-i18n="main.hrGivenNames">Given name(s)</label>
+                    <input type="text" id="new-record-given-names" required>
+                </div>
+                <div class="admin-field">
+                    <label for="new-record-surnames" data-i18n="main.hrSurnames">Surname(s)</label>
+                    <input type="text" id="new-record-surnames" required>
+                </div>
+                <div class="admin-field">
+                    <label for="new-record-email" data-i18n="main.colHrEmail">Email</label>
+                    <input type="email" id="new-record-email" required>
                 </div>
                 <div class="admin-field">
                     <label for="new-record-position" data-i18n="main.colHrPosition">Position</label>
@@ -449,27 +466,63 @@
                     <input type="date" id="new-record-start-date" required>
                 </div>
                 <div class="admin-field">
-                    <label for="new-record-department" data-i18n="main.colHrDepartment">Assigned Department</label>
-                    <select id="new-record-department" required>
-                        <option value="" data-i18n="main.fuelSelectReason">Select...</option>
-                        <option value="steering-committee" data-i18n="menu.steeringCommittee">Steering Committee</option>
-                        <option value="general-management" data-i18n="menu.generalManagement">General Management</option>
-                        <option value="management-control" data-i18n="menu.managementControl">Management Control</option>
-                        <option value="supply-chain" data-i18n="menu.supplyChain">Supply Chain</option>
-                        <option value="purchasing" data-i18n="menu.purchasing">Purchasing</option>
-                        <option value="commercial" data-i18n="menu.commercial">Commercial</option>
-                        <option value="marketing" data-i18n="menu.marketing">Marketing</option>
-                        <option value="human-resources" data-i18n="menu.humanResources">Human Resources</option>
-                        <option value="accounting" data-i18n="menu.accounting">Accounting</option>
-                        <option value="finance" data-i18n="menu.finance">Finance</option>
-                        <option value="certifications" data-i18n="menu.certifications">Certifications</option>
+                    <label for="new-record-cost-center" data-i18n="main.colHrCostCenter">Cost Center</label>
+                    <select id="new-record-cost-center">
+                        <option value="" data-i18n="main.hrNoCostCenter">None</option>
                     </select>
+                </div>
+            </div>
+            <div class="admin-field" style="margin-top: 1rem;">
+                <label data-i18n="main.colHrDepartment">Assigned Department</label>
+                <div class="hr-department-checklist" id="new-record-departments">
+                    <!-- rendered at runtime -->
                 </div>
             </div>
             <div id="new-record-error" class="admin-error" role="alert" hidden></div>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
                 <button type="button" class="btn" id="new-record-save" data-i18n="admin.save">Save</button>
                 <button type="button" class="btn btn-secondary" id="new-record-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Click-to-edit for the Departamento(s) column later — same checklist
+         widget as new-record-modal's, just reused against an existing row
+         instead of a fresh one. -->
+    <div class="modal-overlay" id="edit-departments-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="edit-departments-modal-title">
+            <h3 id="edit-departments-modal-title" data-i18n="main.colHrDepartment">Assigned Department</h3>
+            <div class="hr-department-checklist" id="edit-departments-list">
+                <!-- rendered at runtime -->
+            </div>
+            <div id="edit-departments-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="edit-departments-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="edit-departments-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- One-time credentials display after "Activar" (see
+         activateHrWorkerUser in db.js) — same convention as the client
+         admin auto-provisioning banner: the password is only ever shown
+         here, once, never recoverable afterward. -->
+    <div class="modal-overlay" id="hr-credentials-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="hr-credentials-modal-title">
+            <h3 id="hr-credentials-modal-title" data-i18n="main.hrCredentialsTitle">User activated</h3>
+            <p class="admin-hint" data-i18n="main.hrCredentialsHint">Copy this password now — it won't be shown again.</p>
+            <dl class="user-info-fields">
+                <div class="user-info-field">
+                    <dt data-i18n="business.username">Username</dt>
+                    <dd id="hr-credentials-username">—</dd>
+                </div>
+                <div class="user-info-field">
+                    <dt data-i18n="business.password">Password</dt>
+                    <dd id="hr-credentials-password">—</dd>
+                </div>
+            </dl>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="hr-credentials-close" data-i18n="admin.close">Close</button>
             </div>
         </div>
     </div>

@@ -733,6 +733,40 @@ body.dark-mode .admin-badge-prospecto{
     font-weight: 500;
 }
 
+/* Mi Recurso Humano: Departamento(s) Asignado(s) multi-select — a worker
+   can belong to more than one, so a plain <select> doesn't fit; this is a
+   flat scrollable checkbox list instead (see OpRRHHMiRecursoHumano.html's
+   new-record-modal and edit-departments-modal). */
+.hr-department-checklist{
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 12rem;
+    overflow-y: auto;
+    margin-top: 0.4rem;
+    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+}
+.hr-department-checklist label{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.82rem;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    border-radius: 0.3rem;
+}
+.hr-department-checklist label:hover{
+    background-color: var(--color-bg);
+}
+.hr-department-checklist input[type="checkbox"]{
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
 /* Toggle switch */
 .admin-switch{
     position: relative;
