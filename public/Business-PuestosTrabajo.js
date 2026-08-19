@@ -10,6 +10,7 @@ const form = document.getElementById('jp-form');
 const idField = document.getElementById('jp-id');
 const nameField = document.getElementById('jp-name');
 const abbreviationField = document.getElementById('jp-abbreviation');
+const costCenterField = document.getElementById('jp-cost-center');
 const statusField = document.getElementById('jp-status');
 const errorBanner = document.getElementById('jp-form-error');
 const submitBtn = document.getElementById('jp-form-submit');
@@ -18,6 +19,38 @@ const tableBody = document.getElementById('jp-table-body');
 const emptyMsg = document.getElementById('jp-empty');
 
 let jobPositions = [];
+let costCenters = [];
+
+async function loadCostCenters() {
+    try {
+        const res = await fetch('/api/business/cost-centers', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        costCenters = data.costCenters || [];
+    } catch (err) {
+        console.error('Puestos de Trabajo: failed to load cost centers', err);
+        costCenters = [];
+    }
+}
+function populateCostCenterSelect(select, selectedId) {
+    select.innerHTML = '';
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = Dashboard.t('main.hrNoCostCenter');
+    select.appendChild(noneOpt);
+    costCenters.forEach((cc) => {
+        const opt = document.createElement('option');
+        opt.value = cc.id;
+        opt.textContent = `${cc.code} - ${cc.name}`;
+        select.appendChild(opt);
+    });
+    select.value = selectedId ? String(selectedId) : '';
+}
+function costCenterLabel(costCenterId) {
+    if (!costCenterId) return '—';
+    const cc = costCenters.find((c) => c.id === costCenterId);
+    return cc ? `${cc.code} - ${cc.name}` : '—';
+}
 
 function showError(message) {
     errorBanner.textContent = message;
@@ -31,6 +64,7 @@ function clearError() {
 function resetForm() {
     form.reset();
     idField.value = '';
+    populateCostCenterSelect(costCenterField, null);
     statusField.value = 'active';
     submitBtn.textContent = Dashboard.t('business.addJobPosition');
     cancelBtn.hidden = true;
@@ -55,6 +89,10 @@ function renderJobPositions() {
         const tdAbbreviation = document.createElement('td');
         tdAbbreviation.dataset.col = 'jpAbbreviation';
         tdAbbreviation.textContent = jp.abbreviation || '—';
+
+        const tdCostCenter = document.createElement('td');
+        tdCostCenter.dataset.col = 'jpCostCenter';
+        tdCostCenter.textContent = costCenterLabel(jp.cost_center_id);
 
         const tdStatus = document.createElement('td');
         tdStatus.dataset.col = 'jpStatus';
@@ -87,7 +125,7 @@ function renderJobPositions() {
         deleteBtn.addEventListener('click', () => removeJobPosition(jp));
         tdActions.append(historyBtn, editBtn, deleteBtn);
 
-        tr.append(tdName, tdAbbreviation, tdStatus, tdActions);
+        tr.append(tdName, tdAbbreviation, tdCostCenter, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
     applyJpFilters();
@@ -117,6 +155,7 @@ function startEdit(jp) {
     idField.value = jp.id;
     nameField.value = jp.name;
     abbreviationField.value = jp.abbreviation || '';
+    populateCostCenterSelect(costCenterField, jp.cost_center_id);
     statusField.value = jp.status;
     submitBtn.textContent = Dashboard.t('admin.save');
     cancelBtn.hidden = false;
@@ -158,6 +197,7 @@ form.addEventListener('submit', async (event) => {
         return;
     }
     const abbreviation = abbreviationField.value.trim();
+    const costCenterId = costCenterField.value ? Number(costCenterField.value) : null;
     const status = statusField.value;
 
     const editingId = idField.value;
@@ -170,7 +210,7 @@ form.addEventListener('submit', async (event) => {
             method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, abbreviation, status }),
+            body: JSON.stringify({ name, abbreviation, costCenterId, status }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -207,6 +247,7 @@ document.addEventListener('dashboard:language-changed', () => {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'cat-catalogos-puestos-trabajo' });
         if (!role) return;
+        await loadCostCenters();
         await loadJobPositions();
     } catch (err) {
         console.error('Business (Puestos de Trabajo) failed to initialize:', err);

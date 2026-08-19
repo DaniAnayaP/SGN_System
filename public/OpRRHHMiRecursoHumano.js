@@ -360,7 +360,7 @@ function buildRow(worker) {
     tr.dataset.status = worker.status || 'active';
     tr.append(
         textCell('colHrDbId', worker.dbId),
-        textCell('colHrRecordId', String(worker.recordNumber)),
+        textCell('colHrRecordId', worker.recordCode || String(worker.recordNumber)),
         textCell('colHrFullName', worker.fullName),
         textCell('colHrPosition', worker.position),
         textCell('colHrStartDate', `${pad(day)}/${pad(month)}/${year}`),

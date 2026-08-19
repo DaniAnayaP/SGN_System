@@ -1513,9 +1513,15 @@ app.get('/api/business/job-positions', requireAuth, (req, res) => {
 app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, res) => {
     const error = validateJobPositionBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, abbreviation, status } = req.body;
+    const { name, abbreviation, costCenterId, status } = req.body;
+    if (costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId)) {
+        return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
+    }
     try {
-        const jobPosition = createJobPosition({ clientId: req.user.clientId, name: name.trim(), abbreviation: (abbreviation || '').trim(), status });
+        const jobPosition = createJobPosition({
+            clientId: req.user.clientId, name: name.trim(), abbreviation: (abbreviation || '').trim(),
+            costCenterId: costCenterId || null, status,
+        });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: jobPosition.id,
             recordLabel: jobPosition.name, action: 'create', changedBy: req.user.name,
@@ -1534,10 +1540,14 @@ app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (r
     if (!existing) return res.status(404).json({ message: 'Job position not found.' });
     const error = validateJobPositionBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, abbreviation, status } = req.body;
+    const { name, abbreviation, costCenterId, status } = req.body;
+    if (costCenterId !== undefined && costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId)) {
+        return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
+    }
     const patch = {
         name: name.trim(),
         abbreviation: abbreviation !== undefined ? abbreviation.trim() : existing.abbreviation,
+        costCenterId: costCenterId !== undefined ? costCenterId : existing.cost_center_id,
         status: status ?? existing.status,
     };
     // requireClientAdmin-gated: same reasoning as Centros de Costo's own
@@ -1666,6 +1676,7 @@ function mapHrWorker(row, pendingByRecord) {
         id: row.id,
         dbId: row.db_id,
         recordNumber: row.record_number,
+        recordCode: row.record_code,
         givenNames: row.given_names,
         surnames: row.surnames,
         fullName: row.full_name,

@@ -94,6 +94,7 @@ db.exec(`
         client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
         name          TEXT NOT NULL,
         abbreviation  TEXT NOT NULL DEFAULT '',
+        cost_center_id INTEGER REFERENCES cost_centers(id),
         status        TEXT NOT NULL DEFAULT 'active',
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE(client_id, name)
@@ -178,6 +179,7 @@ db.exec(`
         client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
         db_id          TEXT NOT NULL,
         record_number  INTEGER NOT NULL,
+        record_code    TEXT NOT NULL DEFAULT '',
         full_name      TEXT NOT NULL,
         position       TEXT NOT NULL,
         start_date     TEXT NOT NULL,
@@ -701,11 +703,17 @@ if (!hrWorkerColumns.some((c) => c.name === 'cost_center_id')) {
 if (!hrWorkerColumns.some((c) => c.name === 'user_id')) {
     db.exec('ALTER TABLE hr_workers ADD COLUMN user_id INTEGER REFERENCES users(id)');
 }
+if (!hrWorkerColumns.some((c) => c.name === 'record_code')) {
+    db.exec("ALTER TABLE hr_workers ADD COLUMN record_code TEXT NOT NULL DEFAULT ''");
+}
 
 // abbreviation added after job_positions already shipped once.
 const jobPositionColumns = db.prepare('PRAGMA table_info(job_positions)').all();
 if (!jobPositionColumns.some((c) => c.name === 'abbreviation')) {
     db.exec("ALTER TABLE job_positions ADD COLUMN abbreviation TEXT NOT NULL DEFAULT ''");
+}
+if (!jobPositionColumns.some((c) => c.name === 'cost_center_id')) {
+    db.exec('ALTER TABLE job_positions ADD COLUMN cost_center_id INTEGER REFERENCES cost_centers(id)');
 }
 
 // requested_by/authorized_by added after data_table_changes already shipped
@@ -1322,24 +1330,25 @@ function getJobPositionById(id, clientId) {
     return db.prepare('SELECT * FROM job_positions WHERE id = ? AND client_id = ?').get(id, clientId);
 }
 
-function createJobPosition({ clientId, name, abbreviation, status }) {
+function createJobPosition({ clientId, name, abbreviation, costCenterId, status }) {
     const result = db
-        .prepare('INSERT INTO job_positions (client_id, name, abbreviation, status) VALUES (@clientId, @name, @abbreviation, @status)')
-        .run({ clientId, name, abbreviation: abbreviation || '', status: status || 'active' });
+        .prepare('INSERT INTO job_positions (client_id, name, abbreviation, cost_center_id, status) VALUES (@clientId, @name, @abbreviation, @costCenterId, @status)')
+        .run({ clientId, name, abbreviation: abbreviation || '', costCenterId: costCenterId || null, status: status || 'active' });
     return getJobPositionById(result.lastInsertRowid, clientId);
 }
 
 const JOB_POSITION_FIELDS = {
     name: { column: 'name', fieldKey: 'business.jobPositionName' },
     abbreviation: { column: 'abbreviation', fieldKey: 'business.jobPositionAbbreviation' },
+    costCenterId: { column: 'cost_center_id', fieldKey: 'main.colHrCostCenter' },
     status: { column: 'status', fieldKey: 'business.jobPositionStatus' },
 };
 
-function updateJobPosition(id, clientId, { name, abbreviation, status }) {
+function updateJobPosition(id, clientId, { name, abbreviation, costCenterId, status }) {
     db.prepare(`
-        UPDATE job_positions SET name = @name, abbreviation = @abbreviation, status = @status
+        UPDATE job_positions SET name = @name, abbreviation = @abbreviation, cost_center_id = @costCenterId, status = @status
         WHERE id = @id AND client_id = @clientId
-    `).run({ id, clientId, name, abbreviation: abbreviation || '', status });
+    `).run({ id, clientId, name, abbreviation: abbreviation || '', costCenterId: costCenterId || null, status });
     return getJobPositionById(id, clientId);
 }
 
@@ -1457,6 +1466,24 @@ function computeHrUsername(givenNames, surnames) {
     return `${g1}${g2}${s1}${s2}HRP`;
 }
 
+// "# Único de Registro" display format, confirmed with the user: 3 letters
+// of the company's own abbreviation + the assigned Centro de Costos' code
+// (or SCC, "sin centro de costos", when none is assigned) + a fixed
+// 3-letter code for this screen + the creation consecutivo (record_number).
+// Frozen at creation time (like db_id) rather than recomputed on every
+// render — a client renaming its abbreviation, or a cost center's code
+// changing, later must not retroactively rewrite an already-issued
+// worker's record number.
+const HR_RECORD_SCREEN_CODE = 'MRH';
+function computeHrRecordCode(clientId, costCenterId, recordNumber) {
+    const client = getClientById(clientId);
+    const companyCode = stripAccents(client?.company_abbreviation || client?.company_name || '')
+        .replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3) || 'CLI';
+    const costCenter = costCenterId ? getCostCenterById(costCenterId, clientId) : null;
+    const costCenterCode = costCenter ? costCenter.code : 'SCC';
+    return `${companyCode}${costCenterCode}${HR_RECORD_SCREEN_CODE}${recordNumber}`;
+}
+
 // Also creates the worker's own login account in the same step — "en
 // automático se crea el único Usuario asignado" — but INACTIVE with an
 // unusable throwaway password until activateHrWorkerUser below is called
@@ -1471,6 +1498,7 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM hr_workers WHERE client_id = ?')
         .get(clientId).n;
+    const recordCode = computeHrRecordCode(clientId, costCenterId, recordNumber);
 
     const create = db.transaction(() => {
         const user = createUser({
@@ -1480,16 +1508,16 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
         const result = db
             .prepare(`
                 INSERT INTO hr_workers (
-                    client_id, db_id, record_number, given_names, surnames, full_name,
+                    client_id, db_id, record_number, record_code, given_names, surnames, full_name,
                     position, start_date, department, departments, cost_center_id, email, user_id
                 )
                 VALUES (
-                    @clientId, @dbId, @recordNumber, @givenNames, @surnames, @fullName,
+                    @clientId, @dbId, @recordNumber, @recordCode, @givenNames, @surnames, @fullName,
                     @position, @startDate, @department, @departments, @costCenterId, @email, @userId
                 )
             `)
             .run({
-                clientId, dbId: generateBigDateId(), recordNumber, givenNames, surnames, fullName,
+                clientId, dbId: generateBigDateId(), recordNumber, recordCode, givenNames, surnames, fullName,
                 position, startDate,
                 // Legacy single-value column, kept NOT NULL by its original
                 // schema (no default) — no longer read anywhere (departments

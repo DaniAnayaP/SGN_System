@@ -323,6 +323,12 @@
                         <input id="jp-abbreviation" name="abbreviation" type="text">
                     </div>
                     <div class="admin-field">
+                        <label for="jp-cost-center" data-i18n="main.colHrCostCenter">Cost Center</label>
+                        <select id="jp-cost-center">
+                            <option value="" data-i18n="main.hrNoCostCenter">None</option>
+                        </select>
+                    </div>
+                    <div class="admin-field">
                         <label for="jp-status" data-i18n="business.jobPositionStatus">Status</label>
                         <select id="jp-status">
                             <option value="active" data-i18n="main.filterActive">Active</option>
@@ -366,6 +372,7 @@
                         <tr>
                             <th data-i18n="business.jobPositionName" data-col="jpName">Position Name</th>
                             <th data-i18n="business.jobPositionAbbreviation" data-col="jpAbbreviation">Position Abbreviation</th>
+                            <th data-i18n="main.colHrCostCenter" data-col="jpCostCenter">Cost Center</th>
                             <th data-i18n="business.jobPositionStatus" data-col="jpStatus">Status</th>
                             <th data-col="actions"></th>
                         </tr>
