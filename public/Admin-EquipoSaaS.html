@@ -379,22 +379,24 @@
         </div>
     </div>
 
-    <!-- Árbol de accesos del SaaS por cuenta — lista plana (no hay
-         departamentos/áreas aquí, solo las 3 pantallas del SaaS + el
-         permiso granular "Autorizar Planes"). -->
+    <!-- Árbol de accesos del SaaS por cuenta — mismo perm-tree-row (chevron
+         + checkbox) que plan-tree-modal en Admin-Planes.html, solo que con
+         datos fijos (3 pantallas del SaaS, cada una con sus 4 acciones)
+         en vez de leídos de menu.json — ver renderTreeList en
+         Admin-EquipoSaaS.js. -->
     <div class="modal-overlay" id="saas-user-tree-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="saas-user-tree-modal-title">
             <h3 id="saas-user-tree-modal-title" data-i18n="admin.saasTreeTitle">Access for this SaaS account</h3>
-            <p class="admin-hint" data-i18n="admin.saasTreeHint">Check nothing to leave this account unrestricted (sees/does everything) — same as admin/admin today.</p>
-            <ul class="admin-module-list" id="saas-user-tree-list">
-                <!-- rendered at runtime -->
-            </ul>
-            <div id="saas-user-tree-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+            <div class="admin-form-actions">
                 <button type="button" class="btn" id="saas-user-tree-save" data-i18n="admin.save">Save</button>
                 <button type="button" class="btn btn-secondary" id="saas-user-tree-close" data-i18n="admin.cancel">Close</button>
             </div>
             <p id="saas-user-tree-save-status" class="admin-save-status"></p>
+            <p class="admin-hint" data-i18n="admin.saasTreeHint">Check nothing to leave this account unrestricted (sees/does everything) — same as admin/admin today.</p>
+            <div id="saas-user-tree-list">
+                <!-- rendered at runtime -->
+            </div>
+            <div id="saas-user-tree-error" class="admin-error" role="alert" hidden></div>
         </div>
     </div>
 

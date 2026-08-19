@@ -223,26 +223,17 @@ newForm.addEventListener('submit', async (event) => {
 });
 
 // --- Access tree per SaaS account ----------------------------------------
-function buildTreeRow(labelText, checked, onChange) {
-    const li = document.createElement('li');
-    li.className = 'admin-module-row';
-    const name = document.createElement('span');
-    name.className = 'admin-module-name';
-    name.textContent = labelText;
-    const label = document.createElement('label');
-    label.className = 'admin-switch';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = checked;
-    input.addEventListener('change', () => onChange(input.checked));
-    const track = document.createElement('span');
-    track.className = 'admin-switch-track';
-    label.append(input, track);
-    li.append(name, label);
-    return li;
-}
-
+// Same .perm-tree-row markup PermissionTree.js/PermissionCostTree.js use
+// for every other checkbox tree in the app (chevron toggle + checkbox,
+// indented by depth) — NOT that component itself, since this tree's shape
+// is fixed (3 screens, up to 4 actions each) rather than read from
+// menu.json, so a small purpose-built renderer is simpler here than
+// reusing the department/área/apartado/pantalla/columna machinery built
+// for the much bigger client-side tree. Depth 0 = screen (its checkbox
+// checks/unchecks every action under it at once, indeterminate when only
+// some are), depth 1 = one action leaf.
 let treeGrants = [];
+let expandedScreens = new Set();
 
 function hasGrant(itemId, subItemId) {
     return treeGrants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : !g.subItemId));
@@ -252,25 +243,61 @@ function setGrant(itemId, subItemId, checked) {
     if (checked) treeGrants.push({ itemId, subItemId: subItemId || null });
 }
 
-function buildTreeGroupHeader(labelText) {
-    const li = document.createElement('li');
-    li.className = 'admin-module-group-title';
-    li.textContent = labelText;
-    return li;
+function buildPermTreeRow(labelText, depth, toggle, checked, indeterminate, onChange) {
+    const row = document.createElement('div');
+    row.className = `perm-tree-row perm-tree-depth-${depth}`;
+
+    if (toggle) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'perm-tree-toggle';
+        btn.setAttribute('aria-expanded', String(toggle.expanded));
+        const icon = document.createElement('i');
+        icon.className = 'bx bx-chevron-down';
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.addEventListener('click', () => { toggle.onToggle(); renderTreeList(); });
+        row.appendChild(btn);
+    } else {
+        const spacer = document.createElement('span');
+        spacer.className = 'perm-tree-toggle-spacer';
+        row.appendChild(spacer);
+    }
+
+    const label = document.createElement('label');
+    label.className = 'perm-tree-check';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = checked;
+    input.indeterminate = !!indeterminate;
+    input.addEventListener('change', () => { onChange(input.checked); renderTreeList(); });
+    const span = document.createElement('span');
+    span.textContent = labelText;
+    label.append(input, span);
+    row.appendChild(label);
+
+    return row;
 }
 
 function renderTreeList() {
     treeList.innerHTML = '';
     SAAS_PERMISSION_CATALOG.forEach((screen) => {
-        treeList.appendChild(buildTreeGroupHeader(Dashboard.t(screen.labelKey)));
+        const subItemIds = screen.actions.map((a) => a.subItemId);
+        const checkedCount = subItemIds.filter((subItemId) => hasGrant(screen.itemId, subItemId)).length;
+        const expanded = expandedScreens.has(screen.itemId);
+        treeList.appendChild(buildPermTreeRow(
+            Dashboard.t(screen.labelKey), 0,
+            { expanded, onToggle: () => (expanded ? expandedScreens.delete(screen.itemId) : expandedScreens.add(screen.itemId)) },
+            checkedCount === subItemIds.length, checkedCount > 0 && checkedCount < subItemIds.length,
+            (checked) => subItemIds.forEach((subItemId) => setGrant(screen.itemId, subItemId, checked)),
+        ));
+        if (!expanded) return;
         screen.actions.forEach((action) => {
-            const row = buildTreeRow(
-                Dashboard.t(action.labelKey),
-                hasGrant(screen.itemId, action.subItemId),
+            treeList.appendChild(buildPermTreeRow(
+                Dashboard.t(action.labelKey), 1, null,
+                hasGrant(screen.itemId, action.subItemId), false,
                 (checked) => setGrant(screen.itemId, action.subItemId, checked),
-            );
-            row.style.paddingLeft = '1.5rem';
-            treeList.appendChild(row);
+            ));
         });
     });
 }
@@ -285,6 +312,7 @@ async function openTreeModal(user) {
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         treeGrants = data.grants || [];
+        expandedScreens = new Set();
         renderTreeList();
         treeModal.hidden = false;
     } catch {
