@@ -361,16 +361,22 @@
         </section>
     </main>
 
-    <!-- "Editar" — plan ROW DATA only (name/description/createdAt/createdBy/
-         endDate/costCentersLimit), never the access tree — see
-         plan-tree-modal below for that, a completely separate flow. The
-         module list used to live here too, but a department/button now
-         turns on automatically the moment any permission under it is
-         granted in the access tree (see syncPlanModulesFromGrants in
-         db.js) — nothing left here to toggle by hand. -->
+    <!-- Same modal serves BOTH "+ Agregar Plan Nuevo" and "Editar" — title/
+         submit-button text and whether #plan-edit-only-fields shows switch
+         based on whether plan-id is set (see openCreateModal/openEditModal
+         in Admin-Planes.js). Creating only ever asks for name/description
+         (createdAt/createdBy/endDate/costCentersLimit are meaningless
+         before a plan exists — createdBy is even stamped server-side from
+         the session, never client-supplied at creation); editing shows all
+         of them. Never the access tree either way — see plan-tree-modal
+         below for that, a completely separate flow. The module list used
+         to live here too, but a department/button now turns on
+         automatically the moment any permission under it is granted in
+         the access tree (see syncPlanModulesFromGrants in db.js) —
+         nothing left here to toggle by hand. -->
     <div class="modal-overlay" id="plan-edit-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-edit-modal-title">
-            <h3 id="plan-edit-modal-title" data-i18n="admin.planEditTitle">Edit plan</h3>
+            <h3 id="plan-edit-modal-title">Edit plan</h3>
             <form id="plan-form" class="admin-form" novalidate>
                 <input type="hidden" id="plan-id" value="">
                 <div class="admin-form-grid">
@@ -382,6 +388,8 @@
                         <label for="plan-description" data-i18n="admin.planDescription">Description</label>
                         <input id="plan-description" name="description" type="text">
                     </div>
+                </div>
+                <div class="admin-form-grid" id="plan-edit-only-fields">
                     <div class="admin-field">
                         <label for="plan-created-at" data-i18n="admin.planCreatedAt">Creation date</label>
                         <input id="plan-created-at" name="createdAt" type="date">

@@ -5,9 +5,11 @@
 // columnas it bundles in — same PermissionTree.js component
 // Business-Roles.js already uses for a client's profiles, mounted here
 // against a plan instead). These names are what populate the "Plan /
-// paquete" select on Clientes Nuevos (Admin-SaaS.html). Creating a brand
-// new plan lives on its own page instead (+ Agregar Plan Nuevo,
-// Admin-PlanNuevo.js). Shell (sidebar, i18n, settings, logout) comes from
+// paquete" select on Clientes Nuevos (Admin-SaaS.html). The edit modal
+// (#plan-edit-modal) does double duty as the create modal too — see
+// openEditModal() vs openCreateModal(), both just populate/clear the same
+// form and open it; the submit handler branches POST vs PATCH on whether
+// an id is set. Shell (sidebar, i18n, settings, logout) comes from
 // Dashboard.js.
 //
 // Lifecycle: a new plan starts in Revisión. Its access tree is editable
@@ -24,11 +26,12 @@
 // (from GET /api/admin/plans) reflects that here so the UI can say so
 // instead of silently allowing edits with no explanation.
 //
-// "Editar" only ever touches ROW DATA (name/description/costCentersLimit/
-// modules) — the access tree is a completely separate flow (the shield
-// icon), never reachable from the edit form. Both open as their own modal
-// ("pantalla alterna"), not a panel stacked under the table — same pattern
-// as "Accesos del Administrador" on Nuestros Clientes.
+// "Editar"/"+ Agregar Plan Nuevo" only ever touch ROW DATA (name/
+// description/createdAt/createdBy/endDate/costCentersLimit) — the access
+// tree is a completely separate flow (the shield icon), never reachable
+// from this form. Both edit and create open as their own modal ("pantalla
+// alterna"), not a panel stacked under the table — same pattern as
+// "Accesos del Administrador" on Nuestros Clientes.
 //
 // Access note: the sidebar only shows this page's link to admins with the
 // 'saas-clients'/'saas-plans' grant (see SAAS_SCREEN_GRANT_PATHS in
@@ -38,6 +41,8 @@
 // ---------------------------------------------------------------------------
 
 const editModal = document.getElementById('plan-edit-modal');
+const editModalTitle = document.getElementById('plan-edit-modal-title');
+const editOnlyFields = document.getElementById('plan-edit-only-fields');
 const form = document.getElementById('plan-form');
 const idField = document.getElementById('plan-id');
 const nameField = document.getElementById('plan-name');
@@ -331,6 +336,23 @@ function openEditModal(plan) {
     createdByField.value = plan.createdBy || '';
     endDateField.value = plan.endDate || '';
     costCentersLimitField.value = plan.costCentersLimit || 0;
+    editOnlyFields.hidden = false;
+    editModalTitle.textContent = Dashboard.t('admin.planEditTitle');
+    submitBtn.textContent = Dashboard.t('admin.save');
+    clearError();
+    editModal.hidden = false;
+}
+
+// "+ Agregar Plan Nuevo" — same modal as Editar, "pantalla alterna" style,
+// but only asks for name/description (see #plan-edit-only-fields' own
+// comment in Admin-Planes.html for why the rest doesn't apply yet).
+function openCreateModal() {
+    form.reset();
+    idField.value = '';
+    costCentersLimitField.value = 0;
+    editOnlyFields.hidden = true;
+    editModalTitle.textContent = Dashboard.t('admin.addPlan');
+    submitBtn.textContent = Dashboard.t('admin.addPlan');
     clearError();
     editModal.hidden = false;
 }
@@ -383,11 +405,12 @@ form.addEventListener('submit', async (event) => {
     const endDate = endDateField.value || null;
 
     const editingId = idField.value;
+    const isCreate = !editingId;
 
     submitBtn.disabled = true;
     try {
-        const res = await fetch(`/api/admin/plans/${editingId}`, {
-            method: 'PATCH',
+        const res = await fetch(isCreate ? '/api/admin/plans' : `/api/admin/plans/${editingId}`, {
+            method: isCreate ? 'POST' : 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({ name, description, costCentersLimit, createdAt, createdBy, endDate }),
@@ -401,9 +424,16 @@ form.addEventListener('submit', async (event) => {
             }
             return;
         }
-        const { plan } = await res.json();
-        plans = plans.map((p) => (p.id === plan.id ? plan : p));
-        renderPlans();
+        if (isCreate) {
+            // POST's response plan is missing the computed fields (like
+            // accessPermissionsCost) PATCH's response includes — reload
+            // instead of splicing in an incomplete object.
+            await loadPlans();
+        } else {
+            const { plan } = await res.json();
+            plans = plans.map((p) => (p.id === plan.id ? plan : p));
+            renderPlans();
+        }
         closeEditModal();
     } catch {
         showError(Dashboard.t('admin.saveError'));
@@ -498,10 +528,9 @@ function showTreeError(el, message) {
 // "+ Nuevo Plan" — same toolbar-button placement/style as "+ Nuevo
 // Registro" on Registro Combustible (Inicio-en.css .data-table-new-record-btn,
 // prepended into the .data-table-zoom bar Dashboard.js already renders for
-// every .data-table-wrapper), but this one just navigates to the existing
-// dedicated creation page (Admin-PlanNuevo.html) instead of opening a
-// modal — Nuestros Planes never had an inline create flow, no reason to
-// build one now just for this button.
+// every .data-table-wrapper) — opens the same edit modal in create mode
+// ("pantalla alterna"), same pattern as Editar, instead of navigating to a
+// separate page (Admin-PlanNuevo.html/.js, now removed).
 function renderNewPlanButton() {
     const wrapper = document.querySelector('[data-table-id="mis-planes"]');
     const toolbar = wrapper?.previousElementSibling;
@@ -511,12 +540,17 @@ function renderNewPlanButton() {
     btn.type = 'button';
     btn.className = 'data-table-new-record-btn';
     btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="menu.addPlanNew">${Dashboard.t('menu.addPlanNew')}</span>`;
-    btn.addEventListener('click', () => { window.location.href = 'Admin-PlanNuevo.html'; });
+    btn.addEventListener('click', openCreateModal);
     toolbar.prepend(btn);
 }
 
 document.addEventListener('dashboard:language-changed', () => {
     renderPlans();
+    if (!editModal.hidden) {
+        const isCreate = !idField.value;
+        editModalTitle.textContent = Dashboard.t(isCreate ? 'admin.addPlan' : 'admin.planEditTitle');
+        submitBtn.textContent = Dashboard.t(isCreate ? 'admin.addPlan' : 'admin.save');
+    }
 });
 
 (async function init() {

@@ -1,10 +1,11 @@
 // ---------------------------------------------------------------------------
 // "Nuestros Clientes" — SaaS admin screen: full client roster with everything
 // sold to each one (plan, contract, cost centers, permission adicionales).
-// Creating a brand new client lives on its own page instead (+ Agregar
-// Cliente Nuevo, Admin-ClienteNuevo.js) — the edit modal here only ever
-// appears via startEdit(). Shell (sidebar, i18n, settings, logout) comes
-// from Dashboard.js.
+// The edit modal (#client-edit-modal) does double duty as the create modal
+// too — see startEdit() vs openCreateClientModal(), both just populate/
+// clear the same form and open it; the submit handler branches POST vs
+// PATCH on whether an id is set. Shell (sidebar, i18n, settings, logout)
+// comes from Dashboard.js.
 //
 // Access note: the sidebar only shows this page's link to admins, and the
 // redirect below covers anyone who lands here directly without the role —
@@ -14,6 +15,7 @@
 
 // --- Client edit modal ---------------------------------------------------------
 const clientEditModal = document.getElementById('client-edit-modal');
+const clientEditModalTitle = document.getElementById('client-edit-modal-title');
 const form = document.getElementById('client-form');
 const idField = document.getElementById('client-id');
 const companyField = document.getElementById('client-company');
@@ -442,8 +444,10 @@ async function patchClient(client, overrides) {
     });
     if (!res.ok) throw new Error('save failed');
     const { client: updated } = await res.json();
-    clients = clients.map((c) => (c.id === updated.id ? updated : c));
-    renderClients();
+    // Same gap as the form's own submit handler — this response is missing
+    // the computed fields GET /api/admin/clients fills in, so reload
+    // instead of splicing in an incomplete row.
+    await loadClients();
     return updated;
 }
 
@@ -498,6 +502,27 @@ function startEdit(client) {
     }
     if (existingPalette) existingPalette.seed = client.seed_color || existingPalette.seed;
     paletteWidget.setPalette(existingPalette);
+    clientEditModalTitle.textContent = Dashboard.t('admin.editClient');
+    submitBtn.textContent = Dashboard.t('admin.save');
+    clearError();
+    openClientEditModal();
+}
+
+// "+ Nuevo Cliente" — same modal as Editar, "pantalla alterna" style, in
+// create mode (empty id, POST instead of PATCH — see the form submit
+// handler below) instead of navigating to a separate page
+// (Admin-ClienteNuevo.html/.js, now removed).
+function openCreateClientModal() {
+    form.reset();
+    idField.value = '';
+    setLogoPreview('');
+    setContractPreview('', '');
+    setContractWordPreview('', '');
+    paletteWidget.setPalette(null);
+    contractedCostDisplay.textContent = '—';
+    extraCostCentersField.value = 0;
+    clientEditModalTitle.textContent = Dashboard.t('admin.addClient');
+    submitBtn.textContent = Dashboard.t('admin.addClient');
     clearError();
     openClientEditModal();
 }
@@ -606,11 +631,12 @@ form.addEventListener('submit', async (event) => {
     };
 
     const editingId = idField.value;
+    const isCreate = !editingId;
 
     submitBtn.disabled = true;
     try {
-        const res = await fetch(`/api/admin/clients/${editingId}`, {
-            method: 'PATCH',
+        const res = await fetch(isCreate ? '/api/admin/clients' : `/api/admin/clients/${editingId}`, {
+            method: isCreate ? 'POST' : 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(payload),
@@ -620,9 +646,13 @@ form.addEventListener('submit', async (event) => {
             showError(body.message || Dashboard.t('admin.saveError'));
             return;
         }
-        const { client, generatedAdmin } = await res.json();
-        clients = clients.map((c) => (c.id === client.id ? client : c));
-        renderClients();
+        const { generatedAdmin } = await res.json();
+        // The saved client in this response is missing the computed fields
+        // (contractedCostComputed, additionalPermissionsPayment, etc.) only
+        // GET /api/admin/clients fills in — reload instead of splicing in
+        // an incomplete row, or Costo Contratado/Pago por Adicionales would
+        // silently show $0.00 for this row until the next full reload.
+        await loadClients();
         resetForm();
         if (generatedAdmin) showGeneratedAdmin(generatedAdmin);
     } catch {
@@ -1003,14 +1033,19 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('dashboard:language-changed', () => {
     renderClients();
     if (!colorModal.hidden) colorModalPaletteWidget?.refreshLabels();
+    if (!clientEditModal.hidden) {
+        const isCreate = !idField.value;
+        clientEditModalTitle.textContent = Dashboard.t(isCreate ? 'admin.addClient' : 'admin.editClient');
+        submitBtn.textContent = Dashboard.t(isCreate ? 'admin.addClient' : 'admin.save');
+    }
 });
 
 // "+ Nuevo Cliente" — same toolbar-button placement/style as Mis Planes'
 // "+ Agregar Plan Nuevo" (Inicio-en.css .data-table-new-record-btn,
 // prepended into the .data-table-zoom bar Dashboard.js already renders for
-// every .data-table-wrapper), navigating to the existing dedicated
-// creation page (Admin-ClienteNuevo.html) — Nuestros Clientes never had an
-// inline create flow, no reason to build one now just for this button.
+// every .data-table-wrapper) — opens the same edit modal in create mode
+// ("pantalla alterna"), same pattern as Editar, instead of navigating to a
+// separate page (Admin-ClienteNuevo.html/.js, now removed).
 function renderNewClientButton() {
     const wrapper = document.querySelector('[data-table-id="nuestros-clientes"]');
     const toolbar = wrapper?.previousElementSibling;
@@ -1020,7 +1055,7 @@ function renderNewClientButton() {
     btn.type = 'button';
     btn.className = 'data-table-new-record-btn';
     btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="menu.addClientNew">${Dashboard.t('menu.addClientNew')}</span>`;
-    btn.addEventListener('click', () => { window.location.href = 'Admin-ClienteNuevo.html'; });
+    btn.addEventListener('click', openCreateClientModal);
     toolbar.prepend(btn);
 }
 

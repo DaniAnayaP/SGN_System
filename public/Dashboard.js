@@ -465,9 +465,7 @@ function hasSaasScreenGrant(itemId, subItemId = null) {
 // separate namespace (flat itemId, no {sectionId,itemId,submenuId} triple).
 const SAAS_SCREEN_GRANT_PATHS = {
     'admin-saas': 'saas-clients',
-    'admin-cliente-nuevo': 'saas-clients',
     'admin-planes': 'saas-plans',
-    'admin-plan-nuevo': 'saas-plans',
     'admin-costos-modulos': 'saas-module-costs',
 };
 function hasSaasScreenAccess(activePage) {
@@ -478,14 +476,13 @@ function hasSaasScreenAccess(activePage) {
 
 function buildSidebarData(data, role, activePage) {
     const adminSubmenu = [
-        // "+ Agregar Cliente Nuevo" y "+ Agregar Plan Nuevo" ya no viven
-        // aquí — Nuestros Clientes y Nuestros Planes tienen su propio
-        // botón "+ Agregar ... Nuevo" en el toolbar de su tabla (ver
-        // renderNewClientButton en Admin-SaaS.js / renderNewPlanButton en
-        // Admin-Planes.js), que lleva a las MISMAS páginas
-        // (Admin-ClienteNuevo.html / Admin-PlanNuevo.html, siguen
-        // existiendo tal cual) — estos ítems del sidebar quedarían
-        // redundantes.
+        // "+ Agregar Cliente Nuevo" y "+ Agregar Plan Nuevo" no tienen
+        // entrada propia aquí — Nuestros Clientes y Nuestros Planes tienen
+        // su propio botón "+ Agregar ... Nuevo" en el toolbar de su tabla
+        // (ver renderNewClientButton en Admin-SaaS.js / renderNewPlanButton
+        // en Admin-Planes.js), que abre el mismo modal de Editar en modo
+        // creación ("pantalla alterna") — nunca existieron como páginas
+        // propias en el sidebar, un ítem aquí sería redundante.
         { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', saasItemId: 'saas-clients' },
         { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', saasItemId: 'saas-plans' },
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', saasItemId: 'saas-module-costs' },
@@ -2341,7 +2338,7 @@ function renderDataTableColumnControls() {
                 clearBtn.dataset.colAction = 'filter-clear';
                 clearBtn.setAttribute('aria-label', t('main.filterClearBtn'));
                 clearBtn.title = t('main.filterClearBtn');
-                clearBtn.innerHTML = '<i class="bx bx-filter-alt-x" aria-hidden="true"></i>';
+                clearBtn.innerHTML = '<i class="bx bx-x-circle" aria-hidden="true"></i>';
                 clearBtn.addEventListener('click', () => {
                     filterBar.querySelectorAll('input').forEach((input) => { input.value = ''; });
                     filterBar.querySelectorAll('select').forEach((select) => { select.selectedIndex = 0; });
@@ -3637,8 +3634,8 @@ async function fetchClientBranding() {
 // Wraps an uploaded logo (raster — PNG/JPG straight out of a FileReader,
 // usually filling its whole square, hence the "boxed" look it had wherever
 // shown small like the tab favicon) in an SVG that clips it to a circle with
-// a transparent surround. Called once at upload time in Admin-ClienteNuevo.js
-// / Admin-SaaS.js / Business-Config.js so logoDataUrl is *stored* as SVG —
+// a transparent surround. Called once at upload time in Admin-SaaS.js /
+// Business-Config.js so logoDataUrl is *stored* as SVG —
 // every place that reads it (sidebar logo, favicon, preview) gets the same
 // already-converted image for free. No-ops on input that's already SVG, so
 // re-uploading a previously-converted logo doesn't double-wrap it.
