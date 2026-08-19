@@ -736,27 +736,42 @@ body.dark-mode .admin-badge-prospecto{
 /* Mi Recurso Humano: Departamento(s) Asignado(s) multi-select — a worker
    can belong to more than one, so a plain <select> doesn't fit; this is a
    flat scrollable checkbox list instead (see OpRRHHMiRecursoHumano.html's
-   new-record-modal and edit-departments-modal). */
+   new-record-modal and edit-departments-modal). Shaded sticky header bar
+   at the top (same --color-bg "recessed" tone used to distinguish a table
+   header from its rows elsewhere in the app, e.g. .palette-table thead
+   th) — padding moved off the container and onto the header/rows
+   individually so the header's shading reaches every edge, same technique
+   as .modal-panel h3. */
 .hr-department-checklist{
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
     max-height: 12rem;
     overflow-y: auto;
     margin-top: 0.4rem;
-    padding: 0.5rem;
     border: 1px solid var(--color-border);
     border-radius: 0.4rem;
+}
+.hr-department-checklist-header{
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.45rem 0.7rem;
+    background-color: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-text-secondary);
 }
 .hr-department-checklist label{
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.3rem 0.4rem;
+    padding: 0.4rem 0.7rem;
     font-size: 0.82rem;
     color: var(--color-text-primary);
     cursor: pointer;
-    border-radius: 0.3rem;
 }
 .hr-department-checklist label:hover{
     background-color: var(--color-bg);

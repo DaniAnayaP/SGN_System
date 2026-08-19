@@ -131,6 +131,10 @@ function populateCostCenterSelect(select, selectedId) {
 // "+ Nuevo Registro" modal and the click-to-edit modal on an existing row.
 function buildDepartmentChecklist(container, selectedValues) {
     container.innerHTML = '';
+    const header = document.createElement('div');
+    header.className = 'hr-department-checklist-header';
+    header.textContent = Dashboard.t('main.colHrDepartment');
+    container.appendChild(header);
     const selected = new Set(selectedValues || []);
     DEPARTMENT_OPTIONS.forEach((opt) => {
         const label = document.createElement('label');

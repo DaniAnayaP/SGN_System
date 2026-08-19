@@ -1424,16 +1424,22 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
             .prepare(`
                 INSERT INTO hr_workers (
                     client_id, db_id, record_number, given_names, surnames, full_name,
-                    position, start_date, departments, cost_center_id, email, user_id
+                    position, start_date, department, departments, cost_center_id, email, user_id
                 )
                 VALUES (
                     @clientId, @dbId, @recordNumber, @givenNames, @surnames, @fullName,
-                    @position, @startDate, @departments, @costCenterId, @email, @userId
+                    @position, @startDate, @department, @departments, @costCenterId, @email, @userId
                 )
             `)
             .run({
                 clientId, dbId: generateBigDateId(), recordNumber, givenNames, surnames, fullName,
-                position, startDate, departments: JSON.stringify(departments || []),
+                position, startDate,
+                // Legacy single-value column, kept NOT NULL by its original
+                // schema (no default) — no longer read anywhere (departments
+                // below is authoritative), just satisfied here so the insert
+                // doesn't fail its constraint.
+                department: (departments && departments[0]) || '',
+                departments: JSON.stringify(departments || []),
                 costCenterId: costCenterId || null, email, userId: user.id,
             });
         return result.lastInsertRowid;
