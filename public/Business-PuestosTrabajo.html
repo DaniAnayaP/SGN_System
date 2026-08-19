@@ -315,8 +315,12 @@
                 <input type="hidden" id="jp-id" value="">
                 <div class="admin-form-grid">
                     <div class="admin-field">
-                        <label for="jp-name" data-i18n="business.jobPositionName">Name</label>
+                        <label for="jp-name" data-i18n="business.jobPositionName">Position Name</label>
                         <input id="jp-name" name="name" type="text" required>
+                    </div>
+                    <div class="admin-field">
+                        <label for="jp-abbreviation" data-i18n="business.jobPositionAbbreviation">Position Abbreviation</label>
+                        <input id="jp-abbreviation" name="abbreviation" type="text">
                     </div>
                     <div class="admin-field">
                         <label for="jp-status" data-i18n="business.jobPositionStatus">Status</label>
@@ -360,7 +364,8 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="business.jobPositionName" data-col="jpName">Name</th>
+                            <th data-i18n="business.jobPositionName" data-col="jpName">Position Name</th>
+                            <th data-i18n="business.jobPositionAbbreviation" data-col="jpAbbreviation">Position Abbreviation</th>
                             <th data-i18n="business.jobPositionStatus" data-col="jpStatus">Status</th>
                             <th data-col="actions"></th>
                         </tr>

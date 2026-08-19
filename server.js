@@ -1513,9 +1513,9 @@ app.get('/api/business/job-positions', requireAuth, (req, res) => {
 app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, res) => {
     const error = validateJobPositionBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, status } = req.body;
+    const { name, abbreviation, status } = req.body;
     try {
-        const jobPosition = createJobPosition({ clientId: req.user.clientId, name: name.trim(), status });
+        const jobPosition = createJobPosition({ clientId: req.user.clientId, name: name.trim(), abbreviation: (abbreviation || '').trim(), status });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: jobPosition.id,
             recordLabel: jobPosition.name, action: 'create', changedBy: req.user.name,
@@ -1534,13 +1534,18 @@ app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (r
     if (!existing) return res.status(404).json({ message: 'Job position not found.' });
     const error = validateJobPositionBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, status } = req.body;
+    const { name, abbreviation, status } = req.body;
+    const patch = {
+        name: name.trim(),
+        abbreviation: abbreviation !== undefined ? abbreviation.trim() : existing.abbreviation,
+        status: status ?? existing.status,
+    };
     // requireClientAdmin-gated: same reasoning as Centros de Costo's own
     // PATCH above — always fully applied, this call only exists for its
     // logTableChange side effect.
-    checkAndLogFieldChanges(req, existing, { name: name.trim(), status: status ?? existing.status }, JOB_POSITION_FIELDS, 'puestos-trabajo', existing.name);
+    checkAndLogFieldChanges(req, existing, patch, JOB_POSITION_FIELDS, 'puestos-trabajo', existing.name);
     try {
-        const jobPosition = updateJobPosition(req.params.id, req.user.clientId, { name: name.trim(), status: status ?? existing.status });
+        const jobPosition = updateJobPosition(req.params.id, req.user.clientId, patch);
         res.json({ jobPosition });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {

@@ -9,6 +9,7 @@
 const form = document.getElementById('jp-form');
 const idField = document.getElementById('jp-id');
 const nameField = document.getElementById('jp-name');
+const abbreviationField = document.getElementById('jp-abbreviation');
 const statusField = document.getElementById('jp-status');
 const errorBanner = document.getElementById('jp-form-error');
 const submitBtn = document.getElementById('jp-form-submit');
@@ -51,6 +52,10 @@ function renderJobPositions() {
         tdName.dataset.col = 'jpName';
         tdName.textContent = jp.name;
 
+        const tdAbbreviation = document.createElement('td');
+        tdAbbreviation.dataset.col = 'jpAbbreviation';
+        tdAbbreviation.textContent = jp.abbreviation || '—';
+
         const tdStatus = document.createElement('td');
         tdStatus.dataset.col = 'jpStatus';
         const badge = document.createElement('span');
@@ -82,7 +87,7 @@ function renderJobPositions() {
         deleteBtn.addEventListener('click', () => removeJobPosition(jp));
         tdActions.append(historyBtn, editBtn, deleteBtn);
 
-        tr.append(tdName, tdStatus, tdActions);
+        tr.append(tdName, tdAbbreviation, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
     applyJpFilters();
@@ -95,7 +100,12 @@ function applyJpFilters() {
     const status = document.getElementById('filter-status')?.value || '';
     tableBody.querySelectorAll('tr').forEach((tr) => {
         let visible = true;
-        if (text && !(tr.querySelector('[data-col="jpName"]')?.textContent || '').toLowerCase().includes(text)) visible = false;
+        if (text) {
+            const haystack = ['jpName', 'jpAbbreviation']
+                .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+                .join(' ');
+            if (!haystack.includes(text)) visible = false;
+        }
         if (status && tr.dataset.status !== status) visible = false;
         tr.hidden = !visible;
     });
@@ -106,6 +116,7 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear
 function startEdit(jp) {
     idField.value = jp.id;
     nameField.value = jp.name;
+    abbreviationField.value = jp.abbreviation || '';
     statusField.value = jp.status;
     submitBtn.textContent = Dashboard.t('admin.save');
     cancelBtn.hidden = false;
@@ -146,6 +157,7 @@ form.addEventListener('submit', async (event) => {
         showError(Dashboard.t('admin.requiredFields'));
         return;
     }
+    const abbreviation = abbreviationField.value.trim();
     const status = statusField.value;
 
     const editingId = idField.value;
@@ -158,7 +170,7 @@ form.addEventListener('submit', async (event) => {
             method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, status }),
+            body: JSON.stringify({ name, abbreviation, status }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));

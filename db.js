@@ -93,6 +93,7 @@ db.exec(`
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
         name          TEXT NOT NULL,
+        abbreviation  TEXT NOT NULL DEFAULT '',
         status        TEXT NOT NULL DEFAULT 'active',
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE(client_id, name)
@@ -699,6 +700,12 @@ if (!hrWorkerColumns.some((c) => c.name === 'cost_center_id')) {
 }
 if (!hrWorkerColumns.some((c) => c.name === 'user_id')) {
     db.exec('ALTER TABLE hr_workers ADD COLUMN user_id INTEGER REFERENCES users(id)');
+}
+
+// abbreviation added after job_positions already shipped once.
+const jobPositionColumns = db.prepare('PRAGMA table_info(job_positions)').all();
+if (!jobPositionColumns.some((c) => c.name === 'abbreviation')) {
+    db.exec("ALTER TABLE job_positions ADD COLUMN abbreviation TEXT NOT NULL DEFAULT ''");
 }
 
 // requested_by/authorized_by added after data_table_changes already shipped
@@ -1315,23 +1322,24 @@ function getJobPositionById(id, clientId) {
     return db.prepare('SELECT * FROM job_positions WHERE id = ? AND client_id = ?').get(id, clientId);
 }
 
-function createJobPosition({ clientId, name, status }) {
+function createJobPosition({ clientId, name, abbreviation, status }) {
     const result = db
-        .prepare('INSERT INTO job_positions (client_id, name, status) VALUES (@clientId, @name, @status)')
-        .run({ clientId, name, status: status || 'active' });
+        .prepare('INSERT INTO job_positions (client_id, name, abbreviation, status) VALUES (@clientId, @name, @abbreviation, @status)')
+        .run({ clientId, name, abbreviation: abbreviation || '', status: status || 'active' });
     return getJobPositionById(result.lastInsertRowid, clientId);
 }
 
 const JOB_POSITION_FIELDS = {
     name: { column: 'name', fieldKey: 'business.jobPositionName' },
+    abbreviation: { column: 'abbreviation', fieldKey: 'business.jobPositionAbbreviation' },
     status: { column: 'status', fieldKey: 'business.jobPositionStatus' },
 };
 
-function updateJobPosition(id, clientId, { name, status }) {
+function updateJobPosition(id, clientId, { name, abbreviation, status }) {
     db.prepare(`
-        UPDATE job_positions SET name = @name, status = @status
+        UPDATE job_positions SET name = @name, abbreviation = @abbreviation, status = @status
         WHERE id = @id AND client_id = @clientId
-    `).run({ id, clientId, name, status });
+    `).run({ id, clientId, name, abbreviation: abbreviation || '', status });
     return getJobPositionById(id, clientId);
 }
 
