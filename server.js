@@ -59,6 +59,11 @@ const {
     createCostCenter,
     updateCostCenter,
     deleteCostCenter,
+    listJobPositions,
+    getJobPositionById,
+    createJobPosition,
+    updateJobPosition,
+    deleteJobPosition,
     listFuelRecords,
     getFuelRecordById,
     createFuelRecord,
@@ -81,6 +86,7 @@ const {
     getPendingColumnsByRecord,
     resolvePendingChange,
     COST_CENTER_FIELDS,
+    JOB_POSITION_FIELDS,
     FUEL_PATCHABLE_FIELDS,
     HR_WORKER_PATCHABLE_FIELDS,
     listPlans,
@@ -1482,6 +1488,76 @@ app.delete('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (r
         recordLabel: existing.code, action: 'delete', changedBy: req.user.name,
     });
     deleteCostCenter(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
+// --- Puestos de Trabajo (job positions, scoped to one client) ---------------
+// Managing the catalog stays admin-only, same as Centros de Costo above —
+// but any authenticated user at the client can READ it, since Mi Recurso
+// Humano's Puesto field needs the (active-only) list for its own dropdown.
+const JOB_POSITION_STATUSES = ['active', 'inactive'];
+function validateJobPositionBody(body) {
+    const { name, status } = body || {};
+    if (!name || !name.trim()) return 'name is required.';
+    if (status !== undefined && !JOB_POSITION_STATUSES.includes(status)) {
+        return `status must be one of: ${JOB_POSITION_STATUSES.join(', ')}.`;
+    }
+    return null;
+}
+
+app.get('/api/business/job-positions', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ jobPositions: listJobPositions(req.user.clientId) });
+});
+
+app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, res) => {
+    const error = validateJobPositionBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { name, status } = req.body;
+    try {
+        const jobPosition = createJobPosition({ clientId: req.user.clientId, name: name.trim(), status });
+        logTableChange({
+            clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: jobPosition.id,
+            recordLabel: jobPosition.name, action: 'create', changedBy: req.user.name,
+        });
+        res.status(201).json({ jobPosition });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'A job position with that name already exists.' });
+        }
+        throw err;
+    }
+});
+
+app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getJobPositionById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Job position not found.' });
+    const error = validateJobPositionBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { name, status } = req.body;
+    // requireClientAdmin-gated: same reasoning as Centros de Costo's own
+    // PATCH above — always fully applied, this call only exists for its
+    // logTableChange side effect.
+    checkAndLogFieldChanges(req, existing, { name: name.trim(), status: status ?? existing.status }, JOB_POSITION_FIELDS, 'puestos-trabajo', existing.name);
+    try {
+        const jobPosition = updateJobPosition(req.params.id, req.user.clientId, { name: name.trim(), status: status ?? existing.status });
+        res.json({ jobPosition });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'A job position with that name already exists.' });
+        }
+        throw err;
+    }
+});
+
+app.delete('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getJobPositionById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Job position not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: existing.id,
+        recordLabel: existing.name, action: 'delete', changedBy: req.user.name,
+    });
+    deleteJobPosition(req.params.id, req.user.clientId);
     res.status(204).end();
 });
 

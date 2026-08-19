@@ -82,6 +82,22 @@ db.exec(`
         UNIQUE(client_id, code)
     );
 
+    -- Puestos de Trabajo (Administración de Personal, human-resources área):
+    -- the client's own catalog of job titles, managed from
+    -- Business-PuestosTrabajo.html. Mi Recurso Humano's Puesto field reads
+    -- only the 'active' ones (see GET /api/business/job-positions) — a
+    -- position can be retired without losing its label on already-created
+    -- workers, same "deactivate, never delete the history" idea as
+    -- clients.status.
+    CREATE TABLE IF NOT EXISTS job_positions (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        name          TEXT NOT NULL,
+        status        TEXT NOT NULL DEFAULT 'active',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(client_id, name)
+    );
+
     -- Planes y Paquetes: GEIPSA's own catalog of plan/package types, managed
     -- from Admin-Planes (SaaS admin only). clients.plan just stores the
     -- chosen plan's name as free text (like clients.status) rather than a
@@ -1290,6 +1306,39 @@ function deleteCostCenter(id, clientId) {
     db.prepare('DELETE FROM cost_centers WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
+// --- Query helpers: job positions (Puestos de Trabajo, scoped to one client) -
+function listJobPositions(clientId) {
+    return db.prepare('SELECT * FROM job_positions WHERE client_id = ? ORDER BY name ASC').all(clientId);
+}
+
+function getJobPositionById(id, clientId) {
+    return db.prepare('SELECT * FROM job_positions WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function createJobPosition({ clientId, name, status }) {
+    const result = db
+        .prepare('INSERT INTO job_positions (client_id, name, status) VALUES (@clientId, @name, @status)')
+        .run({ clientId, name, status: status || 'active' });
+    return getJobPositionById(result.lastInsertRowid, clientId);
+}
+
+const JOB_POSITION_FIELDS = {
+    name: { column: 'name', fieldKey: 'business.jobPositionName' },
+    status: { column: 'status', fieldKey: 'business.jobPositionStatus' },
+};
+
+function updateJobPosition(id, clientId, { name, status }) {
+    db.prepare(`
+        UPDATE job_positions SET name = @name, status = @status
+        WHERE id = @id AND client_id = @clientId
+    `).run({ id, clientId, name, status });
+    return getJobPositionById(id, clientId);
+}
+
+function deleteJobPosition(id, clientId) {
+    db.prepare('DELETE FROM job_positions WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
 // --- Query helpers: Registro Combustible (fuel_records, scoped to a client) -
 function listFuelRecords(clientId) {
     return db.prepare('SELECT * FROM fuel_records WHERE client_id = ? ORDER BY record_number ASC').all(clientId);
@@ -2467,6 +2516,7 @@ module.exports = {
     getPendingColumnsByRecord,
     resolvePendingChange,
     COST_CENTER_FIELDS,
+    JOB_POSITION_FIELDS,
     FUEL_PATCHABLE_FIELDS,
     HR_WORKER_PATCHABLE_FIELDS,
     getClientModules,
@@ -2481,6 +2531,11 @@ module.exports = {
     createCostCenter,
     updateCostCenter,
     deleteCostCenter,
+    listJobPositions,
+    getJobPositionById,
+    createJobPosition,
+    updateJobPosition,
+    deleteJobPosition,
     listFuelRecords,
     getFuelRecordById,
     createFuelRecord,

@@ -4427,6 +4427,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-transporte-vol-combustible': TABLE_GRANT_PATHS['registro-combustible'],
     'cat-operaciones-rrhh-mi-recurso-humano': TABLE_GRANT_PATHS['mi-recurso-humano'],
     'cat-operaciones-transporte-vol-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-admin/cat-operaciones-transporte-vol-traslados' },
+    'cat-catalogos-puestos-trabajo': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-catalogos/cat-catalogos-puestos-trabajo' },
 };
 
 function hasScreenAccess(activePage) {

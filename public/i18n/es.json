@@ -142,6 +142,7 @@
     "catCentroDistCodigos": "Códigos",
     "catCentroDistCategorias": "Categorías",
     "catCentroDistUdm": "UDM",
+    "catPuestosTrabajo": "Puestos de Trabajo",
     "opTransVolTraslados": "Registro de traslados",
     "opTransVolCombustible": "Registro Combustible",
     "opTransVolIngresos": "Ingresos",
@@ -400,7 +401,15 @@
     "ccLimitReached": "Has alcanzado el límite de centros de costo de tu plan ({limit}). Contacta a GEIPSA para aumentarlo.",
     "ccNoneYet": "Aún no hay centros de costo. Agrega el primero arriba.",
     "ccCodeExists": "Ya existe un centro de costo con ese código.",
-    "ccDeleteConfirm": "¿Eliminar este centro de costo?"
+    "ccDeleteConfirm": "¿Eliminar este centro de costo?",
+    "jobPositionsTitle": "Puestos de Trabajo",
+    "jobPositionsSubtitle": "Administra el catálogo de puestos de tu empresa — solo los activos aparecen en el campo Puesto de Mi Recurso Humano.",
+    "jobPositionName": "Nombre",
+    "jobPositionStatus": "Estatus",
+    "addJobPosition": "Agregar puesto",
+    "jobPositionsNoneYet": "Aún no hay puestos. Agrega el primero arriba.",
+    "jobPositionNameExists": "Ya existe un puesto con ese nombre.",
+    "jobPositionDeleteConfirm": "¿Eliminar este puesto?"
   },
   "main": {
     "welcome": "Bienvenido",

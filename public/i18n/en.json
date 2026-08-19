@@ -142,6 +142,7 @@
     "catCentroDistCodigos": "Codes",
     "catCentroDistCategorias": "Categories",
     "catCentroDistUdm": "UOM",
+    "catPuestosTrabajo": "Job Positions",
     "opTransVolTraslados": "Transfer Log",
     "opTransVolCombustible": "Fuel Log",
     "opTransVolIngresos": "Income",
@@ -400,7 +401,15 @@
     "ccLimitReached": "You've reached your plan's cost center limit ({limit}). Contact GEIPSA to increase it.",
     "ccNoneYet": "No cost centers yet. Add the first one above.",
     "ccCodeExists": "A cost center with that code already exists.",
-    "ccDeleteConfirm": "Delete this cost center?"
+    "ccDeleteConfirm": "Delete this cost center?",
+    "jobPositionsTitle": "Job Positions",
+    "jobPositionsSubtitle": "Manage your company's job positions — only active ones show up in Mi Recurso Humano's Puesto field.",
+    "jobPositionName": "Name",
+    "jobPositionStatus": "Status",
+    "addJobPosition": "Add job position",
+    "jobPositionsNoneYet": "No job positions yet. Add the first one above.",
+    "jobPositionNameExists": "A job position with that name already exists.",
+    "jobPositionDeleteConfirm": "Delete this job position?"
   },
   "main": {
     "welcome": "Welcome",

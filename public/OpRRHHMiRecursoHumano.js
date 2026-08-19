@@ -27,7 +27,7 @@
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-rrhh-mi-recurso-humano' });
         if (!role) return;
         renderNewRecordButton();
-        await loadCostCenters();
+        await Promise.all([loadCostCenters(), loadJobPositions()]);
         await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano failed to initialize:', err);
@@ -125,6 +125,37 @@ function populateCostCenterSelect(select, selectedId) {
         select.appendChild(opt);
     });
     select.value = selectedId ? String(selectedId) : '';
+}
+
+// --- Puestos de Trabajo (for the Puesto field — reused catalog, managed
+// from Business-PuestosTrabajo.html, not owned by this screen). Only
+// 'active' positions are offered here — a retired one stays on whichever
+// worker already had it (position isn't inline-editable after creation),
+// it just stops being selectable for anyone new.
+let jobPositions = [];
+async function loadJobPositions() {
+    try {
+        const res = await fetch('/api/business/job-positions', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        jobPositions = (data.jobPositions || []).filter((jp) => jp.status === 'active');
+    } catch (err) {
+        console.error('Mi Recurso Humano: failed to load job positions', err);
+        jobPositions = [];
+    }
+}
+function populateJobPositionSelect(select) {
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = Dashboard.t('main.fuelSelectReason');
+    select.appendChild(placeholder);
+    jobPositions.forEach((jp) => {
+        const opt = document.createElement('option');
+        opt.value = jp.name;
+        opt.textContent = jp.name;
+        select.appendChild(opt);
+    });
 }
 
 // --- Departamento(s) Asignado(s) — multi-select checklist, shared by the
@@ -433,7 +464,7 @@ function openNewRecordModal() {
     givenNamesInput.value = '';
     surnamesInput.value = '';
     emailInput.value = '';
-    positionInput.value = '';
+    populateJobPositionSelect(positionInput);
     startDateInput.value = '';
     populateCostCenterSelect(costCenterSelect, null);
     buildDepartmentChecklist(departmentsChecklist, []);
