@@ -156,7 +156,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterToggle: "Filter", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", filterDateFrom: "From date", filterDateTo: "To date", filterFuelSearchHint: "Unit, plates, driver, coordinator...", filterHrSearchHint: "Name, position, email, phone...", filterCcSearchHint: "Code, name, responsible, description...", filterClientsSearchHint: "RFC, nickname, owner, contact...", filterPlansSearchHint: "Name, description, created by...", filterSaasTeamSearchHint: "Username, name, email...", rowEditableLegend: "Row with at least one field you can still edit", emptyStateText: "No data yet.", breadcrumbLabel: "Path", breadcrumbExpand: "Expand breadcrumb", breadcrumbCollapse: "Collapse breadcrumb", colUniqueBigDate: "# Unique Big Date", colRegistro: "# Record", colAnio: "Year", colMes: "Month", colDiaNum: "Day (Num)", colDiaTexto: "Day (Text)", colNoSemCobro: "Collection Week No.", colFecha: "Date", colTipoServicios: "Service Type", colEstatus: "Status",
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterToggle: "Filter", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", filterColumn: "Filter by this column", filterDateFrom: "From date", filterDateTo: "To date", filterFuelSearchHint: "Unit, plates, driver, coordinator...", filterHrSearchHint: "Name, position, email, phone...", filterCcSearchHint: "Code, name, responsible, description...", filterClientsSearchHint: "RFC, nickname, owner, contact...", filterPlansSearchHint: "Name, description, created by...", filterSaasTeamSearchHint: "Username, name, email...", rowEditableLegend: "Row with at least one field you can still edit", emptyStateText: "No data yet.", breadcrumbLabel: "Path", breadcrumbExpand: "Expand breadcrumb", breadcrumbCollapse: "Collapse breadcrumb", colUniqueBigDate: "# Unique Big Date", colRegistro: "# Record", colAnio: "Year", colMes: "Month", colDiaNum: "Day (Num)", colDiaTexto: "Day (Text)", colNoSemCobro: "Collection Week No.", colFecha: "Date", colTipoServicios: "Service Type", colEstatus: "Status",
             colCliente: "Client", colTipoUnidadSolicitada: "Requested Unit Type", colCotizacionServicio: "Service Quote $", colRequisitosServicio: "Service Requirements", colRequisitosSeguridad: "Security Requirements", colRequisitosCobro: "Billing Requirements", colOrigen: "Origin", colHoraCita: "Appointment Time", colUbicacion: "Location", colLinkUbicacion: "Location Link", colEmpresaCliente: "Client's Company", colNomContactoOrigen: "Origin Contact Name", colNoContacto: "Contact No.", colNoColaboradorDriver: "Employee No. (Driver)", colNombreDriver: "Driver Name(s)", colNoColaboradorAuxiliar: "Employee No. (Assistant)", colNombreAuxiliar: "Assistant Name(s)", colRutaAsignada: "Assigned Route", colZona: "Zone", colCantPallets: "Pallet Qty.", colCantUdm: "UOM Qty.", colCantParadas: "Stop Qty.", colParadasVisitadas: "Stops Visited", colCantUmEntregadas: "Units Delivered Qty.", colPorcentajeVisitas: "% Visits", colPorcentajeEntrega: "% Delivery", colDevolucionCantUdm: "Return (UOM Qty.)", colPorcentajeDevolucion: "% Return", colCoordinador: "Coordinator", colEcoUnidad: "Unit Fleet No.", colPlacas: "License Plates", colRutaSubtotal: "Route Subtotal $", colPenalizacion: "Penalty $", colRutaSubtotalCobro: "Route Billing Subtotal $", colIva: "VAT $", colCobroTotalRuta: "Total Route Billing $", colNoFactura: "Invoice No.", colFechaGeneraFactura: "Invoice Generation Date",
             topBarExpand: "Expand top bar", topBarCollapse: "Collapse top bar", decreaseFontSize: "Decrease font size", increaseFontSize: "Increase font size",
             pinColumns: "Pin columns", pinColumnsTitle: "Pin columns", pinColumnsHint: "Choose up to 4 columns to pin to the left. Drag to reorder them.", pinColumnsLimitReached: "You can pin up to 4 columns.", pinColumnsOther: "Other columns", columnVisibility: "Show/hide columns", columnVisibilityTitle: "Show/hide columns", columnVisibilityHint: "Choose which columns to show.", columnHidePinnedConfirm: "This column is pinned. Are you sure you want to hide it?", dragToReorder: "Drag to reorder",
@@ -302,7 +302,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterToggle: "Filtro", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", filterDateFrom: "Fecha desde", filterDateTo: "Fecha hasta", filterFuelSearchHint: "Unidad, placas, chofer, coordinador...", filterHrSearchHint: "Nombre, puesto, correo, teléfono...", filterCcSearchHint: "Código, nombre, responsable, descripción...", filterClientsSearchHint: "RFC, apodo, dueño, contacto...", filterPlansSearchHint: "Nombre, descripción, creado por...", filterSaasTeamSearchHint: "Usuario, nombre, correo...", rowEditableLegend: "Fila con al menos un campo que aún puedes editar", emptyStateText: "Aún no hay datos.", breadcrumbLabel: "Ruta", breadcrumbExpand: "Expandir ruta de acceso", breadcrumbCollapse: "Contraer ruta de acceso", colUniqueBigDate: "# Único Big Date", colRegistro: "# Registro", colAnio: "Año", colMes: "Mes", colDiaNum: "Día (Num)", colDiaTexto: "Día (texto)", colNoSemCobro: "No. Sem Cobro", colFecha: "Fecha", colTipoServicios: "Tipo Servicios", colEstatus: "Estatus",
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterToggle: "Filtro", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", filterColumn: "Filtrar por esta columna", filterDateFrom: "Fecha desde", filterDateTo: "Fecha hasta", filterFuelSearchHint: "Unidad, placas, chofer, coordinador...", filterHrSearchHint: "Nombre, puesto, correo, teléfono...", filterCcSearchHint: "Código, nombre, responsable, descripción...", filterClientsSearchHint: "RFC, apodo, dueño, contacto...", filterPlansSearchHint: "Nombre, descripción, creado por...", filterSaasTeamSearchHint: "Usuario, nombre, correo...", rowEditableLegend: "Fila con al menos un campo que aún puedes editar", emptyStateText: "Aún no hay datos.", breadcrumbLabel: "Ruta", breadcrumbExpand: "Expandir ruta de acceso", breadcrumbCollapse: "Contraer ruta de acceso", colUniqueBigDate: "# Único Big Date", colRegistro: "# Registro", colAnio: "Año", colMes: "Mes", colDiaNum: "Día (Num)", colDiaTexto: "Día (texto)", colNoSemCobro: "No. Sem Cobro", colFecha: "Fecha", colTipoServicios: "Tipo Servicios", colEstatus: "Estatus",
             colCliente: "Cliente", colTipoUnidadSolicitada: "Tipo Unidad Solicitada", colCotizacionServicio: "Cotización $ Servicio", colRequisitosServicio: "Requisitos Servicio", colRequisitosSeguridad: "Requisitos Seguridad", colRequisitosCobro: "Requisitos Cobro", colOrigen: "Origen", colHoraCita: "Hora Cita", colUbicacion: "Ubicación", colLinkUbicacion: "Link Ubicación", colEmpresaCliente: "Empresa del cliente", colNomContactoOrigen: "Nom Contacto Origen", colNoContacto: "No. Contacto", colNoColaboradorDriver: "No. Colaborador", colNombreDriver: "Nombre(s) Driver", colNoColaboradorAuxiliar: "No. Colaborador", colNombreAuxiliar: "Nombre(s) Auxiliar", colRutaAsignada: "Ruta Asignada", colZona: "Zona", colCantPallets: "Cant. Pallets", colCantUdm: "Cant. UDM", colCantParadas: "Cant. Paradas", colParadasVisitadas: "Paradas visitadas", colCantUmEntregadas: "Cant UM Entregadas", colPorcentajeVisitas: "% Visitas", colPorcentajeEntrega: "% Entrega", colDevolucionCantUdm: "Devolución (Cant UDM)", colPorcentajeDevolucion: "% Devolución", colCoordinador: "Coordinador", colEcoUnidad: "Eco Unidad", colPlacas: "Placas", colRutaSubtotal: "$ Ruta Subtotal", colPenalizacion: "Penalización $", colRutaSubtotalCobro: "$ Ruta Subtotal Cobro", colIva: "$ IVA", colCobroTotalRuta: "$ Cobro Total Ruta", colNoFactura: "No. Factura", colFechaGeneraFactura: "F. Genera Factura",
             topBarExpand: "Expandir barra superior", topBarCollapse: "Contraer barra superior", decreaseFontSize: "Reducir tamaño de letra", increaseFontSize: "Aumentar tamaño de letra",
             pinColumns: "Fijar columnas", pinColumnsTitle: "Fijar columnas", pinColumnsHint: "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.", pinColumnsLimitReached: "Puedes fijar hasta 4 columnas.", pinColumnsOther: "Otras columnas", columnVisibility: "Mostrar/ocultar columnas", columnVisibilityTitle: "Mostrar/ocultar columnas", columnVisibilityHint: "Elige qué columnas mostrar.", columnHidePinnedConfirm: "Esta columna está fijada. ¿Seguro que quieres ocultarla?", dragToReorder: "Arrastrar para reordenar",
@@ -1673,6 +1673,14 @@ function observeTableBody(table, tableId) {
                 applyTableSort(tableId);
             });
         }
+        // Per-column value filters (see attachColumnFilterTrigger) use their
+        // own CSS class, not the `hidden` attribute each page's own
+        // Filtrar/Limpiar logic sets — the two systems stay independent
+        // this way (a row hides if EITHER says so) and neither has to know
+        // about the other. Still needs re-applying after every rebuild
+        // though, same as sort, since a freshly-rebuilt row starts with
+        // neither.
+        applyColumnValueFilters(tableId);
     });
     observer.observe(tbody, { childList: true });
     // applyTableSort needs to pause/resume this same observer around its own
@@ -1942,10 +1950,190 @@ function attachSortHandler(th, tableId) {
     th.dataset.sortBound = '1';
     th.classList.add('data-table-col-sortable');
     th.addEventListener('click', (event) => {
-        if (event.target.closest('.data-table-col-resize-handle')) return;
+        if (event.target.closest('.data-table-col-resize-handle') || event.target.closest('.data-table-col-filter-trigger')) return;
         sortTableByColumn(tableId, th.dataset.col);
     });
 }
+
+// --- Per-column value filter (Excel-style checklist) -----------------------
+// Adds ON TOP of each page's own Filtro panel (free text/status/etc), not a
+// replacement — a separate small dropdown per header lets you pick which
+// distinct values of THAT column to keep showing. Distinct values are read
+// straight from the currently-rendered rows (not from any other filter's
+// hidden state), so the checklist for one column never depends on what's
+// currently selected in another — simple and predictable, if not quite
+// Excel's "only show values still reachable" behavior.
+let dataTableFilterMenuEl = null;
+let dataTableFilterMenuTableId = null;
+
+function getColumnDistinctValues(tableId, key) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return [];
+    const values = new Set();
+    Array.from(state.table.tBodies[0]?.rows || []).forEach((tr) => {
+        if (tr.querySelector('td.data-table-empty-cell')) return;
+        const td = tr.querySelector(`[data-col="${key}"]`);
+        if (td) values.add(td.textContent.trim());
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+// Rows hide via a CSS class (see .data-table-row-col-filtered), never the
+// `hidden` attribute each page's own applyXFilters() already owns — the two
+// mechanisms stay independent this way (a row shows only if BOTH leave it
+// visible), so this file never has to know anything about any specific
+// page's filter fields, and no page has to know this feature exists.
+function applyColumnValueFilters(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const rows = Array.from(state.table.tBodies[0]?.rows || []).filter((tr) => !tr.querySelector('td.data-table-empty-cell'));
+    if (!state.columnFilters.size) {
+        rows.forEach((tr) => tr.classList.remove('data-table-row-col-filtered'));
+        return;
+    }
+    rows.forEach((tr) => {
+        let visible = true;
+        state.columnFilters.forEach((selectedSet, key) => {
+            const td = tr.querySelector(`[data-col="${key}"]`);
+            if (!selectedSet.has(td ? td.textContent.trim() : '')) visible = false;
+        });
+        tr.classList.toggle('data-table-row-col-filtered', !visible);
+    });
+}
+
+function updateColumnFilterIndicator(th, active) {
+    th.classList.toggle('data-table-col-filter-active', active);
+}
+
+function closeColumnFilterMenu() {
+    dataTableFilterMenuEl?.remove();
+    dataTableFilterMenuEl = null;
+    dataTableFilterMenuTableId = null;
+    document.removeEventListener('click', handleColumnFilterOutsideClick, true);
+    window.removeEventListener('scroll', closeColumnFilterMenu, true);
+    window.removeEventListener('resize', closeColumnFilterMenu);
+}
+function handleColumnFilterOutsideClick(event) {
+    if (dataTableFilterMenuEl && !dataTableFilterMenuEl.contains(event.target) && !event.target.closest('.data-table-col-filter-trigger')) {
+        closeColumnFilterMenu();
+    }
+}
+
+function openColumnFilterMenu(th, tableId, key) {
+    const reopening = dataTableFilterMenuTableId === tableId && dataTableFilterMenuEl?.dataset.col === key;
+    closeColumnFilterMenu();
+    if (reopening) return; // clicking the same trigger again just closes it
+
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const distinctValues = getColumnDistinctValues(tableId, key);
+    const selected = state.columnFilters.get(key) || new Set(distinctValues);
+
+    const menu = document.createElement('div');
+    menu.className = 'data-table-col-filter-menu';
+    menu.dataset.col = key;
+
+    const allRow = document.createElement('label');
+    allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
+    const allCheckbox = document.createElement('input');
+    allCheckbox.type = 'checkbox';
+    allCheckbox.checked = selected.size === distinctValues.length;
+    allCheckbox.indeterminate = selected.size > 0 && selected.size < distinctValues.length;
+    const allLabel = document.createElement('span');
+    allLabel.textContent = t('main.filterAll');
+    allRow.append(allCheckbox, allLabel);
+    menu.appendChild(allRow);
+
+    const list = document.createElement('div');
+    list.className = 'data-table-col-filter-list';
+    const checkboxes = [];
+
+    function syncAllCheckbox() {
+        const current = state.columnFilters.get(key) || new Set(distinctValues);
+        allCheckbox.checked = current.size === distinctValues.length;
+        allCheckbox.indeterminate = current.size > 0 && current.size < distinctValues.length;
+    }
+
+    distinctValues.forEach((value) => {
+        const row = document.createElement('label');
+        row.className = 'data-table-col-filter-option';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = selected.has(value);
+        cb.addEventListener('change', () => {
+            const current = new Set(state.columnFilters.get(key) || new Set(distinctValues));
+            if (cb.checked) current.add(value); else current.delete(value);
+            if (current.size === distinctValues.length) state.columnFilters.delete(key);
+            else state.columnFilters.set(key, current);
+            applyColumnValueFilters(tableId);
+            updateColumnFilterIndicator(th, state.columnFilters.has(key));
+            syncAllCheckbox();
+        });
+        const span = document.createElement('span');
+        span.textContent = value || '—';
+        row.append(cb, span);
+        list.appendChild(row);
+        checkboxes.push(cb);
+    });
+    menu.appendChild(list);
+
+    allCheckbox.addEventListener('change', () => {
+        checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
+        if (allCheckbox.checked) state.columnFilters.delete(key);
+        else state.columnFilters.set(key, new Set());
+        applyColumnValueFilters(tableId);
+        updateColumnFilterIndicator(th, state.columnFilters.has(key));
+        allCheckbox.indeterminate = false;
+    });
+
+    document.body.appendChild(menu);
+    const rect = th.getBoundingClientRect();
+    const menuWidth = menu.offsetWidth;
+    const left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - menuWidth - 8);
+    menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
+    menu.style.left = `${Math.max(8, left)}px`;
+    dataTableFilterMenuEl = menu;
+    dataTableFilterMenuTableId = tableId;
+    setTimeout(() => {
+        document.addEventListener('click', handleColumnFilterOutsideClick, true);
+        window.addEventListener('scroll', closeColumnFilterMenu, true);
+        window.addEventListener('resize', closeColumnFilterMenu);
+    }, 0);
+}
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && dataTableFilterMenuEl) closeColumnFilterMenu();
+});
+
+// One small trigger per header, separate from the sortable header text
+// itself (see attachSortHandler's own click handler, which ignores clicks
+// on this trigger) — clicking the column TITLE still sorts, exactly as
+// before; this is what lets a column be filterable too without the two
+// interactions fighting over the same click.
+// Checks live DOM presence, not a dataset flag (mirrors attachResizeHandle
+// above) — every <th> here has data-i18n, and data-i18n's own
+// `el.textContent = ...` on language change wipes any appended child,
+// including this trigger. A dataset flag would survive that wipe and then
+// permanently skip re-adding it; re-attaching from a fresh
+// dashboard:language-changed pass (see below) is what keeps it alive.
+function attachColumnFilterTrigger(th, tableId) {
+    if (th.dataset.col === 'actions') return; // nothing meaningful to filter by in this column
+    if (th.querySelector('.data-table-col-filter-trigger')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-col-filter-trigger';
+    btn.setAttribute('aria-label', t('main.filterColumn'));
+    btn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
+    btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openColumnFilterMenu(th, tableId, th.dataset.col);
+    });
+    th.appendChild(btn);
+}
+document.addEventListener('dashboard:language-changed', () => {
+    dataTableColumnState.forEach((state, tableId) => {
+        Array.from(state.table.tHead.rows[0]?.cells || []).forEach((th) => attachColumnFilterTrigger(th, tableId));
+    });
+});
 
 // One-time-per-table setup. Gated behind a ResizeObserver (rather than
 // running straight from initDashboard()) because a table can be inside a
@@ -1980,12 +2168,14 @@ function initDataTableColumns(wrapper, index) {
     dataTableColumnState.set(tableId, {
         table, wrapper, colgroup, columnKeys, labels, config,
         sortKey: null, sortDir: null, originalRowOrder: null,
+        columnFilters: new Map(),
     });
     applyDataTableColumnLayout(tableId);
     enableHeaderDragReorder(table, tableId);
     Array.from(table.tHead.rows[0].cells).forEach((th) => {
         attachResizeHandle(th, tableId);
         attachSortHandler(th, tableId);
+        attachColumnFilterTrigger(th, tableId);
     });
     observeTableBody(table, tableId);
 }
@@ -2345,6 +2535,18 @@ function renderDataTableColumnControls() {
                     filterBar.classList.remove('filter-bar-expanded');
                     filterBtn.setAttribute('aria-expanded', 'false');
                     filterBar.dispatchEvent(new CustomEvent('data-table:filter-clear'));
+                    // Also resets whatever per-column value filters are
+                    // active (see attachColumnFilterTrigger) — one button
+                    // clears both filtering systems at once.
+                    const colTableId = getTableId(wrapper, index);
+                    const colState = dataTableColumnState.get(colTableId);
+                    if (colState) {
+                        colState.columnFilters.clear();
+                        applyColumnValueFilters(colTableId);
+                        colState.table.tHead.rows[0].querySelectorAll('th.data-table-col-filter-active')
+                            .forEach((th) => th.classList.remove('data-table-col-filter-active'));
+                    }
+                    closeColumnFilterMenu();
                     sizeDataTableWrappers();
                 });
 

@@ -468,6 +468,7 @@
     "filterSortName": "Name",
     "filterSearchBtn": "Search",
     "filterClearBtn": "Clear",
+    "filterColumn": "Filter by this column",
     "filterDateFrom": "From date",
     "filterDateTo": "To date",
     "filterFuelSearchHint": "Unit, plates, driver, coordinator...",

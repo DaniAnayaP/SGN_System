@@ -2050,10 +2050,14 @@
        the arrow is a ::after, not an appended child: data-i18n's
        `el.textContent = ...` wipes every child of a <th> on language
        change, and every sortable <th> here has data-i18n. Positioned just
-       left of the resize handle's 6px strip so the two never overlap. */
+       left of the resize handle's 6px strip so the two never overlap.
+       padding-right leaves room for the sort arrow AND the column-filter
+       trigger button beside it (see .data-table-col-filter-trigger below —
+       that one IS an appended child, on purpose, re-attached after every
+       language change instead of fighting the wipe). */
     .data-table-col-sortable{
         cursor: pointer;
-        padding-right: 1.5rem;
+        padding-right: 2.6rem;
     }
     .data-table-col-sortable:hover{
         color: var(--color-text-primary);
@@ -2072,6 +2076,88 @@
     }
     .data-table-col-sort-desc::after{
         content: "▼";
+    }
+    /* Per-column value filter (Dashboard.js attachColumnFilterTrigger/
+       openColumnFilterMenu) — a small chevron sitting between the sort
+       arrow (right: 0.65rem) and the resize handle's 6px strip, opening a
+       floating checklist of that column's distinct values. Filled/colored
+       instead of the plain outline once a filter is actually narrowing the
+       column (data-table-col-filter-active, set on the <th> itself). */
+    .data-table-col-filter-trigger{
+        position: absolute;
+        top: 50%;
+        right: 1.55rem;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.1rem;
+        height: 1.1rem;
+        border: none;
+        border-radius: 0.25rem;
+        padding: 0;
+        background: transparent;
+        color: var(--color-text-secondary);
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+    .data-table-col-filter-trigger:hover{
+        background-color: var(--color-border);
+        color: var(--color-text-primary);
+    }
+    th.data-table-col-filter-active .data-table-col-filter-trigger{
+        color: var(--color-accent, #1a73e8);
+    }
+    /* Floating menu is appended to <body> (not the <th>) so it isn't
+       clipped by the table wrapper's own overflow:auto scroll region —
+       position is set inline in JS from the trigger's own
+       getBoundingClientRect(). */
+    .data-table-col-filter-menu{
+        position: absolute;
+        z-index: 50;
+        min-width: 12rem;
+        max-width: 18rem;
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 0.5rem;
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
+        padding: 0.4rem 0;
+        font-size: 0.82rem;
+    }
+    .data-table-col-filter-option{
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 0.8rem;
+        cursor: pointer;
+        color: var(--color-text-primary);
+    }
+    .data-table-col-filter-option:hover{
+        background-color: var(--color-bg);
+    }
+    .data-table-col-filter-option span{
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .data-table-col-filter-option input[type="checkbox"]{
+        flex-shrink: 0;
+    }
+    .data-table-col-filter-all{
+        font-weight: 600;
+        border-bottom: 1px solid var(--color-border);
+        margin-bottom: 0.25rem;
+        padding-bottom: 0.55rem;
+    }
+    .data-table-col-filter-list{
+        max-height: 16rem;
+        overflow-y: auto;
+    }
+    /* Set by applyColumnValueFilters — independent from (and composes
+       additively with) each page's own `tr.hidden`, see that function's own
+       comment in Dashboard.js. */
+    tr.data-table-row-col-filtered{
+        display: none;
     }
     /* Drag-to-reorder — shared by both the header's horizontal reorder
        (Dashboard.js enableHeaderDragReorder, applies to <th>) and the pin

@@ -468,6 +468,7 @@
     "filterSortName": "Nombre",
     "filterSearchBtn": "Buscar",
     "filterClearBtn": "Limpiar",
+    "filterColumn": "Filtrar por esta columna",
     "filterDateFrom": "Fecha desde",
     "filterDateTo": "Fecha hasta",
     "filterFuelSearchHint": "Unidad, placas, chofer, coordinador...",
