@@ -2259,6 +2259,16 @@
         cursor: pointer;
         color: var(--color-text-primary);
     }
+    /* Same author-vs-user-agent cascade gotcha as
+       .data-table-col-filter-mode-menu[hidden] above — the plain
+       `display: flex` here always won over the browser's own
+       `[hidden] { display: none }`, so searchInputChanged's row.hidden =
+       true/false (see openColumnFilterMenu) never actually hid a filtered-
+       out row from the checklist, even though the underlying selection
+       logic was computing the right answer the whole time. */
+    .data-table-col-filter-option[hidden]{
+        display: none;
+    }
     .data-table-col-filter-option:hover{
         background-color: var(--color-bg);
     }
