@@ -550,6 +550,16 @@
                         if (smLeafKeys.every((k) => set.has(k))) total += costOf(smCostKey);
 
                         sm.submenu.forEach((subSm) => {
+                            // Pantalla's OWN price — same fix as db.js's
+                            // computeCostTotalForGrantSet (see its comment):
+                            // independent from, and in addition to, the
+                            // Categoría rollup above and any Columna prices
+                            // below.
+                            const subSmItemId = subSm.standalone ? subSm.id : item.id;
+                            const subSmSubmenuId = subSm.standalone ? null : `${sm.id}/${subSm.id}`;
+                            if (set.has(keyOf(section.id, subSmItemId, subSmSubmenuId))) {
+                                total += costOf(keyOf(section.id, subSmItemId, subSmSubmenuId));
+                            }
                             if (!(subSm.submenu && subSm.submenu.length)) return;
                             subSm.submenu.forEach((col) => {
                                 const base = `${sm.id}/${subSm.id}/${col.id}`;
