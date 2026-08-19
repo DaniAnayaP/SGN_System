@@ -490,15 +490,14 @@ db.exec(`
 
     -- Costo Accesos-Permisos: a price per plan per tree node, at EVERY
     -- level (Departamento/Área/Categoría/Pantalla/Columna), stored and
-    -- summed independently per level ON PURPOSE (a fully-checked
-    -- Departamento AND a priced Pantalla underneath it both count toward
-    -- the total if both are priced and both are granted — see
-    -- computeAccessCostTotal). Departamento/Área/Categoría-con-hijos/
-    -- Columna have no grant row of their own in plan_grants (checking
-    -- them just fans out to their descendant leaves), so their cost rows
-    -- use a synthetic (sectionId, itemId, submenuId) key that can never
-    -- collide with a real plan_grants tuple — see computeAccessCostTotal
-    -- for the exact key scheme and the "selected" rule per level.
+    -- summed independently per level ON PURPOSE (a priced Departamento AND
+    -- a priced Pantalla underneath it both count toward the total). The
+    -- plan's own total (computeAccessCostTotal) is a plain sum of every row
+    -- here — pricing a node is independent from granting it in the plan's
+    -- separate access tree (plan_grants); a client's ADDITIONAL cost
+    -- (computeClientAdditionalPermissionsCost) still gates on
+    -- client_permission_grants, since that one represents what was
+    -- actually sold to that client, not just priced on the plan's sheet.
     CREATE TABLE IF NOT EXISTS plan_permission_costs (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         plan_id     INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
@@ -1678,8 +1677,10 @@ function setPlanPermissionCosts(planId, costs) {
     return getPlanPermissionCosts(planId);
 }
 
-// --- computeAccessCostTotal: the "Costo de Accesos/Permisos" sum for one --
-// --- plan, walking the SAME universal tree PermissionTree.js builds -------
+// --- buildPlanTreeSections / computeCostTotalForGrantSet: walk the SAME ---
+// --- universal tree PermissionTree.js builds, for whichever grant set ----
+// --- actually needs gating (a client's ADDITIONAL cost, not a plan's own
+// --- total — see computeAccessCostTotal below, which is just a plain sum)
 // This is a hand-kept-in-sync port of PermissionTree.js's init()/render()
 // tree-construction logic (browser code can't be required from Node in this
 // bundler-less multi-page app — same reasoning as categoriesForAreaServer
@@ -1687,9 +1688,7 @@ function setPlanPermissionCosts(planId, costs) {
 // null, costCenters: []), so this only needs to port that one code path, not
 // the allowedSectionIds-filtering / costCenters-injection branches.
 //
-// Cost is priced AND summed independently at every level (Departamento,
-// Área, Categoría, Pantalla, Columna) on purpose — see plan_permission_costs'
-// own comment. "Selected" for a level with descendants (Departamento/Área/
+// "Selected" for a level with descendants (Departamento/Área/
 // Categoría-with-children) means fully checked (every descendant leaf
 // granted, non-empty) — the exact same rollup math PermissionTree.js's
 // render() already computes for indeterminate/checked display. A Columna
@@ -1765,12 +1764,11 @@ function planSmLeafKeys(section, item, sm) {
     return [planTupleKey(section.id, item.id, sm.id)];
 }
 
-// Shared by computeAccessCostTotal (plan_grants) and
-// computeClientAdditionalPermissionsCost (client_permission_grants) — the
-// exact same per-level independent-counting rule (container = fully
-// checked, Columna = any of its 4 sub-permission levels), just
-// parameterized by which grant set counts as "selected" and which cost
-// map to charge against.
+// Used by computeClientAdditionalPermissionsCost (client_permission_grants)
+// to gate which priced nodes actually count toward a client's additional
+// cost — container = fully checked, Columna = any of its 4 sub-permission
+// levels. NOT used by computeAccessCostTotal below (a plan's own total is
+// a plain sum of every priced row, independent of plan_grants).
 function computeCostTotalForGrantSet(grantSet, costMap) {
     const costOf = (sectionId, itemId, submenuId) => costMap.get(planTupleKey(sectionId, itemId, submenuId)) || 0;
     const fullyChecked = (keys) => keys.length > 0 && keys.every((k) => grantSet.has(k));
@@ -1817,10 +1815,19 @@ function computeCostTotalForGrantSet(grantSet, costMap) {
     return total;
 }
 
+// A plan's own "Costo Accesos-Permisos" total is just the sum of every
+// price entered in its cost tree — it does NOT require the same node to
+// also be granted in the plan's separate access tree (the shield-icon
+// modal). Pricing and granting are independent actions on purpose: a price
+// alone is enough to say "this plan charges for this," so this is a plain
+// sum, not computeCostTotalForGrantSet (that shared per-level traversal is
+// still what computeClientAdditionalPermissionsCost uses below, where
+// gating by an actual grant IS correct — it represents what was really
+// sold to that one client, not just priced on the plan's sheet).
+// plan_permission_costs is sparse (cost > 0 only, see
+// setPlanPermissionCosts), so no filtering is needed here.
 function computeAccessCostTotal(planId) {
-    const grantSet = new Set(getPlanGrants(planId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
-    const costMap = new Map(getPlanPermissionCosts(planId).map((c) => [planTupleKey(c.sectionId, c.itemId, c.submenuId), c.cost]));
-    return computeCostTotalForGrantSet(grantSet, costMap);
+    return getPlanPermissionCosts(planId).reduce((sum, c) => sum + (Number(c.cost) || 0), 0);
 }
 
 function getClientPermissionGrants(clientId) {

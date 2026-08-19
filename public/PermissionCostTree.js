@@ -1,10 +1,12 @@
 // ---------------------------------------------------------------------------
 // Fork of PermissionTree.js for Costo Accesos-Permisos + Nuestros Planes'
 // own access-tree modal. A price is attached to a plan's tree at EVERY
-// level (Departamento/Área/Categoría/Pantalla/Columna), stored and summed
-// independently per level — see db.js's computeAccessCostTotal for the
-// exact "selected" rule per level and why this can double-count the same
-// access at multiple levels on purpose.
+// level (Departamento/Área/Categoría/Pantalla/Columna) — a plan's own total
+// (db.js's computeAccessCostTotal) is just the sum of every priced row,
+// independent of whether that node is also granted anywhere, so pricing a
+// Departamento AND a Pantalla underneath it both count on purpose (nothing
+// stops the same access from being priced — and billed — at more than one
+// level at once).
 //
 // PermissionTree.js has no extension hook (sectionsData/grantSet/
 // expandedSections/expandedItems are closure-private, render() blows away
