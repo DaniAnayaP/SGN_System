@@ -115,7 +115,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 20;
+    td.colSpan = 28;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
@@ -232,13 +232,38 @@ function buildReasonCells(record) {
     return { tdReason, tdTransfer, tdInternal };
 }
 
-// Evidencia Ticket — an icon button, always clickable (unlike a disabled
-// placeholder icon): with no photo yet, it opens the file picker; once one
-// is attached, it opens it in a new tab instead. Persisted as a data: URL
-// via PATCH the moment a photo is picked.
-function buildTicketCell(record) {
-    const td = document.createElement('td');
-    td.dataset.col = 'colFuelTicketEvidence';
+// Evidence preview modal — shared by every photo-evidence icon on this page
+// (Evidencia Ticket + the 2 Trip KM evidence columns). NOT window.open(url,
+// '_blank'): modern Chrome blocks a top-level navigation to a data: URL
+// (used here since every photo is stored/PATCHed as a base64 data URL, no
+// file storage backend), so that used to silently do nothing once a photo
+// was already attached. An <img> inside our own modal has no such
+// restriction.
+const evidencePreviewModal = document.getElementById('evidence-preview-modal');
+const evidencePreviewImage = document.getElementById('evidence-preview-image');
+const evidencePreviewClose = document.getElementById('evidence-preview-close');
+function openEvidencePreview(dataUrl) {
+    evidencePreviewImage.src = dataUrl;
+    evidencePreviewModal.hidden = false;
+}
+function closeEvidencePreview() {
+    evidencePreviewModal.hidden = true;
+    evidencePreviewImage.removeAttribute('src');
+}
+evidencePreviewClose.addEventListener('click', closeEvidencePreview);
+evidencePreviewModal.addEventListener('click', (event) => {
+    if (event.target === evidencePreviewModal) closeEvidencePreview();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !evidencePreviewModal.hidden) closeEvidencePreview();
+});
+
+// Shared icon-button control for every photo-evidence cell on this page:
+// always clickable (unlike a disabled placeholder icon) — with no photo
+// yet, it opens the file picker; once one is attached, it opens the shared
+// preview modal instead. Persisted as a data: URL via PATCH the moment a
+// photo is picked.
+function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKey, onCommit }) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'admin-icon-btn';
@@ -247,17 +272,16 @@ function buildTicketCell(record) {
     fileInput.accept = 'image/*';
     fileInput.hidden = true;
 
-    let dataUrl = record.ticketEvidence || null;
-    const pending = isPending(record, 'ticketEvidence');
+    let dataUrl = value || null;
     function render() {
         btn.innerHTML = `<i class="bx ${pending ? 'bx-time-five' : (dataUrl ? 'bx-receipt' : 'bx-image-add')}" aria-hidden="true"></i>`;
-        const label = pending ? 'main.changePending' : (dataUrl ? 'main.colFuelTicketEvidence' : 'main.fuelUploadTicket');
+        const label = pending ? 'main.changePending' : (dataUrl ? viewLabelKey : uploadLabelKey);
         btn.setAttribute('aria-label', Dashboard.t(label));
         btn.title = Dashboard.t(label);
     }
     btn.addEventListener('click', () => {
         if (pending) return;
-        if (dataUrl) window.open(dataUrl, '_blank');
+        if (dataUrl) openEvidencePreview(dataUrl);
         else fileInput.click();
     });
     fileInput.addEventListener('change', () => {
@@ -267,12 +291,42 @@ function buildTicketCell(record) {
         reader.onload = () => {
             dataUrl = reader.result;
             render();
-            patchFuelRecord(record.id, { ticketEvidence: dataUrl });
+            onCommit(dataUrl);
         };
         reader.readAsDataURL(file);
     });
     render();
     td.append(btn, fileInput);
+}
+
+// Evidencia Ticket — see attachEvidenceControl above.
+function buildTicketCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colFuelTicketEvidence';
+    attachEvidenceControl(td, {
+        value: record.ticketEvidence || null,
+        pending: isPending(record, 'ticketEvidence'),
+        uploadLabelKey: 'main.fuelUploadTicket',
+        viewLabelKey: 'main.colFuelTicketEvidence',
+        onCommit: (dataUrl) => patchFuelRecord(record.id, { ticketEvidence: dataUrl }),
+    });
+    return td;
+}
+
+// Evidencia fotográfica para Trip KM Antes/Después — own dedicated column
+// next to each Trip KM value (not inside the same <td> as the KM number:
+// Dashboard.attachInlineEdit does td.innerHTML = '' on every render/commit,
+// which would wipe an icon button appended into that same cell).
+function buildTripKmEvidenceCell(record, col, apiField, uploadLabelKey, viewLabelKey) {
+    const td = document.createElement('td');
+    td.dataset.col = col;
+    attachEvidenceControl(td, {
+        value: record[apiField] || null,
+        pending: isPending(record, apiField),
+        uploadLabelKey,
+        viewLabelKey,
+        onCommit: (dataUrl) => patchFuelRecord(record.id, { [apiField]: dataUrl }),
+    });
     return td;
 }
 
@@ -425,7 +479,9 @@ function buildRow(record) {
         textCell('colFuelCoordinator', record.coordinator),
         buildTicketCell(record),
         tdTripKmBefore,
+        buildTripKmEvidenceCell(record, 'colFuelTripKmBeforeEvidence', 'tripKmBeforeEvidence', 'main.fuelUploadTripKmBeforeEvidence', 'main.colFuelTripKmBeforeEvidence'),
         tdTripKmAfter,
+        buildTripKmEvidenceCell(record, 'colFuelTripKmAfterEvidence', 'tripKmAfterEvidence', 'main.fuelUploadTripKmAfterEvidence', 'main.colFuelTripKmAfterEvidence'),
         tdTripKmTotal,
         buildFuelTypeCell(record),
         tdLiters,

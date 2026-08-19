@@ -847,6 +847,20 @@ body.dark-mode .admin-save-status{
     background-color: var(--color-surface);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--color-border);
 }
+/* Wider than the default .modal-panel so an uploaded photo (ticket or Trip
+   KM evidence) has room to actually be legible instead of being squeezed
+   into a 30rem form-sized panel. */
+.evidence-preview-panel{
+    max-width: 40rem;
+}
+.evidence-preview-image{
+    display: block;
+    max-width: 100%;
+    max-height: 70vh;
+    margin: 0 auto;
+    border-radius: 0.4rem;
+    border: 1px solid var(--color-border);
+}
 /* Full-bleed shaded header banner (same --color-bg "recessed" tone already
    used to distinguish table headers from their rows) instead of the title
    just sitting on the same --color-surface as the rest of the modal —

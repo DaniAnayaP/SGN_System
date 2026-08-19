@@ -138,7 +138,9 @@ db.exec(`
         coordinator         TEXT NOT NULL,
         ticket_evidence     TEXT NOT NULL DEFAULT '',
         trip_km_before      REAL NOT NULL DEFAULT 0,
+        trip_km_before_evidence TEXT NOT NULL DEFAULT '',
         trip_km_after       REAL NOT NULL DEFAULT 0,
+        trip_km_after_evidence  TEXT NOT NULL DEFAULT '',
         fuel_type           TEXT NOT NULL DEFAULT '',
         liters              REAL NOT NULL DEFAULT 0,
         subtotal            REAL NOT NULL DEFAULT 0,
@@ -638,6 +640,15 @@ if (!fuelRecordColumns.some((c) => c.name === 'trip_km_before')) {
 }
 if (!fuelRecordColumns.some((c) => c.name === 'trip_km_after')) {
     db.exec('ALTER TABLE fuel_records ADD COLUMN trip_km_after REAL NOT NULL DEFAULT 0');
+}
+
+// Evidencia fotográfica for Trip KM Antes/Después, added after fuel_records
+// already shipped once — same data: URL pattern as ticket_evidence.
+if (!fuelRecordColumns.some((c) => c.name === 'trip_km_before_evidence')) {
+    db.exec("ALTER TABLE fuel_records ADD COLUMN trip_km_before_evidence TEXT NOT NULL DEFAULT ''");
+}
+if (!fuelRecordColumns.some((c) => c.name === 'trip_km_after_evidence')) {
+    db.exec("ALTER TABLE fuel_records ADD COLUMN trip_km_after_evidence TEXT NOT NULL DEFAULT ''");
 }
 
 // Tipo Combustible / Cant Litros added after fuel_records already shipped
@@ -1285,7 +1296,9 @@ const FUEL_PATCHABLE_FIELDS = {
     plates: { column: 'plates', fieldKey: 'main.colFuelPlates' },
     ticketEvidence: { column: 'ticket_evidence', fieldKey: 'main.colFuelTicketEvidence' },
     tripKmBefore: { column: 'trip_km_before', fieldKey: 'main.colFuelTripKmBefore' },
+    tripKmBeforeEvidence: { column: 'trip_km_before_evidence', fieldKey: 'main.colFuelTripKmBeforeEvidence' },
     tripKmAfter: { column: 'trip_km_after', fieldKey: 'main.colFuelTripKmAfter' },
+    tripKmAfterEvidence: { column: 'trip_km_after_evidence', fieldKey: 'main.colFuelTripKmAfterEvidence' },
     fuelType: { column: 'fuel_type', fieldKey: 'main.colFuelType' },
     liters: { column: 'liters', fieldKey: 'main.colFuelLiters' },
     subtotal: { column: 'subtotal', fieldKey: 'main.colFuelSubtotal' },

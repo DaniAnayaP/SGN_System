@@ -1452,7 +1452,9 @@ function mapFuelRecord(row, pendingByRecord) {
         coordinator: row.coordinator,
         ticketEvidence: row.ticket_evidence,
         tripKmBefore: row.trip_km_before,
+        tripKmBeforeEvidence: row.trip_km_before_evidence,
         tripKmAfter: row.trip_km_after,
+        tripKmAfterEvidence: row.trip_km_after_evidence,
         fuelType: row.fuel_type,
         liters: row.liters,
         subtotal: row.subtotal,
@@ -1503,6 +1505,8 @@ app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     // rejectedFields is simply excluded from what actually gets written.
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FUEL_PATCHABLE_FIELDS, 'registro-combustible', existing.eco_unit, {
         ticketEvidence: (v) => (v ? '[imagen]' : ''),
+        tripKmBeforeEvidence: (v) => (v ? '[imagen]' : ''),
+        tripKmAfterEvidence: (v) => (v ? '[imagen]' : ''),
     });
     const record = updateFuelRecord(req.params.id, req.user.clientId, appliedPatch);
     res.json({ record: mapFuelRecord(record), pendingFields, rejectedFields });
@@ -1615,7 +1619,11 @@ const PENDING_CHANGE_APPLIERS = {
     'mi-recurso-humano': (recordId, clientId, patch) => updateHrWorker(recordId, clientId, patch),
 };
 const PENDING_CHANGE_SANITIZERS = {
-    'registro-combustible': { ticketEvidence: (v) => (v ? '[imagen]' : '') },
+    'registro-combustible': {
+        ticketEvidence: (v) => (v ? '[imagen]' : ''),
+        tripKmBeforeEvidence: (v) => (v ? '[imagen]' : ''),
+        tripKmAfterEvidence: (v) => (v ? '[imagen]' : ''),
+    },
 };
 
 app.get('/api/business/pending-changes', requireAuth, (req, res) => {

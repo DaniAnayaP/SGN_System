@@ -358,7 +358,9 @@
                             <th data-i18n="main.colFuelCoordinator" data-col="colFuelCoordinator">Coordinator</th>
                             <th data-i18n="main.colFuelTicketEvidence" data-col="colFuelTicketEvidence">Ticket Evidence</th>
                             <th data-i18n="main.colFuelTripKmBefore" data-col="colFuelTripKmBefore">Trip KM Before Load</th>
+                            <th data-i18n="main.colFuelTripKmBeforeEvidence" data-col="colFuelTripKmBeforeEvidence">Trip KM Before Evidence</th>
                             <th data-i18n="main.colFuelTripKmAfter" data-col="colFuelTripKmAfter">Trip KM After Load</th>
+                            <th data-i18n="main.colFuelTripKmAfterEvidence" data-col="colFuelTripKmAfterEvidence">Trip KM After Evidence</th>
                             <th data-i18n="main.colFuelTripKmTotal" data-col="colFuelTripKmTotal">Total Trip KM Acquired</th>
                             <th data-i18n="main.colFuelType" data-col="colFuelType">Fuel Type</th>
                             <th data-i18n="main.colFuelLiters" data-col="colFuelLiters">Liters</th>
@@ -374,7 +376,7 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="data-table-empty-cell" colspan="26">
+                            <td class="data-table-empty-cell" colspan="28">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -434,6 +436,16 @@
                     </button>
                 </li>
             </ul>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="evidence-preview-modal" hidden>
+        <div class="modal-panel evidence-preview-panel" role="dialog" aria-modal="true" aria-labelledby="evidence-preview-modal-title">
+            <h3 id="evidence-preview-modal-title" data-i18n="main.evidencePreviewTitle">Evidence</h3>
+            <img class="evidence-preview-image" id="evidence-preview-image" src="" alt="">
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" id="evidence-preview-close" data-i18n="main.close">Close</button>
+            </div>
         </div>
     </div>
 
