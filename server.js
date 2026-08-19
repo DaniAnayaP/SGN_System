@@ -1496,9 +1496,14 @@ app.delete('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (r
 // but any authenticated user at the client can READ it, since Mi Recurso
 // Humano's Puesto field needs the (active-only) list for its own dropdown.
 const JOB_POSITION_STATUSES = ['active', 'inactive'];
-function validateJobPositionBody(body) {
+// requireName: false for PATCH — Centros de Costo Habilitados is edited
+// from its own table-column modal now (see Business-PuestosTrabajo.js),
+// sending a patch body with ONLY costCenterScope, so name can't be
+// required there the way it is for a full create/edit-modal save.
+function validateJobPositionBody(body, { requireName = true } = {}) {
     const { name, status, costCenterScope } = body || {};
-    if (!name || !name.trim()) return 'name is required.';
+    if (requireName && (!name || !name.trim())) return 'name is required.';
+    if (!requireName && name !== undefined && !name.trim()) return 'name is required.';
     if (status !== undefined && !JOB_POSITION_STATUSES.includes(status)) {
         return `status must be one of: ${JOB_POSITION_STATUSES.join(', ')}.`;
     }
@@ -1543,14 +1548,14 @@ app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, r
 app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (req, res) => {
     const existing = getJobPositionById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Job position not found.' });
-    const error = validateJobPositionBody(req.body);
+    const error = validateJobPositionBody(req.body, { requireName: false });
     if (error) return res.status(400).json({ message: error });
     const { name, abbreviation, costCenterScope, status } = req.body;
     if (Array.isArray(costCenterScope) && costCenterScope.some((id) => !getCostCenterById(id, req.user.clientId))) {
         return res.status(400).json({ message: 'costCenterScope contains a cost center that does not belong to this client.' });
     }
     const patch = {
-        name: name.trim(),
+        name: name !== undefined ? name.trim() : existing.name,
         abbreviation: abbreviation !== undefined ? abbreviation.trim() : existing.abbreviation,
         costCenterScope: costCenterScope !== undefined
             ? (costCenterScope === 'all' ? 'all' : JSON.stringify(costCenterScope))

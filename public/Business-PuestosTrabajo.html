@@ -312,7 +312,6 @@
             <p class="admin-subtitle" data-i18n="business.jobPositionsSubtitle">Manage your company's job positions — only active ones show up in Mi Recurso Humano's Puesto field.</p>
 
             <form id="jp-form" class="admin-form" novalidate>
-                <input type="hidden" id="jp-id" value="">
                 <div class="admin-form-grid">
                     <div class="admin-field">
                         <label for="jp-name" data-i18n="business.jobPositionName">Position Name</label>
@@ -330,16 +329,9 @@
                         </select>
                     </div>
                 </div>
-                <div class="admin-field" style="margin-top: 1rem;">
-                    <label data-i18n="business.jobPositionCostCenters">Enabled Cost Centers</label>
-                    <div class="hr-department-checklist" id="jp-cost-center-checklist">
-                        <!-- rendered at runtime -->
-                    </div>
-                </div>
                 <div id="jp-form-error" class="admin-error" role="alert" hidden></div>
                 <div class="admin-form-actions">
                     <button type="submit" class="btn" id="jp-form-submit" data-i18n="business.addJobPosition">Add job position</button>
-                    <button type="button" class="btn btn-secondary" id="jp-form-cancel" data-i18n="admin.cancel" hidden>Cancel</button>
                 </div>
             </form>
 
@@ -385,6 +377,53 @@
             </div>
         </section>
     </main>
+
+    <div class="modal-overlay" id="jp-edit-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="jp-edit-modal-title">
+            <h3 id="jp-edit-modal-title" data-i18n="business.jobPositionEditTitle">Edit Job Position</h3>
+            <input type="hidden" id="jp-edit-id" value="">
+            <div class="admin-form-grid">
+                <div class="admin-field">
+                    <label for="jp-edit-name" data-i18n="business.jobPositionName">Position Name</label>
+                    <input id="jp-edit-name" type="text" required>
+                </div>
+                <div class="admin-field">
+                    <label for="jp-edit-abbreviation" data-i18n="business.jobPositionAbbreviation">Position Abbreviation</label>
+                    <input id="jp-edit-abbreviation" type="text">
+                </div>
+                <div class="admin-field">
+                    <label for="jp-edit-status" data-i18n="business.jobPositionStatus">Status</label>
+                    <select id="jp-edit-status">
+                        <option value="active" data-i18n="main.filterActive">Active</option>
+                        <option value="inactive" data-i18n="main.filterInactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            <div id="jp-edit-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="jp-edit-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="jp-edit-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Centros de Costo Habilitados — click-to-edit from the table column
+         (see Business-PuestosTrabajo.js), not part of creating/editing a
+         Puesto's own fields above. Same checklist markup as the create
+         form used before this modal existed. -->
+    <div class="modal-overlay" id="jp-cost-center-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="jp-cost-center-modal-title">
+            <h3 id="jp-cost-center-modal-title" data-i18n="business.jobPositionCostCenters">Enabled Cost Centers</h3>
+            <div class="hr-department-checklist" id="jp-cost-center-modal-list">
+                <!-- rendered at runtime -->
+            </div>
+            <div id="jp-cost-center-modal-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="jp-cost-center-modal-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="jp-cost-center-modal-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">

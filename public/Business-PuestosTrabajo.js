@@ -7,14 +7,11 @@
 // ---------------------------------------------------------------------------
 
 const form = document.getElementById('jp-form');
-const idField = document.getElementById('jp-id');
 const nameField = document.getElementById('jp-name');
 const abbreviationField = document.getElementById('jp-abbreviation');
-const costCenterChecklist = document.getElementById('jp-cost-center-checklist');
 const statusField = document.getElementById('jp-status');
 const errorBanner = document.getElementById('jp-form-error');
 const submitBtn = document.getElementById('jp-form-submit');
-const cancelBtn = document.getElementById('jp-form-cancel');
 const tableBody = document.getElementById('jp-table-body');
 const emptyMsg = document.getElementById('jp-empty');
 
@@ -33,12 +30,14 @@ async function loadCostCenters() {
     }
 }
 // Centro Costos Habilitados — a Puesto can be enabled for one, several, or
-// every active cost center (confirmed with the user), so this is a
-// checklist (like Mi Recurso Humano's own Departamento checklist) instead
-// of a plain single-value <select>. "Todos" is a distinct scope value
-// ('all', stored as-is) rather than "every box happens to be checked" —
-// a newly created cost center should automatically be covered by a Puesto
-// already set to "Todos", not left out until someone re-checks it by hand.
+// every active cost center (confirmed with the user), set from its own
+// click-to-edit table column (see openCostCenterModal below), never from
+// the creation form — a new Puesto always starts at "Todos" and gets
+// narrowed down afterward, same reasoning as Mi Recurso Humano's own
+// Departamento checklist column. "Todos" is a distinct scope value ('all',
+// stored as-is) rather than "every box happens to be checked" — a newly
+// created cost center should automatically be covered by a Puesto already
+// set to "Todos", not left out until someone re-checks it by hand.
 function parseCostCenterScope(raw) {
     if (!raw || raw === 'all') return 'all';
     try {
@@ -118,11 +117,7 @@ function clearError() {
 
 function resetForm() {
     form.reset();
-    idField.value = '';
-    buildCostCenterScopeChecklist(costCenterChecklist, 'all');
     statusField.value = 'active';
-    submitBtn.textContent = Dashboard.t('business.addJobPosition');
-    cancelBtn.hidden = true;
     clearError();
 }
 
@@ -132,10 +127,6 @@ function renderJobPositions() {
     jobPositions.forEach((jp) => {
         const tr = document.createElement('tr');
         tr.dataset.status = jp.status;
-        // Admin-only screen, every row editable via the form above
-        // (startEdit) — no per-column permission model, same reasoning as
-        // Centros de Costo.
-        tr.classList.add('data-table-row-editable');
 
         const tdName = document.createElement('td');
         tdName.dataset.col = 'jpName';
@@ -145,9 +136,16 @@ function renderJobPositions() {
         tdAbbreviation.dataset.col = 'jpAbbreviation';
         tdAbbreviation.textContent = jp.abbreviation || '—';
 
+        // Centros de Costo Habilitados — click-to-edit, opens
+        // jp-cost-center-modal (a plain text cell can't represent "more
+        // than one selected" well), same pattern as Mi Recurso Humano's
+        // own Departamento(s) column.
         const tdCostCenter = document.createElement('td');
         tdCostCenter.dataset.col = 'jpCostCenter';
         tdCostCenter.textContent = costCenterScopeLabel(jp.cost_center_scope);
+        tdCostCenter.classList.add('editable-cell');
+        tdCostCenter.title = Dashboard.t('main.fuelClickToEdit');
+        tdCostCenter.onclick = () => openCostCenterModal(jp);
 
         const tdStatus = document.createElement('td');
         tdStatus.dataset.col = 'jpStatus';
@@ -171,7 +169,7 @@ function renderJobPositions() {
         editBtn.className = 'admin-icon-btn';
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
-        editBtn.addEventListener('click', () => startEdit(jp));
+        editBtn.addEventListener('click', () => openEditModal(jp));
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
@@ -206,18 +204,6 @@ function applyJpFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyJpFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyJpFilters);
 
-function startEdit(jp) {
-    idField.value = jp.id;
-    nameField.value = jp.name;
-    abbreviationField.value = jp.abbreviation || '';
-    buildCostCenterScopeChecklist(costCenterChecklist, parseCostCenterScope(jp.cost_center_scope));
-    statusField.value = jp.status;
-    submitBtn.textContent = Dashboard.t('admin.save');
-    cancelBtn.hidden = false;
-    clearError();
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
 async function removeJobPosition(jp) {
     if (!confirm(Dashboard.t('business.jobPositionDeleteConfirm'))) return;
     try {
@@ -242,6 +228,9 @@ async function loadJobPositions() {
     }
 }
 
+// --- "Agregar puesto" — creation only; a new Puesto starts at cost-center
+// scope 'all' (see createJobPosition's own default in db.js) and gets
+// narrowed down afterward via the table column, not here.
 form.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearError();
@@ -252,24 +241,15 @@ form.addEventListener('submit', async (event) => {
         return;
     }
     const abbreviation = abbreviationField.value.trim();
-    const costCenterScope = readCostCenterScope(costCenterChecklist);
-    if (Array.isArray(costCenterScope) && !costCenterScope.length) {
-        showError(Dashboard.t('business.jobPositionCostCentersRequired'));
-        return;
-    }
     const status = statusField.value;
-
-    const editingId = idField.value;
-    const url = editingId ? `/api/business/job-positions/${editingId}` : '/api/business/job-positions';
-    const method = editingId ? 'PATCH' : 'POST';
 
     submitBtn.disabled = true;
     try {
-        const res = await fetch(url, {
-            method,
+        const res = await fetch('/api/business/job-positions', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, abbreviation, costCenterScope, status }),
+            body: JSON.stringify({ name, abbreviation, status }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -281,11 +261,7 @@ form.addEventListener('submit', async (event) => {
             return;
         }
         const { jobPosition } = await res.json();
-        if (editingId) {
-            jobPositions = jobPositions.map((p) => (p.id === jobPosition.id ? jobPosition : p));
-        } else {
-            jobPositions = [...jobPositions, jobPosition].sort((a, b) => a.name.localeCompare(b.name));
-        }
+        jobPositions = [...jobPositions, jobPosition].sort((a, b) => a.name.localeCompare(b.name));
         renderJobPositions();
         resetForm();
     } catch {
@@ -295,19 +271,142 @@ form.addEventListener('submit', async (event) => {
     }
 });
 
-cancelBtn.addEventListener('click', resetForm);
+// --- Editar Puesto — a real modal (pantalla alterna) opened from the
+// pencil icon, instead of reusing/scrolling to the creation form above.
+// Only Nombre/Abrev/Estatus live here; Centros de Costo Habilitados has
+// its own modal below.
+const editModal = document.getElementById('jp-edit-modal');
+const editIdField = document.getElementById('jp-edit-id');
+const editNameField = document.getElementById('jp-edit-name');
+const editAbbreviationField = document.getElementById('jp-edit-abbreviation');
+const editStatusField = document.getElementById('jp-edit-status');
+const editError = document.getElementById('jp-edit-error');
+const editSaveBtn = document.getElementById('jp-edit-save');
+const editCancelBtn = document.getElementById('jp-edit-cancel');
 
-document.addEventListener('dashboard:language-changed', () => {
-    if (!idField.value) submitBtn.textContent = Dashboard.t('business.addJobPosition');
-    renderJobPositions();
+function openEditModal(jp) {
+    editIdField.value = jp.id;
+    editNameField.value = jp.name;
+    editAbbreviationField.value = jp.abbreviation || '';
+    editStatusField.value = jp.status;
+    editError.hidden = true;
+    editModal.hidden = false;
+}
+function closeEditModal() {
+    editModal.hidden = true;
+}
+async function saveEditModal() {
+    const name = editNameField.value.trim();
+    if (!name) {
+        editError.textContent = Dashboard.t('admin.requiredFields');
+        editError.hidden = false;
+        return;
+    }
+    editSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/business/job-positions/${editIdField.value}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                name, abbreviation: editAbbreviationField.value.trim(), status: editStatusField.value,
+            }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            editError.textContent = body.message === 'A job position with that name already exists.'
+                ? Dashboard.t('business.jobPositionNameExists')
+                : (body.message || Dashboard.t('admin.saveError'));
+            editError.hidden = false;
+            return;
+        }
+        const { jobPosition } = await res.json();
+        jobPositions = jobPositions.map((p) => (p.id === jobPosition.id ? jobPosition : p));
+        renderJobPositions();
+        closeEditModal();
+    } catch {
+        editError.textContent = Dashboard.t('admin.saveError');
+        editError.hidden = false;
+    } finally {
+        editSaveBtn.disabled = false;
+    }
+}
+editSaveBtn.addEventListener('click', saveEditModal);
+editCancelBtn.addEventListener('click', closeEditModal);
+editModal.addEventListener('click', (event) => {
+    if (event.target === editModal) closeEditModal();
 });
+
+// --- Centros de Costo Habilitados — click-to-edit modal from the table
+// column.
+const ccModal = document.getElementById('jp-cost-center-modal');
+const ccModalList = document.getElementById('jp-cost-center-modal-list');
+const ccModalError = document.getElementById('jp-cost-center-modal-error');
+const ccModalSaveBtn = document.getElementById('jp-cost-center-modal-save');
+const ccModalCancelBtn = document.getElementById('jp-cost-center-modal-cancel');
+let editingCostCenterJpId = null;
+
+function openCostCenterModal(jp) {
+    editingCostCenterJpId = jp.id;
+    buildCostCenterScopeChecklist(ccModalList, parseCostCenterScope(jp.cost_center_scope));
+    ccModalError.hidden = true;
+    ccModal.hidden = false;
+}
+function closeCostCenterModal() {
+    ccModal.hidden = true;
+    editingCostCenterJpId = null;
+}
+async function saveCostCenterModal() {
+    const costCenterScope = readCostCenterScope(ccModalList);
+    if (Array.isArray(costCenterScope) && !costCenterScope.length) {
+        ccModalError.textContent = Dashboard.t('business.jobPositionCostCentersRequired');
+        ccModalError.hidden = false;
+        return;
+    }
+    ccModalSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/business/job-positions/${editingCostCenterJpId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ costCenterScope }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            ccModalError.textContent = body.message || Dashboard.t('admin.saveError');
+            ccModalError.hidden = false;
+            return;
+        }
+        const { jobPosition } = await res.json();
+        jobPositions = jobPositions.map((p) => (p.id === jobPosition.id ? jobPosition : p));
+        renderJobPositions();
+        closeCostCenterModal();
+    } catch {
+        ccModalError.textContent = Dashboard.t('admin.saveError');
+        ccModalError.hidden = false;
+    } finally {
+        ccModalSaveBtn.disabled = false;
+    }
+}
+ccModalSaveBtn.addEventListener('click', saveCostCenterModal);
+ccModalCancelBtn.addEventListener('click', closeCostCenterModal);
+ccModal.addEventListener('click', (event) => {
+    if (event.target === ccModal) closeCostCenterModal();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!editModal.hidden) closeEditModal();
+    if (!ccModal.hidden) closeCostCenterModal();
+});
+
+document.addEventListener('dashboard:language-changed', renderJobPositions);
 
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'cat-catalogos-puestos-trabajo' });
         if (!role) return;
         await loadCostCenters();
-        buildCostCenterScopeChecklist(costCenterChecklist, 'all');
         await loadJobPositions();
     } catch (err) {
         console.error('Business (Puestos de Trabajo) failed to initialize:', err);

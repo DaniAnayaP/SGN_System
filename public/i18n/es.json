@@ -406,6 +406,7 @@
     "jobPositionsSubtitle": "Administra el catálogo de puestos de tu empresa — solo los activos aparecen en el campo Puesto de Mi Recurso Humano.",
     "jobPositionName": "Nombre del Puesto",
     "jobPositionAbbreviation": "Abrev Puesto",
+    "jobPositionEditTitle": "Editar Puesto de Trabajo",
     "jobPositionCostCenters": "Centros de Costo Habilitados",
     "jobPositionCostCentersRequired": "Selecciona al menos un centro de costos o Todos.",
     "jobPositionStatus": "Estatus",
