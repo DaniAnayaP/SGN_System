@@ -1497,10 +1497,14 @@ app.delete('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (r
 // Humano's Puesto field needs the (active-only) list for its own dropdown.
 const JOB_POSITION_STATUSES = ['active', 'inactive'];
 function validateJobPositionBody(body) {
-    const { name, status } = body || {};
+    const { name, status, costCenterScope } = body || {};
     if (!name || !name.trim()) return 'name is required.';
     if (status !== undefined && !JOB_POSITION_STATUSES.includes(status)) {
         return `status must be one of: ${JOB_POSITION_STATUSES.join(', ')}.`;
+    }
+    if (costCenterScope !== undefined && costCenterScope !== 'all'
+        && (!Array.isArray(costCenterScope) || !costCenterScope.length)) {
+        return 'costCenterScope must be "all" or a non-empty array of cost center ids.';
     }
     return null;
 }
@@ -1513,14 +1517,15 @@ app.get('/api/business/job-positions', requireAuth, (req, res) => {
 app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, res) => {
     const error = validateJobPositionBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, abbreviation, costCenterId, status } = req.body;
-    if (costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId)) {
-        return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
+    const { name, abbreviation, costCenterScope, status } = req.body;
+    if (Array.isArray(costCenterScope) && costCenterScope.some((id) => !getCostCenterById(id, req.user.clientId))) {
+        return res.status(400).json({ message: 'costCenterScope contains a cost center that does not belong to this client.' });
     }
     try {
         const jobPosition = createJobPosition({
             clientId: req.user.clientId, name: name.trim(), abbreviation: (abbreviation || '').trim(),
-            costCenterId: costCenterId || null, status,
+            costCenterScope: Array.isArray(costCenterScope) ? JSON.stringify(costCenterScope) : 'all',
+            status,
         });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: jobPosition.id,
@@ -1540,14 +1545,16 @@ app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (r
     if (!existing) return res.status(404).json({ message: 'Job position not found.' });
     const error = validateJobPositionBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, abbreviation, costCenterId, status } = req.body;
-    if (costCenterId !== undefined && costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId)) {
-        return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
+    const { name, abbreviation, costCenterScope, status } = req.body;
+    if (Array.isArray(costCenterScope) && costCenterScope.some((id) => !getCostCenterById(id, req.user.clientId))) {
+        return res.status(400).json({ message: 'costCenterScope contains a cost center that does not belong to this client.' });
     }
     const patch = {
         name: name.trim(),
         abbreviation: abbreviation !== undefined ? abbreviation.trim() : existing.abbreviation,
-        costCenterId: costCenterId !== undefined ? costCenterId : existing.cost_center_id,
+        costCenterScope: costCenterScope !== undefined
+            ? (costCenterScope === 'all' ? 'all' : JSON.stringify(costCenterScope))
+            : existing.cost_center_scope,
         status: status ?? existing.status,
     };
     // requireClientAdmin-gated: same reasoning as Centros de Costo's own

@@ -715,6 +715,20 @@ if (!jobPositionColumns.some((c) => c.name === 'abbreviation')) {
 if (!jobPositionColumns.some((c) => c.name === 'cost_center_id')) {
     db.exec('ALTER TABLE job_positions ADD COLUMN cost_center_id INTEGER REFERENCES cost_centers(id)');
 }
+// cost_center_scope replaces cost_center_id (kept, but frozen/unused going
+// forward — same "add alongside, never drop" convention as contracted_cost)
+// with a job position now enabled for 'all' cost centers or a specific JSON
+// array of ids — confirmed with the user: a Puesto can be enabled for one,
+// several, or every active cost center. Existing single-value rows are
+// backfilled into a one-item array; a Puesto with none set becomes 'all'
+// (available everywhere) rather than silently disappearing from every cost
+// center's Mi Recurso Humano dropdown.
+if (!jobPositionColumns.some((c) => c.name === 'cost_center_scope')) {
+    db.exec("ALTER TABLE job_positions ADD COLUMN cost_center_scope TEXT NOT NULL DEFAULT 'all'");
+    const jobPositionsWithSingleCC = db.prepare('SELECT id, cost_center_id FROM job_positions WHERE cost_center_id IS NOT NULL').all();
+    const backfillScope = db.prepare('UPDATE job_positions SET cost_center_scope = ? WHERE id = ?');
+    jobPositionsWithSingleCC.forEach((row) => backfillScope.run(JSON.stringify([row.cost_center_id]), row.id));
+}
 
 // requested_by/authorized_by added after data_table_changes already shipped
 // once — nullable, only ever filled for rows created via an approved
@@ -1330,25 +1344,25 @@ function getJobPositionById(id, clientId) {
     return db.prepare('SELECT * FROM job_positions WHERE id = ? AND client_id = ?').get(id, clientId);
 }
 
-function createJobPosition({ clientId, name, abbreviation, costCenterId, status }) {
+function createJobPosition({ clientId, name, abbreviation, costCenterScope, status }) {
     const result = db
-        .prepare('INSERT INTO job_positions (client_id, name, abbreviation, cost_center_id, status) VALUES (@clientId, @name, @abbreviation, @costCenterId, @status)')
-        .run({ clientId, name, abbreviation: abbreviation || '', costCenterId: costCenterId || null, status: status || 'active' });
+        .prepare('INSERT INTO job_positions (client_id, name, abbreviation, cost_center_scope, status) VALUES (@clientId, @name, @abbreviation, @costCenterScope, @status)')
+        .run({ clientId, name, abbreviation: abbreviation || '', costCenterScope: costCenterScope || 'all', status: status || 'active' });
     return getJobPositionById(result.lastInsertRowid, clientId);
 }
 
 const JOB_POSITION_FIELDS = {
     name: { column: 'name', fieldKey: 'business.jobPositionName' },
     abbreviation: { column: 'abbreviation', fieldKey: 'business.jobPositionAbbreviation' },
-    costCenterId: { column: 'cost_center_id', fieldKey: 'main.colHrCostCenter' },
+    costCenterScope: { column: 'cost_center_scope', fieldKey: 'business.jobPositionCostCenters' },
     status: { column: 'status', fieldKey: 'business.jobPositionStatus' },
 };
 
-function updateJobPosition(id, clientId, { name, abbreviation, costCenterId, status }) {
+function updateJobPosition(id, clientId, { name, abbreviation, costCenterScope, status }) {
     db.prepare(`
-        UPDATE job_positions SET name = @name, abbreviation = @abbreviation, cost_center_id = @costCenterId, status = @status
+        UPDATE job_positions SET name = @name, abbreviation = @abbreviation, cost_center_scope = @costCenterScope, status = @status
         WHERE id = @id AND client_id = @clientId
-    `).run({ id, clientId, name, abbreviation: abbreviation || '', costCenterId: costCenterId || null, status });
+    `).run({ id, clientId, name, abbreviation: abbreviation || '', costCenterScope: costCenterScope || 'all', status });
     return getJobPositionById(id, clientId);
 }
 

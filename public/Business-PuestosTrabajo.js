@@ -10,7 +10,7 @@ const form = document.getElementById('jp-form');
 const idField = document.getElementById('jp-id');
 const nameField = document.getElementById('jp-name');
 const abbreviationField = document.getElementById('jp-abbreviation');
-const costCenterField = document.getElementById('jp-cost-center');
+const costCenterChecklist = document.getElementById('jp-cost-center-checklist');
 const statusField = document.getElementById('jp-status');
 const errorBanner = document.getElementById('jp-form-error');
 const submitBtn = document.getElementById('jp-form-submit');
@@ -32,24 +32,79 @@ async function loadCostCenters() {
         costCenters = [];
     }
 }
-function populateCostCenterSelect(select, selectedId) {
-    select.innerHTML = '';
-    const noneOpt = document.createElement('option');
-    noneOpt.value = '';
-    noneOpt.textContent = Dashboard.t('main.hrNoCostCenter');
-    select.appendChild(noneOpt);
-    costCenters.forEach((cc) => {
-        const opt = document.createElement('option');
-        opt.value = cc.id;
-        opt.textContent = `${cc.code} - ${cc.name}`;
-        select.appendChild(opt);
-    });
-    select.value = selectedId ? String(selectedId) : '';
+// Centro Costos Habilitados — a Puesto can be enabled for one, several, or
+// every active cost center (confirmed with the user), so this is a
+// checklist (like Mi Recurso Humano's own Departamento checklist) instead
+// of a plain single-value <select>. "Todos" is a distinct scope value
+// ('all', stored as-is) rather than "every box happens to be checked" —
+// a newly created cost center should automatically be covered by a Puesto
+// already set to "Todos", not left out until someone re-checks it by hand.
+function parseCostCenterScope(raw) {
+    if (!raw || raw === 'all') return 'all';
+    try {
+        const ids = JSON.parse(raw);
+        return Array.isArray(ids) ? ids.map(Number) : 'all';
+    } catch {
+        return 'all';
+    }
 }
-function costCenterLabel(costCenterId) {
-    if (!costCenterId) return '—';
-    const cc = costCenters.find((c) => c.id === costCenterId);
-    return cc ? `${cc.code} - ${cc.name}` : '—';
+function buildCostCenterScopeChecklist(container, scope) {
+    container.innerHTML = '';
+    const header = document.createElement('div');
+    header.className = 'hr-department-checklist-header';
+    header.textContent = Dashboard.t('business.jobPositionCostCenters');
+    container.appendChild(header);
+
+    const isAll = scope === 'all';
+    const selectedIds = new Set(Array.isArray(scope) ? scope : []);
+
+    const allLabel = document.createElement('label');
+    const allInput = document.createElement('input');
+    allInput.type = 'checkbox';
+    allInput.className = 'jp-cc-all-checkbox';
+    allInput.checked = isAll;
+    const allSpan = document.createElement('span');
+    allSpan.textContent = Dashboard.t('main.filterAll');
+    allLabel.append(allInput, allSpan);
+    container.appendChild(allLabel);
+
+    const individualInputs = [];
+    costCenters.forEach((cc) => {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = cc.id;
+        input.checked = isAll || selectedIds.has(cc.id);
+        input.disabled = isAll;
+        const span = document.createElement('span');
+        span.textContent = `${cc.code} - ${cc.name}`;
+        label.append(input, span);
+        container.appendChild(label);
+        individualInputs.push(input);
+    });
+
+    allInput.addEventListener('change', () => {
+        individualInputs.forEach((input) => {
+            input.disabled = allInput.checked;
+            if (allInput.checked) input.checked = true;
+        });
+    });
+}
+// Returns 'all' or a (possibly empty — caller validates) array of ids.
+function readCostCenterScope(container) {
+    if (container.querySelector('.jp-cc-all-checkbox')?.checked) return 'all';
+    return Array.from(container.querySelectorAll('input[type="checkbox"]:not(.jp-cc-all-checkbox):checked'))
+        .map((input) => Number(input.value));
+}
+function costCenterScopeLabel(raw) {
+    const scope = parseCostCenterScope(raw);
+    if (scope === 'all') return Dashboard.t('main.filterAll');
+    if (!scope.length) return '—';
+    return scope
+        .map((id) => costCenters.find((c) => c.id === id))
+        .filter(Boolean)
+        .map((cc) => cc.code)
+        .join(', ') || '—';
 }
 
 function showError(message) {
@@ -64,7 +119,7 @@ function clearError() {
 function resetForm() {
     form.reset();
     idField.value = '';
-    populateCostCenterSelect(costCenterField, null);
+    buildCostCenterScopeChecklist(costCenterChecklist, 'all');
     statusField.value = 'active';
     submitBtn.textContent = Dashboard.t('business.addJobPosition');
     cancelBtn.hidden = true;
@@ -92,7 +147,7 @@ function renderJobPositions() {
 
         const tdCostCenter = document.createElement('td');
         tdCostCenter.dataset.col = 'jpCostCenter';
-        tdCostCenter.textContent = costCenterLabel(jp.cost_center_id);
+        tdCostCenter.textContent = costCenterScopeLabel(jp.cost_center_scope);
 
         const tdStatus = document.createElement('td');
         tdStatus.dataset.col = 'jpStatus';
@@ -155,7 +210,7 @@ function startEdit(jp) {
     idField.value = jp.id;
     nameField.value = jp.name;
     abbreviationField.value = jp.abbreviation || '';
-    populateCostCenterSelect(costCenterField, jp.cost_center_id);
+    buildCostCenterScopeChecklist(costCenterChecklist, parseCostCenterScope(jp.cost_center_scope));
     statusField.value = jp.status;
     submitBtn.textContent = Dashboard.t('admin.save');
     cancelBtn.hidden = false;
@@ -197,7 +252,11 @@ form.addEventListener('submit', async (event) => {
         return;
     }
     const abbreviation = abbreviationField.value.trim();
-    const costCenterId = costCenterField.value ? Number(costCenterField.value) : null;
+    const costCenterScope = readCostCenterScope(costCenterChecklist);
+    if (Array.isArray(costCenterScope) && !costCenterScope.length) {
+        showError(Dashboard.t('business.jobPositionCostCentersRequired'));
+        return;
+    }
     const status = statusField.value;
 
     const editingId = idField.value;
@@ -210,7 +269,7 @@ form.addEventListener('submit', async (event) => {
             method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, abbreviation, costCenterId, status }),
+            body: JSON.stringify({ name, abbreviation, costCenterScope, status }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -248,6 +307,7 @@ document.addEventListener('dashboard:language-changed', () => {
         const role = await Dashboard.initDashboard({ activePage: 'cat-catalogos-puestos-trabajo' });
         if (!role) return;
         await loadCostCenters();
+        buildCostCenterScopeChecklist(costCenterChecklist, 'all');
         await loadJobPositions();
     } catch (err) {
         console.error('Business (Puestos de Trabajo) failed to initialize:', err);

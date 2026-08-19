@@ -406,6 +406,8 @@
     "jobPositionsSubtitle": "Manage your company's job positions — only active ones show up in Mi Recurso Humano's Puesto field.",
     "jobPositionName": "Position Name",
     "jobPositionAbbreviation": "Position Abbreviation",
+    "jobPositionCostCenters": "Enabled Cost Centers",
+    "jobPositionCostCentersRequired": "Select at least one cost center, or All.",
     "jobPositionStatus": "Status",
     "addJobPosition": "Add job position",
     "jobPositionsNoneYet": "No job positions yet. Add the first one above.",

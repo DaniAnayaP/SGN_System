@@ -323,17 +323,17 @@
                         <input id="jp-abbreviation" name="abbreviation" type="text">
                     </div>
                     <div class="admin-field">
-                        <label for="jp-cost-center" data-i18n="main.colHrCostCenter">Cost Center</label>
-                        <select id="jp-cost-center">
-                            <option value="" data-i18n="main.hrNoCostCenter">None</option>
-                        </select>
-                    </div>
-                    <div class="admin-field">
                         <label for="jp-status" data-i18n="business.jobPositionStatus">Status</label>
                         <select id="jp-status">
                             <option value="active" data-i18n="main.filterActive">Active</option>
                             <option value="inactive" data-i18n="main.filterInactive">Inactive</option>
                         </select>
+                    </div>
+                </div>
+                <div class="admin-field" style="margin-top: 1rem;">
+                    <label data-i18n="business.jobPositionCostCenters">Enabled Cost Centers</label>
+                    <div class="hr-department-checklist" id="jp-cost-center-checklist">
+                        <!-- rendered at runtime -->
                     </div>
                 </div>
                 <div id="jp-form-error" class="admin-error" role="alert" hidden></div>
@@ -372,7 +372,7 @@
                         <tr>
                             <th data-i18n="business.jobPositionName" data-col="jpName">Position Name</th>
                             <th data-i18n="business.jobPositionAbbreviation" data-col="jpAbbreviation">Position Abbreviation</th>
-                            <th data-i18n="main.colHrCostCenter" data-col="jpCostCenter">Cost Center</th>
+                            <th data-i18n="business.jobPositionCostCenters" data-col="jpCostCenter">Enabled Cost Centers</th>
                             <th data-i18n="business.jobPositionStatus" data-col="jpStatus">Status</th>
                             <th data-col="actions"></th>
                         </tr>

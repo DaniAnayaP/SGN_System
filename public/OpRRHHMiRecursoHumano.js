@@ -112,18 +112,23 @@ async function loadCostCenters() {
         costCenters = [];
     }
 }
-function populateCostCenterSelect(select, selectedId) {
+// allowedIds: optional array of cost center ids to restrict the options to
+// (see the Puesto -> Centro de Costos wiring below) — omitted/null shows
+// every cost center, same as before this existed.
+function populateCostCenterSelect(select, selectedId, allowedIds) {
     select.innerHTML = '';
     const noneOpt = document.createElement('option');
     noneOpt.value = '';
     noneOpt.textContent = Dashboard.t('main.hrNoCostCenter');
     select.appendChild(noneOpt);
-    costCenters.forEach((cc) => {
-        const opt = document.createElement('option');
-        opt.value = cc.id;
-        opt.textContent = `${cc.code} - ${cc.name}`;
-        select.appendChild(opt);
-    });
+    costCenters
+        .filter((cc) => !allowedIds || allowedIds.includes(cc.id))
+        .forEach((cc) => {
+            const opt = document.createElement('option');
+            opt.value = cc.id;
+            opt.textContent = `${cc.code} - ${cc.name}`;
+            select.appendChild(opt);
+        });
     select.value = selectedId ? String(selectedId) : '';
 }
 
@@ -156,6 +161,21 @@ function populateJobPositionSelect(select) {
         opt.textContent = jp.name;
         select.appendChild(opt);
     });
+}
+
+// A Puesto is enabled for 'all' cost centers or a specific set (see
+// Business-PuestosTrabajo.js) — null here means "no restriction", not
+// "empty set", so callers can tell the two apart.
+function jobPositionCostCenterIds(jp) {
+    if (!jp) return null;
+    const raw = jp.cost_center_scope;
+    if (!raw || raw === 'all') return null;
+    try {
+        const ids = JSON.parse(raw);
+        return Array.isArray(ids) ? ids : null;
+    } catch {
+        return null;
+    }
 }
 
 // --- Departamento(s) Asignado(s) — multi-select checklist, shared by the
@@ -459,6 +479,20 @@ const newRecordCancelBtn = document.getElementById('new-record-cancel');
 function closeNewRecordModal() {
     newRecordModal.hidden = true;
 }
+
+// Picking a Puesto narrows Centro de Costos down to whichever cost centers
+// that position is enabled for (see jobPositionCostCenterIds) — a
+// currently-selected cost center that falls outside the new set is
+// cleared rather than silently kept. Attached once here (not inside
+// openNewRecordModal, which re-runs every time the modal opens) so the
+// listener never stacks duplicates.
+positionInput.addEventListener('change', () => {
+    const jp = jobPositions.find((p) => p.name === positionInput.value);
+    const allowedIds = jobPositionCostCenterIds(jp);
+    const currentValue = costCenterSelect.value ? Number(costCenterSelect.value) : null;
+    const keepValue = currentValue && (!allowedIds || allowedIds.includes(currentValue)) ? currentValue : null;
+    populateCostCenterSelect(costCenterSelect, keepValue, allowedIds);
+});
 
 function openNewRecordModal() {
     givenNamesInput.value = '';
