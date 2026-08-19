@@ -393,6 +393,23 @@ for (const col of ['contracted_cost', 'monthly_payment']) {
         db.exec(`ALTER TABLE clients ADD COLUMN ${col} REAL NOT NULL DEFAULT 0`);
     }
 }
+// razon_social: net-new field, distinct from company_name (see Nuestros
+// Clientes redesign) — company_name stays as-is, an internal form field
+// with no table column of its own.
+if (!clientColumns.some((c) => c.name === 'razon_social')) {
+    db.exec("ALTER TABLE clients ADD COLUMN razon_social TEXT NOT NULL DEFAULT ''");
+}
+// Segundo documento de contrato (editable, Word) junto al PDF firmado ya
+// existente — mismo par data-URL/filename, mismo patrón de subida/quitar.
+if (!clientColumns.some((c) => c.name === 'contract_word_data_url')) {
+    db.exec('ALTER TABLE clients ADD COLUMN contract_word_data_url TEXT');
+}
+if (!clientColumns.some((c) => c.name === 'contract_word_file_name')) {
+    db.exec('ALTER TABLE clients ADD COLUMN contract_word_file_name TEXT');
+}
+if (!clientColumns.some((c) => c.name === 'initial_payment')) {
+    db.exec('ALTER TABLE clients ADD COLUMN initial_payment REAL NOT NULL DEFAULT 0');
+}
 // Existing clients (created before this migration) get backfilled with a
 // generated id here instead of staying blank — every client should have
 // one, not just ones created going forward. One at a time (not a single
@@ -492,6 +509,25 @@ db.exec(`
         UNIQUE(plan_id, section_id, item_id, submenu_id)
     );
     CREATE INDEX IF NOT EXISTS idx_plan_permission_costs_plan_id ON plan_permission_costs(plan_id);
+
+    -- client_permission_grants: the client-level counterpart of
+    -- plan_grants — a "+ adicional" sold to THIS client beyond what their
+    -- plan already includes, at the exact same {sectionId, itemId,
+    -- submenuId} leaf granularity (hasta Columna). Never contains a tuple
+    -- already covered by the client's plan (enforced server-side on PUT
+    -- /api/admin/clients/:id/permission-grants, not just in the UI).
+    -- Colors PERMISOS CONTRATADOS' tree yellow and feeds PAGO POR
+    -- ADICIONALES' permissions component, priced against the SAME plan's
+    -- plan_permission_costs — a client never gets its own separate price
+    -- sheet, GEIPSA only ever prices things once, per plan.
+    CREATE TABLE IF NOT EXISTS client_permission_grants (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        section_id  TEXT NOT NULL,
+        item_id     TEXT,
+        submenu_id  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_permission_grants_client_id ON client_permission_grants(client_id);
 
     -- Access tree for GEIPSA's own SaaS-side staff (role='admin' users) —
     -- a much smaller, flat namespace than the client-side department tree
@@ -824,25 +860,28 @@ function getClientProfile(id) {
 function createClient({
     companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
     mission, vision, coreValues, history,
-    rfc, companyNickname, companyAbbreviation, ownerName, billingEmail,
+    rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
-    contractedCost, monthlyPayment,
+    contractWordDataUrl, contractWordFileName,
+    contractedCost, monthlyPayment, initialPayment,
 }) {
     const result = db
         .prepare(`
             INSERT INTO clients (
                 company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette,
                 mission, vision, core_values, history,
-                rfc, company_nickname, company_abbreviation, owner_name, billing_email, big_date_number,
+                rfc, company_nickname, company_abbreviation, owner_name, billing_email, razon_social, big_date_number,
                 contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
-                contracted_cost, monthly_payment
+                contract_word_data_url, contract_word_file_name,
+                contracted_cost, monthly_payment, initial_payment
             )
             VALUES (
                 @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
                 @mission, @vision, @coreValues, @history,
-                @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @bigDateNumber,
+                @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @razonSocial, @bigDateNumber,
                 @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
-                @contractedCost, @monthlyPayment
+                @contractWordDataUrl, @contractWordFileName,
+                @contractedCost, @monthlyPayment, @initialPayment
             )
         `)
         .run({
@@ -851,20 +890,28 @@ function createClient({
             seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
             mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
             rfc: rfc || '', companyNickname: companyNickname || '', companyAbbreviation: companyAbbreviation || '',
-            ownerName: ownerName || '', billingEmail: billingEmail || '', bigDateNumber: generateBigDateId(),
+            ownerName: ownerName || '', billingEmail: billingEmail || '', razonSocial: razonSocial || '', bigDateNumber: generateBigDateId(),
             contractStartDate: contractStartDate || null, contractRegisteredDate: contractRegisteredDate || null,
             contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
-            contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0,
+            contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
+            contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
         });
     return getClientById(result.lastInsertRowid);
 }
 
+// contractedCost is intentionally handled with COALESCE, not a plain
+// overwrite (see Nuestros Clientes redesign) — the field stopped being
+// accepted from the new UI (COSTO $ CONTRATADO is now always computed live
+// from the plan), so every future save passes contractedCost: null here,
+// freezing whatever historical value the column already had instead of
+// zeroing it out on every save.
 function updateClient(id, {
     companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
     mission, vision, coreValues, history,
-    rfc, companyNickname, companyAbbreviation, ownerName, billingEmail,
+    rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
-    contractedCost, monthlyPayment,
+    contractWordDataUrl, contractWordFileName,
+    contractedCost, monthlyPayment, initialPayment,
 }) {
     db.prepare(`
         UPDATE clients
@@ -874,10 +921,12 @@ function updateClient(id, {
             seed_color = @seedColor, color_palette = @colorPalette,
             mission = @mission, vision = @vision, core_values = @coreValues, history = @history,
             rfc = @rfc, company_nickname = @companyNickname, company_abbreviation = @companyAbbreviation,
-            owner_name = @ownerName, billing_email = @billingEmail,
+            owner_name = @ownerName, billing_email = @billingEmail, razon_social = @razonSocial,
             contract_start_date = @contractStartDate, contract_registered_date = @contractRegisteredDate,
             contract_end_date = @contractEndDate, contract_file_data_url = @contractFileDataUrl, contract_file_name = @contractFileName,
-            contracted_cost = @contractedCost, monthly_payment = @monthlyPayment
+            contract_word_data_url = @contractWordDataUrl, contract_word_file_name = @contractWordFileName,
+            contracted_cost = COALESCE(@contractedCost, contracted_cost),
+            monthly_payment = @monthlyPayment, initial_payment = @initialPayment
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
@@ -885,10 +934,11 @@ function updateClient(id, {
         seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
         mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
         rfc: rfc || '', companyNickname: companyNickname || '', companyAbbreviation: companyAbbreviation || '',
-        ownerName: ownerName || '', billingEmail: billingEmail || '',
+        ownerName: ownerName || '', billingEmail: billingEmail || '', razonSocial: razonSocial || '',
         contractStartDate: contractStartDate || null, contractRegisteredDate: contractRegisteredDate || null,
         contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
-        contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0,
+        contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
+        contractedCost: contractedCost ?? null, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
     });
     return getClientById(id);
 }
@@ -1715,9 +1765,13 @@ function planSmLeafKeys(section, item, sm) {
     return [planTupleKey(section.id, item.id, sm.id)];
 }
 
-function computeAccessCostTotal(planId) {
-    const grantSet = new Set(getPlanGrants(planId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
-    const costMap = new Map(getPlanPermissionCosts(planId).map((c) => [planTupleKey(c.sectionId, c.itemId, c.submenuId), c.cost]));
+// Shared by computeAccessCostTotal (plan_grants) and
+// computeClientAdditionalPermissionsCost (client_permission_grants) — the
+// exact same per-level independent-counting rule (container = fully
+// checked, Columna = any of its 4 sub-permission levels), just
+// parameterized by which grant set counts as "selected" and which cost
+// map to charge against.
+function computeCostTotalForGrantSet(grantSet, costMap) {
     const costOf = (sectionId, itemId, submenuId) => costMap.get(planTupleKey(sectionId, itemId, submenuId)) || 0;
     const fullyChecked = (keys) => keys.length > 0 && keys.every((k) => grantSet.has(k));
 
@@ -1737,6 +1791,18 @@ function computeAccessCostTotal(planId) {
                 if (!(sm.submenu && sm.submenu.length)) return;
 
                 sm.submenu.forEach((subSm) => {
+                    // Pantalla's OWN price (PermissionCostTree.js's costEdit
+                    // mode always shows an editable row for every subSm here,
+                    // regardless of whether it also has columns below it —
+                    // see its render()'s sm.submenu.forEach) — independent
+                    // from, and in addition to, the Categoría rollup above
+                    // and any Columna prices below (double-counting across
+                    // levels is the accepted design, see file header).
+                    const subSmItemId = subSm.standalone ? subSm.id : item.id;
+                    const subSmSubmenuId = subSm.standalone ? null : `${sm.id}/${subSm.id}`;
+                    if (grantSet.has(planTupleKey(section.id, subSmItemId, subSmSubmenuId))) {
+                        total += costOf(section.id, subSmItemId, subSmSubmenuId);
+                    }
                     if (!(subSm.submenu && subSm.submenu.length)) return;
                     subSm.submenu.forEach((col) => {
                         const base = `${sm.id}/${subSm.id}/${col.id}`;
@@ -1749,6 +1815,106 @@ function computeAccessCostTotal(planId) {
         });
     });
     return total;
+}
+
+function computeAccessCostTotal(planId) {
+    const grantSet = new Set(getPlanGrants(planId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
+    const costMap = new Map(getPlanPermissionCosts(planId).map((c) => [planTupleKey(c.sectionId, c.itemId, c.submenuId), c.cost]));
+    return computeCostTotalForGrantSet(grantSet, costMap);
+}
+
+function getClientPermissionGrants(clientId) {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM client_permission_grants WHERE client_id = ?')
+        .all(clientId);
+}
+
+function setClientPermissionGrants(clientId, grants) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM client_permission_grants WHERE client_id = ?').run(clientId);
+        const insert = db.prepare(`
+            INSERT INTO client_permission_grants (client_id, section_id, item_id, submenu_id)
+            VALUES (@clientId, @sectionId, @itemId, @submenuId)
+        `);
+        for (const g of rows) {
+            insert.run({ clientId, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
+        }
+    });
+    replace(grants);
+    return getClientPermissionGrants(clientId);
+}
+
+// Sum of the CLIENT's plan's plan_permission_costs for every node "fully
+// selected" via THIS client's own extra grants alone
+// (client_permission_grants) — never mixed with what the plan itself
+// already covers (a node that's fully covered by a MIX of plan+client
+// grants shows as neither green nor yellow at that rollup level — see
+// PermissionCostTree.js's clientTricolor mode — so it never double-prices
+// here either). Returns 0 if the client has no plan / the plan name
+// doesn't resolve.
+function computeClientAdditionalPermissionsCost(clientId) {
+    const client = getClientById(clientId);
+    if (!client || !client.plan) return 0;
+    const plan = getPlanByName(client.plan);
+    if (!plan) return 0;
+    const grantSet = new Set(getClientPermissionGrants(clientId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
+    const costMap = new Map(getPlanPermissionCosts(plan.id).map((c) => [planTupleKey(c.sectionId, c.itemId, c.submenuId), c.cost]));
+    return computeCostTotalForGrantSet(grantSet, costMap);
+}
+
+// 3-tier "is this tuple covered" check (exact match / broadened to the
+// whole item / broadened to the whole section) — mirrors
+// PermissionCostTree.js's client-side isGranted() exactly, ported
+// server-side so PUT .../permission-grants can reject a submitted tuple
+// that's already covered by the plan without trusting the client.
+function isTupleGranted(grants, sectionId, itemId, submenuId) {
+    const set = new Set(grants.map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
+    if (set.has(planTupleKey(sectionId, itemId, submenuId))) return true;
+    if (itemId && set.has(planTupleKey(sectionId, itemId, null))) return true;
+    if (set.has(planTupleKey(sectionId, null, null))) return true;
+    return false;
+}
+
+// Decisión #6 (ver plan): guardar un adicional en el árbol nunca prende un
+// departamento/botón completo "gratis" — solo se agrega de verdad a
+// extra_modules (acceso real, sidebar) cuando ese MODULE_CATALOG key queda
+// TOTALMENTE cubierto por los adicionales de este cliente (misma regla de
+// "completamente marcado" que decide qué cuenta en el costo), así activar
+// acceso real nunca pasa sin que su costo ya se haya sumado. Solo agrega,
+// nunca quita — desmarcar algo en el árbol no revoca acceso ya otorgado.
+// Only writes extra_modules (returns whether it changed anything) — the
+// caller (server.js, same as every other route that touches
+// extra_modules) is responsible for re-running applyEffectiveEntitlements
+// afterward, since that function lives there, not here.
+function syncClientModulesFromPermissionGrants(clientId) {
+    const client = getClientById(clientId);
+    if (!client) return false;
+    const grantSet = new Set(getClientPermissionGrants(clientId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
+    const fullyChecked = (keys) => keys.length > 0 && keys.every((k) => grantSet.has(k));
+    let extraModules = [];
+    try { extraModules = JSON.parse(client.extra_modules || '[]'); } catch { extraModules = []; }
+    const extraModulesSet = new Set(extraModules);
+    let changed = false;
+
+    buildPlanTreeSections().forEach((section) => {
+        // Department-level MODULE_CATALOG keys (e.g. 'supply-chain').
+        if (MODULE_CATALOG.some((m) => m.key === section.id) && !extraModulesSet.has(section.id)) {
+            const sectionLeafKeys = section.items.flatMap((item) => planItemLeafKeys(section, item));
+            if (fullyChecked(sectionLeafKeys)) { extraModulesSet.add(section.id); changed = true; }
+        }
+        // main-section btn-* items (e.g. 'btn-mensajes') — only ones that
+        // are themselves MODULE_CATALOG keys; most main items aren't.
+        section.items.forEach((item) => {
+            if (!MODULE_CATALOG.some((m) => m.key === item.id) || extraModulesSet.has(item.id)) return;
+            const itemLeafKeys = planItemLeafKeys(section, item);
+            if (fullyChecked(itemLeafKeys)) { extraModulesSet.add(item.id); changed = true; }
+        });
+    });
+
+    if (changed) {
+        setClientAddenda(clientId, { extraCostCenters: client.extra_cost_centers || 0, extraModules: Array.from(extraModulesSet) });
+    }
+    return changed;
 }
 
 function getPlanChanges(planId) {
@@ -2107,6 +2273,11 @@ module.exports = {
     getPlanPermissionCosts,
     setPlanPermissionCosts,
     computeAccessCostTotal,
+    getClientPermissionGrants,
+    setClientPermissionGrants,
+    computeClientAdditionalPermissionsCost,
+    isTupleGranted,
+    syncClientModulesFromPermissionGrants,
     getPlanChanges,
     logPlanChange,
     listSaasAdmins,
