@@ -158,8 +158,18 @@
         grid.className = 'palette-table-wrapper';
         container.appendChild(grid);
 
+        // Preview stays hidden until asked for — it used to always render
+        // below the (now scrollable, sticky-header) table, competing for
+        // attention with the row being edited.
+        const previewToggleBtn = document.createElement('button');
+        previewToggleBtn.type = 'button';
+        previewToggleBtn.className = 'btn btn-secondary palette-preview-toggle';
+        previewToggleBtn.textContent = t('admin.paletteShowPreview');
+        container.appendChild(previewToggleBtn);
+
         const preview = document.createElement('div');
         preview.className = 'palette-preview';
+        preview.hidden = true;
         preview.innerHTML = `
             <div class="palette-preview-bar"></div>
             <div class="palette-preview-body">
@@ -169,6 +179,8 @@
             </div>
         `;
         container.appendChild(preview);
+
+        previewToggleBtn.addEventListener('click', () => { preview.hidden = !preview.hidden; });
 
         const fieldInputs = {};
 

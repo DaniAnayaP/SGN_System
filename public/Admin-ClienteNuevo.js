@@ -13,6 +13,7 @@
 
 const form = document.getElementById('client-form');
 const companyField = document.getElementById('client-company');
+const razonSocialField = document.getElementById('client-razon-social');
 const contactField = document.getElementById('client-contact');
 const emailField = document.getElementById('client-email');
 const phoneField = document.getElementById('client-phone');
@@ -34,13 +35,18 @@ const billingEmailField = document.getElementById('client-billing-email');
 const contractStartField = document.getElementById('client-contract-start');
 const contractRegisteredField = document.getElementById('client-contract-registered');
 const contractEndField = document.getElementById('client-contract-end');
-const contractedCostField = document.getElementById('client-contracted-cost');
+const initialPaymentField = document.getElementById('client-initial-payment');
 const monthlyPaymentField = document.getElementById('client-monthly-payment');
 const contractInput = document.getElementById('client-contract');
 const contractDataField = document.getElementById('client-contract-data');
 const contractFilenameField = document.getElementById('client-contract-filename');
 const contractNameLabel = document.getElementById('client-contract-name');
 const contractClearBtn = document.getElementById('client-contract-clear');
+const contractWordInput = document.getElementById('client-contract-word');
+const contractWordDataField = document.getElementById('client-contract-word-data');
+const contractWordFilenameField = document.getElementById('client-contract-word-filename');
+const contractWordNameLabel = document.getElementById('client-contract-word-name');
+const contractWordClearBtn = document.getElementById('client-contract-word-clear');
 const paletteContainer = document.getElementById('client-color-palette');
 let paletteWidget; // created after Dashboard.initDashboard() so i18n labels are ready — see init() below
 const errorBanner = document.getElementById('client-form-error');
@@ -121,10 +127,44 @@ contractClearBtn.addEventListener('click', () => {
     setContractPreview('', '');
 });
 
+// Segundo documento de contrato (Word, editable) — same data-URL-in-the-
+// record pattern as the PDF above.
+function setContractWordPreview(dataUrl, filename) {
+    contractWordDataField.value = dataUrl || '';
+    contractWordFilenameField.value = filename || '';
+    if (dataUrl) {
+        contractWordNameLabel.textContent = filename || '';
+        contractWordNameLabel.hidden = false;
+        contractWordClearBtn.hidden = false;
+    } else {
+        contractWordNameLabel.hidden = true;
+        contractWordClearBtn.hidden = true;
+    }
+}
+
+contractWordInput.addEventListener('change', () => {
+    const file = contractWordInput.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+        showError(Dashboard.t('admin.saveError'));
+        contractWordInput.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setContractWordPreview(reader.result, file.name);
+    reader.readAsDataURL(file);
+});
+
+contractWordClearBtn.addEventListener('click', () => {
+    contractWordInput.value = '';
+    setContractWordPreview('', '');
+});
+
 function resetForm() {
     form.reset();
     setLogoPreview('');
     setContractPreview('', '');
+    setContractWordPreview('', '');
     paletteWidget.setPalette(null);
     clearError();
 }
@@ -164,9 +204,20 @@ form.addEventListener('submit', async (event) => {
         return;
     }
 
+    const rfc = rfcField.value.trim();
+    if (rfc && rfc.length !== 13) {
+        alert(Dashboard.t('admin.rfcLengthError'));
+        return;
+    }
+
+    // Razón Social is legally significant — always confirm before saving,
+    // same as the edit form on Nuestros Clientes.
+    if (!confirm(Dashboard.t('admin.razonSocialConfirm'))) return;
+
     const { seed, ...currentPalette } = paletteWidget.getPalette();
     const payload = {
         companyName,
+        razonSocial: razonSocialField.value.trim(),
         contactName,
         email,
         phone: phoneField.value.trim(),
@@ -179,9 +230,9 @@ form.addEventListener('submit', async (event) => {
         vision: visionField.value.trim(),
         coreValues: valuesField.value.trim(),
         history: historyField.value.trim(),
-        rfc: rfcField.value.trim(),
+        rfc,
         companyNickname: nicknameField.value.trim(),
-        companyAbbreviation: abbreviationField.value.trim(),
+        companyAbbreviation: abbreviationField.value.trim().slice(0, 6),
         ownerName: ownerField.value.trim(),
         billingEmail: billingEmailField.value.trim(),
         contractStartDate: contractStartField.value || null,
@@ -189,7 +240,9 @@ form.addEventListener('submit', async (event) => {
         contractEndDate: contractEndField.value || null,
         contractFileDataUrl: contractDataField.value || null,
         contractFileName: contractFilenameField.value || null,
-        contractedCost: contractedCostField.value ? Number(contractedCostField.value) : 0,
+        contractWordDataUrl: contractWordDataField.value || null,
+        contractWordFileName: contractWordFilenameField.value || null,
+        initialPayment: initialPaymentField.value ? Number(initialPaymentField.value) : 0,
         monthlyPayment: monthlyPaymentField.value ? Number(monthlyPaymentField.value) : 0,
     };
 

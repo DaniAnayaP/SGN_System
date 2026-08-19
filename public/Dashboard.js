@@ -114,7 +114,14 @@ const EMBEDDED_TRANSLATIONS = {
             costCenterTotalColumn: "Cost Center Total", planCurrency: "Currency",
             accessPermCostOverlapHint: "A price set on a container level (Department/Area/Category) is counted separately from — and on top of — the prices of what's underneath it.",
             costLabel: "Cost $",
-            institutionalColor: "Institutional color", noLogo: "No logo", noColorSet: "No color set", editColor: "Edit color", costCenters: "Cost Centers"
+            institutionalColor: "Institutional color", noLogo: "No logo", noColorSet: "No color set", editColor: "Edit color", costCenters: "Cost Centers",
+            razonSocial: "Razón Social", razonSocialConfirm: "Are you sure your Razón Social is correct?", rfcLengthError: "The number of characters doesn't match an RFC",
+            contractWordFile: "Contract (Word)", initialPayment: "Initial Payment", costCentersContracted: "Contracted Cost Centers",
+            costCentersContractedWithExtra: "{planLimit} plan + {extra} additional", contractTerm: "Contract Term", contractTermMonths: "{n} months",
+            permisosContratados: "Contracted Permissions", permisosContratadosTitle: "Contracted Permissions", permisosAdicionalesTitle: "+ Additional Permissions",
+            pagoPorAdicionales: "Payment For Additionals", permTreeLegendPlan: "Included in the plan", permTreeLegendExtra: "Sold as an additional",
+            permTreeLegendNone: "Not contracted", additionalsCostCentersLabel: "for ADDITIONAL COST CENTERS", additionalsPermissionsLabel: "ADDITIONAL PERMISSIONS",
+            additionalsPermissionsPreview: "Additional permissions total: {amount}", paletteShowPreview: "Show current preview"
         },
         business: {
             usersTitle: "Users", usersSubtitle: "Manage the people who use this SGN instance.",
@@ -251,7 +258,14 @@ const EMBEDDED_TRANSLATIONS = {
             costCenterTotalColumn: "Costo de Centro de Costos", planCurrency: "Moneda",
             accessPermCostOverlapHint: "Un costo puesto en un nivel contenedor (Departamento/Área/Categoría) se cuenta aparte de — y además de — los costos de lo que tiene debajo.",
             costLabel: "Costo $",
-            institutionalColor: "Color institucional", noLogo: "Sin logo", noColorSet: "Sin color asignado", editColor: "Editar color", costCenters: "Centro Costos"
+            institutionalColor: "Color institucional", noLogo: "Sin logo", noColorSet: "Sin color asignado", editColor: "Editar color", costCenters: "Centro Costos",
+            razonSocial: "Razón Social", razonSocialConfirm: "¿Está seguro que su Razón Social es correcta?", rfcLengthError: "La cantidad de caracteres no corresponden a un RFC",
+            contractWordFile: "Contrato (Word)", initialPayment: "Pago Inicial", costCentersContracted: "Centros de Costo Contratados",
+            costCentersContractedWithExtra: "{planLimit} plan + {extra} adicionales", contractTerm: "Plazo de Contrato", contractTermMonths: "{n} meses",
+            permisosContratados: "Permisos Contratados", permisosContratadosTitle: "Permisos Contratados", permisosAdicionalesTitle: "+ Permisos Adicionales",
+            pagoPorAdicionales: "Pago Por Adicionales", permTreeLegendPlan: "Incluido en el plan", permTreeLegendExtra: "Vendido como adicional",
+            permTreeLegendNone: "No contratado", additionalsCostCentersLabel: "de CENTRO COSTOS ADICIONALES", additionalsPermissionsLabel: "PERMISOS ADICIONALES",
+            additionalsPermissionsPreview: "Total de permisos adicionales: {amount}", paletteShowPreview: "Ver vista previa actual"
         },
         business: {
             usersTitle: "Usuarios", usersSubtitle: "Administra las personas que usan esta instancia de SGN.",

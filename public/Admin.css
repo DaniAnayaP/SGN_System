@@ -68,6 +68,18 @@
     outline: none;
     border-color: var(--color-text-primary);
 }
+/* COSTO $ CONTRATADO — read-only, computed live from the selected plan (see
+   admin.js's updateContractedCostPreview), same box as a real input/select
+   so it lines up in the grid without looking clickable. */
+.admin-computed-value{
+    margin: 0;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
 .admin-field textarea{
     padding: 0.55rem 0.7rem;
     border: 1px solid var(--color-border);
@@ -366,7 +378,8 @@ body.dark-mode .admin-badge-prospecto{
     margin-bottom: 1.25rem;
     border: 1px solid var(--color-border);
     border-radius: 0.6rem;
-    overflow: hidden;
+    max-height: 20rem;
+    overflow-y: auto;
 }
 .palette-table{
     width: 100%;
@@ -381,7 +394,12 @@ body.dark-mode .admin-badge-prospecto{
     color: var(--color-text-primary);
     border-bottom: 1px solid var(--color-border);
 }
+/* Header stays put while the body scrolls (color-modal's table can get
+   longer than its available height) — same sticky idea .modal-panel h3
+   already uses. */
 .palette-table thead th{
+    position: sticky;
+    top: 0;
     background-color: var(--color-bg);
     font-size: 0.72rem;
     font-weight: 600;
@@ -603,6 +621,12 @@ body.dark-mode .admin-badge-prospecto{
 .perm-tree-status-blocked{
     background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
     color: var(--color-text-secondary);
+}
+/* clientTricolor mode's "amarillo" (vendido como adicional, fuera del
+   plan) — same pattern as -enabled/-blocked above. */
+.perm-tree-status-extra{
+    background-color: color-mix(in srgb, #c9860b 18%, transparent);
+    color: #c9860b;
 }
 .perm-tree-status-label{
     flex: 1;

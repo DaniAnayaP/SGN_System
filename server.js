@@ -46,9 +46,7 @@ const {
     findClientByRfc,
     getModuleCosts,
     setModuleCosts,
-    getAnexosPaymentTotal,
     getAnexoChanges,
-    recordAnexoChange,
     getClientModules,
     setClientModules,
     setClientCostCentersLimit,
@@ -97,6 +95,11 @@ const {
     getPlanPermissionCosts,
     setPlanPermissionCosts,
     computeAccessCostTotal,
+    getClientPermissionGrants,
+    setClientPermissionGrants,
+    computeClientAdditionalPermissionsCost,
+    isTupleGranted,
+    syncClientModulesFromPermissionGrants,
     getPlanChanges,
     logPlanChange,
     listSaasAdmins,
@@ -399,6 +402,42 @@ function validateContractFile(contractFileDataUrl) {
     return null;
 }
 
+// Segundo documento de contrato (editable, Word) junto al PDF firmado —
+// mismo tope de tamaño, MIME de .doc o .docx.
+const CONTRACT_WORD_MIME_PREFIXES = [
+    'data:application/msword',
+    'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+function validateContractWordFile(contractWordDataUrl) {
+    if (!contractWordDataUrl) return null;
+    if (typeof contractWordDataUrl !== 'string' || !CONTRACT_WORD_MIME_PREFIXES.some((p) => contractWordDataUrl.startsWith(p))) {
+        return 'contractWordDataUrl must be a Word document data URL.';
+    }
+    if (contractWordDataUrl.length > MAX_CONTRACT_DATA_URL_LENGTH) {
+        return 'Contract Word file is too large (max ~5MB).';
+    }
+    return null;
+}
+
+// RFC es opcional (un prospecto sin RFC aún es válido), pero si SÍ se
+// escribe algo debe medir exactamente 13 caracteres — el mensaje es el que
+// el usuario pidió mostrar tal cual.
+function validateRfc(rfc) {
+    if (!rfc) return null;
+    if (typeof rfc !== 'string' || rfc.trim().length !== 13) {
+        return 'La cantidad de caracteres no corresponden a un RFC';
+    }
+    return null;
+}
+
+function validateCompanyAbbreviation(companyAbbreviation) {
+    if (!companyAbbreviation) return null;
+    if (typeof companyAbbreviation !== 'string' || companyAbbreviation.length > 6) {
+        return 'companyAbbreviation must be at most 6 characters.';
+    }
+    return null;
+}
+
 function validateOptionalDate(value, fieldName) {
     if (!value) return null;
     if (typeof value !== 'string' || !DATE_RE.test(value)) {
@@ -437,8 +476,8 @@ function validateColorPalette(colorPalette) {
 function validateClientBody(body) {
     const {
         companyName, contactName, email, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
-        billingEmail, contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl,
-        contractedCost, monthlyPayment,
+        billingEmail, contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractWordDataUrl,
+        rfc, companyAbbreviation, monthlyPayment, initialPayment,
     } = body || {};
     if (!companyName || !contactName || !email) {
         return 'companyName, contactName and email are required.';
@@ -457,23 +496,47 @@ function validateClientBody(body) {
     }
     return validateLogo(logoDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette)
         || validateContractFile(contractFileDataUrl)
+        || validateContractWordFile(contractWordDataUrl)
+        || validateRfc(rfc)
+        || validateCompanyAbbreviation(companyAbbreviation)
         || validateOptionalDate(contractStartDate, 'contractStartDate')
         || validateOptionalDate(contractRegisteredDate, 'contractRegisteredDate')
         || validateOptionalDate(contractEndDate, 'contractEndDate')
-        || validateOptionalMoney(contractedCost, 'contractedCost')
-        || validateOptionalMoney(monthlyPayment, 'monthlyPayment');
+        || validateOptionalMoney(monthlyPayment, 'monthlyPayment')
+        || validateOptionalMoney(initialPayment, 'initialPayment');
 }
 
 app.get('/api/admin/modules', requireAuth, requireAdmin, (req, res) => {
     res.json({ modules: MODULE_CATALOG });
 });
 
+// Costo Contratado/Pago por Adicionales ya no se guardan a mano — se
+// calculan en vivo contra el plan asignado + los adicionales vendidos a
+// ESTE cliente (client_permission_grants), cada vez que se pide la lista.
+// Un cliente sin plan (o con un plan que ya no existe) da todo en 0, nunca
+// truena.
 app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
-    const clients = listClients().map((client) => ({
-        ...client,
-        anexosPayment: getAnexosPaymentTotal(client.id),
-        costCentersUsed: countCostCenters(client.id),
-    }));
+    const clients = listClients().map((client) => {
+        const plan = client.plan ? getPlanByName(client.plan) : null;
+        const planAccessPermissionsCost = plan ? computeAccessCostTotal(plan.id) : 0;
+        const planCostCentersLimit = plan ? plan.costCentersLimit : 0;
+        const planCostPerCostCenter = plan ? plan.costPerCostCenter : 0;
+        const planCurrency = plan ? plan.currency : 'MXN';
+        const additionalCostCentersPayment = (client.extra_cost_centers || 0) * planCostPerCostCenter;
+        const additionalPermissionsPayment = plan ? computeClientAdditionalPermissionsCost(client.id) : 0;
+        return {
+            ...client,
+            costCentersUsed: countCostCenters(client.id),
+            planAccessPermissionsCost,
+            planCostCentersLimit,
+            planCostPerCostCenter,
+            planCurrency,
+            contractedCostComputed: planAccessPermissionsCost + (planCostCentersLimit * planCostPerCostCenter),
+            additionalCostCentersPayment,
+            additionalPermissionsPayment,
+            additionalsPaymentTotal: additionalCostCentersPayment + additionalPermissionsPayment,
+        };
+    });
     res.json({ clients });
 });
 
@@ -495,15 +558,17 @@ async function applyClientLifecycle(client) {
 }
 
 // A plan's módulos + centros de costo limit (set in Planes y Paquetes) get
-// stamped onto the client's own Contrataciones every time a client is
-// saved with that plan selected — a full replace across MODULE_CATALOG
-// (not just enabling the plan's modules), so switching plans also turns
-// off whatever the previous plan had on. Then Anexos (per-client extras —
-// see the addenda routes below) are merged in on top, so re-stamping a plan
-// never wipes out an anexo, and an anexo never has to be re-entered just
-// because the client's base plan was edited or reassigned. No-op on the
-// plan side if the client has none selected, or the name doesn't match a
-// real plan (free-text edge case).
+// stamped onto the client's own real access every time a client is saved
+// with that plan selected — a full replace across MODULE_CATALOG (not just
+// enabling the plan's modules), so switching plans also turns off whatever
+// the previous plan had on. Then extra_modules/extra_cost_centers (still
+// stored via getClientAddenda/setClientAddenda — extraCostCenters is edited
+// from the main client PATCH now, extraModules only ever changes via
+// syncClientModulesFromPermissionGrants, see the permission-grants routes
+// below) are merged in on top, so re-stamping a plan never wipes those out,
+// and they never have to be re-entered just because the client's base plan
+// was edited or reassigned. No-op on the plan side if the client has none
+// selected, or the name doesn't match a real plan (free-text edge case).
 function applyEffectiveEntitlements(clientId) {
     const client = getClientById(clientId);
     if (!client) return;
@@ -526,16 +591,22 @@ function extractClientFields(body) {
     const {
         companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
         mission, vision, coreValues, history,
-        rfc, companyNickname, companyAbbreviation, ownerName, billingEmail,
+        rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
         contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
-        contractedCost, monthlyPayment,
+        contractWordDataUrl, contractWordFileName,
+        monthlyPayment, initialPayment,
     } = body;
     return {
         companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
         mission, vision, coreValues, history,
-        rfc, companyNickname, companyAbbreviation, ownerName, billingEmail,
+        rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
         contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
-        contractedCost, monthlyPayment,
+        contractWordDataUrl, contractWordFileName,
+        // contracted_cost ya no viene de la UI (ver validateClientBody) —
+        // updateClient hace COALESCE(@contractedCost, contracted_cost), así
+        // que mandar null aquí congela el valor histórico en vez de
+        // ponerlo en 0 en cada guardado futuro.
+        contractedCost: null, monthlyPayment, initialPayment,
     };
 }
 
@@ -561,7 +632,19 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     if (rfc && findClientByRfc(rfc, existing.id)) {
         return res.status(409).json({ message: 'A client with that RFC already exists.' });
     }
+    // extraCostCenters used to live only in the Anexos modal (now removed —
+    // see the permission-grants routes below); it's just a plain field on
+    // the main client save now. extraModules is preserved as-is since there
+    // is no remaining UI to edit it directly (it's only ever touched by
+    // syncClientModulesFromPermissionGrants).
+    const { extraCostCenters } = req.body || {};
+    if (extraCostCenters !== undefined && (!Number.isInteger(extraCostCenters) || extraCostCenters < 0)) {
+        return res.status(400).json({ message: 'extraCostCenters must be a non-negative integer.' });
+    }
     const client = updateClient(req.params.id, extractClientFields(req.body));
+    if (extraCostCenters !== undefined) {
+        setClientAddenda(req.params.id, { extraCostCenters, extraModules: getClientAddenda(req.params.id).extraModules });
+    }
     applyEffectiveEntitlements(client.id);
     const generatedAdmin = await applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
@@ -653,65 +736,54 @@ app.put('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, 
     res.json({ grants: setUserGrants(client.admin_user_id, grants) });
 });
 
-// Anexos: per-client extras on top of their plan (e.g. +2 centros de costo
-// beyond what the plan gives, or a module the plan doesn't include). GET
-// also returns the plan's own base numbers so the UI can show them as
-// context ("this plan gives 5, you're adding 2 more for this client").
-app.get('/api/admin/clients/:id/addenda', requireAuth, requireAdmin, (req, res) => {
+// Permisos Contratados / + Adicionales: árbol completo (hasta Columna) de
+// lo vendido a ESTE cliente por encima de lo que su plan ya incluye — ver
+// client_permission_grants en db.js. GET también regresa los grants del
+// plan del cliente para que el árbol pinte verde (plan) / amarillo
+// (adicional) / rojo (no contratado) del lado del navegador.
+app.get('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (req, res) => {
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     const plan = client.plan ? getPlanByName(client.plan) : null;
     res.json({
-        addenda: getClientAddenda(req.params.id),
-        planBase: { modules: plan ? plan.modules : [], costCentersLimit: plan ? plan.costCentersLimit : 0 },
+        grants: getClientPermissionGrants(req.params.id),
+        planGrants: plan ? getPlanGrants(plan.id) : [],
+        planId: plan ? plan.id : null,
     });
 });
 
-app.put('/api/admin/clients/:id/addenda', requireAuth, requireAdmin, (req, res) => {
-    const existing = getClientById(req.params.id);
-    if (!existing) return res.status(404).json({ message: 'Client not found.' });
-    const { extraModules, extraCostCenters, requestedBy, requestedAt, contractedDuration } = req.body || {};
-    if (extraModules !== undefined && !Array.isArray(extraModules)) {
-        return res.status(400).json({ message: 'extraModules must be an array.' });
+// Solo acepta tuplas que el plan del cliente TODAVÍA no cubre — rechazado
+// del lado servidor (no solo escondido en el árbol), para que un
+// "+adicional" nunca pueda duplicar (y cobrar dos veces) algo que el plan
+// ya incluye. Al guardar, sincroniza a acceso real (client_modules)
+// cualquier departamento/botón que haya quedado 100% cubierto por los
+// adicionales de este cliente — nunca al revés, nunca parcial (ver
+// syncClientModulesFromPermissionGrants en db.js, Decisión #6: activar
+// acceso real nunca pasa sin que su costo ya esté sumado).
+app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (req, res) => {
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    const { grants } = req.body || {};
+    const error = validateGrants(grants);
+    if (error) return res.status(400).json({ message: error });
+    const plan = client.plan ? getPlanByName(client.plan) : null;
+    const planGrants = plan ? getPlanGrants(plan.id) : [];
+    for (const g of grants) {
+        if (isTupleGranted(planGrants, g.sectionId, g.itemId, g.submenuId)) {
+            return res.status(400).json({ message: 'Ese permiso ya está incluido en el plan del cliente.' });
+        }
     }
-    if (extraCostCenters !== undefined && (!Number.isInteger(extraCostCenters) || extraCostCenters < 0)) {
-        return res.status(400).json({ message: 'extraCostCenters must be a non-negative integer.' });
+    const saved = setClientPermissionGrants(req.params.id, grants);
+    if (syncClientModulesFromPermissionGrants(req.params.id)) {
+        applyEffectiveEntitlements(req.params.id);
     }
-    const dateError = validateOptionalDate(requestedAt, 'requestedAt');
-    if (dateError) return res.status(400).json({ message: dateError });
-
-    // "Cambios de Anexos": one audit row per módulo that actually enters or
-    // leaves extra_modules on this save — diffed against what was there
-    // right before, not against the plan's own modules (those were never
-    // anexos to begin with, so toggling the plan itself doesn't log here).
-    const previousModules = getClientAddenda(req.params.id).extraModules;
-    const nextModules = sanitizePlanModules(extraModules);
-    const added = nextModules.filter((key) => !previousModules.includes(key));
-    const removed = previousModules.filter((key) => !nextModules.includes(key));
-
-    setClientAddenda(req.params.id, {
-        extraModules: nextModules,
-        extraCostCenters: extraCostCenters || 0,
-    });
-    applyEffectiveEntitlements(req.params.id);
-
-    added.forEach((moduleKey) => recordAnexoChange(req.params.id, {
-        moduleKey, action: 'added', requestedBy, requestedAt, contractedDuration,
-    }));
-    removed.forEach((moduleKey) => recordAnexoChange(req.params.id, {
-        moduleKey, action: 'removed', requestedBy, requestedAt, contractedDuration,
-    }));
-
-    res.json({
-        addenda: getClientAddenda(req.params.id),
-        modules: getClientModules(req.params.id),
-        costCentersLimit: getClientById(req.params.id).cost_centers_limit,
-    });
+    res.json({ grants: saved, additionalPermissionsPayment: computeClientAdditionalPermissionsCost(req.params.id) });
 });
 
 // Cambios de Anexos: read-only history for the modal that shows who
-// requested each anexo change and when — the actual writes happen inside
-// the addenda PUT above, never directly.
+// requested each anexo change and when — kept for the record of anexos
+// granted the old (flat, whole-module) way; the new permission-grants
+// route above doesn't write to this log (see its own comment).
 app.get('/api/admin/clients/:id/anexo-changes', requireAuth, requireAdmin, (req, res) => {
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
