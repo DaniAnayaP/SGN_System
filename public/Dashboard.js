@@ -2033,6 +2033,17 @@ function openColumnFilterMenu(th, tableId, key) {
     menu.className = 'data-table-col-filter-menu';
     menu.dataset.col = key;
 
+    // Search box, above "Todos" — only narrows which rows are VISIBLE in
+    // the checklist below, never touches selection state, so typing to
+    // find one value and clearing the search again always shows the
+    // filter exactly as it was left.
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.className = 'data-table-col-filter-search';
+    searchInput.placeholder = t('main.filterSearchPlaceholder');
+    searchInput.addEventListener('click', (event) => event.stopPropagation());
+    menu.appendChild(searchInput);
+
     const allRow = document.createElement('label');
     allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
     const allCheckbox = document.createElement('input');
@@ -2057,6 +2068,7 @@ function openColumnFilterMenu(th, tableId, key) {
     distinctValues.forEach((value) => {
         const row = document.createElement('label');
         row.className = 'data-table-col-filter-option';
+        row.dataset.searchValue = (value || '').toLowerCase();
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = selected.has(value);
@@ -2077,6 +2089,13 @@ function openColumnFilterMenu(th, tableId, key) {
     });
     menu.appendChild(list);
 
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim().toLowerCase();
+        list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
+            row.hidden = query !== '' && !row.dataset.searchValue.includes(query);
+        });
+    });
+
     allCheckbox.addEventListener('change', () => {
         checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
         if (allCheckbox.checked) state.columnFilters.delete(key);
@@ -2094,6 +2113,7 @@ function openColumnFilterMenu(th, tableId, key) {
     menu.style.left = `${Math.max(8, left)}px`;
     dataTableFilterMenuEl = menu;
     dataTableFilterMenuTableId = tableId;
+    searchInput.focus();
     setTimeout(() => {
         document.addEventListener('click', handleColumnFilterOutsideClick, true);
         window.addEventListener('scroll', closeColumnFilterMenu, true);

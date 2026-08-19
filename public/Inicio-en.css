@@ -2139,6 +2139,23 @@
         padding: 0.4rem 0;
         font-size: 0.82rem;
     }
+    /* Live-narrows which rows show in the checklist below (see the input
+       handler in openColumnFilterMenu) — never touches selection state. */
+    .data-table-col-filter-search{
+        display: block;
+        width: calc(100% - 1.6rem);
+        margin: 0 0.8rem 0.4rem;
+        padding: 0.35rem 0.6rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.35rem;
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+        font: inherit;
+    }
+    .data-table-col-filter-search:focus{
+        outline: none;
+        border-color: var(--color-text-primary);
+    }
     .data-table-col-filter-option{
         display: flex;
         align-items: center;
