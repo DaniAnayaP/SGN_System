@@ -312,6 +312,8 @@
     "costCenterTotalColumn": "Costo de Centro de Costos",
     "planCurrency": "Moneda",
     "accessPermCostOverlapHint": "Un costo puesto en un nivel contenedor (Departamento/Área/Categoría) se cuenta aparte de — y además de — los costos de lo que tiene debajo.",
+    "accessPermTreeColumn": "Accesos / Permisos",
+    "accessPermTreeCostColumn": "$ Costo",
     "costLabel": "Costo $",
     "institutionalColor": "Color institucional",
     "noLogo": "Sin logo",
