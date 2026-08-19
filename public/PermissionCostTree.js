@@ -586,7 +586,18 @@
                             labelParams: area.labelParams,
                             submenu: categoriesForArea(s.id, area.id, areaCategories || [], areaOverrides),
                         }));
-                        return { ...s, items: [...generalItems, ...areaItems] };
+                        // clientTricolor mode deliberately drops generalItems
+                        // (home/panel/dashboard) here, unlike costEdit/
+                        // grantReadonlyCost — those two modes exist to feed a
+                        // checkbox cascade that's self-consistent regardless
+                        // of tree shape, but clientTricolor cross-checks its
+                        // OWN leaf set against the server's
+                        // buildPlanTreeSections() (db.js), which never
+                        // includes generalItems under a non-main department.
+                        // Keeping them here would make a fully-sold
+                        // department register as "mixed" (missing 3 leaves
+                        // the server never required) instead of green.
+                        return { ...s, items: mode === 'clientTricolor' ? areaItems : [...generalItems, ...areaItems] };
                     }
                     const items = s.items
                         .filter((i) => i.id !== 'admin-business' && !BUTTON_CONFIG_ITEM_IDS.includes(i.id))
