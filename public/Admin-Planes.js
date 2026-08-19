@@ -214,14 +214,16 @@ function renderPlans() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = plans.length > 0;
     const canActivate = Dashboard.hasSaasScreenGrant('saas-plans', 'activate');
+    const canEditPlans = Dashboard.hasSaasScreenGrant('saas-plans', 'editar');
     plans.forEach((plan) => {
         const tr = document.createElement('tr');
         tr.dataset.planStatus = !plan.locked ? 'revision' : (plan.status || 'active');
-        // Mirrors editBtn's own disabled condition below (isHardLocked) —
-        // that's the one real "can this row still be edited" signal on this
-        // screen; everything else here is either always-on or gated by a
-        // per-action grant (Activar) rather than per-row editability.
-        tr.classList.toggle('data-table-row-editable', !isHardLocked(plan));
+        // Mirrors editBtn's own disabled condition below (isHardLocked AND
+        // the Editar grant) — that's the one real "can this row still be
+        // edited" signal on this screen; everything else here is either
+        // always-on or gated by its own separate per-action grant (Crear/
+        // Activar) rather than per-row editability.
+        tr.classList.toggle('data-table-row-editable', !isHardLocked(plan) && canEditPlans);
 
         const tdName = document.createElement('td');
         tdName.dataset.col = 'name';
@@ -266,9 +268,14 @@ function renderPlans() {
             const editBtn = document.createElement('button');
             editBtn.type = 'button';
             editBtn.className = 'admin-icon-btn';
-            editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
             editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
-            editBtn.addEventListener('click', () => openEditModal(plan));
+            if (canEditPlans) {
+                editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
+                editBtn.addEventListener('click', () => openEditModal(plan));
+            } else {
+                editBtn.disabled = true;
+                editBtn.title = Dashboard.t('admin.planEditNoPermission');
+            }
             tdActions.appendChild(editBtn);
         }
 
@@ -291,9 +298,14 @@ function renderPlans() {
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => removePlan(plan));
+        if (canEditPlans) {
+            deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+            deleteBtn.addEventListener('click', () => removePlan(plan));
+        } else {
+            deleteBtn.disabled = true;
+            deleteBtn.title = Dashboard.t('admin.planEditNoPermission');
+        }
         tdActions.appendChild(deleteBtn);
 
         tr.append(
@@ -532,6 +544,7 @@ function showTreeError(el, message) {
 // ("pantalla alterna"), same pattern as Editar, instead of navigating to a
 // separate page (Admin-PlanNuevo.html/.js, now removed).
 function renderNewPlanButton() {
+    if (!Dashboard.hasSaasScreenGrant('saas-plans', 'crear')) return;
     const wrapper = document.querySelector('[data-table-id="mis-planes"]');
     const toolbar = wrapper?.previousElementSibling;
     if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;

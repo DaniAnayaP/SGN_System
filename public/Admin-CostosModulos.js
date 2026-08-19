@@ -37,12 +37,14 @@ function formatDate(value) {
 function renderPlans() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = plans.length > 0;
+    // This whole screen is admin-only — the one real gate left is the
+    // Editar leaf under saas-module-costs (Equipo SaaS tree), independent
+    // from Nuestros Planes' own Editar.
+    const canEditCosts = Dashboard.hasSaasScreenGrant('saas-module-costs', 'editar');
     plans.forEach((plan) => {
         const tr = document.createElement('tr');
         tr.dataset.planStatus = !plan.locked ? 'revision' : (plan.status || 'active');
-        // This whole screen is admin-only, and pricing is always editable
-        // (never lock-gated) — every row qualifies for the legend.
-        tr.classList.add('data-table-row-editable');
+        tr.classList.toggle('data-table-row-editable', canEditCosts);
 
         const tdName = document.createElement('td');
         tdName.dataset.col = 'name';
@@ -54,10 +56,14 @@ function renderPlans() {
 
         const tdCost = document.createElement('td');
         tdCost.dataset.col = 'accessPermCost';
-        tdCost.className = 'editable-cell';
         tdCost.textContent = Dashboard.formatCurrency(plan.accessPermissionsCost, plan.currency);
-        tdCost.title = Dashboard.t('main.fuelClickToEdit');
-        tdCost.onclick = () => openCostModal(plan);
+        if (canEditCosts) {
+            tdCost.className = 'editable-cell';
+            tdCost.title = Dashboard.t('main.fuelClickToEdit');
+            tdCost.onclick = () => openCostModal(plan);
+        } else {
+            tdCost.title = Dashboard.t('admin.costsEditNoPermission');
+        }
 
         const tdCostPerCC = document.createElement('td');
         tdCostPerCC.dataset.col = 'costPerCostCenter';
@@ -65,6 +71,8 @@ function renderPlans() {
             value: plan.costPerCostCenter ? String(plan.costPerCostCenter) : '',
             inputType: 'number',
             formatDisplay: (v) => Dashboard.formatCurrency(v, plan.currency),
+            disabled: !canEditCosts,
+            disabledText: Dashboard.formatCurrency(plan.costPerCostCenter, plan.currency),
             onCommit: (val) => patchPlanField(plan, { costPerCostCenter: Math.max(0, Number(val) || 0) }),
         });
 
@@ -80,10 +88,15 @@ function renderPlans() {
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'admin-icon-btn';
-        editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
-        editBtn.title = Dashboard.t('admin.edit');
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
-        editBtn.addEventListener('click', () => openCostModal(plan));
+        if (canEditCosts) {
+            editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
+            editBtn.title = Dashboard.t('admin.edit');
+            editBtn.addEventListener('click', () => openCostModal(plan));
+        } else {
+            editBtn.disabled = true;
+            editBtn.title = Dashboard.t('admin.costsEditNoPermission');
+        }
         const historyBtn = document.createElement('button');
         historyBtn.type = 'button';
         historyBtn.className = 'admin-icon-btn';

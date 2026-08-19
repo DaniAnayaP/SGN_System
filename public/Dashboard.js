@@ -1025,6 +1025,16 @@ function closeTopBarActions() {
 }
 registerTopBarDropdown(closeTopBarActions);
 
+// openedAt guards against the exact tap that OPENS the menu also being the
+// one that closes it: some mobile browsers dispatch a synthetic click for a
+// touch tap that lands on `document` as a second, separate event rather
+// than bubbling through the normal chain — stopPropagation() below has no
+// effect on that second dispatch since it never passed through this
+// listener at all. Reported on mobile as "tap the ⋮ button, it opens then
+// immediately closes". Ignoring any outside-click within 300ms of opening
+// is long enough to absorb that stray duplicate, short enough that a real
+// deliberate tap-elsewhere-to-close still works instantly.
+let topBarActionsOpenedAt = 0;
 topBarActionsToggle?.addEventListener('click', (event) => {
     event.stopPropagation();
     const wasOpen = topBarActions.classList.contains('open');
@@ -1032,10 +1042,12 @@ topBarActionsToggle?.addEventListener('click', (event) => {
     if (!wasOpen) {
         topBarActions.classList.add('open');
         topBarActionsToggle.setAttribute('aria-expanded', 'true');
+        topBarActionsOpenedAt = Date.now();
     }
 });
 
 document.addEventListener('click', (event) => {
+    if (Date.now() - topBarActionsOpenedAt < 300) return;
     if (topBarActions && !topBarActions.contains(event.target)) closeTopBarActions();
 });
 

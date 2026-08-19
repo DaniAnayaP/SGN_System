@@ -261,13 +261,15 @@ function iconButton(iconClass, label, onClick, { disabled = false, title = '', d
 function renderClients() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = clients.length > 0;
+    // No per-column permission model like the operational tables — just 2
+    // whole-row actions (Editar, Activar/Desactivar), each its own Equipo
+    // SaaS leaf (see Admin-EquipoSaaS.js's tree). Computed once per render,
+    // not per row: it's the same grant for every row on this screen.
+    const canEditClients = Dashboard.hasSaasScreenGrant('saas-clients', 'editar');
+    const canActivateClients = Dashboard.hasSaasScreenGrant('saas-clients', 'activar');
     clients.forEach((client) => {
         const tr = document.createElement('tr');
         tr.dataset.status = client.status;
-        // Every row on this screen is editable by whoever can see it — this
-        // table has no per-column permission model like the operational
-        // tables, only the "puede ver esta pantalla" gate already enforced
-        // by Dashboard.js before this page even loads.
         tr.classList.add('data-table-row-editable');
 
         const tdStatus = document.createElement('td');
@@ -338,11 +340,18 @@ function renderClients() {
                 title: client.adminUsername ? '' : Dashboard.t('admin.adminAccessNoAdminYet'),
             }),
             iconButton('bx-plus', Dashboard.t('admin.permisosAdicionalesTitle'), () => openPermisosAdicionalesModal(client)),
-            iconButton('bx-edit', Dashboard.t('admin.edit'), () => startEdit(client)),
+            iconButton('bx-edit', Dashboard.t('admin.edit'), () => startEdit(client), {
+                disabled: !canEditClients,
+                title: canEditClients ? '' : Dashboard.t('admin.clientEditNoPermission'),
+            }),
             iconButton(
                 client.status === 'inactivo' ? 'bx-check-circle' : 'bx-x-circle',
                 Dashboard.t(client.status === 'inactivo' ? 'admin.activate' : 'admin.deactivate'),
                 () => toggleClientStatus(client),
+                {
+                    disabled: !canActivateClients,
+                    title: canActivateClients ? '' : Dashboard.t('admin.clientActivateNoPermission'),
+                },
             ),
         );
 
@@ -1047,6 +1056,7 @@ document.addEventListener('dashboard:language-changed', () => {
 // ("pantalla alterna"), same pattern as Editar, instead of navigating to a
 // separate page (Admin-ClienteNuevo.html/.js, now removed).
 function renderNewClientButton() {
+    if (!Dashboard.hasSaasScreenGrant('saas-clients', 'crear')) return;
     const wrapper = document.querySelector('[data-table-id="nuestros-clientes"]');
     const toolbar = wrapper?.previousElementSibling;
     if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;

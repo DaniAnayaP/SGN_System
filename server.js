@@ -612,6 +612,9 @@ function extractClientFields(body) {
 }
 
 app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'crear')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear clientes.' });
+    }
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const rfc = (req.body.rfc || '').trim();
@@ -627,6 +630,20 @@ app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
 app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) => {
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    // Editar and Activar/Desactivar are independent Equipo SaaS leaves — an
+    // admin holding only one of them can still save this same form as long
+    // as what they're actually changing matches what they hold: any
+    // non-status field needs Editar, an actual status flip additionally (or
+    // solely) needs Activar. Both apply when a save touches both at once.
+    const grants = getSaasUserGrants(req.user.sub);
+    const changesStatus = req.body?.status !== undefined && req.body.status !== existing.status;
+    const changesOtherFields = Object.keys(req.body || {}).some((k) => k !== 'status');
+    if (changesOtherFields && !hasSaasGrant(grants, 'saas-clients', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar clientes.' });
+    }
+    if (changesStatus && !hasSaasGrant(grants, 'saas-clients', 'activar')) {
+        return res.status(403).json({ message: 'No tienes permiso para activar/desactivar clientes.' });
+    }
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const rfc = (req.body.rfc || '').trim();
@@ -854,6 +871,9 @@ app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'crear')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear planes.' });
+    }
     const error = validatePlanBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { name, description, modules, costCentersLimit } = req.body;
@@ -885,6 +905,29 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     // further authorization — it's just a visibility flag at that point.
     if (status === 'active' && !existing.locked) {
         return res.status(400).json({ message: 'Usa el botón Activar para pasar un plan a Activo.' });
+    }
+    // This one route serves 3 different screens' saves, each its own Equipo
+    // SaaS leaf: plan fields/endDate (Nuestros Planes -> Editar), status
+    // (Nuestros Planes -> Activar/Desactivar toggle once already locked;
+    // the one-time Revisión->Activo transition stays gated by 'activate'
+    // via POST .../activate above, not here), and currency/
+    // costPerCostCenter (Costo Accesos-Permisos -> Editar, see
+    // Admin-CostosModulos.js's patchPlanField, which calls this same
+    // route). A save can touch more than one bucket at once, so each is
+    // checked independently against whatever it actually changes.
+    const grants = getSaasUserGrants(req.user.sub);
+    const bodyKeys = Object.keys(req.body || {});
+    const changesStatus = status !== undefined && status !== existing.status;
+    const changesPricing = bodyKeys.some((k) => k === 'currency' || k === 'costPerCostCenter');
+    const changesPlanFields = bodyKeys.some((k) => k !== 'status' && k !== 'currency' && k !== 'costPerCostCenter');
+    if (changesPlanFields && !hasSaasGrant(grants, 'saas-plans', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
+    }
+    if (changesStatus && !hasSaasGrant(grants, 'saas-plans', 'activate')) {
+        return res.status(403).json({ message: 'No tienes permiso para activar/desactivar planes.' });
+    }
+    if (changesPricing && !hasSaasGrant(grants, 'saas-module-costs', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar costos de accesos-permisos.' });
     }
     if (currency !== undefined && !['MXN', 'USD'].includes(currency)) {
         return res.status(400).json({ message: 'currency must be MXN or USD.' });
@@ -961,6 +1004,9 @@ app.post('/api/admin/plans/:id/activate', requireAuth, requireAdmin, (req, res) 
 app.delete('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
+    }
     deletePlan(req.params.id);
     res.status(204).end();
 });
@@ -983,6 +1029,9 @@ app.get('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
 app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
+    }
     if (existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
         return res.status(409).json({ message: 'Este plan ya está activo y no puede modificarse.' });
     }
@@ -1025,6 +1074,9 @@ app.get('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req
 app.put('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-module-costs', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar costos de accesos-permisos.' });
+    }
     const { costs, currency } = req.body || {};
     const error = validatePlanPermissionCosts(costs);
     if (error) return res.status(400).json({ message: error });

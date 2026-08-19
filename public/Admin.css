@@ -732,6 +732,21 @@ body.dark-mode .admin-badge-prospecto{
     color: var(--color-text-primary);
     font-weight: 500;
 }
+/* Non-interactive branch label above a screen's Ver/Editar/Crear/Activar
+   leaves in the Equipo SaaS access tree (see Admin-EquipoSaaS.js
+   renderTreeList) — plain text, no border/switch, unlike the leaf rows
+   below it. */
+.admin-module-group-title{
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-text-secondary);
+    margin-top: 0.4rem;
+}
+.admin-module-group-title:first-child{
+    margin-top: 0;
+}
 
 /* Toggle switch */
 .admin-switch{

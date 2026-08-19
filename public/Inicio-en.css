@@ -864,6 +864,12 @@
         font-size: 1.2rem;
         cursor: pointer;
         transition: background-color 0.2s ease, color 0.2s ease;
+        /* Some mobile browsers still hold a ~300ms tap before dispatching
+           click (waiting to see if it becomes a double-tap-to-zoom gesture),
+           which can make a fast tap-then-release read as a stray/duplicate
+           interaction. manipulation opts these icon buttons out of that
+           delay entirely — no functional loss, they're not zoomable text. */
+        touch-action: manipulation;
     }
     .top-bar-actions button:hover{
         background-color: var(--color-bg);

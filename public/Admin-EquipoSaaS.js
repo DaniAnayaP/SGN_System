@@ -40,17 +40,47 @@ const treeSaveStatus = document.getElementById('saas-user-tree-save-status');
 let saasUsers = [];
 let selectedUserId = null;
 
-// The flat SaaS permission catalog — kept in sync by hand with
-// SAAS_SCREEN_GRANT_PATHS in Dashboard.js and the itemId strings server.js
-// checks (hasSaasGrant). Adding a 4th SaaS screen later means adding one
-// entry here.
+// The SaaS permission catalog: one branch per SaaS screen (kept in sync by
+// hand with SAAS_SCREEN_GRANT_PATHS in Dashboard.js), each with its own
+// independent per-action leaves — same itemId/subItemId tuples
+// hasSaasGrant checks server-side throughout server.js. A bare
+// {itemId, subItemId: null} row (the "Ver" leaf here) is what
+// hasSaasScreenGrant in Dashboard.js also checks for sidebar/page
+// visibility — granting ANY other leaf under a screen implies Ver too (see
+// hasSaasGrant's own comment), so Ver alone means "can see it, nothing
+// else". Costo Accesos-Permisos has no Crear/Activar leaves — there's
+// nothing to create or activate on that screen, plans are created and
+// activated from Nuestros Planes. Nuestros Planes' Activar leaf keeps the
+// pre-existing 'activate' subItemId (not 'activar') since it's the same
+// grant POST /api/admin/plans/:id/activate already checks — renamed only
+// in its on-screen label ("Autorizar Planes" -> "Activar/Desactivar") to
+// match the other 2 screens' naming.
 const SAAS_PERMISSION_CATALOG = [
-    { itemId: 'saas-clients', labelKey: 'menu.clientesRegistrados' },
+    {
+        itemId: 'saas-clients', labelKey: 'menu.clientesRegistrados',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
+            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
+            { subItemId: 'activar', labelKey: 'admin.saasActionActivate' },
+        ],
+    },
     {
         itemId: 'saas-plans', labelKey: 'menu.plansRegistered',
-        sub: [{ subItemId: 'activate', labelKey: 'admin.saasPermActivatePlans' }],
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
+            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
+            { subItemId: 'activate', labelKey: 'admin.saasActionActivate' },
+        ],
     },
-    { itemId: 'saas-module-costs', labelKey: 'menu.moduleCosts' },
+    {
+        itemId: 'saas-module-costs', labelKey: 'menu.moduleCosts',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
+        ],
+    },
 ];
 
 function showError(el, message) {
@@ -222,12 +252,23 @@ function setGrant(itemId, subItemId, checked) {
     if (checked) treeGrants.push({ itemId, subItemId: subItemId || null });
 }
 
+function buildTreeGroupHeader(labelText) {
+    const li = document.createElement('li');
+    li.className = 'admin-module-group-title';
+    li.textContent = labelText;
+    return li;
+}
+
 function renderTreeList() {
     treeList.innerHTML = '';
-    SAAS_PERMISSION_CATALOG.forEach((perm) => {
-        treeList.appendChild(buildTreeRow(Dashboard.t(perm.labelKey), hasGrant(perm.itemId), (checked) => setGrant(perm.itemId, null, checked)));
-        (perm.sub || []).forEach((sub) => {
-            const row = buildTreeRow(`— ${Dashboard.t(sub.labelKey)}`, hasGrant(perm.itemId, sub.subItemId), (checked) => setGrant(perm.itemId, sub.subItemId, checked));
+    SAAS_PERMISSION_CATALOG.forEach((screen) => {
+        treeList.appendChild(buildTreeGroupHeader(Dashboard.t(screen.labelKey)));
+        screen.actions.forEach((action) => {
+            const row = buildTreeRow(
+                Dashboard.t(action.labelKey),
+                hasGrant(screen.itemId, action.subItemId),
+                (checked) => setGrant(screen.itemId, action.subItemId, checked),
+            );
             row.style.paddingLeft = '1.5rem';
             treeList.appendChild(row);
         });

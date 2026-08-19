@@ -1547,6 +1547,48 @@ function seedScreenVisibilityGrants() {
 }
 seedScreenVisibilityGrants();
 
+// --- One-time data migration: seed acciones-por-pantalla for pre-existing --
+// --- Equipo SaaS grants ---------------------------------------------------
+// Before this round, a bare {itemId, subItemId: null} row in
+// saas_user_grants meant "full access to that screen" (create/edit/
+// activate, everything) — the "Accesos de esta cuenta SaaS" modal was a
+// flat per-screen checkbox. Now that same tuple means "Ver" only, with
+// Editar/Crear/Activar as independent opt-in leaves (see the tree built in
+// Admin-EquipoSaaS.js and the grant checks added throughout server.js).
+// Without this seed, any admin who was ALREADY restricted to specific
+// screens would suddenly lose every action on them the moment this
+// deployed. Deliberately does NOT touch 'activate' under saas-plans
+// (Autorizar Planes) — that was already its own independent opt-in leaf
+// before this change and still is; a plain "sees Nuestros Planes" grant
+// never implied it, so backfilling it here would be a privilege escalation,
+// not a preservation of existing access. Runs exactly once
+// (schema_migrations_data), same reasoning as the two migrations above.
+const SAAS_ACTIONS_SEED_KEY = 'seed-saas-screen-actions-v1';
+const SAAS_SCREEN_BACKFILL_SUBITEMS = {
+    'saas-clients': ['editar', 'crear', 'activar'],
+    'saas-plans': ['editar', 'crear'],
+    'saas-module-costs': ['editar'],
+};
+function seedSaasScreenActionGrants() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SAAS_ACTIONS_SEED_KEY)) return;
+
+    const baseRows = db.prepare('SELECT user_id AS userId, item_id AS itemId FROM saas_user_grants WHERE sub_item_id IS NULL').all();
+    const hasGrant = db.prepare('SELECT 1 FROM saas_user_grants WHERE user_id = ? AND item_id = ? AND sub_item_id = ?');
+    const insertGrant = db.prepare('INSERT INTO saas_user_grants (user_id, item_id, sub_item_id) VALUES (?, ?, ?)');
+
+    const seed = db.transaction(() => {
+        baseRows.forEach(({ userId, itemId }) => {
+            (SAAS_SCREEN_BACKFILL_SUBITEMS[itemId] || []).forEach((subItemId) => {
+                if (!hasGrant.get(userId, itemId, subItemId)) insertGrant.run(userId, itemId, subItemId);
+            });
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SAAS_ACTIONS_SEED_KEY);
+    });
+    seed();
+    console.log('[db] Seeded Equipo SaaS per-screen actions for pre-existing restricted admins (one-time migration).');
+}
+seedSaasScreenActionGrants();
+
 // --- Query helpers: plans (Planes y Paquetes, GEIPSA-wide, not per-client) ---
 // modules is stored as a JSON array of MODULE_CATALOG keys; costCentersLimit
 // mirrors clients.cost_centers_limit. Together they're the same shape
