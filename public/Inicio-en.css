@@ -2057,7 +2057,16 @@
        language change instead of fighting the wipe) — put first/leftmost
        on purpose so it reads as a distinct control, not a decoration lost
        next to the sort arrow. */
-    .data-table-col-sortable{
+    /* th.data-table-col-sortable (not just .data-table-col-sortable) so this
+       ties the base ".data-table th, .data-table td { padding: ... }"
+       rule's specificity (one type + one class either way) — a tie lets
+       source order decide, and this rule comes later, so its padding-left/
+       -right longhands actually win instead of silently losing to that
+       shorthand. Without the "th", the padding here never took effect at
+       all, which is exactly why the filter icon and the sort arrow were
+       both overlapping the label text instead of sitting in their own
+       reserved space. */
+    th.data-table-col-sortable{
         cursor: pointer;
         padding-left: 1.7rem;
         padding-right: 1.5rem;
