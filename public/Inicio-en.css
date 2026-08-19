@@ -2139,12 +2139,22 @@
         padding: 0.4rem 0;
         font-size: 0.82rem;
     }
-    /* Live-narrows which rows show in the checklist below (see the input
-       handler in openColumnFilterMenu) — never touches selection state. */
+    /* Row above "Todos" — live-narrows which rows show in the checklist
+       below (see openColumnFilterMenu/searchInputChanged), never touches
+       selection state. Text columns get a "Tipo de Filtro" mode button +
+       search box; date columns (see isDateColumn) get a Desde:/Hasta:
+       range instead — position:relative so the mode dropdown below can
+       anchor to this row rather than the whole menu. */
+    .data-table-col-filter-search-row{
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0 0.8rem 0.4rem;
+    }
     .data-table-col-filter-search{
-        display: block;
-        width: calc(100% - 1.6rem);
-        margin: 0 0.8rem 0.4rem;
+        flex: 1;
+        min-width: 0;
         padding: 0.35rem 0.6rem;
         border: 1px solid var(--color-border);
         border-radius: 0.35rem;
@@ -2152,9 +2162,75 @@
         color: var(--color-text-primary);
         font: inherit;
     }
-    .data-table-col-filter-search:focus{
+    .data-table-col-filter-search:focus,
+    .data-table-col-filter-date:focus{
         outline: none;
         border-color: var(--color-text-primary);
+    }
+    .data-table-col-filter-mode-btn{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 1.8rem;
+        height: 1.8rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.35rem;
+        background-color: var(--color-bg);
+        color: var(--color-text-secondary);
+        font-size: 0.9rem;
+        cursor: pointer;
+    }
+    .data-table-col-filter-mode-btn:hover{
+        color: var(--color-text-primary);
+    }
+    .data-table-col-filter-mode-menu{
+        position: absolute;
+        top: 100%;
+        left: 0.8rem;
+        z-index: 51;
+        margin-top: 0.2rem;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 0.4rem;
+        box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.18);
+        overflow: hidden;
+        min-width: 8rem;
+    }
+    .data-table-col-filter-mode-option{
+        border: none;
+        background: transparent;
+        color: var(--color-text-primary);
+        text-align: left;
+        padding: 0.4rem 0.7rem;
+        font: inherit;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+    .data-table-col-filter-mode-option:hover{
+        background-color: var(--color-bg);
+    }
+    .data-table-col-filter-mode-option-active{
+        font-weight: 600;
+        color: var(--color-accent, #1a73e8);
+    }
+    .data-table-col-filter-date-label{
+        flex-shrink: 0;
+        color: var(--color-text-secondary);
+        font-size: 0.75rem;
+    }
+    .data-table-col-filter-date{
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0.3rem 0.4rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.35rem;
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+        font: inherit;
+        font-size: 0.75rem;
     }
     .data-table-col-filter-option{
         display: flex;

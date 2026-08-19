@@ -156,7 +156,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "A cost center with that code already exists.",
             ccDeleteConfirm: "Delete this cost center?"
         },
-        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterToggle: "Filter", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", filterColumn: "Filter by this column", filterDateFrom: "From date", filterDateTo: "To date", filterFuelSearchHint: "Unit, plates, driver, coordinator...", filterHrSearchHint: "Name, position, email, phone...", filterCcSearchHint: "Code, name, responsible, description...", filterClientsSearchHint: "RFC, nickname, owner, contact...", filterPlansSearchHint: "Name, description, created by...", filterSaasTeamSearchHint: "Username, name, email...", rowEditableLegend: "Row with at least one field you can still edit", emptyStateText: "No data yet.", breadcrumbLabel: "Path", breadcrumbExpand: "Expand breadcrumb", breadcrumbCollapse: "Collapse breadcrumb", colUniqueBigDate: "# Unique Big Date", colRegistro: "# Record", colAnio: "Year", colMes: "Month", colDiaNum: "Day (Num)", colDiaTexto: "Day (Text)", colNoSemCobro: "Collection Week No.", colFecha: "Date", colTipoServicios: "Service Type", colEstatus: "Status",
+        main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterToggle: "Filter", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", filterColumn: "Filter by this column", filterModeLabel: "Filter type", filterModeStartsWith: "Starts with", filterModeContains: "Contains", filterModeEquals: "Equal to", filterDateFrom: "From date", filterDateTo: "To date", filterFuelSearchHint: "Unit, plates, driver, coordinator...", filterHrSearchHint: "Name, position, email, phone...", filterCcSearchHint: "Code, name, responsible, description...", filterClientsSearchHint: "RFC, nickname, owner, contact...", filterPlansSearchHint: "Name, description, created by...", filterSaasTeamSearchHint: "Username, name, email...", rowEditableLegend: "Row with at least one field you can still edit", emptyStateText: "No data yet.", breadcrumbLabel: "Path", breadcrumbExpand: "Expand breadcrumb", breadcrumbCollapse: "Collapse breadcrumb", colUniqueBigDate: "# Unique Big Date", colRegistro: "# Record", colAnio: "Year", colMes: "Month", colDiaNum: "Day (Num)", colDiaTexto: "Day (Text)", colNoSemCobro: "Collection Week No.", colFecha: "Date", colTipoServicios: "Service Type", colEstatus: "Status",
             colCliente: "Client", colTipoUnidadSolicitada: "Requested Unit Type", colCotizacionServicio: "Service Quote $", colRequisitosServicio: "Service Requirements", colRequisitosSeguridad: "Security Requirements", colRequisitosCobro: "Billing Requirements", colOrigen: "Origin", colHoraCita: "Appointment Time", colUbicacion: "Location", colLinkUbicacion: "Location Link", colEmpresaCliente: "Client's Company", colNomContactoOrigen: "Origin Contact Name", colNoContacto: "Contact No.", colNoColaboradorDriver: "Employee No. (Driver)", colNombreDriver: "Driver Name(s)", colNoColaboradorAuxiliar: "Employee No. (Assistant)", colNombreAuxiliar: "Assistant Name(s)", colRutaAsignada: "Assigned Route", colZona: "Zone", colCantPallets: "Pallet Qty.", colCantUdm: "UOM Qty.", colCantParadas: "Stop Qty.", colParadasVisitadas: "Stops Visited", colCantUmEntregadas: "Units Delivered Qty.", colPorcentajeVisitas: "% Visits", colPorcentajeEntrega: "% Delivery", colDevolucionCantUdm: "Return (UOM Qty.)", colPorcentajeDevolucion: "% Return", colCoordinador: "Coordinator", colEcoUnidad: "Unit Fleet No.", colPlacas: "License Plates", colRutaSubtotal: "Route Subtotal $", colPenalizacion: "Penalty $", colRutaSubtotalCobro: "Route Billing Subtotal $", colIva: "VAT $", colCobroTotalRuta: "Total Route Billing $", colNoFactura: "Invoice No.", colFechaGeneraFactura: "Invoice Generation Date",
             topBarExpand: "Expand top bar", topBarCollapse: "Collapse top bar", decreaseFontSize: "Decrease font size", increaseFontSize: "Increase font size",
             pinColumns: "Pin columns", pinColumnsTitle: "Pin columns", pinColumnsHint: "Choose up to 4 columns to pin to the left. Drag to reorder them.", pinColumnsLimitReached: "You can pin up to 4 columns.", pinColumnsOther: "Other columns", columnVisibility: "Show/hide columns", columnVisibilityTitle: "Show/hide columns", columnVisibilityHint: "Choose which columns to show.", columnHidePinnedConfirm: "This column is pinned. Are you sure you want to hide it?", dragToReorder: "Drag to reorder",
@@ -302,7 +302,7 @@ const EMBEDDED_TRANSLATIONS = {
             ccCodeExists: "Ya existe un centro de costo con ese código.",
             ccDeleteConfirm: "¿Eliminar este centro de costo?"
         },
-        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterToggle: "Filtro", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", filterColumn: "Filtrar por esta columna", filterDateFrom: "Fecha desde", filterDateTo: "Fecha hasta", filterFuelSearchHint: "Unidad, placas, chofer, coordinador...", filterHrSearchHint: "Nombre, puesto, correo, teléfono...", filterCcSearchHint: "Código, nombre, responsable, descripción...", filterClientsSearchHint: "RFC, apodo, dueño, contacto...", filterPlansSearchHint: "Nombre, descripción, creado por...", filterSaasTeamSearchHint: "Usuario, nombre, correo...", rowEditableLegend: "Fila con al menos un campo que aún puedes editar", emptyStateText: "Aún no hay datos.", breadcrumbLabel: "Ruta", breadcrumbExpand: "Expandir ruta de acceso", breadcrumbCollapse: "Contraer ruta de acceso", colUniqueBigDate: "# Único Big Date", colRegistro: "# Registro", colAnio: "Año", colMes: "Mes", colDiaNum: "Día (Num)", colDiaTexto: "Día (texto)", colNoSemCobro: "No. Sem Cobro", colFecha: "Fecha", colTipoServicios: "Tipo Servicios", colEstatus: "Estatus",
+        main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterToggle: "Filtro", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", filterColumn: "Filtrar por esta columna", filterModeLabel: "Tipo de Filtro", filterModeStartsWith: "Inicia con", filterModeContains: "Contiene", filterModeEquals: "Igual que", filterDateFrom: "Fecha desde", filterDateTo: "Fecha hasta", filterFuelSearchHint: "Unidad, placas, chofer, coordinador...", filterHrSearchHint: "Nombre, puesto, correo, teléfono...", filterCcSearchHint: "Código, nombre, responsable, descripción...", filterClientsSearchHint: "RFC, apodo, dueño, contacto...", filterPlansSearchHint: "Nombre, descripción, creado por...", filterSaasTeamSearchHint: "Usuario, nombre, correo...", rowEditableLegend: "Fila con al menos un campo que aún puedes editar", emptyStateText: "Aún no hay datos.", breadcrumbLabel: "Ruta", breadcrumbExpand: "Expandir ruta de acceso", breadcrumbCollapse: "Contraer ruta de acceso", colUniqueBigDate: "# Único Big Date", colRegistro: "# Registro", colAnio: "Año", colMes: "Mes", colDiaNum: "Día (Num)", colDiaTexto: "Día (texto)", colNoSemCobro: "No. Sem Cobro", colFecha: "Fecha", colTipoServicios: "Tipo Servicios", colEstatus: "Estatus",
             colCliente: "Cliente", colTipoUnidadSolicitada: "Tipo Unidad Solicitada", colCotizacionServicio: "Cotización $ Servicio", colRequisitosServicio: "Requisitos Servicio", colRequisitosSeguridad: "Requisitos Seguridad", colRequisitosCobro: "Requisitos Cobro", colOrigen: "Origen", colHoraCita: "Hora Cita", colUbicacion: "Ubicación", colLinkUbicacion: "Link Ubicación", colEmpresaCliente: "Empresa del cliente", colNomContactoOrigen: "Nom Contacto Origen", colNoContacto: "No. Contacto", colNoColaboradorDriver: "No. Colaborador", colNombreDriver: "Nombre(s) Driver", colNoColaboradorAuxiliar: "No. Colaborador", colNombreAuxiliar: "Nombre(s) Auxiliar", colRutaAsignada: "Ruta Asignada", colZona: "Zona", colCantPallets: "Cant. Pallets", colCantUdm: "Cant. UDM", colCantParadas: "Cant. Paradas", colParadasVisitadas: "Paradas visitadas", colCantUmEntregadas: "Cant UM Entregadas", colPorcentajeVisitas: "% Visitas", colPorcentajeEntrega: "% Entrega", colDevolucionCantUdm: "Devolución (Cant UDM)", colPorcentajeDevolucion: "% Devolución", colCoordinador: "Coordinador", colEcoUnidad: "Eco Unidad", colPlacas: "Placas", colRutaSubtotal: "$ Ruta Subtotal", colPenalizacion: "Penalización $", colRutaSubtotalCobro: "$ Ruta Subtotal Cobro", colIva: "$ IVA", colCobroTotalRuta: "$ Cobro Total Ruta", colNoFactura: "No. Factura", colFechaGeneraFactura: "F. Genera Factura",
             topBarExpand: "Expandir barra superior", topBarCollapse: "Contraer barra superior", decreaseFontSize: "Reducir tamaño de letra", increaseFontSize: "Aumentar tamaño de letra",
             pinColumns: "Fijar columnas", pinColumnsTitle: "Fijar columnas", pinColumnsHint: "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.", pinColumnsLimitReached: "Puedes fijar hasta 4 columnas.", pinColumnsOther: "Otras columnas", columnVisibility: "Mostrar/ocultar columnas", columnVisibilityTitle: "Mostrar/ocultar columnas", columnVisibilityHint: "Elige qué columnas mostrar.", columnHidePinnedConfirm: "Esta columna está fijada. ¿Seguro que quieres ocultarla?", dragToReorder: "Arrastrar para reordenar",
@@ -1978,6 +1978,18 @@ function getColumnDistinctValues(tableId, key) {
     return Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Every date column in this app renders as a plain ISO string (YYYY-MM-DD)
+// with no separate formatting step (see Admin-Planes.js's own formatDate,
+// which just slices to 10 chars) — auto-detecting off that shape avoids
+// needing any page to opt a column into "this is a date" by hand. A column
+// with zero non-empty values (nothing rendered yet) is never treated as a
+// date column — nothing to detect from.
+function isDateColumn(distinctValues) {
+    const nonEmpty = distinctValues.filter((v) => v !== '');
+    return nonEmpty.length > 0 && nonEmpty.every((v) => ISO_DATE_RE.test(v));
+}
+
 // Rows hide via a CSS class (see .data-table-row-col-filtered), never the
 // `hidden` attribute each page's own applyXFilters() already owns — the two
 // mechanisms stay independent this way (a row shows only if BOTH leave it
@@ -2033,16 +2045,111 @@ function openColumnFilterMenu(th, tableId, key) {
     menu.className = 'data-table-col-filter-menu';
     menu.dataset.col = key;
 
-    // Search box, above "Todos" — only narrows which rows are VISIBLE in
-    // the checklist below, never touches selection state, so typing to
-    // find one value and clearing the search again always shows the
-    // filter exactly as it was left.
-    const searchInput = document.createElement('input');
-    searchInput.type = 'search';
-    searchInput.className = 'data-table-col-filter-search';
-    searchInput.placeholder = t('main.filterSearchPlaceholder');
-    searchInput.addEventListener('click', (event) => event.stopPropagation());
-    menu.appendChild(searchInput);
+    // Above "Todos" — only narrows which rows are VISIBLE in the checklist
+    // below, never touches selection state, so searching to find one value
+    // and clearing the search again always shows the filter exactly as it
+    // was left. Date columns (see isDateColumn) get a Desde:/Hasta: range
+    // instead of the text box — "starts with" a date is meaningless, a
+    // range is what's actually useful there. applyRowSearch (defined once
+    // list/checkboxes exist, further down) does the actual hiding either
+    // way.
+    const dateColumn = isDateColumn(distinctValues);
+    const searchRow = document.createElement('div');
+    searchRow.className = 'data-table-col-filter-search-row';
+    let applyRowSearch = () => {};
+
+    if (dateColumn) {
+        const fromField = document.createElement('input');
+        fromField.type = 'date';
+        fromField.className = 'data-table-col-filter-date';
+        fromField.setAttribute('aria-label', t('main.filterDateFrom'));
+        fromField.addEventListener('click', (event) => event.stopPropagation());
+        const toField = document.createElement('input');
+        toField.type = 'date';
+        toField.className = 'data-table-col-filter-date';
+        toField.setAttribute('aria-label', t('main.filterDateTo'));
+        toField.addEventListener('click', (event) => event.stopPropagation());
+
+        const fromLabel = document.createElement('span');
+        fromLabel.className = 'data-table-col-filter-date-label';
+        fromLabel.textContent = t('main.filterDateFrom');
+        const toLabel = document.createElement('span');
+        toLabel.className = 'data-table-col-filter-date-label';
+        toLabel.textContent = t('main.filterDateTo');
+        searchRow.append(fromLabel, fromField, toLabel, toField);
+
+        applyRowSearch = (row) => {
+            const value = row.dataset.searchValue;
+            if (fromField.value && value < fromField.value) return false;
+            if (toField.value && value > toField.value) return false;
+            return true;
+        };
+        fromField.addEventListener('input', () => searchInputChanged());
+        toField.addEventListener('input', () => searchInputChanged());
+    } else {
+        const FILTER_MODES = [
+            { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
+            { id: 'contains', labelKey: 'main.filterModeContains' },
+            { id: 'equals', labelKey: 'main.filterModeEquals' },
+        ];
+        let searchMode = 'contains';
+
+        const modeBtn = document.createElement('button');
+        modeBtn.type = 'button';
+        modeBtn.className = 'data-table-col-filter-mode-btn';
+        modeBtn.setAttribute('aria-label', t('main.filterModeLabel'));
+        modeBtn.title = t('main.filterModeLabel');
+        modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
+        searchRow.appendChild(modeBtn);
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'search';
+        searchInput.className = 'data-table-col-filter-search';
+        searchInput.placeholder = t('main.filterSearchPlaceholder');
+        searchInput.addEventListener('click', (event) => event.stopPropagation());
+        searchRow.appendChild(searchInput);
+
+        const modeMenu = document.createElement('div');
+        modeMenu.className = 'data-table-col-filter-mode-menu';
+        modeMenu.hidden = true;
+        const modeButtons = FILTER_MODES.map((mode) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'data-table-col-filter-mode-option';
+            btn.textContent = t(mode.labelKey);
+            btn.classList.toggle('data-table-col-filter-mode-option-active', mode.id === searchMode);
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                searchMode = mode.id;
+                modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
+                btn.classList.add('data-table-col-filter-mode-option-active');
+                modeMenu.hidden = true;
+                searchInputChanged();
+            });
+            modeMenu.appendChild(btn);
+            return btn;
+        });
+        searchRow.appendChild(modeMenu);
+
+        modeBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            modeMenu.hidden = !modeMenu.hidden;
+        });
+        menu.addEventListener('click', (event) => {
+            if (!modeMenu.hidden && event.target !== modeBtn && !modeMenu.contains(event.target)) modeMenu.hidden = true;
+        });
+
+        applyRowSearch = (row) => {
+            const query = searchInput.value.trim().toLowerCase();
+            if (query === '') return true;
+            const value = row.dataset.searchValue;
+            return searchMode === 'startsWith' ? value.startsWith(query)
+                : searchMode === 'equals' ? value === query
+                    : value.includes(query);
+        };
+        searchInput.addEventListener('input', () => searchInputChanged());
+    }
+    menu.appendChild(searchRow);
 
     const allRow = document.createElement('label');
     allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
@@ -2089,12 +2196,14 @@ function openColumnFilterMenu(th, tableId, key) {
     });
     menu.appendChild(list);
 
-    searchInput.addEventListener('input', () => {
-        const query = searchInput.value.trim().toLowerCase();
+    // Hoisted (function declaration, not const) so the date/text branches
+    // above can wire their own input listeners to call it even though it's
+    // only defined here, once `list`'s rows actually exist.
+    function searchInputChanged() {
         list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
-            row.hidden = query !== '' && !row.dataset.searchValue.includes(query);
+            row.hidden = !applyRowSearch(row);
         });
-    });
+    }
 
     allCheckbox.addEventListener('change', () => {
         checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
@@ -2113,7 +2222,7 @@ function openColumnFilterMenu(th, tableId, key) {
     menu.style.left = `${Math.max(8, left)}px`;
     dataTableFilterMenuEl = menu;
     dataTableFilterMenuTableId = tableId;
-    searchInput.focus();
+    searchRow.querySelector('input')?.focus();
     setTimeout(() => {
         document.addEventListener('click', handleColumnFilterOutsideClick, true);
         window.addEventListener('scroll', closeColumnFilterMenu, true);
