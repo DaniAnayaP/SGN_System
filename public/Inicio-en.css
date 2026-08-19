@@ -313,7 +313,7 @@
         display: none;
     }
     /* Phone-size: icon only, same breakpoint as Cost Centers. */
-    @media (max-width:700px) or (max-height:683px){
+    @media (max-width:700px) or (max-height:550px){
         .dept-picker-btn{
             padding: 0.5rem;
             border-radius: 50%;
@@ -821,7 +821,7 @@
     }
     /* Phone-size: icon only, matching the established mobile breakpoint
        used to switch the sidebar into its off-canvas mode. */
-    @media (max-width:700px) or (max-height:683px){
+    @media (max-width:700px) or (max-height:550px){
         .cc-picker-btn{
             padding: 0.5rem;
             border-radius: 50%;
@@ -1475,7 +1475,7 @@
         transform: translateY(-150%);
     }
     /* Responsive */
-    @media (max-height: 683px){
+    @media (max-height: 550px){
         .footer{
             box-shadow: none;
         }
@@ -1498,8 +1498,14 @@
     }
     /* Sidebar goes off-canvas (opened only via the hamburger) starting at
        780px — raised from 700px since the sidebar itself was still taking
-       up too much room relative to the content below that width. */
-    @media (max-width:780px) or (max-height:683px) {
+       up too much room relative to the content below that width. The
+       height leg (550px, lowered from 683px) is deliberately much lower
+       than the width one: it exists to catch genuinely short windows
+       (small preview panes, a window dragged very short), not a normal
+       desktop browser whose innerHeight just lost some room to tabs/
+       bookmarks bar/an extension banner — 683px was tripping on exactly
+       that ordinary case. */
+    @media (max-width:780px) or (max-height:550px) {
         #menu-btn{
             display: none;
         }
@@ -1562,7 +1568,7 @@
 
     /* The top bar's own content (department + area + cost-center pickers,
        page title, six action icons) stops fitting well before the sidebar
-       needs to go off-canvas (that's the 780px/683px breakpoint above, a
+       needs to go off-canvas (that's the 780px/550px breakpoint above, a
        separate concern) — confirmed by testing the actual breakpoint where
        icons start spilling past the rounded box. This was 936px before the
        department/area pickers moved into the top bar (see the "Move
