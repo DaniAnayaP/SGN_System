@@ -171,11 +171,7 @@
     "human-resources/hr-area-personnel-admin": {
       "cat-catalogos": [
         {
-          "id": "cat-catalogos-puestos-trabajo", "labelKey": "menu.catPuestosTrabajo", "icon": "bx-window", "href": "Business-PuestosTrabajo.html",
-          "submenu": [
-            { "id": "jpName", "labelKey": "business.jobPositionName", "permissionOnly": true },
-            { "id": "jpStatus", "labelKey": "business.jobPositionStatus", "permissionOnly": true }
-          ]
+          "id": "cat-catalogos-puestos-trabajo", "labelKey": "menu.catPuestosTrabajo", "icon": "bx-window", "href": "Business-PuestosTrabajo.html"
         }
       ],
       "cat-operaciones": [
