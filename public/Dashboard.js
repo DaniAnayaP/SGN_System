@@ -1986,7 +1986,11 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // with zero non-empty values (nothing rendered yet) is never treated as a
 // date column — nothing to detect from.
 function isDateColumn(distinctValues) {
-    const nonEmpty = distinctValues.filter((v) => v !== '');
+    // textCell()-style renderers (Admin-SaaS.js, Admin-Planes.js, etc.) show
+    // "—" for a null/empty date, never an actual empty string — both need
+    // excluding here, or a single client/plan/row with no date at all would
+    // make the whole column fail detection.
+    const nonEmpty = distinctValues.filter((v) => v !== '' && v !== '—');
     return nonEmpty.length > 0 && nonEmpty.every((v) => ISO_DATE_RE.test(v));
 }
 
