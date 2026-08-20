@@ -2249,9 +2249,19 @@ function openColumnFilterMenu(th, tableId, key) {
             const query = searchInput.value.trim().toLowerCase();
             if (query === '') return true;
             const value = row.dataset.searchValue;
-            return searchMode === 'startsWith' ? value.startsWith(query)
-                : searchMode === 'equals' ? value === query
-                    : value.includes(query);
+            if (searchMode === 'equals') {
+                // A cell can itself hold several comma-separated values (e.g.
+                // Centro de Costos' multi-select) -- "Igual que" splits BOTH
+                // sides on comma and matches if any filter term exactly
+                // matches any of the cell's own terms, so typing "GEA,
+                // TRAMET" matches a row tagged just "GEA" as well as one
+                // tagged "GEA,TRAMET,GSN,GEIPSA". A single term with no comma
+                // on either side behaves exactly like the old plain equality.
+                const queryTerms = query.split(',').map((s) => s.trim()).filter(Boolean);
+                const valueTerms = value.split(',').map((s) => s.trim());
+                return queryTerms.some((term) => valueTerms.includes(term));
+            }
+            return searchMode === 'startsWith' ? value.startsWith(query) : value.includes(query);
         };
         searchInput.addEventListener('input', () => searchInputChanged());
     }

@@ -555,6 +555,20 @@
         overflow: hidden;
         left: 0;
     }
+    /* A nested dropdown's own .sub-menu (e.g. Personalizados' report list,
+       inside Reportes) changes height WITHOUT any transition — an ancestor
+       dropdown resizes itself right after by reading THIS element's
+       scrollHeight (see wireMenuInteractions), and a mid-transition read
+       only sees however far the animation has gotten by that exact instant
+       (still ~0, since 0ms have elapsed), not this element's real target
+       height. That undersized ancestor then clips the very content that
+       was just opened, and only catches up after enough repeated clicks
+       happen to land after the transition has actually finished. Instant
+       (untransitioned) height here means the ancestor's very next read
+       always sees the true final size. */
+    .sub-menu-item-dropdown > .sub-menu{
+        transition: none;
+    }
     .Sidebar.minimize .sub-menu{
         position: absolute;
         left: 4.2rem;
