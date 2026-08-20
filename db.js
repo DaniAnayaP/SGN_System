@@ -1677,6 +1677,71 @@ function applyOperator(operator, a, b) {
     }
 }
 
+function reportWeekOfYear(date) {
+    const start = new Date(date.getFullYear(), 0, 1);
+    const days = Math.floor((date - start) / 86400000);
+    return Math.ceil((days + start.getDay() + 1) / 7);
+}
+
+// A report's "Base de Registro" columns are picked from Base de Datos
+// Global's own column list, so they carry ITS colKey ids (colFuelEcoUnit,
+// colFuelLiters, ...) -- BaseDatos-Empresa.js's own display ids, several of
+// which (colFuelCostPerLiter, colFuelTotal, colFuelDate, colFuelYear, ...)
+// are derived on the fly there and never exist as a literal property on the
+// mapFuelRecord() record object. A plain record[colKey] lookup (the naive
+// approach) silently returns undefined for every one of those -- and for
+// EVERY colFuel* key, since even the ones backed by a real field use a
+// different property name (record.ecoUnit, not record.colFuelEcoUnit).
+// This mirrors BaseDatos-Empresa.js's own buildFuelRow derivations, minus
+// its $/L/km cosmetic suffixes and translated labels (a calculated column
+// needs to feed these back into evaluateOperandValue as plain numbers, and
+// there's no client-side i18n dictionary available on the server) -- money
+// fields keep the $ sign since evaluateOperandValue already strips it.
+// Falls back to a direct record[colKey] lookup for anything not listed here
+// (covers every colSys* Control Interno key today, which mapFuelRecord
+// already attaches under that exact property name, and any future table's
+// own columns whose colKey already matches its record property 1:1).
+function resolveFuelReportColumnValue(record, colKey) {
+    const liters = parseFloat(record.liters) || 0;
+    const subtotal = parseFloat(record.subtotal) || 0;
+    const vat = parseFloat(record.vat) || 0;
+    const tripKmBefore = parseFloat(record.tripKmBefore) || 0;
+    const tripKmAfter = parseFloat(record.tripKmAfter) || 0;
+    const [year, month, day] = (record.date || '').split('-').map(Number);
+    const dateObj = year && month && day ? new Date(year, month - 1, day) : null;
+    const pad = (n) => String(n).padStart(2, '0');
+    switch (colKey) {
+        case 'colFuelDbId': return record.dbId;
+        case 'colFuelRecordId': return record.recordNumber != null ? String(record.recordNumber) : null;
+        case 'colFuelDate': return dateObj ? `${pad(day)}-${pad(month)}-${pad(year % 100)}` : null;
+        case 'colFuelYear': return dateObj ? String(year) : null;
+        case 'colFuelMonth': return dateObj ? SYSTEM_COLUMN_MONTH_ABBR[month - 1] : null;
+        case 'colFuelWeek': return dateObj ? `Sem${reportWeekOfYear(dateObj)}+${year}` : null;
+        case 'colFuelDayNum': return dateObj ? String(day) : null;
+        case 'colFuelDayText': return dateObj ? SYSTEM_COLUMN_DAY_ABBR[dateObj.getDay()] : null;
+        case 'colFuelTicketEvidence': return record.ticketEvidence ? 'Sí' : null;
+        case 'colFuelTripKmBefore': return tripKmBefore ? tripKmBefore.toLocaleString() : null;
+        case 'colFuelTripKmBeforeEvidence': return record.tripKmBeforeEvidence ? 'Sí' : null;
+        case 'colFuelTripKmAfter': return tripKmAfter ? tripKmAfter.toLocaleString() : null;
+        case 'colFuelTripKmAfterEvidence': return record.tripKmAfterEvidence ? 'Sí' : null;
+        case 'colFuelTripKmTotal': return Math.max(tripKmAfter - tripKmBefore, 0).toLocaleString();
+        case 'colFuelLiters': return liters ? liters.toLocaleString() : null;
+        case 'colFuelCostPerLiter': return liters > 0 ? `$${(subtotal / liters).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
+        case 'colFuelSubtotal': return subtotal ? `$${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
+        case 'colFuelVat': return vat ? `$${vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
+        case 'colFuelTotal': return (subtotal || vat) ? `$${(subtotal + vat).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
+        case 'colFuelEcoUnit': return record.ecoUnit;
+        case 'colFuelPlates': return record.plates;
+        case 'colFuelDriver': return record.driver;
+        case 'colFuelCoordinator': return record.coordinator;
+        case 'colFuelType': return record.fuelType;
+        case 'colFuelReason': return record.reason;
+        case 'colFuelTransferService': return record.transferService;
+        case 'colFuelInternalMovement': return record.internalMovement;
+        default: return record[colKey];
+    }
+}
+
 // Evaluates one report's columns (in position order, so a calculated column
 // can reference an earlier one) against every underlying record already
 // mapped by its own screen (mapFuelRecord today; a future screen's own
@@ -1695,7 +1760,8 @@ function computeIntelligentReportRows(report, records) {
         report.columns.forEach((col) => {
             let displayValue = null;
             if (col.type === 'base') {
-                displayValue = record[col.colKey] != null && record[col.colKey] !== '' ? record[col.colKey] : null;
+                const value = resolveFuelReportColumnValue(record, col.colKey);
+                displayValue = value != null && value !== '' ? value : null;
             } else if (col.type === 'calculated' && col.formula) {
                 const operandValues = col.formula.operands.map((op) => (
                     op.kind === 'constant' ? op.value : evaluateOperandValue(rawByPosition[op.reportColumnId])

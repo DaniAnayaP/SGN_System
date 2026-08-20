@@ -17,8 +17,10 @@ function formatCellValue(value) {
 }
 
 function renderResults(report, rows) {
+    // No on-screen <h1> here (the breadcrumb already carries this report's
+    // name, matching it by href in the sidebar tree) -- document.title only
+    // drives the browser tab, same convention as Registro de traslados.
     const title = `${Dashboard.companyName || ''} - ${report.name}`.replace(/^ - /, '');
-    document.getElementById('report-page-heading').textContent = title;
     document.getElementById('report-page-title').textContent = title;
 
     const headRow = document.getElementById('report-results-head');
@@ -49,10 +51,17 @@ function renderResults(report, rows) {
     if (wrapper && report.columns.length) Dashboard.initDataTableColumns(wrapper, 0);
 }
 
+function showResultsMessage(text) {
+    document.querySelector('[data-table-id="report-results"] table').hidden = true;
+    const emptyEl = document.getElementById('report-results-empty');
+    emptyEl.textContent = text;
+    emptyEl.hidden = false;
+}
+
 async function loadResults() {
     const id = reportIdFromUrl();
     if (!id) {
-        document.getElementById('report-page-heading').textContent = Dashboard.t('main.reportEmptyState');
+        showResultsMessage(Dashboard.t('main.reportEmptyState'));
         return;
     }
     try {
@@ -62,7 +71,7 @@ async function loadResults() {
         renderResults(report, rows || []);
     } catch (err) {
         console.error('Transacciones Inteligentes: failed to load report results', err);
-        document.getElementById('report-page-heading').textContent = Dashboard.t('admin.saveError');
+        showResultsMessage(Dashboard.t('admin.saveError'));
     }
 }
 
