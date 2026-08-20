@@ -1521,8 +1521,13 @@ function setDataTableFontSize(size) {
     document.documentElement.style.setProperty('--data-table-font-size', `${clamped}rem`);
     localStorage.setItem(DATA_TABLE_FONT_SIZE_KEY, String(clamped));
     document.querySelectorAll('.data-table-zoom').forEach((zoom) => {
-        zoom.querySelector('[data-zoom="out"]').disabled = clamped <= DATA_TABLE_FONT_MIN;
-        zoom.querySelector('[data-zoom="in"]').disabled = clamped >= DATA_TABLE_FONT_MAX;
+        // Either button can be missing now (hasIconGrant may have withheld
+        // it) -- this runs for every .data-table-zoom on the page, not just
+        // the one that was just clicked.
+        const outBtn = zoom.querySelector('[data-zoom="out"]');
+        const inBtn = zoom.querySelector('[data-zoom="in"]');
+        if (outBtn) outBtn.disabled = clamped <= DATA_TABLE_FONT_MIN;
+        if (inBtn) inBtn.disabled = clamped >= DATA_TABLE_FONT_MAX;
     });
     sizeDataTableWrappers();
     return clamped;
@@ -1533,14 +1538,29 @@ function setDataTableFontSize(size) {
 function renderDataTableZoomControls() {
     document.querySelectorAll('.data-table-wrapper').forEach((wrapper) => {
         if (wrapper.previousElementSibling?.classList?.contains('data-table-zoom')) return;
+        const tableKey = wrapper.dataset.tableId;
         const zoom = document.createElement('div');
         zoom.className = 'data-table-zoom';
-        zoom.innerHTML = `
-            <button type="button" class="data-table-zoom-btn" data-zoom="out" aria-label="${t('main.decreaseFontSize')}"><i class="bx bx-minus" aria-hidden="true"></i></button>
-            <button type="button" class="data-table-zoom-btn" data-zoom="in" aria-label="${t('main.increaseFontSize')}"><i class="bx bx-plus" aria-hidden="true"></i></button>
-        `;
-        zoom.querySelector('[data-zoom="out"]').addEventListener('click', () => setDataTableFontSize(getDataTableFontSize() - DATA_TABLE_FONT_STEP));
-        zoom.querySelector('[data-zoom="in"]').addEventListener('click', () => setDataTableFontSize(getDataTableFontSize() + DATA_TABLE_FONT_STEP));
+        if (hasIconGrant(tableKey, 'iconZoomOut')) {
+            const outBtn = document.createElement('button');
+            outBtn.type = 'button';
+            outBtn.className = 'data-table-zoom-btn';
+            outBtn.dataset.zoom = 'out';
+            outBtn.setAttribute('aria-label', t('main.decreaseFontSize'));
+            outBtn.innerHTML = '<i class="bx bx-minus" aria-hidden="true"></i>';
+            outBtn.addEventListener('click', () => setDataTableFontSize(getDataTableFontSize() - DATA_TABLE_FONT_STEP));
+            zoom.appendChild(outBtn);
+        }
+        if (hasIconGrant(tableKey, 'iconZoomIn')) {
+            const inBtn = document.createElement('button');
+            inBtn.type = 'button';
+            inBtn.className = 'data-table-zoom-btn';
+            inBtn.dataset.zoom = 'in';
+            inBtn.setAttribute('aria-label', t('main.increaseFontSize'));
+            inBtn.innerHTML = '<i class="bx bx-plus" aria-hidden="true"></i>';
+            inBtn.addEventListener('click', () => setDataTableFontSize(getDataTableFontSize() + DATA_TABLE_FONT_STEP));
+            zoom.appendChild(inBtn);
+        }
         wrapper.insertAdjacentElement('beforebegin', zoom);
     });
     setDataTableFontSize(getDataTableFontSize());
@@ -2918,43 +2938,58 @@ function renderDataTableColumnControls() {
     document.querySelectorAll('.data-table-wrapper').forEach((wrapper, index) => {
         const zoom = wrapper.previousElementSibling;
         if (zoom?.classList?.contains('data-table-zoom') && !zoom.querySelector('[data-col-action]')) {
-            const pinBtn = document.createElement('button');
-            pinBtn.type = 'button';
-            pinBtn.className = 'data-table-zoom-btn';
-            pinBtn.dataset.colAction = 'pin';
-            pinBtn.setAttribute('aria-label', t('main.pinColumns'));
-            pinBtn.title = t('main.pinColumns');
-            pinBtn.innerHTML = '<i class="bx bx-pin" aria-hidden="true"></i>';
-            pinBtn.addEventListener('click', () => openPinPicker(getTableId(wrapper, index)));
+            const tableKey = getTableId(wrapper, index);
+            const toAppend = [];
 
-            const visBtn = document.createElement('button');
-            visBtn.type = 'button';
-            visBtn.className = 'data-table-zoom-btn';
-            visBtn.dataset.colAction = 'visibility';
-            visBtn.setAttribute('aria-label', t('main.columnVisibility'));
-            visBtn.title = t('main.columnVisibility');
-            visBtn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
-            visBtn.addEventListener('click', () => openVisibilityPicker(getTableId(wrapper, index)));
+            if (hasIconGrant(tableKey, 'iconPin')) {
+                const pinBtn = document.createElement('button');
+                pinBtn.type = 'button';
+                pinBtn.className = 'data-table-zoom-btn';
+                pinBtn.dataset.colAction = 'pin';
+                pinBtn.setAttribute('aria-label', t('main.pinColumns'));
+                pinBtn.title = t('main.pinColumns');
+                pinBtn.innerHTML = '<i class="bx bx-pin" aria-hidden="true"></i>';
+                pinBtn.addEventListener('click', () => openPinPicker(getTableId(wrapper, index)));
+                toAppend.push(pinBtn);
+            }
 
-            const historyBtn = document.createElement('button');
-            historyBtn.type = 'button';
-            historyBtn.className = 'data-table-zoom-btn';
-            historyBtn.dataset.colAction = 'history';
-            historyBtn.setAttribute('aria-label', t('main.changeHistory'));
-            historyBtn.title = t('main.changeHistory');
-            historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-            historyBtn.addEventListener('click', () => openChangeHistory(getTableId(wrapper, index)));
+            if (hasIconGrant(tableKey, 'iconVisibility')) {
+                const visBtn = document.createElement('button');
+                visBtn.type = 'button';
+                visBtn.className = 'data-table-zoom-btn';
+                visBtn.dataset.colAction = 'visibility';
+                visBtn.setAttribute('aria-label', t('main.columnVisibility'));
+                visBtn.title = t('main.columnVisibility');
+                visBtn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
+                visBtn.addEventListener('click', () => openVisibilityPicker(getTableId(wrapper, index)));
+                toAppend.push(visBtn);
+            }
 
-            const legendBtn = document.createElement('button');
-            legendBtn.type = 'button';
-            legendBtn.className = 'data-table-zoom-btn';
-            legendBtn.dataset.colAction = 'legend';
-            legendBtn.setAttribute('aria-label', t('main.columnLegendBtn'));
-            legendBtn.title = t('main.columnLegendBtn');
-            legendBtn.innerHTML = '<span class="data-table-legend-icon" aria-hidden="true"><span></span><span></span><span></span></span>';
-            legendBtn.addEventListener('click', () => openColumnLegend(getTableId(wrapper, index)));
+            if (hasIconGrant(tableKey, 'iconHistory')) {
+                const historyBtn = document.createElement('button');
+                historyBtn.type = 'button';
+                historyBtn.className = 'data-table-zoom-btn';
+                historyBtn.dataset.colAction = 'history';
+                historyBtn.setAttribute('aria-label', t('main.changeHistory'));
+                historyBtn.title = t('main.changeHistory');
+                historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+                historyBtn.addEventListener('click', () => openChangeHistory(getTableId(wrapper, index)));
+                toAppend.push(historyBtn);
+            }
 
-            zoom.append(pinBtn, visBtn, historyBtn, legendBtn);
+            if (hasIconGrant(tableKey, 'iconLegend')) {
+                const legendBtn = document.createElement('button');
+                legendBtn.type = 'button';
+                legendBtn.className = 'data-table-zoom-btn';
+                legendBtn.dataset.colAction = 'legend';
+                legendBtn.setAttribute('aria-label', t('main.columnLegendBtn'));
+                legendBtn.title = t('main.columnLegendBtn');
+                legendBtn.innerHTML = '<span class="data-table-legend-icon" aria-hidden="true"><span></span><span></span><span></span></span>';
+                legendBtn.addEventListener('click', () => openColumnLegend(getTableId(wrapper, index)));
+                toAppend.push(legendBtn);
+            }
+
+            zoom.append(...toAppend);
 
             // Filtrar/Limpiar — only for tables that actually have a
             // .filter-bar (see the wiring block below this function for
@@ -2964,53 +2999,61 @@ function renderDataTableColumnControls() {
             // zoom's previous sibling at this point.
             const filterBar = zoom.previousElementSibling;
             if (filterBar?.classList?.contains('filter-bar')) {
-                const filterBtn = document.createElement('button');
-                filterBtn.type = 'button';
-                filterBtn.className = 'data-table-zoom-btn';
-                filterBtn.dataset.colAction = 'filter';
-                filterBtn.setAttribute('aria-label', t('main.filterToggle'));
-                filterBtn.setAttribute('aria-expanded', 'false');
-                filterBtn.title = t('main.filterToggle');
-                filterBtn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
-                filterBtn.addEventListener('click', () => {
-                    const expanded = filterBar.classList.toggle('filter-bar-expanded');
-                    filterBtn.setAttribute('aria-expanded', String(expanded));
-                    sizeDataTableWrappers();
-                });
-
-                const clearBtn = document.createElement('button');
-                clearBtn.type = 'button';
-                clearBtn.className = 'data-table-zoom-btn';
-                clearBtn.dataset.colAction = 'filter-clear';
-                clearBtn.setAttribute('aria-label', t('main.filterClearBtn'));
-                clearBtn.title = t('main.filterClearBtn');
-                clearBtn.innerHTML = '<i class="bx bx-x-circle" aria-hidden="true"></i>';
-                clearBtn.addEventListener('click', () => {
-                    filterBar.querySelectorAll('input').forEach((input) => { input.value = ''; });
-                    filterBar.querySelectorAll('select').forEach((select) => { select.selectedIndex = 0; });
-                    filterBar.classList.remove('filter-bar-expanded');
+                const filterToAppend = [];
+                let filterBtn = null;
+                if (hasIconGrant(tableKey, 'iconFilter')) {
+                    filterBtn = document.createElement('button');
+                    filterBtn.type = 'button';
+                    filterBtn.className = 'data-table-zoom-btn';
+                    filterBtn.dataset.colAction = 'filter';
+                    filterBtn.setAttribute('aria-label', t('main.filterToggle'));
                     filterBtn.setAttribute('aria-expanded', 'false');
-                    filterBar.dispatchEvent(new CustomEvent('data-table:filter-clear'));
-                    // Also resets whatever per-column value filters are
-                    // active (see attachColumnFilterTrigger) — one button
-                    // clears both filtering systems at once, AND puts the
-                    // column layout itself (order/widths/hidden/pinned, group
-                    // bands included) back to default — see
-                    // resetDataTableColumnLayout.
-                    const colTableId = getTableId(wrapper, index);
-                    const colState = dataTableColumnState.get(colTableId);
-                    if (colState) {
-                        colState.columnFilters.clear();
-                        applyColumnValueFilters(colTableId);
-                        getHeaderRow(colState.table).querySelectorAll('th.data-table-col-filter-active')
-                            .forEach((th) => th.classList.remove('data-table-col-filter-active'));
-                        resetDataTableColumnLayout(colTableId);
-                    }
-                    closeColumnFilterMenu();
-                    sizeDataTableWrappers();
-                });
+                    filterBtn.title = t('main.filterToggle');
+                    filterBtn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
+                    filterBtn.addEventListener('click', () => {
+                        const expanded = filterBar.classList.toggle('filter-bar-expanded');
+                        filterBtn.setAttribute('aria-expanded', String(expanded));
+                        sizeDataTableWrappers();
+                    });
+                    filterToAppend.push(filterBtn);
+                }
 
-                zoom.append(filterBtn, clearBtn);
+                if (hasIconGrant(tableKey, 'iconFilterClear')) {
+                    const clearBtn = document.createElement('button');
+                    clearBtn.type = 'button';
+                    clearBtn.className = 'data-table-zoom-btn';
+                    clearBtn.dataset.colAction = 'filter-clear';
+                    clearBtn.setAttribute('aria-label', t('main.filterClearBtn'));
+                    clearBtn.title = t('main.filterClearBtn');
+                    clearBtn.innerHTML = '<i class="bx bx-x-circle" aria-hidden="true"></i>';
+                    clearBtn.addEventListener('click', () => {
+                        filterBar.querySelectorAll('input').forEach((input) => { input.value = ''; });
+                        filterBar.querySelectorAll('select').forEach((select) => { select.selectedIndex = 0; });
+                        filterBar.classList.remove('filter-bar-expanded');
+                        filterBtn?.setAttribute('aria-expanded', 'false');
+                        filterBar.dispatchEvent(new CustomEvent('data-table:filter-clear'));
+                        // Also resets whatever per-column value filters are
+                        // active (see attachColumnFilterTrigger) — one button
+                        // clears both filtering systems at once, AND puts the
+                        // column layout itself (order/widths/hidden/pinned, group
+                        // bands included) back to default — see
+                        // resetDataTableColumnLayout.
+                        const colTableId = getTableId(wrapper, index);
+                        const colState = dataTableColumnState.get(colTableId);
+                        if (colState) {
+                            colState.columnFilters.clear();
+                            applyColumnValueFilters(colTableId);
+                            getHeaderRow(colState.table).querySelectorAll('th.data-table-col-filter-active')
+                                .forEach((th) => th.classList.remove('data-table-col-filter-active'));
+                            resetDataTableColumnLayout(colTableId);
+                        }
+                        closeColumnFilterMenu();
+                        sizeDataTableWrappers();
+                    });
+                    filterToAppend.push(clearBtn);
+                }
+
+                zoom.append(...filterToAppend);
             }
         }
 
@@ -4788,6 +4831,22 @@ function getColumnGrantLevel(tableKey, colKey) {
 }
 function hasColumnEditGrant(tableKey, colKey) {
     return getColumnGrantLevel(tableKey, colKey) === 'editar';
+}
+
+// Toolbar icons (Fijar/Visibilidad/Historial/Leyenda/Filtro/Limpiar/Zoom) —
+// a simple yes/no leaf under "Iconos Personalización" in the tree (see
+// PermissionTree.js: renderIconPermissions), unlike a column's 3-tier Solo
+// Ver/Ver y Operar/Editar. A table with no TABLE_GRANT_PATHS entry (or no
+// "Iconos Personalización" branch in menu.json at all) never gates its
+// icons -- this only takes effect for a pantalla that actually opted in.
+function hasIconGrant(tableKey, iconId) {
+    if (!!currentUser?.isClientAdmin) return true;
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return true;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    return grants.some((g) => (
+        g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}`
+    ));
 }
 // `pending` (whether the SERVER already reported this exact field as
 // awaiting approval, via GET .../fuel-records|hr-workers' pendingFields)

@@ -232,16 +232,31 @@
             keys.forEach((k) => (checked ? grantSet.add(k) : grantSet.delete(k)));
         }
 
-        // A plain, non-interactive label row — used for the "Tabla <X>"
-        // heading, which has no grant of its own (a pantalla's table is
-        // always exactly one; nothing meaningful to select/deselect at
-        // that level).
-        function buildStaticRow(labelText, depth) {
+        // A row with no checkbox/grant of its own — used for the "Tabla <X>"
+        // heading (a pantalla's table is always exactly one; nothing
+        // meaningful to select/deselect at that level). `toggle`, when
+        // given, adds the same chevron expand/collapse button buildRow's
+        // checkbox rows use, so a long column list can be folded away as a
+        // whole; omit it for a row that's just permanently visible.
+        function buildStaticRow(labelText, depth, toggle) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth} perm-tree-row-static`;
-            const spacer = document.createElement('span');
-            spacer.className = 'perm-tree-toggle-spacer';
-            row.appendChild(spacer);
+            if (toggle) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'perm-tree-toggle';
+                btn.setAttribute('aria-expanded', String(toggle.expanded));
+                const icon = document.createElement('i');
+                icon.className = 'bx bx-chevron-down';
+                icon.setAttribute('aria-hidden', 'true');
+                btn.appendChild(icon);
+                btn.addEventListener('click', () => { toggle.onToggle(); render(); });
+                row.appendChild(btn);
+            } else {
+                const spacer = document.createElement('span');
+                spacer.className = 'perm-tree-toggle-spacer';
+                row.appendChild(spacer);
+            }
             const label = document.createElement('span');
             label.className = 'perm-tree-static-label';
             label.textContent = labelText;
@@ -374,15 +389,59 @@
         // Renders the "Tabla <pantalla>" heading + one row per entry in the
         // pantalla's own column list — either a plain column, or (when
         // marked isClassification) a group like "Control Interno" that
-        // nests several columns under one shared toggle.
+        // nests several columns under one shared toggle. The heading itself
+        // is now a toggle too (same expandedItems Set/collapsed-by-default
+        // convention as every other row here) so a long column list
+        // (Control Interno's 13 plus a pantalla's own) can be folded away
+        // as a whole instead of always taking up the full height.
         function renderTableColumns(container, section, item, sm, subSm, subBlocked) {
-            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4));
+            const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const tableExpanded = expandedItems.has(tableTreeKey);
+            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, {
+                expanded: tableExpanded,
+                onToggle: () => {
+                    if (tableExpanded) expandedItems.delete(tableTreeKey);
+                    else expandedItems.add(tableTreeKey);
+                },
+            }));
+            if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
                     renderClassificationGroup(container, section, item, sm, subSm, entry, subBlocked);
                     return;
                 }
                 renderColumnRow(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5, subBlocked);
+            });
+        }
+
+        // Renders the "Iconos Personalización" heading + one plain checkbox
+        // per toolbar icon (Fijar/Visibilidad/Historial/Leyenda/Filtro/
+        // Limpiar/Zoom) a pantalla's table offers. Unlike a Columna, an icon
+        // has no Ver y Operar/Editar/Autorizar distinction — it's simply
+        // shown or not (see Dashboard.js: hasIconGrant) — so each one is a
+        // single ordinary leaf, same shape as a plain pantalla checkbox.
+        function renderIconPermissions(container, section, item, sm, subSm, subBlocked) {
+            const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const iconsExpanded = expandedItems.has(iconsTreeKey);
+            container.appendChild(buildStaticRow(t('menu.iconsPersonalization'), 4, {
+                expanded: iconsExpanded,
+                onToggle: () => {
+                    if (iconsExpanded) expandedItems.delete(iconsTreeKey);
+                    else expandedItems.add(iconsTreeKey);
+                },
+            }));
+            if (!iconsExpanded) return;
+            subSm.iconsSubmenu.forEach((icon) => {
+                const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
+                const iconRow = buildRow(t(icon.labelKey), 5, null, subBlocked);
+                if (!readOnly) {
+                    iconRow.input.checked = grantSet.has(iconKey);
+                    iconRow.input.addEventListener('change', () => {
+                        setKeys([iconKey], iconRow.input.checked);
+                        render();
+                    });
+                }
+                container.appendChild(iconRow.row);
             });
         }
 
@@ -529,6 +588,9 @@
 
                             if (subSm.submenu && subSm.submenu.length) {
                                 renderTableColumns(container, section, item, sm, subSm, subBlocked);
+                            }
+                            if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
+                                renderIconPermissions(container, section, item, sm, subSm, subBlocked);
                             }
                         });
                     });

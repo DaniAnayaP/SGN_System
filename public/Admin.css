@@ -687,7 +687,8 @@ body.dark-mode .admin-badge-prospecto{
     font-size: 0.7rem;
     color: var(--color-text-secondary);
 }
-/* "Tabla <X>" heading — no checkbox, no toggle, purely organizational. */
+/* "Tabla <X>" heading — no checkbox (a pantalla's table is always exactly
+   one, nothing to select/deselect at that level), collapsible chevron. */
 .perm-tree-row-static{
     opacity: 0.75;
 }
