@@ -73,6 +73,12 @@ const {
     deleteIntelligentReport,
     authorizeIntelligentReport,
     computeIntelligentReportRows,
+    listScheduledReports,
+    getScheduledReportById,
+    createScheduledReport,
+    updateScheduledReport,
+    deleteScheduledReport,
+    authorizeScheduledReport,
     listFuelRecords,
     getFuelRecordById,
     createFuelRecord,
@@ -1825,6 +1831,88 @@ app.post('/api/business/intelligent-reports/:id/authorize', requireAuth, (req, r
         recordLabel: report.name, action: 'update', changedBy: req.user.name,
     });
     res.json({ report });
+});
+
+// --- Reportes Programados (Configuración > Negocio Inteligente) ------------
+// No mailer/WhatsApp/internal-chat delivery integration exists yet -- this
+// only records the schedule definition for whenever that job gets built
+// (same "define, don't execute" scope Transacciones Inteligentes itself
+// started with).
+const SCHEDULED_REPORT_DELIVERY_METHODS = ['email', 'whatsapp', 'internal_chat'];
+
+function validateScheduledReportPayload(req, res) {
+    const { reportId, name, endDate, deliveryMethod, recipients } = req.body || {};
+    if (!name?.trim()) { res.status(400).json({ message: 'name is required.' }); return null; }
+    if (!reportId) { res.status(400).json({ message: 'reportId is required.' }); return null; }
+    if (!SCHEDULED_REPORT_DELIVERY_METHODS.includes(deliveryMethod)) {
+        res.status(400).json({ message: 'deliveryMethod must be email, whatsapp, or internal_chat.' });
+        return null;
+    }
+    if (!recipients?.trim()) { res.status(400).json({ message: 'recipients is required.' }); return null; }
+    const report = getIntelligentReportById(reportId, req.user.clientId);
+    if (!report) { res.status(400).json({ message: 'reportId does not match an existing report.' }); return null; }
+    return { reportId, name: name.trim(), endDate: endDate?.trim() || null, deliveryMethod, recipients: recipients.trim() };
+}
+
+app.get('/api/business/scheduled-reports', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ scheduledReports: listScheduledReports(req.user.clientId) });
+});
+
+app.post('/api/business/scheduled-reports', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const payload = validateScheduledReportPayload(req, res);
+    if (!payload) return;
+    const scheduledReport = createScheduledReport({ clientId: req.user.clientId, createdBy: req.user.name, ...payload });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
+        recordLabel: scheduledReport.name, action: 'create', changedBy: req.user.name,
+    });
+    res.status(201).json({ scheduledReport });
+});
+
+app.patch('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getScheduledReportById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Scheduled report not found.' });
+    const payload = validateScheduledReportPayload(req, res);
+    if (!payload) return;
+    const scheduledReport = updateScheduledReport(req.params.id, req.user.clientId, payload);
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
+        recordLabel: scheduledReport.name, action: 'update', changedBy: req.user.name,
+    });
+    res.json({ scheduledReport });
+});
+
+app.delete('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getScheduledReportById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Scheduled report not found.' });
+    deleteScheduledReport(req.params.id, req.user.clientId);
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: existing.id,
+        recordLabel: existing.name, action: 'delete', changedBy: req.user.name,
+    });
+    res.status(204).end();
+});
+
+app.post('/api/business/scheduled-reports/:id/authorize', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getScheduledReportById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Scheduled report not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canAuthorizeColumn(grants, 'reportes-programados', 'colScheduledAuthorizedBy')) {
+            return res.status(403).json({ message: 'No tienes permiso para autorizar envíos programados.' });
+        }
+    }
+    const scheduledReport = authorizeScheduledReport(req.params.id, req.user.clientId, req.user.name);
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
+        recordLabel: scheduledReport.name, action: 'update', changedBy: req.user.name,
+    });
+    res.json({ scheduledReport });
 });
 
 // --- Registro Combustible (Operaciones > Transporte Volumen) ----------------

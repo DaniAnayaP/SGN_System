@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.smartBusinessTransactions">Smart Business Transactions</title>
+    <title data-i18n="menu.scheduledReportsScreen">Scheduled Reports</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -348,96 +348,85 @@
 
         <div class="page-content">
             <div class="page-header">
-                <h1 data-i18n="menu.smartBusinessTransactions">Smart Business Transactions</h1>
+                <h1 data-i18n="menu.scheduledReportsScreen">Scheduled Reports</h1>
             </div>
 
             <div class="admin-form-actions" style="margin-bottom: 1rem;">
-                <button type="button" class="btn" id="report-new-btn">
+                <button type="button" class="btn" id="scheduled-new-btn">
                     <i class="bx bx-plus" aria-hidden="true"></i>
-                    <span data-i18n="main.reportNewBtn">Create New</span>
+                    <span data-i18n="main.scheduledNewBtn">+ New Scheduled Delivery</span>
                 </button>
             </div>
 
-            <div class="data-table-wrapper" data-table-id="transacciones-inteligentes">
+            <div class="data-table-wrapper" data-table-id="reportes-programados">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="main.colSysEmpresa" data-col="reportCompany">Company</th>
-                            <th data-i18n="main.reportName" data-col="reportName">Creation Name</th>
-                            <th data-i18n="main.reportCreatedAt" data-col="reportCreatedAt">Creation Date</th>
-                            <th data-i18n="main.reportCreatedBy" data-col="reportCreatedBy">Created By</th>
-                            <th data-i18n="main.reportAuthorizedBy" data-col="reportAuthorizedBy">Authorized By</th>
+                            <th data-i18n="main.colScheduledName" data-col="scheduledName">Name</th>
+                            <th data-i18n="main.colScheduledCreatedBy" data-col="scheduledCreatedBy">Created By</th>
+                            <th data-i18n="main.colScheduledAuthorizedBy" data-col="scheduledAuthorizedBy">Authorized By</th>
+                            <th data-i18n="main.colScheduledCreatedAt" data-col="scheduledCreatedAt">Created At</th>
+                            <th data-i18n="main.colScheduledEndDate" data-col="scheduledEndDate">End Date</th>
+                            <th data-i18n="main.colScheduledDeliveryMethod" data-col="scheduledDeliveryMethod">Delivery Method</th>
+                            <th data-i18n="main.colScheduledRecipients" data-col="scheduledRecipients">Recipients</th>
                             <th data-col="actions"></th>
                         </tr>
                     </thead>
-                    <tbody id="report-table-body">
+                    <tbody id="scheduled-table-body">
                         <!-- rendered at runtime -->
                     </tbody>
                 </table>
-                <p id="report-empty" class="admin-empty" data-i18n="main.reportEmptyState" hidden>You haven't created any reports yet.</p>
+                <p id="scheduled-empty" class="admin-empty" data-i18n="main.scheduledEmptyState" hidden>You haven't created any scheduled deliveries yet.</p>
             </div>
         </div>
     </main>
 
-    <div class="modal-overlay" id="report-modal" hidden>
-        <div class="modal-panel" style="max-width: 42rem;" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
-            <h3 id="report-modal-title" data-i18n="main.reportModalTitle">Create New Report</h3>
-            <input type="hidden" id="report-edit-id" value="">
+    <div class="modal-overlay" id="scheduled-modal" hidden>
+        <div class="modal-panel" style="max-width: 34rem;" role="dialog" aria-modal="true" aria-labelledby="scheduled-modal-title">
+            <h3 id="scheduled-modal-title" data-i18n="main.scheduledModalTitle">New Scheduled Delivery</h3>
+            <input type="hidden" id="scheduled-edit-id" value="">
 
-            <div id="report-step-main">
-                <div class="admin-field">
-                    <label for="report-name-input" data-i18n="main.reportNameLabel">Report name</label>
-                    <input type="text" id="report-name-input" data-i18n-placeholder="main.reportNamePlaceholder" placeholder="Report name">
-                </div>
-                <div class="admin-field" style="margin-top: 1rem;">
-                    <label data-i18n="main.reportColumnsLabel">Report columns</label>
-                    <ul class="report-column-list" id="report-column-list">
-                        <!-- rendered at runtime -->
-                    </ul>
-                </div>
-                <div class="report-add-buttons">
-                    <button type="button" class="report-add-btn" id="report-add-base-btn">
-                        <i class="bx bx-list-check" aria-hidden="true"></i>
-                        <span data-i18n="main.reportAddBaseColumn">Base Registry Column</span>
+            <div class="admin-field">
+                <label for="scheduled-name-input" data-i18n="main.colScheduledName">Name</label>
+                <input type="text" id="scheduled-name-input">
+            </div>
+            <div class="admin-field" style="margin-top: 1rem;">
+                <label for="scheduled-report-select" data-i18n="main.scheduledPickReport">Report to send</label>
+                <select id="scheduled-report-select">
+                    <!-- rendered at runtime -->
+                </select>
+            </div>
+            <div class="admin-field" style="margin-top: 1rem;">
+                <label for="scheduled-end-date-input" data-i18n="main.scheduledEndDateLabel">Delivery end date (optional)</label>
+                <input type="date" id="scheduled-end-date-input">
+            </div>
+            <div class="admin-field" style="margin-top: 1rem;">
+                <label for="scheduled-recipients-input" data-i18n="main.scheduledRecipientsLabel">Recipients</label>
+                <input type="text" id="scheduled-recipients-input" data-i18n-placeholder="main.scheduledRecipientsPlaceholder" placeholder="Recipients">
+            </div>
+            <div class="admin-field" style="margin-top: 1rem;">
+                <label data-i18n="main.scheduledDeliveryLabel">Delivery method</label>
+                <div class="scheduled-delivery-options" id="scheduled-delivery-options">
+                    <button type="button" class="scheduled-delivery-option" data-delivery="email">
+                        <i class="bx bx-envelope" aria-hidden="true"></i>
+                        <span data-i18n="main.scheduledDeliveryEmail">Email</span>
                     </button>
-                    <button type="button" class="report-add-btn" id="report-add-calc-btn">
-                        <i class="bx bx-math" aria-hidden="true"></i>
-                        <span data-i18n="main.reportAddCalculatedColumn">Calculated Column</span>
+                    <button type="button" class="scheduled-delivery-option" data-delivery="whatsapp">
+                        <i class="bx bxl-whatsapp" aria-hidden="true"></i>
+                        <span data-i18n="main.scheduledDeliveryWhatsapp">WhatsApp</span>
                     </button>
-                </div>
-                <div id="report-modal-error" class="admin-error" role="alert" hidden></div>
-                <div class="admin-form-actions">
-                    <button type="button" class="btn" id="report-save-btn" data-i18n="main.reportSave">Save Report</button>
-                    <button type="button" class="btn btn-secondary" id="report-cancel-btn" data-i18n="admin.cancel">Cancel</button>
+                    <button type="button" class="scheduled-delivery-option scheduled-delivery-option-disabled" data-delivery="internal_chat" disabled>
+                        <i class="bx bx-chat" aria-hidden="true"></i>
+                        <span data-i18n="main.scheduledDeliveryChat">Internal Chat</span>
+                        <span class="scheduled-delivery-soon" data-i18n="main.scheduledDeliveryChatSoon">Coming soon</span>
+                    </button>
                 </div>
             </div>
 
-            <div id="report-step-base" hidden>
-                <p class="admin-hint" data-i18n="main.reportBaseColumnHint">Check the columns you want to add to the report.</p>
-                <div class="report-picker-list" id="report-base-picker-list">
-                    <!-- rendered at runtime -->
-                </div>
-                <div class="admin-form-actions">
-                    <button type="button" class="btn" id="report-base-add-btn" data-i18n="main.reportAddSelected">Add selected</button>
-                    <button type="button" class="btn btn-secondary" id="report-base-back-btn" data-i18n="admin.cancel">Cancel</button>
-                </div>
-            </div>
-
-            <div id="report-step-calc" hidden>
-                <p class="admin-hint" data-i18n="main.reportFormulaHint">Choose the columns (or numbers) and the operation between them.</p>
-                <div class="report-formula-operands" id="report-formula-operands">
-                    <!-- rendered at runtime -->
-                </div>
-                <button type="button" class="report-add-operand-btn" id="report-add-operand-btn" data-i18n="main.reportAddOperand">+ Add operand</button>
-                <div class="admin-field" style="margin-top: 1rem;">
-                    <label for="report-calc-name-input" data-i18n="main.reportCalcNameLabel">Calculated column name</label>
-                    <input type="text" id="report-calc-name-input" data-i18n-placeholder="main.reportCalcNamePlaceholder" placeholder="Calculated column name">
-                </div>
-                <div id="report-calc-error" class="admin-error" role="alert" hidden></div>
-                <div class="admin-form-actions">
-                    <button type="button" class="btn" id="report-calc-add-btn" data-i18n="main.reportAddToReport">Add to report</button>
-                    <button type="button" class="btn btn-secondary" id="report-calc-back-btn" data-i18n="admin.cancel">Cancel</button>
-                </div>
+            <div id="scheduled-modal-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions">
+                <button type="button" class="btn" id="scheduled-save-btn" data-i18n="main.scheduledSave">Save</button>
+                <button type="button" class="btn btn-secondary" id="scheduled-cancel-btn" data-i18n="admin.cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -497,6 +486,6 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="NegocioInteligente-Transacciones.js"></script>
+    <script src="ReportesProgramados.js"></script>
 </body>
 </html>

@@ -138,6 +138,28 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_intelligent_report_columns_report_id ON intelligent_report_columns(report_id);
 
+    -- Reportes Programados: a recurring "send this saved report to these
+    -- recipients" definition -- doesn't send anything itself (no mailer/
+    -- WhatsApp integration built yet), just records the schedule so the
+    -- future sending job has something to read. delivery_method is one of
+    -- 'email' | 'whatsapp' | 'internal_chat' (the last one has no actual
+    -- delivery path yet either -- see ScheduledReportes.js's own note).
+    -- end_date is optional (NULL = runs indefinitely).
+    CREATE TABLE IF NOT EXISTS scheduled_reports (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        report_id       INTEGER NOT NULL REFERENCES intelligent_reports(id) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        created_by      TEXT NOT NULL,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        authorized_by   TEXT,
+        authorized_at   TEXT,
+        end_date        TEXT,
+        delivery_method TEXT NOT NULL,
+        recipients      TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_scheduled_reports_client_id ON scheduled_reports(client_id);
+
     -- Planes y Paquetes: GEIPSA's own catalog of plan/package types, managed
     -- from Admin-Planes (SaaS admin only). clients.plan just stores the
     -- chosen plan's name as free text (like clients.status) rather than a
@@ -1186,6 +1208,7 @@ const TABLE_GRANT_PATHS = {
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
     'transacciones-inteligentes': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-transacciones' },
+    'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -1514,6 +1537,62 @@ function authorizeIntelligentReport(id, clientId, authorizedBy) {
         WHERE id = @id AND client_id = @clientId
     `).run({ id, clientId, authorizedBy });
     return getIntelligentReportById(id, clientId);
+}
+
+// --- Query helpers: Reportes Programados (scoped to a client) --------------
+// reportName rides along via a join purely for display (the create/edit
+// modal needs it to show which saved report a schedule points at) -- never
+// written back, the real relationship is report_id.
+function listScheduledReports(clientId) {
+    return db
+        .prepare(`
+            SELECT scheduled_reports.*, intelligent_reports.name AS reportName
+            FROM scheduled_reports JOIN intelligent_reports ON intelligent_reports.id = scheduled_reports.report_id
+            WHERE scheduled_reports.client_id = ?
+            ORDER BY scheduled_reports.created_at DESC, scheduled_reports.id DESC
+        `)
+        .all(clientId);
+}
+
+function getScheduledReportById(id, clientId) {
+    return db
+        .prepare(`
+            SELECT scheduled_reports.*, intelligent_reports.name AS reportName
+            FROM scheduled_reports JOIN intelligent_reports ON intelligent_reports.id = scheduled_reports.report_id
+            WHERE scheduled_reports.id = ? AND scheduled_reports.client_id = ?
+        `)
+        .get(id, clientId);
+}
+
+function createScheduledReport({ clientId, reportId, name, createdBy, endDate, deliveryMethod, recipients }) {
+    const result = db
+        .prepare(`
+            INSERT INTO scheduled_reports (client_id, report_id, name, created_by, end_date, delivery_method, recipients)
+            VALUES (@clientId, @reportId, @name, @createdBy, @endDate, @deliveryMethod, @recipients)
+        `)
+        .run({ clientId, reportId, name, createdBy, endDate: endDate || null, deliveryMethod, recipients });
+    return getScheduledReportById(result.lastInsertRowid, clientId);
+}
+
+function updateScheduledReport(id, clientId, { reportId, name, endDate, deliveryMethod, recipients }) {
+    db.prepare(`
+        UPDATE scheduled_reports
+        SET report_id = @reportId, name = @name, end_date = @endDate, delivery_method = @deliveryMethod, recipients = @recipients
+        WHERE id = @id AND client_id = @clientId
+    `).run({ id, clientId, reportId, name, endDate: endDate || null, deliveryMethod, recipients });
+    return getScheduledReportById(id, clientId);
+}
+
+function deleteScheduledReport(id, clientId) {
+    db.prepare('DELETE FROM scheduled_reports WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+function authorizeScheduledReport(id, clientId, authorizedBy) {
+    db.prepare(`
+        UPDATE scheduled_reports SET authorized_by = @authorizedBy, authorized_at = datetime('now')
+        WHERE id = @id AND client_id = @clientId
+    `).run({ id, clientId, authorizedBy });
+    return getScheduledReportById(id, clientId);
 }
 
 // --- Query helpers: Registro Combustible (fuel_records, scoped to a client) -
@@ -2939,6 +3018,12 @@ module.exports = {
     deleteIntelligentReport,
     authorizeIntelligentReport,
     computeIntelligentReportRows,
+    listScheduledReports,
+    getScheduledReportById,
+    createScheduledReport,
+    updateScheduledReport,
+    deleteScheduledReport,
+    authorizeScheduledReport,
     listFuelRecords,
     getFuelRecordById,
     createFuelRecord,

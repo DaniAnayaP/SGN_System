@@ -31,6 +31,26 @@
                   "submenu": [
                     { "id": "colReportAuthorization", "labelKey": "main.colReportAuthorization", "permissionOnly": true }
                   ]
+                },
+                {
+                  "id": "nit-reportes-programados", "labelKey": "menu.scheduledReportsScreen", "permissionOnly": true,
+                  "submenu": [
+                    { "id": "colScheduledName", "labelKey": "main.colScheduledName", "permissionOnly": true },
+                    { "id": "colScheduledCreatedBy", "labelKey": "main.colScheduledCreatedBy", "permissionOnly": true },
+                    { "id": "colScheduledAuthorizedBy", "labelKey": "main.colScheduledAuthorizedBy", "permissionOnly": true },
+                    { "id": "colScheduledCreatedAt", "labelKey": "main.colScheduledCreatedAt", "permissionOnly": true },
+                    { "id": "colScheduledEndDate", "labelKey": "main.colScheduledEndDate", "permissionOnly": true },
+                    { "id": "colScheduledDeliveryMethod", "labelKey": "main.colScheduledDeliveryMethod", "permissionOnly": true },
+                    { "id": "colScheduledRecipients", "labelKey": "main.colScheduledRecipients", "permissionOnly": true }
+                  ],
+                  "iconsSubmenu": [
+                    { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+                    { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+                    { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+                    { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+                    { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+                    { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true }
+                  ]
                 }
               ]
             },
@@ -124,7 +144,8 @@
       "icon": "bx-bar-chart-alt-2",
       "submenu": [
         { "id": "reportes-nativos", "labelKey": "menu.reportesNativos", "icon": "bx-window", "submenu": [] },
-        { "id": "reportes-personalizados", "labelKey": "menu.reportesPersonalizados", "icon": "bx-window", "submenu": [] }
+        { "id": "reportes-personalizados", "labelKey": "menu.reportesPersonalizados", "icon": "bx-window", "submenu": [] },
+        { "id": "reportes-programados", "labelKey": "menu.scheduledReportsScreen", "icon": "bx-calendar-event", "href": "ReportesProgramados.html", "permissionOnly": true }
       ]
     },
     {
