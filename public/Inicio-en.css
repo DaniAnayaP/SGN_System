@@ -1823,14 +1823,6 @@
         background-color: var(--color-surface);
         overflow: auto;
     }
-    /* Row-editable legend (see Dashboard.js renderDataTableColumnControls)
-       — reuses the same .perm-tree-status-enabled badge already used for
-       "habilitado" in the admin access tree, so the two screens read the
-       same visual language. */
-    .data-table-legend{
-        margin: 0.6rem 0 0;
-        font-size: 0.8rem;
-    }
     /* Mixed into --color-surface (opaque), not transparent — a pinned
        column's td needs a solid background to hide content scrolling
        underneath it, so the tint has to stay solid too (see the pinned-
@@ -1873,6 +1865,33 @@
     .data-table-zoom-btn:disabled{
         opacity: 0.4;
         cursor: default;
+    }
+    /* Semaforización icon for the "Leyenda" toolbar button (Dashboard.js
+       openColumnLegend) — 3 stacked dots, since Boxicons has no literal
+       traffic-light glyph to rely on. Colors are fixed (not theme tokens):
+       the icon is a generic "this is a color legend" symbol, unrelated to
+       whatever specific colors the legend itself lists. */
+    .data-table-legend-icon{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+    .data-table-legend-icon span{
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        display: block;
+    }
+    .data-table-legend-icon span:nth-child(1){ background-color: #E24B4A; }
+    .data-table-legend-icon span:nth-child(2){ background-color: #EF9F27; }
+    .data-table-legend-icon span:nth-child(3){ background-color: #639922; }
+    .data-table-legend-swatch{
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        border: 1px solid var(--color-border);
     }
     /* "+ Nuevo Registro"-style button — same toolbar row as the zoom/pin/
        visibility controls, but pinned to the LEFT via margin-right:auto

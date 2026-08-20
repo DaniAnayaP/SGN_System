@@ -1665,6 +1665,28 @@ function applyDataTableColumnLayout(tableId) {
     renderColumnGroupBand(tableId);
 }
 
+// Restores order/widths/hidden/pinned to their true defaults — the order
+// columns appear in the HTML (which always matches the permission tree's
+// own order, since both are built from the same list), widths as measured
+// the very first time the table ever rendered (naturalWidths, captured once
+// in initDataTableColumns — re-measuring live would just re-save whatever
+// custom widths are already on screen instead of undoing them), nothing
+// hidden, and only the first column pinned. Wired into the "Limpiar" button
+// (see renderDataTableColumnControls) so clearing filters also puts the
+// table back the way it started, group bands included.
+function resetDataTableColumnLayout(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    state.config = {
+        order: state.columnKeys.slice(),
+        hidden: [],
+        widths: { ...state.naturalWidths },
+        pinned: state.columnKeys[0] ? [state.columnKeys[0]] : [],
+    };
+    saveDataTableConfig(tableId, state.config);
+    applyDataTableColumnLayout(tableId);
+}
+
 function observeTableBody(table, tableId) {
     const tbody = table.tBodies[0];
     if (!tbody || tbody.dataset.colObserved) return;
@@ -2347,7 +2369,7 @@ function initDataTableColumns(wrapper, index) {
         if (config.widths[key] == null) config.widths[key] = naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
     });
     dataTableColumnState.set(tableId, {
-        table, wrapper, colgroup, columnKeys, labels, config, groupKeys,
+        table, wrapper, colgroup, columnKeys, labels, config, groupKeys, naturalWidths,
         sortKey: null, sortDir: null, originalRowOrder: null,
         columnFilters: new Map(),
     });
@@ -2675,6 +2697,82 @@ async function openChangeHistory(tableId, recordId) {
     }
 }
 
+// Color legend modal — one row for the row-editable green tint (universal,
+// every table has it) plus one row per column classification actually
+// present on THIS table (read from state.groupKeys, so a table with no
+// classifications yet just shows the row-editable entry). Adding a future
+// classification only means one more entry here, keyed by the same
+// labelKey already used for its data-group attribute in the HTML.
+const COLUMN_GROUP_META = {
+    'menu.classControlInterno': { swatch: 'var(--color-column-system-band-bg)', descKey: 'main.classControlInternoDesc' },
+};
+
+let columnLegendModal = null;
+let columnLegendList = null;
+
+function ensureColumnLegendModal() {
+    if (columnLegendModal) return;
+    columnLegendModal = document.createElement('div');
+    columnLegendModal.className = 'modal-overlay';
+    columnLegendModal.hidden = true;
+    columnLegendModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 36rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-legend-title">
+            <h3 id="data-table-legend-title">${t('main.columnLegendTitle')}</h3>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>${t('main.columnLegendColor')}</th>
+                            <th>${t('main.columnLegendClassification')}</th>
+                            <th>${t('main.columnLegendDescription')}</th>
+                        </tr>
+                    </thead>
+                    <tbody data-role="list"></tbody>
+                </table>
+            </div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(columnLegendModal);
+    columnLegendList = columnLegendModal.querySelector('[data-role="list"]');
+    const close = () => { columnLegendModal.hidden = true; };
+    columnLegendModal.querySelector('[data-role="close"]').addEventListener('click', close);
+    wireModalDismiss(columnLegendModal, close);
+}
+
+function buildLegendRow(swatchColor, name, desc) {
+    const tr = document.createElement('tr');
+    const swatchTd = document.createElement('td');
+    const swatch = document.createElement('span');
+    swatch.className = 'data-table-legend-swatch';
+    swatch.style.backgroundColor = swatchColor;
+    swatchTd.appendChild(swatch);
+    const nameTd = document.createElement('td');
+    nameTd.textContent = name;
+    const descTd = document.createElement('td');
+    descTd.textContent = desc;
+    tr.append(swatchTd, nameTd, descTd);
+    return tr;
+}
+
+function openColumnLegend(tableId) {
+    ensureColumnLegendModal();
+    columnLegendModal.hidden = false;
+    columnLegendList.innerHTML = '';
+    columnLegendList.appendChild(buildLegendRow('#2c8f4a', t('main.rowEditableName'), t('main.rowEditableLegend')));
+    const state = dataTableColumnState.get(tableId);
+    const seenGroups = new Set();
+    (state?.groupKeys ? Array.from(state.groupKeys.values()) : []).forEach((groupLabelKey) => {
+        if (seenGroups.has(groupLabelKey)) return;
+        seenGroups.add(groupLabelKey);
+        const meta = COLUMN_GROUP_META[groupLabelKey];
+        if (!meta) return;
+        columnLegendList.appendChild(buildLegendRow(meta.swatch, t(groupLabelKey), t(meta.descKey)));
+    });
+}
+
 // Adds the 3 new toolbar buttons into the SAME .data-table-zoom bar that
 // renderDataTableZoomControls() already inserts (must run after it), then
 // lazily boots column management for each table the first time it reports
@@ -2710,7 +2808,16 @@ function renderDataTableColumnControls() {
             historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
             historyBtn.addEventListener('click', () => openChangeHistory(getTableId(wrapper, index)));
 
-            zoom.append(pinBtn, visBtn, historyBtn);
+            const legendBtn = document.createElement('button');
+            legendBtn.type = 'button';
+            legendBtn.className = 'data-table-zoom-btn';
+            legendBtn.dataset.colAction = 'legend';
+            legendBtn.setAttribute('aria-label', t('main.columnLegendBtn'));
+            legendBtn.title = t('main.columnLegendBtn');
+            legendBtn.innerHTML = '<span class="data-table-legend-icon" aria-hidden="true"><span></span><span></span><span></span></span>';
+            legendBtn.addEventListener('click', () => openColumnLegend(getTableId(wrapper, index)));
+
+            zoom.append(pinBtn, visBtn, historyBtn, legendBtn);
 
             // Filtrar/Limpiar — only for tables that actually have a
             // .filter-bar (see the wiring block below this function for
@@ -2749,7 +2856,10 @@ function renderDataTableColumnControls() {
                     filterBar.dispatchEvent(new CustomEvent('data-table:filter-clear'));
                     // Also resets whatever per-column value filters are
                     // active (see attachColumnFilterTrigger) — one button
-                    // clears both filtering systems at once.
+                    // clears both filtering systems at once, AND puts the
+                    // column layout itself (order/widths/hidden/pinned, group
+                    // bands included) back to default — see
+                    // resetDataTableColumnLayout.
                     const colTableId = getTableId(wrapper, index);
                     const colState = dataTableColumnState.get(colTableId);
                     if (colState) {
@@ -2757,6 +2867,7 @@ function renderDataTableColumnControls() {
                         applyColumnValueFilters(colTableId);
                         getHeaderRow(colState.table).querySelectorAll('th.data-table-col-filter-active')
                             .forEach((th) => th.classList.remove('data-table-col-filter-active'));
+                        resetDataTableColumnLayout(colTableId);
                     }
                     closeColumnFilterMenu();
                     sizeDataTableWrappers();
@@ -2764,23 +2875,6 @@ function renderDataTableColumnControls() {
 
                 zoom.append(filterBtn, clearBtn);
             }
-        }
-
-        // Row-editable legend — always shown below the table (same "always
-        // visible reference" pattern as the admin access tree's legend, not
-        // conditional on whether any row is actually editable right now).
-        // Each table's own JS is the one that knows which rows qualify and
-        // adds/removes .data-table-row-editable on the <tr> accordingly;
-        // this only renders the explanatory legend once per wrapper.
-        if (!wrapper.dataset.legendAttached) {
-            wrapper.dataset.legendAttached = '1';
-            const legend = document.createElement('p');
-            legend.className = 'admin-hint perm-tree-legend data-table-legend';
-            legend.innerHTML = `
-                <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
-                <span data-i18n="main.rowEditableLegend">${t('main.rowEditableLegend')}</span>
-            `;
-            wrapper.insertAdjacentElement('afterend', legend);
         }
 
         if (wrapper.dataset.colObserverAttached) return;
