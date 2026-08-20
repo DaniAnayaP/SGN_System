@@ -911,7 +911,8 @@ function getClientById(id) {
 function getClientBranding(id) {
     const row = db
         .prepare(`
-            SELECT company_name AS companyName, logo_data_url AS logoDataUrl,
+            SELECT company_name AS companyName, company_abbreviation AS companyAbbreviation,
+                   logo_data_url AS logoDataUrl,
                    primary_color AS primaryColor, secondary_color AS secondaryColor,
                    seed_color AS seedColor, color_palette AS colorPaletteRaw
             FROM clients WHERE id = ?

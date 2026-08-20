@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.clientAdmin">Client Administration</title>
+    <title data-i18n="menu.smartBusinessTransactions">Smart Business Transactions</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
 </head>
-<body>
+<body data-active-page="btn-negocio-inteligente">
     <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
         <div class="header">
             <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="menu.clientAdmin">Client Administration</p>
+                <p class="welcome-text" data-i18n="main.welcome">Welcome</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -340,345 +340,17 @@
             </div>
         </div>
 
-        <section class="admin-panel">
-            <div id="panel-clients" class="admin-tab-panel">
-                <p class="admin-subtitle" data-i18n="admin.clientsSubtitle">Manage the companies using this SGN instance.</p>
-
-                <div id="generated-admin-box" class="admin-generated-credentials" role="alert" hidden>
-                    <p class="admin-generated-title" data-i18n="admin.generatedAdminTitle">New client admin account created</p>
-                    <p class="admin-generated-note" data-i18n="admin.generatedAdminNote">This password is shown only once — copy it now and share it with the client securely.</p>
-                    <div class="admin-generated-row">
-                        <span data-i18n="business.username">Username</span>: <strong id="generated-admin-username"></strong>
-                    </div>
-                    <div class="admin-generated-row">
-                        <span data-i18n="business.password">Password</span>: <strong id="generated-admin-password"></strong>
-                    </div>
-                    <button type="button" class="btn btn-secondary" id="generated-admin-dismiss" data-i18n="admin.dismiss">Dismiss</button>
-                </div>
-
-                <div class="filter-bar" id="filter-bar">
-                    <div class="filter-bar-panel">
-                        <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
-                        <div class="filter-bar-fields">
-                            <div class="filter-field">
-                                <label for="filter-search-text" data-i18n="main.filterClientsSearchHint">RFC, nickname, owner, contact...</label>
-                                <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterClientsSearchHint" placeholder="RFC, nickname, owner, contact...">
-                            </div>
-                            <div class="filter-field">
-                                <label for="filter-status" data-i18n="admin.status">Status</label>
-                                <select id="filter-status">
-                                    <option value="" data-i18n="main.filterAll">All</option>
-                                    <option value="activo" data-i18n="admin.statusActivo">Active</option>
-                                    <option value="inactivo" data-i18n="admin.statusInactivo">Inactive</option>
-                                    <option value="prospecto" data-i18n="admin.statusProspecto">Prospect</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="filter-bar-actions">
-                            <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="data-table-wrapper" data-table-id="nuestros-clientes">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th data-i18n="admin.bigDateNumber" data-col="bigDateNumber">Unique Big Date No.</th>
-                                <th data-i18n="admin.rfc" data-col="rfc">Company RFC</th>
-                                <th data-i18n="admin.razonSocial" data-col="razonSocial">Razón Social</th>
-                                <th data-i18n="admin.companyNickname" data-col="companyNickname">Company nickname</th>
-                                <th data-i18n="admin.companyAbbreviation" data-col="companyAbbreviation">Company abbreviation</th>
-                                <th data-i18n="admin.logo" data-col="logo">Logo</th>
-                                <th data-i18n="admin.institutionalColor" data-col="institutionalColor">Institutional color</th>
-                                <th data-i18n="admin.ownerName" data-col="ownerName">Owner</th>
-                                <th data-i18n="admin.contactName" data-col="contactName">Contact name</th>
-                                <th data-i18n="admin.billingEmail" data-col="billingEmail">Billing contact email</th>
-                                <th data-i18n="admin.contractStartDate" data-col="contractStartDate">Contract start date</th>
-                                <th data-i18n="admin.contractFile" data-col="contractFile">Contract</th>
-                                <th data-i18n="admin.contractWordFile" data-col="contractWordFile">Contract (Word)</th>
-                                <th data-i18n="admin.plan" data-col="plan">Plan / package</th>
-                                <th data-i18n="admin.contractedCost" data-col="contractedCost">Contracted cost $</th>
-                                <th data-i18n="admin.initialPayment" data-col="initialPayment">Initial payment</th>
-                                <th data-i18n="admin.monthlyPayment" data-col="monthlyPayment">Monthly payment</th>
-                                <th data-i18n="admin.costCenters" data-col="costCenters">Cost Centers</th>
-                                <th data-i18n="admin.costCentersContracted" data-col="costCentersContracted">Contracted cost centers</th>
-                                <th data-i18n="admin.anexoChanges" data-col="anexoChanges">Anexos changes</th>
-                                <th data-i18n="admin.contractRegisteredDate" data-col="contractRegisteredDate">Contract registration date</th>
-                                <th data-i18n="admin.contractEndDate" data-col="contractEndDate">Contract end date</th>
-                                <th data-i18n="admin.contractTerm" data-col="contractTerm">Contract term</th>
-                                <th data-i18n="admin.permisosContratados" data-col="permisosContratados">Contracted permissions</th>
-                                <th data-i18n="admin.pagoPorAdicionales" data-col="pagoPorAdicionales">Payment for additionals</th>
-                                <th data-i18n="business.username" data-col="username">Username</th>
-                                <th data-i18n="admin.status" data-col="status">Status</th>
-                                <th data-col="actions"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="clients-table-body">
-                            <!-- rendered at runtime -->
-                        </tbody>
-                    </table>
-                    <p id="clients-empty" class="admin-empty" data-i18n="admin.noClients" hidden>No clients yet. Add the first one above.</p>
-                </div>
+        <div class="page-content">
+            <div class="page-header">
+                <h1 data-i18n="menu.smartBusinessTransactions">Smart Business Transactions</h1>
             </div>
-        </section>
+
+            <div class="empty-state">
+                <i class="bx bx-line-chart" aria-hidden="true"></i>
+                <p data-i18n="main.emptyStateText">No data yet.</p>
+            </div>
+        </div>
     </main>
-
-    <div class="modal-overlay" id="client-edit-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="client-edit-modal-title" style="max-width: 52rem;">
-            <h3 id="client-edit-modal-title">Edit client</h3>
-            <form id="client-form" class="admin-form" novalidate>
-                <input type="hidden" id="client-id" value="">
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="client-company" data-i18n="admin.companyName">Company name</label>
-                        <input id="client-company" name="companyName" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-razon-social" data-i18n="admin.razonSocial">Razón Social</label>
-                        <input id="client-razon-social" name="razonSocial" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-contact" data-i18n="admin.contactName">Contact name</label>
-                        <input id="client-contact" name="contactName" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-email" data-i18n="admin.email">Email</label>
-                        <input id="client-email" name="email" type="email" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-phone" data-i18n="admin.phone">Phone</label>
-                        <input id="client-phone" name="phone" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-plan" data-i18n="admin.plan">Plan / package</label>
-                        <select id="client-plan" name="plan">
-                            <option value="" data-i18n="admin.selectPlanPlaceholder">Choose a plan...</option>
-                        </select>
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-status" data-i18n="admin.status">Status</label>
-                        <select id="client-status" name="status">
-                            <option value="prospecto" data-i18n="admin.statusProspecto">Prospect</option>
-                            <option value="activo" data-i18n="admin.statusActivo">Active</option>
-                            <option value="inactivo" data-i18n="admin.statusInactivo">Inactive</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="client-rfc" data-i18n="admin.rfc">Company RFC</label>
-                        <input id="client-rfc" name="rfc" type="text" maxlength="13">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-nickname" data-i18n="admin.companyNickname">Company nickname</label>
-                        <input id="client-nickname" name="companyNickname" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-abbreviation" data-i18n="admin.companyAbbreviation">Company abbreviation</label>
-                        <input id="client-abbreviation" name="companyAbbreviation" type="text" maxlength="6">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-owner" data-i18n="admin.ownerName">Owner</label>
-                        <input id="client-owner" name="ownerName" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-billing-email" data-i18n="admin.billingEmail">Billing contact email</label>
-                        <input id="client-billing-email" name="billingEmail" type="email">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-contract-start" data-i18n="admin.contractStartDate">Contract start date</label>
-                        <input id="client-contract-start" name="contractStartDate" type="date">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-contract-registered" data-i18n="admin.contractRegisteredDate">Contract registration date</label>
-                        <input id="client-contract-registered" name="contractRegisteredDate" type="date">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-contract-end" data-i18n="admin.contractEndDate">Contract end date</label>
-                        <input id="client-contract-end" name="contractEndDate" type="date">
-                    </div>
-                    <div class="admin-field">
-                        <label data-i18n="admin.contractedCost">Contracted cost $</label>
-                        <p id="client-contracted-cost-display" class="admin-computed-value">—</p>
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-initial-payment" data-i18n="admin.initialPayment">Initial payment</label>
-                        <input id="client-initial-payment" name="initialPayment" type="number" min="0" step="0.01">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-monthly-payment" data-i18n="admin.monthlyPayment">Monthly payment</label>
-                        <input id="client-monthly-payment" name="monthlyPayment" type="number" min="0" step="0.01">
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-extra-cost-centers" data-i18n="admin.extraCostCenters">Extra cost centers</label>
-                        <input id="client-extra-cost-centers" name="extraCostCenters" type="number" min="0" step="1" value="0">
-                    </div>
-                </div>
-
-                <div class="admin-client-profile-fields">
-                    <div class="admin-field">
-                        <label for="client-mission" data-i18n="admin.mission">Mission</label>
-                        <textarea id="client-mission" name="mission" rows="2"></textarea>
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-vision" data-i18n="admin.vision">Vision</label>
-                        <textarea id="client-vision" name="vision" rows="2"></textarea>
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-values" data-i18n="admin.coreValues">Values</label>
-                        <textarea id="client-values" name="coreValues" rows="2"></textarea>
-                    </div>
-                    <div class="admin-field">
-                        <label for="client-history" data-i18n="admin.history">History</label>
-                        <textarea id="client-history" name="history" rows="3"></textarea>
-                    </div>
-                </div>
-
-                <div class="admin-branding-fields admin-branding-fields-logo-only">
-                    <div class="admin-field admin-logo-field">
-                        <label for="client-logo" data-i18n="admin.logo">Logo</label>
-                        <div class="admin-logo-row">
-                            <img id="client-logo-preview" class="admin-logo-preview" alt="" hidden>
-                            <input id="client-logo" name="logo" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
-                            <button type="button" class="btn btn-secondary admin-logo-clear" id="client-logo-clear" data-i18n="admin.removeLogo" hidden>Remove</button>
-                        </div>
-                        <input type="hidden" id="client-logo-data" name="logoDataUrl" value="">
-                    </div>
-                    <div class="admin-field admin-logo-field">
-                        <label for="client-contract" data-i18n="admin.contractFile">Contract (PDF, signed)</label>
-                        <div class="admin-logo-row">
-                            <span id="client-contract-name" class="admin-contract-filename" hidden></span>
-                            <input id="client-contract" name="contract" type="file" accept="application/pdf">
-                            <button type="button" class="btn btn-secondary admin-logo-clear" id="client-contract-clear" data-i18n="admin.removeContract" hidden>Remove</button>
-                        </div>
-                        <input type="hidden" id="client-contract-data" name="contractFileDataUrl" value="">
-                        <input type="hidden" id="client-contract-filename" name="contractFileName" value="">
-                    </div>
-                    <div class="admin-field admin-logo-field">
-                        <label for="client-contract-word" data-i18n="admin.contractWordFile">Contract (Word, editable)</label>
-                        <div class="admin-logo-row">
-                            <span id="client-contract-word-name" class="admin-contract-filename" hidden></span>
-                            <input id="client-contract-word" name="contractWord" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-                            <button type="button" class="btn btn-secondary admin-logo-clear" id="client-contract-word-clear" data-i18n="admin.removeContract" hidden>Remove</button>
-                        </div>
-                        <input type="hidden" id="client-contract-word-data" name="contractWordDataUrl" value="">
-                        <input type="hidden" id="client-contract-word-filename" name="contractWordFileName" value="">
-                    </div>
-                </div>
-
-                <div id="client-color-palette"></div>
-
-                <div id="client-form-error" class="admin-error" role="alert" hidden></div>
-                <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="client-form-submit" data-i18n="admin.save">Save</button>
-                    <button type="button" class="btn btn-secondary" id="client-form-cancel" data-i18n="admin.cancel">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="permisos-contratados-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="permisos-contratados-title" style="max-width: 48rem;">
-            <h3 id="permisos-contratados-title" data-i18n="admin.permisosContratadosTitle">Contracted permissions</h3>
-            <p id="permisos-contratados-subtitle" class="admin-subtitle"></p>
-            <p class="admin-hint perm-tree-legend">
-                <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
-                <span data-i18n="admin.permTreeLegendPlan">Included in the plan</span>
-                <span class="perm-tree-status perm-tree-status-extra"><i class="bx bx-plus-circle" aria-hidden="true"></i></span>
-                <span data-i18n="admin.permTreeLegendExtra">Sold as an additional</span>
-                <span class="perm-tree-status perm-tree-status-blocked"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>
-                <span data-i18n="admin.permTreeLegendNone">Not contracted</span>
-            </p>
-            <div id="permisos-contratados-container"></div>
-            <div id="permisos-contratados-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn btn-secondary" id="permisos-contratados-close" data-i18n="admin.cancel">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="permisos-adicionales-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="permisos-adicionales-title" style="max-width: 48rem;">
-            <h3 id="permisos-adicionales-title" data-i18n="admin.permisosAdicionalesTitle">+ Additional permissions</h3>
-            <div class="admin-form-actions">
-                <button type="button" class="btn" id="permisos-adicionales-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="permisos-adicionales-close" data-i18n="admin.cancel">Close</button>
-            </div>
-            <p id="permisos-adicionales-total" class="admin-save-status"></p>
-            <p id="permisos-adicionales-subtitle" class="admin-subtitle"></p>
-            <p class="admin-hint perm-tree-legend">
-                <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
-                <span data-i18n="admin.permTreeLegendPlan">Included in the plan</span>
-                <span class="perm-tree-status perm-tree-status-extra"><i class="bx bx-plus-circle" aria-hidden="true"></i></span>
-                <span data-i18n="admin.permTreeLegendExtra">Sold as an additional</span>
-                <span class="perm-tree-status perm-tree-status-blocked"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>
-                <span data-i18n="admin.permTreeLegendNone">Not contracted (click to add)</span>
-            </p>
-            <div id="permisos-adicionales-container"></div>
-            <div id="permisos-adicionales-error" class="admin-error" role="alert" hidden></div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="anexo-changes-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="anexo-changes-modal-title">
-            <h3 id="anexo-changes-modal-title" data-i18n="admin.anexoChangesTitle">Anexos Changes</h3>
-            <p id="anexo-changes-subtitle" class="admin-subtitle"></p>
-            <div class="data-table-wrapper" data-table-id="anexos-changes" style="max-height: 60vh;">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th data-i18n="admin.colModule" data-col="colModule">Module</th>
-                            <th data-i18n="admin.colAction" data-col="colAction">Action</th>
-                            <th data-i18n="admin.colRequestedBy" data-col="colRequestedBy">Requested by</th>
-                            <th data-i18n="admin.colRequestedAt" data-col="colRequestedAt">Request date</th>
-                            <th data-i18n="admin.colChangedAt" data-col="colChangedAt">Change date</th>
-                            <th data-i18n="admin.colDuration" data-col="colDuration">Contracted duration</th>
-                        </tr>
-                    </thead>
-                    <tbody id="anexo-changes-table-body">
-                        <!-- rendered at runtime -->
-                    </tbody>
-                </table>
-            </div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn btn-secondary" id="anexo-changes-close" data-i18n="admin.cancel">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="color-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="color-modal-title">
-            <h3 id="color-modal-title" data-i18n="admin.institutionalColor">Institutional color</h3>
-            <div class="admin-form-actions">
-                <button type="button" class="btn" id="color-modal-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="color-modal-cancel" data-i18n="admin.cancel">Cancel</button>
-            </div>
-            <p id="color-modal-subtitle" class="admin-subtitle"></p>
-            <div id="color-modal-palette"></div>
-            <div id="color-modal-error" class="admin-error" role="alert" hidden></div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="admin-access-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="admin-access-modal-title">
-            <h3 id="admin-access-modal-title" data-i18n="admin.adminAccessTitle">Administrator Access</h3>
-            <p id="admin-access-subtitle" class="admin-subtitle"></p>
-            <p id="admin-access-hint" class="admin-hint" data-i18n="admin.adminAccessHint">Read-only — shows everything this client has contracted (habilitado) vs. not contracted (bloqueado). This administrator always sees everything habilitado automatically; nothing here can be selected or saved.</p>
-            <p class="admin-hint perm-tree-legend">
-                <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
-                <span data-i18n="admin.adminAccessEnabled">Contratado / habilitado</span>
-                <span class="perm-tree-status perm-tree-status-blocked"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>
-                <span data-i18n="admin.adminAccessBlocked">No contratado / bloqueado</span>
-            </p>
-            <div id="admin-access-tree-container"></div>
-            <div id="admin-access-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn btn-secondary" id="admin-access-cancel" data-i18n="admin.cancel">Close</button>
-            </div>
-        </div>
-    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -735,8 +407,6 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="PermissionTree.js"></script>
-    <script src="PermissionCostTree.js"></script>
-    <script src="Admin-SaaS.js"></script>
+    <script src="CategoryScreen.js"></script>
 </body>
 </html>

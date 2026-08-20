@@ -362,6 +362,7 @@ async function loadLanguage(lang) {
     localStorage.setItem('lang', lang);
     applyStaticTranslations();
     applyClientBranding(clientBranding); // re-assert: applyStaticTranslations just reset .brand span to the generic "SGN" label
+    updateDatabaseMenuLabel(clientBranding); // re-assert: applyStaticTranslations just reset the database label too
     document.querySelectorAll('.lang-option').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.lang === lang);
     });
@@ -3630,7 +3631,7 @@ function syncButtonConfigShortcuts() {
 // icon shows whenever the user has been granted the parent OR any single
 // child (a lingering itemId-only grant from before this submenu existed
 // still works too).
-const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-admin-negocio', 'btn-config-botones', 'btn-otros'];
+const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
 function hasSettingsAccess() {
     if (isUnrestrictedClientAdmin()) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
@@ -3705,11 +3706,15 @@ function syncSettingsSubmenuVisibility() {
     const styleGroup = document.getElementById('style-group');
     const businessAdminGroup = document.getElementById('business-admin-group');
     const buttonConfigGroup = document.getElementById('button-config-group');
+    const databaseGroup = document.getElementById('database-group');
+    const businessIntelligenceGroup = document.getElementById('business-intelligence-group');
     const othersGroup = document.getElementById('settings-others-group');
     if (languageGroup && !hasSettingsSubPermission('btn-idioma')) languageGroup.hidden = true;
     if (styleGroup && !hasSettingsSubPermission('btn-estilo')) styleGroup.hidden = true;
     if (businessAdminGroup && !hasSettingsSubPermission('btn-admin-negocio')) businessAdminGroup.hidden = true;
     if (buttonConfigGroup && !hasSettingsSubPermission('btn-config-botones')) buttonConfigGroup.hidden = true;
+    if (databaseGroup && !hasSettingsSubPermission('btn-base-datos')) databaseGroup.hidden = true;
+    if (businessIntelligenceGroup && !hasSettingsSubPermission('btn-negocio-inteligente')) businessIntelligenceGroup.hidden = true;
     if (othersGroup && !hasSettingsSubPermission('btn-otros')) othersGroup.hidden = true;
 }
 
@@ -4055,6 +4060,16 @@ function applyClientBranding(branding) {
     }
 }
 
+// "Base de Datos" (Settings dropdown) shows the client's own company
+// abbreviation appended to the base label, e.g. "Base de Datos GEIPSA" — the
+// same company_abbreviation already used to build record ids (see db.js).
+function updateDatabaseMenuLabel(branding) {
+    const label = document.getElementById('database-company-label');
+    if (!label) return;
+    const base = t('menu.databaseCompany');
+    label.textContent = branding?.companyAbbreviation ? `${base} ${branding.companyAbbreviation}` : base;
+}
+
 // --- Breadcrumb bar ----------------------------------------------------------
 // "Ruta de acceso": below the top bar, shows the path used to reach the
 // current screen. Computed by walking the same menuData tree that already
@@ -4374,6 +4389,7 @@ async function initDashboard({ activePage } = {}) {
     if (role !== 'admin') {
         clientBranding = await fetchClientBranding();
         applyClientBranding(clientBranding);
+        updateDatabaseMenuLabel(clientBranding);
         await initCostCenterPicker();
     } else {
         document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');
