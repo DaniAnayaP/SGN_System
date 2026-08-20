@@ -90,7 +90,7 @@ function buildFuelRow(record) {
         textCell('colFuelDate', `${pad(day)}-${pad(month)}-${pad(year % 100)}`, 'col-table-fuel'),
         textCell('colFuelYear', String(year), 'col-table-fuel'),
         textCell('colFuelMonth', MONTH_ABBR[lang][month - 1], 'col-table-fuel'),
-        textCell('colFuelWeek', `Sem${weekOfYear(dateObj)}+${year}`, 'col-table-fuel'),
+        textCell('colFuelWeek', `Sem${weekOfYear(dateObj)}_${year}`, 'col-table-fuel'),
         textCell('colFuelDayNum', String(day), 'col-table-fuel'),
         textCell('colFuelDayText', DAY_ABBR[lang][dateObj.getDay()], 'col-table-fuel'),
         textCell('colFuelEcoUnit', record.ecoUnit, 'col-table-fuel'),

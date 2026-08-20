@@ -1617,7 +1617,7 @@ function getSystemColumnsForRecord({ companyName, area, modulo, pantalla, centro
         colSysMesNum: pad(d.getUTCMonth() + 1),
         colSysMesTexto: SYSTEM_COLUMN_MONTH_ABBR[d.getUTCMonth()],
         colSysAnio: String(d.getUTCFullYear()),
-        colSysSemana: `Sem${week}+${d.getUTCFullYear()}`,
+        colSysSemana: `Sem${week}_${d.getUTCFullYear()}`,
         colSysHora: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`,
     };
 }
@@ -1716,7 +1716,7 @@ function resolveFuelReportColumnValue(record, colKey) {
         case 'colFuelDate': return dateObj ? `${pad(day)}-${pad(month)}-${pad(year % 100)}` : null;
         case 'colFuelYear': return dateObj ? String(year) : null;
         case 'colFuelMonth': return dateObj ? SYSTEM_COLUMN_MONTH_ABBR[month - 1] : null;
-        case 'colFuelWeek': return dateObj ? `Sem${reportWeekOfYear(dateObj)}+${year}` : null;
+        case 'colFuelWeek': return dateObj ? `Sem${reportWeekOfYear(dateObj)}_${year}` : null;
         case 'colFuelDayNum': return dateObj ? String(day) : null;
         case 'colFuelDayText': return dateObj ? SYSTEM_COLUMN_DAY_ABBR[dateObj.getDay()] : null;
         case 'colFuelTicketEvidence': return record.ticketEvidence ? 'Sí' : null;

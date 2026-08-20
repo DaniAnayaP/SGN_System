@@ -1782,6 +1782,14 @@ app.post('/api/business/fuel-records', requireAuth, (req, res) => {
     if (!date || !ecoUnit?.trim() || !driver?.trim() || !coordinator?.trim()) {
         return res.status(400).json({ message: 'date, ecoUnit, driver and coordinator are required.' });
     }
+    // Centro Costos is a Control Interno column -- it must be filled in
+    // from creation, same as the fields above, not left to be silently
+    // blank (the client only ever sends a value when exactly one cost
+    // center is active in the top-bar picker; see
+    // Dashboard.selectedCostCenterLabel's own comment for why).
+    if (!centroCostos?.trim()) {
+        return res.status(400).json({ message: 'centroCostos is required.' });
+    }
     const record = createFuelRecord({
         clientId: req.user.clientId,
         date,

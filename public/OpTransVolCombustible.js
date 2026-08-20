@@ -489,7 +489,7 @@ function buildRow(record) {
         textCell('colFuelDate', `${pad(day)}-${pad(month)}-${pad(year % 100)}`),
         textCell('colFuelYear', String(year)),
         textCell('colFuelMonth', MONTH_ABBR[lang][month - 1]),
-        textCell('colFuelWeek', `Sem${weekOfYear(dateObj)}+${year}`),
+        textCell('colFuelWeek', `Sem${weekOfYear(dateObj)}_${year}`),
         textCell('colFuelDayNum', String(day)),
         textCell('colFuelDayText', DAY_ABBR[lang][dateObj.getDay()]),
         textCell('colFuelEcoUnit', record.ecoUnit),
@@ -615,6 +615,16 @@ async function saveNewRecord() {
     const missing = [dateInput, ecoUnitInput, driverInput, coordinatorInput].some((el) => !el.value.trim());
     if (missing) {
         newRecordError.textContent = Dashboard.t('login.fieldRequired');
+        newRecordError.hidden = false;
+        return;
+    }
+    // Control Interno columns must be filled in from creation, not left
+    // blank -- Centro Costos only has a real value when exactly one is
+    // active in the top-bar picker (see Dashboard.selectedCostCenterLabel's
+    // own comment), so block the save here rather than silently persisting
+    // a record with no Centro de Costos.
+    if (!Dashboard.selectedCostCenterLabel) {
+        newRecordError.textContent = Dashboard.t('admin.costCenterRequiredForRecord');
         newRecordError.hidden = false;
         return;
     }

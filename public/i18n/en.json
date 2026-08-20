@@ -216,6 +216,7 @@
     "requiredFields": "Company name, contact name and email are required.",
     "loadError": "Couldn't load data. Please try again.",
     "saveError": "Couldn't save changes. Please try again.",
+    "costCenterRequiredForRecord": "Select one specific Cost Center in the top bar before creating the record — it's a Control Interno column and must be filled in from creation.",
     "clientSaved": "Client saved.",
     "contratacionesTitle": "Contracted Modules",
     "contratacionesSubtitle": "Turn on the modules each client has contracted.",
