@@ -249,30 +249,6 @@
             return row;
         }
 
-        // A row with an expand/collapse toggle but no checkbox — used for
-        // each Columna row, which (unlike every other node in this tree)
-        // has no "granted or not" meaning of its own; only its 4 children
-        // (Solo Ver/Ver y Operar/Editar/Autorizar) are real grants.
-        function buildToggleOnlyRow(labelText, depth, toggle) {
-            const row = document.createElement('div');
-            row.className = `perm-tree-row perm-tree-depth-${depth}`;
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'perm-tree-toggle';
-            btn.setAttribute('aria-expanded', String(toggle.expanded));
-            const icon = document.createElement('i');
-            icon.className = 'bx bx-chevron-down';
-            icon.setAttribute('aria-hidden', 'true');
-            btn.appendChild(icon);
-            btn.addEventListener('click', () => { toggle.onToggle(); render(); });
-            row.appendChild(btn);
-            const label = document.createElement('span');
-            label.className = 'perm-tree-toggle-label';
-            label.textContent = labelText;
-            row.appendChild(label);
-            return row;
-        }
-
         // "Solo Ver"/"Ver y Operar"/"Editar" are mutually exclusive (a
         // column can be in at most one of these 3 modes at a time) —
         // "Autorizar" is a fully independent 4th toggle, combinable with
@@ -296,17 +272,36 @@
         function renderColumnRow(container, section, item, base, col, depth, subBlocked) {
             const colTreeKey = `col::${section.id}::${item.id}::${base}`;
             const colExpanded = expandedItems.has(colTreeKey);
-            const colRow = buildToggleOnlyRow(t(col.labelKey, col.labelParams), depth, {
+            const soloVerKey = keyOf(section.id, item.id, `${base}/solo-ver`);
+            // The column's own row IS "Solo Ver" -- its checkbox toggles that
+            // grant directly, same mutual-exclusion rule as the other 2
+            // levels below. Expanding it reveals just Ver y Operar/Editar
+            // (Solo Ver no longer needs its own separate child row) plus the
+            // independent Autorizar toggle.
+            const colRow = buildRow(t(col.labelKey, col.labelParams), depth, {
                 expanded: colExpanded,
                 onToggle: () => {
                     if (colExpanded) expandedItems.delete(colTreeKey);
                     else expandedItems.add(colTreeKey);
                 },
-            });
-            container.appendChild(colRow);
+            }, subBlocked);
+            if (!readOnly) {
+                colRow.input.checked = grantSet.has(soloVerKey);
+                colRow.input.addEventListener('change', () => {
+                    if (colRow.input.checked) {
+                        COLUMN_LEVELS.forEach((other) => {
+                            if (other.id === 'solo-ver') return;
+                            grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
+                        });
+                    }
+                    setKeys([soloVerKey], colRow.input.checked);
+                    render();
+                });
+            }
+            container.appendChild(colRow.row);
             if (!colExpanded) return;
 
-            COLUMN_LEVELS.forEach((level) => {
+            COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').forEach((level) => {
                 const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
                 const levelRow = buildRow(t(level.labelKey), depth + 1, null, subBlocked);
                 if (!readOnly) {
