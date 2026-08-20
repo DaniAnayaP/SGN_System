@@ -977,10 +977,20 @@ function wireMenuInteractions() {
             // open ancestor needs its height re-measured now, or the
             // parent's stale (too-short) fixed height clips the nested
             // content that just appeared (arrow rotates, nothing visible).
+            // scrollHeight on an overflow:hidden box never reports SMALLER
+            // than the box's own current height (only larger, if content
+            // overflows it) -- reading it while the old pixel height is
+            // still applied would just hand back that same old number (plus
+            // this +6, forever), growing by 6px on every click regardless
+            // of what actually changed. Snapping to 'auto' first forces a
+            // real natural-size measurement before computing the new target.
             let ancestor = menuItem.parentElement?.closest('.menu-item-dropdown.sub-menu-toggle');
             while (ancestor) {
                 const ancestorSubMenu = ancestor.querySelector(':scope > .sub-menu');
-                if (ancestorSubMenu) ancestorSubMenu.style.height = `${ancestorSubMenu.scrollHeight + 6}px`;
+                if (ancestorSubMenu) {
+                    ancestorSubMenu.style.height = 'auto';
+                    ancestorSubMenu.style.height = `${ancestorSubMenu.scrollHeight + 6}px`;
+                }
                 ancestor = ancestor.parentElement?.closest('.menu-item-dropdown.sub-menu-toggle');
             }
         });
