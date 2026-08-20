@@ -1622,6 +1622,95 @@ function getSystemColumnsForRecord({ companyName, area, modulo, pantalla, centro
     };
 }
 
+const SYSTEM_COLUMN_MONTH_INDEX = SYSTEM_COLUMN_MONTH_ABBR.reduce((map, abbr, i) => {
+    map[abbr.toLowerCase()] = i;
+    return map;
+}, {});
+
+// Turns one raw base-column value into a number a calculated column's
+// formula can do arithmetic on -- an operand can be a plain number, a
+// currency-formatted amount ($/,), or one of the 2 date shapes this system
+// already produces (dd/mmm/aaaa from Control Interno's colSysFecha,
+// dd-mm-aa or yyyy-mm-dd from Registro Combustible's own date columns).
+// Dates become an epoch day count so "Fecha − Fecha" naturally comes out in
+// days. Anything unrecognized returns null (that cell is blank in the
+// results, not a crash for the whole report).
+function evaluateOperandValue(raw) {
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+    if (typeof raw !== 'string' || !raw.trim()) return null;
+    const value = raw.trim();
+
+    const cleaned = value.replace(/[$,%\s]/g, '');
+    if (cleaned && !Number.isNaN(Number(cleaned)) && /^-?\d+(\.\d+)?$/.test(cleaned)) {
+        return Number(cleaned);
+    }
+
+    const slashMatch = value.match(/^(\d{1,2})\/([A-Za-zÀ-ÿ]{3,4})\.?\/(\d{4})$/);
+    if (slashMatch) {
+        const monthIndex = SYSTEM_COLUMN_MONTH_INDEX[slashMatch[2].toLowerCase()];
+        if (monthIndex != null) {
+            return Math.floor(Date.UTC(Number(slashMatch[3]), monthIndex, Number(slashMatch[1])) / 86400000);
+        }
+    }
+
+    const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+        return Math.floor(Date.UTC(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3])) / 86400000);
+    }
+
+    const shortMatch = value.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+    if (shortMatch) {
+        return Math.floor(Date.UTC(2000 + Number(shortMatch[3]), Number(shortMatch[2]) - 1, Number(shortMatch[1])) / 86400000);
+    }
+
+    return null;
+}
+
+function applyOperator(operator, a, b) {
+    if (a == null || b == null) return null;
+    switch (operator) {
+        case 'add': return a + b;
+        case 'subtract': return a - b;
+        case 'multiply': return a * b;
+        case 'divide': return b === 0 ? null : a / b;
+        default: return null;
+    }
+}
+
+// Evaluates one report's columns (in position order, so a calculated column
+// can reference an earlier one) against every underlying record already
+// mapped by its own screen (mapFuelRecord today; a future screen's own
+// map*Record concatenates in the same way base-datos-global does). Returns
+// one ARRAY per record, one value per report column, in report.columns'
+// own order -- never keyed by label, since 2 columns could share the same
+// user-given name and a label key would silently drop one. Base columns
+// display their raw value untouched (text stays text, e.g. Conductor/
+// Placas) -- evaluateOperandValue only ever runs on a value at the moment
+// some OTHER (calculated) column references it as an operand, never on a
+// base column's own display value, so a text column never gets forced into
+// a number just for being shown in the report.
+function computeIntelligentReportRows(report, records) {
+    return records.map((record) => {
+        const rawByPosition = [];
+        report.columns.forEach((col) => {
+            let displayValue = null;
+            if (col.type === 'base') {
+                displayValue = record[col.colKey] != null && record[col.colKey] !== '' ? record[col.colKey] : null;
+            } else if (col.type === 'calculated' && col.formula) {
+                const operandValues = col.formula.operands.map((op) => (
+                    op.kind === 'constant' ? op.value : evaluateOperandValue(rawByPosition[op.reportColumnId])
+                ));
+                const numeric = operandValues.reduce((acc, next, i) => (
+                    i === 0 ? next : applyOperator(col.formula.operators[i - 1], acc, next)
+                ), null);
+                displayValue = numeric == null ? null : Math.round(numeric * 100) / 100;
+            }
+            rawByPosition.push(displayValue);
+        });
+        return rawByPosition;
+    });
+}
+
 // --- Query helpers: Mi Recurso Humano (hr_workers, scoped to a client) ------
 // LEFT JOIN so the auto-created account's username/active state rides along
 // wherever a worker record is fetched — same pattern as listClients'
@@ -2783,6 +2872,7 @@ module.exports = {
     updateIntelligentReport,
     deleteIntelligentReport,
     authorizeIntelligentReport,
+    computeIntelligentReportRows,
     listFuelRecords,
     getFuelRecordById,
     createFuelRecord,

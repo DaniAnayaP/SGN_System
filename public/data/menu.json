@@ -118,8 +118,8 @@
       "labelKey": "menu.catReportes",
       "icon": "bx-bar-chart-alt-2",
       "submenu": [
-        { "id": "cat-reportes-1", "labelKey": "menu.catReportesItem1", "icon": "bx-window", "href": "#" },
-        { "id": "cat-reportes-2", "labelKey": "menu.catReportesItem2", "icon": "bx-window", "href": "#" }
+        { "id": "reportes-nativos", "labelKey": "menu.reportesNativos", "icon": "bx-window", "submenu": [] },
+        { "id": "reportes-personalizados", "labelKey": "menu.reportesPersonalizados", "icon": "bx-window", "submenu": [] }
       ]
     },
     {

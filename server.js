@@ -70,6 +70,7 @@ const {
     updateIntelligentReport,
     deleteIntelligentReport,
     authorizeIntelligentReport,
+    computeIntelligentReportRows,
     listFuelRecords,
     getFuelRecordById,
     createFuelRecord,
@@ -1638,6 +1639,22 @@ app.get('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
     const report = getIntelligentReportById(req.params.id, req.user.clientId);
     if (!report) return res.status(404).json({ message: 'Report not found.' });
     res.json({ report });
+});
+
+// Real computed data for a saved report -- same underlying records
+// base-datos-global already assembles (mapFuelRecord already carries the 13
+// Control Interno columns), run through computeIntelligentReportRows. A
+// future screen's own map*Record output gets concatenated into `records`
+// here the same way it will in base-datos-global once it exists.
+app.get('/api/business/intelligent-reports/:id/results', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const report = getIntelligentReportById(req.params.id, req.user.clientId);
+    if (!report) return res.status(404).json({ message: 'Report not found.' });
+    const client = getClientById(req.user.clientId);
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'registro-combustible');
+    const records = listFuelRecords(req.user.clientId).map((r) => mapFuelRecord(r, pendingByRecord, client?.company_name));
+    const rows = computeIntelligentReportRows(report, records);
+    res.json({ report: { name: report.name, columns: report.columns }, rows });
 });
 
 app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {

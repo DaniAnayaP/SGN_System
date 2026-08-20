@@ -792,7 +792,10 @@ function buildMenuItem(item) {
     a.appendChild(icon);
 
     const span = document.createElement('span');
-    span.textContent = t(item.labelKey, item.labelParams || {});
+    // item.label (literal) wins over labelKey when both could apply — only
+    // ever set for runtime-injected items whose text is free-form client
+    // data (e.g. a saved report's own name), never a translatable string.
+    span.textContent = item.label || t(item.labelKey, item.labelParams || {});
     a.appendChild(span);
 
     if (item.submenu) {
@@ -4262,6 +4265,35 @@ function updateDatabaseMenuLabel(branding) {
     label.textContent = branding?.companyAbbreviation ? `${base} ${branding.companyAbbreviation}` : base;
 }
 
+// "Reportes > Personalizados" — sidebar. menuData.areaCategories is the ONE
+// shared template every área's own "Reportes" reads from (see
+// effectiveAreaCategories) — mutating cat-reportes here once means every
+// área picks it up automatically, no per-área duplication needed. Each
+// report's own name is free-form client data, not a translatable string, so
+// it rides in via item.label (see buildMenuItem/crumbFromItem) rather than
+// labelKey. Runs on every page (not just Transacciones Inteligentes), same
+// as clientBranding/sidebarCostCenters just above.
+async function loadPersonalizedReports() {
+    try {
+        const res = await fetch('/api/business/intelligent-reports', { credentials: 'include' });
+        if (!res.ok) return;
+        const { reports } = await res.json();
+        const cat = (menuData?.areaCategories || []).find((c) => c.id === 'cat-reportes');
+        const personalizados = cat?.submenu?.find((sm) => sm.id === 'reportes-personalizados');
+        if (!personalizados) return;
+        personalizados.submenu = (reports || []).map((report) => ({
+            id: `report-${report.id}`,
+            label: `${clientBranding?.companyName || ''} - ${report.name}`,
+            href: `NegocioInteligente-ReporteResultados.html?id=${report.id}`,
+        }));
+        renderFilteredMenu();
+    } catch {
+        // No sidebar entries for this session's reports — not fatal, the
+        // rest of the app still works, same as any other best-effort
+        // sidebar enrichment (branding, cost centers) failing silently.
+    }
+}
+
 // --- Breadcrumb bar ----------------------------------------------------------
 // "Ruta de acceso": below the top bar, shows the path used to reach the
 // current screen. Computed by walking the same menuData tree that already
@@ -4301,7 +4333,7 @@ function findHrefTrail(items, targetFile, trail = []) {
 // their own in menu.json, and the leaf that DOES have one is always the
 // current page — which shouldn't link to itself either way.
 function crumbFromItem(item) {
-    return { label: t(item.labelKey, item.labelParams || {}), href: null };
+    return { label: item.label || t(item.labelKey, item.labelParams || {}), href: null };
 }
 
 // The areaCategories screens (Cat 1/2, Ope 1/2, etc.) are one shared array
@@ -4583,6 +4615,7 @@ async function initDashboard({ activePage } = {}) {
         applyClientBranding(clientBranding);
         updateDatabaseMenuLabel(clientBranding);
         await initCostCenterPicker();
+        await loadPersonalizedReports();
     } else {
         document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');
     }
@@ -4888,4 +4921,12 @@ window.Dashboard = {
         return cc ? `${cc.code} - ${cc.name}` : '';
     },
     get companyName() { return clientBranding?.companyName || ''; },
+    // For pages whose table columns aren't known until an async fetch
+    // resolves (e.g. a report's results, one column per report column) --
+    // the automatic ResizeObserver-based lazy-init (renderDataTableColumnControls)
+    // disconnects itself the first time the wrapper reports a nonzero width,
+    // which can happen before such a page has appended any real <th> cells,
+    // permanently missing its one chance to wire up reorder/pin/hide/sort/
+    // filter. Call this directly once the real columns are in the DOM.
+    initDataTableColumns,
 };
