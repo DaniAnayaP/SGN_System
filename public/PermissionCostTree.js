@@ -368,63 +368,101 @@
         // as one unit (see columnColorFor/extraSlotArgs's header comments).
         // grantReadonlyCost mode: identical toggle-only + 4-checkbox
         // behavior as PermissionTree.js, unchanged, plus a read-only cost
-        // badge on the Columna row itself only.
+        // badge on the Columna row itself only. Shared by both plain
+        // columns and columns nested inside a classification group (see
+        // renderClassificationGroup below) via an arbitrary `base` prefix.
+        function renderColumnRow(container, section, item, base, col, depth) {
+            const colCostKey = keyOf(section.id, item.id, base);
+
+            if (mode === 'costEdit') {
+                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, colCostKey);
+                container.appendChild(row);
+                return;
+            }
+
+            if (mode === 'clientTricolor') {
+                const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
+                const color = columnColorFor(levelKeys);
+                const colorSlot = {
+                    color,
+                    checked: color === 'red' && levelKeys.every((k) => pendingAdditions.has(k)),
+                    onChange: (checked) => levelKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
+                };
+                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, null, colorSlot);
+                container.appendChild(row);
+                return;
+            }
+
+            const colTreeKey = `col::${section.id}::${item.id}::${base}`;
+            const colExpanded = expandedItems.has(colTreeKey);
+            const colRow = buildToggleOnlyRow(t(col.labelKey, col.labelParams), depth, {
+                expanded: colExpanded,
+                onToggle: () => { if (colExpanded) expandedItems.delete(colTreeKey); else expandedItems.add(colTreeKey); },
+            }, colCostKey);
+            container.appendChild(colRow);
+            if (!colExpanded) return;
+
+            COLUMN_LEVELS.forEach((level) => {
+                const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                const { row: levelRowEl, input: levelInput } = buildRow(t(level.labelKey), depth + 1, null, null);
+                levelInput.checked = grantSet.has(levelKey);
+                levelInput.addEventListener('change', () => {
+                    if (levelInput.checked) {
+                        COLUMN_LEVELS.forEach((other) => {
+                            if (other.id === level.id) return;
+                            grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
+                        });
+                    }
+                    setKeys([levelKey], levelInput.checked);
+                    render();
+                });
+                container.appendChild(levelRowEl);
+            });
+
+            const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
+            const { row: authRowEl, input: authInput } = buildRow(t(COLUMN_AUTHORIZE.labelKey), depth + 1, null, null);
+            authInput.checked = grantSet.has(authKey);
+            authInput.addEventListener('change', () => { setKeys([authKey], authInput.checked); render(); });
+            container.appendChild(authRowEl);
+        }
+
+        // A classification (e.g. "Control Interno") groups several columns
+        // under one expandable row, same container pattern as `sm` nodes
+        // with a sub-submenu (see render() below) — leafKeys computed
+        // locally (one "solo-ver" key per column) since Columna is outside
+        // leafKeysUnder's reach on purpose. costEdit mode gets no cost slot
+        // of its own here (pricing stays at Columna); clientTricolor gets
+        // its color from the same extraSlotArgs/colorFor every other
+        // container level already uses; grantReadonlyCost cascades
+        // "solo-ver" to every column on click, mirroring PermissionTree.js.
+        function renderClassificationGroup(container, section, item, sm, subSm, cls) {
+            const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
+            const classLeafKeys = cls.submenu.map((col) => keyOf(section.id, item.id, `${classBase}/${col.id}/solo-ver`));
+            const classChecked = classLeafKeys.filter((k) => grantSet.has(k)).length;
+            const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
+            const classExpanded = expandedItems.has(classTreeKey);
+            const { row, input } = buildRow(t(cls.labelKey, cls.labelParams), 4, {
+                expanded: classExpanded,
+                onToggle: () => { if (classExpanded) expandedItems.delete(classTreeKey); else expandedItems.add(classTreeKey); },
+            }, ...extraSlotArgs(null, classLeafKeys));
+            if (input && mode !== 'clientTricolor') {
+                input.checked = classChecked === classLeafKeys.length;
+                input.indeterminate = classChecked > 0 && classChecked < classLeafKeys.length;
+                input.addEventListener('change', () => { setKeys(classLeafKeys, input.checked); render(); });
+            }
+            container.appendChild(row);
+            if (!classExpanded) return;
+            cls.submenu.forEach((col) => renderColumnRow(container, section, item, `${classBase}/${col.id}`, col, 5));
+        }
+
         function renderColumns(container, section, item, sm, subSm) {
             container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4));
-            subSm.submenu.forEach((col) => {
-                const base = `${sm.id}/${subSm.id}/${col.id}`;
-                const colCostKey = keyOf(section.id, item.id, base);
-
-                if (mode === 'costEdit') {
-                    const { row } = buildRow(t(col.labelKey, col.labelParams), 5, null, colCostKey);
-                    container.appendChild(row);
+            subSm.submenu.forEach((entry) => {
+                if (entry.isClassification) {
+                    renderClassificationGroup(container, section, item, sm, subSm, entry);
                     return;
                 }
-
-                if (mode === 'clientTricolor') {
-                    const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
-                    const color = columnColorFor(levelKeys);
-                    const colorSlot = {
-                        color,
-                        checked: color === 'red' && levelKeys.every((k) => pendingAdditions.has(k)),
-                        onChange: (checked) => levelKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
-                    };
-                    const { row } = buildRow(t(col.labelKey, col.labelParams), 5, null, null, colorSlot);
-                    container.appendChild(row);
-                    return;
-                }
-
-                const colTreeKey = `col::${section.id}::${item.id}::${sm.id}::${subSm.id}::${col.id}`;
-                const colExpanded = expandedItems.has(colTreeKey);
-                const colRow = buildToggleOnlyRow(t(col.labelKey, col.labelParams), 5, {
-                    expanded: colExpanded,
-                    onToggle: () => { if (colExpanded) expandedItems.delete(colTreeKey); else expandedItems.add(colTreeKey); },
-                }, colCostKey);
-                container.appendChild(colRow);
-                if (!colExpanded) return;
-
-                COLUMN_LEVELS.forEach((level) => {
-                    const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
-                    const { row: levelRowEl, input: levelInput } = buildRow(t(level.labelKey), 6, null, null);
-                    levelInput.checked = grantSet.has(levelKey);
-                    levelInput.addEventListener('change', () => {
-                        if (levelInput.checked) {
-                            COLUMN_LEVELS.forEach((other) => {
-                                if (other.id === level.id) return;
-                                grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
-                            });
-                        }
-                        setKeys([levelKey], levelInput.checked);
-                        render();
-                    });
-                    container.appendChild(levelRowEl);
-                });
-
-                const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
-                const { row: authRowEl, input: authInput } = buildRow(t(COLUMN_AUTHORIZE.labelKey), 6, null, null);
-                authInput.checked = grantSet.has(authKey);
-                authInput.addEventListener('change', () => { setKeys([authKey], authInput.checked); render(); });
-                container.appendChild(authRowEl);
+                renderColumnRow(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5);
             });
         }
 

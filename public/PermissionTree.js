@@ -286,58 +286,108 @@
         ];
         const COLUMN_AUTHORIZE = { id: 'autorizar', labelKey: 'main.permAutorizar' };
 
-        // Renders the "Tabla <pantalla>" heading + one toggle row per
-        // column + (when a column is expanded) its 4 permission leaves —
-        // entirely separate from leafKeysUnder/expand/the section-and-up
-        // rollup chain (see leafKeysUnder's comment for why). Local expand
-        // state reuses `expandedItems` with a distinctive 6-part key so it
-        // can't collide with the 2-part/3-part keys used elsewhere in it.
-        function renderTableColumns(container, section, item, sm, subSm, subBlocked) {
-            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4));
-            subSm.submenu.forEach((col) => {
-                const base = `${sm.id}/${subSm.id}/${col.id}`;
-                const colTreeKey = `col::${section.id}::${item.id}::${sm.id}::${subSm.id}::${col.id}`;
-                const colExpanded = expandedItems.has(colTreeKey);
-                const colRow = buildToggleOnlyRow(t(col.labelKey, col.labelParams), 5, {
-                    expanded: colExpanded,
-                    onToggle: () => {
-                        if (colExpanded) expandedItems.delete(colTreeKey);
-                        else expandedItems.add(colTreeKey);
-                    },
-                });
-                container.appendChild(colRow);
-                if (!colExpanded) return;
+        // One toggle row for a column + (when expanded) its 4 permission
+        // leaves, keyed off an arbitrary `base` submenuId prefix — shared by
+        // plain columns (base = sm/subSm/col) and columns nested inside a
+        // classification group (base = sm/subSm/class/col, see
+        // renderClassificationGroup below). Entirely separate from
+        // leafKeysUnder/expand/the section-and-up rollup chain (see
+        // leafKeysUnder's comment for why).
+        function renderColumnRow(container, section, item, base, col, depth, subBlocked) {
+            const colTreeKey = `col::${section.id}::${item.id}::${base}`;
+            const colExpanded = expandedItems.has(colTreeKey);
+            const colRow = buildToggleOnlyRow(t(col.labelKey, col.labelParams), depth, {
+                expanded: colExpanded,
+                onToggle: () => {
+                    if (colExpanded) expandedItems.delete(colTreeKey);
+                    else expandedItems.add(colTreeKey);
+                },
+            });
+            container.appendChild(colRow);
+            if (!colExpanded) return;
 
-                COLUMN_LEVELS.forEach((level) => {
-                    const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
-                    const levelRow = buildRow(t(level.labelKey), 6, null, subBlocked);
-                    if (!readOnly) {
-                        levelRow.input.checked = grantSet.has(levelKey);
-                        levelRow.input.addEventListener('change', () => {
-                            if (levelRow.input.checked) {
-                                // Uncheck the other 2 mutually-exclusive levels for this column.
-                                COLUMN_LEVELS.forEach((other) => {
-                                    if (other.id === level.id) return;
-                                    grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
-                                });
-                            }
-                            setKeys([levelKey], levelRow.input.checked);
-                            render();
-                        });
-                    }
-                    container.appendChild(levelRow.row);
-                });
-
-                const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
-                const authRow = buildRow(t(COLUMN_AUTHORIZE.labelKey), 6, null, subBlocked);
+            COLUMN_LEVELS.forEach((level) => {
+                const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                const levelRow = buildRow(t(level.labelKey), depth + 1, null, subBlocked);
                 if (!readOnly) {
-                    authRow.input.checked = grantSet.has(authKey);
-                    authRow.input.addEventListener('change', () => {
-                        setKeys([authKey], authRow.input.checked);
+                    levelRow.input.checked = grantSet.has(levelKey);
+                    levelRow.input.addEventListener('change', () => {
+                        if (levelRow.input.checked) {
+                            // Uncheck the other 2 mutually-exclusive levels for this column.
+                            COLUMN_LEVELS.forEach((other) => {
+                                if (other.id === level.id) return;
+                                grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
+                            });
+                        }
+                        setKeys([levelKey], levelRow.input.checked);
                         render();
                     });
                 }
-                container.appendChild(authRow.row);
+                container.appendChild(levelRow.row);
+            });
+
+            const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
+            const authRow = buildRow(t(COLUMN_AUTHORIZE.labelKey), depth + 1, null, subBlocked);
+            if (!readOnly) {
+                authRow.input.checked = grantSet.has(authKey);
+                authRow.input.addEventListener('change', () => {
+                    setKeys([authKey], authRow.input.checked);
+                    render();
+                });
+            }
+            container.appendChild(authRow.row);
+        }
+
+        // A classification (e.g. "Control Interno") groups several columns
+        // under one expandable row with its own checkbox — checking it
+        // grants "solo-ver" on every column inside at once (the admin can
+        // still open each column afterward and raise it individually);
+        // unchecking clears all of them. This is the first place a click
+        // above Columna cascades into Columna's own sub-levels — every
+        // other container's "checked" state (Departamento/Área/Apartado/
+        // Pantalla) rolls up from leafKeysUnder, which stops before Columna
+        // on purpose (see its comment), so this rollup is computed locally
+        // instead of reusing that function.
+        function renderClassificationGroup(container, section, item, sm, subSm, cls, subBlocked) {
+            const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
+            const classLeafKeys = cls.submenu.map((col) => keyOf(section.id, item.id, `${classBase}/${col.id}/solo-ver`));
+            const classChecked = classLeafKeys.filter((k) => grantSet.has(k)).length;
+            const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
+            const classExpanded = expandedItems.has(classTreeKey);
+            const classRow = buildRow(t(cls.labelKey, cls.labelParams), 4, {
+                expanded: classExpanded,
+                onToggle: () => {
+                    if (classExpanded) expandedItems.delete(classTreeKey);
+                    else expandedItems.add(classTreeKey);
+                },
+            }, subBlocked);
+            if (!readOnly) {
+                classRow.input.checked = classChecked === classLeafKeys.length;
+                classRow.input.indeterminate = classChecked > 0 && classChecked < classLeafKeys.length;
+                classRow.input.addEventListener('change', () => {
+                    setKeys(classLeafKeys, classRow.input.checked);
+                    render();
+                });
+            }
+            container.appendChild(classRow.row);
+            if (!classExpanded) return;
+            cls.submenu.forEach((col) => {
+                renderColumnRow(container, section, item, `${classBase}/${col.id}`, col, 5, subBlocked);
+            });
+        }
+
+        // Renders the "Tabla <pantalla>" heading + one row per entry in the
+        // pantalla's own column list — either a plain column, or (when
+        // marked isClassification) a group like "Control Interno" that
+        // nests several columns under one shared toggle.
+        function renderTableColumns(container, section, item, sm, subSm, subBlocked) {
+            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4));
+            subSm.submenu.forEach((entry) => {
+                if (entry.isClassification) {
+                    renderClassificationGroup(container, section, item, sm, subSm, entry, subBlocked);
+                    return;
+                }
+                renderColumnRow(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5, subBlocked);
             });
         }
 

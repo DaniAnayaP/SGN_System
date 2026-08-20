@@ -74,6 +74,24 @@ function textCell(key, value) {
     return td;
 }
 
+// The 13 "Control Interno" columns — same as textCell, plus the muted
+// col-system class (see Inicio-en.css) that visually sets them apart from
+// this screen's own columns.
+function textCellSystem(key, value) {
+    const td = textCell(key, value);
+    td.classList.add('col-system');
+    return td;
+}
+
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+function buildSystemCells(record) {
+    return SYSTEM_COLUMN_KEYS.map((key) => textCellSystem(key, record[key]));
+}
+
 async function patchFuelRecord(id, patch) {
     try {
         const res = await fetch(`/api/business/fuel-records/${id}`, {
@@ -465,6 +483,7 @@ function buildRow(record) {
     tr.dataset.recordId = String(record.id);
     tr.dataset.recordDate = record.date;
     tr.append(
+        ...buildSystemCells(record),
         textCell('colFuelDbId', record.dbId),
         textCell('colFuelRecordId', String(record.recordNumber)),
         textCell('colFuelDate', `${pad(day)}-${pad(month)}-${pad(year % 100)}`),
@@ -611,6 +630,7 @@ async function saveNewRecord() {
                 ecoUnit: ecoUnitInput.value.trim(),
                 driver: driverInput.value.trim(),
                 coordinator: coordinatorInput.value.trim(),
+                centroCostos: Dashboard.selectedCostCenterLabel,
             }),
         });
         if (!res.ok) throw new Error('save failed');

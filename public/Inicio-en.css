@@ -16,6 +16,9 @@
         --color-tooltip-text: #FFF;
         --shadow-border: rgba(0, 0, 0, 0.1);
         --user-bg-color: #FAFAFC;
+        --color-column-system-bg: #EEF2F6;
+        --color-column-system-band-bg: #DCE6ED;
+        --color-column-system-text: #3F4E5C;
     }
     body.dark-mode{
          --color-bg: #3A3D4D;
@@ -27,6 +30,9 @@
         --color-tooltip-text: #000;
         --shadow-border: rgba(255, 255, 255, 0.1);
         --user-bg-color: #FAFAFC;
+        --color-column-system-bg: #202B34;
+        --color-column-system-band-bg: #2B3A46;
+        --color-column-system-text: #AFC4D3;
     }
     /* Institutional style: a FULL theme variant, exactly like body.dark-mode
        above — every one of the same variables gets overridden, just sourced
@@ -44,6 +50,9 @@
         --color-tooltip-text: var(--institutional-tooltip-text, #FFF);
         --shadow-border: rgba(0, 0, 0, 0.12);
         --user-bg-color: var(--institutional-surface, #FAFAFC);
+        --color-column-system-bg: #EEF2F6;
+        --color-column-system-band-bg: #DCE6ED;
+        --color-column-system-text: #3F4E5C;
     }
     body.institutional-mode .brand{
         background-color: var(--institutional-accent, transparent);
@@ -1996,6 +2005,39 @@
         letter-spacing: 0.02em;
         color: var(--color-text-secondary);
         border-bottom: 2px solid var(--color-border);
+    }
+    /* Column-group band (Dashboard.js: renderColumnGroupBand) — a purely
+       cosmetic row above the real header, one <th colspan> per contiguous
+       run of same-group columns (e.g. "Control Interno"). Not sticky, on
+       purpose: it scrolls away with the body while the real header below it
+       keeps its own sticky top:0, so no offset math is needed between the
+       two rows and nothing here has to react to the font-size zoom control
+       changing the real header's height. */
+    .data-table-group-band th{
+        padding: 0.3rem 0.9rem;
+        text-align: left;
+        font-size: calc(var(--data-table-font-size, 0.85rem) * 0.75);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        border-bottom: 1px solid var(--color-border);
+        border-right: 1px solid color-mix(in srgb, var(--color-border) 35%, transparent);
+        background-color: var(--color-bg);
+        color: var(--color-text-secondary);
+    }
+    .data-table-group-band th.data-table-group-band-cell{
+        background-color: var(--color-column-system-band-bg);
+        color: var(--color-column-system-text);
+    }
+    /* The 13 "Control Interno" system columns (and future classifications)
+       get a tenue tint in both their header and body cells, distinguishing
+       them from a table's own pre-existing columns at a glance. */
+    .data-table th.col-system,
+    .data-table td.col-system{
+        background-color: var(--color-column-system-bg);
+    }
+    .data-table thead th.col-system{
+        background-color: var(--color-column-system-bg);
     }
     /* Pinned columns (see Dashboard.js: renderDataTableColumnControls /
        applyDataTableColumnLayout) — generalizes what used to be a hardcoded

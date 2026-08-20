@@ -680,6 +680,14 @@ if (!fuelRecordColumns.some((c) => c.name === 'liters')) {
     db.exec('ALTER TABLE fuel_records ADD COLUMN liters REAL NOT NULL DEFAULT 0');
 }
 
+// Centro Costos ("Control Interno" system column) added after fuel_records
+// already shipped once — captured once at creation from whatever Centro de
+// Costos is active in the top-bar picker at that moment, never patched
+// afterward (see FUEL_PATCHABLE_FIELDS, which intentionally excludes it).
+if (!fuelRecordColumns.some((c) => c.name === 'centro_costos')) {
+    db.exec("ALTER TABLE fuel_records ADD COLUMN centro_costos TEXT NOT NULL DEFAULT ''");
+}
+
 // given_names/surnames (separate from full_name, needed to compute the
 // auto-generated username — see computeHrUsername), departments (JSON
 // array, replacing the old single `department` column so a worker can
@@ -1141,6 +1149,22 @@ const TABLE_GRANT_PATHS = {
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
 };
 
+// The 13 "Control Interno" system columns (see getSystemColumnsForRecord
+// below) sit one level deeper than a table's own columns in menu.json —
+// nested inside a classification group (id "class-control-interno")
+// instead of directly under the pantalla. getColumnGrantLevel/
+// canAuthorizeColumn need that extra segment only for these ids; every
+// other column keeps its existing (shallower) path.
+const SYSTEM_COLUMN_CLASSIFICATION = 'class-control-interno';
+const SYSTEM_COLUMN_IDS = new Set([
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+]);
+function columnSubmenuBase(path, colKey) {
+    return SYSTEM_COLUMN_IDS.has(colKey) ? `${path.submenuPrefix}/${SYSTEM_COLUMN_CLASSIFICATION}/${colKey}` : `${path.submenuPrefix}/${colKey}`;
+}
+
 // No grant at all on a column behaves as 'solo-ver' (confirmed product
 // default). The 3 levels are mutually exclusive by UI convention only —
 // PermissionTree.js enforces that in its own checkbox-group handler — so
@@ -1149,7 +1173,7 @@ const TABLE_GRANT_PATHS = {
 function getColumnGrantLevel(grants, tableKey, colKey) {
     const path = TABLE_GRANT_PATHS[tableKey];
     if (!path) return 'solo-ver';
-    const base = `${path.submenuPrefix}/${colKey}`;
+    const base = columnSubmenuBase(path, colKey);
     const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
     if (has('editar')) return 'editar';
     if (has('ver-y-operar')) return 'ver-y-operar';
@@ -1159,7 +1183,8 @@ function getColumnGrantLevel(grants, tableKey, colKey) {
 function canAuthorizeColumn(grants, tableKey, colKey) {
     const path = TABLE_GRANT_PATHS[tableKey];
     if (!path) return false;
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${colKey}/autorizar`);
+    const base = columnSubmenuBase(path, colKey);
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/autorizar`);
 }
 
 // --- Pending changes (real approval workflow for "Editar" on an ---------
@@ -1380,16 +1405,16 @@ function getFuelRecordById(id, clientId) {
     return db.prepare('SELECT * FROM fuel_records WHERE id = ? AND client_id = ?').get(id, clientId);
 }
 
-function createFuelRecord({ clientId, date, ecoUnit, driver, coordinator }) {
+function createFuelRecord({ clientId, date, ecoUnit, driver, coordinator, centroCostos }) {
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fuel_records WHERE client_id = ?')
         .get(clientId).n;
     const result = db
         .prepare(`
-            INSERT INTO fuel_records (client_id, db_id, record_number, record_date, eco_unit, driver, coordinator)
-            VALUES (@clientId, @dbId, @recordNumber, @date, @ecoUnit, @driver, @coordinator)
+            INSERT INTO fuel_records (client_id, db_id, record_number, record_date, eco_unit, driver, coordinator, centro_costos)
+            VALUES (@clientId, @dbId, @recordNumber, @date, @ecoUnit, @driver, @coordinator, @centroCostos)
         `)
-        .run({ clientId, dbId: generateBigDateId(), recordNumber, date, ecoUnit, driver, coordinator });
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, date, ecoUnit, driver, coordinator, centroCostos: centroCostos || '' });
     return getFuelRecordById(result.lastInsertRowid, clientId);
 }
 
@@ -1430,6 +1455,51 @@ function updateFuelRecord(id, clientId, patch) {
 
 function deleteFuelRecord(id, clientId) {
     db.prepare('DELETE FROM fuel_records WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+const SYSTEM_COLUMN_MONTH_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const SYSTEM_COLUMN_DAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+// The 13 "Control Interno" columns for one row — Empresa/Área/Módulo/
+// Pantalla are fixed per table (same value for every row/client) and never
+// stored; Fecha/Día/Mes/Año/Semana/Hora are derived from createdAt (when the
+// record was actually entered, not the fuel event's own record_date, which
+// is a separate pre-existing column) using the same day/month abbreviations
+// and week formula OpTransVolCombustible.js already uses client-side for
+// Año/Mes/Semana/Día — computed here instead so every table's system columns
+// come from one consistent, server-side source, and so a future Reportes
+// query can rely on them without re-deriving anything per screen. Centro
+// Costos is the one real per-row value, passed in from the stored column.
+// Mexico Central Time, fixed (no DST since 2022 in most of the country) —
+// hardcoded rather than read from the Node process' own local timezone,
+// because that varies by deployment (this dev machine runs -0600, but a
+// plain Railway deployment defaults to UTC) and would silently shift "Hora"
+// depending on where the server happens to run. created_at is stored in UTC
+// (SQLite's datetime('now')); shifting it here, then reading every field
+// with the UTC getters, makes the result deterministic regardless of host.
+const SYSTEM_COLUMN_UTC_OFFSET_HOURS = -6;
+
+function getSystemColumnsForRecord({ companyName, area, modulo, pantalla, centroCostos, createdAt }) {
+    const utc = createdAt ? new Date(`${createdAt.replace(' ', 'T')}Z`) : new Date();
+    const d = new Date(utc.getTime() + SYSTEM_COLUMN_UTC_OFFSET_HOURS * 60 * 60 * 1000);
+    const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const week = Math.ceil((Math.floor((d - start) / 86400000) + start.getUTCDay() + 1) / 7);
+    const pad = (n) => String(n).padStart(2, '0');
+    return {
+        colSysEmpresa: companyName || '',
+        colSysArea: area || '',
+        colSysModulo: modulo || '',
+        colSysPantalla: pantalla || '',
+        colSysCentroCostos: centroCostos || '',
+        colSysFecha: `${pad(d.getUTCDate())}/${SYSTEM_COLUMN_MONTH_ABBR[d.getUTCMonth()].toLowerCase()}/${d.getUTCFullYear()}`,
+        colSysDiaNum: pad(d.getUTCDate()),
+        colSysDiaTexto: SYSTEM_COLUMN_DAY_ABBR[d.getUTCDay()],
+        colSysMesNum: pad(d.getUTCMonth() + 1),
+        colSysMesTexto: SYSTEM_COLUMN_MONTH_ABBR[d.getUTCMonth()],
+        colSysAnio: String(d.getUTCFullYear()),
+        colSysSemana: `Sem${week}+${d.getUTCFullYear()}`,
+        colSysHora: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`,
+    };
 }
 
 // --- Query helpers: Mi Recurso Humano (hr_workers, scoped to a client) ------
@@ -2592,6 +2662,7 @@ module.exports = {
     createFuelRecord,
     updateFuelRecord,
     deleteFuelRecord,
+    getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,

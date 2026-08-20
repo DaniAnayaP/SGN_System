@@ -69,6 +69,7 @@ const {
     createFuelRecord,
     updateFuelRecord,
     deleteFuelRecord,
+    getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,
@@ -1595,7 +1596,15 @@ app.delete('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (
 // access is already enforced by the sidebar/menu grant system on the client
 // (Dashboard.initDashboard); these routes only require the caller to belong
 // to a client at all.
-function mapFuelRecord(row, pendingByRecord) {
+// Control Interno's Área/Módulo/Pantalla are fixed for this one screen
+// (matches its own position in menu.json: sc-area-transport-1 /
+// supply-chain / cat-operaciones-transporte-vol-combustible) -- a future
+// table repeats this same recipe with its own 3 fixed labels.
+const FUEL_RECORD_AREA_LABEL = 'Transporte Volumen';
+const FUEL_RECORD_MODULE_LABEL = 'Cadena de Suministro';
+const FUEL_RECORD_SCREEN_LABEL = 'Registro Combustible';
+
+function mapFuelRecord(row, pendingByRecord, companyName) {
     if (!row) return row;
     return {
         id: row.id,
@@ -1619,18 +1628,27 @@ function mapFuelRecord(row, pendingByRecord) {
         transferService: row.transfer_service,
         internalMovement: row.internal_movement,
         pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: FUEL_RECORD_AREA_LABEL,
+            modulo: FUEL_RECORD_MODULE_LABEL,
+            pantalla: FUEL_RECORD_SCREEN_LABEL,
+            centroCostos: row.centro_costos,
+            createdAt: row.created_at,
+        }),
     };
 }
 
 app.get('/api/business/fuel-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'registro-combustible');
-    res.json({ records: listFuelRecords(req.user.clientId).map((r) => mapFuelRecord(r, pendingByRecord)) });
+    const client = getClientById(req.user.clientId);
+    res.json({ records: listFuelRecords(req.user.clientId).map((r) => mapFuelRecord(r, pendingByRecord, client?.company_name)) });
 });
 
 app.post('/api/business/fuel-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const { date, ecoUnit, driver, coordinator } = req.body || {};
+    const { date, ecoUnit, driver, coordinator, centroCostos } = req.body || {};
     if (!date || !ecoUnit?.trim() || !driver?.trim() || !coordinator?.trim()) {
         return res.status(400).json({ message: 'date, ecoUnit, driver and coordinator are required.' });
     }
@@ -1640,12 +1658,14 @@ app.post('/api/business/fuel-records', requireAuth, (req, res) => {
         ecoUnit: ecoUnit.trim(),
         driver: driver.trim(),
         coordinator: coordinator.trim(),
+        centroCostos: (centroCostos || '').trim(),
     });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: record.id,
         recordLabel: record.eco_unit, action: 'create', changedBy: req.user.name,
     });
-    res.status(201).json({ record: mapFuelRecord(record) });
+    const client = getClientById(req.user.clientId);
+    res.status(201).json({ record: mapFuelRecord(record, null, client?.company_name) });
 });
 
 app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
@@ -1665,7 +1685,8 @@ app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
         tripKmAfterEvidence: (v) => (v ? '[imagen]' : ''),
     });
     const record = updateFuelRecord(req.params.id, req.user.clientId, appliedPatch);
-    res.json({ record: mapFuelRecord(record), pendingFields, rejectedFields });
+    const client = getClientById(req.user.clientId);
+    res.json({ record: mapFuelRecord(record, null, client?.company_name), pendingFields, rejectedFields });
 });
 
 app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {

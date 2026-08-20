@@ -1505,8 +1505,17 @@ function getTableId(wrapper, index) {
     return wrapper.dataset.tableId || `auto:${location.pathname}:${index}`;
 }
 
+// The real, interactive header row — always table.tHead.rows[0] UNLESS a
+// column-group band (see renderColumnGroupBand) has been inserted above it,
+// in which case the band takes rows[0]'s slot and the real header is marked
+// with this class so every column-engine function below still finds it
+// without needing to know band rows exist at all.
+function getHeaderRow(table) {
+    return table.tHead.querySelector('tr.data-table-header-row') || table.tHead.rows[0];
+}
+
 function getDataTableColumnKeys(table) {
-    return Array.from(table.tHead.rows[0].cells).map((th) => th.dataset.col).filter(Boolean);
+    return Array.from(getHeaderRow(table).cells).map((th) => th.dataset.col).filter(Boolean);
 }
 
 function dataTableConfigStorageKey(tableId) {
@@ -1562,7 +1571,7 @@ function buildOrGetColgroup(table) {
 
 function measureNaturalColumnWidths(table) {
     const widths = {};
-    Array.from(table.tHead.rows[0].cells).forEach((th) => {
+    Array.from(getHeaderRow(table).cells).forEach((th) => {
         if (th.dataset.col) widths[th.dataset.col] = Math.max(DATA_TABLE_COL_MIN_WIDTH, Math.round(th.getBoundingClientRect().width));
     });
     return widths;
@@ -1601,7 +1610,7 @@ function applyDataTableColumnLayout(tableId) {
     if (!state) return;
     const { table, colgroup, config } = state;
     const visualOrder = getVisualColumnOrder(config);
-    const headerRow = table.tHead.rows[0];
+    const headerRow = getHeaderRow(table);
     const hiddenSet = new Set(config.hidden);
     const visiblePinned = config.pinned.filter((k) => !hiddenSet.has(k));
     state.visiblePinned = visiblePinned;
@@ -1652,6 +1661,8 @@ function applyDataTableColumnLayout(tableId) {
     Array.from(table.tBodies[0]?.rows || []).forEach((tr) => {
         if (!tr.querySelector('td.data-table-empty-cell')) applyRowColumnState(tr, tableId);
     });
+
+    renderColumnGroupBand(tableId);
 }
 
 function observeTableBody(table, tableId) {
@@ -1735,7 +1746,7 @@ function reorderColumn(tableId, sourceKey, targetKey, before) {
 // the pin picker's own (vertical, separate) drag-reorder below, avoiding
 // ambiguous cross-region drags between the fixed and scrolling zones.
 function enableHeaderDragReorder(table, tableId) {
-    const headerRow = table.tHead.rows[0];
+    const headerRow = getHeaderRow(table);
     if (headerRow.dataset.dragBound) return;
     headerRow.dataset.dragBound = '1';
     let draggedKey = null;
@@ -1911,7 +1922,7 @@ function compareSortCells(a, b) {
 function applySortIndicators(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
-    Array.from(state.table.tHead.rows[0].cells).forEach((th) => {
+    Array.from(getHeaderRow(state.table).cells).forEach((th) => {
         th.classList.remove('data-table-col-sort-asc', 'data-table-col-sort-desc');
         if (th.dataset.col === state.sortKey) {
             th.classList.add(state.sortDir === 'asc' ? 'data-table-col-sort-asc' : 'data-table-col-sort-desc');
@@ -2285,7 +2296,7 @@ function attachColumnFilterTrigger(th, tableId) {
 }
 document.addEventListener('dashboard:language-changed', () => {
     dataTableColumnState.forEach((state, tableId) => {
-        Array.from(state.table.tHead.rows[0]?.cells || []).forEach((th) => attachColumnFilterTrigger(th, tableId));
+        Array.from(getHeaderRow(state.table)?.cells || []).forEach((th) => attachColumnFilterTrigger(th, tableId));
     });
 });
 
@@ -2305,7 +2316,23 @@ function initDataTableColumns(wrapper, index) {
     table.dataset.colInit = '1';
     const tableId = getTableId(wrapper, index);
     const labels = {};
-    Array.from(table.tHead.rows[0].cells).forEach((th) => { labels[th.dataset.col] = th.textContent.trim(); });
+    const groupKeys = new Map();
+    Array.from(getHeaderRow(table).cells).forEach((th) => {
+        labels[th.dataset.col] = th.textContent.trim();
+        if (th.dataset.group) groupKeys.set(th.dataset.col, th.dataset.group);
+    });
+    // A column-group band (e.g. "Control Interno") is a second, purely
+    // cosmetic <tr> inserted above the real header — see getHeaderRow's own
+    // comment for why this can't just be a 2nd cell in the same row. Marking
+    // the real header with this class here, before anything else reads it,
+    // is what lets every other column-engine function keep calling
+    // getHeaderRow(table) with zero awareness that a band exists.
+    if (groupKeys.size) {
+        getHeaderRow(table).classList.add('data-table-header-row');
+        const bandRow = document.createElement('tr');
+        bandRow.className = 'data-table-group-band';
+        table.tHead.insertBefore(bandRow, table.tHead.firstChild);
+    }
     const colgroup = buildOrGetColgroup(table);
     columnKeys.forEach((key) => {
         if (!colgroup.querySelector(`col[data-col="${key}"]`)) {
@@ -2320,18 +2347,49 @@ function initDataTableColumns(wrapper, index) {
         if (config.widths[key] == null) config.widths[key] = naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
     });
     dataTableColumnState.set(tableId, {
-        table, wrapper, colgroup, columnKeys, labels, config,
+        table, wrapper, colgroup, columnKeys, labels, config, groupKeys,
         sortKey: null, sortDir: null, originalRowOrder: null,
         columnFilters: new Map(),
     });
     applyDataTableColumnLayout(tableId);
     enableHeaderDragReorder(table, tableId);
-    Array.from(table.tHead.rows[0].cells).forEach((th) => {
+    Array.from(getHeaderRow(table).cells).forEach((th) => {
         attachResizeHandle(th, tableId);
         attachSortHandler(th, tableId);
         attachColumnFilterTrigger(th, tableId);
     });
     observeTableBody(table, tableId);
+}
+
+// Rebuilds the cosmetic group-band row (e.g. "Control Interno" spanning its
+// columns) to match the CURRENT visual order/visibility — called once at
+// init and again every time applyDataTableColumnLayout runs, so reordering,
+// hiding, or pinning a grouped column keeps the band accurate. Consecutive
+// visible columns sharing the same group collapse into one <th colspan>;
+// a column dragged away from its group simply splits the band into two
+// segments for that group instead of enforcing contiguity.
+function renderColumnGroupBand(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || !state.groupKeys || !state.groupKeys.size) return;
+    const bandRow = state.table.tHead.querySelector('tr.data-table-group-band');
+    if (!bandRow) return;
+    const hiddenSet = new Set(state.config.hidden);
+    const visualOrder = getVisualColumnOrder(state.config).filter((k) => !hiddenSet.has(k));
+    bandRow.innerHTML = '';
+    let i = 0;
+    while (i < visualOrder.length) {
+        const groupKey = state.groupKeys.get(visualOrder[i]) || null;
+        let span = 1;
+        while (i + span < visualOrder.length && (state.groupKeys.get(visualOrder[i + span]) || null) === groupKey) span += 1;
+        const th = document.createElement('th');
+        th.colSpan = span;
+        if (groupKey) {
+            th.textContent = t(groupKey);
+            th.className = 'data-table-group-band-cell';
+        }
+        bandRow.appendChild(th);
+        i += span;
+    }
 }
 
 function wireModalDismiss(overlay, onClose) {
@@ -2697,7 +2755,7 @@ function renderDataTableColumnControls() {
                     if (colState) {
                         colState.columnFilters.clear();
                         applyColumnValueFilters(colTableId);
-                        colState.table.tHead.rows[0].querySelectorAll('th.data-table-col-filter-active')
+                        getHeaderRow(colState.table).querySelectorAll('th.data-table-col-filter-active')
                             .forEach((th) => th.classList.remove('data-table-col-filter-active'));
                     }
                     closeColumnFilterMenu();
@@ -4684,4 +4742,15 @@ window.Dashboard = {
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },
+    // "Centro Costos" (Control Interno system column) at record-creation
+    // time — only meaningful when exactly one cost center is active in the
+    // top-bar picker; 'all' or several selected is ambiguous for "which one
+    // does this new record belong to", so it's left blank rather than
+    // guessing (the record can still be found through every other Control
+    // Interno column).
+    get selectedCostCenterLabel() {
+        if (!(selectedCostCenterIds instanceof Set) || selectedCostCenterIds.size !== 1) return '';
+        const cc = sidebarCostCenters.find((c) => c.id === Array.from(selectedCostCenterIds)[0]);
+        return cc ? `${cc.code} - ${cc.name}` : '';
+    },
 };
