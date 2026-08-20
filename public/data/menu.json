@@ -17,7 +17,12 @@
             { "id": "btn-estilo", "labelKey": "main.style", "icon": "bx-palette", "href": "#", "permissionOnly": true },
             { "id": "btn-admin-negocio", "labelKey": "menu.adminBusiness", "icon": "bx-shopping-bag", "href": "#", "permissionOnly": true },
             { "id": "btn-config-botones", "labelKey": "main.buttonConfig", "icon": "bx-slider-alt", "href": "#", "permissionOnly": true },
-            { "id": "btn-base-datos", "labelKey": "menu.databaseGroup", "icon": "bx-data", "href": "#", "permissionOnly": true },
+            {
+              "id": "btn-base-datos", "labelKey": "menu.databaseGroup", "icon": "bx-data", "href": "#", "permissionOnly": true,
+              "submenu": [
+                { "id": "bd-global", "labelKey": "menu.databaseCompany", "permissionOnly": true }
+              ]
+            },
             {
               "id": "btn-negocio-inteligente", "labelKey": "menu.businessIntelligenceGroup", "icon": "bx-bulb", "href": "#", "permissionOnly": true,
               "submenu": [
