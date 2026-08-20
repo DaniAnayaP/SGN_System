@@ -22,6 +22,12 @@
         --color-table-band-fuel-bg: #E3ECF9;
         --color-table-band-fuel-band-bg: #CBDCF2;
         --color-table-band-fuel-text: #1D3A63;
+        --color-report-base-bg: #E7F3EC;
+        --color-report-base-band-bg: #CBE6D6;
+        --color-report-base-text: #1E5631;
+        --color-report-calc-bg: #FBF0DE;
+        --color-report-calc-band-bg: #F3DFB3;
+        --color-report-calc-text: #7A5310;
     }
     body.dark-mode{
          --color-bg: #3A3D4D;
@@ -39,6 +45,12 @@
         --color-table-band-fuel-bg: #24344A;
         --color-table-band-fuel-band-bg: #2E4360;
         --color-table-band-fuel-text: #B9D2F2;
+        --color-report-base-bg: #1B2E22;
+        --color-report-base-band-bg: #24402D;
+        --color-report-base-text: #8FD3A6;
+        --color-report-calc-bg: #332812;
+        --color-report-calc-band-bg: #4A3A16;
+        --color-report-calc-text: #F0C978;
     }
     /* Institutional style: a FULL theme variant, exactly like body.dark-mode
        above — every one of the same variables gets overridden, just sourced
@@ -62,6 +74,12 @@
         --color-table-band-fuel-bg: #E3ECF9;
         --color-table-band-fuel-band-bg: #CBDCF2;
         --color-table-band-fuel-text: #1D3A63;
+        --color-report-base-bg: #E7F3EC;
+        --color-report-base-band-bg: #CBE6D6;
+        --color-report-base-text: #1E5631;
+        --color-report-calc-bg: #FBF0DE;
+        --color-report-calc-band-bg: #F3DFB3;
+        --color-report-calc-text: #7A5310;
     }
     body.institutional-mode .brand{
         background-color: var(--institutional-accent, transparent);
@@ -2090,6 +2108,19 @@
         background-color: var(--color-table-band-fuel-band-bg);
         color: var(--color-table-band-fuel-text);
     }
+    /* Transacciones Inteligentes' results table — the one place today with
+       2 DIFFERENT values on the same classification band (Base de Datos vs.
+       Calculada), so unlike Control Interno's single uniform tint above,
+       each value here needs its own color, same per-value pattern as the
+       table-of-origin band just above. */
+    .data-table-group-band-classification th[data-group-key="main.reportColBase"]{
+        background-color: var(--color-report-base-band-bg);
+        color: var(--color-report-base-text);
+    }
+    .data-table-group-band-classification th[data-group-key="main.reportColCalc"]{
+        background-color: var(--color-report-calc-band-bg);
+        color: var(--color-report-calc-text);
+    }
     /* Either band, wherever nothing has been classified yet (see
        fillBandRow's emptyLabelKey) — tenue and in italics so it reads as
        "not assigned" rather than a rendering mistake. */
@@ -2119,6 +2150,23 @@
     }
     .data-table thead th.col-table-fuel{
         background-color: var(--color-table-band-fuel-bg);
+    }
+    /* Transacciones Inteligentes' results table — same tenue-tint idea,
+       marking which of a report's own columns came straight from Base de
+       Datos Global (green) vs. were built from a formula (amber). */
+    .data-table th.report-col-base,
+    .data-table td.report-col-base{
+        background-color: var(--color-report-base-bg);
+    }
+    .data-table thead th.report-col-base{
+        background-color: var(--color-report-base-bg);
+    }
+    .data-table th.report-col-calc,
+    .data-table td.report-col-calc{
+        background-color: var(--color-report-calc-bg);
+    }
+    .data-table thead th.report-col-calc{
+        background-color: var(--color-report-calc-bg);
     }
     /* Pinned columns (see Dashboard.js: renderDataTableColumnControls /
        applyDataTableColumnLayout) — generalizes what used to be a hardcoded

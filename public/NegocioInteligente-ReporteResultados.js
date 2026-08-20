@@ -23,11 +23,21 @@ function renderResults(report, rows) {
     const title = `${Dashboard.companyName || ''} - ${report.name}`.replace(/^ - /, '');
     document.getElementById('report-page-title').textContent = title;
 
+    // Semaforización: which columns came straight from Base de Datos Global
+    // vs. were built from a formula -- data-group feeds the generic
+    // classification band (Dashboard.js: initDataTableColumns already reads
+    // it off every <th>), report-col-base/-calc tint the real header/body
+    // cells the same way col-system/col-table-fuel do elsewhere.
+    const reportColClass = (col) => (col.type === 'calculated' ? 'report-col-calc' : 'report-col-base');
+    const reportColGroupKey = (col) => (col.type === 'calculated' ? 'main.reportColCalc' : 'main.reportColBase');
+
     const headRow = document.getElementById('report-results-head');
     headRow.innerHTML = '';
     report.columns.forEach((col, index) => {
         const th = document.createElement('th');
         th.dataset.col = `col${index}`;
+        th.dataset.group = reportColGroupKey(col);
+        th.className = reportColClass(col);
         th.textContent = col.label;
         headRow.appendChild(th);
     });
@@ -41,6 +51,7 @@ function renderResults(report, rows) {
         row.forEach((value, index) => {
             const td = document.createElement('td');
             td.dataset.col = `col${index}`;
+            td.className = reportColClass(report.columns[index]);
             td.textContent = formatCellValue(value);
             tr.appendChild(td);
         });

@@ -2793,6 +2793,8 @@ async function openChangeHistory(tableId, recordId) {
 // labelKey already used for its data-group attribute in the HTML.
 const COLUMN_GROUP_META = {
     'menu.classControlInterno': { swatch: 'var(--color-column-system-band-bg)', descKey: 'main.classControlInternoDesc' },
+    'main.reportColBase': { swatch: 'var(--color-report-base-band-bg)', descKey: 'main.reportColBaseDesc' },
+    'main.reportColCalc': { swatch: 'var(--color-report-calc-band-bg)', descKey: 'main.reportColCalcDesc' },
 };
 
 let columnLegendModal = null;
