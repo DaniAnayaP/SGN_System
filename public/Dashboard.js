@@ -969,6 +969,20 @@ function wireMenuInteractions() {
                     otherSubmenu.style.padding = '0';
                 }
             });
+            // An ancestor dropdown's own .sub-menu height was fixed in
+            // pixels back when IT was toggled open, based on its
+            // scrollHeight at that time — before this nested one existed or
+            // had this much content. Expanding/collapsing a nested dropdown
+            // changes the parent's true content height, so every currently-
+            // open ancestor needs its height re-measured now, or the
+            // parent's stale (too-short) fixed height clips the nested
+            // content that just appeared (arrow rotates, nothing visible).
+            let ancestor = menuItem.parentElement?.closest('.menu-item-dropdown.sub-menu-toggle');
+            while (ancestor) {
+                const ancestorSubMenu = ancestor.querySelector(':scope > .sub-menu');
+                if (ancestorSubMenu) ancestorSubMenu.style.height = `${ancestorSubMenu.scrollHeight + 6}px`;
+                ancestor = ancestor.parentElement?.closest('.menu-item-dropdown.sub-menu-toggle');
+            }
         });
     });
 
