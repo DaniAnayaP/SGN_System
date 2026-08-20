@@ -561,6 +561,23 @@
         flex-shrink: 0;
         font-size: 0.9rem;
     }
+    /* A sub-menu item that's itself a dropdown (e.g. Reportes >
+       Personalizados > each saved report) — mirrors .menu-link's own
+       chevron rotation/collapse rules, scoped to .sub-menu-link since
+       nested items don't use .menu-link. */
+    .sub-menu-item-dropdown{
+        overflow: hidden;
+    }
+    .sub-menu-link i:last-child:not(:only-child){
+        margin-left: auto;
+        transition: transform 0.3s ease;
+    }
+    .sub-menu-item-dropdown.sub-menu-toggle .sub-menu-link i:last-child{
+        transform: rotate(180deg);
+    }
+    .sub-menu .sub-menu .sub-menu-link{
+        margin-left: 3.7rem;
+    }
     .sub-menu::before{
         content: '';
         position: absolute;

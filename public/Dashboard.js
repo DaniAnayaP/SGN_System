@@ -778,6 +778,20 @@ function buildSubmenu(items) {
         span.textContent = item.label || t(item.labelKey, item.labelParams || {});
         a.appendChild(span);
         li.appendChild(a);
+        // A sub-menu item can itself hold its own nested submenu (e.g.
+        // Reportes > Personalizados > each saved report) — same
+        // dropdown/chevron treatment as a top-level item (buildMenuItem),
+        // just one level deeper. menu-item-dropdown reuses the existing
+        // click-to-toggle wiring in wireMenuInteractions() as-is, which
+        // already supports arbitrary nesting depth via :scope > .sub-menu.
+        if (item.submenu) {
+            li.classList.add('menu-item-dropdown', 'sub-menu-item-dropdown');
+            const chevron = document.createElement('i');
+            chevron.className = 'bx bx-chevron-down';
+            chevron.setAttribute('aria-hidden', 'true');
+            a.appendChild(chevron);
+            li.appendChild(buildSubmenu(item.submenu));
+        }
         ul.appendChild(li);
     });
     return ul;
