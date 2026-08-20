@@ -64,6 +64,12 @@ const {
     createJobPosition,
     updateJobPosition,
     deleteJobPosition,
+    listIntelligentReports,
+    getIntelligentReportById,
+    createIntelligentReport,
+    updateIntelligentReport,
+    deleteIntelligentReport,
+    authorizeIntelligentReport,
     listFuelRecords,
     getFuelRecordById,
     createFuelRecord,
@@ -1587,6 +1593,113 @@ app.delete('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (
     });
     deleteJobPosition(req.params.id, req.user.clientId);
     res.status(204).end();
+});
+
+// --- Transacciones Inteligentes de Negocio (Negocio Inteligente) -----------
+// A report is a name + an ordered list of columns (base, pulled straight
+// from Base de Datos Global, or calculated, a formula over other columns
+// already in the same report) -- see intelligent_report_columns in db.js for
+// the exact shapes. This only stores/lists/edits the definition; running a
+// report to see real computed data is a future piece, not built yet.
+function validateReportColumns(columns) {
+    if (!Array.isArray(columns)) return 'columns must be an array.';
+    const ids = new Set(columns.map((_, i) => i));
+    for (const col of columns) {
+        if (!col || typeof col.label !== 'string' || !col.label.trim()) return 'Every column needs a label.';
+        if (col.type === 'base') continue;
+        if (col.type !== 'calculated') return 'Each column must be type "base" or "calculated".';
+        const formula = col.formula;
+        if (!formula || !Array.isArray(formula.operands) || !Array.isArray(formula.operators)) {
+            return 'A calculated column needs a formula.';
+        }
+        if (formula.operands.length < 2 || formula.operands.length !== formula.operators.length + 1) {
+            return 'A calculated column needs at least 2 operands, one fewer operator than operands.';
+        }
+        for (const op of formula.operands) {
+            if (op.kind === 'constant') {
+                if (typeof op.value !== 'number' || Number.isNaN(op.value)) return 'A constant operand needs a number.';
+            } else if (op.kind === 'column') {
+                if (!ids.has(op.reportColumnId)) return 'A column operand must reference another column in this same report.';
+            } else {
+                return 'Each operand must be a column or a constant.';
+            }
+        }
+    }
+    return null;
+}
+
+app.get('/api/business/intelligent-reports', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ reports: listIntelligentReports(req.user.clientId) });
+});
+
+app.get('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const report = getIntelligentReportById(req.params.id, req.user.clientId);
+    if (!report) return res.status(404).json({ message: 'Report not found.' });
+    res.json({ report });
+});
+
+app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { name, columns } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ message: 'name is required.' });
+    const columnsError = validateReportColumns(columns || []);
+    if (columnsError) return res.status(400).json({ message: columnsError });
+    const report = createIntelligentReport({
+        clientId: req.user.clientId, name: name.trim(), createdBy: req.user.name, columns,
+    });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
+        recordLabel: report.name, action: 'create', changedBy: req.user.name,
+    });
+    res.status(201).json({ report });
+});
+
+app.patch('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getIntelligentReportById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Report not found.' });
+    const { name, columns } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ message: 'name is required.' });
+    const columnsError = validateReportColumns(columns || []);
+    if (columnsError) return res.status(400).json({ message: columnsError });
+    const report = updateIntelligentReport(req.params.id, req.user.clientId, { name: name.trim(), columns });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
+        recordLabel: report.name, action: 'update', changedBy: req.user.name,
+    });
+    res.json({ report });
+});
+
+app.delete('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getIntelligentReportById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Report not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: existing.id,
+        recordLabel: existing.name, action: 'delete', changedBy: req.user.name,
+    });
+    deleteIntelligentReport(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
+app.post('/api/business/intelligent-reports/:id/authorize', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getIntelligentReportById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Report not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canAuthorizeColumn(grants, 'transacciones-inteligentes', 'colReportAuthorization')) {
+            return res.status(403).json({ message: 'No tienes permiso para autorizar reportes.' });
+        }
+    }
+    const report = authorizeIntelligentReport(req.params.id, req.user.clientId, req.user.name);
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
+        recordLabel: report.name, action: 'update', changedBy: req.user.name,
+    });
+    res.json({ report });
 });
 
 // --- Registro Combustible (Operaciones > Transporte Volumen) ----------------

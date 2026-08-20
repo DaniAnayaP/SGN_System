@@ -345,12 +345,96 @@
                 <h1 data-i18n="menu.smartBusinessTransactions">Smart Business Transactions</h1>
             </div>
 
-            <div class="empty-state">
-                <i class="bx bx-line-chart" aria-hidden="true"></i>
-                <p data-i18n="main.emptyStateText">No data yet.</p>
+            <div class="admin-form-actions" style="margin-bottom: 1rem;">
+                <button type="button" class="btn" id="report-new-btn">
+                    <i class="bx bx-plus" aria-hidden="true"></i>
+                    <span data-i18n="main.reportNewBtn">Create New</span>
+                </button>
+            </div>
+
+            <div class="data-table-wrapper" data-table-id="transacciones-inteligentes">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="main.colSysEmpresa" data-col="reportCompany">Company</th>
+                            <th data-i18n="main.reportName" data-col="reportName">Creation Name</th>
+                            <th data-i18n="main.reportCreatedAt" data-col="reportCreatedAt">Creation Date</th>
+                            <th data-i18n="main.reportCreatedBy" data-col="reportCreatedBy">Created By</th>
+                            <th data-i18n="main.reportAuthorizedBy" data-col="reportAuthorizedBy">Authorized By</th>
+                            <th data-col="actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-table-body">
+                        <!-- rendered at runtime -->
+                    </tbody>
+                </table>
+                <p id="report-empty" class="admin-empty" data-i18n="main.reportEmptyState" hidden>You haven't created any reports yet.</p>
             </div>
         </div>
     </main>
+
+    <div class="modal-overlay" id="report-modal" hidden>
+        <div class="modal-panel" style="max-width: 42rem;" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+            <h3 id="report-modal-title" data-i18n="main.reportModalTitle">Create New Report</h3>
+            <input type="hidden" id="report-edit-id" value="">
+
+            <div id="report-step-main">
+                <div class="admin-field">
+                    <label for="report-name-input" data-i18n="main.reportNameLabel">Report name</label>
+                    <input type="text" id="report-name-input" data-i18n-placeholder="main.reportNamePlaceholder" placeholder="Report name">
+                </div>
+                <div class="admin-field" style="margin-top: 1rem;">
+                    <label data-i18n="main.reportColumnsLabel">Report columns</label>
+                    <ul class="report-column-list" id="report-column-list">
+                        <!-- rendered at runtime -->
+                    </ul>
+                </div>
+                <div class="report-add-buttons">
+                    <button type="button" class="report-add-btn" id="report-add-base-btn">
+                        <i class="bx bx-list-check" aria-hidden="true"></i>
+                        <span data-i18n="main.reportAddBaseColumn">Base Registry Column</span>
+                    </button>
+                    <button type="button" class="report-add-btn" id="report-add-calc-btn">
+                        <i class="bx bx-math" aria-hidden="true"></i>
+                        <span data-i18n="main.reportAddCalculatedColumn">Calculated Column</span>
+                    </button>
+                </div>
+                <div id="report-modal-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn" id="report-save-btn" data-i18n="main.reportSave">Save Report</button>
+                    <button type="button" class="btn btn-secondary" id="report-cancel-btn" data-i18n="admin.cancel">Cancel</button>
+                </div>
+            </div>
+
+            <div id="report-step-base" hidden>
+                <p class="admin-hint" data-i18n="main.reportBaseColumnHint">Check the columns you want to add to the report.</p>
+                <div class="report-picker-list" id="report-base-picker-list">
+                    <!-- rendered at runtime -->
+                </div>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn" id="report-base-add-btn" data-i18n="main.reportAddSelected">Add selected</button>
+                    <button type="button" class="btn btn-secondary" id="report-base-back-btn" data-i18n="admin.cancel">Cancel</button>
+                </div>
+            </div>
+
+            <div id="report-step-calc" hidden>
+                <p class="admin-hint" data-i18n="main.reportFormulaHint">Choose the columns (or numbers) and the operation between them.</p>
+                <div class="report-formula-operands" id="report-formula-operands">
+                    <!-- rendered at runtime -->
+                </div>
+                <button type="button" class="report-add-operand-btn" id="report-add-operand-btn" data-i18n="main.reportAddOperand">+ Add operand</button>
+                <div class="admin-field" style="margin-top: 1rem;">
+                    <label for="report-calc-name-input" data-i18n="main.reportCalcNameLabel">Calculated column name</label>
+                    <input type="text" id="report-calc-name-input" data-i18n-placeholder="main.reportCalcNamePlaceholder" placeholder="Calculated column name">
+                </div>
+                <div id="report-calc-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn" id="report-calc-add-btn" data-i18n="main.reportAddToReport">Add to report</button>
+                    <button type="button" class="btn btn-secondary" id="report-calc-back-btn" data-i18n="admin.cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -407,6 +491,6 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="CategoryScreen.js"></script>
+    <script src="NegocioInteligente-Transacciones.js"></script>
 </body>
 </html>

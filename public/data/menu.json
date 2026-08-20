@@ -18,7 +18,17 @@
             { "id": "btn-admin-negocio", "labelKey": "menu.adminBusiness", "icon": "bx-shopping-bag", "href": "#", "permissionOnly": true },
             { "id": "btn-config-botones", "labelKey": "main.buttonConfig", "icon": "bx-slider-alt", "href": "#", "permissionOnly": true },
             { "id": "btn-base-datos", "labelKey": "menu.databaseGroup", "icon": "bx-data", "href": "#", "permissionOnly": true },
-            { "id": "btn-negocio-inteligente", "labelKey": "menu.businessIntelligenceGroup", "icon": "bx-bulb", "href": "#", "permissionOnly": true },
+            {
+              "id": "btn-negocio-inteligente", "labelKey": "menu.businessIntelligenceGroup", "icon": "bx-bulb", "href": "#", "permissionOnly": true,
+              "submenu": [
+                {
+                  "id": "nit-transacciones", "labelKey": "menu.smartBusinessTransactions", "permissionOnly": true,
+                  "submenu": [
+                    { "id": "colReportAuthorization", "labelKey": "main.colReportAuthorization", "permissionOnly": true }
+                  ]
+                }
+              ]
+            },
             { "id": "btn-otros", "labelKey": "main.others", "icon": "bx-dots-horizontal-rounded", "href": "#", "permissionOnly": true }
           ]
         },

@@ -4887,4 +4887,5 @@ window.Dashboard = {
         const cc = sidebarCostCenters.find((c) => c.id === Array.from(selectedCostCenterIds)[0]);
         return cc ? `${cc.code} - ${cc.name}` : '';
     },
+    get companyName() { return clientBranding?.companyName || ''; },
 };

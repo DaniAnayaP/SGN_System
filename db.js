@@ -100,6 +100,44 @@ db.exec(`
         UNIQUE(client_id, name)
     );
 
+    -- Transacciones Inteligentes de Negocio: a client-defined report is just
+    -- a name + an ordered list of columns, each either pulled straight from
+    -- Base de Datos Global (type 'base') or computed from other columns
+    -- already in the same report (type 'calculated', see
+    -- intelligent_report_columns.formula_json below). Running the report to
+    -- see real computed data is a future step -- this only stores the
+    -- report's own definition.
+    CREATE TABLE IF NOT EXISTS intelligent_reports (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        name          TEXT NOT NULL,
+        created_by    TEXT NOT NULL,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        authorized_by TEXT,
+        authorized_at TEXT
+    );
+    -- source_table_key/col_key (base columns only) match the exact keys
+    -- Base de Datos Global already renders with -- see
+    -- BASE_DATOS_GLOBAL_COLUMNS in server.js, the shared source of truth for
+    -- what "Columna Base de Registro" can offer. formula_json (calculated
+    -- columns only) is a flat left-to-right "calculator tape": { operands:
+    -- [{kind:'column', reportColumnId} | {kind:'constant', value}, ...],
+    -- operators: [...] }, operands.length === operators.length + 1. A
+    -- column operand references another row in this same table by id, so a
+    -- calculated column can be built from another calculated column with no
+    -- extra modeling.
+    CREATE TABLE IF NOT EXISTS intelligent_report_columns (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_id        INTEGER NOT NULL REFERENCES intelligent_reports(id) ON DELETE CASCADE,
+        position         INTEGER NOT NULL,
+        type             TEXT NOT NULL,
+        source_table_key TEXT,
+        col_key          TEXT,
+        label            TEXT NOT NULL,
+        formula_json     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_intelligent_report_columns_report_id ON intelligent_report_columns(report_id);
+
     -- Planes y Paquetes: GEIPSA's own catalog of plan/package types, managed
     -- from Admin-Planes (SaaS admin only). clients.plan just stores the
     -- chosen plan's name as free text (like clients.status) rather than a
@@ -1147,6 +1185,7 @@ const TABLE_GRANT_PATHS = {
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
+    'transacciones-inteligentes': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-transacciones' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -1394,6 +1433,87 @@ function updateJobPosition(id, clientId, { name, abbreviation, costCenterScope, 
 
 function deleteJobPosition(id, clientId) {
     db.prepare('DELETE FROM job_positions WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// --- Query helpers: Transacciones Inteligentes de Negocio (reports) --------
+function mapIntelligentReportColumn(row) {
+    let formula = null;
+    if (row.formula_json) {
+        try { formula = JSON.parse(row.formula_json); } catch { formula = null; }
+    }
+    return {
+        id: row.id,
+        type: row.type,
+        sourceTableKey: row.source_table_key,
+        colKey: row.col_key,
+        label: row.label,
+        formula,
+    };
+}
+
+function listIntelligentReports(clientId) {
+    return db.prepare('SELECT * FROM intelligent_reports WHERE client_id = ? ORDER BY created_at DESC, id DESC').all(clientId);
+}
+
+function getIntelligentReportById(id, clientId) {
+    const report = db.prepare('SELECT * FROM intelligent_reports WHERE id = ? AND client_id = ?').get(id, clientId);
+    if (!report) return null;
+    const columns = db
+        .prepare('SELECT * FROM intelligent_report_columns WHERE report_id = ? ORDER BY position ASC')
+        .all(id)
+        .map(mapIntelligentReportColumn);
+    return { ...report, columns };
+}
+
+function insertIntelligentReportColumns(reportId, columns) {
+    const insert = db.prepare(`
+        INSERT INTO intelligent_report_columns (report_id, position, type, source_table_key, col_key, label, formula_json)
+        VALUES (@reportId, @position, @type, @sourceTableKey, @colKey, @label, @formulaJson)
+    `);
+    columns.forEach((col, index) => {
+        insert.run({
+            reportId,
+            position: index,
+            type: col.type,
+            sourceTableKey: col.sourceTableKey || null,
+            colKey: col.colKey || null,
+            label: col.label,
+            formulaJson: col.formula ? JSON.stringify(col.formula) : null,
+        });
+    });
+}
+
+function createIntelligentReport({ clientId, name, createdBy, columns }) {
+    const create = db.transaction(() => {
+        const result = db
+            .prepare('INSERT INTO intelligent_reports (client_id, name, created_by) VALUES (@clientId, @name, @createdBy)')
+            .run({ clientId, name, createdBy });
+        insertIntelligentReportColumns(result.lastInsertRowid, columns || []);
+        return result.lastInsertRowid;
+    });
+    return getIntelligentReportById(create(), clientId);
+}
+
+function updateIntelligentReport(id, clientId, { name, columns }) {
+    const update = db.transaction(() => {
+        db.prepare('UPDATE intelligent_reports SET name = @name WHERE id = @id AND client_id = @clientId').run({ id, clientId, name });
+        db.prepare('DELETE FROM intelligent_report_columns WHERE report_id = ?').run(id);
+        insertIntelligentReportColumns(id, columns || []);
+    });
+    update();
+    return getIntelligentReportById(id, clientId);
+}
+
+function deleteIntelligentReport(id, clientId) {
+    db.prepare('DELETE FROM intelligent_reports WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+function authorizeIntelligentReport(id, clientId, authorizedBy) {
+    db.prepare(`
+        UPDATE intelligent_reports SET authorized_by = @authorizedBy, authorized_at = datetime('now')
+        WHERE id = @id AND client_id = @clientId
+    `).run({ id, clientId, authorizedBy });
+    return getIntelligentReportById(id, clientId);
 }
 
 // --- Query helpers: Registro Combustible (fuel_records, scoped to a client) -
@@ -2657,6 +2777,12 @@ module.exports = {
     createJobPosition,
     updateJobPosition,
     deleteJobPosition,
+    listIntelligentReports,
+    getIntelligentReportById,
+    createIntelligentReport,
+    updateIntelligentReport,
+    deleteIntelligentReport,
+    authorizeIntelligentReport,
     listFuelRecords,
     getFuelRecordById,
     createFuelRecord,
