@@ -691,8 +691,13 @@ body.dark-mode .admin-badge-prospecto{
 .perm-tree-row:hover{
     background-color: var(--color-bg);
 }
+/* Each nesting level (Departamento/Área/Apartado/Pantalla/Clasificación/
+   Columna) gets its own weight/size/color instead of one shared muted
+   style getting progressively smaller -- the level itself should be
+   readable at a glance, not just inferable from indentation. */
 .perm-tree-depth-0{
     font-weight: 700;
+    font-size: 0.95rem;
     margin-top: 0.4rem;
 }
 .perm-tree-depth-0:first-child{
@@ -700,17 +705,23 @@ body.dark-mode .admin-badge-prospecto{
 }
 .perm-tree-depth-1{
     padding-left: 1.5rem;
-    font-weight: 500;
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: #1D3A63;
 }
 .perm-tree-depth-2{
     padding-left: 3rem;
-    font-size: 0.78rem;
-    color: var(--color-text-secondary);
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #5A4A8A;
 }
 .perm-tree-depth-3{
     padding-left: 4.5rem;
-    font-size: 0.75rem;
-    color: var(--color-text-secondary);
+    font-weight: 500;
+    font-size: 0.82rem;
+    color: var(--color-accent, #1a73e8);
 }
 .perm-tree-depth-4{
     padding-left: 6rem;
@@ -719,13 +730,35 @@ body.dark-mode .admin-badge-prospecto{
 }
 .perm-tree-depth-5{
     padding-left: 7.5rem;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--color-text-secondary);
 }
 .perm-tree-depth-6{
     padding-left: 9rem;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
+    font-style: italic;
     color: var(--color-text-secondary);
+}
+body.dark-mode .perm-tree-depth-1{
+    color: #B9D2F2;
+}
+body.dark-mode .perm-tree-depth-2{
+    color: #C7B8F0;
+}
+/* Classification group (Control Interno, etc.) — same tint the columns it
+   groups already wear as their own tenue tint in the real data-table, so
+   the same color reads as "one connected concept" in both places. Applied
+   on top of .perm-tree-depth-4 (renderClassificationGroup in
+   PermissionTree.js adds this class alongside it), distinguishing it from
+   the plain "Tabla <X>"/"Iconos Personalización" heading rows that also
+   live at depth 4 but carry no grant of their own. */
+.perm-tree-row-classification{
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--color-column-system-text);
+    background-color: var(--color-column-system-band-bg);
+    border-radius: 0.3rem;
+    margin: 0.15rem 0;
 }
 /* "Tabla <X>" heading — no checkbox (a pantalla's table is always exactly
    one, nothing to select/deselect at that level), collapsible chevron. */

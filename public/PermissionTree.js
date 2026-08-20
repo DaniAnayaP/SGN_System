@@ -371,6 +371,7 @@
                     else expandedItems.add(classTreeKey);
                 },
             }, subBlocked);
+            classRow.row.classList.add('perm-tree-row-classification');
             if (!readOnly) {
                 classRow.input.checked = classChecked === classLeafKeys.length;
                 classRow.input.indeterminate = classChecked > 0 && classChecked < classLeafKeys.length;
