@@ -2514,8 +2514,15 @@ function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey) {
 function renderColumnGroupBand(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
-    const hiddenSet = new Set(state.config.hidden);
-    const visualOrder = getVisualColumnOrder(state.config).filter((k) => !hiddenSet.has(k));
+    // Hidden columns keep their <th> in the real header row (collapsed to 0
+    // width via the shared colgroup's <col visibility:collapse>, not
+    // removed from the DOM) -- the band row has to keep a matching segment
+    // for each one too, or it ends up with fewer cells than there are
+    // column slots and the browser assigns every cell after the gap to the
+    // wrong column, visibly shifting the whole band out of alignment with
+    // the real header underneath it. A hidden column's own segment just
+    // renders at 0 width either way, so there's no need to special-case it.
+    const visualOrder = getVisualColumnOrder(state.config);
     const tableBandRow = state.table.tHead.querySelector('tr.data-table-group-band-table');
     if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map());
     const classBandRow = state.table.tHead.querySelector('tr.data-table-group-band-classification');
