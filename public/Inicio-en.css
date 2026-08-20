@@ -19,6 +19,9 @@
         --color-column-system-bg: #EEF2F6;
         --color-column-system-band-bg: #DCE6ED;
         --color-column-system-text: #3F4E5C;
+        --color-table-band-fuel-bg: #E3ECF9;
+        --color-table-band-fuel-band-bg: #CBDCF2;
+        --color-table-band-fuel-text: #1D3A63;
     }
     body.dark-mode{
          --color-bg: #3A3D4D;
@@ -33,6 +36,9 @@
         --color-column-system-bg: #202B34;
         --color-column-system-band-bg: #2B3A46;
         --color-column-system-text: #AFC4D3;
+        --color-table-band-fuel-bg: #24344A;
+        --color-table-band-fuel-band-bg: #2E4360;
+        --color-table-band-fuel-text: #B9D2F2;
     }
     /* Institutional style: a FULL theme variant, exactly like body.dark-mode
        above — every one of the same variables gets overridden, just sourced
@@ -53,6 +59,9 @@
         --color-column-system-bg: #EEF2F6;
         --color-column-system-band-bg: #DCE6ED;
         --color-column-system-text: #3F4E5C;
+        --color-table-band-fuel-bg: #E3ECF9;
+        --color-table-band-fuel-band-bg: #CBDCF2;
+        --color-table-band-fuel-text: #1D3A63;
     }
     body.institutional-mode .brand{
         background-color: var(--institutional-accent, transparent);
@@ -2044,9 +2053,35 @@
         background-color: var(--color-bg);
         color: var(--color-text-secondary);
     }
-    .data-table-group-band th.data-table-group-band-cell{
+    /* Classification band (Control Interno today) — unchanged from before
+       the table band existed; still the only band Registro Combustible's
+       own page ever renders. */
+    .data-table-group-band-classification th.data-table-group-band-cell{
         background-color: var(--color-column-system-band-bg);
         color: var(--color-column-system-text);
+    }
+    /* Table-of-origin band (Base de Datos Global only) — one color per
+       pantalla, keyed by the same i18n key used for the column's own
+       data-group-table attribute. Control Interno reuses its existing
+       purple since it's the same concept either way; each real pantalla
+       gets its own tone as it's added here. */
+    .data-table-group-band-table th[data-group-key="menu.classControlInterno"]{
+        background-color: var(--color-column-system-band-bg);
+        color: var(--color-column-system-text);
+    }
+    .data-table-group-band-table th[data-group-key="menu.opTransVolCombustible"]{
+        background-color: var(--color-table-band-fuel-band-bg);
+        color: var(--color-table-band-fuel-text);
+    }
+    /* Either band, wherever nothing has been classified yet (see
+       fillBandRow's emptyLabelKey) — tenue and in italics so it reads as
+       "not assigned" rather than a rendering mistake. */
+    .data-table-group-band-cell-empty{
+        color: var(--color-text-secondary);
+        font-style: italic;
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
     }
     /* The 13 "Control Interno" system columns (and future classifications)
        get a tenue tint in both their header and body cells, distinguishing
@@ -2057,6 +2092,16 @@
     }
     .data-table thead th.col-system{
         background-color: var(--color-column-system-bg);
+    }
+    /* Registro Combustible's own columns, as shown grouped inside Base de
+       Datos Global — same "tenue tint marks this column's origin" idea as
+       col-system above, in the table band's own blue instead of purple. */
+    .data-table th.col-table-fuel,
+    .data-table td.col-table-fuel{
+        background-color: var(--color-table-band-fuel-bg);
+    }
+    .data-table thead th.col-table-fuel{
+        background-color: var(--color-table-band-fuel-bg);
     }
     /* Pinned columns (see Dashboard.js: renderDataTableColumnControls /
        applyDataTableColumnLayout) — generalizes what used to be a hardcoded

@@ -2339,21 +2339,37 @@ function initDataTableColumns(wrapper, index) {
     const tableId = getTableId(wrapper, index);
     const labels = {};
     const groupKeys = new Map();
+    const groupTableKeys = new Map();
     Array.from(getHeaderRow(table).cells).forEach((th) => {
         labels[th.dataset.col] = th.textContent.trim();
         if (th.dataset.group) groupKeys.set(th.dataset.col, th.dataset.group);
+        if (th.dataset.groupTable) groupTableKeys.set(th.dataset.col, th.dataset.groupTable);
     });
-    // A column-group band (e.g. "Control Interno") is a second, purely
-    // cosmetic <tr> inserted above the real header — see getHeaderRow's own
-    // comment for why this can't just be a 2nd cell in the same row. Marking
-    // the real header with this class here, before anything else reads it,
-    // is what lets every other column-engine function keep calling
-    // getHeaderRow(table) with zero awareness that a band exists.
-    if (groupKeys.size) {
-        getHeaderRow(table).classList.add('data-table-header-row');
-        const bandRow = document.createElement('tr');
-        bandRow.className = 'data-table-group-band';
-        table.tHead.insertBefore(bandRow, table.tHead.firstChild);
+    // Up to 2 column-group bands (e.g. "Control Interno" and, on Base de
+    // Datos Global, which pantalla a column came from) are purely cosmetic
+    // <tr>s inserted above the real header — see getHeaderRow's own comment
+    // for why this can't just be extra cells in the same row. Marking the
+    // real header with this class here, before anything else reads it, is
+    // what lets every other column-engine function keep calling
+    // getHeaderRow(table) with zero awareness that band rows exist. Order
+    // matters: table band (data-group-table) renders above classification
+    // band (data-group) — insertBefore(..., headerRow) twice, table band
+    // second, so it ends up first.
+    const wantsClassificationBand = groupKeys.size > 0 || wrapper.dataset.forceClassificationBand === '1';
+    const wantsTableBand = groupTableKeys.size > 0;
+    if (wantsClassificationBand || wantsTableBand) {
+        const headerRow = getHeaderRow(table);
+        headerRow.classList.add('data-table-header-row');
+        if (wantsClassificationBand) {
+            const band = document.createElement('tr');
+            band.className = 'data-table-group-band data-table-group-band-classification';
+            table.tHead.insertBefore(band, headerRow);
+        }
+        if (wantsTableBand) {
+            const band = document.createElement('tr');
+            band.className = 'data-table-group-band data-table-group-band-table';
+            table.tHead.insertBefore(band, headerRow);
+        }
     }
     const colgroup = buildOrGetColgroup(table);
     columnKeys.forEach((key) => {
@@ -2369,7 +2385,7 @@ function initDataTableColumns(wrapper, index) {
         if (config.widths[key] == null) config.widths[key] = naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
     });
     dataTableColumnState.set(tableId, {
-        table, wrapper, colgroup, columnKeys, labels, config, groupKeys, naturalWidths,
+        table, wrapper, colgroup, columnKeys, labels, config, groupKeys, groupTableKeys, naturalWidths,
         sortKey: null, sortDir: null, originalRowOrder: null,
         columnFilters: new Map(),
     });
@@ -2383,35 +2399,59 @@ function initDataTableColumns(wrapper, index) {
     observeTableBody(table, tableId);
 }
 
-// Rebuilds the cosmetic group-band row (e.g. "Control Interno" spanning its
-// columns) to match the CURRENT visual order/visibility — called once at
-// init and again every time applyDataTableColumnLayout runs, so reordering,
-// hiding, or pinning a grouped column keeps the band accurate. Consecutive
-// visible columns sharing the same group collapse into one <th colspan>;
-// a column dragged away from its group simply splits the band into two
-// segments for that group instead of enforcing contiguity.
-function renderColumnGroupBand(tableId) {
-    const state = dataTableColumnState.get(tableId);
-    if (!state || !state.groupKeys || !state.groupKeys.size) return;
-    const bandRow = state.table.tHead.querySelector('tr.data-table-group-band');
-    if (!bandRow) return;
-    const hiddenSet = new Set(state.config.hidden);
-    const visualOrder = getVisualColumnOrder(state.config).filter((k) => !hiddenSet.has(k));
+// Shared by both band rows (see renderColumnGroupBand below): collapses
+// consecutive visible columns sharing the same group value into one <th
+// colspan>, keyed by an arbitrary i18n-key map. A column dragged away from
+// its group simply splits the band into two segments for that group instead
+// of enforcing contiguity. emptyLabelKey (classification band only, on
+// tables that opt in via data-force-classification-band) shows once, across
+// the whole row, ONLY when every column in this row is still ungrouped —
+// once even one column gets a real classification, that placeholder goes
+// away and the real segments show instead.
+function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey) {
     bandRow.innerHTML = '';
+    const segments = [];
     let i = 0;
     while (i < visualOrder.length) {
-        const groupKey = state.groupKeys.get(visualOrder[i]) || null;
+        const groupKey = keyMap.get(visualOrder[i]) || null;
         let span = 1;
-        while (i + span < visualOrder.length && (state.groupKeys.get(visualOrder[i + span]) || null) === groupKey) span += 1;
-        const th = document.createElement('th');
-        th.colSpan = span;
-        if (groupKey) {
-            th.textContent = t(groupKey);
-            th.className = 'data-table-group-band-cell';
-        }
-        bandRow.appendChild(th);
+        while (i + span < visualOrder.length && (keyMap.get(visualOrder[i + span]) || null) === groupKey) span += 1;
+        segments.push({ groupKey, span });
         i += span;
     }
+    const allUngrouped = segments.every((s) => !s.groupKey);
+    segments.forEach((s) => {
+        const th = document.createElement('th');
+        th.colSpan = s.span;
+        if (s.groupKey) {
+            th.textContent = t(s.groupKey);
+            th.className = 'data-table-group-band-cell';
+            th.dataset.groupKey = s.groupKey;
+        } else if (allUngrouped && emptyLabelKey) {
+            th.textContent = t(emptyLabelKey);
+            th.className = 'data-table-group-band-cell-empty';
+        } else {
+            th.className = 'data-table-group-band-cell-empty';
+        }
+        bandRow.appendChild(th);
+    });
+}
+
+// Rebuilds both cosmetic group-band rows (table-of-origin on top,
+// classification below it) to match the CURRENT visual order/visibility —
+// called once at init and again every time applyDataTableColumnLayout
+// runs, so reordering, hiding, or pinning a grouped column keeps both bands
+// accurate. Either row is a no-op (querySelector finds nothing) on tables
+// that never asked for it, e.g. Registro Combustible has no table band.
+function renderColumnGroupBand(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const hiddenSet = new Set(state.config.hidden);
+    const visualOrder = getVisualColumnOrder(state.config).filter((k) => !hiddenSet.has(k));
+    const tableBandRow = state.table.tHead.querySelector('tr.data-table-group-band-table');
+    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map());
+    const classBandRow = state.table.tHead.querySelector('tr.data-table-group-band-classification');
+    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending');
 }
 
 function wireModalDismiss(overlay, onClose) {

@@ -1701,6 +1701,24 @@ app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     res.status(204).end();
 });
 
+// --- Base de Datos Global (Configuración > Base de Datos) -------------------
+// Read-only union of every record from every pantalla that has Control
+// Interno columns wired -- today just Registro Combustible. Reuses
+// mapFuelRecord as-is (already carries the 13 Control Interno columns, see
+// the Registro Combustible pilot above) rather than inventing a separate
+// mapping shape; the day another pantalla gets Control Interno, its own
+// map*Record output gets concatenated into `records` here the same way.
+app.get('/api/business/base-datos-global', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const client = getClientById(req.user.clientId);
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'registro-combustible');
+    const records = listFuelRecords(req.user.clientId).map((r) => ({
+        ...mapFuelRecord(r, pendingByRecord, client?.company_name),
+        sourceTable: 'registro-combustible',
+    }));
+    res.json({ records });
+});
+
 // --- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de --
 // --- Personal) — same access model as fuel records above. ------------------
 function mapHrWorker(row, pendingByRecord) {

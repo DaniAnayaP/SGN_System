@@ -345,9 +345,61 @@
                 <h1 data-i18n="menu.databaseCompany">Database</h1>
             </div>
 
-            <div class="empty-state">
-                <i class="bx bx-data" aria-hidden="true"></i>
-                <p data-i18n="main.emptyStateText">No data yet.</p>
+            <div class="data-table-wrapper" data-table-id="base-datos-global" data-force-classification-band="1">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group-table="menu.classControlInterno" class="col-system">Company</th>
+                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group-table="menu.classControlInterno" class="col-system">Area</th>
+                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group-table="menu.classControlInterno" class="col-system">Module</th>
+                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group-table="menu.classControlInterno" class="col-system">Screen</th>
+                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group-table="menu.classControlInterno" class="col-system">Cost Center</th>
+                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group-table="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
+                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group-table="menu.classControlInterno" class="col-system">Day (dd)</th>
+                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group-table="menu.classControlInterno" class="col-system">Day (ddd)</th>
+                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group-table="menu.classControlInterno" class="col-system">Month (mm)</th>
+                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group-table="menu.classControlInterno" class="col-system">Month (mmm)</th>
+                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group-table="menu.classControlInterno" class="col-system">Year (yyyy)</th>
+                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group-table="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
+                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group-table="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
+                            <th data-i18n="main.colFuelDbId" data-col="colFuelDbId" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Unique Database #</th>
+                            <th data-i18n="main.colFuelRecordId" data-col="colFuelRecordId" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Unique Consumption Record #</th>
+                            <th data-i18n="main.colFuelDate" data-col="colFuelDate" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Date</th>
+                            <th data-i18n="main.colFuelYear" data-col="colFuelYear" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Year</th>
+                            <th data-i18n="main.colFuelMonth" data-col="colFuelMonth" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Month</th>
+                            <th data-i18n="main.colFuelWeek" data-col="colFuelWeek" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Week #</th>
+                            <th data-i18n="main.colFuelDayNum" data-col="colFuelDayNum" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Day #</th>
+                            <th data-i18n="main.colFuelDayText" data-col="colFuelDayText" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Day</th>
+                            <th data-i18n="main.colFuelEcoUnit" data-col="colFuelEcoUnit" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Fleet Unit #</th>
+                            <th data-i18n="main.colFuelPlates" data-col="colFuelPlates" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Unit Plates</th>
+                            <th data-i18n="main.colFuelDriver" data-col="colFuelDriver" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Driver</th>
+                            <th data-i18n="main.colFuelCoordinator" data-col="colFuelCoordinator" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Coordinator</th>
+                            <th data-i18n="main.colFuelTicketEvidence" data-col="colFuelTicketEvidence" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Ticket Evidence</th>
+                            <th data-i18n="main.colFuelTripKmBefore" data-col="colFuelTripKmBefore" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Trip KM Before Load</th>
+                            <th data-i18n="main.colFuelTripKmBeforeEvidence" data-col="colFuelTripKmBeforeEvidence" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Trip KM Before Evidence</th>
+                            <th data-i18n="main.colFuelTripKmAfter" data-col="colFuelTripKmAfter" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Trip KM After Load</th>
+                            <th data-i18n="main.colFuelTripKmAfterEvidence" data-col="colFuelTripKmAfterEvidence" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Trip KM After Evidence</th>
+                            <th data-i18n="main.colFuelTripKmTotal" data-col="colFuelTripKmTotal" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Total Trip KM Acquired</th>
+                            <th data-i18n="main.colFuelType" data-col="colFuelType" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Fuel Type</th>
+                            <th data-i18n="main.colFuelLiters" data-col="colFuelLiters" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Liters</th>
+                            <th data-i18n="main.colFuelCostPerLiter" data-col="colFuelCostPerLiter" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Cost per Liter</th>
+                            <th data-i18n="main.colFuelSubtotal" data-col="colFuelSubtotal" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Subtotal</th>
+                            <th data-i18n="main.colFuelVat" data-col="colFuelVat" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">VAT</th>
+                            <th data-i18n="main.colFuelTotal" data-col="colFuelTotal" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Total</th>
+                            <th data-i18n="main.colFuelReason" data-col="colFuelReason" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Load Reason</th>
+                            <th data-i18n="main.colFuelTransferService" data-col="colFuelTransferService" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Transfer Service</th>
+                            <th data-i18n="main.colFuelInternalMovement" data-col="colFuelInternalMovement" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Internal Movement</th>
+                            <th data-col="actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="data-table-empty-cell" colspan="41">
+                                <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </main>
@@ -407,6 +459,6 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="CategoryScreen.js"></script>
+    <script src="BaseDatos-Empresa.js"></script>
 </body>
 </html>
