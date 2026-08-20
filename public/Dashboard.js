@@ -769,7 +769,13 @@ function buildSubmenu(items) {
             a.appendChild(icon);
         }
         const span = document.createElement('span');
-        span.textContent = t(item.labelKey, item.labelParams || {});
+        // item.label (literal) wins over labelKey — same runtime-injected-
+        // item convention as buildMenuItem/crumbFromItem (see their own
+        // comments). Without this fallback, an injected item with no
+        // labelKey at all (e.g. a saved report) would throw here (t() calls
+        // .split on its key argument, which crashes on undefined) instead
+        // of just rendering blank.
+        span.textContent = item.label || t(item.labelKey, item.labelParams || {});
         a.appendChild(span);
         li.appendChild(a);
         ul.appendChild(li);
@@ -916,8 +922,16 @@ function wireMenuInteractions() {
     });
 
     menuItemsDropdown.forEach((menuItem) => {
-        menuItem.addEventListener('click', () => {
-            const subMenu = menuItem.querySelector('.sub-menu');
+        menuItem.addEventListener('click', (event) => {
+            // A dropdown can now nest inside another one (Reportes >
+            // Personalizados, the first 2-level-deep case in this sidebar) —
+            // without stopPropagation, clicking the inner one also bubbles
+            // up and fires the outer one's own handler, immediately
+            // re-collapsing it. :scope > .sub-menu (not .sub-menu) makes
+            // sure each handler only ever touches ITS OWN direct submenu,
+            // never a nested one belonging to a child dropdown.
+            event.stopPropagation();
+            const subMenu = menuItem.querySelector(':scope > .sub-menu');
             const isActive = menuItem.classList.toggle('sub-menu-toggle');
             if (subMenu) {
                 if (isActive) {
@@ -929,13 +943,16 @@ function wireMenuInteractions() {
                 }
             }
             menuItemsDropdown.forEach((item) => {
-                if (item !== menuItem) {
-                    const otherSubmenu = item.querySelector('.sub-menu');
-                    if (otherSubmenu) {
-                        item.classList.remove('sub-menu-toggle');
-                        otherSubmenu.style.height = '0';
-                        otherSubmenu.style.padding = '0';
-                    }
+                // Never collapse an ANCESTOR of the item just toggled open
+                // (that would hide the very item the user just opened) —
+                // only true siblings/unrelated dropdowns close, same
+                // accordion behavior as before this nesting existed.
+                if (item === menuItem || item.contains(menuItem)) return;
+                const otherSubmenu = item.querySelector(':scope > .sub-menu');
+                if (otherSubmenu) {
+                    item.classList.remove('sub-menu-toggle');
+                    otherSubmenu.style.height = '0';
+                    otherSubmenu.style.padding = '0';
                 }
             });
         });
@@ -945,7 +962,7 @@ function wireMenuInteractions() {
         menuItem.addEventListener('mouseenter', () => {
             if (!Sidebar.classList.contains('minimize')) return;
             menuItemsDropdown.forEach((item) => {
-                const otherSubmenu = item.querySelector('.sub-menu');
+                const otherSubmenu = item.querySelector(':scope > .sub-menu');
                 if (otherSubmenu) {
                     item.classList.remove('sub-menu-toggle');
                     otherSubmenu.style.height = '0';
