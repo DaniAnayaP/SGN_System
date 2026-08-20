@@ -145,7 +145,7 @@
       "submenu": [
         { "id": "reportes-nativos", "labelKey": "menu.reportesNativos", "icon": "bx-window", "submenu": [] },
         { "id": "reportes-personalizados", "labelKey": "menu.reportesPersonalizados", "icon": "bx-window", "submenu": [] },
-        { "id": "reportes-programados", "labelKey": "menu.scheduledReportsScreen", "icon": "bx-calendar-event", "href": "ReportesProgramados.html", "permissionOnly": true }
+        { "id": "reportes-programados", "labelKey": "menu.scheduledReportsScreen", "icon": "bx-calendar-event", "href": "ReportesProgramados.html" }
       ]
     },
     {
