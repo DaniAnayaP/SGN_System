@@ -4304,10 +4304,11 @@ async function loadPersonalizedReports() {
             href: `NegocioInteligente-ReporteResultados.html?id=${report.id}`,
         }));
         renderFilteredMenu();
-    } catch {
+    } catch (err) {
         // No sidebar entries for this session's reports — not fatal, the
         // rest of the app still works, same as any other best-effort
         // sidebar enrichment (branding, cost centers) failing silently.
+        console.error('Reportes personalizados: no se pudieron cargar', err);
     }
 }
 
