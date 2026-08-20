@@ -2505,6 +2505,26 @@ function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey) {
     });
 }
 
+// Snapshot of a .data-table exactly as it currently looks on screen --
+// visible columns in their current visual order, and only the rows that
+// pass every active filter -- for anything that needs to act on "what the
+// user is looking at right now" (e.g. exporting a report's results). Hidden
+// columns are left out here (unlike renderColumnGroupBand's own internal
+// use of visualOrder, which keeps them as invisible placeholders purely to
+// keep the band row's cell count aligned with the real header).
+function getVisibleTableSnapshot(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return { columns: [], rows: [] };
+    const hiddenSet = new Set(state.config.hidden);
+    const visualOrder = getVisualColumnOrder(state.config).filter((k) => !hiddenSet.has(k));
+    const columns = visualOrder.map((key) => ({ key, label: state.labels[key] || key }));
+    const rows = Array.from(state.table.tBodies[0]?.rows || [])
+        .filter((tr) => !tr.querySelector('td.data-table-empty-cell'))
+        .filter((tr) => !tr.hidden && !tr.classList.contains('data-table-row-col-filtered'))
+        .map((tr) => visualOrder.map((key) => (tr.querySelector(`[data-col="${key}"]`)?.textContent || '').trim()));
+    return { columns, rows };
+}
+
 // Rebuilds both cosmetic group-band rows (table-of-origin on top,
 // classification below it) to match the CURRENT visual order/visibility —
 // called once at init and again every time applyDataTableColumnLayout
@@ -5004,4 +5024,5 @@ window.Dashboard = {
     // permanently missing its one chance to wire up reorder/pin/hide/sort/
     // filter. Call this directly once the real columns are in the DOM.
     initDataTableColumns,
+    getVisibleTableSnapshot,
 };

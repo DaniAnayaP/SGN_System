@@ -29,6 +29,8 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 
 const { hashPassword, verifyPassword } = require('./password');
 const {
@@ -1655,6 +1657,112 @@ app.get('/api/business/intelligent-reports/:id/results', requireAuth, (req, res)
     const records = listFuelRecords(req.user.clientId).map((r) => mapFuelRecord(r, pendingByRecord, client?.company_name));
     const rows = computeIntelligentReportRows(report, records);
     res.json({ report: { name: report.name, columns: report.columns }, rows });
+});
+
+// Filename for Content-Disposition -- strips CR/LF and quotes (header
+// injection) regardless of source, then offers both a plain ASCII fallback
+// and the real UTF-8 name (RFC 5987) so accented report names (any user-
+// given text ends up here) still show up correctly in browsers that honor
+// filename*, instead of forcing every download into ASCII.
+function buildContentDisposition(filename) {
+    const clean = String(filename).replace(/[\r\n"]/g, ' ').trim() || 'archivo';
+    const asciiSafe = clean.replace(/[^\x20-\x7E]/g, '_');
+    return `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodeURIComponent(clean)}`;
+}
+
+// Exports whatever a .data-table's CURRENT view looks like (Dashboard.js:
+// getVisibleTableSnapshot already narrows this down to visible columns, in
+// their current order, and only rows passing every active filter) -- these
+// 2 routes don't touch the database at all, they just format whatever the
+// already-authenticated caller is already looking at, so requireAuth alone
+// (no client-scoping needed) is the right gate, same reasoning as any other
+// purely-formatting endpoint.
+const EXPORT_MAX_ROWS = 20000;
+const EXPORT_MAX_COLUMNS = 200;
+
+function validateExportPayload(req, res) {
+    const { columns, rows } = req.body || {};
+    if (!Array.isArray(columns) || !columns.length || !Array.isArray(rows)) {
+        res.status(400).json({ message: 'columns and rows are required.' });
+        return null;
+    }
+    if (rows.length > EXPORT_MAX_ROWS || columns.length > EXPORT_MAX_COLUMNS) {
+        res.status(400).json({ message: 'Too many rows or columns to export.' });
+        return null;
+    }
+    return { columns, rows };
+}
+
+app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
+    const payload = validateExportPayload(req, res);
+    if (!payload) return;
+    const { columns, rows } = payload;
+    const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
+    const workbook = new ExcelJS.Workbook();
+    // Excel sheet names: max 31 chars, can't contain \ / * ? : [ ]
+    const sheet = workbook.addWorksheet(title.replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'Reporte');
+    sheet.columns = columns.map((col) => {
+        const label = String(col?.label ?? '');
+        return { header: label, width: Math.max(12, label.length + 4) };
+    });
+    rows.forEach((row) => {
+        sheet.addRow(Array.isArray(row) ? row.map((cell) => (cell == null ? '' : String(cell))) : []);
+    });
+    sheet.getRow(1).font = { bold: true };
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', buildContentDisposition(`${title}.xlsx`));
+    await workbook.xlsx.write(res);
+    res.end();
+});
+
+// pdfkit has no built-in table widget -- draws a simple even-width grid by
+// hand, breaking to a new page (and re-measuring from the top margin) once
+// a row would run past the bottom margin. Long cell text is clipped with
+// an ellipsis rather than wrapped, so every row stays the same height and
+// the grid lines stay simple to draw.
+function drawPdfTable(doc, columns, rows) {
+    const startX = doc.page.margins.left;
+    const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const colWidth = pageWidth / columns.length;
+    const rowHeight = 20;
+    let y = doc.y;
+
+    function drawRow(values, isHeader) {
+        if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
+            doc.addPage();
+            y = doc.page.margins.top;
+        }
+        let x = startX;
+        doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
+        values.forEach((val) => {
+            doc.rect(x, y, colWidth, rowHeight).stroke('#CCCCCC');
+            doc.fillColor('#000000').text(String(val ?? ''), x + 3, y + 5, {
+                width: colWidth - 6, height: rowHeight - 6, ellipsis: true, lineBreak: false,
+            });
+            x += colWidth;
+        });
+        y += rowHeight;
+    }
+
+    drawRow(columns.map((c) => c.label), true);
+    rows.forEach((row) => drawRow(row, false));
+}
+
+app.post('/api/business/export/pdf', requireAuth, (req, res) => {
+    const payload = validateExportPayload(req, res);
+    if (!payload) return;
+    const { columns, rows } = payload;
+    const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', buildContentDisposition(`${title}.pdf`));
+    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: columns.length > 5 ? 'landscape' : 'portrait' });
+    doc.pipe(res);
+    doc.fontSize(14).text(title, { align: 'center' });
+    doc.moveDown();
+    drawPdfTable(doc, columns, rows);
+    doc.end();
 });
 
 app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
