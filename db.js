@@ -674,6 +674,23 @@ if (db.prepare('SELECT COUNT(*) AS n FROM geo_countries').get().n === 0) {
     seedGeoCatalog();
 }
 
+// field_fill_rules gains an authorization workflow (Reglas de Orden de
+// Llenado, its own screen under Gestión) -- a new rule is created but has
+// no effect (applyFieldFillRules only enforces authorized rules) until
+// someone with the colFieldRuleAuthorization grant authorizes it, same
+// two-step idea as Transacciones Inteligentes' own report authorization.
+// gate_label/dependent_label are denormalized at creation time so the
+// concentrator screen can show every rule from every table without needing
+// to know each table's live column list.
+const fieldFillRuleColumns = db.prepare('PRAGMA table_info(field_fill_rules)').all();
+if (!fieldFillRuleColumns.some((c) => c.name === 'gate_label')) {
+    db.exec("ALTER TABLE field_fill_rules ADD COLUMN gate_label TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE field_fill_rules ADD COLUMN dependent_label TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE field_fill_rules ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+    db.exec('ALTER TABLE field_fill_rules ADD COLUMN authorized_by TEXT');
+    db.exec('ALTER TABLE field_fill_rules ADD COLUMN authorized_at TEXT');
+}
+
 // A plan/package can carry a preset of módulos + centros de costo limit —
 // the same options as Contrataciones — so assigning a plan to a client
 // (Clientes Nuevos) can stamp its Contrataciones automatically instead of
@@ -1383,6 +1400,7 @@ const TABLE_GRANT_PATHS = {
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
     'transacciones-inteligentes': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-transacciones' },
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
+    'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -1611,24 +1629,68 @@ function createStreet(localityId, name) {
 }
 
 // --- Query helpers: "Reglas de Orden de Llenado" (field_fill_rules) --------
+// Returns every rule for the table regardless of authorization status --
+// both the per-table 🔗 modal (which needs to show pending ones too, not
+// just make them disappear after creation) and the Gestión concentrator
+// screen read this shape. Only Dashboard.js's applyFieldFillRules (the live
+// locking engine) filters to authorized-only, since that's the one place
+// an unauthorized rule must have zero effect.
 function listFieldFillRules(clientId, tableKey) {
     return db.prepare('SELECT * FROM field_fill_rules WHERE client_id = ? AND table_key = ? ORDER BY id ASC').all(clientId, tableKey);
+}
+
+function listAllFieldFillRules(clientId) {
+    return db.prepare('SELECT * FROM field_fill_rules WHERE client_id = ? ORDER BY table_key ASC, id ASC').all(clientId);
+}
+
+function getFieldFillRuleById(id, clientId) {
+    return db.prepare('SELECT * FROM field_fill_rules WHERE id = ? AND client_id = ?').get(id, clientId);
 }
 
 // A dependent can only have one gate -- creating a new rule for a dependent
 // that's already gated silently replaces the old one instead of erroring,
 // matching "puedes... invertir la regla cuando quieras" (delete + re-add
 // would work too, but this is the same one-step action from the admin's
-// point of view).
-function createFieldFillRule(clientId, tableKey, gateCol, dependentCol) {
+// point of view). Starts unauthorized -- see the module-load migration
+// comment on field_fill_rules for why.
+function createFieldFillRule({ clientId, tableKey, gateCol, gateLabel, dependentCol, dependentLabel, createdBy }) {
     const create = db.transaction(() => {
         db.prepare('DELETE FROM field_fill_rules WHERE client_id = ? AND table_key = ? AND dependent_col = ?').run(clientId, tableKey, dependentCol);
         return db
-            .prepare('INSERT INTO field_fill_rules (client_id, table_key, gate_col, dependent_col) VALUES (?, ?, ?, ?)')
-            .run(clientId, tableKey, gateCol, dependentCol).lastInsertRowid;
+            .prepare(`
+                INSERT INTO field_fill_rules (client_id, table_key, gate_col, gate_label, dependent_col, dependent_label, created_by)
+                VALUES (@clientId, @tableKey, @gateCol, @gateLabel, @dependentCol, @dependentLabel, @createdBy)
+            `)
+            .run({
+                clientId, tableKey, gateCol, gateLabel: gateLabel || gateCol,
+                dependentCol, dependentLabel: dependentLabel || dependentCol, createdBy: createdBy || '',
+            }).lastInsertRowid;
     });
     const id = create();
     return db.prepare('SELECT * FROM field_fill_rules WHERE id = ?').get(id);
+}
+
+// Editing what a rule actually says invalidates whatever was authorized
+// before -- the person who authorized it approved THAT specific gate ->
+// dependent pair, not whatever it might change into later.
+function updateFieldFillRule(id, clientId, { gateCol, gateLabel, dependentCol, dependentLabel }) {
+    db.prepare(`
+        UPDATE field_fill_rules
+        SET gate_col = @gateCol, gate_label = @gateLabel, dependent_col = @dependentCol, dependent_label = @dependentLabel,
+            authorized_by = NULL, authorized_at = NULL
+        WHERE id = @id AND client_id = @clientId
+    `).run({
+        id, clientId, gateCol, gateLabel: gateLabel || gateCol, dependentCol, dependentLabel: dependentLabel || dependentCol,
+    });
+    return getFieldFillRuleById(id, clientId);
+}
+
+function authorizeFieldFillRule(id, clientId, authorizedBy) {
+    db.prepare(`
+        UPDATE field_fill_rules SET authorized_by = @authorizedBy, authorized_at = datetime('now')
+        WHERE id = @id AND client_id = @clientId
+    `).run({ id, clientId, authorizedBy });
+    return getFieldFillRuleById(id, clientId);
 }
 
 function deleteFieldFillRule(id, clientId) {
@@ -3367,7 +3429,11 @@ module.exports = {
     createLocality,
     createStreet,
     listFieldFillRules,
+    listAllFieldFillRules,
+    getFieldFillRuleById,
     createFieldFillRule,
+    updateFieldFillRule,
+    authorizeFieldFillRule,
     deleteFieldFillRule,
     listJobPositions,
     getJobPositionById,

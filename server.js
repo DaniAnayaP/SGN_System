@@ -70,7 +70,11 @@ const {
     createLocality,
     createStreet,
     listFieldFillRules,
+    listAllFieldFillRules,
+    getFieldFillRuleById,
     createFieldFillRule,
+    updateFieldFillRule,
+    authorizeFieldFillRule,
     deleteFieldFillRule,
     listJobPositions,
     getJobPositionById,
@@ -1627,26 +1631,84 @@ app.post('/api/business/geo/streets', requireAuth, requireClientAdmin, (req, res
 
 // --- Reglas de Orden de Llenado (field_fill_rules, scoped to one client) ---
 // Reads are open to any authenticated user at the client -- every table
-// viewer needs the active rules to know which cells are locked. Only a
-// client admin can add/remove a rule (it's a configuration decision, same
-// gating as everything else under "Administración del Negocio").
+// viewer needs the rules to know which cells are locked, and someone with
+// ONLY the Autorizar grant (not a client admin) still needs to see pending
+// ones on the Gestión concentrator screen. A rule has no effect on any
+// table until authorized (see mapFieldFillRule's authorized flag) -- only
+// a client admin can create/edit/delete (a configuration decision, same
+// gating as everything else under "Administración del Negocio"), and
+// authorizing needs the specific colFieldRuleAuthorization grant.
+function mapFieldFillRule(row) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        tableKey: row.table_key,
+        gateCol: row.gate_col,
+        gateLabel: row.gate_label,
+        dependentCol: row.dependent_col,
+        dependentLabel: row.dependent_label,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+        authorizedBy: row.authorized_by,
+        authorizedAt: row.authorized_at,
+        authorized: !!row.authorized_at,
+    };
+}
+function validateFieldFillRuleBody(body) {
+    const tableKey = (body?.tableKey || '').trim();
+    const gateCol = (body?.gateCol || '').trim();
+    const dependentCol = (body?.dependentCol || '').trim();
+    if (!tableKey || !gateCol || !dependentCol) return 'tableKey, gateCol and dependentCol are required.';
+    if (gateCol === dependentCol) return 'gateCol and dependentCol must be different columns.';
+    return null;
+}
 app.get('/api/business/field-fill-rules', requireAuth, (req, res) => {
     const tableKey = (req.query.tableKey || '').trim();
     if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
     if (!req.user.clientId) return res.json({ rules: [] });
-    res.json({ rules: listFieldFillRules(req.user.clientId, tableKey) });
+    res.json({ rules: listFieldFillRules(req.user.clientId, tableKey).map(mapFieldFillRule) });
+});
+app.get('/api/business/field-fill-rules/all', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.json({ rules: [] });
+    res.json({ rules: listAllFieldFillRules(req.user.clientId).map(mapFieldFillRule) });
 });
 app.post('/api/business/field-fill-rules', requireAuth, requireClientAdmin, (req, res) => {
-    const tableKey = (req.body?.tableKey || '').trim();
-    const gateCol = (req.body?.gateCol || '').trim();
-    const dependentCol = (req.body?.dependentCol || '').trim();
-    if (!tableKey || !gateCol || !dependentCol) {
-        return res.status(400).json({ message: 'tableKey, gateCol and dependentCol are required.' });
+    const error = validateFieldFillRuleBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { tableKey, gateCol, gateLabel, dependentCol, dependentLabel } = req.body;
+    const rule = createFieldFillRule({
+        clientId: req.user.clientId, tableKey, gateCol, gateLabel, dependentCol, dependentLabel, createdBy: req.user.name,
+    });
+    res.status(201).json({ rule: mapFieldFillRule(rule) });
+});
+app.patch('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getFieldFillRuleById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Rule not found.' });
+    const error = validateFieldFillRuleBody({ tableKey: existing.table_key, ...req.body });
+    if (error) return res.status(400).json({ message: error });
+    const { gateCol, gateLabel, dependentCol, dependentLabel } = req.body;
+    try {
+        const rule = updateFieldFillRule(req.params.id, req.user.clientId, { gateCol, gateLabel, dependentCol, dependentLabel });
+        res.json({ rule: mapFieldFillRule(rule) });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'That dependent field already has a different rule.' });
+        }
+        throw err;
     }
-    if (gateCol === dependentCol) {
-        return res.status(400).json({ message: 'gateCol and dependentCol must be different columns.' });
+});
+app.post('/api/business/field-fill-rules/:id/authorize', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFieldFillRuleById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Rule not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canAuthorizeColumn(grants, 'reglas-orden-llenado', 'colFieldRuleAuthorization')) {
+            return res.status(403).json({ message: 'No tienes permiso para autorizar reglas.' });
+        }
     }
-    res.status(201).json({ rule: createFieldFillRule(req.user.clientId, tableKey, gateCol, dependentCol) });
+    const rule = authorizeFieldFillRule(req.params.id, req.user.clientId, req.user.name);
+    res.json({ rule: mapFieldFillRule(rule) });
 });
 app.delete('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
     deleteFieldFillRule(req.params.id, req.user.clientId);

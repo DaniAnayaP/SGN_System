@@ -1960,7 +1960,7 @@ async function loadFieldFillRules(tableId) {
     try {
         const res = await fetch(`${API_BASE}/business/field-fill-rules?tableKey=${encodeURIComponent(tableId)}`, { credentials: 'include' });
         const data = res.ok ? await res.json() : { rules: [] };
-        fieldFillRulesCache.set(tableId, (data.rules || []).map((r) => ({ id: r.id, gateCol: r.gate_col, dependentCol: r.dependent_col })));
+        fieldFillRulesCache.set(tableId, data.rules || []);
     } catch {
         fieldFillRulesCache.set(tableId, []);
     }
@@ -1980,8 +1980,11 @@ function isDataTableCellEmpty(td) {
 }
 
 function applyFieldFillRules(tableId) {
-    const rules = fieldFillRulesCache.get(tableId);
-    if (!rules || !rules.length) return;
+    // Only an AUTHORIZED rule locks anything -- a newly-created one sits
+    // idle until someone with the Autorizar grant approves it from the
+    // Reglas de Orden de Llenado screen (Gestión).
+    const rules = (fieldFillRulesCache.get(tableId) || []).filter((r) => r.authorized);
+    if (!rules.length) return;
     const state = dataTableColumnState.get(tableId);
     const tbody = state?.table?.tBodies?.[0];
     if (!tbody) return;
@@ -3066,6 +3069,13 @@ function renderFieldRulesModal() {
             const chip = document.createElement('span');
             chip.className = 'field-rules-chip';
             chip.append(document.createTextNode(state.labels[rule.dependentCol] || rule.dependentCol));
+            if (!rule.authorized) {
+                const pending = document.createElement('span');
+                pending.className = 'field-rules-chip-pending';
+                pending.textContent = t('main.fieldRulesPendingBadge');
+                pending.title = t('main.fieldRulesPendingHint');
+                chip.appendChild(pending);
+            }
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.className = 'field-rules-chip-remove';
@@ -3093,6 +3103,7 @@ async function openFieldRulesModal(tableId) {
 
 async function addFieldRule() {
     if (!fieldRulesState) return;
+    const state = dataTableColumnState.get(fieldRulesState.tableId);
     const gateCol = fieldRulesGateSelect.value;
     const dependentCol = fieldRulesDependentSelect.value;
     fieldRulesError.hidden = true;
@@ -3107,12 +3118,18 @@ async function addFieldRule() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ tableKey: fieldRulesState.tableId, gateCol, dependentCol }),
+            body: JSON.stringify({
+                tableKey: fieldRulesState.tableId, gateCol, dependentCol,
+                gateLabel: state?.labels[gateCol] || gateCol, dependentLabel: state?.labels[dependentCol] || dependentCol,
+            }),
         });
         if (!res.ok) throw new Error('save failed');
         await loadFieldFillRules(fieldRulesState.tableId);
         renderFieldRulesModal();
-        showToast(t('main.changeSaved'), 'success');
+        // Not yet authorized -- see Reglas de Orden de Llenado (Gestión) --
+        // so this toast deliberately doesn't say "changeSaved"/"recordSaved",
+        // which would wrongly imply the field is already locking anything.
+        showToast(t('main.fieldRuleCreatedPending'), 'success');
     } catch {
         fieldRulesError.textContent = t('admin.saveError');
         fieldRulesError.hidden = false;
@@ -5256,6 +5273,7 @@ const TABLE_GRANT_PATHS = {
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
     'transacciones-inteligentes': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-transacciones' },
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
+    'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
 };
 
 // "Pantalla habilitada" — direct-URL page-load block, on top of the
@@ -5271,6 +5289,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-rrhh-mi-recurso-humano': TABLE_GRANT_PATHS['mi-recurso-humano'],
     'cat-operaciones-transporte-vol-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-admin/cat-operaciones-transporte-vol-traslados' },
     'cat-catalogos-puestos-trabajo': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-catalogos/cat-catalogos-puestos-trabajo' },
+    'cat-gestion-reglas-orden': TABLE_GRANT_PATHS['reglas-orden-llenado'],
 };
 
 function hasScreenAccess(activePage) {

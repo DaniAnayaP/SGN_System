@@ -54,6 +54,12 @@
                 }
               ]
             },
+            {
+              "id": "btn-gestion-reglas-orden", "labelKey": "menu.fieldRulesGroup", "icon": "bx-link", "href": "#", "permissionOnly": true,
+              "submenu": [
+                { "id": "colFieldRuleAuthorization", "labelKey": "main.colFieldRuleAuthorization", "permissionOnly": true }
+              ]
+            },
             { "id": "btn-otros", "labelKey": "main.others", "icon": "bx-dots-horizontal-rounded", "href": "#", "permissionOnly": true }
           ]
         },
@@ -134,7 +140,7 @@
       "labelKey": "menu.catGestion",
       "icon": "bx-list-check",
       "submenu": [
-        { "id": "cat-gestion-1", "labelKey": "menu.catGestionItem1", "icon": "bx-window", "href": "#" },
+        { "id": "cat-gestion-reglas-orden", "labelKey": "menu.fieldRulesScreen", "icon": "bx-link", "href": "Business-ReglasOrden.html" },
         { "id": "cat-gestion-2", "labelKey": "menu.catGestionItem2", "icon": "bx-window", "href": "#" }
       ]
     },

@@ -1081,6 +1081,31 @@ body.dark-mode .perm-tree-depth-2{
     color: var(--color-text-secondary);
     flex-shrink: 0;
 }
+.field-rules-chip-pending{
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #b8860b;
+    font-weight: 700;
+}
+
+/* Reglas de Orden de Llenado (Gestión) -- the create/edit modal's own
+   Campo requisito -> Campo dependiente row, labeled (unlike the per-table
+   🔗 modal's bare add-row, since this screen isn't opened from a live
+   table where the context is already obvious). */
+.fr-field-row{
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+.fr-field-row .admin-field{
+    flex: 1;
+    min-width: 0;
+}
+.fr-field-row .field-rules-arrow{
+    padding-bottom: 0.6rem;
+}
 
 /* A locked dependent cell (see Dashboard.js: applyFieldFillRules) — dimmed
    and non-interactive until its gate column has a value. The lock guard
