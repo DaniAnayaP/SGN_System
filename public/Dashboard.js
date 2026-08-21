@@ -982,14 +982,17 @@ function buildMenuItem(item) {
 // there too. Hidden whenever there's no admin-business item to show (GEIPSA
 // admin's reduced sidebar has none).
 // This dropdown is a flat <ul> (no chevron/accordion support, unlike the
-// main sidebar's buildMenuItem/buildSubmenu) -- an item with real children
-// of its own (e.g. Servicio Contratado, now a folder instead of a direct
-// link) has nothing to navigate to itself, so it's skipped and its
-// children are flattened in one level instead of rendering a dead href="#".
+// main sidebar's buildMenuItem/buildSubmenu) -- a PURE folder (href="#" or
+// missing, e.g. Servicio Contratado) has nothing to navigate to itself, so
+// it's skipped and its real children are flattened in one level instead of
+// rendering a dead link. A leaf with its own real href (e.g. Nuestros
+// Centros Costos) still carries a submenu of its own -- the permission
+// tree's column list (ccCode, ccName...) -- but that's not sub-navigation,
+// so a real href always wins and stops the recursion there.
 function flattenBusinessAdminItems(items) {
     const flat = [];
     (items || []).filter((i) => !i.permissionOnly).forEach((item) => {
-        if (item.submenu) flat.push(...flattenBusinessAdminItems(item.submenu));
+        if (!item.href || item.href === '#') flat.push(...flattenBusinessAdminItems(item.submenu));
         else flat.push(item);
     });
     return flat;
