@@ -80,20 +80,20 @@ async function patchWorker(id, patch) {
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            alert(body.message || Dashboard.t('admin.saveError'));
+            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'error');
             await refreshTable();
             return;
         }
         const body = await res.json().catch(() => ({}));
         if (body.rejectedFields?.length) {
-            alert(`${Dashboard.t('main.fieldLocked')}: ${body.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`);
+            Dashboard.showToast(`${Dashboard.t('main.fieldLocked')}: ${body.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'warning');
         } else if (body.pendingFields?.length) {
-            alert(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`);
+            Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
         }
         await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano: failed to save change', err);
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
         await refreshTable();
     }
 }
@@ -234,7 +234,7 @@ async function deleteWorker(id, tr) {
         ensureEmptyState();
     } catch (err) {
         console.error('Mi Recurso Humano: failed to delete record', err);
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
@@ -611,7 +611,7 @@ async function activateWorkerUser(workerId) {
         const res = await fetch(`/api/business/hr-workers/${workerId}/activate-user`, { method: 'POST', credentials: 'include' });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            alert(body.message || Dashboard.t('admin.saveError'));
+            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'error');
             return;
         }
         const { generated } = await res.json();
@@ -621,7 +621,7 @@ async function activateWorkerUser(workerId) {
         await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano: failed to activate user', err);
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 credentialsCloseBtn.addEventListener('click', () => { credentialsModal.hidden = true; });

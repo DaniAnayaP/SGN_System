@@ -158,7 +158,7 @@ async function loadSaasUsers() {
         saasUsers = data.users || [];
         renderSaasUsers();
     } catch {
-        alert(Dashboard.t('admin.loadError'));
+        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }
 }
 
@@ -316,7 +316,7 @@ async function openTreeModal(user) {
         renderTreeList();
         treeModal.hidden = false;
     } catch {
-        alert(Dashboard.t('admin.loadError'));
+        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }
 }
 function closeTreeModal() {

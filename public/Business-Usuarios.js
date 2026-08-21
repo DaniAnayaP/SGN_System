@@ -29,7 +29,7 @@ async function toggleUserActive(user) {
         if (!res.ok) throw new Error('save failed');
         await loadUsers();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
@@ -98,7 +98,7 @@ async function loadUsers() {
         await renderUsersTable();
         populateAssignSelect();
     } catch {
-        alert(Dashboard.t('admin.loadError'));
+        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }
 }
 

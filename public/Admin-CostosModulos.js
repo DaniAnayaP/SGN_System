@@ -125,7 +125,7 @@ async function patchPlanField(plan, patch) {
         plans = plans.map((p) => (p.id === updated.id ? updated : p));
         renderPlans();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
         await loadPlans();
     }
 }
@@ -172,7 +172,7 @@ async function openCostModal(plan) {
         await tree.init([], data.costs || []);
         costModal.hidden = false;
     } catch {
-        alert(Dashboard.t('admin.loadError'));
+        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }
 }
 function closeCostModal() {

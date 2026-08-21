@@ -59,7 +59,7 @@ async function exportReport(format) {
         else await downloadViaServer(format, columns, rows, currentReportTitle);
     } catch (err) {
         console.error('Transacciones Inteligentes: export failed', err);
-        alert(Dashboard.t('main.downloadError'));
+        Dashboard.showToast(Dashboard.t('main.downloadError'), 'error');
     }
 }
 

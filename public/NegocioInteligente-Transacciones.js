@@ -102,7 +102,7 @@ function renderColumnList() {
             const dependents = draftColumns.filter((c, i) => i !== index && c.type === 'calculated'
                 && c.formula.operands.some((op) => op.kind === 'column' && op.reportColumnId === index));
             if (dependents.length) {
-                alert(Dashboard.t('main.reportColumnInUse', { names: dependents.map((d) => d.label).join(', ') }));
+                Dashboard.showToast(Dashboard.t('main.reportColumnInUse', { names: dependents.map((d) => d.label).join(', ') }), 'warning');
                 return;
             }
             draftColumns.splice(index, 1);
@@ -424,12 +424,12 @@ async function authorizeReport(report) {
     try {
         const res = await fetch(`/api/business/intelligent-reports/${report.id}/authorize`, { method: 'POST', credentials: 'include' });
         if (!res.ok) {
-            if (res.status === 403) { alert(Dashboard.t('main.fieldLocked')); return; }
+            if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
             throw new Error('authorize failed');
         }
         await loadReports();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
@@ -441,7 +441,7 @@ async function deleteReport(report) {
         reports = reports.filter((r) => r.id !== report.id);
         renderReports();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 

@@ -130,7 +130,7 @@ async function removeProfile(profile) {
             permissionsHint.hidden = false;
         }
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 

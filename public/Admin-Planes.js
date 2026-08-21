@@ -110,7 +110,7 @@ async function patchPlanField(plan, patch) {
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            alert(body.message || Dashboard.t('admin.saveError'));
+            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'error');
             await loadPlans();
             return;
         }
@@ -118,7 +118,7 @@ async function patchPlanField(plan, patch) {
         plans = plans.map((p) => (p.id === updated.id ? updated : p));
         renderPlans();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
         await loadPlans();
     }
 }
@@ -199,14 +199,14 @@ async function activatePlan(plan) {
         const res = await fetch(`/api/admin/plans/${plan.id}/activate`, { method: 'POST', credentials: 'include' });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            alert(body.message || Dashboard.t('admin.saveError'));
+            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'error');
             return;
         }
         const { plan: updated } = await res.json();
         plans = plans.map((p) => (p.id === updated.id ? updated : p));
         renderPlans();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
@@ -384,7 +384,7 @@ async function removePlan(plan) {
             treeModal.hidden = true;
         }
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
@@ -397,7 +397,7 @@ async function loadPlans() {
         devModeOverride = !!data.devModeOverride;
         renderPlans();
     } catch {
-        alert(Dashboard.t('admin.loadError'));
+        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }
 }
 
@@ -494,7 +494,7 @@ async function selectPlanForTree(plan) {
         treeContainer.classList.toggle('perm-tree-view-only', locked);
         treeModal.hidden = false;
     } catch {
-        alert(Dashboard.t('admin.loadError'));
+        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }
 }
 

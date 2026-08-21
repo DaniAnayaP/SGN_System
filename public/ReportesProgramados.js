@@ -187,12 +187,12 @@ async function authorizeScheduled(scheduled) {
     try {
         const res = await fetch(`/api/business/scheduled-reports/${scheduled.id}/authorize`, { method: 'POST', credentials: 'include' });
         if (!res.ok) {
-            if (res.status === 403) { alert(Dashboard.t('main.fieldLocked')); return; }
+            if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
             throw new Error('authorize failed');
         }
         await loadScheduledReports();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
@@ -204,7 +204,7 @@ async function deleteScheduled(scheduled) {
         scheduledReports = scheduledReports.filter((s) => s.id !== scheduled.id);
         renderScheduledReports();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 

@@ -245,7 +245,7 @@ async function toggleUserActive(user) {
         if (!res.ok) throw new Error('save failed');
         await loadUsers();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 

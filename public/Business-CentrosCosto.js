@@ -146,7 +146,7 @@ async function removeCostCenter(cc) {
         costCenters = costCenters.filter((c) => c.id !== cc.id);
         renderCostCenters();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 

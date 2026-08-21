@@ -11,6 +11,90 @@
 // (see requireAdmin in server.js) — the redirects here are just UX.
 // ---------------------------------------------------------------------------
 
+// --- Toast notifications (Éxito/Error/Info/Advertencia) --------------------
+// Dashboard.showToast(message, type, { title, duration }) -- a lightweight
+// replacement for the ad-hoc alert()/inline-error-text patterns scattered
+// across every page's own JS. Stacks in a fixed corner, auto-dismisses
+// (duration: 0 to keep it until closed by hand), never blocks the page the
+// way alert() does. Exported on window.Dashboard at the bottom of this file.
+const TOAST_ICONS = { success: 'bx-check-circle', error: 'bx-x-circle', info: 'bx-info-circle', warning: 'bx-error' };
+const TOAST_TITLE_KEYS = {
+    success: 'main.toastSuccessTitle', error: 'main.toastErrorTitle',
+    info: 'main.toastInfoTitle', warning: 'main.toastWarningTitle',
+};
+const TOAST_DEFAULT_DURATION = 3000;
+
+function ensureToastContainer() {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        container.setAttribute('aria-live', 'polite');
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
+function showToast(message, type = 'info', { title, duration = TOAST_DEFAULT_DURATION } = {}) {
+    const kind = TOAST_ICONS[type] ? type : 'info';
+    const container = ensureToastContainer();
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${kind}`;
+    toast.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+
+    const iconBadge = document.createElement('span');
+    iconBadge.className = 'toast-icon-badge';
+    const icon = document.createElement('i');
+    icon.className = `bx ${TOAST_ICONS[kind]}`;
+    icon.setAttribute('aria-hidden', 'true');
+    iconBadge.appendChild(icon);
+
+    const msgEl = document.createElement('p');
+    msgEl.className = 'toast-message';
+    const titleEl = document.createElement('strong');
+    titleEl.className = 'toast-title';
+    titleEl.textContent = `${title || t(TOAST_TITLE_KEYS[kind])}: `;
+    msgEl.append(titleEl, document.createTextNode(message));
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'toast-close';
+    closeBtn.setAttribute('aria-label', t('main.close'));
+    closeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+
+    const progress = document.createElement('div');
+    progress.className = 'toast-progress';
+
+    let dismissTimer = null;
+    const close = () => {
+        if (dismissTimer) clearTimeout(dismissTimer);
+        toast.classList.remove('toast-visible');
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+        // Fallback in case the transitionend listener above never fires
+        // (e.g. prefers-reduced-motion skips the transition entirely).
+        setTimeout(() => toast.remove(), 300);
+    };
+    closeBtn.addEventListener('click', close);
+
+    toast.append(iconBadge, msgEl, closeBtn, progress);
+    container.appendChild(toast);
+    // Force layout before adding the visible class (and starting the
+    // progress-bar shrink) so both transitions actually play instead of
+    // snapping straight to their end state on the very first frame.
+    void toast.offsetWidth;
+    toast.classList.add('toast-visible');
+    if (duration) {
+        progress.style.transitionDuration = `${duration}ms`;
+        progress.style.width = '0';
+        dismissTimer = setTimeout(close, duration);
+    } else {
+        progress.style.display = 'none';
+    }
+    return { close };
+}
+
 const API_BASE = window.APP_CONFIG?.apiBase || '/api';
 const SUPPORTED_LANGS = ['en', 'es'];
 const DEFAULT_LANG = 'en';
@@ -3148,7 +3232,7 @@ function applyStyle(style) {
 document.querySelectorAll('.style-option').forEach((btn) => {
     btn.addEventListener('click', () => {
         if (btn.dataset.style === 'institutional' && !clientBranding) {
-            alert(t('main.inDevelopment'));
+            showToast(t('main.inDevelopment'), 'info');
             return;
         }
         localStorage.setItem('style', btn.dataset.style);
@@ -3441,14 +3525,14 @@ async function resolvePendingNotification(id, action, row) {
         const res = await fetch(`/api/business/pending-changes/${id}/${action}`, { method: 'POST', credentials: 'include' });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            alert(body.message || t('admin.saveError'));
+            showToast(body.message || t('admin.saveError'), 'error');
             return;
         }
         row.remove();
-        alert(action === 'approve' ? t('main.notificationApproved') : t('main.notificationRejected'));
+        showToast(action === 'approve' ? t('main.notificationApproved') : t('main.notificationRejected'), 'success');
         loadPendingChanges();
     } catch {
-        alert(t('admin.saveError'));
+        showToast(t('admin.saveError'), 'error');
     }
 }
 
@@ -5107,4 +5191,5 @@ window.Dashboard = {
     // filter. Call this directly once the real columns are in the DOM.
     initDataTableColumns,
     getVisibleTableSnapshot,
+    showToast,
 };

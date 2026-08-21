@@ -212,7 +212,7 @@ async function removeJobPosition(jp) {
         jobPositions = jobPositions.filter((p) => p.id !== jp.id);
         renderJobPositions();
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 

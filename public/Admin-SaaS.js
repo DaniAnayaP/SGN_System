@@ -467,7 +467,7 @@ async function toggleClientStatus(client) {
     try {
         await patchClient(client, { status: nextStatus });
     } catch {
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
@@ -597,7 +597,7 @@ form.addEventListener('submit', async (event) => {
 
     const rfc = rfcField.value.trim();
     if (rfc && rfc.length !== 13) {
-        alert(Dashboard.t('admin.rfcLengthError'));
+        Dashboard.showToast(Dashboard.t('admin.rfcLengthError'), 'warning');
         return;
     }
 

@@ -102,15 +102,15 @@ async function patchFuelRecord(id, patch) {
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            alert(body.message || Dashboard.t('admin.saveError'));
+            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'error');
             await refreshTable();
             return;
         }
         const body = await res.json().catch(() => ({}));
         if (body.rejectedFields?.length) {
-            alert(`${Dashboard.t('main.fieldLocked')}: ${body.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`);
+            Dashboard.showToast(`${Dashboard.t('main.fieldLocked')}: ${body.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'warning');
         } else if (body.pendingFields?.length) {
-            alert(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`);
+            Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
         }
         // No longer optimistic-only: the cell may have just been diverted to
         // a pending approval (still showing the OLD value) or partially
@@ -119,7 +119,7 @@ async function patchFuelRecord(id, patch) {
         await refreshTable();
     } catch (err) {
         console.error('Registro Combustible: failed to save change', err);
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
         await refreshTable();
     }
 }
@@ -151,7 +151,7 @@ async function deleteFuelRecord(id, tr) {
         ensureEmptyState();
     } catch (err) {
         console.error('Registro Combustible: failed to delete record', err);
-        alert(Dashboard.t('admin.saveError'));
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
