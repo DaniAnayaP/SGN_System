@@ -2496,15 +2496,31 @@ function initDataTableColumns(wrapper, index) {
 // the whole row, ONLY when every column in this row is still ungrouped —
 // once even one column gets a real classification, that placeholder goes
 // away and the real segments show instead.
-function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey) {
+//
+// Segments also break at a pinned/unpinned boundary (never merging the two
+// into one <th colspan>) -- a single cell can't be "half sticky", so a
+// segment straddling both would have to pick one behavior and get the other
+// wrong. A segment that's fully pinned then gets the exact same
+// position:sticky/left/data-table-col-pinned(-edge) treatment applyPinStyle
+// already gives the real header cells beneath it, or scrolling would slide
+// the real (now fixed-in-place) column out from under its own color while
+// some OTHER band segment drifts into that same screen position instead.
+function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state) {
     bandRow.innerHTML = '';
+    const pinnedSet = new Set(state?.visiblePinned || []);
+    const lastPinnedKey = pinnedSet.size ? state.visiblePinned[state.visiblePinned.length - 1] : null;
     const segments = [];
     let i = 0;
     while (i < visualOrder.length) {
         const groupKey = keyMap.get(visualOrder[i]) || null;
+        const pinned = pinnedSet.has(visualOrder[i]);
         let span = 1;
-        while (i + span < visualOrder.length && (keyMap.get(visualOrder[i + span]) || null) === groupKey) span += 1;
-        segments.push({ groupKey, span });
+        while (
+            i + span < visualOrder.length
+            && (keyMap.get(visualOrder[i + span]) || null) === groupKey
+            && pinnedSet.has(visualOrder[i + span]) === pinned
+        ) span += 1;
+        segments.push({ groupKey, span, pinned, startKey: visualOrder[i], endKey: visualOrder[i + span - 1] });
         i += span;
     }
     const allUngrouped = segments.every((s) => !s.groupKey);
@@ -2520,6 +2536,11 @@ function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey) {
             th.className = 'data-table-group-band-cell-empty';
         } else {
             th.className = 'data-table-group-band-cell-empty';
+        }
+        if (s.pinned) {
+            th.classList.add('data-table-col-pinned');
+            if (s.endKey === lastPinnedKey) th.classList.add('data-table-col-pinned-edge');
+            th.style.left = `${state.pinnedLeft[s.startKey]}px`;
         }
         bandRow.appendChild(th);
     });
@@ -2564,9 +2585,9 @@ function renderColumnGroupBand(tableId) {
     // renders at 0 width either way, so there's no need to special-case it.
     const visualOrder = getVisualColumnOrder(state.config);
     const tableBandRow = state.table.tHead.querySelector('tr.data-table-group-band-table');
-    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map());
+    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state);
     const classBandRow = state.table.tHead.querySelector('tr.data-table-group-band-classification');
-    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending');
+    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state);
 }
 
 function wireModalDismiss(overlay, onClose) {
