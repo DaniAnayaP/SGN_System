@@ -342,34 +342,10 @@
 
         <section class="admin-panel">
             <p class="admin-subtitle" data-i18n="business.costCentersSubtitle">Manage your company's cost centers.</p>
+            <div class="admin-form-actions">
+                <button type="button" class="btn" id="cc-new-btn" data-i18n="business.ccNew">+ New Cost Center</button>
+            </div>
             <p id="cc-limit-status" class="admin-hint"></p>
-
-            <form id="cc-form" class="admin-form" novalidate>
-                <input type="hidden" id="cc-id" value="">
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="cc-code" data-i18n="business.ccCode">Code</label>
-                        <input id="cc-code" name="code" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="cc-name" data-i18n="business.ccName">Name</label>
-                        <input id="cc-name" name="name" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="cc-responsible" data-i18n="business.ccResponsible">Responsible</label>
-                        <input id="cc-responsible" name="responsible" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="cc-description" data-i18n="business.ccDescription">Description</label>
-                        <input id="cc-description" name="description" type="text">
-                    </div>
-                </div>
-                <div id="cc-form-error" class="admin-error" role="alert" hidden></div>
-                <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="cc-form-submit" data-i18n="business.addCostCenter">Add cost center</button>
-                    <button type="button" class="btn btn-secondary" id="cc-form-cancel" data-i18n="admin.cancel" hidden>Cancel</button>
-                </div>
-            </form>
 
             <div class="filter-bar" id="filter-bar">
                 <div class="filter-bar-panel">
@@ -421,6 +397,100 @@
             </div>
         </section>
     </main>
+
+    <div class="modal-overlay" id="cc-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="cc-modal-title">
+            <h3 id="cc-modal-title" data-i18n="business.ccModalTitleNew">New Cost Center</h3>
+            <input type="hidden" id="cc-id" value="">
+
+            <div class="admin-form-grid">
+                <div class="admin-field">
+                    <label data-i18n="business.ccCompany">Company</label>
+                    <p class="admin-computed-value" id="cc-company-display">—</p>
+                </div>
+            </div>
+
+            <div class="admin-form-grid cc-cascade-grid">
+                <div class="admin-field">
+                    <label for="cc-country" data-i18n="business.ccCountry">Country</label>
+                    <div class="cc-select-row">
+                        <select id="cc-country"></select>
+                        <button type="button" class="cc-add-new-btn" id="cc-country-add-toggle" title="Add new country">+</button>
+                    </div>
+                    <div class="cc-add-new-row" id="cc-country-add-row" hidden>
+                        <input type="text" id="cc-country-add-input" data-i18n-placeholder="business.ccAddNewCountry" placeholder="New country">
+                        <button type="button" class="btn btn-secondary" id="cc-country-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+                <div class="admin-field">
+                    <label for="cc-state" data-i18n="business.ccState">State</label>
+                    <div class="cc-select-row">
+                        <select id="cc-state" disabled></select>
+                        <button type="button" class="cc-add-new-btn" id="cc-state-add-toggle" title="Add new state" disabled>+</button>
+                    </div>
+                    <div class="cc-add-new-row" id="cc-state-add-row" hidden>
+                        <input type="text" id="cc-state-add-input" data-i18n-placeholder="business.ccAddNewState" placeholder="New state">
+                        <button type="button" class="btn btn-secondary" id="cc-state-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+                <div class="admin-field">
+                    <label for="cc-locality" data-i18n="business.ccLocality">Locality</label>
+                    <div class="cc-select-row">
+                        <select id="cc-locality" disabled></select>
+                        <button type="button" class="cc-add-new-btn" id="cc-locality-add-toggle" title="Add new locality" disabled>+</button>
+                    </div>
+                    <div class="cc-add-new-row" id="cc-locality-add-row" hidden>
+                        <input type="text" id="cc-locality-add-input" data-i18n-placeholder="business.ccAddNewLocality" placeholder="New locality">
+                        <button type="button" class="btn btn-secondary" id="cc-locality-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+                <div class="admin-field">
+                    <label for="cc-street" data-i18n="business.ccStreet">Street</label>
+                    <div class="cc-select-row">
+                        <select id="cc-street" disabled></select>
+                        <button type="button" class="cc-add-new-btn" id="cc-street-add-toggle" title="Add new street" disabled>+</button>
+                    </div>
+                    <div class="cc-add-new-row" id="cc-street-add-row" hidden>
+                        <input type="text" id="cc-street-add-input" data-i18n-placeholder="business.ccAddNewStreet" placeholder="New street">
+                        <button type="button" class="btn btn-secondary" id="cc-street-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-form-grid">
+                <div class="admin-field">
+                    <label for="cc-sucursal" data-i18n="business.ccBranch">Branch</label>
+                    <input id="cc-sucursal" type="text" required>
+                </div>
+            </div>
+
+            <div class="cc-code-preview">
+                <strong id="cc-code-preview-value">______</strong>
+                <span data-i18n="business.ccCodePreview">Generated code</span>
+            </div>
+
+            <div class="admin-form-grid">
+                <div class="admin-field">
+                    <label for="cc-name" data-i18n="business.ccName">Name</label>
+                    <input id="cc-name" type="text" required>
+                </div>
+                <div class="admin-field">
+                    <label for="cc-responsible" data-i18n="business.ccResponsible">Responsible</label>
+                    <input id="cc-responsible" type="text">
+                </div>
+                <div class="admin-field">
+                    <label for="cc-description" data-i18n="business.ccDescription">Description</label>
+                    <input id="cc-description" type="text">
+                </div>
+            </div>
+
+            <div id="cc-modal-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="cc-modal-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="cc-modal-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">

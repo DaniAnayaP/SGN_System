@@ -61,6 +61,14 @@ const {
     createCostCenter,
     updateCostCenter,
     setCostCenterStatus,
+    listCountries,
+    listStates,
+    listLocalities,
+    listStreets,
+    createCountry,
+    createState,
+    createLocality,
+    createStreet,
     listJobPositions,
     getJobPositionById,
     createJobPosition,
@@ -1444,8 +1452,10 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
 // Negocio" — but any authenticated user at the client can READ the list,
 // since every client user needs it for the sidebar's Centro de Costo picker.
 function validateCostCenterBody(body) {
-    const { code, name } = body || {};
-    if (!code || !name) return 'code and name are required.';
+    const { countryId, stateId, localityId, streetId, sucursal, name } = body || {};
+    if (!countryId || !stateId || !localityId || !streetId || !sucursal || !name) {
+        return 'countryId, stateId, localityId, streetId, sucursal and name are required.';
+    }
     return null;
 }
 
@@ -1469,6 +1479,11 @@ function mapCostCenter(row, companyName) {
         status: row.status,
         accountNumber: row.account_number,
         recordCode: row.record_code,
+        countryId: row.country_id,
+        stateId: row.state_id,
+        localityId: row.locality_id,
+        streetId: row.street_id,
+        sucursal: row.sucursal,
         ...getSystemColumnsForRecord({
             companyName,
             area: COST_CENTER_AREA_LABEL,
@@ -1496,9 +1511,11 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
     if (countCostCenters(req.user.clientId) >= client.cost_centers_limit) {
         return res.status(409).json({ message: 'Cost center limit reached for this client.' });
     }
-    const { code, name, description, responsible } = req.body;
+    const { countryId, stateId, localityId, streetId, sucursal, name, description, responsible } = req.body;
     try {
-        const costCenter = createCostCenter({ clientId: req.user.clientId, code, name, description, responsible });
+        const costCenter = createCostCenter({
+            clientId: req.user.clientId, countryId, stateId, localityId, streetId, sucursal, name, description, responsible,
+        });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
             recordLabel: costCenter.code, action: 'create', changedBy: req.user.name,
@@ -1517,16 +1534,21 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
     const error = validateCostCenterBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { code, name, description, responsible } = req.body;
-    // requireClientAdmin-gated route: req.user.isClientAdmin is always true
-    // here, so every field always lands in appliedPatch and pending/rejected
-    // are always empty — this call only exists for its logTableChange side
-    // effect. updateCostCenter always overwrites all 4 columns regardless
-    // (not a partial-SET builder like the other 2 tables), so it's still
-    // called with the original full body, not appliedPatch.
-    checkAndLogFieldChanges(req, existing, { code, name, description, responsible }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
+    const { countryId, stateId, localityId, streetId, sucursal, name, description, responsible } = req.body;
     try {
-        const costCenter = updateCostCenter(req.params.id, req.user.clientId, { code, name, description, responsible });
+        const costCenter = updateCostCenter(req.params.id, req.user.clientId, {
+            countryId, stateId, localityId, streetId, sucursal, name, description, responsible,
+        });
+        // requireClientAdmin-gated route: req.user.isClientAdmin is always
+        // true here, so every field always lands in appliedPatch and
+        // pending/rejected are always empty — this call only exists for its
+        // logTableChange side effect. Logged AFTER updateCostCenter (using
+        // its own computed code/sucursal) since código is no longer part of
+        // the submitted body — it's derived from the geo ids.
+        checkAndLogFieldChanges(req, existing, {
+            code: costCenter.code, name: costCenter.name, description: costCenter.description,
+            responsible: costCenter.responsible, sucursal: costCenter.sucursal,
+        }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
         res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -1550,6 +1572,54 @@ app.patch('/api/business/cost-centers/:id/status', requireAuth, requireClientAdm
         recordLabel: costCenter.code, action: 'update', changedBy: req.user.name,
     });
     res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
+});
+
+// --- Geo catalog (País/Estado/Localidad/Calle behind a Centro de Costos'
+// código) -- shared across every client on the SaaS, see db.js's own comment
+// on the geo_* tables. Reads are open to any authenticated user (harmless,
+// and future screens may want them); adding a new entry is gated the same
+// as creating/editing a Centro de Costos itself, since that's the only
+// place these "+" buttons live today.
+app.get('/api/business/geo/countries', requireAuth, (req, res) => {
+    res.json({ items: listCountries() });
+});
+app.get('/api/business/geo/states', requireAuth, (req, res) => {
+    const countryId = Number(req.query.countryId) || 0;
+    if (!countryId) return res.status(400).json({ message: 'countryId is required.' });
+    res.json({ items: listStates(countryId) });
+});
+app.get('/api/business/geo/localities', requireAuth, (req, res) => {
+    const stateId = Number(req.query.stateId) || 0;
+    if (!stateId) return res.status(400).json({ message: 'stateId is required.' });
+    res.json({ items: listLocalities(stateId) });
+});
+app.get('/api/business/geo/streets', requireAuth, (req, res) => {
+    const localityId = Number(req.query.localityId) || 0;
+    if (!localityId) return res.status(400).json({ message: 'localityId is required.' });
+    res.json({ items: listStreets(localityId) });
+});
+app.post('/api/business/geo/countries', requireAuth, requireClientAdmin, (req, res) => {
+    const name = (req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ message: 'name is required.' });
+    res.status(201).json({ item: createCountry(name) });
+});
+app.post('/api/business/geo/states', requireAuth, requireClientAdmin, (req, res) => {
+    const countryId = Number(req.body?.countryId) || 0;
+    const name = (req.body?.name || '').trim();
+    if (!countryId || !name) return res.status(400).json({ message: 'countryId and name are required.' });
+    res.status(201).json({ item: createState(countryId, name) });
+});
+app.post('/api/business/geo/localities', requireAuth, requireClientAdmin, (req, res) => {
+    const stateId = Number(req.body?.stateId) || 0;
+    const name = (req.body?.name || '').trim();
+    if (!stateId || !name) return res.status(400).json({ message: 'stateId and name are required.' });
+    res.status(201).json({ item: createLocality(stateId, name) });
+});
+app.post('/api/business/geo/streets', requireAuth, requireClientAdmin, (req, res) => {
+    const localityId = Number(req.body?.localityId) || 0;
+    const name = (req.body?.name || '').trim();
+    if (!localityId || !name) return res.status(400).json({ message: 'localityId and name are required.' });
+    res.status(201).json({ item: createStreet(localityId, name) });
 });
 
 // --- Puestos de Trabajo (job positions, scoped to one client) ---------------

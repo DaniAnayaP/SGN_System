@@ -1,19 +1,13 @@
 // ---------------------------------------------------------------------------
 // "Centros de Costo" — Administración del Negocio: the client's own admin
-// manages their cost center catalog (código, nombre, responsable,
-// descripción), capped by clients.cost_centers_limit — set by GEIPSA from
-// Contrataciones (Admin-SaaS). Shell comes from Dashboard.js.
+// manages their cost center catalog, capped by clients.cost_centers_limit —
+// set by GEIPSA from Contrataciones (Admin-SaaS). Shell comes from
+// Dashboard.js. Código is no longer free-typed: it's built server-side from
+// a cascading País > Estado > Localidad > Calle pick (each first letter)
+// plus Empresa and Sucursal — see db.js's buildCostCenterCodeBase.
 // ---------------------------------------------------------------------------
 
-const form = document.getElementById('cc-form');
-const idField = document.getElementById('cc-id');
-const codeField = document.getElementById('cc-code');
-const nameField = document.getElementById('cc-name');
-const responsibleField = document.getElementById('cc-responsible');
-const descriptionField = document.getElementById('cc-description');
-const errorBanner = document.getElementById('cc-form-error');
-const submitBtn = document.getElementById('cc-form-submit');
-const cancelBtn = document.getElementById('cc-form-cancel');
+const newBtn = document.getElementById('cc-new-btn');
 const tableBody = document.getElementById('cc-table-body');
 const emptyMsg = document.getElementById('cc-empty');
 const limitStatus = document.getElementById('cc-limit-status');
@@ -27,15 +21,6 @@ function padAccountNumber(n) {
     return String(n).padStart(6, '0');
 }
 
-function showError(message) {
-    errorBanner.textContent = message;
-    errorBanner.hidden = false;
-}
-function clearError() {
-    errorBanner.hidden = true;
-    errorBanner.textContent = '';
-}
-
 function isAtLimit() {
     return costCenters.length >= limit;
 }
@@ -44,16 +29,7 @@ function refreshLimitStatus() {
     limitStatus.textContent = isAtLimit()
         ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
         : Dashboard.t('business.ccLimitStatus', { count: costCenters.length, limit });
-    submitBtn.disabled = isAtLimit() && !idField.value;
-}
-
-function resetForm() {
-    form.reset();
-    idField.value = '';
-    submitBtn.textContent = Dashboard.t('business.addCostCenter');
-    cancelBtn.hidden = true;
-    clearError();
-    refreshLimitStatus();
+    newBtn.disabled = isAtLimit();
 }
 
 const CONTROL_INTERNO_COLS = [
@@ -68,8 +44,8 @@ function renderCostCenters() {
     costCenters.forEach((cc) => {
         const tr = document.createElement('tr');
         // This whole screen is admin-only (see Dashboard.js's "pantalla
-        // habilitada" gate) and every row here is editable via the form
-        // above (startEdit) — no per-column permission model like the
+        // habilitada" gate) and every row here is editable via the modal
+        // (openEditModal) — no per-column permission model like the
         // operational tables, so every row qualifies for the legend.
         tr.classList.add('data-table-row-editable');
 
@@ -121,7 +97,7 @@ function renderCostCenters() {
         editBtn.className = 'admin-icon-btn';
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
-        editBtn.addEventListener('click', () => startEdit(cc));
+        editBtn.addEventListener('click', () => openEditModal(cc));
         const toggleBtn = document.createElement('button');
         toggleBtn.type = 'button';
         toggleBtn.className = 'admin-icon-btn';
@@ -155,19 +131,6 @@ function applyCcFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyCcFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyCcFilters);
 
-function startEdit(cc) {
-    idField.value = cc.id;
-    codeField.value = cc.code;
-    nameField.value = cc.name;
-    responsibleField.value = cc.responsible || '';
-    descriptionField.value = cc.description || '';
-    submitBtn.textContent = Dashboard.t('admin.save');
-    submitBtn.disabled = false;
-    cancelBtn.hidden = false;
-    clearError();
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
 // No delete -- account_number/record_code are a permanent accounting
 // sequence (see db.js's own migration comment), only Activar/Desactivar.
 async function toggleCostCenterStatus(cc) {
@@ -198,44 +161,251 @@ async function loadCostCenters() {
         limit = data.limit || 0;
         renderCostCenters();
     } catch {
-        showError(Dashboard.t('admin.loadError'));
+        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }
 }
 
-form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    clearError();
+// --- "+ Nuevo Centro Costos" modal ------------------------------------------
+// País/Estado/Localidad/Calle cascade: each level depends on the one before
+// it, and each has its own "+" to grow the (SaaS-wide shared) catalog on the
+// spot. See db.js's geo_countries/geo_states/geo_localities/geo_streets.
+const ccModal = document.getElementById('cc-modal');
+const ccModalTitle = document.getElementById('cc-modal-title');
+const idField = document.getElementById('cc-id');
+const companyDisplay = document.getElementById('cc-company-display');
+const sucursalField = document.getElementById('cc-sucursal');
+const nameField = document.getElementById('cc-name');
+const responsibleField = document.getElementById('cc-responsible');
+const descriptionField = document.getElementById('cc-description');
+const modalError = document.getElementById('cc-modal-error');
+const modalSaveBtn = document.getElementById('cc-modal-save');
+const modalCancelBtn = document.getElementById('cc-modal-cancel');
+const codePreviewValue = document.getElementById('cc-code-preview-value');
 
-    const code = codeField.value.trim();
+const LEVEL_ORDER = ['country', 'state', 'locality', 'street'];
+const cascadeLevels = {
+    country: {
+        select: document.getElementById('cc-country'), addToggle: document.getElementById('cc-country-add-toggle'),
+        addRow: document.getElementById('cc-country-add-row'), addInput: document.getElementById('cc-country-add-input'),
+        addConfirm: document.getElementById('cc-country-add-confirm'), items: [], parent: null,
+        listUrl: () => '/api/business/geo/countries',
+        createUrl: () => '/api/business/geo/countries',
+        createBody: (name) => ({ name }),
+        titleKey: 'business.ccAddNewCountry',
+    },
+    state: {
+        select: document.getElementById('cc-state'), addToggle: document.getElementById('cc-state-add-toggle'),
+        addRow: document.getElementById('cc-state-add-row'), addInput: document.getElementById('cc-state-add-input'),
+        addConfirm: document.getElementById('cc-state-add-confirm'), items: [], parent: 'country',
+        listUrl: (parentId) => `/api/business/geo/states?countryId=${parentId}`,
+        createUrl: () => '/api/business/geo/states',
+        createBody: (name, parentId) => ({ countryId: parentId, name }),
+        titleKey: 'business.ccAddNewState',
+    },
+    locality: {
+        select: document.getElementById('cc-locality'), addToggle: document.getElementById('cc-locality-add-toggle'),
+        addRow: document.getElementById('cc-locality-add-row'), addInput: document.getElementById('cc-locality-add-input'),
+        addConfirm: document.getElementById('cc-locality-add-confirm'), items: [], parent: 'state',
+        listUrl: (parentId) => `/api/business/geo/localities?stateId=${parentId}`,
+        createUrl: () => '/api/business/geo/localities',
+        createBody: (name, parentId) => ({ stateId: parentId, name }),
+        titleKey: 'business.ccAddNewLocality',
+    },
+    street: {
+        select: document.getElementById('cc-street'), addToggle: document.getElementById('cc-street-add-toggle'),
+        addRow: document.getElementById('cc-street-add-row'), addInput: document.getElementById('cc-street-add-input'),
+        addConfirm: document.getElementById('cc-street-add-confirm'), items: [], parent: 'locality',
+        listUrl: (parentId) => `/api/business/geo/streets?localityId=${parentId}`,
+        createUrl: () => '/api/business/geo/streets',
+        createBody: (name, parentId) => ({ localityId: parentId, name }),
+        titleKey: 'business.ccAddNewStreet',
+    },
+};
+
+function firstLetter(s) {
+    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().charAt(0).toUpperCase() || '_';
+}
+
+function updateCodePreview() {
+    const companyLetter = firstLetter(clientBranding?.companyAbbreviation || clientBranding?.companyName);
+    const levelLetters = LEVEL_ORDER.map((key) => {
+        const level = cascadeLevels[key];
+        const item = level.items.find((i) => String(i.id) === String(level.select.value));
+        return firstLetter(item?.name);
+    });
+    const sucursalLetter = firstLetter(sucursalField.value);
+    codePreviewValue.textContent = `${companyLetter}${levelLetters.join('')}${sucursalLetter}`;
+}
+
+function populateSelect(selectEl, items) {
+    selectEl.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = items.length ? Dashboard.t('business.ccSelectPlaceholder') : Dashboard.t('business.ccNoOptionsYet');
+    selectEl.appendChild(placeholder);
+    items.forEach((item) => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.name;
+        selectEl.appendChild(opt);
+    });
+}
+
+// parentId === null means "this level's own prerequisite isn't chosen yet"
+// (only meaningful for state/locality/street) -- country has no parent, so
+// it always loads its full list regardless of what's passed here.
+async function loadLevel(levelKey, parentId) {
+    const level = cascadeLevels[levelKey];
+    if (level.parent && !parentId) {
+        level.items = [];
+        populateSelect(level.select, []);
+        level.select.querySelector('option').textContent = Dashboard.t('business.ccSelectParentFirst');
+        level.select.disabled = true;
+        level.addToggle.disabled = true;
+        level.addRow.hidden = true;
+        return;
+    }
+    try {
+        const res = await fetch(level.listUrl(parentId), { credentials: 'include' });
+        level.items = res.ok ? (await res.json()).items || [] : [];
+    } catch {
+        level.items = [];
+    }
+    populateSelect(level.select, level.items);
+    level.select.disabled = false;
+    level.addToggle.disabled = false;
+}
+
+LEVEL_ORDER.forEach((levelKey, idx) => {
+    const level = cascadeLevels[levelKey];
+    level.select.addEventListener('change', async () => {
+        for (let i = idx + 1; i < LEVEL_ORDER.length; i++) {
+            const childKey = LEVEL_ORDER[i];
+            const parentKey = LEVEL_ORDER[i - 1];
+            await loadLevel(childKey, cascadeLevels[parentKey].select.value || null);
+        }
+        updateCodePreview();
+    });
+    level.addToggle.addEventListener('click', () => {
+        level.addRow.hidden = !level.addRow.hidden;
+        if (!level.addRow.hidden) level.addInput.focus();
+    });
+    level.addConfirm.addEventListener('click', async () => {
+        const name = level.addInput.value.trim();
+        if (!name) return;
+        const parentId = level.parent ? cascadeLevels[level.parent].select.value : null;
+        level.addConfirm.disabled = true;
+        try {
+            const res = await fetch(level.createUrl(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(level.createBody(name, parentId)),
+            });
+            if (!res.ok) throw new Error('create failed');
+            const { item } = await res.json();
+            await loadLevel(levelKey, parentId);
+            level.select.value = item.id;
+            level.addInput.value = '';
+            level.addRow.hidden = true;
+            level.select.dispatchEvent(new Event('change'));
+        } catch {
+            Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        } finally {
+            level.addConfirm.disabled = false;
+        }
+    });
+});
+sucursalField.addEventListener('input', updateCodePreview);
+
+function resetCascadeAddRows() {
+    LEVEL_ORDER.forEach((key) => {
+        const level = cascadeLevels[key];
+        level.addRow.hidden = true;
+        level.addInput.value = '';
+    });
+}
+
+async function openNewModal() {
+    idField.value = '';
+    ccModalTitle.textContent = Dashboard.t('business.ccModalTitleNew');
+    companyDisplay.textContent = clientBranding?.companyName || '—';
+    sucursalField.value = '';
+    nameField.value = '';
+    responsibleField.value = '';
+    descriptionField.value = '';
+    modalError.hidden = true;
+    resetCascadeAddRows();
+
+    await loadLevel('country', null);
+    await loadLevel('state', null);
+    await loadLevel('locality', null);
+    await loadLevel('street', null);
+    updateCodePreview();
+    ccModal.hidden = false;
+}
+
+async function openEditModal(cc) {
+    idField.value = cc.id;
+    ccModalTitle.textContent = Dashboard.t('business.ccModalTitleEdit');
+    companyDisplay.textContent = clientBranding?.companyName || '—';
+    sucursalField.value = cc.sucursal || '';
+    nameField.value = cc.name;
+    responsibleField.value = cc.responsible || '';
+    descriptionField.value = cc.description || '';
+    modalError.hidden = true;
+    resetCascadeAddRows();
+
+    await loadLevel('country', null);
+    cascadeLevels.country.select.value = cc.countryId || '';
+    await loadLevel('state', cc.countryId || null);
+    cascadeLevels.state.select.value = cc.stateId || '';
+    await loadLevel('locality', cc.stateId || null);
+    cascadeLevels.locality.select.value = cc.localityId || '';
+    await loadLevel('street', cc.localityId || null);
+    cascadeLevels.street.select.value = cc.streetId || '';
+
+    updateCodePreview();
+    ccModal.hidden = false;
+}
+
+function closeCcModal() {
+    ccModal.hidden = true;
+}
+
+async function saveCcModal() {
+    modalError.hidden = true;
+    const countryId = Number(cascadeLevels.country.select.value) || null;
+    const stateId = Number(cascadeLevels.state.select.value) || null;
+    const localityId = Number(cascadeLevels.locality.select.value) || null;
+    const streetId = Number(cascadeLevels.street.select.value) || null;
+    const sucursal = sucursalField.value.trim();
     const name = nameField.value.trim();
-    if (!code || !name) {
-        showError(Dashboard.t('admin.requiredFields'));
+    if (!countryId || !stateId || !localityId || !streetId || !sucursal || !name) {
+        modalError.textContent = Dashboard.t('admin.requiredFields');
+        modalError.hidden = false;
         return;
     }
     const responsible = responsibleField.value.trim();
     const description = descriptionField.value.trim();
-
     const editingId = idField.value;
     const url = editingId ? `/api/business/cost-centers/${editingId}` : '/api/business/cost-centers';
     const method = editingId ? 'PATCH' : 'POST';
 
-    submitBtn.disabled = true;
+    modalSaveBtn.disabled = true;
     try {
         const res = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ code, name, responsible, description }),
+            body: JSON.stringify({ countryId, stateId, localityId, streetId, sucursal, name, responsible, description }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            if (body.message === 'Cost center limit reached for this client.') {
-                showError(Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit }));
-            } else if (body.message === 'A cost center with that code already exists.') {
-                showError(Dashboard.t('business.ccCodeExists'));
-            } else {
-                showError(body.message || Dashboard.t('admin.saveError'));
-            }
+            modalError.textContent = body.message === 'Cost center limit reached for this client.'
+                ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
+                : (body.message || Dashboard.t('admin.saveError'));
+            modalError.hidden = false;
             return;
         }
         const { costCenter } = await res.json();
@@ -245,26 +415,45 @@ form.addEventListener('submit', async (event) => {
             costCenters = [...costCenters, costCenter].sort((a, b) => a.code.localeCompare(b.code));
         }
         renderCostCenters();
-        resetForm();
+        closeCcModal();
         Dashboard.showToast(Dashboard.t(editingId ? 'main.changeSaved' : 'main.recordSaved'), 'success');
     } catch {
-        showError(Dashboard.t('admin.saveError'));
+        modalError.textContent = Dashboard.t('admin.saveError');
+        modalError.hidden = false;
     } finally {
-        submitBtn.disabled = isAtLimit() && !idField.value;
+        modalSaveBtn.disabled = false;
     }
+}
+
+newBtn.addEventListener('click', openNewModal);
+modalSaveBtn.addEventListener('click', saveCcModal);
+modalCancelBtn.addEventListener('click', closeCcModal);
+ccModal.addEventListener('click', (event) => {
+    if (event.target === ccModal) closeCcModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !ccModal.hidden) closeCcModal();
 });
 
-cancelBtn.addEventListener('click', resetForm);
-
 document.addEventListener('dashboard:language-changed', () => {
-    if (!idField.value) submitBtn.textContent = Dashboard.t('business.addCostCenter');
     renderCostCenters();
+    LEVEL_ORDER.forEach((key) => {
+        const level = cascadeLevels[key];
+        level.addToggle.title = Dashboard.t(level.titleKey);
+        if (!level.select.disabled) {
+            const placeholder = level.select.querySelector('option[value=""]');
+            if (placeholder) placeholder.textContent = level.items.length ? Dashboard.t('business.ccSelectPlaceholder') : Dashboard.t('business.ccNoOptionsYet');
+        }
+    });
 });
 
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'business-centros-costo' });
         if (!role) return;
+        LEVEL_ORDER.forEach((key) => {
+            cascadeLevels[key].addToggle.title = Dashboard.t(cascadeLevels[key].titleKey);
+        });
         await loadCostCenters();
     } catch (err) {
         console.error('Business (Centros de Costo) failed to initialize:', err);

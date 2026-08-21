@@ -82,6 +82,39 @@ db.exec(`
         UNIQUE(client_id, code)
     );
 
+    -- Geographic catalog behind a Centro de Costos' código (País/Estado/
+    -- Localidad/Calle, each first-letter contributing to the composed code —
+    -- see computeCostCenterCodeBase below). Shared across every client on the
+    -- SaaS rather than per-client: real-world geography is the same fact
+    -- regardless of which client references it, so one client adding
+    -- "Zapopan" under Jalisco makes it available to every other client too,
+    -- instead of everyone re-typing the same catalog. Seeded once (see
+    -- seedGeoCatalog below) with real países + México's own estados; every
+    -- other level starts empty and grows only from admins clicking "+" in
+    -- the Centro de Costos modal.
+    CREATE TABLE IF NOT EXISTS geo_countries (
+        id    INTEGER PRIMARY KEY AUTOINCREMENT,
+        name  TEXT NOT NULL UNIQUE
+    );
+    CREATE TABLE IF NOT EXISTS geo_states (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        country_id  INTEGER NOT NULL REFERENCES geo_countries(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        UNIQUE(country_id, name)
+    );
+    CREATE TABLE IF NOT EXISTS geo_localities (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        state_id  INTEGER NOT NULL REFERENCES geo_states(id) ON DELETE CASCADE,
+        name      TEXT NOT NULL,
+        UNIQUE(state_id, name)
+    );
+    CREATE TABLE IF NOT EXISTS geo_streets (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        locality_id  INTEGER NOT NULL REFERENCES geo_localities(id) ON DELETE CASCADE,
+        name         TEXT NOT NULL,
+        UNIQUE(locality_id, name)
+    );
+
     -- Puestos de Trabajo (Administración de Personal, human-resources área):
     -- the client's own catalog of job titles, managed from
     -- Business-PuestosTrabajo.html. Mi Recurso Humano's Puesto field reads
@@ -551,6 +584,77 @@ if (!costCenterColumns.some((c) => c.name === 'record_code')) {
     costCentersMissingRecordCode.forEach((row) => {
         backfillCostCenterRecordCode.run(computeCostCenterRecordCode(row.client_id, row.code, row.account_number), row.id);
     });
+}
+// País/Estado/Localidad/Calle + Sucursal behind the new cascading código
+// builder. A cost center created before this migration keeps its old
+// free-typed code (these columns stay NULL/'' for it) until it's next
+// edited, at which point the modal requires real selections and the code
+// gets recomputed like any other record.
+if (!costCenterColumns.some((c) => c.name === 'country_id')) {
+    db.exec('ALTER TABLE cost_centers ADD COLUMN country_id INTEGER REFERENCES geo_countries(id)');
+    db.exec('ALTER TABLE cost_centers ADD COLUMN state_id INTEGER REFERENCES geo_states(id)');
+    db.exec('ALTER TABLE cost_centers ADD COLUMN locality_id INTEGER REFERENCES geo_localities(id)');
+    db.exec('ALTER TABLE cost_centers ADD COLUMN street_id INTEGER REFERENCES geo_streets(id)');
+    db.exec("ALTER TABLE cost_centers ADD COLUMN sucursal TEXT NOT NULL DEFAULT ''");
+}
+
+// Seed data for the geo catalog — a real, well-known list of países (not a
+// live internet fetch: no outbound access from this server has been set up,
+// and the world's country list is static enough to hardcode reliably) plus
+// México's 32 estados, since GEIPSA and its first clients are Mexican and
+// this is the catalog's most immediately useful depth. Every other
+// país/estado, plus every localidad/calle, starts empty and grows only from
+// an admin clicking "+" in the Centro de Costos modal — there's no
+// realistic way to preload those exhaustively. Runs once, guarded by
+// geo_countries already having rows.
+if (db.prepare('SELECT COUNT(*) AS n FROM geo_countries').get().n === 0) {
+    const GEO_COUNTRIES_SEED = [
+        'Afganistán', 'Albania', 'Alemania', 'Andorra', 'Angola', 'Antigua y Barbuda', 'Arabia Saudita',
+        'Argelia', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaiyán', 'Bahamas', 'Baréin',
+        'Bangladés', 'Barbados', 'Bélgica', 'Belice', 'Benín', 'Bielorrusia', 'Birmania (Myanmar)',
+        'Bolivia', 'Bosnia y Herzegovina', 'Botsuana', 'Brasil', 'Brunéi', 'Bulgaria', 'Burkina Faso',
+        'Burundi', 'Bután', 'Cabo Verde', 'Camboya', 'Camerún', 'Canadá', 'Catar', 'Chad', 'Chile',
+        'China', 'Chipre', 'Ciudad del Vaticano', 'Colombia', 'Comoras', 'Corea del Norte',
+        'Corea del Sur', 'Costa de Marfil', 'Costa Rica', 'Croacia', 'Cuba', 'Dinamarca', 'Dominica',
+        'Ecuador', 'Egipto', 'El Salvador', 'Emiratos Árabes Unidos', 'Eritrea', 'Eslovaquia',
+        'Eslovenia', 'España', 'Estados Unidos', 'Estonia', 'Esuatini', 'Etiopía', 'Filipinas',
+        'Finlandia', 'Fiyi', 'Francia', 'Gabón', 'Gambia', 'Georgia', 'Ghana', 'Granada', 'Grecia',
+        'Guatemala', 'Guyana', 'Guinea', 'Guinea-Bisáu', 'Guinea Ecuatorial', 'Haití', 'Honduras',
+        'Hungría', 'India', 'Indonesia', 'Irak', 'Irán', 'Irlanda', 'Islandia', 'Islas Marshall',
+        'Islas Salomón', 'Israel', 'Italia', 'Jamaica', 'Japón', 'Jordania', 'Kazajistán', 'Kenia',
+        'Kirguistán', 'Kiribati', 'Kuwait', 'Laos', 'Lesoto', 'Letonia', 'Líbano', 'Liberia', 'Libia',
+        'Liechtenstein', 'Lituania', 'Luxemburgo', 'Macedonia del Norte', 'Madagascar', 'Malasia',
+        'Malaui', 'Maldivas', 'Malí', 'Malta', 'Marruecos', 'Mauricio', 'Mauritania', 'México',
+        'Micronesia', 'Moldavia', 'Mónaco', 'Mongolia', 'Montenegro', 'Mozambique', 'Namibia', 'Nauru',
+        'Nepal', 'Nicaragua', 'Níger', 'Nigeria', 'Noruega', 'Nueva Zelanda', 'Omán', 'Países Bajos',
+        'Pakistán', 'Palaos', 'Panamá', 'Papúa Nueva Guinea', 'Paraguay', 'Perú', 'Polonia', 'Portugal',
+        'Reino Unido', 'República Centroafricana', 'República Checa', 'República del Congo',
+        'República Democrática del Congo', 'República Dominicana', 'Ruanda', 'Rumanía', 'Rusia',
+        'Samoa', 'San Cristóbal y Nieves', 'San Marino', 'San Vicente y las Granadinas', 'Santa Lucía',
+        'Santo Tomé y Príncipe', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leona', 'Singapur', 'Siria',
+        'Somalia', 'Sri Lanka', 'Sudáfrica', 'Sudán', 'Sudán del Sur', 'Suecia', 'Suiza', 'Surinam',
+        'Tailandia', 'Tanzania', 'Tayikistán', 'Timor Oriental', 'Togo', 'Tonga', 'Trinidad y Tobago',
+        'Túnez', 'Turkmenistán', 'Turquía', 'Tuvalu', 'Ucrania', 'Uganda', 'Uruguay', 'Uzbekistán',
+        'Vanuatu', 'Venezuela', 'Vietnam', 'Yemen', 'Yibuti', 'Zambia', 'Zimbabue',
+    ];
+    const GEO_MEXICO_STATES_SEED = [
+        'Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua',
+        'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Guanajuato', 'Guerrero', 'Hidalgo',
+        'Jalisco', 'Estado de México', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca',
+        'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco',
+        'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas',
+    ];
+    const insertCountry = db.prepare('INSERT INTO geo_countries (name) VALUES (?)');
+    const insertState = db.prepare('INSERT INTO geo_states (country_id, name) VALUES (?, ?)');
+    const seedGeoCatalog = db.transaction(() => {
+        let mexicoId = null;
+        GEO_COUNTRIES_SEED.forEach((name) => {
+            const { lastInsertRowid } = insertCountry.run(name);
+            if (name === 'México') mexicoId = lastInsertRowid;
+        });
+        GEO_MEXICO_STATES_SEED.forEach((name) => insertState.run(mexicoId, name));
+    });
+    seedGeoCatalog();
 }
 
 // A plan/package can carry a preset of módulos + centros de costo limit —
@@ -1444,18 +1548,75 @@ function getCostCenterById(id, clientId) {
     return db.prepare('SELECT * FROM cost_centers WHERE id = ? AND client_id = ?').get(id, clientId);
 }
 
-function createCostCenter({ clientId, code, name, description, responsible }) {
+// --- Query helpers: geo catalog (País/Estado/Localidad/Calle, global) -------
+function listCountries() {
+    return db.prepare('SELECT * FROM geo_countries ORDER BY name ASC').all();
+}
+function listStates(countryId) {
+    return db.prepare('SELECT * FROM geo_states WHERE country_id = ? ORDER BY name ASC').all(countryId);
+}
+function listLocalities(stateId) {
+    return db.prepare('SELECT * FROM geo_localities WHERE state_id = ? ORDER BY name ASC').all(stateId);
+}
+function listStreets(localityId) {
+    return db.prepare('SELECT * FROM geo_streets WHERE locality_id = ? ORDER BY name ASC').all(localityId);
+}
+// Each "add new" is idempotent (COLLATE NOCASE) rather than erroring on a
+// duplicate -- two admins typing "Jalisco" a moment apart should both just
+// end up pointing at the same catalog row, not fight over a UNIQUE error.
+function createCountry(name) {
+    const trimmed = (name || '').trim();
+    const existing = db.prepare('SELECT * FROM geo_countries WHERE name = ? COLLATE NOCASE').get(trimmed);
+    if (existing) return existing;
+    const { lastInsertRowid } = db.prepare('INSERT INTO geo_countries (name) VALUES (?)').run(trimmed);
+    return db.prepare('SELECT * FROM geo_countries WHERE id = ?').get(lastInsertRowid);
+}
+function createState(countryId, name) {
+    const trimmed = (name || '').trim();
+    const existing = db.prepare('SELECT * FROM geo_states WHERE country_id = ? AND name = ? COLLATE NOCASE').get(countryId, trimmed);
+    if (existing) return existing;
+    const { lastInsertRowid } = db.prepare('INSERT INTO geo_states (country_id, name) VALUES (?, ?)').run(countryId, trimmed);
+    return db.prepare('SELECT * FROM geo_states WHERE id = ?').get(lastInsertRowid);
+}
+function createLocality(stateId, name) {
+    const trimmed = (name || '').trim();
+    const existing = db.prepare('SELECT * FROM geo_localities WHERE state_id = ? AND name = ? COLLATE NOCASE').get(stateId, trimmed);
+    if (existing) return existing;
+    const { lastInsertRowid } = db.prepare('INSERT INTO geo_localities (state_id, name) VALUES (?, ?)').run(stateId, trimmed);
+    return db.prepare('SELECT * FROM geo_localities WHERE id = ?').get(lastInsertRowid);
+}
+function createStreet(localityId, name) {
+    const trimmed = (name || '').trim();
+    const existing = db.prepare('SELECT * FROM geo_streets WHERE locality_id = ? AND name = ? COLLATE NOCASE').get(localityId, trimmed);
+    if (existing) return existing;
+    const { lastInsertRowid } = db.prepare('INSERT INTO geo_streets (locality_id, name) VALUES (?, ?)').run(localityId, trimmed);
+    return db.prepare('SELECT * FROM geo_streets WHERE id = ?').get(lastInsertRowid);
+}
+
+function createCostCenter({ clientId, countryId, stateId, localityId, streetId, sucursal, name, description, responsible }) {
+    const client = getClientById(clientId);
+    const baseCode = buildCostCenterCodeBase(client, countryId, stateId, localityId, streetId, sucursal);
     const create = db.transaction(() => {
+        const code = generateUniqueCostCenterCode(clientId, baseCode);
         const accountNumber = db
             .prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM cost_centers WHERE client_id = ?')
             .get(clientId).n;
         const result = db
             .prepare(`
-                INSERT INTO cost_centers (client_id, code, name, description, responsible, account_number, record_code)
-                VALUES (@clientId, @code, @name, @description, @responsible, @accountNumber, @recordCode)
+                INSERT INTO cost_centers (
+                    client_id, code, name, description, responsible,
+                    country_id, state_id, locality_id, street_id, sucursal,
+                    account_number, record_code
+                )
+                VALUES (
+                    @clientId, @code, @name, @description, @responsible,
+                    @countryId, @stateId, @localityId, @streetId, @sucursal,
+                    @accountNumber, @recordCode
+                )
             `)
             .run({
                 clientId, code, name, description: description || '', responsible: responsible || '',
+                countryId, stateId, localityId, streetId, sucursal: sucursal || '',
                 accountNumber, recordCode: computeCostCenterRecordCode(clientId, code, accountNumber),
             });
         return result.lastInsertRowid;
@@ -1464,20 +1625,32 @@ function createCostCenter({ clientId, code, name, description, responsible }) {
 }
 
 // Used only for change-history diffing (see logFieldChanges) — updateCostCenter
-// itself always overwrites all 4 columns, same as before this map existed.
+// itself always overwrites every column, same as before this map existed.
 const COST_CENTER_FIELDS = {
     code: { column: 'code', fieldKey: 'business.ccCode' },
     name: { column: 'name', fieldKey: 'business.ccName' },
     responsible: { column: 'responsible', fieldKey: 'business.ccResponsible' },
     description: { column: 'description', fieldKey: 'business.ccDescription' },
+    sucursal: { column: 'sucursal', fieldKey: 'business.ccBranch' },
 };
 
-function updateCostCenter(id, clientId, { code, name, description, responsible }) {
+// code is recomputed from the new geo selections (not resubmitted directly)
+// -- unlike record_code (frozen forever at creation, see
+// computeCostCenterRecordCode's own comment), código is allowed to change on
+// edit since it exists to reflect the currently-selected location.
+function updateCostCenter(id, clientId, { countryId, stateId, localityId, streetId, sucursal, name, description, responsible }) {
+    const client = getClientById(clientId);
+    const baseCode = buildCostCenterCodeBase(client, countryId, stateId, localityId, streetId, sucursal);
+    const code = generateUniqueCostCenterCode(clientId, baseCode, id);
     db.prepare(`
         UPDATE cost_centers
-        SET code = @code, name = @name, description = @description, responsible = @responsible
+        SET code = @code, name = @name, description = @description, responsible = @responsible,
+            country_id = @countryId, state_id = @stateId, locality_id = @localityId, street_id = @streetId, sucursal = @sucursal
         WHERE id = @id AND client_id = @clientId
-    `).run({ id, clientId, code, name, description: description || '', responsible: responsible || '' });
+    `).run({
+        id, clientId, code, name, description: description || '', responsible: responsible || '',
+        countryId, stateId, localityId, streetId, sucursal: sucursal || '',
+    });
     return getCostCenterById(id, clientId);
 }
 
@@ -2010,6 +2183,39 @@ function computeCostCenterRecordCode(clientId, code, accountNumber) {
     const companyCode = stripAccents(client?.company_abbreviation || client?.company_name || '')
         .replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3) || 'CLI';
     return `${companyCode}${code}${COST_CENTER_RECORD_SCREEN_CODE}${padAccountNumber(accountNumber)}`;
+}
+
+// A Centro de Costos' own código -- Empresa + País + Estado + Localidad +
+// Calle + Sucursal, one letter each (see the cascading picker in
+// Business-CentrosCosto.js). Unlike record_code above, this one is allowed
+// to change on edit, since it exists to describe the currently-selected
+// location, not to act as a permanent accounting reference.
+function costCenterCodeLetter(word) {
+    return (stripAccents(word || '').trim().charAt(0) || 'X').toUpperCase();
+}
+function buildCostCenterCodeBase(client, countryId, stateId, localityId, streetId, sucursal) {
+    const country = countryId ? db.prepare('SELECT name FROM geo_countries WHERE id = ?').get(countryId) : null;
+    const state = stateId ? db.prepare('SELECT name FROM geo_states WHERE id = ?').get(stateId) : null;
+    const locality = localityId ? db.prepare('SELECT name FROM geo_localities WHERE id = ?').get(localityId) : null;
+    const street = streetId ? db.prepare('SELECT name FROM geo_streets WHERE id = ?').get(streetId) : null;
+    return [
+        client?.company_abbreviation || client?.company_name,
+        country?.name, state?.name, locality?.name, street?.name, sucursal,
+    ].map(costCenterCodeLetter).join('');
+}
+// Two different real places can share the same 6 first letters (two states
+// both starting with "J", say) -- rather than reject the second one, append
+// "-2", "-3"... until it's unique for this client. excludeId lets an edit
+// re-check against every OTHER cost center without colliding with itself.
+function generateUniqueCostCenterCode(clientId, baseCode, excludeId) {
+    const exists = db.prepare('SELECT 1 FROM cost_centers WHERE client_id = ? AND code = ? AND id != ?');
+    let candidate = baseCode;
+    let n = 2;
+    while (exists.get(clientId, candidate, excludeId || 0)) {
+        candidate = `${baseCode}-${n}`;
+        n += 1;
+    }
+    return candidate;
 }
 
 // Also creates the worker's own login account in the same step — "en
@@ -3110,6 +3316,14 @@ module.exports = {
     createCostCenter,
     updateCostCenter,
     setCostCenterStatus,
+    listCountries,
+    listStates,
+    listLocalities,
+    listStreets,
+    createCountry,
+    createState,
+    createLocality,
+    createStreet,
     listJobPositions,
     getJobPositionById,
     createJobPosition,

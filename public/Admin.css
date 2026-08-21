@@ -231,6 +231,79 @@ body.dark-mode .admin-error{
     color: var(--color-text-primary);
 }
 
+/* Centro de Costos — cascading País/Estado/Localidad/Calle picker inside
+   the "+ Nuevo Centro Costos" modal (see Business-CentrosCosto.js). Each
+   level is a <select> plus a "+" toggle that reveals a small inline
+   add-new row underneath it. */
+#cc-modal .modal-panel{
+    max-width: 36rem;
+}
+.cc-cascade-grid{
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.cc-select-row{
+    display: flex;
+    gap: 0.4rem;
+}
+.cc-select-row select{
+    flex: 1;
+    min-width: 0;
+}
+.cc-add-new-btn{
+    flex-shrink: 0;
+    width: 2.3rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.cc-add-new-btn:disabled{
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.cc-add-new-row{
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+}
+.cc-add-new-row input{
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.8rem;
+}
+.cc-add-new-row .btn-secondary{
+    padding: 0.5rem 0.8rem;
+    font-size: 0.78rem;
+}
+.cc-code-preview{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 0.9rem;
+    margin-bottom: 1rem;
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+}
+.cc-code-preview strong{
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    color: var(--color-text-primary);
+}
+.cc-code-preview span{
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+
 /* One-time generated credentials banner */
 .admin-generated-credentials{
     margin-bottom: 1.5rem;
