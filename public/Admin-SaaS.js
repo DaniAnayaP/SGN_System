@@ -70,6 +70,37 @@ function showError(message) {
     errorBanner.textContent = message;
     errorBanner.hidden = false;
 }
+
+// validateClientBody (server.js) returns plain English text meant for
+// developers, never run through i18n -- this maps the ones a real admin can
+// actually trigger via this form back to a translated message, same pattern
+// already used elsewhere for "Cost center limit reached"/"A cost center
+// with that code already exists". Falls back to the raw string for
+// anything not covered here (no worse than before this map existed).
+const CLIENT_FORM_ERROR_MAP = [
+    ['companyName, contactName and email are required.', 'admin.requiredFields'],
+    ['billingEmail must be a valid email address.', 'admin.errBillingEmailInvalid'],
+    ['La cantidad de caracteres no corresponden a un RFC', 'admin.rfcLengthError'],
+    ['companyAbbreviation must be at most 6 characters.', 'admin.errCompanyAbbreviationLength'],
+    ['logoDataUrl must be an image data URL.', 'admin.errLogoFormat'],
+    ['Logo image is too large (max ~350KB).', 'admin.errLogoTooLarge'],
+    ['contractFileDataUrl must be a PDF data URL.', 'admin.errContractFormat'],
+    ['Contract file is too large (max ~5MB).', 'admin.errContractTooLarge'],
+    ['contractWordDataUrl must be a Word document data URL.', 'admin.errContractWordFormat'],
+    ['Contract Word file is too large (max ~5MB).', 'admin.errContractWordTooLarge'],
+    ['contractStartDate must be a date in YYYY-MM-DD format.', 'admin.errContractStartDateFormat'],
+    ['contractRegisteredDate must be a date in YYYY-MM-DD format.', 'admin.errContractRegisteredDateFormat'],
+    ['contractEndDate must be a date in YYYY-MM-DD format.', 'admin.errContractEndDateFormat'],
+    ['monthlyPayment must be a number >= 0.', 'admin.errMonthlyPaymentInvalid'],
+    ['initialPayment must be a number >= 0.', 'admin.errInitialPaymentInvalid'],
+    ['primaryColor must be a hex color like #1a73e8.', 'admin.errPrimaryColorInvalid'],
+    ['secondaryColor must be a hex color like #1a73e8.', 'admin.errSecondaryColorInvalid'],
+];
+function translateClientFormError(message) {
+    if (!message) return Dashboard.t('admin.saveError');
+    const entry = CLIENT_FORM_ERROR_MAP.find(([raw]) => raw === message);
+    return entry ? Dashboard.t(entry[1]) : message;
+}
 function clearError() {
     errorBanner.hidden = true;
     errorBanner.textContent = '';
@@ -612,7 +643,7 @@ form.addEventListener('submit', async (event) => {
     // Razón Social is legally significant — always confirm before saving,
     // even on an otherwise-unrelated edit, per the explicit request that
     // led to this field existing at all.
-    if (!confirm(Dashboard.t('admin.razonSocialConfirm'))) return;
+    if (!(await Dashboard.confirm(Dashboard.t('admin.razonSocialConfirm')))) return;
 
     const { seed, ...currentPalette } = paletteWidget.getPalette();
     const payload = {
@@ -660,7 +691,7 @@ form.addEventListener('submit', async (event) => {
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            showError(body.message || Dashboard.t('admin.saveError'));
+            showError(translateClientFormError(body.message));
             return;
         }
         const { generatedAdmin } = await res.json();

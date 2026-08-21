@@ -200,7 +200,7 @@ async function authorizeScheduled(scheduled) {
 }
 
 async function deleteScheduled(scheduled) {
-    if (!confirm(Dashboard.t('main.scheduledDeleteConfirm'))) return;
+    if (!(await Dashboard.confirm(Dashboard.t('main.scheduledDeleteConfirm')))) return;
     try {
         const res = await fetch(`/api/business/scheduled-reports/${scheduled.id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) throw new Error('delete failed');

@@ -194,7 +194,7 @@ function buildLockedCell(plan) {
 }
 
 async function activatePlan(plan) {
-    if (!confirm(Dashboard.t('admin.planActivateConfirm'))) return;
+    if (!(await Dashboard.confirm(Dashboard.t('admin.planActivateConfirm')))) return;
     try {
         const res = await fetch(`/api/admin/plans/${plan.id}/activate`, { method: 'POST', credentials: 'include' });
         if (!res.ok) {
@@ -371,7 +371,7 @@ function openCreateModal() {
 }
 
 async function removePlan(plan) {
-    if (!confirm(Dashboard.t('admin.confirmDeletePlan'))) return;
+    if (!(await Dashboard.confirm(Dashboard.t('admin.confirmDeletePlan')))) return;
     try {
         const res = await fetch(`/api/admin/plans/${plan.id}`, {
             method: 'DELETE',

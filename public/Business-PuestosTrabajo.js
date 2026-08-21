@@ -205,7 +205,7 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyJpFilters);
 
 async function removeJobPosition(jp) {
-    if (!confirm(Dashboard.t('business.jobPositionDeleteConfirm'))) return;
+    if (!(await Dashboard.confirm(Dashboard.t('business.jobPositionDeleteConfirm')))) return;
     try {
         const res = await fetch(`/api/business/job-positions/${jp.id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) throw new Error('delete failed');

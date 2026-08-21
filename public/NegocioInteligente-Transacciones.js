@@ -437,7 +437,7 @@ async function authorizeReport(report) {
 }
 
 async function deleteReport(report) {
-    if (!confirm(Dashboard.t('main.reportDeleteConfirm'))) return;
+    if (!(await Dashboard.confirm(Dashboard.t('main.reportDeleteConfirm')))) return;
     try {
         const res = await fetch(`/api/business/intelligent-reports/${report.id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) throw new Error('delete failed');

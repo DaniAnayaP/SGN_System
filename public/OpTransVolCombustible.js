@@ -143,7 +143,7 @@ function ensureEmptyState() {
 }
 
 async function deleteFuelRecord(id, tr) {
-    if (!confirm(Dashboard.t('main.recordDeleteConfirm'))) return;
+    if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;
     try {
         const res = await fetch(`/api/business/fuel-records/${id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) throw new Error('delete failed');

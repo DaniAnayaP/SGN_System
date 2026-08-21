@@ -115,7 +115,7 @@ function startEdit(profile) {
 }
 
 async function removeProfile(profile) {
-    if (!confirm(Dashboard.t('business.confirmDeleteProfile'))) return;
+    if (!(await Dashboard.confirm(Dashboard.t('business.confirmDeleteProfile')))) return;
     try {
         const res = await fetch(`/api/business/profiles/${profile.id}`, {
             method: 'DELETE',

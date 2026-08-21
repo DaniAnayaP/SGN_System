@@ -95,6 +95,66 @@ function showToast(message, type = 'info', { title, duration = TOAST_DEFAULT_DUR
     return { close };
 }
 
+// --- Confirm dialog (styled replacement for window.confirm) ----------------
+// Dashboard.confirm(message) -- returns a Promise<boolean>. Same visual
+// language as the toast system (colored icon badge, surface card) but a
+// blocking modal with Aceptar/Cancelar, since every caller needs a boolean
+// answer before continuing (a toast alone can't do that). One hidden
+// overlay is reused across every call instead of building a new DOM tree
+// each time.
+function ensureConfirmModal() {
+    let modal = document.getElementById('confirm-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'confirm-modal';
+    modal.className = 'modal-overlay confirm-modal-overlay';
+    modal.hidden = true;
+    modal.innerHTML = `
+        <div class="modal-panel confirm-modal-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-modal-message">
+            <span class="confirm-modal-icon-badge"><i class="bx bx-help-circle" aria-hidden="true"></i></span>
+            <p class="confirm-modal-message" id="confirm-modal-message"></p>
+            <div class="admin-form-actions confirm-modal-actions">
+                <button type="button" class="btn btn-secondary" id="confirm-modal-cancel"></button>
+                <button type="button" class="btn" id="confirm-modal-accept"></button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    return modal;
+}
+
+function confirmDialog(message) {
+    return new Promise((resolve) => {
+        const modal = ensureConfirmModal();
+        modal.querySelector('.confirm-modal-message').textContent = message;
+        const acceptBtn = modal.querySelector('#confirm-modal-accept');
+        const cancelBtn = modal.querySelector('#confirm-modal-cancel');
+        acceptBtn.textContent = t('admin.confirmAccept');
+        cancelBtn.textContent = t('admin.cancel');
+
+        const done = (result) => {
+            modal.hidden = true;
+            acceptBtn.removeEventListener('click', onAccept);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            document.removeEventListener('keydown', onKeydown);
+            resolve(result);
+        };
+        const onAccept = () => done(true);
+        const onCancel = () => done(false);
+        const onBackdrop = (event) => { if (event.target === modal) done(false); };
+        const onKeydown = (event) => { if (event.key === 'Escape') done(false); };
+
+        acceptBtn.addEventListener('click', onAccept);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onBackdrop);
+        document.addEventListener('keydown', onKeydown);
+
+        modal.hidden = false;
+        acceptBtn.focus();
+    });
+}
+
 const API_BASE = window.APP_CONFIG?.apiBase || '/api';
 const SUPPORTED_LANGS = ['en', 'es'];
 const DEFAULT_LANG = 'en';
@@ -2838,7 +2898,7 @@ function renderVisibilityPickerList() {
     state.columnKeys.forEach((key) => {
         const { row, input } = buildColumnPickerRow(key, state.labels[key] || key);
         input.checked = !visibilityPickerState.hiddenSet.has(key);
-        input.addEventListener('change', () => {
+        input.addEventListener('change', async () => {
             // Never allow hiding the last remaining visible column.
             const visibleCount = state.columnKeys.length - visibilityPickerState.hiddenSet.size;
             if (!input.checked && visibleCount <= 1) {
@@ -2850,7 +2910,7 @@ function renderVisibilityPickerList() {
             // invisible until someone remembers to check the pin picker too
             // — confirm before letting that happen.
             if (!input.checked && state.config.pinned.includes(key)) {
-                if (!confirm(t('main.columnHidePinnedConfirm'))) {
+                if (!(await confirmDialog(t('main.columnHidePinnedConfirm')))) {
                     input.checked = true;
                     return;
                 }
@@ -4399,7 +4459,7 @@ async function performLogout() {
         const message = greeting
             ? t('sidebar.logoutConfirmGreeting', { name: greeting })
             : t('sidebar.logoutConfirm');
-        if (!window.confirm(message)) return;
+        if (!(await confirmDialog(message))) return;
     }
 
     sessionStorage.removeItem('sgn_token');
@@ -5192,4 +5252,5 @@ window.Dashboard = {
     initDataTableColumns,
     getVisibleTableSnapshot,
     showToast,
+    confirm: confirmDialog,
 };

@@ -1169,6 +1169,41 @@ body.dark-mode .admin-save-status{
 .evidence-preview-panel{
     max-width: 40rem;
 }
+
+/* Confirm dialog (Dashboard.js: Dashboard.confirm) -- styled replacement for
+   window.confirm, same icon-badge visual language as the toast system
+   (see .toast-icon-badge in Inicio-en.css) but centered as a small modal
+   instead of a corner notification, since callers need a blocking yes/no
+   answer. */
+.confirm-modal-panel{
+    max-width: 24rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.9rem;
+}
+.confirm-modal-icon-badge{
+    flex-shrink: 0;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FFFFFF;
+    font-size: 1.4rem;
+    background-color: #b8860b;
+}
+.confirm-modal-message{
+    font-size: 0.9rem;
+    color: var(--color-text-primary);
+    line-height: 1.5;
+}
+.confirm-modal-actions{
+    justify-content: center;
+    width: 100%;
+}
 .evidence-preview-image{
     display: block;
     max-width: 100%;
