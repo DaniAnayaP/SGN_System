@@ -60,7 +60,7 @@ const {
     getCostCenterById,
     createCostCenter,
     updateCostCenter,
-    deleteCostCenter,
+    setCostCenterStatus,
     listJobPositions,
     getJobPositionById,
     createJobPosition,
@@ -1449,10 +1449,44 @@ function validateCostCenterBody(body) {
     return null;
 }
 
+// Control Interno for Servicio Contratado's own table -- same recipe as
+// FUEL_RECORD_*_LABEL/mapFuelRecord above, this table's 3 fixed labels.
+// Centro Costos itself stays blank: a cost center record isn't tied to
+// ANOTHER cost center the way an operational record (a fuel purchase, an
+// HR worker) is, so there's nothing meaningful to put there.
+const COST_CENTER_AREA_LABEL = '';
+const COST_CENTER_MODULE_LABEL = 'Administración del Negocio';
+const COST_CENTER_SCREEN_LABEL = 'Servicio Contratado';
+
+function mapCostCenter(row, companyName) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        code: row.code,
+        name: row.name,
+        description: row.description,
+        responsible: row.responsible,
+        status: row.status,
+        accountNumber: row.account_number,
+        recordCode: row.record_code,
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: COST_CENTER_AREA_LABEL,
+            modulo: COST_CENTER_MODULE_LABEL,
+            pantalla: COST_CENTER_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
 app.get('/api/business/cost-centers', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const client = getClientById(req.user.clientId);
-    res.json({ costCenters: listCostCenters(req.user.clientId), limit: client.cost_centers_limit });
+    res.json({
+        costCenters: listCostCenters(req.user.clientId).map((cc) => mapCostCenter(cc, client.company_name)),
+        limit: client.cost_centers_limit,
+    });
 });
 
 app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, res) => {
@@ -1469,7 +1503,7 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
             clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
             recordLabel: costCenter.code, action: 'create', changedBy: req.user.name,
         });
-        res.status(201).json({ costCenter });
+        res.status(201).json({ costCenter: mapCostCenter(costCenter, client.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(409).json({ message: 'A cost center with that code already exists.' });
@@ -1493,7 +1527,7 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     checkAndLogFieldChanges(req, existing, { code, name, description, responsible }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
     try {
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, { code, name, description, responsible });
-        res.json({ costCenter });
+        res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(409).json({ message: 'A cost center with that code already exists.' });
@@ -1502,15 +1536,20 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     }
 });
 
-app.delete('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (req, res) => {
+// No DELETE route -- a cost center's account_number/record_code are a
+// permanent accounting sequence (same reasoning as clients themselves, see
+// db.js's own migration comment), so only Activar/Desactivar from here on.
+app.patch('/api/business/cost-centers/:id/status', requireAuth, requireClientAdmin, (req, res) => {
     const existing = getCostCenterById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
+    const { status } = req.body || {};
+    if (status !== 'active' && status !== 'inactive') return res.status(400).json({ message: 'status must be active or inactive.' });
+    const costCenter = setCostCenterStatus(req.params.id, req.user.clientId, status);
     logTableChange({
-        clientId: req.user.clientId, tableKey: 'centros-costo', recordId: existing.id,
-        recordLabel: existing.code, action: 'delete', changedBy: req.user.name,
+        clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
+        recordLabel: costCenter.code, action: 'update', changedBy: req.user.name,
     });
-    deleteCostCenter(req.params.id, req.user.clientId);
-    res.status(204).end();
+    res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
 });
 
 // --- Puestos de Trabajo (job positions, scoped to one client) ---------------

@@ -504,6 +504,55 @@ clientsMissingBigDate.forEach((row) => backfillBigDate.run(generateBigDateId(), 
 // RFC on record don't collide with each other.
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_rfc ON clients(rfc) WHERE rfc != ''");
 
+// # Registro Único (Contable): the client's own 6-digit accounting account
+// number, global across the whole SaaS (client #1 ever created is 000001,
+// and so on) — assigned once at creation and never reused, which is exactly
+// why a client can only ever be Activado/Desactivado, never deleted (see the
+// "no hard-delete" note above createClient). Existing rows (created before
+// this migration) get backfilled here from their own id order, which is a
+// safe proxy for creation order since ids are AUTOINCREMENT (never reused)
+// and no client has ever actually been deletable.
+if (!clientColumns.some((c) => c.name === 'account_number')) {
+    db.exec('ALTER TABLE clients ADD COLUMN account_number INTEGER');
+    db.exec(`
+        UPDATE clients SET account_number = (
+            SELECT COUNT(*) FROM clients c2 WHERE c2.id <= clients.id
+        ) WHERE account_number IS NULL
+    `);
+}
+
+const costCenterColumns = db.prepare('PRAGMA table_info(cost_centers)').all();
+// Same "no hard-delete, only Activar/Desactivar" rule as clients, for the
+// same reason (a Centro de Costos also gets its own 6-digit accounting
+// account number, account_number below -- this time sequential PER CLIENT,
+// each client's own cost centers starting at 000001 independently).
+if (!costCenterColumns.some((c) => c.name === 'status')) {
+    db.exec("ALTER TABLE cost_centers ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+}
+if (!costCenterColumns.some((c) => c.name === 'account_number')) {
+    db.exec('ALTER TABLE cost_centers ADD COLUMN account_number INTEGER');
+    db.exec(`
+        UPDATE cost_centers SET account_number = (
+            SELECT COUNT(*) FROM cost_centers c2
+            WHERE c2.client_id = cost_centers.client_id AND c2.id <= cost_centers.id
+        ) WHERE account_number IS NULL
+    `);
+}
+// # Registro Único Base de Datos -- same composite-code idea as Mi Recurso
+// Humano's own computeHrRecordCode (company abbreviation + this record's own
+// code + a fixed 3-letter screen code + the consecutivo), frozen at creation
+// like that one is, not recomputed on every render. Backfilled one row at a
+// time (needs each row's own client lookup, not expressible as a single SQL
+// UPDATE) for any cost center created before this migration.
+if (!costCenterColumns.some((c) => c.name === 'record_code')) {
+    db.exec("ALTER TABLE cost_centers ADD COLUMN record_code TEXT NOT NULL DEFAULT ''");
+    const costCentersMissingRecordCode = db.prepare("SELECT id, client_id, code, account_number FROM cost_centers WHERE record_code = ''").all();
+    const backfillCostCenterRecordCode = db.prepare('UPDATE cost_centers SET record_code = ? WHERE id = ?');
+    costCentersMissingRecordCode.forEach((row) => {
+        backfillCostCenterRecordCode.run(computeCostCenterRecordCode(row.client_id, row.code, row.account_number), row.id);
+    });
+}
+
 // A plan/package can carry a preset of módulos + centros de costo limit —
 // the same options as Contrataciones — so assigning a plan to a client
 // (Clientes Nuevos) can stamp its Contrataciones automatically instead of
@@ -1013,38 +1062,42 @@ function createClient({
     contractWordDataUrl, contractWordFileName,
     contractedCost, monthlyPayment, initialPayment,
 }) {
-    const result = db
-        .prepare(`
-            INSERT INTO clients (
-                company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette,
-                mission, vision, core_values, history,
-                rfc, company_nickname, company_abbreviation, owner_name, billing_email, razon_social, big_date_number,
-                contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
-                contract_word_data_url, contract_word_file_name,
-                contracted_cost, monthly_payment, initial_payment
-            )
-            VALUES (
-                @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
-                @mission, @vision, @coreValues, @history,
-                @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @razonSocial, @bigDateNumber,
-                @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
-                @contractWordDataUrl, @contractWordFileName,
-                @contractedCost, @monthlyPayment, @initialPayment
-            )
-        `)
-        .run({
-            companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto',
-            logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
-            seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
-            mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
-            rfc: rfc || '', companyNickname: companyNickname || '', companyAbbreviation: companyAbbreviation || '',
-            ownerName: ownerName || '', billingEmail: billingEmail || '', razonSocial: razonSocial || '', bigDateNumber: generateBigDateId(),
-            contractStartDate: contractStartDate || null, contractRegisteredDate: contractRegisteredDate || null,
-            contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
-            contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
-            contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
-        });
-    return getClientById(result.lastInsertRowid);
+    const create = db.transaction(() => {
+        const accountNumber = db.prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM clients').get().n;
+        return db
+            .prepare(`
+                INSERT INTO clients (
+                    company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette,
+                    mission, vision, core_values, history,
+                    rfc, company_nickname, company_abbreviation, owner_name, billing_email, razon_social, big_date_number, account_number,
+                    contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
+                    contract_word_data_url, contract_word_file_name,
+                    contracted_cost, monthly_payment, initial_payment
+                )
+                VALUES (
+                    @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
+                    @mission, @vision, @coreValues, @history,
+                    @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @razonSocial, @bigDateNumber, @accountNumber,
+                    @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
+                    @contractWordDataUrl, @contractWordFileName,
+                    @contractedCost, @monthlyPayment, @initialPayment
+                )
+            `)
+            .run({
+                companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto',
+                logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
+                seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
+                mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
+                rfc: rfc || '', companyNickname: companyNickname || '', companyAbbreviation: companyAbbreviation || '',
+                ownerName: ownerName || '', billingEmail: billingEmail || '', razonSocial: razonSocial || '',
+                bigDateNumber: generateBigDateId(), accountNumber,
+                contractStartDate: contractStartDate || null, contractRegisteredDate: contractRegisteredDate || null,
+                contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
+                contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
+                contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
+            }).lastInsertRowid;
+    });
+    return getClientById(create());
 }
 
 // contractedCost is intentionally handled with COALESCE, not a plain
@@ -1392,13 +1445,22 @@ function getCostCenterById(id, clientId) {
 }
 
 function createCostCenter({ clientId, code, name, description, responsible }) {
-    const result = db
-        .prepare(`
-            INSERT INTO cost_centers (client_id, code, name, description, responsible)
-            VALUES (@clientId, @code, @name, @description, @responsible)
-        `)
-        .run({ clientId, code, name, description: description || '', responsible: responsible || '' });
-    return getCostCenterById(result.lastInsertRowid, clientId);
+    const create = db.transaction(() => {
+        const accountNumber = db
+            .prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM cost_centers WHERE client_id = ?')
+            .get(clientId).n;
+        const result = db
+            .prepare(`
+                INSERT INTO cost_centers (client_id, code, name, description, responsible, account_number, record_code)
+                VALUES (@clientId, @code, @name, @description, @responsible, @accountNumber, @recordCode)
+            `)
+            .run({
+                clientId, code, name, description: description || '', responsible: responsible || '',
+                accountNumber, recordCode: computeCostCenterRecordCode(clientId, code, accountNumber),
+            });
+        return result.lastInsertRowid;
+    });
+    return getCostCenterById(create(), clientId);
 }
 
 // Used only for change-history diffing (see logFieldChanges) — updateCostCenter
@@ -1419,8 +1481,14 @@ function updateCostCenter(id, clientId, { code, name, description, responsible }
     return getCostCenterById(id, clientId);
 }
 
-function deleteCostCenter(id, clientId) {
-    db.prepare('DELETE FROM cost_centers WHERE id = ? AND client_id = ?').run(id, clientId);
+// No hard-delete -- account_number/record_code are a permanent accounting
+// sequence, same "Activar/Desactivar only" reasoning as clients (see the
+// migration block near the top of this file). Deleting a row here would
+// leave a hole in that sequence, which is exactly what this rule exists to
+// prevent.
+function setCostCenterStatus(id, clientId, status) {
+    db.prepare('UPDATE cost_centers SET status = @status WHERE id = @id AND client_id = @clientId').run({ id, clientId, status });
+    return getCostCenterById(id, clientId);
 }
 
 // --- Query helpers: job positions (Puestos de Trabajo, scoped to one client) -
@@ -1921,6 +1989,27 @@ function computeHrRecordCode(clientId, costCenterId, recordNumber) {
     const costCenter = costCenterId ? getCostCenterById(costCenterId, clientId) : null;
     const costCenterCode = costCenter ? costCenter.code : 'SCC';
     return `${companyCode}${costCenterCode}${HR_RECORD_SCREEN_CODE}${recordNumber}`;
+}
+
+// 6-digit accounting account number ("000001", "000002"...) -- clients and
+// cost centers both get one of these (see the migration blocks above),
+// clients global across the SaaS, cost centers sequential per client.
+function padAccountNumber(n) {
+    return String(n).padStart(6, '0');
+}
+
+// Centro de Costos' own "# Registro Único Base de Datos" -- same composite-
+// code idea as computeHrRecordCode just above (company abbreviation + this
+// record's own code + a fixed 3-letter screen code + its own 6-digit
+// account_number), frozen at creation for the same reason: a later rename
+// (company abbreviation, or this cost center's own code) must not
+// retroactively rewrite an already-issued record's code.
+const COST_CENTER_RECORD_SCREEN_CODE = 'CCT';
+function computeCostCenterRecordCode(clientId, code, accountNumber) {
+    const client = getClientById(clientId);
+    const companyCode = stripAccents(client?.company_abbreviation || client?.company_name || '')
+        .replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3) || 'CLI';
+    return `${companyCode}${code}${COST_CENTER_RECORD_SCREEN_CODE}${padAccountNumber(accountNumber)}`;
 }
 
 // Also creates the worker's own login account in the same step — "en
@@ -3020,7 +3109,7 @@ module.exports = {
     getCostCenterById,
     createCostCenter,
     updateCostCenter,
-    deleteCostCenter,
+    setCostCenterStatus,
     listJobPositions,
     getJobPositionById,
     createJobPosition,

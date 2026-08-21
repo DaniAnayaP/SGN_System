@@ -21,6 +21,12 @@ const limitStatus = document.getElementById('cc-limit-status');
 let costCenters = [];
 let limit = 0;
 
+// Mirrors db.js's own padAccountNumber -- the raw accountNumber field is
+// just an integer, padded to 6 digits only for display here.
+function padAccountNumber(n) {
+    return String(n).padStart(6, '0');
+}
+
 function showError(message) {
     errorBanner.textContent = message;
     errorBanner.hidden = false;
@@ -50,6 +56,12 @@ function resetForm() {
     refreshLimitStatus();
 }
 
+const CONTROL_INTERNO_COLS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+
 function renderCostCenters() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = costCenters.length > 0;
@@ -60,6 +72,14 @@ function renderCostCenters() {
         // above (startEdit) — no per-column permission model like the
         // operational tables, so every row qualifies for the legend.
         tr.classList.add('data-table-row-editable');
+
+        CONTROL_INTERNO_COLS.forEach((col) => {
+            const td = document.createElement('td');
+            td.dataset.col = col;
+            td.className = 'col-system';
+            td.textContent = cc[col] || '—';
+            tr.appendChild(td);
+        });
 
         const tdCode = document.createElement('td');
         tdCode.dataset.col = 'ccCode';
@@ -73,6 +93,18 @@ function renderCostCenters() {
         const tdDescription = document.createElement('td');
         tdDescription.dataset.col = 'ccDescription';
         tdDescription.textContent = cc.description || '—';
+        const tdAccountNumber = document.createElement('td');
+        tdAccountNumber.dataset.col = 'ccAccountNumber';
+        tdAccountNumber.textContent = padAccountNumber(cc.accountNumber);
+        const tdRecordCode = document.createElement('td');
+        tdRecordCode.dataset.col = 'ccRecordCode';
+        tdRecordCode.textContent = cc.recordCode;
+        const tdStatus = document.createElement('td');
+        tdStatus.dataset.col = 'ccStatus';
+        const statusBadge = document.createElement('span');
+        statusBadge.className = `admin-badge admin-badge-${cc.status === 'inactive' ? 'inactivo' : 'activo'}`;
+        statusBadge.textContent = Dashboard.t(cc.status === 'inactive' ? 'main.filterInactive' : 'main.filterActive');
+        tdStatus.appendChild(statusBadge);
 
         const tdActions = document.createElement('td');
         tdActions.dataset.col = 'actions';
@@ -90,15 +122,16 @@ function renderCostCenters() {
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editBtn.addEventListener('click', () => startEdit(cc));
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => removeCostCenter(cc));
-        tdActions.append(historyBtn, editBtn, deleteBtn);
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'admin-icon-btn';
+        toggleBtn.innerHTML = `<i class="bx ${cc.status === 'inactive' ? 'bx-check-circle' : 'bx-x-circle'}" aria-hidden="true"></i>`;
+        toggleBtn.setAttribute('aria-label', Dashboard.t(cc.status === 'inactive' ? 'admin.activate' : 'admin.deactivate'));
+        toggleBtn.title = Dashboard.t(cc.status === 'inactive' ? 'admin.activate' : 'admin.deactivate');
+        toggleBtn.addEventListener('click', () => toggleCostCenterStatus(cc));
+        tdActions.append(historyBtn, editBtn, toggleBtn);
 
-        tr.append(tdCode, tdName, tdResponsible, tdDescription, tdActions);
+        tr.append(tdCode, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
     refreshLimitStatus();
@@ -135,16 +168,22 @@ function startEdit(cc) {
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-async function removeCostCenter(cc) {
-    if (!confirm(Dashboard.t('business.ccDeleteConfirm'))) return;
+// No delete -- account_number/record_code are a permanent accounting
+// sequence (see db.js's own migration comment), only Activar/Desactivar.
+async function toggleCostCenterStatus(cc) {
+    const nextStatus = cc.status === 'inactive' ? 'active' : 'inactive';
     try {
-        const res = await fetch(`/api/business/cost-centers/${cc.id}`, {
-            method: 'DELETE',
+        const res = await fetch(`/api/business/cost-centers/${cc.id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
+            body: JSON.stringify({ status: nextStatus }),
         });
-        if (!res.ok) throw new Error('delete failed');
-        costCenters = costCenters.filter((c) => c.id !== cc.id);
+        if (!res.ok) throw new Error('save failed');
+        const { costCenter } = await res.json();
+        costCenters = costCenters.map((c) => (c.id === costCenter.id ? costCenter : c));
         renderCostCenters();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
@@ -207,6 +246,7 @@ form.addEventListener('submit', async (event) => {
         }
         renderCostCenters();
         resetForm();
+        Dashboard.showToast(Dashboard.t(editingId ? 'main.changeSaved' : 'main.recordSaved'), 'success');
     } catch {
         showError(Dashboard.t('admin.saveError'));
     } finally {

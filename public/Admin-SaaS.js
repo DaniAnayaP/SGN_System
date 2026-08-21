@@ -215,6 +215,12 @@ function formatMoney(value) {
     return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// Mirrors db.js's own padAccountNumber -- the raw account_number column is
+// just an integer, padded to 6 digits only for display here.
+function padAccountNumber(n) {
+    return String(n).padStart(6, '0');
+}
+
 function textCell(value) {
     const td = document.createElement('td');
     td.textContent = value || '—';
@@ -236,7 +242,7 @@ function contractTermMonths(startDate, endDate) {
 // Matches, in order, the <th data-col> values in the "Nuestros Clientes"
 // table (Admin-SaaS.html) and the tr.append(...) call in renderClients().
 const DATA_TABLE_CLIENT_COLUMNS = [
-    'bigDateNumber', 'rfc', 'razonSocial', 'companyNickname', 'companyAbbreviation',
+    'bigDateNumber', 'accountNumber', 'rfc', 'razonSocial', 'companyNickname', 'companyAbbreviation',
     'logo', 'institutionalColor', 'ownerName', 'contactName', 'billingEmail',
     'contractStartDate', 'contractFile', 'contractWordFile', 'plan',
     'contractedCost', 'initialPayment', 'monthlyPayment',
@@ -357,6 +363,7 @@ function renderClients() {
 
         tr.append(
             textCell(client.big_date_number),
+            textCell(client.account_number != null ? padAccountNumber(client.account_number) : ''),
             textCell(client.rfc),
             textCell(client.razon_social),
             textCell(client.company_nickname),
