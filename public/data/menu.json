@@ -137,7 +137,7 @@
       "labelKey": "menu.catAdmin",
       "icon": "bx-briefcase-alt-2",
       "submenu": [
-        { "id": "cat-admin-fuel-traceability", "labelKey": "menu.opTransVolCombustible", "icon": "bx-data", "href": "TrazTransVolCombustible.html" },
+        { "id": "cat-admin-1", "labelKey": "menu.catAdminItem1", "icon": "bx-window", "href": "#" },
         { "id": "cat-admin-2", "labelKey": "menu.catAdminItem2", "icon": "bx-window", "href": "#" }
       ]
     },
@@ -236,7 +236,8 @@
         { "id": "cat-operaciones-transporte-vol-inventario", "labelKey": "menu.opTransVolInventario", "icon": "bx-window", "href": "#" }
       ],
       "cat-admin": [
-        { "id": "cat-operaciones-transporte-vol-traslados", "labelKey": "menu.opTransVolTraslados", "icon": "bx-window", "href": "OpTransVolTraslados.html" }
+        { "id": "cat-operaciones-transporte-vol-traslados", "labelKey": "menu.opTransVolTraslados", "icon": "bx-window", "href": "OpTransVolTraslados.html" },
+        { "id": "cat-admin-fuel-traceability", "labelKey": "menu.opTransVolCombustible", "icon": "bx-data", "href": "TrazTransVolCombustible.html" }
       ]
     },
     "supply-chain/sc-area-distribution-center": {
