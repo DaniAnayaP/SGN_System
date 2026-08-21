@@ -1000,6 +1000,102 @@ body.dark-mode .perm-tree-depth-2{
     font-weight: 500;
 }
 
+/* Reglas de Orden de Llenado (Dashboard.js: openFieldRulesModal) -- one
+   card per gate column, listing every dependent field it unlocks as a
+   removable chip. */
+.field-rules-panel{
+    max-width: 34rem;
+}
+.field-rules-group{
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.7rem;
+}
+.field-rules-gate{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 0.55rem;
+}
+.field-rules-dot{
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background-color: #2c8f4a;
+    flex-shrink: 0;
+}
+.field-rules-dependents{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding-left: 0.9rem;
+}
+.field-rules-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    padding: 0.25rem 0.4rem 0.25rem 0.7rem;
+}
+.field-rules-chip-remove{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.field-rules-chip-remove:hover{
+    color: #c0392b;
+}
+.field-rules-add-row{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.8rem;
+    margin-top: 0.4rem;
+    border-top: 1px dashed var(--color-border);
+}
+.field-rules-add-row select{
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.8rem;
+}
+.field-rules-arrow{
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+/* A locked dependent cell (see Dashboard.js: applyFieldFillRules) — dimmed
+   and non-interactive until its gate column has a value. The lock guard
+   (attachFieldLockGuard) intercepts the click before any page-specific
+   handler runs, so no per-page styling/wiring is needed beyond this. */
+.data-table-cell-locked{
+    opacity: 0.5;
+    cursor: not-allowed !important;
+}
+.data-table-cell-locked::before{
+    content: "🔒";
+    margin-right: 0.3rem;
+    font-size: 0.75em;
+}
+
 /* Mi Recurso Humano: Departamento(s) Asignado(s) multi-select — a worker
    can belong to more than one, so a plain <select> doesn't fit; this is a
    flat scrollable checkbox list instead (see OpRRHHMiRecursoHumano.html's

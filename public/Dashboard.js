@@ -1948,6 +1948,72 @@ function refreshDataTableColumnWidths(tableId) {
     }
 }
 
+// --- Reglas de Orden de Llenado -- a client admin can require one column
+// ("gate") to have a value before another ("dependent") becomes usable, on
+// any .data-table (see the "Reglas de Orden" toolbar icon below). A gate
+// can unlock several dependents at once, and those dependents never block
+// each other -- only their own gate does, and none of this blocks saving
+// the record. tableId -> array of { id, gateCol, dependentCol }.
+const fieldFillRulesCache = new Map();
+
+async function loadFieldFillRules(tableId) {
+    try {
+        const res = await fetch(`${API_BASE}/business/field-fill-rules?tableKey=${encodeURIComponent(tableId)}`, { credentials: 'include' });
+        const data = res.ok ? await res.json() : { rules: [] };
+        fieldFillRulesCache.set(tableId, (data.rules || []).map((r) => ({ id: r.id, gateCol: r.gate_col, dependentCol: r.dependent_col })));
+    } catch {
+        fieldFillRulesCache.set(tableId, []);
+    }
+    applyFieldFillRules(tableId);
+}
+
+// attachInlineEdit cells (money/number/text) tag themselves with
+// data-dt-empty since their own empty state renders as a "+ Agregar"
+// placeholder, not "—" -- trust that marker when present. Everything else
+// (plain-text cells) follows the "—" placeholder convention used
+// throughout this app (see e.g. Business-CentrosCosto.js's own
+// renderCostCenters) for an empty value.
+function isDataTableCellEmpty(td) {
+    if (td.dataset.dtEmpty !== undefined) return td.dataset.dtEmpty === '1';
+    const text = td.textContent.trim();
+    return !text || text === '—' || text === '-';
+}
+
+function applyFieldFillRules(tableId) {
+    const rules = fieldFillRulesCache.get(tableId);
+    if (!rules || !rules.length) return;
+    const state = dataTableColumnState.get(tableId);
+    const tbody = state?.table?.tBodies?.[0];
+    if (!tbody) return;
+    Array.from(tbody.rows).forEach((tr) => {
+        rules.forEach((rule) => {
+            const gateTd = tr.querySelector(`td[data-col="${rule.gateCol}"]`);
+            const depTd = tr.querySelector(`td[data-col="${rule.dependentCol}"]`);
+            if (!gateTd || !depTd) return;
+            const locked = isDataTableCellEmpty(gateTd);
+            depTd.classList.toggle('data-table-cell-locked', locked);
+            depTd.dataset.fieldLocked = locked ? '1' : '';
+            depTd.title = locked ? t('main.fieldRuleLockedHint', { field: state.labels[rule.gateCol] || rule.gateCol }) : '';
+        });
+    });
+}
+
+// Blocks a locked cell's click before whatever page-specific handler is
+// attached to it ever runs -- registered once per wrapper, in the capture
+// phase, so it works no matter how each page wires its own inline-edit /
+// upload trigger for that cell.
+function attachFieldLockGuard(wrapper, tableId) {
+    if (wrapper.dataset.lockGuardAttached) return;
+    wrapper.dataset.lockGuardAttached = '1';
+    wrapper.addEventListener('click', (event) => {
+        const lockedCell = event.target.closest('[data-field-locked="1"]');
+        if (!lockedCell) return;
+        event.stopImmediatePropagation();
+        event.preventDefault();
+        showToast(lockedCell.title || t('main.fieldRuleLockedGeneric'), 'warning');
+    }, true);
+}
+
 function observeTableBody(table, tableId) {
     const tbody = table.tBodies[0];
     if (!tbody || tbody.dataset.colObserved) return;
@@ -1967,7 +2033,10 @@ function observeTableBody(table, tableId) {
                 }
             });
         });
-        if (addedRealRow) refreshDataTableColumnWidths(tableId);
+        if (addedRealRow) {
+            refreshDataTableColumnWidths(tableId);
+            applyFieldFillRules(tableId);
+        }
         // A rebuild (PATCH-triggered refresh, filter re-render, etc.)
         // invalidates any remembered "before sorting" order — and if a sort
         // is active, re-apply it to the freshly-rebuilt rows so it survives
@@ -2671,6 +2740,8 @@ function initDataTableColumns(wrapper, index) {
         attachColumnFilterTrigger(th, tableId);
     });
     observeTableBody(table, tableId);
+    attachFieldLockGuard(wrapper, tableId);
+    loadFieldFillRules(tableId);
 }
 
 // Shared by both band rows (see renderColumnGroupBand below): collapses
@@ -2894,6 +2965,173 @@ function openPinPicker(tableId) {
     pinPickerState = { tableId, pinnedOrder: [...state.config.pinned] };
     renderPinPickerLists();
     pinPickerModal.hidden = false;
+}
+
+// --- Reglas de Orden de Llenado modal ---------------------------------
+let fieldRulesModal = null;
+let fieldRulesList = null;
+let fieldRulesGateSelect = null;
+let fieldRulesDependentSelect = null;
+let fieldRulesAddBtn = null;
+let fieldRulesError = null;
+let fieldRulesState = null; // { tableId }
+
+// Control Interno columns and the trailing actions column are never
+// user-fillable fields, so they never make sense as a gate or a dependent.
+function fieldRulesEligibleColumns(state) {
+    return state.columnKeys.filter((key) => !key.startsWith('colSys') && key !== 'actions');
+}
+
+function ensureFieldRulesModal() {
+    if (fieldRulesModal) return;
+    fieldRulesModal = document.createElement('div');
+    fieldRulesModal.className = 'modal-overlay';
+    fieldRulesModal.hidden = true;
+    fieldRulesModal.innerHTML = `
+        <div class="modal-panel field-rules-panel" role="dialog" aria-modal="true" aria-labelledby="field-rules-title">
+            <h3 id="field-rules-title">${t('main.fieldRulesTitle')}</h3>
+            <p class="admin-hint">${t('main.fieldRulesHint')}</p>
+            <div data-role="list"></div>
+            <div class="field-rules-add-row">
+                <select data-role="gate"></select>
+                <span class="field-rules-arrow">→</span>
+                <select data-role="dependent"></select>
+                <button type="button" class="btn" data-role="add">${t('main.fieldRulesAdd')}</button>
+            </div>
+            <div class="admin-error" data-role="error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(fieldRulesModal);
+    fieldRulesList = fieldRulesModal.querySelector('[data-role="list"]');
+    fieldRulesGateSelect = fieldRulesModal.querySelector('[data-role="gate"]');
+    fieldRulesDependentSelect = fieldRulesModal.querySelector('[data-role="dependent"]');
+    fieldRulesAddBtn = fieldRulesModal.querySelector('[data-role="add"]');
+    fieldRulesError = fieldRulesModal.querySelector('[data-role="error"]');
+    const close = () => { fieldRulesModal.hidden = true; fieldRulesState = null; };
+    fieldRulesModal.querySelector('[data-role="close"]').addEventListener('click', close);
+    fieldRulesAddBtn.addEventListener('click', addFieldRule);
+    wireModalDismiss(fieldRulesModal, close);
+}
+
+function renderFieldRulesModal() {
+    const state = dataTableColumnState.get(fieldRulesState.tableId);
+    if (!state) return;
+    const eligible = fieldRulesEligibleColumns(state);
+    const rules = fieldFillRulesCache.get(fieldRulesState.tableId) || [];
+
+    const populate = (select) => {
+        select.innerHTML = '';
+        eligible.forEach((key) => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = state.labels[key] || key;
+            select.appendChild(opt);
+        });
+    };
+    populate(fieldRulesGateSelect);
+    populate(fieldRulesDependentSelect);
+    // Default the two selects to different columns so "+ Agregar" doesn't
+    // immediately fail with "must be different columns" on first open.
+    if (eligible.length > 1) fieldRulesDependentSelect.selectedIndex = 1;
+
+    fieldRulesList.innerHTML = '';
+    if (!rules.length) {
+        const empty = document.createElement('p');
+        empty.className = 'admin-hint';
+        empty.textContent = t('main.fieldRulesNoneYet');
+        fieldRulesList.appendChild(empty);
+        return;
+    }
+    // One card per gate column, listing every dependent it unlocks -- same
+    // shape as the approved mockup, so an admin can see at a glance which
+    // fields share a gate without hunting through a flat list.
+    const byGate = new Map();
+    rules.forEach((rule) => {
+        if (!byGate.has(rule.gateCol)) byGate.set(rule.gateCol, []);
+        byGate.get(rule.gateCol).push(rule);
+    });
+    byGate.forEach((groupRules, gateCol) => {
+        const card = document.createElement('div');
+        card.className = 'field-rules-group';
+        const gateLine = document.createElement('div');
+        gateLine.className = 'field-rules-gate';
+        gateLine.innerHTML = `<span class="field-rules-dot"></span> ${state.labels[gateCol] || gateCol}`;
+        card.appendChild(gateLine);
+        const depsRow = document.createElement('div');
+        depsRow.className = 'field-rules-dependents';
+        groupRules.forEach((rule) => {
+            const chip = document.createElement('span');
+            chip.className = 'field-rules-chip';
+            chip.append(document.createTextNode(state.labels[rule.dependentCol] || rule.dependentCol));
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'field-rules-chip-remove';
+            removeBtn.setAttribute('aria-label', t('admin.delete'));
+            removeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+            removeBtn.addEventListener('click', () => removeFieldRule(rule.id));
+            chip.appendChild(removeBtn);
+            depsRow.appendChild(chip);
+        });
+        card.appendChild(depsRow);
+        fieldRulesList.appendChild(card);
+    });
+}
+
+async function openFieldRulesModal(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    ensureFieldRulesModal();
+    fieldRulesState = { tableId };
+    fieldRulesError.hidden = true;
+    if (!fieldFillRulesCache.has(tableId)) await loadFieldFillRules(tableId);
+    renderFieldRulesModal();
+    fieldRulesModal.hidden = false;
+}
+
+async function addFieldRule() {
+    if (!fieldRulesState) return;
+    const gateCol = fieldRulesGateSelect.value;
+    const dependentCol = fieldRulesDependentSelect.value;
+    fieldRulesError.hidden = true;
+    if (!gateCol || !dependentCol || gateCol === dependentCol) {
+        fieldRulesError.textContent = t('main.fieldRulesSameColumnError');
+        fieldRulesError.hidden = false;
+        return;
+    }
+    fieldRulesAddBtn.disabled = true;
+    try {
+        const res = await fetch(`${API_BASE}/business/field-fill-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ tableKey: fieldRulesState.tableId, gateCol, dependentCol }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        await loadFieldFillRules(fieldRulesState.tableId);
+        renderFieldRulesModal();
+        showToast(t('main.changeSaved'), 'success');
+    } catch {
+        fieldRulesError.textContent = t('admin.saveError');
+        fieldRulesError.hidden = false;
+    } finally {
+        fieldRulesAddBtn.disabled = false;
+    }
+}
+
+async function removeFieldRule(id) {
+    if (!fieldRulesState) return;
+    try {
+        const res = await fetch(`${API_BASE}/business/field-fill-rules/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) throw new Error('delete failed');
+        await loadFieldFillRules(fieldRulesState.tableId);
+        renderFieldRulesModal();
+        showToast(t('main.changeSaved'), 'success');
+    } catch {
+        showToast(t('admin.saveError'), 'error');
+    }
 }
 
 let visibilityPickerModal = null;
@@ -3194,6 +3432,23 @@ function renderDataTableColumnControls() {
                 legendBtn.innerHTML = '<span class="data-table-legend-icon" aria-hidden="true"><span></span><span></span><span></span></span>';
                 legendBtn.addEventListener('click', () => openColumnLegend(getTableId(wrapper, index)));
                 toAppend.push(legendBtn);
+            }
+
+            // Reglas de Orden de Llenado — admin-only (it's a configuration
+            // decision, same gating as creating/editing a Centro de Costos),
+            // not wired into Iconos Personalización like the icons above:
+            // this one isn't about what a profile can SEE, it's about who
+            // can change how the table behaves for everyone.
+            if (currentUser?.isClientAdmin) {
+                const rulesBtn = document.createElement('button');
+                rulesBtn.type = 'button';
+                rulesBtn.className = 'data-table-zoom-btn';
+                rulesBtn.dataset.colAction = 'field-rules';
+                rulesBtn.setAttribute('aria-label', t('main.fieldRulesBtn'));
+                rulesBtn.title = t('main.fieldRulesBtn');
+                rulesBtn.innerHTML = '<i class="bx bx-link" aria-hidden="true"></i>';
+                rulesBtn.addEventListener('click', () => openFieldRulesModal(getTableId(wrapper, index)));
+                toAppend.push(rulesBtn);
             }
 
             zoom.append(...toAppend);
@@ -5102,6 +5357,11 @@ function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, o
             return;
         }
         const hasValue = current !== '' && current != null;
+        // An empty numeric/money cell renders as a "+ Agregar" placeholder,
+        // not "—" — applyFieldFillRules (Reglas de Orden de Llenado) can't
+        // tell that apart from real text by reading textContent alone, so
+        // it checks this marker first instead.
+        td.dataset.dtEmpty = hasValue ? '' : '1';
         const span = document.createElement('span');
         span.className = hasValue ? 'editable-cell-value' : 'editable-cell-value editable-cell-placeholder';
         span.textContent = hasValue ? (formatDisplay ? formatDisplay(current) : current) : t('main.fuelAddValue');
@@ -5151,6 +5411,11 @@ function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, o
             current = input.value;
             if (onCommit) onCommit(current);
             renderDisplay();
+            // This cell may be someone else's gate (see Reglas de Orden de
+            // Llenado) -- inline-edit patches this <td> in place rather than
+            // rebuilding the row, so nothing else would notice its value
+            // just changed unless this re-evaluates dependents itself.
+            if (tableKey) applyFieldFillRules(tableKey);
         };
         input.addEventListener('blur', commit);
         input.addEventListener('keydown', (event) => {

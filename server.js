@@ -69,6 +69,9 @@ const {
     createState,
     createLocality,
     createStreet,
+    listFieldFillRules,
+    createFieldFillRule,
+    deleteFieldFillRule,
     listJobPositions,
     getJobPositionById,
     createJobPosition,
@@ -1620,6 +1623,34 @@ app.post('/api/business/geo/streets', requireAuth, requireClientAdmin, (req, res
     const name = (req.body?.name || '').trim();
     if (!localityId || !name) return res.status(400).json({ message: 'localityId and name are required.' });
     res.status(201).json({ item: createStreet(localityId, name) });
+});
+
+// --- Reglas de Orden de Llenado (field_fill_rules, scoped to one client) ---
+// Reads are open to any authenticated user at the client -- every table
+// viewer needs the active rules to know which cells are locked. Only a
+// client admin can add/remove a rule (it's a configuration decision, same
+// gating as everything else under "Administración del Negocio").
+app.get('/api/business/field-fill-rules', requireAuth, (req, res) => {
+    const tableKey = (req.query.tableKey || '').trim();
+    if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
+    if (!req.user.clientId) return res.json({ rules: [] });
+    res.json({ rules: listFieldFillRules(req.user.clientId, tableKey) });
+});
+app.post('/api/business/field-fill-rules', requireAuth, requireClientAdmin, (req, res) => {
+    const tableKey = (req.body?.tableKey || '').trim();
+    const gateCol = (req.body?.gateCol || '').trim();
+    const dependentCol = (req.body?.dependentCol || '').trim();
+    if (!tableKey || !gateCol || !dependentCol) {
+        return res.status(400).json({ message: 'tableKey, gateCol and dependentCol are required.' });
+    }
+    if (gateCol === dependentCol) {
+        return res.status(400).json({ message: 'gateCol and dependentCol must be different columns.' });
+    }
+    res.status(201).json({ rule: createFieldFillRule(req.user.clientId, tableKey, gateCol, dependentCol) });
+});
+app.delete('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
+    deleteFieldFillRule(req.params.id, req.user.clientId);
+    res.status(204).end();
 });
 
 // --- Puestos de Trabajo (job positions, scoped to one client) ---------------

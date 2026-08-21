@@ -115,6 +115,23 @@ db.exec(`
         UNIQUE(locality_id, name)
     );
 
+    -- "Reglas de Orden de Llenado" -- a client admin can require one column
+    -- ("gate") to have a value before another ("dependent") becomes
+    -- editable, on any .data-table (see Dashboard.js's applyFieldFillRules).
+    -- A dependent has at most one gate at a time (re-creating a rule for an
+    -- already-gated dependent replaces it, see createFieldFillRule below),
+    -- but the SAME gate can unlock any number of different dependents, and
+    -- those dependents don't block each other -- only their own gate does.
+    CREATE TABLE IF NOT EXISTS field_fill_rules (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        table_key      TEXT NOT NULL,
+        gate_col       TEXT NOT NULL,
+        dependent_col  TEXT NOT NULL,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(client_id, table_key, dependent_col)
+    );
+
     -- Puestos de Trabajo (Administración de Personal, human-resources área):
     -- the client's own catalog of job titles, managed from
     -- Business-PuestosTrabajo.html. Mi Recurso Humano's Puesto field reads
@@ -1591,6 +1608,31 @@ function createStreet(localityId, name) {
     if (existing) return existing;
     const { lastInsertRowid } = db.prepare('INSERT INTO geo_streets (locality_id, name) VALUES (?, ?)').run(localityId, trimmed);
     return db.prepare('SELECT * FROM geo_streets WHERE id = ?').get(lastInsertRowid);
+}
+
+// --- Query helpers: "Reglas de Orden de Llenado" (field_fill_rules) --------
+function listFieldFillRules(clientId, tableKey) {
+    return db.prepare('SELECT * FROM field_fill_rules WHERE client_id = ? AND table_key = ? ORDER BY id ASC').all(clientId, tableKey);
+}
+
+// A dependent can only have one gate -- creating a new rule for a dependent
+// that's already gated silently replaces the old one instead of erroring,
+// matching "puedes... invertir la regla cuando quieras" (delete + re-add
+// would work too, but this is the same one-step action from the admin's
+// point of view).
+function createFieldFillRule(clientId, tableKey, gateCol, dependentCol) {
+    const create = db.transaction(() => {
+        db.prepare('DELETE FROM field_fill_rules WHERE client_id = ? AND table_key = ? AND dependent_col = ?').run(clientId, tableKey, dependentCol);
+        return db
+            .prepare('INSERT INTO field_fill_rules (client_id, table_key, gate_col, dependent_col) VALUES (?, ?, ?, ?)')
+            .run(clientId, tableKey, gateCol, dependentCol).lastInsertRowid;
+    });
+    const id = create();
+    return db.prepare('SELECT * FROM field_fill_rules WHERE id = ?').get(id);
+}
+
+function deleteFieldFillRule(id, clientId) {
+    db.prepare('DELETE FROM field_fill_rules WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
 function createCostCenter({ clientId, countryId, stateId, localityId, streetId, sucursal, name, description, responsible }) {
@@ -3324,6 +3366,9 @@ module.exports = {
     createState,
     createLocality,
     createStreet,
+    listFieldFillRules,
+    createFieldFillRule,
+    deleteFieldFillRule,
     listJobPositions,
     getJobPositionById,
     createJobPosition,

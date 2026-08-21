@@ -296,6 +296,10 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
         const label = pending ? 'main.changePending' : (dataUrl ? viewLabelKey : uploadLabelKey);
         btn.setAttribute('aria-label', Dashboard.t(label));
         btn.title = Dashboard.t(label);
+        // Icon-only cell -- textContent alone can't tell empty from filled
+        // (see Reglas de Orden de Llenado's applyFieldFillRules), so this
+        // marks it explicitly, same convention as Dashboard.attachInlineEdit.
+        td.dataset.dtEmpty = dataUrl ? '' : '1';
     }
     btn.addEventListener('click', () => {
         if (pending) return;
@@ -310,6 +314,7 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
             dataUrl = reader.result;
             render();
             onCommit(dataUrl);
+            applyFieldFillRules(TABLE_KEY);
         };
         reader.readAsDataURL(file);
     });
