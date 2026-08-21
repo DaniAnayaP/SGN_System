@@ -1909,6 +1909,45 @@ function resetDataTableColumnLayout(tableId) {
     applyDataTableColumnLayout(tableId);
 }
 
+// The ResizeObserver-based lazy-init (see initDataTableColumns) fires as
+// soon as a table's wrapper has a nonzero width — for any page whose rows
+// arrive from an async fetch (nearly every table in this app), that's
+// almost always BEFORE those rows exist. A column with no header text
+// (e.g. the trailing "actions" column) then measures as empty and gets
+// clamped to DATA_TABLE_COL_MIN_WIDTH, which gets cached into localStorage
+// via saveDataTableConfig and stays wrong forever — clipping icon buttons
+// that only show up once real rows render. Re-measuring here, once real
+// rows exist, and widening (never shrinking, so a deliberate manual resize
+// is never overwritten) anything still sitting exactly at that floor fixes
+// it. Safe to call repeatedly: once a column moves off the floor this
+// becomes a no-op for it.
+function refreshDataTableColumnWidths(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    let changed = false;
+    state.columnKeys.forEach((key) => {
+        if (state.config.widths[key] !== DATA_TABLE_COL_MIN_WIDTH) return;
+        // table-layout:fixed is already applied by the time this runs, so
+        // re-measuring the <th> (like the initial measureNaturalColumnWidths
+        // does) would just read back the same clamped width -- look at each
+        // body cell's scrollWidth instead, which still reports the true
+        // content size even while the cell's own box is clipped by that
+        // fixed width (overflow: hidden doesn't shrink scrollWidth).
+        let needed = 0;
+        state.table.querySelectorAll(`tbody > tr > td[data-col="${key}"]`).forEach((td) => {
+            if (td.scrollWidth > needed) needed = td.scrollWidth;
+        });
+        if (needed > DATA_TABLE_COL_MIN_WIDTH) {
+            state.config.widths[key] = needed + 4; // small buffer for padding/rounding
+            changed = true;
+        }
+    });
+    if (changed) {
+        applyDataTableColumnLayout(tableId);
+        saveDataTableConfig(tableId, state.config);
+    }
+}
+
 function observeTableBody(table, tableId) {
     const tbody = table.tBodies[0];
     if (!tbody || tbody.dataset.colObserved) return;
@@ -1919,13 +1958,16 @@ function observeTableBody(table, tableId) {
     // means those renderers never need to know about column customization.
     let resortScheduled = false;
     const observer = new MutationObserver((mutations) => {
+        let addedRealRow = false;
         mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
                 if (node.nodeType === 1 && node.tagName === 'TR' && !node.querySelector('td.data-table-empty-cell')) {
                     applyRowColumnState(node, tableId);
+                    addedRealRow = true;
                 }
             });
         });
+        if (addedRealRow) refreshDataTableColumnWidths(tableId);
         // A rebuild (PATCH-triggered refresh, filter re-render, etc.)
         // invalidates any remembered "before sorting" order — and if a sort
         // is active, re-apply it to the freshly-rebuilt rows so it survives
