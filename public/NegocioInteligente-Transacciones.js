@@ -350,8 +350,10 @@ document.getElementById('report-save-btn').addEventListener('click', async () =>
             body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error('save failed');
+        const wasEditing = !!editingReportId;
         closeReportModal();
         await loadReports();
+        Dashboard.showToast(Dashboard.t(wasEditing ? 'main.changeSaved' : 'main.recordSaved'), 'success');
     } catch {
         modalError.textContent = Dashboard.t('admin.saveError');
         modalError.hidden = false;
@@ -428,6 +430,7 @@ async function authorizeReport(report) {
             throw new Error('authorize failed');
         }
         await loadReports();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }

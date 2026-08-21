@@ -205,6 +205,7 @@ async function activatePlan(plan) {
         const { plan: updated } = await res.json();
         plans = plans.map((p) => (p.id === updated.id ? updated : p));
         renderPlans();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
@@ -447,6 +448,7 @@ form.addEventListener('submit', async (event) => {
             renderPlans();
         }
         closeEditModal();
+        Dashboard.showToast(Dashboard.t(isCreate ? 'main.recordSaved' : 'main.changeSaved'), 'success');
     } catch {
         showError(Dashboard.t('admin.saveError'));
     } finally {
@@ -521,7 +523,7 @@ treeSaveBtn.addEventListener('click', async () => {
             return;
         }
         await loadPlans();
-        treeSaveStatus.textContent = Dashboard.t('admin.planTreeSaved');
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         showTreeError(treeError, Dashboard.t('admin.saveError'));
     } finally {

@@ -264,6 +264,7 @@ form.addEventListener('submit', async (event) => {
         jobPositions = [...jobPositions, jobPosition].sort((a, b) => a.name.localeCompare(b.name));
         renderJobPositions();
         resetForm();
+        Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
     } catch {
         showError(Dashboard.t('admin.saveError'));
     } finally {
@@ -324,6 +325,7 @@ async function saveEditModal() {
         jobPositions = jobPositions.map((p) => (p.id === jobPosition.id ? jobPosition : p));
         renderJobPositions();
         closeEditModal();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         editError.textContent = Dashboard.t('admin.saveError');
         editError.hidden = false;
@@ -381,6 +383,7 @@ async function saveCostCenterModal() {
         jobPositions = jobPositions.map((p) => (p.id === jobPosition.id ? jobPosition : p));
         renderJobPositions();
         closeCostCenterModal();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         ccModalError.textContent = Dashboard.t('admin.saveError');
         ccModalError.hidden = false;

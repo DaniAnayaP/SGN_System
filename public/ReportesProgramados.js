@@ -119,8 +119,10 @@ document.getElementById('scheduled-save-btn').addEventListener('click', async ()
             body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error('save failed');
+        const wasEditing = !!editingScheduledId;
         closeScheduledModal();
         await loadScheduledReports();
+        Dashboard.showToast(Dashboard.t(wasEditing ? 'main.changeSaved' : 'main.recordSaved'), 'success');
     } catch {
         modalError.textContent = Dashboard.t('admin.saveError');
         modalError.hidden = false;
@@ -191,6 +193,7 @@ async function authorizeScheduled(scheduled) {
             throw new Error('authorize failed');
         }
         await loadScheduledReports();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }

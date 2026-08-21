@@ -673,6 +673,7 @@ async function saveNewRecord() {
         if (emptyRow) emptyRow.remove();
         tbody.appendChild(buildRow(record));
         closeNewRecordModal();
+        Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
     } catch (err) {
         newRecordError.textContent = Dashboard.t('admin.saveError');
         newRecordError.hidden = false;

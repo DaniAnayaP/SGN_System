@@ -28,6 +28,7 @@ async function toggleUserActive(user) {
         });
         if (!res.ok) throw new Error('save failed');
         await loadUsers();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
@@ -185,10 +186,10 @@ assignSaveBtn.addEventListener('click', async () => {
             body: JSON.stringify({ profileIds }),
         });
         if (!res.ok) throw new Error('save failed');
-        assignSaveStatus.textContent = Dashboard.t('business.profilesSaved');
         renderUsersTable();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
-        assignSaveStatus.textContent = Dashboard.t('admin.saveError');
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     } finally {
         assignSaveBtn.disabled = false;
     }

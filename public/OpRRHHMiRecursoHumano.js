@@ -82,7 +82,7 @@ async function patchWorker(id, patch) {
             const body = await res.json().catch(() => ({}));
             Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'error');
             await refreshTable();
-            return;
+            return false;
         }
         const body = await res.json().catch(() => ({}));
         if (body.rejectedFields?.length) {
@@ -91,10 +91,12 @@ async function patchWorker(id, patch) {
             Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
         }
         await refreshTable();
+        return true;
     } catch (err) {
         console.error('Mi Recurso Humano: failed to save change', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
         await refreshTable();
+        return false;
     }
 }
 
@@ -545,6 +547,7 @@ async function saveNewRecord() {
         if (emptyRow) emptyRow.remove();
         tbody.appendChild(buildRow(worker));
         closeNewRecordModal();
+        Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
     } catch (err) {
         newRecordError.textContent = Dashboard.t('admin.saveError');
         newRecordError.hidden = false;
@@ -593,8 +596,9 @@ editDepartmentsSaveBtn.addEventListener('click', async () => {
     }
     editDepartmentsSaveBtn.disabled = true;
     try {
-        await patchWorker(editingDepartmentsWorkerId, { departments });
+        const saved = await patchWorker(editingDepartmentsWorkerId, { departments });
         closeEditDepartmentsModal();
+        if (saved) Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } finally {
         editDepartmentsSaveBtn.disabled = false;
     }

@@ -473,6 +473,7 @@ async function toggleClientStatus(client) {
     const nextStatus = client.status === 'inactivo' ? 'activo' : 'inactivo';
     try {
         await patchClient(client, { status: nextStatus });
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
@@ -671,6 +672,7 @@ form.addEventListener('submit', async (event) => {
         await loadClients();
         resetForm();
         if (generatedAdmin) showGeneratedAdmin(generatedAdmin);
+        Dashboard.showToast(Dashboard.t(isCreate ? 'main.recordSaved' : 'main.changeSaved'), 'success');
     } catch {
         showError(Dashboard.t('admin.saveError'));
     } finally {
@@ -914,6 +916,7 @@ permisosAdicionalesSaveBtn.addEventListener('click', async () => {
         }
         await loadClients();
         closePermisosAdicionalesModal();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         permisosAdicionalesError.textContent = Dashboard.t('admin.saveError');
         permisosAdicionalesError.hidden = false;

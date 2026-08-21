@@ -182,6 +182,7 @@ form.addEventListener('submit', async (event) => {
         }
         renderProfiles();
         resetForm();
+        Dashboard.showToast(Dashboard.t(editingId ? 'main.changeSaved' : 'main.recordSaved'), 'success');
     } catch {
         showError(Dashboard.t('admin.saveError'));
     } finally {
@@ -222,9 +223,9 @@ permissionsSaveBtn.addEventListener('click', async () => {
             body: JSON.stringify({ grants: tree.getGrants() }),
         });
         if (!res.ok) throw new Error('save failed');
-        permissionsSaveStatus.textContent = Dashboard.t('business.profileSaved');
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
-        permissionsSaveStatus.textContent = Dashboard.t('admin.saveError');
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     } finally {
         permissionsSaveBtn.disabled = false;
     }

@@ -215,6 +215,7 @@ newForm.addEventListener('submit', async (event) => {
         saasUsers = [...saasUsers, user];
         renderSaasUsers();
         closeNewModal();
+        Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
     } catch {
         showError(newFormError, Dashboard.t('admin.saveError'));
     } finally {
@@ -341,7 +342,7 @@ treeSaveBtn.addEventListener('click', async () => {
             showError(treeError, body.message || Dashboard.t('admin.saveError'));
             return;
         }
-        treeSaveStatus.textContent = Dashboard.t('business.profileSaved');
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         showError(treeError, Dashboard.t('admin.saveError'));
     } finally {

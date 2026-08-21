@@ -135,6 +135,7 @@ grantAccessSaveBtn.addEventListener('click', async () => {
         });
         if (!res.ok) throw new Error('save failed');
         closeGrantAccessModal();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         grantAccessError.textContent = Dashboard.t('admin.saveError');
         grantAccessError.hidden = false;
@@ -218,6 +219,7 @@ editProfilesSaveBtn.addEventListener('click', async () => {
         });
         if (!res.ok) throw new Error('save failed');
         closeEditProfilesModal();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         editProfilesError.textContent = Dashboard.t('admin.saveError');
         editProfilesError.hidden = false;
