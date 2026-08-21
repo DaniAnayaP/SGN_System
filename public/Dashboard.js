@@ -982,20 +982,28 @@ function buildMenuItem(item) {
 // there too. Hidden whenever there's no admin-business item to show (GEIPSA
 // admin's reduced sidebar has none).
 // This dropdown is a flat <ul> (no chevron/accordion support, unlike the
-// main sidebar's buildMenuItem/buildSubmenu) -- a PURE folder (href="#" or
-// missing, e.g. Servicio Contratado) has nothing to navigate to itself, so
-// it's skipped and its real children are flattened in one level instead of
-// rendering a dead link. A leaf with its own real href (e.g. Nuestros
-// Centros Costos) still carries a submenu of its own -- the permission
-// tree's column list (ccCode, ccName...) -- but that's not sub-navigation,
-// so a real href always wins and stops the recursion there.
-function flattenBusinessAdminItems(items) {
-    const flat = [];
+// main sidebar's buildMenuItem/buildSubmenu) -- a PURE folder (no real href
+// of its own, e.g. Servicio Contratado) can't be a clickable row, but it
+// must stay VISIBLE as a heading (not disappear) with its own real children
+// listed right underneath it, indented -- no click-to-expand needed here
+// since this is just a quick-access mirror, not the full navigational tree.
+// A leaf (real href, e.g. Nuestros Centros Costos, Roles, or Expansiones —
+// href="#" there just means "not built yet", not "this is a folder") is
+// always its own row, even if it also carries a submenu of its own (the
+// permission tree's column list, ccCode/ccName/... -- not sub-navigation).
+function buildBusinessAdminEntries(items, indent = false) {
+    const entries = [];
     (items || []).filter((i) => !i.permissionOnly).forEach((item) => {
-        if (!item.href || item.href === '#') flat.push(...flattenBusinessAdminItems(item.submenu));
-        else flat.push(item);
+        const hasRealHref = item.href && item.href !== '#';
+        const navigableChildren = (item.submenu || []).filter((c) => !c.permissionOnly);
+        if (!hasRealHref && navigableChildren.length) {
+            entries.push({ item, indent, heading: true });
+            entries.push(...buildBusinessAdminEntries(navigableChildren, true));
+        } else {
+            entries.push({ item, indent, heading: false });
+        }
     });
-    return flat;
+    return entries;
 }
 
 function renderBusinessAdminSettingsMenu(items) {
@@ -1003,27 +1011,28 @@ function renderBusinessAdminSettingsMenu(items) {
     const submenu = document.getElementById('business-admin-submenu');
     if (!group || !submenu) return;
     submenu.innerHTML = '';
-    const flatItems = flattenBusinessAdminItems(items);
-    if (!flatItems.length) {
+    const entries = buildBusinessAdminEntries(items);
+    if (!entries.length) {
         group.hidden = true;
         return;
     }
-    flatItems.forEach((item) => {
+    entries.forEach(({ item, indent, heading }) => {
         const li = document.createElement('li');
         li.setAttribute('role', 'none');
-        const a = document.createElement('a');
-        a.href = item.href || '#';
-        a.setAttribute('role', 'menuitem');
+        if (indent) li.classList.add('settings-submenu-indent');
+        const el = document.createElement(heading ? 'span' : 'a');
+        if (heading) li.classList.add('settings-submenu-heading');
+        else { el.href = item.href || '#'; el.setAttribute('role', 'menuitem'); }
         if (item.icon) {
             const icon = document.createElement('i');
             icon.className = `bx ${item.icon}`;
             icon.setAttribute('aria-hidden', 'true');
-            a.appendChild(icon);
+            el.appendChild(icon);
         }
-        const span = document.createElement('span');
-        span.textContent = t(item.labelKey, item.labelParams || {});
-        a.appendChild(span);
-        li.appendChild(a);
+        const label = document.createElement('span');
+        label.textContent = t(item.labelKey, item.labelParams || {});
+        el.appendChild(label);
+        li.appendChild(el);
         submenu.appendChild(li);
     });
     group.hidden = false;

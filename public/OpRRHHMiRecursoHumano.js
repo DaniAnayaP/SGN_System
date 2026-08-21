@@ -27,7 +27,7 @@
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-rrhh-mi-recurso-humano' });
         if (!role) return;
         renderNewRecordButton();
-        await Promise.all([loadCostCenters(), loadJobPositions()]);
+        await Promise.all([loadCostCenters(), loadJobPositions(), loadHrStatusCatalog()]);
         await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano failed to initialize:', err);
@@ -165,6 +165,39 @@ function populateJobPositionSelect(select) {
     });
 }
 
+// --- Estatus RH (for the Estatus column/filter — reused catalog, managed
+// from Business-EstatusRH.html, not owned by this screen). Only 'active'
+// entries are offered here, same "retired one stays on whoever already had
+// it" reasoning as Puestos de Trabajo above; the filter dropdown gets the
+// same list appended at runtime since it's no longer a fixed Activo/
+// Inactivo pair.
+let hrStatusCatalog = [];
+async function loadHrStatusCatalog() {
+    try {
+        const res = await fetch('/api/business/hr-status-catalog', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        hrStatusCatalog = (data.hrStatuses || []).filter((s) => s.status === 'active');
+    } catch (err) {
+        console.error('Mi Recurso Humano: failed to load HR status catalog', err);
+        hrStatusCatalog = [];
+    }
+    populateHrStatusFilterOptions();
+}
+function populateHrStatusFilterOptions() {
+    const select = document.getElementById('filter-status');
+    if (!select) return;
+    const current = select.value;
+    select.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
+    hrStatusCatalog.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = String(s.id);
+        opt.textContent = s.name;
+        select.appendChild(opt);
+    });
+    select.value = current;
+}
+
 // A Puesto is enabled for 'all' cost centers or a specific set (see
 // Business-PuestosTrabajo.js) — null here means "no restriction", not
 // "empty set", so callers can tell the two apart.
@@ -263,27 +296,29 @@ function buildActionsCell(worker, tr) {
     return td;
 }
 
-// Estatus — a real <select>, always live in the cell (not click-to-edit),
-// defaulting to Activo since a worker is, by definition, active the moment
-// they're registered — still changeable inline afterwards. Flipping this to
-// Inactivo also revokes the worker's own login (see updateHrWorker's status
-// cascade in db.js) — the row refresh after the PATCH picks up the new
-// Estado de Usuario automatically.
+// Estatus — a real <select> sourced from the client's own Estatus RH
+// catalog (Business-EstatusRH.html), always live in the cell (not
+// click-to-edit), defaulting to Activo since a worker is, by definition,
+// active the moment they're registered — still changeable inline
+// afterwards. Picking an entry marked "Inactivo" in that catalog (e.g.
+// Rescisión de Contrato) also revokes the worker's own login (see
+// updateHrWorker's cascade in db.js) — the row refresh after the PATCH
+// picks up the new Estado de Usuario automatically.
 function buildStatusCell(worker) {
     const td = document.createElement('td');
     td.dataset.col = 'colHrStatus';
     const select = document.createElement('select');
     select.className = 'editable-cell-select';
-    [['active', 'main.filterActive'], ['inactive', 'main.filterInactive']].forEach(([val, key]) => {
+    hrStatusCatalog.forEach((s) => {
         const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = Dashboard.t(key);
+        opt.value = String(s.id);
+        opt.textContent = s.name;
         select.appendChild(opt);
     });
-    select.value = worker.status || 'active';
-    select.disabled = isPending(worker, 'status') || !Dashboard.canEditField(TABLE_KEY, 'colHrStatus', worker.status || '');
-    if (select.disabled) select.title = Dashboard.t(isPending(worker, 'status') ? 'main.changePending' : 'main.fieldLocked');
-    select.addEventListener('change', () => patchWorker(worker.id, { status: select.value }));
+    select.value = worker.hrStatusId ? String(worker.hrStatusId) : '';
+    select.disabled = isPending(worker, 'hrStatusId') || !Dashboard.canEditField(TABLE_KEY, 'colHrStatus', worker.hrStatusName || '');
+    if (select.disabled) select.title = Dashboard.t(isPending(worker, 'hrStatusId') ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => patchWorker(worker.id, { hrStatusId: Number(select.value) }));
     td.appendChild(select);
     return td;
 }
@@ -379,7 +414,7 @@ function buildRow(worker) {
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(worker.id);
     tr.dataset.departments = JSON.stringify(worker.departments || []);
-    tr.dataset.status = worker.status || 'active';
+    tr.dataset.hrStatusId = worker.hrStatusId ? String(worker.hrStatusId) : '';
     tr.append(
         textCell('colHrDbId', worker.dbId),
         textCell('colHrRecordId', worker.recordCode || String(worker.recordNumber)),
@@ -452,7 +487,7 @@ function hrRowMatchesFilters(tr, filters) {
         const departments = JSON.parse(tr.dataset.departments || '[]');
         if (!departments.includes(filters.department)) return false;
     }
-    if (filters.status && tr.dataset.status !== filters.status) return false;
+    if (filters.status && tr.dataset.hrStatusId !== filters.status) return false;
     return true;
 }
 function applyHrFilters() {

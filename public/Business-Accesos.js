@@ -252,30 +252,77 @@ async function toggleUserActive(user) {
 }
 
 // --- Table --------------------------------------------------------------
+function operationalBadgeClass(status) {
+    if (status === 'active') return 'admin-badge-activo';
+    if (status === 'inactive') return 'admin-badge-inactivo';
+    return 'admin-badge-suspendido';
+}
+function operationalLabelKey(status) {
+    if (status === 'active') return 'business.hrStatusEffectActive';
+    if (status === 'inactive') return 'business.hrStatusEffectInactive';
+    return 'business.hrStatusEffectSuspended';
+}
+
 function renderUsersTable() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = users.length > 0;
     users.forEach((user) => {
         const tr = document.createElement('tr');
+        tr.dataset.operationalStatus = user.operationalStatus || 'active';
 
         const tdUsername = document.createElement('td');
+        tdUsername.dataset.col = 'accUsername';
         tdUsername.textContent = user.username;
         const tdName = document.createElement('td');
+        tdName.dataset.col = 'accName';
         tdName.textContent = user.name;
         const tdCreated = document.createElement('td');
+        tdCreated.dataset.col = 'accCreated';
         tdCreated.textContent = (user.created_at || '').slice(0, 10);
 
+        // Estatus RH — read-only here, sourced from Recursos Humanos /
+        // Administración de Personal / Mi Recurso Humano (Business-EstatusRH
+        // catalog). Never editable from this screen.
         const tdHrStatus = document.createElement('td');
-        if (user.hrStatus) {
+        tdHrStatus.dataset.col = 'accHrStatus';
+        if (user.hrStatusName) {
             const badge = document.createElement('span');
-            badge.className = `admin-badge admin-badge-${user.hrStatus === 'active' ? 'activo' : 'inactivo'}`;
-            badge.textContent = Dashboard.t(user.hrStatus === 'active' ? 'main.filterActive' : 'main.filterInactive');
+            badge.className = `admin-badge ${operationalBadgeClass(user.hrStatusEffect)}`;
+            badge.textContent = user.hrStatusName;
             tdHrStatus.appendChild(badge);
         } else {
             tdHrStatus.textContent = '—';
         }
 
+        // Estatus Operativo — derived from Estatus RH (see
+        // computeOperationalStatus in db.js). The manual toggle is only
+        // clickable when Estatus RH is Activo (or this user has no HR
+        // record at all) — any other Estatus RH value forces Suspendido/
+        // Inactivo here and the toggle shows locked instead.
+        const tdOperationalStatus = document.createElement('td');
+        tdOperationalStatus.dataset.col = 'accOperationalStatus';
+        const opBadge = document.createElement('span');
+        opBadge.className = `admin-badge ${operationalBadgeClass(user.operationalStatus)}`;
+        opBadge.textContent = Dashboard.t(operationalLabelKey(user.operationalStatus));
+        const opToggleBtn = document.createElement('button');
+        opToggleBtn.type = 'button';
+        opToggleBtn.className = 'admin-icon-btn';
+        const isForcedByHr = user.hrStatusEffect === 'suspended' || user.hrStatusEffect === 'inactive';
+        if (isForcedByHr) {
+            opToggleBtn.disabled = true;
+            opToggleBtn.innerHTML = '<i class="bx bx-lock-alt" aria-hidden="true"></i>';
+            opToggleBtn.setAttribute('aria-label', Dashboard.t('business.accesosOperationalLocked'));
+            opToggleBtn.title = Dashboard.t('business.accesosOperationalLocked');
+        } else {
+            opToggleBtn.innerHTML = `<i class="bx ${user.active ? 'bx-x-circle' : 'bx-check-circle'}" aria-hidden="true"></i>`;
+            opToggleBtn.setAttribute('aria-label', Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate'));
+            opToggleBtn.title = Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate');
+            opToggleBtn.addEventListener('click', () => toggleUserActive(user));
+        }
+        tdOperationalStatus.append(opBadge, opToggleBtn);
+
         const tdActivePerms = document.createElement('td');
+        tdActivePerms.dataset.col = 'accActivePerms';
         const activePermsBtn = document.createElement('button');
         activePermsBtn.type = 'button';
         activePermsBtn.className = 'admin-icon-btn';
@@ -286,6 +333,7 @@ function renderUsersTable() {
         tdActivePerms.appendChild(activePermsBtn);
 
         const tdActions = document.createElement('td');
+        tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
         const grantBtn = document.createElement('button');
         grantBtn.type = 'button';
@@ -301,19 +349,33 @@ function renderUsersTable() {
         editBtn.title = Dashboard.t('admin.edit');
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editBtn.addEventListener('click', () => openEditProfilesModal(user));
-        const toggleBtn = document.createElement('button');
-        toggleBtn.type = 'button';
-        toggleBtn.className = 'admin-icon-btn';
-        toggleBtn.innerHTML = `<i class="bx ${user.active ? 'bx-x-circle' : 'bx-check-circle'}" aria-hidden="true"></i>`;
-        toggleBtn.setAttribute('aria-label', Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate'));
-        toggleBtn.title = Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate');
-        toggleBtn.addEventListener('click', () => toggleUserActive(user));
-        tdActions.append(grantBtn, editBtn, toggleBtn);
+        tdActions.append(grantBtn, editBtn);
 
-        tr.append(tdUsername, tdName, tdCreated, tdHrStatus, tdActivePerms, tdActions);
+        tr.append(tdUsername, tdName, tdCreated, tdHrStatus, tdOperationalStatus, tdActivePerms, tdActions);
         tableBody.appendChild(tr);
     });
+    applyAccesosFilters();
 }
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the fields mean).
+function applyAccesosFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    const operationalStatus = document.getElementById('filter-operational-status')?.value || '';
+    tableBody.querySelectorAll('tr').forEach((tr) => {
+        let visible = true;
+        if (text) {
+            const haystack = ['accUsername', 'accName']
+                .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+                .join(' ');
+            if (!haystack.includes(text)) visible = false;
+        }
+        if (operationalStatus && tr.dataset.operationalStatus !== operationalStatus) visible = false;
+        tr.hidden = !visible;
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyAccesosFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyAccesosFilters);
 
 async function loadUsers() {
     try {

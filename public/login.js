@@ -41,6 +41,8 @@ const EMBEDDED_TRANSLATIONS = {
             showPassword: "Show password", hidePassword: "Hide password",
             invalidCredentials: "Incorrect username or password.",
             genericError: "Something went wrong. Please try again.",
+            operationalInactive: "You cannot access the system due to a contract termination. Contact Human Resources if you believe this is an error.",
+            operationalSuspended: "Your account is temporarily suspended. Contact Human Resources if you believe this is an error.",
             signingIn: "Signing in...", fieldRequired: "This field is required."
         }
     },
@@ -58,6 +60,8 @@ const EMBEDDED_TRANSLATIONS = {
             showPassword: "Mostrar contraseña", hidePassword: "Ocultar contraseña",
             invalidCredentials: "Usuario o contraseña incorrectos.",
             genericError: "Algo salió mal. Inténtalo de nuevo.",
+            operationalInactive: "No puedes acceder al sistema debido a una rescisión de contrato. Contacta a Recursos Humanos si crees que esto es un error.",
+            operationalSuspended: "Tu cuenta está suspendida temporalmente. Contacta a Recursos Humanos si crees que esto es un error.",
             signingIn: "Iniciando sesión...", fieldRequired: "Este campo es obligatorio."
         }
     }
@@ -189,12 +193,20 @@ loginForm?.addEventListener('submit', async (event) => {
             body: JSON.stringify(payload),
         });
 
-        if (res.status === 401) {
-            showError(t('login.invalidCredentials'));
-            return;
-        }
         if (!res.ok) {
-            showError(t('login.genericError'));
+            // Estatus Operativo (derived from Estatus RH) blocks login even
+            // with the right password — a distinct message per reason, see
+            // POST /api/auth/login's operationalStatus field.
+            const body = res.status === 403 ? await res.json().catch(() => ({})) : {};
+            if (body.operationalStatus === 'inactive') {
+                showError(t('login.operationalInactive'));
+            } else if (body.operationalStatus === 'suspended') {
+                showError(t('login.operationalSuspended'));
+            } else if (res.status === 401) {
+                showError(t('login.invalidCredentials'));
+            } else {
+                showError(t('login.genericError'));
+            }
             return;
         }
 

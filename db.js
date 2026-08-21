@@ -301,6 +301,23 @@ db.exec(`
         created_at     TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Catálogo Estatus RH (Administración de Personal > Catálogos): the
+    -- client's own list of HR status options (Activo, De vacaciones,
+    -- Rescisión de Contrato...). operational_effect is set per entry by
+    -- whoever maintains the catalog ('active' | 'suspended' | 'inactive')
+    -- so a brand-new status added later doesn't need any code change to be
+    -- classified correctly — see computeOperationalStatus below for how
+    -- this feeds hr_workers.hr_status_id into Estatus Operativo.
+    CREATE TABLE IF NOT EXISTS hr_status_catalog (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id          INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        name               TEXT NOT NULL,
+        operational_effect TEXT NOT NULL DEFAULT 'suspended',
+        status             TEXT NOT NULL DEFAULT 'active',
+        created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(client_id, name)
+    );
+
     -- Historial de cambios ("control de cambios" icon on every .data-table):
     -- one row per created/updated/deleted record on any client-scoped
     -- business table. table_key matches that table's data-table-id.
@@ -942,6 +959,37 @@ if (!fuelRecordColumns.some((c) => c.name === 'centro_costos')) {
 // worker is billed against), and user_id (the login account auto-created
 // alongside this worker — see createHrWorker) all added after hr_workers
 // already shipped once.
+// Seed set for a brand-new client's Estatus RH catalog (also used to
+// backfill any client that predates hr_status_catalog, below). A client can
+// freely rename/add/remove entries afterward from Business-EstatusRH.html —
+// this only fires once per client, when their catalog is still empty.
+const DEFAULT_HR_STATUSES = [
+    ['Activo', 'active'],
+    ['De vacaciones', 'suspended'],
+    ['Incapacidad', 'suspended'],
+    ['Permiso sin Goce de Sueldo', 'suspended'],
+    ['Permiso con Goce de Sueldo', 'suspended'],
+    ['Rescisión de Contrato', 'inactive'],
+];
+const insertHrStatusCatalogEntry = db.prepare('INSERT INTO hr_status_catalog (client_id, name, operational_effect) VALUES (?, ?, ?)');
+function ensureDefaultHrStatusCatalog(clientId) {
+    const existing = db.prepare('SELECT COUNT(*) AS n FROM hr_status_catalog WHERE client_id = ?').get(clientId).n;
+    if (existing > 0) return;
+    const seed = db.transaction(() => {
+        DEFAULT_HR_STATUSES.forEach(([name, effect]) => insertHrStatusCatalogEntry.run(clientId, name, effect));
+    });
+    seed();
+}
+// Every worker is Activo by definition the moment they're registered (see
+// createHrWorker below) — looks up this client's own Activo entry,
+// seeding their catalog first if it's still empty.
+function getDefaultActiveHrStatusId(clientId) {
+    ensureDefaultHrStatusCatalog(clientId);
+    const row = db.prepare("SELECT id FROM hr_status_catalog WHERE client_id = ? AND name = 'Activo' ORDER BY id ASC LIMIT 1").get(clientId)
+        || db.prepare("SELECT id FROM hr_status_catalog WHERE client_id = ? AND operational_effect = 'active' ORDER BY id ASC LIMIT 1").get(clientId);
+    return row ? row.id : null;
+}
+
 const hrWorkerColumns = db.prepare('PRAGMA table_info(hr_workers)').all();
 if (!hrWorkerColumns.some((c) => c.name === 'given_names')) {
     db.exec("ALTER TABLE hr_workers ADD COLUMN given_names TEXT NOT NULL DEFAULT ''");
@@ -960,6 +1008,27 @@ if (!hrWorkerColumns.some((c) => c.name === 'user_id')) {
 }
 if (!hrWorkerColumns.some((c) => c.name === 'record_code')) {
     db.exec("ALTER TABLE hr_workers ADD COLUMN record_code TEXT NOT NULL DEFAULT ''");
+}
+// hr_status_id replaces the old free-standing status ('active'/'inactive')
+// with a reference into the new hr_status_catalog. One-time backfill, right
+// when the column is first added: every client with existing workers gets
+// their catalog seeded (if not already), then each worker is pointed at
+// Activo or Rescisión de Contrato depending on their old status — Rescisión
+// de Contrato because that's the only new entry whose operational_effect
+// ('inactive') matches what old status='inactive' already did (revoke
+// login, see updateHrWorker's cascade). The legacy `status` column is left
+// in place, unused, rather than risk a destructive DROP COLUMN on live data.
+if (!hrWorkerColumns.some((c) => c.name === 'hr_status_id')) {
+    db.exec('ALTER TABLE hr_workers ADD COLUMN hr_status_id INTEGER REFERENCES hr_status_catalog(id)');
+    const workerClientIds = db.prepare('SELECT DISTINCT client_id FROM hr_workers').all().map((r) => r.client_id);
+    const setWorkerHrStatus = db.prepare('UPDATE hr_workers SET hr_status_id = ? WHERE client_id = ? AND status = ?');
+    workerClientIds.forEach((clientId) => {
+        ensureDefaultHrStatusCatalog(clientId);
+        const activeId = db.prepare("SELECT id FROM hr_status_catalog WHERE client_id = ? AND name = 'Activo'").get(clientId)?.id;
+        const rescindedId = db.prepare("SELECT id FROM hr_status_catalog WHERE client_id = ? AND name = 'Rescisión de Contrato'").get(clientId)?.id;
+        if (activeId) setWorkerHrStatus.run(activeId, clientId, 'active');
+        if (rescindedId) setWorkerHrStatus.run(rescindedId, clientId, 'inactive');
+    });
 }
 
 // abbreviation added after job_positions already shipped once.
@@ -1803,6 +1872,53 @@ function deleteJobPosition(id, clientId) {
     db.prepare('DELETE FROM job_positions WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
+// --- Query helpers: Estatus RH catalog (Administración de Personal, scoped
+// to one client) — see DEFAULT_HR_STATUSES/ensureDefaultHrStatusCatalog
+// above for the seed this starts from.
+function listHrStatusCatalog(clientId) {
+    ensureDefaultHrStatusCatalog(clientId);
+    return db.prepare('SELECT * FROM hr_status_catalog WHERE client_id = ? ORDER BY id ASC').all(clientId);
+}
+
+function getHrStatusCatalogById(id, clientId) {
+    return db.prepare('SELECT * FROM hr_status_catalog WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function createHrStatusCatalogEntry({ clientId, name, operationalEffect, status }) {
+    const result = db
+        .prepare('INSERT INTO hr_status_catalog (client_id, name, operational_effect, status) VALUES (@clientId, @name, @operationalEffect, @status)')
+        .run({ clientId, name, operationalEffect: operationalEffect || 'suspended', status: status || 'active' });
+    return getHrStatusCatalogById(result.lastInsertRowid, clientId);
+}
+
+const HR_STATUS_CATALOG_FIELDS = {
+    name: { column: 'name', fieldKey: 'business.hrStatusName' },
+    operationalEffect: { column: 'operational_effect', fieldKey: 'business.hrStatusEffect' },
+    status: { column: 'status', fieldKey: 'business.hrStatusCatalogStatus' },
+};
+
+function updateHrStatusCatalogEntry(id, clientId, { name, operationalEffect, status }) {
+    db.prepare(`
+        UPDATE hr_status_catalog SET name = @name, operational_effect = @operationalEffect, status = @status
+        WHERE id = @id AND client_id = @clientId
+    `).run({ id, clientId, name, operationalEffect: operationalEffect || 'suspended', status: status || 'active' });
+    return getHrStatusCatalogById(id, clientId);
+}
+
+function deleteHrStatusCatalogEntry(id, clientId) {
+    db.prepare('DELETE FROM hr_status_catalog WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// Estatus Operativo (Business-Accesos.html): 'active' follows the manual
+// users.active toggle (habilitar/inactivar) same as before this feature —
+// any other bucket ('suspended'/'inactive') is FORCED by the worker's
+// current Estatus RH entry, overriding whatever users.active happens to
+// hold, and the manual toggle is locked from that screen while it's forced.
+function computeOperationalStatus({ active, hrStatusEffect }) {
+    if (hrStatusEffect === 'suspended' || hrStatusEffect === 'inactive') return hrStatusEffect;
+    return active ? 'active' : 'inactive';
+}
+
 // --- Query helpers: Transacciones Inteligentes de Negocio (reports) --------
 function mapIntelligentReportColumn(row) {
     let formula = null;
@@ -2208,8 +2324,11 @@ function computeIntelligentReportRows(report, records) {
 function listHrWorkers(clientId) {
     return db
         .prepare(`
-            SELECT hr_workers.*, users.username AS username, users.active AS userActive
-            FROM hr_workers LEFT JOIN users ON users.id = hr_workers.user_id
+            SELECT hr_workers.*, users.username AS username, users.active AS userActive,
+                   hr_status_catalog.name AS hrStatusName, hr_status_catalog.operational_effect AS hrStatusEffect
+            FROM hr_workers
+            LEFT JOIN users ON users.id = hr_workers.user_id
+            LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
             WHERE hr_workers.client_id = ?
             ORDER BY hr_workers.record_number ASC
         `)
@@ -2219,8 +2338,11 @@ function listHrWorkers(clientId) {
 function getHrWorkerById(id, clientId) {
     return db
         .prepare(`
-            SELECT hr_workers.*, users.username AS username, users.active AS userActive
-            FROM hr_workers LEFT JOIN users ON users.id = hr_workers.user_id
+            SELECT hr_workers.*, users.username AS username, users.active AS userActive,
+                   hr_status_catalog.name AS hrStatusName, hr_status_catalog.operational_effect AS hrStatusEffect
+            FROM hr_workers
+            LEFT JOIN users ON users.id = hr_workers.user_id
+            LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
             WHERE hr_workers.id = ? AND hr_workers.client_id = ?
         `)
         .get(id, clientId);
@@ -2337,6 +2459,9 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM hr_workers WHERE client_id = ?')
         .get(clientId).n;
     const recordCode = computeHrRecordCode(clientId, costCenterId, recordNumber);
+    // Outside the transaction below since it may itself seed (and thus
+    // write to) hr_status_catalog on this client's very first worker.
+    const activeHrStatusId = getDefaultActiveHrStatusId(clientId);
 
     const create = db.transaction(() => {
         const user = createUser({
@@ -2347,11 +2472,11 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
             .prepare(`
                 INSERT INTO hr_workers (
                     client_id, db_id, record_number, record_code, given_names, surnames, full_name,
-                    position, start_date, department, departments, cost_center_id, email, user_id
+                    position, start_date, department, departments, cost_center_id, email, user_id, hr_status_id
                 )
                 VALUES (
                     @clientId, @dbId, @recordNumber, @recordCode, @givenNames, @surnames, @fullName,
-                    @position, @startDate, @department, @departments, @costCenterId, @email, @userId
+                    @position, @startDate, @department, @departments, @costCenterId, @email, @userId, @hrStatusId
                 )
             `)
             .run({
@@ -2363,7 +2488,7 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
                 // doesn't fail its constraint.
                 department: (departments && departments[0]) || '',
                 departments: JSON.stringify(departments || []),
-                costCenterId: costCenterId || null, email, userId: user.id,
+                costCenterId: costCenterId || null, email, userId: user.id, hrStatusId: activeHrStatusId,
             });
         return result.lastInsertRowid;
     });
@@ -2392,7 +2517,7 @@ const HR_WORKER_PATCHABLE_FIELDS = {
     area: { column: 'area', fieldKey: 'main.colHrArea' },
     email: { column: 'email', fieldKey: 'main.colHrEmail' },
     phone: { column: 'phone', fieldKey: 'main.colHrPhone' },
-    status: { column: 'status', fieldKey: 'main.colHrStatus' },
+    hrStatusId: { column: 'hr_status_id', fieldKey: 'main.colHrStatus' },
     departments: { column: 'departments', fieldKey: 'main.colHrDepartment' },
     costCenterId: { column: 'cost_center_id', fieldKey: 'main.colHrCostCenter' },
 };
@@ -2412,13 +2537,20 @@ function updateHrWorker(id, clientId, patch) {
     if (sets.length) {
         db.prepare(`UPDATE hr_workers SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
     }
-    // Deactivating a worker also revokes their login, matching the
-    // client-level cascade (deactivateClientUsers). Does NOT auto-reactivate
-    // on the way back to 'active' — restoring login needs an explicit
-    // "Activar" click, same as a brand-new worker.
-    if (Object.prototype.hasOwnProperty.call(patch, 'status') && patch.status === 'inactive') {
-        const worker = getHrWorkerById(id, clientId);
-        if (worker?.user_id) db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(worker.user_id);
+    // A status whose catalog entry is marked "Inactivo" (e.g. Rescisión de
+    // Contrato) also revokes the worker's login, matching the old
+    // status='inactive' cascade this replaces. Does NOT auto-reactivate when
+    // it moves off that entry — restoring login needs an explicit "Activar"
+    // click, same as a brand-new worker. A "Suspendido" entry (vacaciones,
+    // incapacidad, permisos...) does NOT revoke login by itself — Estatus
+    // Operativo (see computeOperationalStatus) already blocks their access
+    // independently of users.active while their status stays in that bucket.
+    if (Object.prototype.hasOwnProperty.call(patch, 'hrStatusId')) {
+        const entry = db.prepare('SELECT operational_effect FROM hr_status_catalog WHERE id = ? AND client_id = ?').get(patch.hrStatusId, clientId);
+        if (entry?.operational_effect === 'inactive') {
+            const worker = getHrWorkerById(id, clientId);
+            if (worker?.user_id) db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(worker.user_id);
+        }
     }
     return getHrWorkerById(id, clientId);
 }
@@ -3124,20 +3256,39 @@ function hasSaasGrant(grants, itemId, subItemId = null) {
     return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
 }
 
-// hr_workers.status ("Estatus RH") is a separate concept from users.active
-// (see hr_workers' own comment / OpRRHHMiRecursoHumano.js's buildStatusCell
-// vs buildUserStatusCell) -- LEFT JOIN since not every business user is
-// necessarily tied to an hr_workers row.
+// Estatus RH (hr_workers -> hr_status_catalog) is a separate concept from
+// users.active -- LEFT JOIN twice since not every business user is
+// necessarily tied to an hr_workers row. Estatus Operativo (Accesos y
+// Permisos) is derived from both, see computeOperationalStatus.
 function listBusinessUsers(clientId) {
-    return db
+    const rows = db
         .prepare(`
             SELECT users.id, users.username, users.email, users.name, users.role, users.active,
-                   users.is_client_admin, users.created_at, hr_workers.status AS hrStatus
-            FROM users LEFT JOIN hr_workers ON hr_workers.user_id = users.id
+                   users.is_client_admin, users.created_at,
+                   hr_status_catalog.name AS hrStatusName, hr_status_catalog.operational_effect AS hrStatusEffect
+            FROM users
+            LEFT JOIN hr_workers ON hr_workers.user_id = users.id
+            LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
             WHERE users.client_id = ? AND users.is_client_admin = 0
             ORDER BY users.created_at DESC
         `)
         .all(clientId);
+    return rows.map((row) => ({ ...row, operationalStatus: computeOperationalStatus(row) }));
+}
+
+// Login gate (POST /api/auth/login) -- same derivation as listBusinessUsers,
+// for the one user who just typed in a username/password.
+function getUserOperationalStatus(userId) {
+    const row = db
+        .prepare(`
+            SELECT users.active, hr_status_catalog.operational_effect AS hrStatusEffect
+            FROM users
+            LEFT JOIN hr_workers ON hr_workers.user_id = users.id
+            LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
+            WHERE users.id = ?
+        `)
+        .get(userId);
+    return row ? computeOperationalStatus(row) : 'active';
 }
 
 function getUserById(id, clientId) {
@@ -3440,6 +3591,14 @@ module.exports = {
     createJobPosition,
     updateJobPosition,
     deleteJobPosition,
+    listHrStatusCatalog,
+    getHrStatusCatalogById,
+    createHrStatusCatalogEntry,
+    updateHrStatusCatalogEntry,
+    deleteHrStatusCatalogEntry,
+    HR_STATUS_CATALOG_FIELDS,
+    computeOperationalStatus,
+    getUserOperationalStatus,
     listIntelligentReports,
     getIntelligentReportById,
     createIntelligentReport,

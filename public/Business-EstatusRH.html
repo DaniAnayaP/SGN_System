@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.opRrhhMiRecursoHumano">My Human Resource</title>
+    <title data-i18n="business.hrStatusCatalogTitle">HR Status</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
 </head>
-<body data-active-page="cat-operaciones-rrhh-mi-recurso-humano">
+<body>
     <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
         <div class="header">
             <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="main.welcome">Welcome</p>
+                <p class="welcome-text" data-i18n="business.hrStatusCatalogTitle">HR Status</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -340,77 +340,88 @@
             </div>
         </div>
 
-        <div class="page-content">
-            <div class="filter-bar" id="filter-bar">
-                <div class="filter-bar-panel">
-                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
-                    <div class="filter-bar-fields">
-                        <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterHrSearchHint">Name, position, email, phone...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterHrSearchHint" placeholder="Name, position, email, phone...">
-                        </div>
-                        <div class="filter-field">
-                            <label for="filter-department" data-i18n="main.colHrDepartment">Assigned Department</label>
-                            <select id="filter-department">
-                                <option value="" data-i18n="main.filterAll">All</option>
-                                <option value="steering-committee" data-i18n="menu.steeringCommittee">Steering Committee</option>
-                                <option value="general-management" data-i18n="menu.generalManagement">General Management</option>
-                                <option value="management-control" data-i18n="menu.managementControl">Management Control</option>
-                                <option value="supply-chain" data-i18n="menu.supplyChain">Supply Chain</option>
-                                <option value="purchasing" data-i18n="menu.purchasing">Purchasing</option>
-                                <option value="commercial" data-i18n="menu.commercial">Commercial</option>
-                                <option value="marketing" data-i18n="menu.marketing">Marketing</option>
-                                <option value="human-resources" data-i18n="menu.humanResources">Human Resources</option>
-                                <option value="accounting" data-i18n="menu.accounting">Accounting</option>
-                                <option value="finance" data-i18n="menu.finance">Finance</option>
-                                <option value="certifications" data-i18n="menu.certifications">Certifications</option>
-                            </select>
-                        </div>
-                        <div class="filter-field">
-                            <label for="filter-status" data-i18n="main.filterStatus">Status</label>
-                            <select id="filter-status">
-                                <option value="" data-i18n="main.filterAll">All</option>
-                                <!-- Estatus RH options appended at runtime from the client's own catalog (see loadHrStatusCatalog in OpRRHHMiRecursoHumano.js) -->
-                            </select>
-                        </div>
+        <section class="admin-panel">
+            <p class="admin-subtitle" data-i18n="business.hrStatusCatalogSubtitle">Manage your company's HR status options — each one decides what it means for Estatus Operativo on Accesos y Permisos.</p>
+
+            <form id="hs-form" class="admin-form" novalidate>
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="hs-name" data-i18n="business.hrStatusName">Name</label>
+                        <input id="hs-name" name="name" type="text" required>
                     </div>
-                    <div class="filter-bar-actions">
-                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
+                    <div class="admin-field">
+                        <label for="hs-effect" data-i18n="business.hrStatusEffect">Effect on Estatus Operativo</label>
+                        <select id="hs-effect">
+                            <option value="active" data-i18n="business.hrStatusEffectActive">Activo</option>
+                            <option value="suspended" selected data-i18n="business.hrStatusEffectSuspended">Suspendido</option>
+                            <option value="inactive" data-i18n="business.hrStatusEffectInactive">Inactivo</option>
+                        </select>
+                    </div>
+                    <div class="admin-field">
+                        <label for="hs-status" data-i18n="business.jobPositionStatus">Status</label>
+                        <select id="hs-status">
+                            <option value="active" data-i18n="main.filterActive">Active</option>
+                            <option value="inactive" data-i18n="main.filterInactive">Inactive</option>
+                        </select>
                     </div>
                 </div>
-            </div>
+                <div id="hs-form-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn" id="hs-form-submit" data-i18n="business.addHrStatus">Add HR status</button>
+                </div>
+            </form>
 
-            <div class="data-table-wrapper" data-table-id="mi-recurso-humano">
+            <div class="data-table-wrapper" data-table-id="estatus-rh">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="main.colHrDbId" data-col="colHrDbId">Unique Database #</th>
-                            <th data-i18n="main.colHrRecordId" data-col="colHrRecordId">Unique Record #</th>
-                            <th data-i18n="main.colHrFullName" data-col="colHrFullName">Full Name</th>
-                            <th data-i18n="main.colHrPosition" data-col="colHrPosition">Position</th>
-                            <th data-i18n="main.colHrStartDate" data-col="colHrStartDate">Start Date</th>
-                            <th data-i18n="main.colHrDepartment" data-col="colHrDepartment">Assigned Department</th>
-                            <th data-i18n="main.colHrArea" data-col="colHrArea">Assigned Area</th>
-                            <th data-i18n="main.colHrCostCenter" data-col="colHrCostCenter">Cost Center</th>
-                            <th data-i18n="main.colHrEmail" data-col="colHrEmail">Email</th>
-                            <th data-i18n="main.colHrPhone" data-col="colHrPhone">Phone</th>
-                            <th data-i18n="main.colHrStatus" data-col="colHrStatus">Status</th>
-                            <th data-i18n="main.colHrUsername" data-col="colHrUsername">User</th>
-                            <th data-i18n="main.colHrUserStatus" data-col="colHrUserStatus">User Status</th>
+                            <th data-i18n="business.hrStatusName" data-col="hsName">Name</th>
+                            <th data-i18n="business.hrStatusEffect" data-col="hsEffect">Effect on Estatus Operativo</th>
+                            <th data-i18n="business.jobPositionStatus" data-col="hsStatus">Status</th>
                             <th data-col="actions"></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
-                            <td class="data-table-empty-cell" colspan="14">
-                                <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
-                            </td>
-                        </tr>
+                    <tbody id="hs-table-body">
+                        <!-- rendered at runtime -->
                     </tbody>
                 </table>
+                <p id="hs-empty" class="admin-empty" data-i18n="business.hrStatusNoneYet" hidden>No HR statuses yet. Add the first one above.</p>
+            </div>
+        </section>
+    </main>
+
+    <div class="modal-overlay" id="hs-edit-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="hs-edit-modal-title">
+            <h3 id="hs-edit-modal-title" data-i18n="business.hrStatusEditTitle">Edit HR Status</h3>
+            <input type="hidden" id="hs-edit-id" value="">
+            <div class="admin-form-grid">
+                <div class="admin-field">
+                    <label for="hs-edit-name" data-i18n="business.hrStatusName">Name</label>
+                    <input id="hs-edit-name" type="text" required>
+                </div>
+                <div class="admin-field">
+                    <label for="hs-edit-effect" data-i18n="business.hrStatusEffect">Effect on Estatus Operativo</label>
+                    <select id="hs-edit-effect">
+                        <option value="active" data-i18n="business.hrStatusEffectActive">Activo</option>
+                        <option value="suspended" data-i18n="business.hrStatusEffectSuspended">Suspendido</option>
+                        <option value="inactive" data-i18n="business.hrStatusEffectInactive">Inactivo</option>
+                    </select>
+                </div>
+                <div class="admin-field">
+                    <label for="hs-edit-status" data-i18n="business.jobPositionStatus">Status</label>
+                    <select id="hs-edit-status">
+                        <option value="active" data-i18n="main.filterActive">Active</option>
+                        <option value="inactive" data-i18n="main.filterInactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            <div id="hs-edit-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="hs-edit-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="hs-edit-cancel" data-i18n="admin.cancel">Cancel</button>
             </div>
         </div>
-    </main>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -465,103 +476,8 @@
         </div>
     </div>
 
-    <!-- Nombre(s)/Apellidos are separate fields (not one "Nombre Completo")
-         because the auto-generated username needs to know exactly which
-         words are given names vs. apellidos — see computeHrUsername in
-         db.js. Correo is required up front too, unlike the rest of this
-         form's "fill in later" fields, since the linked login account
-         (created in this same save, see createHrWorker) needs one. -->
-    <div class="modal-overlay" id="new-record-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-record-modal-title">
-            <h3 id="new-record-modal-title" data-i18n="main.newHireRecord">New Hire</h3>
-            <p class="admin-hint" data-i18n="main.hrNewRecordHint">Phone and status can be filled in later, directly from the table row.</p>
-            <div class="admin-form-grid">
-                <div class="admin-field">
-                    <label for="new-record-given-names" data-i18n="main.hrGivenNames">Given name(s)</label>
-                    <input type="text" id="new-record-given-names" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-surnames" data-i18n="main.hrSurnames">Surname(s)</label>
-                    <input type="text" id="new-record-surnames" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-email" data-i18n="main.colHrEmail">Email</label>
-                    <input type="email" id="new-record-email" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-position" data-i18n="main.colHrPosition">Position</label>
-                    <select id="new-record-position" required>
-                        <option value="" data-i18n="main.fuelSelectReason">Select...</option>
-                    </select>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-start-date" data-i18n="main.colHrStartDate">Start Date</label>
-                    <input type="date" id="new-record-start-date" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-cost-center" data-i18n="main.colHrCostCenter">Cost Center</label>
-                    <select id="new-record-cost-center">
-                        <option value="" data-i18n="main.hrNoCostCenter">None</option>
-                    </select>
-                </div>
-            </div>
-            <div class="admin-field" style="margin-top: 1rem;">
-                <label data-i18n="main.colHrDepartment">Assigned Department</label>
-                <div class="hr-department-checklist" id="new-record-departments">
-                    <!-- rendered at runtime -->
-                </div>
-            </div>
-            <div id="new-record-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="new-record-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="new-record-cancel" data-i18n="admin.cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Click-to-edit for the Departamento(s) column later — same checklist
-         widget as new-record-modal's, just reused against an existing row
-         instead of a fresh one. -->
-    <div class="modal-overlay" id="edit-departments-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="edit-departments-modal-title">
-            <h3 id="edit-departments-modal-title" data-i18n="main.colHrDepartment">Assigned Department</h3>
-            <div class="hr-department-checklist" id="edit-departments-list">
-                <!-- rendered at runtime -->
-            </div>
-            <div id="edit-departments-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="edit-departments-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="edit-departments-cancel" data-i18n="admin.cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- One-time credentials display after "Activar" (see
-         activateHrWorkerUser in db.js) — same convention as the client
-         admin auto-provisioning banner: the password is only ever shown
-         here, once, never recoverable afterward. -->
-    <div class="modal-overlay" id="hr-credentials-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="hr-credentials-modal-title">
-            <h3 id="hr-credentials-modal-title" data-i18n="main.hrCredentialsTitle">User activated</h3>
-            <p class="admin-hint" data-i18n="main.hrCredentialsHint">Copy this password now — it won't be shown again.</p>
-            <dl class="user-info-fields">
-                <div class="user-info-field">
-                    <dt data-i18n="business.username">Username</dt>
-                    <dd id="hr-credentials-username">—</dd>
-                </div>
-                <div class="user-info-field">
-                    <dt data-i18n="business.password">Password</dt>
-                    <dd id="hr-credentials-password">—</dd>
-                </div>
-            </dl>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="hr-credentials-close" data-i18n="admin.close">Close</button>
-            </div>
-        </div>
-    </div>
-
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="OpRRHHMiRecursoHumano.js"></script>
+    <script src="Business-EstatusRH.js"></script>
 </body>
 </html>

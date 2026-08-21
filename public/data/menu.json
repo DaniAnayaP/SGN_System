@@ -251,6 +251,9 @@
       "cat-catalogos": [
         {
           "id": "cat-catalogos-puestos-trabajo", "labelKey": "menu.catPuestosTrabajo", "icon": "bx-window", "href": "Business-PuestosTrabajo.html"
+        },
+        {
+          "id": "cat-catalogos-estatus-rh", "labelKey": "menu.catEstatusRH", "icon": "bx-id-card", "href": "Business-EstatusRH.html"
         }
       ],
       "cat-operaciones": [

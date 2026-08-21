@@ -574,6 +574,10 @@ body.dark-mode .admin-generated-credentials{
     background-color: #eaf1fb;
     color: #2c5aa0;
 }
+.admin-badge-suspendido{
+    background-color: #fff2d9;
+    color: #9a6b00;
+}
 body.dark-mode .admin-badge-activo{
     background-color: #1c3324; color: #7fd99a;
 }
@@ -582,6 +586,9 @@ body.dark-mode .admin-badge-inactivo{
 }
 body.dark-mode .admin-badge-prospecto{
     background-color: #1e2a3a; color: #8fb8ea;
+}
+body.dark-mode .admin-badge-suspendido{
+    background-color: #3a2e10; color: #f0c463;
 }
 
 /* Institutional color palette widget */

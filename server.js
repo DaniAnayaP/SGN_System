@@ -81,6 +81,13 @@ const {
     createJobPosition,
     updateJobPosition,
     deleteJobPosition,
+    listHrStatusCatalog,
+    getHrStatusCatalogById,
+    createHrStatusCatalogEntry,
+    updateHrStatusCatalogEntry,
+    deleteHrStatusCatalogEntry,
+    HR_STATUS_CATALOG_FIELDS,
+    getUserOperationalStatus,
     listIntelligentReports,
     getIntelligentReportById,
     createIntelligentReport,
@@ -296,6 +303,17 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     // client whose status left 'activo' (see activateClient/deactivateClientUsers).
     if (!user.active) {
         return res.status(403).json({ message: 'This account is inactive.' });
+    }
+    // Estatus Operativo, derived from this user's Estatus RH (see
+    // computeOperationalStatus in db.js) — a "suspended" or "inactive" RH
+    // status (vacaciones, incapacidad, rescisión de contrato...) blocks
+    // login entirely, even though users.active itself may still be 1.
+    const operationalStatus = getUserOperationalStatus(user.id);
+    if (operationalStatus === 'inactive') {
+        return res.status(403).json({ message: 'This account cannot access the system due to a contract termination.', operationalStatus });
+    }
+    if (operationalStatus === 'suspended') {
+        return res.status(403).json({ message: 'This account is temporarily suspended.', operationalStatus });
     }
 
     const token = jwt.sign(
@@ -1820,6 +1838,86 @@ app.delete('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (
     res.status(204).end();
 });
 
+// --- Estatus RH catalog (Administración de Personal > Catálogos) -----------
+// Same read-for-everyone/write-for-admins split as job positions: Mi
+// Recurso Humano's own Estatus dropdown (any authenticated client user)
+// needs the (active-only, filtered client-side same as Puesto's dropdown)
+// list to render at all.
+const HR_STATUS_EFFECTS = ['active', 'suspended', 'inactive'];
+const HR_STATUS_CATALOG_STATUSES = ['active', 'inactive'];
+function validateHrStatusCatalogBody(body, { requireName = true } = {}) {
+    const { name, operationalEffect, status } = body || {};
+    if (requireName && (!name || !name.trim())) return 'name is required.';
+    if (!requireName && name !== undefined && !name.trim()) return 'name is required.';
+    if (operationalEffect !== undefined && !HR_STATUS_EFFECTS.includes(operationalEffect)) {
+        return `operationalEffect must be one of: ${HR_STATUS_EFFECTS.join(', ')}.`;
+    }
+    if (status !== undefined && !HR_STATUS_CATALOG_STATUSES.includes(status)) {
+        return `status must be one of: ${HR_STATUS_CATALOG_STATUSES.join(', ')}.`;
+    }
+    return null;
+}
+
+app.get('/api/business/hr-status-catalog', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ hrStatuses: listHrStatusCatalog(req.user.clientId) });
+});
+
+app.post('/api/business/hr-status-catalog', requireAuth, requireClientAdmin, (req, res) => {
+    const error = validateHrStatusCatalogBody(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const { name, operationalEffect, status } = req.body;
+    try {
+        const hrStatus = createHrStatusCatalogEntry({
+            clientId: req.user.clientId, name: name.trim(), operationalEffect, status,
+        });
+        logTableChange({
+            clientId: req.user.clientId, tableKey: 'estatus-rh', recordId: hrStatus.id,
+            recordLabel: hrStatus.name, action: 'create', changedBy: req.user.name,
+        });
+        res.status(201).json({ hrStatus });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'An HR status with that name already exists.' });
+        }
+        throw err;
+    }
+});
+
+app.patch('/api/business/hr-status-catalog/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getHrStatusCatalogById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'HR status not found.' });
+    const error = validateHrStatusCatalogBody(req.body, { requireName: false });
+    if (error) return res.status(400).json({ message: error });
+    const { name, operationalEffect, status } = req.body;
+    const patch = {
+        name: name !== undefined ? name.trim() : existing.name,
+        operationalEffect: operationalEffect ?? existing.operational_effect,
+        status: status ?? existing.status,
+    };
+    checkAndLogFieldChanges(req, existing, patch, HR_STATUS_CATALOG_FIELDS, 'estatus-rh', existing.name);
+    try {
+        const hrStatus = updateHrStatusCatalogEntry(req.params.id, req.user.clientId, patch);
+        res.json({ hrStatus });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'An HR status with that name already exists.' });
+        }
+        throw err;
+    }
+});
+
+app.delete('/api/business/hr-status-catalog/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getHrStatusCatalogById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'HR status not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'estatus-rh', recordId: existing.id,
+        recordLabel: existing.name, action: 'delete', changedBy: req.user.name,
+    });
+    deleteHrStatusCatalogEntry(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
 // --- Transacciones Inteligentes de Negocio (Negocio Inteligente) -----------
 // A report is a name + an ordered list of columns (base, pulled straight
 // from Base de Datos Global, or calculated, a formula over other columns
@@ -2288,7 +2386,9 @@ function mapHrWorker(row, pendingByRecord) {
         area: row.area,
         email: row.email,
         phone: row.phone,
-        status: row.status,
+        hrStatusId: row.hr_status_id,
+        hrStatusName: row.hrStatusName,
+        hrStatusEffect: row.hrStatusEffect,
         username: row.username,
         // NULL (no linked account, shouldn't happen for anything created
         // after this feature shipped) reads as false, same as inactive.
@@ -2353,6 +2453,10 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (Object.prototype.hasOwnProperty.call(patch, 'costCenterId') && patch.costCenterId != null
         && !getCostCenterById(patch.costCenterId, req.user.clientId)) {
         return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'hrStatusId')
+        && !getHrStatusCatalogById(patch.hrStatusId, req.user.clientId)) {
+        return res.status(400).json({ message: 'hrStatusId does not belong to this client.' });
     }
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
     const worker = updateHrWorker(req.params.id, req.user.clientId, appliedPatch);
