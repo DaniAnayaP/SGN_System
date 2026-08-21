@@ -7,13 +7,31 @@
 // plus Empresa and Sucursal — see db.js's buildCostCenterCodeBase.
 // ---------------------------------------------------------------------------
 
-const newBtn = document.getElementById('cc-new-btn');
 const tableBody = document.getElementById('cc-table-body');
 const emptyMsg = document.getElementById('cc-empty');
 const limitStatus = document.getElementById('cc-limit-status');
 
 let costCenters = [];
 let limit = 0;
+let newBtn = null;
+
+// Same spot/style as Registro Combustible's own "+ Nuevo Registro" (see
+// OpTransVolCombustible.js's renderNewRecordButton) -- prepended into this
+// table's own zoom/pin/visibility toolbar instead of sitting in its own
+// subtitled block above the filter bar, so the panel stays as compact as
+// every other operational table's.
+function renderNewCcButton() {
+    const wrapper = document.querySelector('[data-table-id="centros-costo"]');
+    const toolbar = wrapper?.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    if (toolbar.querySelector('.data-table-new-record-btn')) return;
+    newBtn = document.createElement('button');
+    newBtn.type = 'button';
+    newBtn.className = 'data-table-new-record-btn';
+    newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="business.ccNew">${Dashboard.t('business.ccNew')}</span>`;
+    newBtn.addEventListener('click', openNewModal);
+    toolbar.prepend(newBtn);
+}
 
 // Mirrors db.js's own padAccountNumber -- the raw accountNumber field is
 // just an integer, padded to 6 digits only for display here.
@@ -29,7 +47,7 @@ function refreshLimitStatus() {
     limitStatus.textContent = isAtLimit()
         ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
         : Dashboard.t('business.ccLimitStatus', { count: costCenters.length, limit });
-    newBtn.disabled = isAtLimit();
+    if (newBtn) newBtn.disabled = isAtLimit();
 }
 
 const CONTROL_INTERNO_COLS = [
@@ -60,6 +78,9 @@ function renderCostCenters() {
         const tdCode = document.createElement('td');
         tdCode.dataset.col = 'ccCode';
         tdCode.textContent = cc.code;
+        const tdSucursal = document.createElement('td');
+        tdSucursal.dataset.col = 'ccSucursal';
+        tdSucursal.textContent = cc.sucursal || '—';
         const tdName = document.createElement('td');
         tdName.dataset.col = 'ccName';
         tdName.textContent = cc.name;
@@ -107,7 +128,7 @@ function renderCostCenters() {
         toggleBtn.addEventListener('click', () => toggleCostCenterStatus(cc));
         tdActions.append(historyBtn, editBtn, toggleBtn);
 
-        tr.append(tdCode, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
+        tr.append(tdCode, tdSucursal, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
     refreshLimitStatus();
@@ -122,7 +143,7 @@ function applyCcFilters() {
     const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
     tableBody.querySelectorAll('tr').forEach((tr) => {
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['ccCode', 'ccName', 'ccResponsible', 'ccDescription']
+        const haystack = ['ccCode', 'ccSucursal', 'ccName', 'ccResponsible', 'ccDescription']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !haystack.includes(text);
@@ -425,7 +446,6 @@ async function saveCcModal() {
     }
 }
 
-newBtn.addEventListener('click', openNewModal);
 modalSaveBtn.addEventListener('click', saveCcModal);
 modalCancelBtn.addEventListener('click', closeCcModal);
 ccModal.addEventListener('click', (event) => {
@@ -451,6 +471,7 @@ document.addEventListener('dashboard:language-changed', () => {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'business-centros-costo' });
         if (!role) return;
+        renderNewCcButton();
         LEVEL_ORDER.forEach((key) => {
             cascadeLevels[key].addToggle.title = Dashboard.t(cascadeLevels[key].titleKey);
         });
