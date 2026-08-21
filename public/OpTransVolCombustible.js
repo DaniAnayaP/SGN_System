@@ -593,9 +593,32 @@ const dateInput = document.getElementById('new-record-date');
 const ecoUnitInput = document.getElementById('new-record-eco-unit');
 const driverInput = document.getElementById('new-record-driver');
 const coordinatorInput = document.getElementById('new-record-coordinator');
+const costCenterSelect = document.getElementById('new-record-cost-center');
 const newRecordError = document.getElementById('new-record-error');
 const newRecordSaveBtn = document.getElementById('new-record-save');
 const newRecordCancelBtn = document.getElementById('new-record-cancel');
+
+// Dashboard.js and this page share one global scope (plain <script> tags,
+// not modules) -- sidebarCostCenters is Dashboard.js's own top-level `let`,
+// same one the top-bar cc-picker itself reads from.
+function populateCostCenterSelect() {
+    costCenterSelect.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
+    (typeof sidebarCostCenters !== 'undefined' ? sidebarCostCenters : []).forEach((cc) => {
+        const option = document.createElement('option');
+        option.value = String(cc.id);
+        option.textContent = `${cc.code} - ${cc.name}`;
+        costCenterSelect.appendChild(option);
+    });
+    // Preset to the top-bar picker's own current selection when it's
+    // unambiguous (exactly one active there) -- same convenience default,
+    // just editable here now instead of only settable from the top bar.
+    // selectedCostCenterIds is Dashboard.js's own top-level `let` (same
+    // shared-scope situation as sidebarCostCenters above); mirrors
+    // Dashboard.selectedCostCenterLabel's own "only when exactly one" rule.
+    const oneSelected = typeof selectedCostCenterIds !== 'undefined'
+        && selectedCostCenterIds instanceof Set && selectedCostCenterIds.size === 1;
+    costCenterSelect.value = oneSelected ? String(Array.from(selectedCostCenterIds)[0]) : '';
+}
 
 function closeNewRecordModal() {
     newRecordModal.hidden = true;
@@ -606,6 +629,7 @@ function openNewRecordModal() {
     ecoUnitInput.value = '';
     driverInput.value = '';
     coordinatorInput.value = '';
+    populateCostCenterSelect();
     newRecordError.hidden = true;
     newRecordModal.hidden = false;
     dateInput.focus();
@@ -619,11 +643,10 @@ async function saveNewRecord() {
         return;
     }
     // Control Interno columns must be filled in from creation, not left
-    // blank -- Centro Costos only has a real value when exactly one is
-    // active in the top-bar picker (see Dashboard.selectedCostCenterLabel's
-    // own comment), so block the save here rather than silently persisting
-    // a record with no Centro de Costos.
-    if (!Dashboard.selectedCostCenterLabel) {
+    // blank -- block the save here rather than silently persisting a record
+    // with no Centro de Costos.
+    const selectedCc = sidebarCostCenters.find((cc) => String(cc.id) === costCenterSelect.value);
+    if (!selectedCc) {
         newRecordError.textContent = Dashboard.t('admin.costCenterRequiredForRecord');
         newRecordError.hidden = false;
         return;
@@ -640,7 +663,7 @@ async function saveNewRecord() {
                 ecoUnit: ecoUnitInput.value.trim(),
                 driver: driverInput.value.trim(),
                 coordinator: coordinatorInput.value.trim(),
-                centroCostos: Dashboard.selectedCostCenterLabel,
+                centroCostos: `${selectedCc.code} - ${selectedCc.name}`,
             }),
         });
         if (!res.ok) throw new Error('save failed');
