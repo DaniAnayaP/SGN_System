@@ -1255,6 +1255,18 @@
     .settings-submenu-group.open > .settings-submenu-toggle i:last-child{
         transform: rotate(180deg);
     }
+    /* Same reasoning as the sidebar's .sub-menu-item-dropdown > .sub-menu:
+       the ANCESTOR "Administración del Negocio" submenu resizes itself
+       right after this one toggles (see wireSettingsSubmenuToggles), by
+       reading ITS scrollHeight -- a mid-transition read only sees however
+       far this element's own animation has gotten in that same instant
+       (still ~0 elapsed, so still the OLD height), leaving the ancestor
+       either a gap (just collapsed) or clipped/overlapping the next group
+       (just expanded). No transition here means that read always sees the
+       true final size immediately. */
+    .settings-submenu-group > .settings-submenu{
+        transition: none;
+    }
     /* A nested .settings-submenu (Servicio Contratado's own children) sits
        one level deeper than the dropdown's other rows -- extra padding
        tells them apart without a separate indent-tracking class per row. */
