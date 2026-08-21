@@ -981,29 +981,91 @@ function buildMenuItem(item) {
 // (Servicio Contratado, Roles, Datos de Cliente, etc.) are reachable from
 // there too. Hidden whenever there's no admin-business item to show (GEIPSA
 // admin's reduced sidebar has none).
-// This dropdown is a flat <ul> (no chevron/accordion support, unlike the
-// main sidebar's buildMenuItem/buildSubmenu) -- a PURE folder (no real href
-// of its own, e.g. Servicio Contratado) can't be a clickable row, but it
-// must stay VISIBLE as a heading (not disappear) with its own real children
-// listed right underneath it, indented -- no click-to-expand needed here
-// since this is just a quick-access mirror, not the full navigational tree.
+// A PURE folder (no real href of its own, e.g. Servicio Contratado) becomes
+// its own 2-click accordion here — collapsed by default, opened by its own
+// toggle, exactly like the main sidebar's nested dropdowns (buildSubmenu) —
+// per explicit user request to match that behavior instead of the flat
+// always-expanded heading this used to be.
 // A leaf (real href, e.g. Nuestros Centros Costos, Roles, or Expansiones —
 // href="#" there just means "not built yet", not "this is a folder") is
-// always its own row, even if it also carries a submenu of its own (the
-// permission tree's column list, ccCode/ccName/... -- not sub-navigation).
-function buildBusinessAdminEntries(items, indent = false) {
-    const entries = [];
+// always its own plain row, even if it also carries a submenu of its own
+// (the permission tree's column list, ccCode/ccName/... -- not sub-nav).
+function buildBusinessAdminSubmenuList(items) {
+    const ul = document.createElement('ul');
+    ul.className = 'settings-submenu';
+    ul.setAttribute('role', 'menu');
     (items || []).filter((i) => !i.permissionOnly).forEach((item) => {
         const hasRealHref = item.href && item.href !== '#';
         const navigableChildren = (item.submenu || []).filter((c) => !c.permissionOnly);
+        const li = document.createElement('li');
+        li.setAttribute('role', 'none');
         if (!hasRealHref && navigableChildren.length) {
-            entries.push({ item, indent, heading: true });
-            entries.push(...buildBusinessAdminEntries(navigableChildren, true));
+            li.className = 'settings-submenu-group';
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'settings-submenu-toggle';
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            if (item.icon) {
+                const icon = document.createElement('i');
+                icon.className = `bx ${item.icon}`;
+                icon.setAttribute('aria-hidden', 'true');
+                toggleBtn.appendChild(icon);
+            }
+            const label = document.createElement('span');
+            label.textContent = t(item.labelKey, item.labelParams || {});
+            toggleBtn.appendChild(label);
+            const chevron = document.createElement('i');
+            chevron.className = 'bx bx-chevron-down';
+            chevron.setAttribute('aria-hidden', 'true');
+            toggleBtn.appendChild(chevron);
+            li.appendChild(toggleBtn);
+            li.appendChild(buildBusinessAdminSubmenuList(navigableChildren));
         } else {
-            entries.push({ item, indent, heading: false });
+            const a = document.createElement('a');
+            a.href = item.href || '#';
+            a.setAttribute('role', 'menuitem');
+            if (item.icon) {
+                const icon = document.createElement('i');
+                icon.className = `bx ${item.icon}`;
+                icon.setAttribute('aria-hidden', 'true');
+                a.appendChild(icon);
+            }
+            const label = document.createElement('span');
+            label.textContent = t(item.labelKey, item.labelParams || {});
+            a.appendChild(label);
+            li.appendChild(a);
         }
+        ul.appendChild(li);
     });
-    return entries;
+    return ul;
+}
+
+// Wires each direct toggle inside `root` (not its own nested toggles —
+// those get wired by the recursive call on their own list) to expand/
+// collapse just its own nested <ul>, then re-measures the "Administración
+// del Negocio" group's own fixed pixel height if it's currently open —
+// that height was fixed at whatever this nested list's collapsed size was
+// when the OUTER group was last opened, so it clips/gaps around this
+// toggle otherwise (same fix as wireMenuInteractions' own ancestor
+// re-measure, one level up).
+function wireSettingsSubmenuToggles(root) {
+    root.querySelectorAll(':scope > li > .settings-submenu-toggle').forEach((toggleBtn) => {
+        const li = toggleBtn.closest('li');
+        const nested = li.querySelector(':scope > ul');
+        wireSettingsSubmenuToggles(nested);
+        toggleBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const isOpen = li.classList.toggle('open');
+            toggleBtn.setAttribute('aria-expanded', String(isOpen));
+            nested.style.height = isOpen ? `${nested.scrollHeight}px` : '0';
+            const ancestorGroup = document.getElementById('business-admin-group');
+            const ancestorSubmenu = document.getElementById('business-admin-submenu');
+            if (ancestorGroup?.classList.contains('open') && ancestorSubmenu) {
+                ancestorSubmenu.style.height = 'auto';
+                ancestorSubmenu.style.height = `${ancestorSubmenu.scrollHeight}px`;
+            }
+        });
+    });
 }
 
 function renderBusinessAdminSettingsMenu(items) {
@@ -1011,30 +1073,14 @@ function renderBusinessAdminSettingsMenu(items) {
     const submenu = document.getElementById('business-admin-submenu');
     if (!group || !submenu) return;
     submenu.innerHTML = '';
-    const entries = buildBusinessAdminEntries(items);
-    if (!entries.length) {
+    const navigable = (items || []).filter((i) => !i.permissionOnly);
+    if (!navigable.length) {
         group.hidden = true;
         return;
     }
-    entries.forEach(({ item, indent, heading }) => {
-        const li = document.createElement('li');
-        li.setAttribute('role', 'none');
-        if (indent) li.classList.add('settings-submenu-indent');
-        const el = document.createElement(heading ? 'span' : 'a');
-        if (heading) li.classList.add('settings-submenu-heading');
-        else { el.href = item.href || '#'; el.setAttribute('role', 'menuitem'); }
-        if (item.icon) {
-            const icon = document.createElement('i');
-            icon.className = `bx ${item.icon}`;
-            icon.setAttribute('aria-hidden', 'true');
-            el.appendChild(icon);
-        }
-        const label = document.createElement('span');
-        label.textContent = t(item.labelKey, item.labelParams || {});
-        el.appendChild(label);
-        li.appendChild(el);
-        submenu.appendChild(li);
-    });
+    const built = buildBusinessAdminSubmenuList(navigable);
+    while (built.firstChild) submenu.appendChild(built.firstChild);
+    wireSettingsSubmenuToggles(submenu);
     group.hidden = false;
 }
 

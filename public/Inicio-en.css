@@ -1240,30 +1240,26 @@
         color: var(--color-text-primary);
     }
     /* A pure-folder row (e.g. Servicio Contratado) inside the
-       Administración del Negocio quick-access dropdown -- not clickable
-       (nothing to navigate to), just a heading grouping its own real
-       children right underneath it (see Dashboard.js's
-       buildBusinessAdminEntries/renderBusinessAdminSettingsMenu). */
-    .settings-submenu-heading span{
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        width: 100%;
-        padding: 0.45rem 0.6rem 0.45rem 1.5rem;
-        border-radius: 0.35rem;
-        background-color: color-mix(in srgb, var(--color-accent, #2B4C9B) 10%, transparent);
-        color: var(--color-accent, #2B4C9B);
-        font-size: 0.75rem;
+       Administración del Negocio quick-access dropdown -- its own 2-click
+       accordion (see Dashboard.js's buildBusinessAdminSubmenuList/
+       wireSettingsSubmenuToggles): bold trigger + chevron, collapsed by
+       default, expanding a nested <ul class="settings-submenu"> of its own
+       real children right underneath it. */
+    .settings-submenu-toggle{
         font-weight: 700;
-        cursor: default;
-        box-sizing: border-box;
     }
-    .settings-submenu-heading span i{
-        flex-shrink: 0;
-        font-size: 0.85rem;
+    .settings-submenu-toggle i:last-child{
+        margin-left: auto;
+        transition: transform 0.2s ease;
     }
-    .settings-submenu-indent > a,
-    .settings-submenu-indent > button{
+    .settings-submenu-group.open > .settings-submenu-toggle i:last-child{
+        transform: rotate(180deg);
+    }
+    /* A nested .settings-submenu (Servicio Contratado's own children) sits
+       one level deeper than the dropdown's other rows -- extra padding
+       tells them apart without a separate indent-tracking class per row. */
+    .settings-submenu .settings-submenu button,
+    .settings-submenu .settings-submenu a{
         padding-left: 2.4rem;
     }
     .settings-submenu button.active{
