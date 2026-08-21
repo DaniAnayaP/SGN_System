@@ -981,16 +981,31 @@ function buildMenuItem(item) {
 // (Servicio Contratado, Roles, Datos de Cliente, etc.) are reachable from
 // there too. Hidden whenever there's no admin-business item to show (GEIPSA
 // admin's reduced sidebar has none).
+// This dropdown is a flat <ul> (no chevron/accordion support, unlike the
+// main sidebar's buildMenuItem/buildSubmenu) -- an item with real children
+// of its own (e.g. Servicio Contratado, now a folder instead of a direct
+// link) has nothing to navigate to itself, so it's skipped and its
+// children are flattened in one level instead of rendering a dead href="#".
+function flattenBusinessAdminItems(items) {
+    const flat = [];
+    (items || []).filter((i) => !i.permissionOnly).forEach((item) => {
+        if (item.submenu) flat.push(...flattenBusinessAdminItems(item.submenu));
+        else flat.push(item);
+    });
+    return flat;
+}
+
 function renderBusinessAdminSettingsMenu(items) {
     const group = document.getElementById('business-admin-group');
     const submenu = document.getElementById('business-admin-submenu');
     if (!group || !submenu) return;
     submenu.innerHTML = '';
-    if (!items || !items.length) {
+    const flatItems = flattenBusinessAdminItems(items);
+    if (!flatItems.length) {
         group.hidden = true;
         return;
     }
-    items.forEach((item) => {
+    flatItems.forEach((item) => {
         const li = document.createElement('li');
         li.setAttribute('role', 'none');
         const a = document.createElement('a');
