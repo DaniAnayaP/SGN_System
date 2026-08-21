@@ -871,7 +871,7 @@
     "fieldLocked": "Already saved — you need permission to edit it",
     "tablePrefix": "Table",
     "permSoloVer": "View Only",
-    "permVerYOperar": "View & Operate",
+    "permVerYOperar": "Operate",
     "permEditar": "Edit",
     "permAutorizar": "Authorize",
     "changePending": "Pending authorization",

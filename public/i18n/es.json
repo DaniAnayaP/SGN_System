@@ -871,7 +871,7 @@
     "fieldLocked": "Ya se guardó — necesitas permiso para modificarlo",
     "tablePrefix": "Tabla",
     "permSoloVer": "Solo Ver",
-    "permVerYOperar": "Ver y Operar",
+    "permVerYOperar": "Operar",
     "permEditar": "Editar",
     "permAutorizar": "Autorizar",
     "changePending": "Pendiente de autorización",

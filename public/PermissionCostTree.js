@@ -22,9 +22,14 @@
 //     (one price for the whole column), never descending into its 4 Solo
 //     Ver/Ver y Operar/Editar/Autorizar sub-permission rows.
 //   - 'grantReadonlyCost' (Nuestros Planes' shield-icon modal): every row =
-//     the SAME interactive checkbox PermissionTree.js already has (nothing
-//     about how permissions are granted changes) plus a read-only cost
-//     value next to it, sourced from that same plan's already-saved costs.
+//     an interactive checkbox plus a read-only cost value next to it,
+//     sourced from that same plan's already-saved costs. A Columna's Ver/
+//     Operar/Editar/Autorizar checkboxes deliberately behave DIFFERENTLY
+//     here than in PermissionTree.js (confirmed with the user): a Plan is
+//     choosing which capability LEVELS it makes available at all, not
+//     which single one applies to a real user, so Operar/Editar/Autorizar
+//     are freely combinable (not mutually exclusive) once Ver is checked,
+//     and locked while it isn't — see renderColumnRow below.
 //   - 'clientTricolor' (Nuestros Clientes' "Permisos Contratados"/
 //     "+ Adicionales" modals): every row is colored against TWO grant sets
 //     at once — the client's PLAN (green) and this client's OWN extra
@@ -328,33 +333,6 @@
             return row;
         }
 
-        // Columna row — only used in grantReadonlyCost mode (costEdit and
-        // clientTricolor modes render Columna as a plain priced/colored leaf
-        // via buildRow instead, see renderColumns below). No checkbox of its
-        // own, same as PermissionTree.js — only its 4 sub-permission
-        // children are real grants — plus a read-only cost badge sourced
-        // from costMap.
-        function buildToggleOnlyRow(labelText, depth, toggle, costKey) {
-            const row = document.createElement('div');
-            row.className = `perm-tree-row perm-tree-depth-${depth}`;
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'perm-tree-toggle';
-            btn.setAttribute('aria-expanded', String(toggle.expanded));
-            const icon = document.createElement('i');
-            icon.className = 'bx bx-chevron-down';
-            icon.setAttribute('aria-hidden', 'true');
-            btn.appendChild(icon);
-            btn.addEventListener('click', () => { toggle.onToggle(); render(); });
-            row.appendChild(btn);
-            const label = document.createElement('span');
-            label.className = 'perm-tree-toggle-label';
-            label.textContent = labelText;
-            row.appendChild(label);
-            if (costKey != null) row.appendChild(buildCostSlot(costKey));
-            return row;
-        }
-
         const COLUMN_LEVELS = [
             { id: 'solo-ver', labelKey: 'main.permSoloVer' },
             { id: 'ver-y-operar', labelKey: 'main.permVerYOperar' },
@@ -366,9 +344,16 @@
         // stops here (never descends into the 4 sub-permission levels).
         // clientTricolor mode: same flat-leaf treatment, colored/checkable
         // as one unit (see columnColorFor/extraSlotArgs's header comments).
-        // grantReadonlyCost mode: identical toggle-only + 4-checkbox
-        // behavior as PermissionTree.js, unchanged, plus a read-only cost
-        // badge on the Columna row itself only. Shared by both plain
+        // grantReadonlyCost mode: intentionally DIFFERENT from
+        // PermissionTree.js here (confirmed with the user) -- a Plan is
+        // deciding which capability LEVELS it makes available at all, not
+        // which single one applies to a real user, so Ver y Operar/Editar/
+        // Autorizar are independently combinable (not mutually exclusive)
+        // once Ver is on -- but locked (disabled, unselectable) while Ver
+        // is off, since none of them make sense without it. Ver itself is
+        // merged into the Columna row's own checkbox (same as
+        // PermissionTree.js's column row), which also carries the
+        // read-only cost badge for the whole column. Shared by both plain
         // columns and columns nested inside a classification group (see
         // renderClassificationGroup below) via an arbitrary `base` prefix.
         function renderColumnRow(container, section, item, base, col, depth) {
@@ -395,24 +380,33 @@
 
             const colTreeKey = `col::${section.id}::${item.id}::${base}`;
             const colExpanded = expandedItems.has(colTreeKey);
-            const colRow = buildToggleOnlyRow(t(col.labelKey, col.labelParams), depth, {
+            const soloVerKey = keyOf(section.id, item.id, `${base}/solo-ver`);
+            const { row: colRow, input: colInput } = buildRow(t(col.labelKey, col.labelParams), depth, {
                 expanded: colExpanded,
                 onToggle: () => { if (colExpanded) expandedItems.delete(colTreeKey); else expandedItems.add(colTreeKey); },
             }, colCostKey);
+            colInput.checked = grantSet.has(soloVerKey);
+            colInput.addEventListener('change', () => {
+                setKeys([soloVerKey], colInput.checked);
+                // Operar/Editar/Autorizar can't stay granted without Ver.
+                if (!colInput.checked) {
+                    [...COLUMN_LEVELS, COLUMN_AUTHORIZE].forEach((level) => {
+                        if (level.id === 'solo-ver') return;
+                        grantSet.delete(keyOf(section.id, item.id, `${base}/${level.id}`));
+                    });
+                }
+                render();
+            });
             container.appendChild(colRow);
             if (!colExpanded) return;
 
-            COLUMN_LEVELS.forEach((level) => {
+            const verGranted = grantSet.has(soloVerKey);
+            COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').forEach((level) => {
                 const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
                 const { row: levelRowEl, input: levelInput } = buildRow(t(level.labelKey), depth + 1, null, null);
                 levelInput.checked = grantSet.has(levelKey);
+                levelInput.disabled = !verGranted;
                 levelInput.addEventListener('change', () => {
-                    if (levelInput.checked) {
-                        COLUMN_LEVELS.forEach((other) => {
-                            if (other.id === level.id) return;
-                            grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
-                        });
-                    }
                     setKeys([levelKey], levelInput.checked);
                     render();
                 });
@@ -422,6 +416,7 @@
             const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
             const { row: authRowEl, input: authInput } = buildRow(t(COLUMN_AUTHORIZE.labelKey), depth + 1, null, null);
             authInput.checked = grantSet.has(authKey);
+            authInput.disabled = !verGranted;
             authInput.addEventListener('change', () => { setKeys([authKey], authInput.checked); render(); });
             container.appendChild(authRowEl);
         }

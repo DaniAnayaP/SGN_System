@@ -899,6 +899,13 @@ body.dark-mode .perm-tree-depth-2{
     min-width: 0;
     cursor: pointer;
 }
+/* Operar/Editar/Autorizar in a Plan's own access tree (grantReadonlyCost
+   mode) are locked until that column's own Ver checkbox is on -- see
+   PermissionCostTree.js's renderColumnRow. */
+.perm-tree-check:has(input:disabled){
+    cursor: not-allowed;
+    opacity: 0.5;
+}
 /* Read-only habilitado/bloqueado status badge (PermissionTree.js create's
    readOnly option) — replaces the checkbox entirely, so there's nothing to
    click/toggle/accidentally save. */

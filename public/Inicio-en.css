@@ -1204,10 +1204,20 @@
     .settings-dropdown-group.open .settings-dropdown-toggle i:last-child{
         transform: rotate(180deg);
     }
+    /* max-height caps how tall ANY settings-dropdown group's own submenu
+       can grow, regardless of how many rows it ends up with (Servicio
+       Contratado's own children included) -- once its JS-driven `height`
+       (see the click handlers below) exceeds this cap, the box just stops
+       growing and overflow-y:auto turns the excess into its OWN internal
+       scrollbar, never the page's. This is deliberately generic (every
+       .settings-submenu, not just Administración del Negocio's) so any
+       group that becomes this long later gets the same treatment for free. */
     .settings-submenu{
         list-style: none;
         height: 0;
-        overflow: hidden;
+        max-height: min(45vh, 24rem);
+        overflow-x: hidden;
+        overflow-y: auto;
         transition: height 0.2s ease;
     }
     .settings-submenu button,
