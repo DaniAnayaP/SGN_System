@@ -284,6 +284,11 @@
                     label.textContent = labelText;
                     row.appendChild(label);
                 }
+                // Interactive "+ Adicionales" only: shows what each row would
+                // cost (or already costs, if green/yellow) so the running
+                // total at the bottom of the modal isn't the only place a
+                // price appears — confirmed with the user.
+                if (interactive && costKey != null) row.appendChild(buildCostSlot(costKey));
             } else {
                 const labelEl = document.createElement('label');
                 labelEl.className = 'perm-tree-check';
@@ -309,7 +314,7 @@
         function extraSlotArgs(ownKey, leafKeys) {
             if (mode !== 'clientTricolor') return [ownKey, undefined];
             const color = colorFor(leafKeys);
-            return [null, {
+            return [ownKey, {
                 color,
                 checked: color === 'red' && leafKeys.length > 0 && leafKeys.every((k) => pendingAdditions.has(k)),
                 onChange: (checked) => leafKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
@@ -373,7 +378,7 @@
                     checked: color === 'red' && levelKeys.every((k) => pendingAdditions.has(k)),
                     onChange: (checked) => levelKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
                 };
-                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, null, colorSlot);
+                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, colCostKey, colorSlot);
                 container.appendChild(row);
                 return;
             }

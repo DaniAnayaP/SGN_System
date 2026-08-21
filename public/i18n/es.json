@@ -384,6 +384,7 @@
     "additionalsCostCentersLabel": "de CENTRO COSTOS ADICIONALES",
     "additionalsPermissionsLabel": "PERMISOS ADICIONALES",
     "additionalsPermissionsPreview": "Total de permisos adicionales: {amount}",
+    "additionalsConfirmMessage": "¿Está seguro que desea agregar estos permisos y accesos? El costo es de: {amount}",
     "paletteShowPreview": "Ver vista previa actual"
   },
   "business": {

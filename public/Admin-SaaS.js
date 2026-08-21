@@ -930,6 +930,11 @@ async function openPermisosAdicionalesModal(client) {
 
 permisosAdicionalesSaveBtn.addEventListener('click', async () => {
     if (!adicionalesClientId || !adicionalesTree) return;
+    const total = adicionalesTree.getAdditionalCostTotal();
+    const confirmed = await Dashboard.confirm(Dashboard.t('admin.additionalsConfirmMessage', {
+        amount: Dashboard.formatCurrency(total, adicionalesCurrency),
+    }));
+    if (!confirmed) return;
     permisosAdicionalesSaveBtn.disabled = true;
     permisosAdicionalesError.hidden = true;
     try {
