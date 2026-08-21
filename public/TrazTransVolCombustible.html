@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="business.costCentersTitle">Cost Centers</title>
+    <title data-i18n="menu.opTransVolCombustible">Fuel Log</title>
     <link rel="icon" href="Imagenes/Logo_Stickers.webp">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="business.costCentersTitle">Cost Centers</p>
+                <p class="welcome-text" data-i18n="menu.opTransVolCombustible">Fuel Log</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -340,152 +340,66 @@
             </div>
         </div>
 
-        <section class="admin-panel">
-            <div class="filter-bar" id="filter-bar">
-                <div class="filter-bar-panel">
-                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
-                    <div class="filter-bar-fields">
-                        <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterCcSearchHint">Code, name, responsible, description...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterCcSearchHint" placeholder="Code, name, responsible, description...">
-                        </div>
-                    </div>
-                    <div class="filter-bar-actions">
-                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="data-table-wrapper" data-table-id="centros-costo">
+        <div class="page-content">
+            <p class="admin-subtitle" data-i18n="main.trazSubtitle">Read-only traceability — everything recorded in Registro Combustible, including calculated columns. Edit from Operaciones instead.</p>
+            <div class="data-table-wrapper" data-table-id="traz-registro-combustible" data-force-classification-band="1">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group="menu.classControlInterno">Company</th>
-                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group="menu.classControlInterno">Area</th>
-                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group="menu.classControlInterno">Module</th>
-                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group="menu.classControlInterno">Screen</th>
-                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group="menu.classControlInterno">Cost Center</th>
-                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group="menu.classControlInterno">Date</th>
-                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group="menu.classControlInterno">Day(dd)</th>
-                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group="menu.classControlInterno">Day(ddd)</th>
-                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group="menu.classControlInterno">Month(mm)</th>
-                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group="menu.classControlInterno">Month(mmm)</th>
-                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group="menu.classControlInterno">Year</th>
-                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno">Week</th>
-                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno">Time</th>
-                            <th data-i18n="business.ccCode" data-col="ccCode">Code</th>
-                            <th data-i18n="business.ccBranch" data-col="ccSucursal">Branch</th>
-                            <th data-i18n="business.ccName" data-col="ccName">Name</th>
-                            <th data-i18n="business.ccResponsible" data-col="ccResponsible">Responsible</th>
-                            <th data-i18n="business.ccDescription" data-col="ccDescription">Description</th>
-                            <th data-i18n="admin.accountNumber" data-col="ccAccountNumber"># Registro Único (Contable)</th>
-                            <th data-i18n="business.ccRecordCode" data-col="ccRecordCode"># Registro Único Base de Datos</th>
-                            <th data-i18n="main.colHrStatus" data-col="ccStatus">Status</th>
+                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group-table="menu.classControlInterno" class="col-system">Company</th>
+                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group-table="menu.classControlInterno" class="col-system">Area</th>
+                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group-table="menu.classControlInterno" class="col-system">Module</th>
+                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group-table="menu.classControlInterno" class="col-system">Screen</th>
+                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group-table="menu.classControlInterno" class="col-system">Cost Center</th>
+                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group-table="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
+                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group-table="menu.classControlInterno" class="col-system">Day (dd)</th>
+                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group-table="menu.classControlInterno" class="col-system">Day (ddd)</th>
+                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group-table="menu.classControlInterno" class="col-system">Month (mm)</th>
+                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group-table="menu.classControlInterno" class="col-system">Month (mmm)</th>
+                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group-table="menu.classControlInterno" class="col-system">Year (yyyy)</th>
+                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group-table="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
+                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group-table="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
+                            <th data-i18n="main.colFuelDbId" data-col="colFuelDbId" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Unique Database #</th>
+                            <th data-i18n="main.colFuelRecordId" data-col="colFuelRecordId" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Unique Consumption Record #</th>
+                            <th data-i18n="main.colFuelDate" data-col="colFuelDate" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Date</th>
+                            <th data-i18n="main.colFuelYear" data-col="colFuelYear" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Year</th>
+                            <th data-i18n="main.colFuelMonth" data-col="colFuelMonth" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Month</th>
+                            <th data-i18n="main.colFuelWeek" data-col="colFuelWeek" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Week #</th>
+                            <th data-i18n="main.colFuelDayNum" data-col="colFuelDayNum" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Day #</th>
+                            <th data-i18n="main.colFuelDayText" data-col="colFuelDayText" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Day</th>
+                            <th data-i18n="main.colFuelEcoUnit" data-col="colFuelEcoUnit" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Fleet Unit #</th>
+                            <th data-i18n="main.colFuelPlates" data-col="colFuelPlates" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Unit Plates</th>
+                            <th data-i18n="main.colFuelDriver" data-col="colFuelDriver" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Driver</th>
+                            <th data-i18n="main.colFuelCoordinator" data-col="colFuelCoordinator" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Coordinator</th>
+                            <th data-i18n="main.colFuelTicketEvidence" data-col="colFuelTicketEvidence" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Ticket Evidence</th>
+                            <th data-i18n="main.colFuelTripKmBefore" data-col="colFuelTripKmBefore" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Trip KM Before Load</th>
+                            <th data-i18n="main.colFuelTripKmBeforeEvidence" data-col="colFuelTripKmBeforeEvidence" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Trip KM Before Evidence</th>
+                            <th data-i18n="main.colFuelTripKmAfter" data-col="colFuelTripKmAfter" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Trip KM After Load</th>
+                            <th data-i18n="main.colFuelTripKmAfterEvidence" data-col="colFuelTripKmAfterEvidence" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Trip KM After Evidence</th>
+                            <th data-i18n="main.colFuelTripKmTotal" data-col="colFuelTripKmTotal" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Total Trip KM Acquired</th>
+                            <th data-i18n="main.colFuelType" data-col="colFuelType" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Fuel Type</th>
+                            <th data-i18n="main.colFuelLiters" data-col="colFuelLiters" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Liters</th>
+                            <th data-i18n="main.colFuelCostPerLiter" data-col="colFuelCostPerLiter" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Cost per Liter</th>
+                            <th data-i18n="main.colFuelSubtotal" data-col="colFuelSubtotal" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Subtotal</th>
+                            <th data-i18n="main.colFuelVat" data-col="colFuelVat" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">VAT</th>
+                            <th data-i18n="main.colFuelTotal" data-col="colFuelTotal" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Total</th>
+                            <th data-i18n="main.colFuelReason" data-col="colFuelReason" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Load Reason</th>
+                            <th data-i18n="main.colFuelTransferService" data-col="colFuelTransferService" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Transfer Service</th>
+                            <th data-i18n="main.colFuelInternalMovement" data-col="colFuelInternalMovement" data-group-table="menu.opTransVolCombustible" class="col-table-fuel">Internal Movement</th>
                             <th data-col="actions"></th>
                         </tr>
                     </thead>
-                    <tbody id="cc-table-body">
-                        <!-- rendered at runtime -->
+                    <tbody id="traz-fuel-table-body">
+                        <tr>
+                            <td class="data-table-empty-cell" colspan="41">
+                                <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
-                <p id="cc-empty" class="admin-empty" data-i18n="business.ccNoneYet" hidden>No cost centers yet. Add the first one above.</p>
-            </div>
-        </section>
-    </main>
-
-    <div class="modal-overlay" id="cc-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="cc-modal-title">
-            <h3 id="cc-modal-title" data-i18n="business.ccModalTitleNew">New Cost Center</h3>
-            <input type="hidden" id="cc-id" value="">
-
-            <div class="admin-form-grid">
-                <div class="admin-field">
-                    <label data-i18n="business.ccCompany">Company</label>
-                    <p class="admin-computed-value" id="cc-company-display">—</p>
-                </div>
-            </div>
-
-            <div class="admin-form-grid cc-cascade-grid">
-                <div class="admin-field">
-                    <label for="cc-country" data-i18n="business.ccCountry">Country</label>
-                    <div class="cc-select-row">
-                        <select id="cc-country"></select>
-                        <button type="button" class="cc-add-new-btn" id="cc-country-add-toggle" title="Add new country">+</button>
-                    </div>
-                    <div class="cc-add-new-row" id="cc-country-add-row" hidden>
-                        <input type="text" id="cc-country-add-input" data-i18n-placeholder="business.ccAddNewCountry" placeholder="New country">
-                        <button type="button" class="btn btn-secondary" id="cc-country-add-confirm" data-i18n="admin.add">Add</button>
-                    </div>
-                </div>
-                <div class="admin-field">
-                    <label for="cc-state" data-i18n="business.ccState">State</label>
-                    <div class="cc-select-row">
-                        <select id="cc-state" disabled></select>
-                        <button type="button" class="cc-add-new-btn" id="cc-state-add-toggle" title="Add new state" disabled>+</button>
-                    </div>
-                    <div class="cc-add-new-row" id="cc-state-add-row" hidden>
-                        <input type="text" id="cc-state-add-input" data-i18n-placeholder="business.ccAddNewState" placeholder="New state">
-                        <button type="button" class="btn btn-secondary" id="cc-state-add-confirm" data-i18n="admin.add">Add</button>
-                    </div>
-                </div>
-                <div class="admin-field">
-                    <label for="cc-locality" data-i18n="business.ccLocality">Locality</label>
-                    <div class="cc-select-row">
-                        <select id="cc-locality" disabled></select>
-                        <button type="button" class="cc-add-new-btn" id="cc-locality-add-toggle" title="Add new locality" disabled>+</button>
-                    </div>
-                    <div class="cc-add-new-row" id="cc-locality-add-row" hidden>
-                        <input type="text" id="cc-locality-add-input" data-i18n-placeholder="business.ccAddNewLocality" placeholder="New locality">
-                        <button type="button" class="btn btn-secondary" id="cc-locality-add-confirm" data-i18n="admin.add">Add</button>
-                    </div>
-                </div>
-                <div class="admin-field">
-                    <label for="cc-street" data-i18n="business.ccStreet">Street</label>
-                    <div class="cc-select-row">
-                        <select id="cc-street" disabled></select>
-                        <button type="button" class="cc-add-new-btn" id="cc-street-add-toggle" title="Add new street" disabled>+</button>
-                    </div>
-                    <div class="cc-add-new-row" id="cc-street-add-row" hidden>
-                        <input type="text" id="cc-street-add-input" data-i18n-placeholder="business.ccAddNewStreet" placeholder="New street">
-                        <button type="button" class="btn btn-secondary" id="cc-street-add-confirm" data-i18n="admin.add">Add</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="admin-form-grid">
-                <div class="admin-field">
-                    <label for="cc-sucursal" data-i18n="business.ccBranch">Branch</label>
-                    <input id="cc-sucursal" type="text" required>
-                </div>
-            </div>
-
-            <div class="cc-code-preview">
-                <strong id="cc-code-preview-value">______</strong>
-                <span data-i18n="business.ccCodePreview">Generated code</span>
-            </div>
-
-            <div class="admin-form-grid">
-                <div class="admin-field">
-                    <label for="cc-name" data-i18n="business.ccName">Name</label>
-                    <input id="cc-name" type="text" required>
-                </div>
-                <div class="admin-field">
-                    <label for="cc-responsible" data-i18n="business.ccResponsible">Responsible</label>
-                    <input id="cc-responsible" type="text">
-                </div>
-                <div class="admin-field">
-                    <label for="cc-description" data-i18n="business.ccDescription">Description</label>
-                    <input id="cc-description" type="text">
-                </div>
-            </div>
-
-            <div id="cc-modal-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="cc-modal-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="cc-modal-cancel" data-i18n="admin.cancel">Cancel</button>
             </div>
         </div>
-    </div>
+    </main>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -541,7 +455,6 @@
     </div>
 
     <script src="Dashboard.js"></script>
-    <script src="ColorPalette.js"></script>
-    <script src="Business-CentrosCosto.js"></script>
+    <script src="TrazTransVolCombustible.js"></script>
 </body>
 </html>

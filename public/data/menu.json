@@ -75,12 +75,18 @@
           "icon": "bx-shopping-bag",
           "submenu": [
             {
-              "id": "ab-contracted-service", "labelKey": "menu.contractedService", "href": "Business-CentrosCosto.html", "icon": "bx-purchase-tag-alt",
+              "id": "ab-contracted-service", "labelKey": "menu.contractedService", "href": "#", "icon": "bx-purchase-tag-alt",
               "submenu": [
-                { "id": "ccCode", "labelKey": "business.ccCode", "permissionOnly": true },
-                { "id": "ccName", "labelKey": "business.ccName", "permissionOnly": true },
-                { "id": "ccResponsible", "labelKey": "business.ccResponsible", "permissionOnly": true },
-                { "id": "ccDescription", "labelKey": "business.ccDescription", "permissionOnly": true }
+                {
+                  "id": "ab-our-cost-centers", "labelKey": "menu.ourCostCenters", "href": "Business-CentrosCosto.html", "icon": "bx-purchase-tag-alt",
+                  "submenu": [
+                    { "id": "ccCode", "labelKey": "business.ccCode", "permissionOnly": true },
+                    { "id": "ccName", "labelKey": "business.ccName", "permissionOnly": true },
+                    { "id": "ccResponsible", "labelKey": "business.ccResponsible", "permissionOnly": true },
+                    { "id": "ccDescription", "labelKey": "business.ccDescription", "permissionOnly": true }
+                  ]
+                },
+                { "id": "ab-my-access", "labelKey": "menu.myContractedAccess", "href": "Business-MisAccesos.html", "icon": "bx-key" }
               ]
             },
             { "id": "ab-expansions", "labelKey": "menu.expansions", "href": "#", "icon": "bx-trending-up" },
@@ -131,7 +137,7 @@
       "labelKey": "menu.catAdmin",
       "icon": "bx-briefcase-alt-2",
       "submenu": [
-        { "id": "cat-admin-1", "labelKey": "menu.catAdminItem1", "icon": "bx-window", "href": "#" },
+        { "id": "cat-admin-fuel-traceability", "labelKey": "menu.opTransVolCombustible", "icon": "bx-data", "href": "TrazTransVolCombustible.html" },
         { "id": "cat-admin-2", "labelKey": "menu.catAdminItem2", "icon": "bx-window", "href": "#" }
       ]
     },

@@ -9,7 +9,6 @@
 
 const tableBody = document.getElementById('cc-table-body');
 const emptyMsg = document.getElementById('cc-empty');
-const limitStatus = document.getElementById('cc-limit-status');
 
 let costCenters = [];
 let limit = 0;
@@ -43,11 +42,16 @@ function isAtLimit() {
     return costCenters.length >= limit;
 }
 
+// No standing on-screen line for this (matches Registro Combustible's own
+// fully compact panel) -- the count/limit lives as the "+ Nuevo Centro
+// Costos" button's tooltip instead, still there on hover but not taking
+// permanent vertical space.
 function refreshLimitStatus() {
-    limitStatus.textContent = isAtLimit()
+    if (!newBtn) return;
+    newBtn.title = isAtLimit()
         ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
         : Dashboard.t('business.ccLimitStatus', { count: costCenters.length, limit });
-    if (newBtn) newBtn.disabled = isAtLimit();
+    newBtn.disabled = isAtLimit();
 }
 
 const CONTROL_INTERNO_COLS = [

@@ -1305,6 +1305,14 @@ app.put('/api/business/users/:id/profiles', requireAuth, requireClientAdmin, (re
     res.json({ profiles: setUserProfiles(req.params.id, validIds) });
 });
 
+// Self-service version of the route below -- any authenticated business
+// user can check their OWN active permissions ("Servicio Contratado" ->
+// "Mis Accesos y Permisos"), no admin grant required, since it's their own
+// data. Same profile + extra shape "Permisos Activados" already uses.
+app.get('/api/business/me/grants', requireAuth, (req, res) => {
+    res.json({ grants: getUserGrants(req.user.sub), profileGrants: getUserProfileGrants(req.user.sub) });
+});
+
 app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
