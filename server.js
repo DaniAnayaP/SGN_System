@@ -138,6 +138,7 @@ const {
     getUserProfileById,
     getUserBusinessProfileById,
     getUserEffectiveGrants,
+    getUserProfileGrants,
     getUserDefaults,
     setUserDefaults,
     getUserUiScale,
@@ -1293,7 +1294,12 @@ app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
     if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
-    res.json({ grants: getUserGrants(req.params.id) });
+    // grants = the extra layer this screen's own edit modal manages;
+    // profileGrants = everything this user already gets from their assigned
+    // profile(s) -- surfaced here too so "Permisos Activados" (read-only)
+    // can show the full effective picture (profile + extra) without a
+    // second round trip.
+    res.json({ grants: getUserGrants(req.params.id), profileGrants: getUserProfileGrants(req.params.id) });
 });
 
 app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {

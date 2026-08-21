@@ -343,25 +343,75 @@
         <section class="admin-panel">
             <p class="admin-subtitle" data-i18n="business.accesosSubtitle">Grant a user extra modules, sections, or screens beyond what their profile(s) already give them.</p>
 
-            <div class="admin-select-row">
-                <label for="access-user-select" data-i18n="business.selectUserForAccess">Select a user</label>
-                <select id="access-user-select">
-                    <option value="" data-i18n="business.selectUserPlaceholder">Choose a user...</option>
-                </select>
-            </div>
-
-            <p id="access-hint" class="admin-hint" data-i18n="business.noUserSelected">Select a user above to manage their profiles.</p>
-
-            <div id="access-panel" hidden>
-                <p class="admin-subtitle" data-i18n="business.extraAccessHint">This is in addition to whatever their assigned profiles already grant — it never removes access.</p>
-                <div id="permission-tree-container"></div>
-                <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                    <button type="button" class="btn" id="access-save" data-i18n="admin.save">Save</button>
-                </div>
-                <p id="access-save-status" class="admin-save-status"></p>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="business.username">Username</th>
+                            <th data-i18n="business.name">Full name</th>
+                            <th data-i18n="business.createdAt">Created</th>
+                            <th data-i18n="business.accesosHrStatusCol">HR Status</th>
+                            <th data-i18n="business.accesosActivePermsCol">Active Permissions</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="access-table-body">
+                        <!-- rendered at runtime -->
+                    </tbody>
+                </table>
+                <p id="access-empty" class="admin-empty" data-i18n="business.usersEmpty" hidden>No users yet — register someone in Mi Recurso Humano first.</p>
             </div>
         </section>
     </main>
+
+    <div class="modal-overlay" id="active-perms-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="active-perms-title" style="max-width: 48rem;">
+            <h3 id="active-perms-title" data-i18n="business.accesosActivePermsTitle">Active Permissions</h3>
+            <p id="active-perms-subtitle" class="admin-subtitle"></p>
+            <p class="admin-hint perm-tree-legend">
+                <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
+                <span data-i18n="business.accesosLegendProfile">Granted by profile</span>
+                <span class="perm-tree-status perm-tree-status-extra"><i class="bx bx-plus-circle" aria-hidden="true"></i></span>
+                <span data-i18n="business.accesosLegendExtra">Granted extra</span>
+                <span class="perm-tree-status perm-tree-status-blocked"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>
+                <span data-i18n="business.accesosLegendNone">No access</span>
+            </p>
+            <div id="active-perms-container"></div>
+            <div id="active-perms-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" id="active-perms-close" data-i18n="admin.cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="grant-access-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="grant-access-title" style="max-width: 48rem;">
+            <h3 id="grant-access-title" data-i18n="business.accesosGrantTitle">Grant Access</h3>
+            <p id="grant-access-subtitle" class="admin-subtitle"></p>
+            <p class="admin-hint" data-i18n="business.extraAccessHint">This is in addition to whatever their assigned profiles already grant — it never removes access.</p>
+            <div id="grant-access-container"></div>
+            <div id="grant-access-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="grant-access-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="grant-access-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="edit-profiles-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="edit-profiles-title">
+            <h3 id="edit-profiles-title" data-i18n="business.accesosProfilesTitle">Edit Profiles</h3>
+            <p id="edit-profiles-subtitle" class="admin-subtitle"></p>
+            <div id="edit-profiles-list">
+                <!-- rendered at runtime -->
+            </div>
+            <div id="edit-profiles-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="edit-profiles-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="edit-profiles-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -419,6 +469,7 @@
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
     <script src="PermissionTree.js"></script>
+    <script src="PermissionCostTree.js"></script>
     <script src="Business-Accesos.js"></script>
 </body>
 </html>

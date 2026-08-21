@@ -2725,11 +2725,18 @@ function hasSaasGrant(grants, itemId, subItemId = null) {
     return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
 }
 
+// hr_workers.status ("Estatus RH") is a separate concept from users.active
+// (see hr_workers' own comment / OpRRHHMiRecursoHumano.js's buildStatusCell
+// vs buildUserStatusCell) -- LEFT JOIN since not every business user is
+// necessarily tied to an hr_workers row.
 function listBusinessUsers(clientId) {
     return db
         .prepare(`
-            SELECT id, username, email, name, role, active, is_client_admin, created_at
-            FROM users WHERE client_id = ? AND is_client_admin = 0 ORDER BY created_at DESC
+            SELECT users.id, users.username, users.email, users.name, users.role, users.active,
+                   users.is_client_admin, users.created_at, hr_workers.status AS hrStatus
+            FROM users LEFT JOIN hr_workers ON hr_workers.user_id = users.id
+            WHERE users.client_id = ? AND users.is_client_admin = 0
+            ORDER BY users.created_at DESC
         `)
         .all(clientId);
 }
@@ -2899,12 +2906,13 @@ function getUserGrants(userId) {
         .all(userId);
 }
 
-// Union of what every profile assigned to this user grants (via
-// getUserProfiles) plus their own extra grants (getUserGrants) — the full
-// "everything this user can actually see" set shown by the "Permisos" field
-// in Datos de Usuario del Negocio, deduplicated by section/item/submenu.
-function getUserEffectiveGrants(userId) {
-    const profileGrants = db
+// What every profile assigned to this user grants (via getUserProfiles),
+// on its own -- e.g. for Accesos y Permisos' read-only "Permisos Activados"
+// view, which needs profile-derived and extra grants as 2 separate sets
+// (see PermissionCostTree.js's clientTricolor mode) rather than the single
+// deduplicated union getUserEffectiveGrants returns below.
+function getUserProfileGrants(userId) {
+    return db
         .prepare(`
             SELECT DISTINCT pg.section_id AS sectionId, pg.item_id AS itemId, pg.submenu_id AS submenuId
             FROM profile_grants pg
@@ -2912,9 +2920,16 @@ function getUserEffectiveGrants(userId) {
             WHERE up.user_id = ?
         `)
         .all(userId);
+}
+
+// Union of what every profile assigned to this user grants plus their own
+// extra grants (getUserGrants) — the full "everything this user can
+// actually see" set shown by the "Permisos" field in Datos de Usuario del
+// Negocio, deduplicated by section/item/submenu.
+function getUserEffectiveGrants(userId) {
     const seen = new Set();
     const combined = [];
-    for (const g of [...profileGrants, ...getUserGrants(userId)]) {
+    for (const g of [...getUserProfileGrants(userId), ...getUserGrants(userId)]) {
         const key = `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -3070,6 +3085,7 @@ module.exports = {
     getUserProfileById,
     getUserBusinessProfileById,
     getUserEffectiveGrants,
+    getUserProfileGrants,
     getUserDefaults,
     setUserDefaults,
     getUserUiScale,
