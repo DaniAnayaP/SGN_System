@@ -63,6 +63,35 @@
         --color-accent: #9CA2B8;
         --color-accent-text: #12141A;
     }
+    /* Futuristic style: a FULL fixed theme, same shape as body.dark-mode
+       above (not client-customizable like institutional-mode) — dark navy
+       base with the violet/cyan accent pair from the mobile app's own
+       icon, so web and app share one look when a client picks it. */
+    body.futuristic-mode{
+        --color-bg: #0b0d14;
+        --color-surface: #12141f;
+        --color-border: #232640;
+        --color-text-primary: #FFFFFF;
+        --color-text-secondary: #9BA3C4;
+        --color-tooltip-bg: #1C1F4A;
+        --color-tooltip-text: #FFFFFF;
+        --shadow-border: rgba(127, 225, 255, 0.15);
+        --user-bg-color: #12141f;
+        --color-column-system-bg: #1A1F3A;
+        --color-column-system-band-bg: #242B52;
+        --color-column-system-text: #B9C2F0;
+        --color-table-band-fuel-bg: #142A3A;
+        --color-table-band-fuel-band-bg: #1C3A4F;
+        --color-table-band-fuel-text: #8FD9F5;
+        --color-report-base-bg: #10241C;
+        --color-report-base-band-bg: #163A2C;
+        --color-report-base-text: #6FE3AB;
+        --color-report-calc-bg: #2A1F0A;
+        --color-report-calc-band-bg: #3D2D10;
+        --color-report-calc-text: #F5C563;
+        --color-accent: #7FE1FF;
+        --color-accent-text: #0B0D14;
+    }
     /* Institutional style: a FULL theme variant, exactly like body.dark-mode
        above — every one of the same variables gets overridden, just sourced
        from the client's own palette (applyClientBranding in Dashboard.js)

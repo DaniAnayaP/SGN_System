@@ -3687,18 +3687,21 @@ document.querySelectorAll('.lang-option').forEach((btn) => {
 // it for its actual colors).
 function getStoredStyle() {
     const stored = localStorage.getItem('style');
-    return ['light', 'dark', 'institutional'].includes(stored) ? stored : 'light';
+    return ['light', 'dark', 'institutional', 'futuristic'].includes(stored) ? stored : 'light';
 }
 
 function applyStyle(style) {
     if (style === 'institutional' && clientBranding) {
-        document.body.classList.remove('dark-mode');
+        document.body.classList.remove('dark-mode', 'futuristic-mode');
         document.body.classList.add('institutional-mode');
     } else if (style === 'dark') {
-        document.body.classList.remove('institutional-mode');
+        document.body.classList.remove('institutional-mode', 'futuristic-mode');
         document.body.classList.add('dark-mode');
-    } else {
+    } else if (style === 'futuristic') {
         document.body.classList.remove('institutional-mode', 'dark-mode');
+        document.body.classList.add('futuristic-mode');
+    } else {
+        document.body.classList.remove('institutional-mode', 'dark-mode', 'futuristic-mode');
     }
     document.querySelectorAll('.style-option').forEach((b) => b.classList.toggle('active', b.dataset.style === style));
 }
