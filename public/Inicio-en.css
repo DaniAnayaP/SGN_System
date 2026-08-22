@@ -70,25 +70,25 @@
     body.futuristic-mode{
         --color-bg: #0b0d14;
         --color-surface: #12141f;
-        --color-border: #232640;
+        --color-border: #2C3355;
         --color-text-primary: #FFFFFF;
-        --color-text-secondary: #9BA3C4;
+        --color-text-secondary: #C3CBEF;
         --color-tooltip-bg: #1C1F4A;
         --color-tooltip-text: #FFFFFF;
         --shadow-border: rgba(127, 225, 255, 0.15);
         --user-bg-color: #12141f;
         --color-column-system-bg: #1A1F3A;
-        --color-column-system-band-bg: #242B52;
-        --color-column-system-text: #B9C2F0;
+        --color-column-system-band-bg: #2C3566;
+        --color-column-system-text: #D3D9FC;
         --color-table-band-fuel-bg: #142A3A;
-        --color-table-band-fuel-band-bg: #1C3A4F;
-        --color-table-band-fuel-text: #8FD9F5;
+        --color-table-band-fuel-band-bg: #20475F;
+        --color-table-band-fuel-text: #B3E9FC;
         --color-report-base-bg: #10241C;
-        --color-report-base-band-bg: #163A2C;
-        --color-report-base-text: #6FE3AB;
+        --color-report-base-band-bg: #1E4A36;
+        --color-report-base-text: #9CF0C3;
         --color-report-calc-bg: #2A1F0A;
-        --color-report-calc-band-bg: #3D2D10;
-        --color-report-calc-text: #F5C563;
+        --color-report-calc-band-bg: #4A3714;
+        --color-report-calc-text: #FAD589;
         --color-accent: #7FE1FF;
         --color-accent-text: #0B0D14;
     }
