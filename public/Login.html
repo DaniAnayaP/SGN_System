@@ -4,12 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-i18n="meta.loginTitle">SGN by GEIPSA - Login</title>
-    <link rel="icon" href="Imagenes/Logo_Stickers.webp">
+    <link rel="icon" href="icons/icon-512.png">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-512.png">
     <meta name="theme-color" content="#3A4BC9">
     <link rel="stylesheet" href="Login.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
 </head>
 <body>
     <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Change language">EN / ES</button>
