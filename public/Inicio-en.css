@@ -2124,6 +2124,11 @@
         padding: 0.6rem 0.9rem;
         text-align: left;
         white-space: nowrap;
+        /* Explicit, not inherited — some contexts (e.g. a table nested
+           inside a modal or a component with its own color reset) broke
+           the inherited color chain, leaving cells at the browser's
+           default black text regardless of theme. */
+        color: var(--color-text-primary);
         /* Only bites once a column is actually resized narrower than its
            content (see Dashboard.js attachResizeHandle) — with the default
            auto widths nothing overflows, so this has zero visual effect
