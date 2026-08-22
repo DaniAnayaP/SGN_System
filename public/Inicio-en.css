@@ -28,6 +28,8 @@
         --color-report-calc-bg: #FBF0DE;
         --color-report-calc-band-bg: #F3DFB3;
         --color-report-calc-text: #7A5310;
+        --color-accent: #2B4C9B;
+        --color-accent-text: #FFFFFF;
     }
     body.dark-mode{
          --color-bg: #3A3D4D;
@@ -51,6 +53,8 @@
         --color-report-calc-bg: #332812;
         --color-report-calc-band-bg: #4A3A16;
         --color-report-calc-text: #F0C978;
+        --color-accent: #7FA3F0;
+        --color-accent-text: #12141A;
     }
     /* Institutional style: a FULL theme variant, exactly like body.dark-mode
        above — every one of the same variables gets overridden, just sourced
@@ -80,6 +84,8 @@
         --color-report-calc-bg: #FBF0DE;
         --color-report-calc-band-bg: #F3DFB3;
         --color-report-calc-text: #7A5310;
+        --color-accent: var(--institutional-accent, #2B4C9B);
+        --color-accent-text: var(--institutional-accent-text, #FFFFFF);
     }
     body.institutional-mode .brand{
         background-color: var(--institutional-accent, transparent);
@@ -102,10 +108,6 @@
     body.institutional-mode .settings-dropdown-group.open .settings-dropdown-toggle,
     body.institutional-mode .user-info-menu.open #user-info-btn{
         color: var(--institutional-accent, var(--color-text-primary));
-    }
-    body.institutional-mode .btn{
-        background: var(--institutional-accent, #4753b0);
-        color: var(--institutional-accent-text, #FFFFFF);
     }
     .sr-only{
         position: absolute;

@@ -219,16 +219,40 @@ body.dark-mode .admin-error{
     display: flex;
     gap: 0.75rem;
 }
-.admin-form-actions .btn{
-    width: auto;
+/* Shared primary/secondary button used everywhere in the app (Guardar/
+   Cancelar, Buscar, "+ Nuevo..."). Never had a real base style of its own
+   before this — every button was just riding on browser default chrome —
+   so this is the first place --color-accent actually gets used, already
+   theme-aware (claro/oscuro/institucional) via Inicio-en.css's :root/
+   body.dark-mode/body.institutional-mode blocks. */
+.btn{
     padding: 0.6rem 1.4rem;
-    border-radius: 0.4rem;
+    border-radius: 1.4rem;
     font-size: 0.85rem;
+    font-weight: 600;
+    font-family: inherit;
+    border: none;
+    cursor: pointer;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    transition: filter 0.15s ease;
+}
+.btn:hover{
+    filter: brightness(1.08);
 }
 .btn-secondary{
     background: transparent;
     border: 1px solid var(--color-border);
     color: var(--color-text-primary);
+}
+.btn-secondary:hover{
+    filter: none;
+    background: var(--color-bg);
+}
+.btn:disabled{
+    opacity: 0.55;
+    cursor: not-allowed;
+    filter: none;
 }
 
 /* Centro de Costos — cascading País/Estado/Localidad/Calle picker inside
