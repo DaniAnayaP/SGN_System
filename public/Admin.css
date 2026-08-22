@@ -49,12 +49,14 @@
 .panel-tabs-frame{
     container-type: inline-size;
     container-name: panel-tabs;
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    overflow: hidden;
 }
 .panel-tabs{
     display: flex;
     gap: 0.35rem;
-    background: var(--panel-tab-bg);
-    border-radius: 0.6rem 0.6rem 0 0;
+    background: var(--color-surface);
     padding: 0.4rem 0.4rem 0.3rem;
 }
 .panel-tab{
@@ -70,7 +72,7 @@
     font-family: inherit;
     font-size: 0.78rem;
     font-weight: 600;
-    color: #B7C2E8;
+    color: var(--color-text-secondary);
     background: transparent;
     cursor: pointer;
     white-space: nowrap;
@@ -95,32 +97,34 @@
 .panel-tab .badge{
     font-size: 0.62rem;
     font-weight: 700;
-    background: rgba(255, 255, 255, 0.16);
-    color: #fff;
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
     padding: 0.05rem 0.4rem;
     border-radius: 1rem;
 }
 .panel-tab.active .badge{
-    background: rgba(255, 255, 255, 0.28);
+    background: color-mix(in srgb, var(--color-accent-text) 25%, transparent);
+    color: var(--color-accent-text);
 }
-/* The pantallas row -- muted background + dotted top border reads as "one
-   level below the categoría row" without a visible gap between them. */
+/* The pantallas row -- fondo de página (más tenue que el de tarjeta de la
+   fila de categorías) + línea punteada arriba reads as "one level below",
+   without a visible gap between them -- same --color-bg/--color-surface
+   contrast this app already uses everywhere a card sits on the page. */
 .panel-subtabs{
     display: flex;
     gap: 0.35rem;
-    background: var(--panel-subtab-bg);
-    border-top: 1px dashed rgba(255, 255, 255, 0.18);
+    background: var(--color-bg);
+    border-top: 1px dashed var(--color-border);
     padding: 0.5rem 0.4rem;
-    border-radius: 0 0 0.6rem 0.6rem;
     overflow-x: auto;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+    scrollbar-color: var(--color-border) transparent;
 }
 .panel-subtabs::-webkit-scrollbar{
     height: 0.4rem;
 }
 .panel-subtabs::-webkit-scrollbar-thumb{
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--color-border);
     border-radius: 0.3rem;
 }
 .panel-subtab{
@@ -132,39 +136,38 @@
     padding: 0.5rem 0.8rem;
     border: none;
     border-radius: 0.45rem;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-surface);
     font-family: inherit;
     font-size: 0.76rem;
     font-weight: 500;
-    color: #9AA6CC;
+    color: var(--color-text-secondary);
     cursor: pointer;
     white-space: nowrap;
 }
 .panel-subtab i{
     font-size: 0.9rem;
     flex-shrink: 0;
-    color: #7C89B8;
+    color: var(--color-text-secondary);
 }
 .panel-subtab .full{
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .panel-subtab.active{
-    background: color-mix(in srgb, var(--color-accent) 45%, transparent);
-    color: #fff;
+    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+    color: var(--color-accent);
     font-weight: 600;
 }
 .panel-subtab.active i{
-    color: #fff;
+    color: var(--color-accent);
 }
 .panel-subtabs-empty{
-    background: var(--panel-subtab-bg);
-    border-top: 1px dashed rgba(255, 255, 255, 0.18);
-    border-radius: 0 0 0.6rem 0.6rem;
+    background: var(--color-bg);
+    border-top: 1px dashed var(--color-border);
     padding: 0.9rem 0.9rem;
     font-size: 0.78rem;
     font-style: italic;
-    color: #9AA6CC;
+    color: var(--color-text-secondary);
 }
 /* Medium width (container, not viewport) -- category AND pantalla labels
    abbreviate/truncate instead of shrinking indefinitely. */

@@ -28,10 +28,13 @@
         --color-report-calc-bg: #FBF0DE;
         --color-report-calc-band-bg: #F3DFB3;
         --color-report-calc-text: #7A5310;
-        --color-accent: #2B4C9B;
+        /* Not a new color -- same value as --color-text-secondary, already
+           used everywhere (dept/área/cost-center pill text, etc.) before
+           this session touched anything. Kept as its own token (rather
+           than referencing --color-text-secondary directly) only so
+           institutional mode below can still override it independently. */
+        --color-accent: #3F435D;
         --color-accent-text: #FFFFFF;
-        --panel-tab-bg: #242F55;
-        --panel-subtab-bg: #1A2038;
     }
     body.dark-mode{
          --color-bg: #3A3D4D;
@@ -55,10 +58,10 @@
         --color-report-calc-bg: #332812;
         --color-report-calc-band-bg: #4A3A16;
         --color-report-calc-text: #F0C978;
-        --color-accent: #7FA3F0;
+        /* Same value as --color-text-secondary in this theme, same
+           reasoning as :root's own --color-accent above. */
+        --color-accent: #9CA2B8;
         --color-accent-text: #12141A;
-        --panel-tab-bg: #1B2440;
-        --panel-subtab-bg: #131730;
     }
     /* Institutional style: a FULL theme variant, exactly like body.dark-mode
        above — every one of the same variables gets overridden, just sourced
@@ -88,10 +91,8 @@
         --color-report-calc-bg: #FBF0DE;
         --color-report-calc-band-bg: #F3DFB3;
         --color-report-calc-text: #7A5310;
-        --color-accent: var(--institutional-accent, #2B4C9B);
+        --color-accent: var(--institutional-accent, #3F435D);
         --color-accent-text: var(--institutional-accent-text, #FFFFFF);
-        --panel-tab-bg: #242F55;
-        --panel-subtab-bg: #1A2038;
     }
     body.institutional-mode .brand{
         background-color: var(--institutional-accent, transparent);
