@@ -630,6 +630,7 @@ function buildSidebarData(data, role, activePage) {
         // propias en el sidebar, un ítem aquí sería redundante.
         { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', saasItemId: 'saas-clients' },
         { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', saasItemId: 'saas-plans' },
+        { id: 'admin-nuestras-apps', labelKey: 'menu.ourApps', href: 'Admin-NuestrasApps.html', saasItemId: 'saas-apps' },
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', saasItemId: 'saas-module-costs' },
         { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
@@ -1375,6 +1376,13 @@ function closeSettingsMenu() {
 }
 registerTopBarDropdown(closeSettingsMenu);
 
+// Same synthetic-duplicate-click guard as topBarActionsToggle above — this
+// button lives inside .top-bar-actions-list, which below 1120px is itself
+// behind the "more" toggle, so a touch tap here is just as likely to fire
+// that extra document-level click. Without this guard the settings dropdown
+// (Idioma/Estilo/...) opened and immediately closed on any screen narrower
+// than 1120px.
+let settingsMenuOpenedAt = 0;
 settingsBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     const wasOpen = settingsMenu.classList.contains('open');
@@ -1382,10 +1390,12 @@ settingsBtn?.addEventListener('click', (event) => {
     if (!wasOpen) {
         settingsMenu.classList.add('open');
         settingsBtn.setAttribute('aria-expanded', 'true');
+        settingsMenuOpenedAt = Date.now();
     }
 });
 
 document.addEventListener('click', (event) => {
+    if (Date.now() - settingsMenuOpenedAt < 300) return;
     if (settingsMenu && !settingsMenu.contains(event.target)) closeSettingsMenu();
 });
 
@@ -1444,6 +1454,10 @@ async function loadUserProfile() {
     }
 }
 
+// Same synthetic-duplicate-click guard as topBarActionsToggle/settingsBtn
+// above — this button lives inside .top-bar-actions-list too, so it's just
+// as exposed to the "opens then immediately closes" bug below 1120px.
+let userInfoMenuOpenedAt = 0;
 userInfoBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     const wasOpen = userInfoMenu.classList.contains('open');
@@ -1452,10 +1466,12 @@ userInfoBtn?.addEventListener('click', (event) => {
         userInfoMenu.classList.add('open');
         userInfoBtn.setAttribute('aria-expanded', 'true');
         loadUserProfile();
+        userInfoMenuOpenedAt = Date.now();
     }
 });
 
 document.addEventListener('click', (event) => {
+    if (Date.now() - userInfoMenuOpenedAt < 300) return;
     if (userInfoMenu && !userInfoMenu.contains(event.target)) closeUserInfoMenu();
 });
 
@@ -1679,6 +1695,8 @@ async function loadBusinessProfile() {
     }
 }
 
+// Same guard as userInfoBtn above.
+let businessProfileMenuOpenedAt = 0;
 businessProfileBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     const wasOpen = businessProfileMenu.classList.contains('open');
@@ -1687,10 +1705,12 @@ businessProfileBtn?.addEventListener('click', (event) => {
         businessProfileMenu.classList.add('open');
         businessProfileBtn.setAttribute('aria-expanded', 'true');
         loadBusinessProfile();
+        businessProfileMenuOpenedAt = Date.now();
     }
 });
 
 document.addEventListener('click', (event) => {
+    if (Date.now() - businessProfileMenuOpenedAt < 300) return;
     if (businessProfileMenu && !businessProfileMenu.contains(event.target)) closeBusinessProfileMenu();
 });
 

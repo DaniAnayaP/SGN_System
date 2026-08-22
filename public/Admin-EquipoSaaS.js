@@ -81,6 +81,14 @@ const SAAS_PERMISSION_CATALOG = [
             { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
         ],
     },
+    {
+        itemId: 'saas-apps', labelKey: 'menu.ourApps',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
+            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
+        ],
+    },
 ];
 
 function showError(el, message) {

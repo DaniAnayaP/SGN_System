@@ -222,6 +222,32 @@ db.exec(`
         created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Nuestras APPs: GEIPSA's catalog of end-user mobile app "kinds", one
+    -- per business vertical (3PL, Restaurante, Control de Acceso...). Each
+    -- app is filled in incrementally with its own operational screens
+    -- (saas_app_screens) as that vertical's needs get built out — a plan
+    -- then picks ONE of these (plans.app_id below) to decide what its
+    -- clients' phones show. Nothing here defines the underlying data
+    -- (that's still Registro Combustible/Control Interno/etc.) — this is
+    -- purely which guided-screen experience wraps around it.
+    CREATE TABLE IF NOT EXISTS saas_apps (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL UNIQUE,
+        icon        TEXT NOT NULL DEFAULT 'bx-mobile-alt',
+        color_from  TEXT NOT NULL DEFAULT '#6C7CF0',
+        color_to    TEXT NOT NULL DEFAULT '#3A4BC9',
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS saas_app_screens (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        app_id       INTEGER NOT NULL REFERENCES saas_apps(id) ON DELETE CASCADE,
+        name         TEXT NOT NULL,
+        screen_type  TEXT NOT NULL DEFAULT 'guided',
+        position     INTEGER NOT NULL DEFAULT 0,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_app_screens_app_id ON saas_app_screens(app_id);
+
     -- Costo $ de cada botón/módulo de MODULE_CATALOG — configurado en su
     -- propia pantalla (Costos de Módulos), usado para calcular "Pago por
     -- Anexos" en Nuestros Clientes (suma del costo de cada módulo que un
@@ -739,6 +765,12 @@ if (!planColumns.some((c) => c.name === 'currency')) {
 }
 if (!planColumns.some((c) => c.name === 'cost_per_cost_center')) {
     db.exec('ALTER TABLE plans ADD COLUMN cost_per_cost_center REAL NOT NULL DEFAULT 0');
+}
+// Which Nuestras APPs entry this plan's clients get on their phone —
+// nullable (existing plans predate this and simply show nothing app-side
+// until someone picks one), never enforced NOT NULL for that reason.
+if (!planColumns.some((c) => c.name === 'app_id')) {
+    db.exec('ALTER TABLE plans ADD COLUMN app_id INTEGER REFERENCES saas_apps(id)');
 }
 
 // plan_grants: same {sectionId, itemId, submenuId} shape as profile_grants —
@@ -2779,7 +2811,7 @@ seedSaasScreenActionGrants();
 // Contrataciones edits per-client — see applyPlanToClient in server.js.
 function deserializePlan(row) {
     if (!row) return row;
-    const { modules, cost_centers_limit, created_by, end_date, locked, cost_per_cost_center, ...rest } = row;
+    const { modules, cost_centers_limit, created_by, end_date, locked, cost_per_cost_center, app_id, ...rest } = row;
     let parsedModules = [];
     try { parsedModules = JSON.parse(modules) || []; } catch { parsedModules = []; }
     return {
@@ -2790,6 +2822,7 @@ function deserializePlan(row) {
         endDate: end_date || '',
         locked: !!locked,
         costPerCostCenter: cost_per_cost_center || 0,
+        appId: app_id || null,
     };
 }
 
@@ -2832,14 +2865,14 @@ function createPlan({ name, description, modules, costCentersLimit, createdBy })
 // concern from the frozen access-tree definition (see Costo Accesos-Permisos).
 function updatePlan(id, {
     name, description, modules, costCentersLimit, status, endDate, currency, costPerCostCenter,
-    createdAt, createdBy,
+    createdAt, createdBy, appId,
 }) {
     const existing = getPlanById(id);
     db.prepare(`
         UPDATE plans SET name = @name, description = @description, modules = @modules,
             cost_centers_limit = @costCentersLimit, status = @status, end_date = @endDate,
             currency = @currency, cost_per_cost_center = @costPerCostCenter,
-            created_at = @createdAt, created_by = @createdBy
+            created_at = @createdAt, created_by = @createdBy, app_id = @appId
         WHERE id = @id
     `).run({
         id,
@@ -2853,6 +2886,7 @@ function updatePlan(id, {
         costPerCostCenter: costPerCostCenter ?? existing.costPerCostCenter ?? 0,
         createdAt: createdAt ?? existing.created_at,
         createdBy: (createdBy ?? existing.createdBy) || '',
+        appId: appId !== undefined ? appId : (existing.appId ?? null),
     });
     return getPlanById(id);
 }
@@ -2874,6 +2908,71 @@ function activatePlan(id) {
 
 function deletePlan(id) {
     db.prepare('DELETE FROM plans WHERE id = ?').run(id);
+}
+
+// --- Nuestras APPs ---------------------------------------------------------
+function deserializeSaasApp(row) {
+    if (!row) return row;
+    const { color_from, color_to, created_at, ...rest } = row;
+    return { ...rest, colorFrom: color_from, colorTo: color_to, createdAt: created_at };
+}
+
+function listSaasApps() {
+    const apps = db.prepare('SELECT * FROM saas_apps ORDER BY name ASC').all().map(deserializeSaasApp);
+    const screenCounts = db.prepare('SELECT app_id, COUNT(*) AS n FROM saas_app_screens GROUP BY app_id').all();
+    const planCounts = db.prepare("SELECT app_id, COUNT(*) AS n FROM plans WHERE app_id IS NOT NULL GROUP BY app_id").all();
+    const screenMap = Object.fromEntries(screenCounts.map((r) => [r.app_id, r.n]));
+    const planMap = Object.fromEntries(planCounts.map((r) => [r.app_id, r.n]));
+    return apps.map((a) => ({ ...a, screenCount: screenMap[a.id] || 0, planCount: planMap[a.id] || 0 }));
+}
+
+function getSaasAppById(id) {
+    const app = deserializeSaasApp(db.prepare('SELECT * FROM saas_apps WHERE id = ?').get(id));
+    if (!app) return app;
+    const screens = db
+        .prepare('SELECT id, name, screen_type AS screenType, position FROM saas_app_screens WHERE app_id = ? ORDER BY position ASC, id ASC')
+        .all(id);
+    const planNames = db.prepare('SELECT name FROM plans WHERE app_id = ?').all(id).map((r) => r.name);
+    return { ...app, screens, planNames };
+}
+
+function createSaasApp({ name, icon, colorFrom, colorTo }) {
+    const result = db
+        .prepare('INSERT INTO saas_apps (name, icon, color_from, color_to) VALUES (@name, @icon, @colorFrom, @colorTo)')
+        .run({
+            name, icon: icon || 'bx-mobile-alt',
+            colorFrom: colorFrom || '#6C7CF0', colorTo: colorTo || '#3A4BC9',
+        });
+    return getSaasAppById(result.lastInsertRowid);
+}
+
+function updateSaasApp(id, { name, icon, colorFrom, colorTo }) {
+    const existing = getSaasAppById(id);
+    db.prepare('UPDATE saas_apps SET name = @name, icon = @icon, color_from = @colorFrom, color_to = @colorTo WHERE id = @id')
+        .run({
+            id,
+            name: name ?? existing.name,
+            icon: icon ?? existing.icon,
+            colorFrom: colorFrom ?? existing.colorFrom,
+            colorTo: colorTo ?? existing.colorTo,
+        });
+    return getSaasAppById(id);
+}
+
+function deleteSaasApp(id) {
+    db.prepare('DELETE FROM saas_apps WHERE id = ?').run(id);
+}
+
+function addSaasAppScreen(appId, { name, screenType }) {
+    const maxPos = db.prepare('SELECT COALESCE(MAX(position), -1) AS maxPos FROM saas_app_screens WHERE app_id = ?').get(appId).maxPos;
+    db.prepare('INSERT INTO saas_app_screens (app_id, name, screen_type, position) VALUES (@appId, @name, @screenType, @position)')
+        .run({ appId, name, screenType: screenType || 'guided', position: maxPos + 1 });
+    return getSaasAppById(appId);
+}
+
+function deleteSaasAppScreen(appId, screenId) {
+    db.prepare('DELETE FROM saas_app_screens WHERE id = ? AND app_id = ?').run(screenId, appId);
+    return getSaasAppById(appId);
 }
 
 function getPlanGrants(planId) {
@@ -3633,6 +3732,13 @@ module.exports = {
     lockPlan,
     activatePlan,
     deletePlan,
+    listSaasApps,
+    getSaasAppById,
+    createSaasApp,
+    updateSaasApp,
+    deleteSaasApp,
+    addSaasAppScreen,
+    deleteSaasAppScreen,
     getPlanGrants,
     setPlanGrants,
     syncPlanModulesFromGrants,

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.plansRegistered">Our Plans</title>
+    <title data-i18n="menu.ourApps">Our APPs</title>
     <link rel="icon" href="icons/icon-512.png">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="menu.plansRegistered">Our Plans</p>
+                <p class="welcome-text" data-i18n="menu.ourApps">Our APPs</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -346,137 +346,106 @@
             </div>
         </div>
 
-        <section class="admin-panel">
-            <p class="admin-subtitle" data-i18n="admin.plansSubtitle">Manage the plan or package types you can assign to your clients.</p>
+        <section class="admin-panel" id="apps-catalog-view">
+            <p class="admin-subtitle" data-i18n="admin.appsSubtitle">Design the guided-screen app experience for each business vertical — one plan picks one app.</p>
+            <div class="admin-toolbar">
+                <button type="button" class="btn" id="app-new-btn" data-i18n="menu.addAppNew">+ Create New App</button>
+            </div>
+            <div class="saas-app-grid" id="saas-app-grid">
+                <!-- rendered at runtime -->
+            </div>
+            <p id="apps-empty" class="admin-empty" data-i18n="admin.noApps" hidden>No apps yet. Add the first one above.</p>
+        </section>
 
-            <div class="filter-bar" id="filter-bar">
-                <div class="filter-bar-panel">
-                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
-                    <div class="filter-bar-fields">
-                        <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterPlansSearchHint">Name, description, created by...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterPlansSearchHint" placeholder="Name, description, created by...">
-                        </div>
-                        <div class="filter-field">
-                            <label for="filter-status" data-i18n="admin.planStatus">Status</label>
-                            <select id="filter-status">
-                                <option value="" data-i18n="main.filterAll">All</option>
-                                <option value="revision" data-i18n="admin.planStatusRevision">Under Review</option>
-                                <option value="active" data-i18n="admin.planStatusActive">Active</option>
-                                <option value="inactive" data-i18n="admin.planStatusInactive">Inactive</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="filter-bar-actions">
-                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
-                    </div>
+        <section class="admin-panel" id="app-detail-view" hidden>
+            <button type="button" class="btn btn-secondary" id="app-detail-back-btn">
+                <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                <span data-i18n="admin.back">Back</span>
+            </button>
+            <div class="saas-app-detail-head">
+                <div class="saas-app-icon" id="app-detail-icon"><i class="bx bx-mobile-alt" aria-hidden="true"></i></div>
+                <div>
+                    <h2 id="app-detail-name">—</h2>
+                    <p class="admin-subtitle" id="app-detail-clients"></p>
                 </div>
+                <button type="button" class="admin-icon-btn" id="app-detail-edit-btn" aria-label="Edit">
+                    <i class="bx bx-edit" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="admin-icon-btn admin-icon-btn-danger" id="app-detail-delete-btn" aria-label="Delete">
+                    <i class="bx bx-trash" aria-hidden="true"></i>
+                </button>
             </div>
-
-            <div class="data-table-wrapper" data-table-id="mis-planes">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th data-i18n="admin.planName" data-col="name">Plan name</th>
-                            <th data-i18n="admin.planDescription" data-col="description">Description</th>
-                            <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
-                            <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
-                            <th data-i18n="admin.costCentersLimit" data-col="costCentersLimit">Cost centers limit</th>
-                            <th data-i18n="admin.accessPermCostColumn" data-col="accessPermCost">Access/Permissions cost</th>
-                            <th data-i18n="admin.costCenterTotalColumn" data-col="costCenterTotal">Cost center total</th>
-                            <th data-i18n="admin.planEndDate" data-col="endDate">End date</th>
-                            <th data-i18n="admin.planStatus" data-col="status">Status</th>
-                            <th data-i18n="admin.planLocked" data-col="locked">Locked</th>
-                            <th data-col="actions"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="plan-table-body">
-                        <!-- rendered at runtime -->
-                    </tbody>
-                </table>
-                <p id="plan-empty" class="admin-empty" data-i18n="admin.noPlans" hidden>No plans yet. Add the first one above.</p>
+            <div id="app-screen-list" class="saas-app-screen-list">
+                <!-- rendered at runtime -->
             </div>
+            <button type="button" class="admin-add-row-btn" id="app-add-screen-btn">
+                <i class="bx bx-plus-circle" aria-hidden="true"></i>
+                <span data-i18n="menu.appAddScreen">Add another operational screen</span>
+            </button>
         </section>
     </main>
 
-    <!-- Same modal serves BOTH "+ Agregar Plan Nuevo" and "Editar" — title/
-         submit-button text and whether #plan-edit-only-fields shows switch
-         based on whether plan-id is set (see openCreateModal/openEditModal
-         in Admin-Planes.js). Creating only ever asks for name/description
-         (createdAt/createdBy/endDate/costCentersLimit are meaningless
-         before a plan exists — createdBy is even stamped server-side from
-         the session, never client-supplied at creation); editing shows all
-         of them. Never the access tree either way — see plan-tree-modal
-         below for that, a completely separate flow. The module list used
-         to live here too, but a department/button now turns on
-         automatically the moment any permission under it is granted in
-         the access tree (see syncPlanModulesFromGrants in db.js) —
-         nothing left here to toggle by hand. -->
-    <div class="modal-overlay" id="plan-edit-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-edit-modal-title">
-            <h3 id="plan-edit-modal-title">Edit plan</h3>
-            <form id="plan-form" class="admin-form" novalidate>
-                <input type="hidden" id="plan-id" value="">
+    <div class="modal-overlay" id="app-edit-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="app-edit-modal-title">
+            <h3 id="app-edit-modal-title">Edit app</h3>
+            <form id="app-form" class="admin-form" novalidate>
+                <input type="hidden" id="app-id" value="">
                 <div class="admin-form-grid">
                     <div class="admin-field">
-                        <label for="plan-name" data-i18n="admin.planName">Plan name</label>
-                        <input id="plan-name" name="name" type="text" required>
+                        <label for="app-name" data-i18n="admin.planName">Name</label>
+                        <input id="app-name" name="name" type="text" required>
                     </div>
                     <div class="admin-field">
-                        <label for="plan-description" data-i18n="admin.planDescription">Description</label>
-                        <input id="plan-description" name="description" type="text">
-                    </div>
-                </div>
-                <div class="admin-form-grid" id="plan-edit-only-fields">
-                    <div class="admin-field">
-                        <label for="plan-created-at" data-i18n="admin.planCreatedAt">Creation date</label>
-                        <input id="plan-created-at" name="createdAt" type="date">
-                    </div>
-                    <div class="admin-field">
-                        <label for="plan-created-by" data-i18n="admin.planCreatedBy">Created by</label>
-                        <input id="plan-created-by" name="createdBy" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="plan-end-date" data-i18n="admin.planEndDate">End date</label>
-                        <input id="plan-end-date" name="endDate" type="date">
-                    </div>
-                    <div class="admin-field">
-                        <label for="plan-cost-centers-limit" data-i18n="admin.costCentersLimit">Allowed cost centers</label>
-                        <input id="plan-cost-centers-limit" type="number" min="0" step="1" value="0">
-                    </div>
-                    <div class="admin-field">
-                        <label for="plan-app-id" data-i18n="menu.planAppType">App type for this Plan</label>
-                        <select id="plan-app-id" name="appId">
-                            <option value="" data-i18n="menu.planAppTypeNone">None yet</option>
+                        <label for="app-icon" data-i18n="admin.appIcon">Icon</label>
+                        <select id="app-icon" name="icon">
+                            <option value="bx-truck">🚚 Transporte / 3PL</option>
+                            <option value="bx-restaurant">🍽️ Restaurante</option>
+                            <option value="bx-door-open">🚪 Control de Acceso</option>
+                            <option value="bx-store">🏬 Retail</option>
+                            <option value="bx-mobile-alt">📱 Genérica</option>
                         </select>
                     </div>
+                    <div class="admin-field">
+                        <label for="app-color-from" data-i18n="admin.appColorFrom">Color (inicio)</label>
+                        <input id="app-color-from" name="colorFrom" type="color" value="#6C7CF0">
+                    </div>
+                    <div class="admin-field">
+                        <label for="app-color-to" data-i18n="admin.appColorTo">Color (fin)</label>
+                        <input id="app-color-to" name="colorTo" type="color" value="#3A4BC9">
+                    </div>
                 </div>
-
-                <div id="plan-form-error" class="admin-error" role="alert" hidden></div>
+                <div id="app-form-error" class="admin-error" role="alert" hidden></div>
                 <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="plan-form-submit" data-i18n="admin.save">Save</button>
-                    <button type="button" class="btn btn-secondary" id="plan-form-cancel" data-i18n="admin.cancel">Cancel</button>
+                    <button type="submit" class="btn" id="app-form-submit" data-i18n="admin.save">Save</button>
+                    <button type="button" class="btn btn-secondary" id="app-form-cancel" data-i18n="admin.cancel">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Árbol de accesos de este plan — editable mientras está en Revisión,
-         de solo lectura para siempre en cuanto pasa a Activo (ver
-         perm-tree-view-only en Admin.css). Su propia pantalla alterna, no
-         un panel debajo de la tabla — mismo patrón que "Accesos del
-         Administrador" en Nuestros Clientes. -->
-    <div class="modal-overlay" id="plan-tree-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-tree-modal-title" style="max-width: 48rem;">
-            <h3 id="plan-tree-modal-title" data-i18n="admin.planTreeTitle">Access tree for this plan</h3>
-            <div class="admin-form-actions">
-                <button type="button" class="btn" id="plan-tree-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="plan-tree-close" data-i18n="admin.cancel">Close</button>
-            </div>
-            <p id="plan-tree-save-status" class="admin-save-status"></p>
-            <p id="plan-tree-locked-note" class="admin-hint" hidden></p>
-            <div id="plan-tree-container"></div>
-            <div id="plan-tree-error" class="admin-error" role="alert" hidden></div>
+    <div class="modal-overlay" id="app-screen-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="app-screen-modal-title">
+            <h3 id="app-screen-modal-title" data-i18n="menu.appAddScreen">Add another operational screen</h3>
+            <form id="app-screen-form" class="admin-form" novalidate>
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="app-screen-name" data-i18n="menu.appScreenName">Screen name</label>
+                        <input id="app-screen-name" name="name" type="text" required>
+                    </div>
+                    <div class="admin-field">
+                        <label for="app-screen-type" data-i18n="menu.appScreenType">Screen type</label>
+                        <select id="app-screen-type" name="screenType">
+                            <option value="guided" data-i18n="menu.appScreenTypeGuided">Guided form</option>
+                            <option value="readonly" data-i18n="menu.appScreenTypeReadonly">Read-only</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="app-screen-form-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn" id="app-screen-form-submit" data-i18n="admin.save">Save</button>
+                    <button type="button" class="btn btn-secondary" id="app-screen-form-cancel" data-i18n="admin.cancel">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -534,7 +503,6 @@
     </div>
 
     <script src="Dashboard.js"></script>
-    <script src="PermissionCostTree.js"></script>
-    <script src="Admin-Planes.js"></script>
+    <script src="Admin-NuestrasApps.js"></script>
 </body>
 </html>

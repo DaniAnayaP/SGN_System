@@ -1542,3 +1542,133 @@ body.dark-mode .admin-save-status{
     color: var(--color-text-primary);
     font-size: 1rem;
 }
+
+/* Nuestras APPs — catalog grid + per-app detail panel */
+.admin-toolbar{
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+}
+.saas-app-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1rem;
+}
+.saas-app-card{
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.7rem;
+    padding: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.saas-app-card:hover{
+    box-shadow: 0 8px 20px -12px var(--shadow-border);
+    transform: translateY(-2px);
+}
+.saas-app-icon{
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.25rem;
+}
+.saas-app-card h3{
+    font-size: 0.95rem;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+.saas-app-meta{
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+.saas-app-status{
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 1rem;
+    width: fit-content;
+    letter-spacing: 0.02em;
+}
+.saas-app-status.active{ background-color: #E4F5E9; color: #1E7B3C; }
+.saas-app-status.empty{ background-color: var(--color-bg); color: var(--color-text-secondary); }
+.saas-app-clients{
+    font-size: 0.72rem;
+    color: var(--color-accent);
+    font-weight: 600;
+    margin: 0;
+}
+.saas-app-detail-head{
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin: 1rem 0 1.2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+.saas-app-detail-head h2{
+    font-size: 1.1rem;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+.saas-app-detail-head .admin-subtitle{
+    margin: 0.15rem 0 0;
+}
+.saas-app-detail-head .saas-app-icon{
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.4rem;
+}
+.saas-app-detail-head .admin-icon-btn{ margin-left: auto; }
+.saas-app-screen-row{
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.7rem 0.4rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.85rem;
+}
+.saas-app-screen-num{
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background-color: var(--color-bg);
+    color: var(--color-accent);
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.saas-app-screen-name{
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+.saas-app-screen-tag{
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+    background-color: var(--color-bg);
+    padding: 0.15rem 0.55rem;
+    border-radius: 1rem;
+}
+.admin-add-row-btn{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    color: var(--color-accent);
+    font-weight: 600;
+    font-size: 0.82rem;
+    padding: 0.8rem 0.4rem 0;
+    cursor: pointer;
+}

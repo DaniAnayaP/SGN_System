@@ -135,6 +135,13 @@ const {
     lockPlan,
     activatePlan,
     deletePlan,
+    listSaasApps,
+    getSaasAppById,
+    createSaasApp,
+    updateSaasApp,
+    deleteSaasApp,
+    addSaasAppScreen,
+    deleteSaasAppScreen,
     getPlanGrants,
     setPlanGrants,
     syncPlanModulesFromGrants,
@@ -954,7 +961,7 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
 app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    const { status, endDate, currency, costPerCostCenter, createdAt, createdBy } = req.body || {};
+    const { status, endDate, currency, costPerCostCenter, createdAt, createdBy, appId } = req.body || {};
     // The FIRST Revisión -> Activo transition only ever happens through the
     // gated POST .../activate below (requires the 'activate' SaaS grant) —
     // this plain PATCH can never do that one. Once a plan has been through
@@ -1019,6 +1026,7 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
             costPerCostCenter,
             createdAt,
             createdBy: createdBy != null ? createdBy.trim() : undefined,
+            appId,
         });
         logPlanChange({ planId: plan.id, action: 'update', changedBy: req.user.name });
         if (currency !== undefined && currency !== existing.currency) {
@@ -1161,6 +1169,79 @@ app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) =>
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     res.json({ changes: getPlanChanges(req.params.id) });
+});
+
+// --- Nuestras APPs -----------------------------------------------------------
+// The catalog of end-user app "kinds" (one per business vertical), each
+// filled in over time with its own operational screens — see the
+// saas_apps/saas_app_screens comment in db.js. Same 'saas-apps' grant
+// shape (Ver/Editar/Crear) as saas-clients/saas-plans above, checked
+// against Equipo SaaS's SAAS_PERMISSION_CATALOG.
+app.get('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
+    res.json({ apps: listSaasApps() });
+});
+
+app.get('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
+    const app_ = getSaasAppById(req.params.id);
+    if (!app_) return res.status(404).json({ message: 'App not found.' });
+    res.json({ app: app_ });
+});
+
+app.post('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'crear')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear apps.' });
+    }
+    const { name, icon, colorFrom, colorTo } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
+    try {
+        const app_ = createSaasApp({ name: name.trim(), icon, colorFrom, colorTo });
+        res.status(201).json({ app: app_ });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'Ya existe una app con ese nombre.' });
+        }
+        throw err;
+    }
+});
+
+app.patch('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar apps.' });
+    }
+    const existing = getSaasAppById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'App not found.' });
+    const { name, icon, colorFrom, colorTo } = req.body || {};
+    res.json({ app: updateSaasApp(req.params.id, { name, icon, colorFrom, colorTo }) });
+});
+
+app.delete('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para eliminar apps.' });
+    }
+    const existing = getSaasAppById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'App not found.' });
+    deleteSaasApp(req.params.id);
+    res.status(204).end();
+});
+
+app.post('/api/admin/saas-apps/:id/screens', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar apps.' });
+    }
+    const existing = getSaasAppById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'App not found.' });
+    const { name, screenType } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre de la pantalla es requerido.' });
+    res.status(201).json({ app: addSaasAppScreen(req.params.id, { name: name.trim(), screenType }) });
+});
+
+app.delete('/api/admin/saas-apps/:id/screens/:screenId', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar apps.' });
+    }
+    const existing = getSaasAppById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'App not found.' });
+    res.json({ app: deleteSaasAppScreen(req.params.id, req.params.screenId) });
 });
 
 // --- Equipo SaaS (GEIPSA's own staff — role='admin' accounts) ---------------
