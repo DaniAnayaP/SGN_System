@@ -819,6 +819,33 @@ function applyScreenGrantFilter(data) {
 
 function renderFilteredMenu() {
     if (menuData) renderMenu(applyScreenGrantFilter(applyAreaFilter(applyDepartmentFilter(menuData))));
+    // Every department/área change (there are several call sites: the
+    // dept/area pickers, "defaults" modal, login-defaults auto-apply...)
+    // funnels through here, so this is the one place a page like Panel.html
+    // needs to listen to react without a full reload — mirrors
+    // dashboard:language-changed's own dispatch further up this file.
+    document.dispatchEvent(new CustomEvent('dashboard:area-changed', {
+        detail: { department: selectedDepartment, area: selectedArea },
+    }));
+}
+
+// Panel.html's own data source: every categoría (Catálogos/Operaciones/
+// Admin/Gestión/Reportes/Material Apoyo) for the CURRENTLY selected
+// departamento/área, each with its submenu narrowed down to real,
+// grant-covered pantallas only (permissionOnly leaves and href="#"
+// placeholders dropped, same hasScreenGrant check the sidebar itself
+// uses) -- unlike applyScreenGrantFilter, a categoría that ends up with
+// zero pantallas is kept (not dropped) so Panel can still show it with a
+// 0 count instead of silently disappearing.
+function getPanelCategories() {
+    if (!menuData || !selectedDepartment || !selectedArea) return [];
+    return effectiveAreaCategories(menuData).map((cat) => ({
+        ...cat,
+        submenu: (cat.submenu || []).filter((s) => (
+            !s.permissionOnly && s.href && s.href !== '#'
+            && hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${s.id}`)
+        )),
+    }));
 }
 
 // Most areas' full names are already short enough to show as-is; a few
@@ -5629,6 +5656,9 @@ window.Dashboard = {
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },
+    get selectedDepartment() { return selectedDepartment; },
+    get selectedArea() { return selectedArea; },
+    getPanelCategories,
     // "Centro Costos" (Control Interno system column) at record-creation
     // time — only meaningful when exactly one cost center is active in the
     // top-bar picker; 'all' or several selected is ambiguous for "which one

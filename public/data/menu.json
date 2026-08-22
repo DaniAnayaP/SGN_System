@@ -4,7 +4,7 @@
       "id": "main",
       "items": [
         { "id": "home", "labelKey": "menu.home", "icon": "bx-home-alt-2", "href": "#" },
-        { "id": "panel", "labelKey": "menu.panel", "icon": "bx-grid-alt", "href": "#" },
+        { "id": "panel", "labelKey": "menu.panel", "icon": "bx-grid-alt", "href": "Panel.html" },
         { "id": "dashboard", "labelKey": "menu.dashboard", "icon": "bx-bar-chart-alt-2", "href": "Inicio-en.html" },
         { "id": "btn-mensajes", "labelKey": "main.messages", "icon": "bx-message", "href": "#", "permissionOnly": true },
         { "id": "btn-chatbot", "labelKey": "main.chatbot", "icon": "bx-bot", "href": "#", "permissionOnly": true },
@@ -117,6 +117,7 @@
     {
       "id": "cat-catalogos",
       "labelKey": "menu.catCatalogos",
+      "abbrKey": "menu.catCatalogosAbbr",
       "icon": "bx-category-alt",
       "submenu": [
         { "id": "cat-catalogos-1", "labelKey": "menu.catCatalogosItem1", "icon": "bx-window", "href": "CatCatalogos1.html" },
@@ -126,6 +127,7 @@
     {
       "id": "cat-operaciones",
       "labelKey": "menu.catOperaciones",
+      "abbrKey": "menu.catOperacionesAbbr",
       "icon": "bx-cog",
       "submenu": [
         { "id": "cat-operaciones-1", "labelKey": "menu.catOperacionesItem1", "icon": "bx-window", "href": "#" },
@@ -135,6 +137,7 @@
     {
       "id": "cat-admin",
       "labelKey": "menu.catAdmin",
+      "abbrKey": "menu.catAdmin",
       "icon": "bx-briefcase-alt-2",
       "submenu": [
         { "id": "cat-admin-1", "labelKey": "menu.catAdminItem1", "icon": "bx-window", "href": "#" },
@@ -144,6 +147,7 @@
     {
       "id": "cat-gestion",
       "labelKey": "menu.catGestion",
+      "abbrKey": "menu.catGestionAbbr",
       "icon": "bx-list-check",
       "submenu": [
         { "id": "cat-gestion-reglas-orden", "labelKey": "menu.fieldRulesScreen", "icon": "bx-link", "href": "Business-ReglasOrden.html" },
@@ -153,6 +157,7 @@
     {
       "id": "cat-reportes",
       "labelKey": "menu.catReportes",
+      "abbrKey": "menu.catReportesAbbr",
       "icon": "bx-bar-chart-alt-2",
       "submenu": [
         { "id": "reportes-nativos", "labelKey": "menu.reportesNativos", "icon": "bx-window", "submenu": [] },
@@ -163,6 +168,7 @@
     {
       "id": "cat-material-apoyo",
       "labelKey": "menu.catMaterialApoyo",
+      "abbrKey": "menu.catMaterialApoyoAbbr",
       "icon": "bx-support",
       "submenu": [
         { "id": "cat-material-apoyo-1", "labelKey": "menu.catMaterialApoyoItem1", "icon": "bx-window", "href": "#" },

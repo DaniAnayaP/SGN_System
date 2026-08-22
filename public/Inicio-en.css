@@ -30,6 +30,8 @@
         --color-report-calc-text: #7A5310;
         --color-accent: #2B4C9B;
         --color-accent-text: #FFFFFF;
+        --panel-tab-bg: #242F55;
+        --panel-subtab-bg: #1A2038;
     }
     body.dark-mode{
          --color-bg: #3A3D4D;
@@ -55,6 +57,8 @@
         --color-report-calc-text: #F0C978;
         --color-accent: #7FA3F0;
         --color-accent-text: #12141A;
+        --panel-tab-bg: #1B2440;
+        --panel-subtab-bg: #131730;
     }
     /* Institutional style: a FULL theme variant, exactly like body.dark-mode
        above — every one of the same variables gets overridden, just sourced
@@ -86,6 +90,8 @@
         --color-report-calc-text: #7A5310;
         --color-accent: var(--institutional-accent, #2B4C9B);
         --color-accent-text: var(--institutional-accent-text, #FFFFFF);
+        --panel-tab-bg: #242F55;
+        --panel-subtab-bg: #1A2038;
     }
     body.institutional-mode .brand{
         background-color: var(--institutional-accent, transparent);

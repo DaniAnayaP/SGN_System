@@ -37,6 +37,150 @@
     font-size: 0.85rem;
 }
 
+/* Panel.html — categoría tabs (Catálogos/Operaciones/Admin/Gestión/
+   Reportes/Material Apoyo) + a second row of that categoría's own
+   pantallas right underneath, "pegadita" (same block, no gap). Container
+   query driven (not @media) since what matters is THIS component's own
+   available width, not the viewport — the sidebar being open/closed
+   changes that independent of screen size. Always exactly 6 categoría
+   tabs, so they flex to fill the row evenly; the pantallas row's count
+   varies, so those keep their natural width and the row scrolls instead
+   of ever wrapping. */
+.panel-tabs-frame{
+    container-type: inline-size;
+    container-name: panel-tabs;
+}
+.panel-tabs{
+    display: flex;
+    gap: 0.35rem;
+    background: var(--panel-tab-bg);
+    border-radius: 0.6rem 0.6rem 0 0;
+    padding: 0.4rem 0.4rem 0.3rem;
+}
+.panel-tab{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.55rem 0.4rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #B7C2E8;
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.panel-tab i{
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.panel-tab .full,
+.panel-tab .short{
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.panel-tab .short{
+    display: none;
+}
+.panel-tab.active{
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+}
+.panel-tab .badge{
+    font-size: 0.62rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    padding: 0.05rem 0.4rem;
+    border-radius: 1rem;
+}
+.panel-tab.active .badge{
+    background: rgba(255, 255, 255, 0.28);
+}
+/* The pantallas row -- muted background + dotted top border reads as "one
+   level below the categoría row" without a visible gap between them. */
+.panel-subtabs{
+    display: flex;
+    gap: 0.35rem;
+    background: var(--panel-subtab-bg);
+    border-top: 1px dashed rgba(255, 255, 255, 0.18);
+    padding: 0.5rem 0.4rem;
+    border-radius: 0 0 0.6rem 0.6rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+.panel-subtabs::-webkit-scrollbar{
+    height: 0.4rem;
+}
+.panel-subtabs::-webkit-scrollbar-thumb{
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 0.3rem;
+}
+.panel-subtab{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    max-width: 14rem;
+    padding: 0.5rem 0.8rem;
+    border: none;
+    border-radius: 0.45rem;
+    background: rgba(255, 255, 255, 0.05);
+    font-family: inherit;
+    font-size: 0.76rem;
+    font-weight: 500;
+    color: #9AA6CC;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.panel-subtab i{
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    color: #7C89B8;
+}
+.panel-subtab .full{
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.panel-subtab.active{
+    background: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    color: #fff;
+    font-weight: 600;
+}
+.panel-subtab.active i{
+    color: #fff;
+}
+.panel-subtabs-empty{
+    background: var(--panel-subtab-bg);
+    border-top: 1px dashed rgba(255, 255, 255, 0.18);
+    border-radius: 0 0 0.6rem 0.6rem;
+    padding: 0.9rem 0.9rem;
+    font-size: 0.78rem;
+    font-style: italic;
+    color: #9AA6CC;
+}
+/* Medium width (container, not viewport) -- category AND pantalla labels
+   abbreviate/truncate instead of shrinking indefinitely. */
+@container panel-tabs (max-width: 46rem){
+    .panel-tab .full{ display: none; }
+    .panel-tab .short{ display: inline; }
+    .panel-subtab .full{ max-width: 8rem; }
+}
+/* Narrow (container, e.g. mobile) -- categoría tabs drop to icon-only;
+   pantallas keep their icon+label (already scrolls horizontally if it
+   doesn't fit, per the note above). */
+@container panel-tabs (max-width: 26rem){
+    .panel-tab .short{ display: none; }
+    .panel-tab{ padding: 0.6rem 0.3rem; }
+}
+
 /* Form */
 .admin-form-grid{
     display: grid;
