@@ -14,19 +14,45 @@
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js');
         }
-        // Only present when this page is loaded inside the native Capacitor
-        // app (remote mode injects its bridge into every page it loads,
-        // this exact page included) — a plain browser tab never has
-        // window.Capacitor, so this is a no-op there. launchAutoHide is
-        // false in capacitor.config.json specifically so the splash stays
-        // up until THIS page is actually interactive, instead of a fixed
-        // timer that could hide it before the real content is ready.
-        window.addEventListener('load', () => {
-            window.Capacitor?.Plugins?.SplashScreen?.hide();
-        });
     </script>
 </head>
 <body>
+    <!-- Native-app-only "unlock" screen: shown instead of the login form
+         when (a) running inside the Capacitor app AND (b) a still-valid
+         session already exists (see access-screen.js) — Face ID/fingerprint
+         just locally re-confirms it's really the phone's owner before
+         resuming that session; it never replaces the actual password login,
+         which stays available as a fallback and is the only path when
+         there's no existing session to unlock. Never shown in a plain
+         browser tab (no window.Capacitor there). -->
+    <div id="access-screen" class="access-screen" hidden>
+        <div class="access-mark">
+            <svg viewBox="0 0 1024 1024" width="100%" height="100%">
+                <path d="M320 700 L320 470 Q320 320 512 320 Q704 320 704 470" stroke="#FFFFFF" stroke-width="72" fill="none" stroke-linecap="round"/>
+                <circle cx="704" cy="560" r="62" fill="#FFFFFF"/>
+                <circle cx="320" cy="700" r="62" fill="#7FE1FF"/>
+            </svg>
+        </div>
+        <div class="access-name">SGN</div>
+        <div class="access-tag" data-i18n="login.accessTagline">Sistema de Gestión de Negocios</div>
+        <div class="access-spinner" id="access-spinner"></div>
+        <button type="button" class="access-btn" id="access-btn" hidden>
+            <i class="bx bx-log-in" aria-hidden="true"></i>
+            <span data-i18n="login.accessButton">Acceder</span>
+        </button>
+        <div class="access-sheet" id="access-sheet" hidden>
+            <p class="access-sheet-title" data-i18n="login.accessHow">¿Cómo quieres entrar?</p>
+            <button type="button" class="access-sheet-opt primary" id="access-biometric-btn">
+                <i class="bx bx-scan" aria-hidden="true"></i>
+                <span id="access-biometric-label">Face ID</span>
+            </button>
+            <button type="button" class="access-sheet-opt" id="access-password-btn">
+                <i class="bx bx-lock-alt" aria-hidden="true"></i>
+                <span data-i18n="login.accessWithPassword">Usuario y contraseña</span>
+            </button>
+        </div>
+    </div>
+
     <button type="button" id="lang-toggle" class="lang-toggle" aria-label="Change language">EN / ES</button>
 
     <div id="form-error" class="form-error" role="alert" hidden></div>
@@ -131,5 +157,6 @@
     </div>
 
     <script src="login.js" defer></script>
+    <script src="access-screen.js" defer></script>
 </body>
 </html>

@@ -317,6 +317,121 @@ margin: -15px 0 15px;
     transition: width linear;
 }
 
+/* Native-app-only unlock screen (Face ID / password) — see access-screen.js.
+   Covers the whole viewport, sitting over the normal login form. */
+.access-screen{
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: radial-gradient(circle at 30% 20%, #2A3166, #0b0d14 70%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20vh 1.5rem 3rem;
+}
+.access-mark{
+    width: 88px;
+    height: 88px;
+    border-radius: 22px;
+    background: radial-gradient(circle at 20% 15%, #6C7CF0, #3A4BC9 55%, #1C1F4A 100%);
+    padding: 20px;
+    margin-bottom: 1.4rem;
+}
+.access-name{
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 1.6rem;
+    letter-spacing: 0.04em;
+    color: #fff;
+}
+.access-tag{
+    font-size: 0.68rem;
+    color: #9BA3C4;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 0.3rem;
+}
+.access-spinner{
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid rgba(255, 255, 255, 0.18);
+    border-top-color: #7FE1FF;
+    border-radius: 50%;
+    margin-top: 1.4rem;
+    animation: access-spin 1s linear infinite;
+}
+.access-spinner.hidden{
+    display: none;
+}
+@keyframes access-spin{
+    to{ transform: rotate(360deg); }
+}
+.access-btn{
+    margin-top: auto;
+    width: 100%;
+    max-width: 20rem;
+    background: #7FE1FF;
+    color: #0b0d14;
+    border: none;
+    border-radius: 0.9rem;
+    padding: 0.9rem;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+.access-sheet{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #12141f;
+    border-radius: 1.4rem 1.4rem 0 0;
+    padding: 1.4rem 1.3rem calc(1.6rem + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
+}
+.access-sheet-title{
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #fff;
+    text-align: center;
+    margin: 0 0 0.4rem;
+}
+.access-sheet-opt{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: #171b2c;
+    border: 1px solid #232640;
+    border-radius: 0.8rem;
+    padding: 0.8rem 0.9rem;
+    color: #e6e8f5;
+    font-size: 0.82rem;
+    font-family: 'Poppins', sans-serif;
+    cursor: pointer;
+}
+.access-sheet-opt i{
+    font-size: 1.2rem;
+    color: #7FE1FF;
+}
+.access-sheet-opt.primary{
+    background: #7FE1FF;
+    color: #0b0d14;
+    border-color: #7FE1FF;
+    font-weight: 700;
+}
+.access-sheet-opt.primary i{
+    color: #0b0d14;
+}
+
 .toggle-box{
     position: absolute;
     width: 100%;
