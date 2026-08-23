@@ -327,10 +327,14 @@ window.addEventListener('beforeinstallprompt', (event) => {
     deferredInstallPrompt = event;
 });
 document.getElementById('open-app-link')?.addEventListener('click', async (event) => {
-    event.preventDefault();
     if (window.matchMedia('(display-mode: standalone)').matches) {
+        event.preventDefault();
         return; // already running as the installed app — nothing to do
     }
+    if (/Android/i.test(navigator.userAgent)) {
+        return; // let the link's href download the real .apk
+    }
+    event.preventDefault();
     if (deferredInstallPrompt) {
         deferredInstallPrompt.prompt();
         await deferredInstallPrompt.userChoice;
