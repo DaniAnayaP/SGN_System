@@ -14,6 +14,16 @@
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js');
         }
+        // Only present when this page is loaded inside the native Capacitor
+        // app (remote mode injects its bridge into every page it loads,
+        // this exact page included) — a plain browser tab never has
+        // window.Capacitor, so this is a no-op there. launchAutoHide is
+        // false in capacitor.config.json specifically so the splash stays
+        // up until THIS page is actually interactive, instead of a fixed
+        // timer that could hide it before the real content is ready.
+        window.addEventListener('load', () => {
+            window.Capacitor?.Plugins?.SplashScreen?.hide();
+        });
     </script>
 </head>
 <body>
