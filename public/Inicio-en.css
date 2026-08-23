@@ -1685,6 +1685,13 @@
             font-size: 1.2rem;
             cursor: pointer;
             transition: background-color 0.2s ease, color 0.2s ease;
+            /* Now sits at the start of .top-bar-title (left side) — with
+               the sidebar open as a full overlay (z-index 40) on top of
+               that same left edge, this button was getting visually
+               covered with no way left to close the sidebar again.
+               Outranks it so it's always reachable either way. */
+            position: relative;
+            z-index: 45;
         }
         .sidebars-btn:hover{
             background-color: var(--color-bg);
