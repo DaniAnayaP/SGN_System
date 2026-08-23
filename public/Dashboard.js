@@ -1169,16 +1169,29 @@ function wireMenuInteractions() {
     const menuItemsDropdown = document.querySelectorAll('.menu-item-dropdown');
     const menuItemsStatic = document.querySelectorAll('.menu-item-static');
 
-    sidebarsBtn?.addEventListener('click', () => {
-        const isHidden = document.body.classList.toggle('sidebars-hidden');
-        sidebarsBtn.setAttribute('aria-expanded', String(isHidden));
-    });
+    // sidebarsBtn/menuBtn are static markup (never recreated), but
+    // wireMenuInteractions() itself re-runs on every menu render (search
+    // filter, language switch, department change...) — without this guard,
+    // each re-run stacked one more click listener onto the same button. An
+    // even number of stacked listeners toggles the class an even number of
+    // times per click, which cancels itself out and made the button look
+    // completely dead (confirmed live: aria-expanded never changed).
+    if (sidebarsBtn && !sidebarsBtn.dataset.wired) {
+        sidebarsBtn.dataset.wired = '1';
+        sidebarsBtn.addEventListener('click', () => {
+            const isHidden = document.body.classList.toggle('sidebars-hidden');
+            sidebarsBtn.setAttribute('aria-expanded', String(isHidden));
+        });
+    }
 
-    menuBtn?.addEventListener('click', () => {
-        const isMinimized = Sidebar.classList.toggle('minimize');
-        menuBtn.setAttribute('aria-expanded', String(!isMinimized));
-        hideSidebarTooltip();
-    });
+    if (menuBtn && !menuBtn.dataset.wired) {
+        menuBtn.dataset.wired = '1';
+        menuBtn.addEventListener('click', () => {
+            const isMinimized = Sidebar.classList.toggle('minimize');
+            menuBtn.setAttribute('aria-expanded', String(!isMinimized));
+            hideSidebarTooltip();
+        });
+    }
 
     menuItemsDropdown.forEach((menuItem) => {
         menuItem.addEventListener('click', (event) => {
