@@ -1296,6 +1296,52 @@ function checkWindowSize() {
 }
 window.addEventListener('resize', checkWindowSize);
 
+// --- Top-bar overflow: collapse based on real measured collision, not a
+// fixed viewport width. A fixed breakpoint never held here — how many
+// action icons Dashboard.js inserts varies by account (6 to 9), pill
+// labels vary by department/language, and browser zoom changes the
+// effective content width without changing window.innerWidth. Two-stage
+// cascade, both against ACTUAL layout: first collapse the action icons
+// behind "⋮" once .top-bar-title would touch them; if the title still
+// collides with that now-much-narrower "⋮" button, hide the title too.
+// See .top-bar-icons-collapsed / .top-bar-title-hidden in Inicio-en.css.
+function checkTopBarFit() {
+    const topBar = document.querySelector('.top-bar');
+    const titleGroup = document.querySelector('.top-bar-title');
+    const actionsGroup = document.getElementById('top-bar-actions');
+    if (!topBar || !titleGroup || !actionsGroup) return;
+
+    // Reset to the fullest state before measuring — an already-collapsed
+    // state hides content, which would give a false "plenty of room" read.
+    topBar.classList.remove('top-bar-icons-collapsed', 'top-bar-title-hidden');
+
+    const GAP = 12; // px of breathing room before calling it a collision
+    const titleRight = titleGroup.getBoundingClientRect().right;
+    if (titleRight + GAP <= actionsGroup.getBoundingClientRect().left) return;
+
+    topBar.classList.add('top-bar-icons-collapsed');
+    // Re-measure: the icons are now tucked behind "⋮", a much narrower
+    // target — only hide the title too if it's STILL colliding against that.
+    if (titleRight + GAP > actionsGroup.getBoundingClientRect().left) {
+        topBar.classList.add('top-bar-title-hidden');
+    }
+}
+let topBarFitRaf = null;
+function scheduleTopBarFitCheck() {
+    if (topBarFitRaf) cancelAnimationFrame(topBarFitRaf);
+    topBarFitRaf = requestAnimationFrame(checkTopBarFit);
+}
+window.addEventListener('resize', scheduleTopBarFitCheck);
+scheduleTopBarFitCheck();
+// Catches department/area/cost-center picker labels loading in, language
+// switches, and any other content change inside the title group — without
+// needing to separately hook every call site that might affect its width.
+const topBarTitleEl = document.querySelector('.top-bar-title');
+if (topBarTitleEl) {
+    new MutationObserver(scheduleTopBarFitCheck)
+        .observe(topBarTitleEl, { childList: true, subtree: true, characterData: true });
+}
+
 // Every dropdown/panel below (top-bar-actions overflow, Configuración,
 // Datos de Usuario, Datos de Usuario del Negocio, chatbot, Departamento/
 // Área/Centro de Costos pickers, sidebar search results) has its own toggle
