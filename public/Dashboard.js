@@ -1169,12 +1169,6 @@ function wireMenuInteractions() {
     const menuItemsDropdown = document.querySelectorAll('.menu-item-dropdown');
     const menuItemsStatic = document.querySelectorAll('.menu-item-static');
 
-    // Moved from .top-bar-actions (right side) to the very start of
-    // .top-bar-title (left side, before the Departamento picker) — same
-    // element/id/listeners/behavior, just repositioned. prepend() is a
-    // no-op if it's already there, safe to run on every re-render.
-    if (sidebarsBtn) document.querySelector('.top-bar-title')?.prepend(sidebarsBtn);
-
     // sidebarsBtn/menuBtn are static markup (never recreated), but
     // wireMenuInteractions() itself re-runs on every menu render (search
     // filter, language switch, department change...) — without this guard,
@@ -1345,10 +1339,19 @@ function checkTopBarFit() {
         topBar.classList.add('top-bar-title-hidden');
     }
 }
-let topBarFitRaf = null;
+let topBarFitTimer = null;
 function scheduleTopBarFitCheck() {
-    if (topBarFitRaf) cancelAnimationFrame(topBarFitRaf);
-    topBarFitRaf = requestAnimationFrame(checkTopBarFit);
+    // A plain requestAnimationFrame debounce (~16ms) fired mid-animation
+    // whenever the sidebar slides in/out (.Sidebar has its own 0.3s CSS
+    // transition) — each firing re-measured while the layout was still
+    // moving, and since the real geometry genuinely differs frame to
+    // frame during that animation, the collapsed/uncollapsed outcome
+    // legitimately flip-flopped call to call, visible as the action icons
+    // rapidly opening/closing in sync with the sidebar's own motion.
+    // Waiting past the transition's own duration before measuring means
+    // every check happens against the settled, final layout instead.
+    if (topBarFitTimer) clearTimeout(topBarFitTimer);
+    topBarFitTimer = setTimeout(checkTopBarFit, 350);
 }
 window.addEventListener('resize', scheduleTopBarFitCheck);
 scheduleTopBarFitCheck();
