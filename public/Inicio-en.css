@@ -1195,6 +1195,24 @@
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
+    /* Datos del Negocio / Tamaño del Sistema, moved here from their own
+       top-bar icons (see Dashboard.js) — one less icon competing for room
+       in a row that was overflowing on ordinary desktop widths. Their
+       trigger buttons already read as normal rows via the plain
+       ".settings-dropdown button" rule above (leaving .top-bar-actions
+       drops them out of that selector's circular-icon sizing); this just
+       widens their popout panel's anchor so it doesn't try to hang off the
+       narrow settings dropdown itself. */
+    .settings-dropdown-moved-item{
+        position: relative;
+        width: 100%;
+    }
+    .settings-dropdown-moved-item .user-info-dropdown{
+        right: auto;
+        left: 100%;
+        top: 0;
+        margin-left: 0.4rem;
+    }
     /* Settings dropdown: Language / Style / Administración del Negocio accordion groups */
     .settings-dropdown-group{
         display: flex;

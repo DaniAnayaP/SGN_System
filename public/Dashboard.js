@@ -1718,6 +1718,24 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeBusinessProfileMenu();
 });
 
+// Same move as #ui-scale-menu — into the ⚙️ Settings dropdown instead of
+// its own top-bar icon, one less icon in a row that was overflowing on
+// ordinary desktop widths.
+if (businessProfileMenu) {
+    const settingsDropdownEl = document.getElementById('settings-dropdown');
+    if (settingsDropdownEl) {
+        businessProfileMenu.classList.add('settings-dropdown-moved-item');
+        const label = document.createElement('span');
+        label.setAttribute('data-i18n', 'main.businessProfile');
+        label.textContent = t('main.businessProfile');
+        businessProfileBtn.appendChild(label);
+        const li = document.createElement('li');
+        li.setAttribute('role', 'none');
+        li.appendChild(businessProfileMenu);
+        settingsDropdownEl.appendChild(li);
+    }
+}
+
 // Language / Style / Configuración botones accordions: clicking a group's
 // toggle expands its submenu in place, closing any other open group (all
 // flat/single-level, same as Idioma and Estilo — no nesting).
@@ -3957,8 +3975,27 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     wrapper.querySelector('#ui-scale-increase').addEventListener('click', () => {
         if (currentUiScaleLevel < UI_SCALE_LEVELS.length) saveUiScaleLevel(currentUiScaleLevel + 1);
     });
-    if (settingsMenuEl) {
-        settingsMenuEl.insertAdjacentElement('beforebegin', wrapper);
+    // Lives inside the ⚙️ Settings dropdown (as its own row), not as a
+    // separate top-bar icon — one less icon competing for room in that row,
+    // which was overflowing on plenty of ordinary desktop widths with the
+    // full icon set. wrapper keeps all its existing open/close mechanics
+    // (.open class, absolutely-positioned .user-info-dropdown panel) —
+    // .settings-dropdown-moved-item below just restyles its trigger button
+    // to read as a flat settings row instead of a circular top-bar icon.
+    const settingsDropdownEl = settingsMenuEl?.querySelector('#settings-dropdown') || container.querySelector('#settings-dropdown');
+    if (settingsDropdownEl) {
+        wrapper.classList.add('settings-dropdown-moved-item');
+        // The button was icon-only by design (a circular top-bar icon needs
+        // no visible label) — moved into a text list of settings rows, it
+        // needs one now.
+        const label = document.createElement('span');
+        label.setAttribute('data-i18n', 'main.uiScale');
+        label.textContent = t('main.uiScale');
+        toggleBtn.appendChild(label);
+        const li = document.createElement('li');
+        li.setAttribute('role', 'none');
+        li.appendChild(wrapper);
+        settingsDropdownEl.appendChild(li);
     } else {
         container.appendChild(wrapper);
     }
