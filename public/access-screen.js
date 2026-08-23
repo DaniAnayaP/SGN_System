@@ -1,18 +1,16 @@
 // ---------------------------------------------------------------------------
-// Native-app-only "unlock" screen: Face ID/fingerprint (or password as a
-// fallback) to resume an ALREADY-VALID session, not a replacement for the
-// real password login. It only ever appears when both are true:
-//   1. window.Capacitor exists — remote mode injects the native bridge into
-//      every page it loads, this one included; a plain browser tab never
-//      has it, so this whole file is a no-op there.
-//   2. GET /api/me (the session-cookie-gated route already used elsewhere)
-//      succeeds — there IS a session to unlock. With no valid session,
-//      biometrics have nothing to confirm, so the plain login form (already
-//      in the page) is what shows, same as in a browser.
-// Biometric success never talks to the server on its own — it just
-// re-confirms locally that the phone's owner is the one holding it, then
-// lets the existing session (the same cookie /api/me just checked) carry
-// the user straight into the app.
+// Native-app-only "Acceder" screen: splash-style icon/title + a loading
+// spinner, then an Acceder button that offers Face ID/fingerprint (or
+// password) to enter. Always shown when running inside the Capacitor app
+// (window.Capacitor only exists there — a plain browser tab always skips
+// straight to the normal login form, same as before this existed).
+//
+// Face ID/fingerprint only ever RESUMES an already-valid session — it's a
+// local "confirm it's really the phone's owner" gate, not a replacement for
+// the real password login, and it never talks to the server on its own. If
+// there's no existing session (first run, or a previous one expired/logged
+// out), Face ID has nothing to resume, so tapping it goes straight to the
+// password form instead of pretending to authenticate.
 // ---------------------------------------------------------------------------
 
 (async function initAccessScreen() {
@@ -21,19 +19,6 @@
 
     if (!Capacitor) {
         hideNativeSplash(); // no-op, kept for symmetry/clarity
-        return;
-    }
-
-    let hasSession = false;
-    try {
-        const res = await fetch('/api/me', { credentials: 'include' });
-        hasSession = res.ok;
-    } catch {
-        hasSession = false;
-    }
-
-    if (!hasSession) {
-        hideNativeSplash();
         return;
     }
 
@@ -49,17 +34,17 @@
     screen.hidden = false;
     hideNativeSplash(); // our overlay is already up — seamless handoff from the native splash
 
+    const [sessionResult, biometryResult] = await Promise.allSettled([
+        fetch('/api/me', { credentials: 'include' }),
+        Capacitor.Plugins?.BiometricAuthNative?.checkBiometry?.() ?? Promise.reject(),
+    ]);
+    const hasSession = sessionResult.status === 'fulfilled' && sessionResult.value.ok;
+    const biometry = biometryResult.status === 'fulfilled' ? biometryResult.value : null;
     const BiometricAuth = Capacitor.Plugins?.BiometricAuthNative;
-    let biometry = null;
-    if (BiometricAuth) {
-        try {
-            biometry = await BiometricAuth.checkBiometry();
-        } catch {
-            biometry = null;
-        }
-    }
 
-    const hasBiometry = !!biometry?.isAvailable;
+    // Face ID needs BOTH device support AND a session to resume — offering
+    // it with neither would just be a dead end that always falls back.
+    const hasBiometry = !!biometry?.isAvailable && hasSession;
     if (hasBiometry && biometricLabel) {
         // BiometryType: 3 = fingerprint, 4 = face, 5 = iris (see the plugin's
         // definitions) — everything else falls back to the generic Face ID
