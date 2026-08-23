@@ -273,6 +273,24 @@ registerForm?.addEventListener('submit', async (event) => {
 // page, so if it's already installed (or the browser never offered to
 // install it) this just takes the user to the site itself, which is the
 // same thing the installed app shows anyway.
+function showToast(message) {
+    let container = document.querySelector('.login-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'login-toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'login-toast';
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('login-toast-visible'));
+    setTimeout(() => {
+        toast.classList.remove('login-toast-visible');
+        setTimeout(() => toast.remove(), 250);
+    }, 5000);
+}
+
 let deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
@@ -293,7 +311,7 @@ document.getElementById('open-app-link')?.addEventListener('click', async (event
     // engagement heuristics are met — not guaranteed on a first visit, and
     // there's no API to trigger it on demand. A silent no-op here reads as
     // "the button is broken", so explain the manual path instead.
-    showError(t('login.installManually'));
+    showToast(t('login.installManually'));
 });
 
 // --- Init ------------------------------------------------------------------
