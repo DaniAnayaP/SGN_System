@@ -40,16 +40,21 @@
             <i class="bx bx-log-in" aria-hidden="true"></i>
             <span data-i18n="login.accessButton">Acceder</span>
         </button>
+        <button type="button" class="access-peek" id="access-peek" hidden aria-label="Show sign-in options">
+            <i class="bx bx-chevron-up" aria-hidden="true"></i>
+        </button>
         <div class="access-sheet" id="access-sheet" hidden>
             <p class="access-sheet-title" data-i18n="login.accessHow">¿Cómo quieres entrar?</p>
-            <button type="button" class="access-sheet-opt primary" id="access-biometric-btn">
-                <i class="bx bx-scan" aria-hidden="true"></i>
-                <span id="access-biometric-label">Face ID</span>
-            </button>
-            <button type="button" class="access-sheet-opt" id="access-password-btn">
-                <i class="bx bx-lock-alt" aria-hidden="true"></i>
-                <span data-i18n="login.accessWithPassword">Usuario y contraseña</span>
-            </button>
+            <div class="access-sheet-icons">
+                <button type="button" class="access-icon-opt primary" id="access-biometric-btn">
+                    <span class="access-icon-circle"><i class="bx bx-scan" aria-hidden="true"></i></span>
+                    <span class="access-icon-caption" id="access-biometric-label">Face ID</span>
+                </button>
+                <button type="button" class="access-icon-opt" id="access-password-btn">
+                    <span class="access-icon-circle"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>
+                    <span class="access-icon-caption" data-i18n="login.accessWithPassword">Usuario y contraseña</span>
+                </button>
+            </div>
         </div>
     </div>
 

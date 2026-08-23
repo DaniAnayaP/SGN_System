@@ -13,8 +13,25 @@
 // password form instead of pretending to authenticate.
 // ---------------------------------------------------------------------------
 
+// window.Capacitor is injected by the native bridge, but there's no
+// guarantee it exists the instant a deferred script starts running —
+// checking exactly once, immediately, meant this whole screen worked or
+// silently fell back to the plain login form depending on pure timing luck
+// (confirmed live: worked once, then didn't after nothing in this file
+// actually changed the outcome). Poll briefly instead of a single check.
+function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
+    return new Promise((resolve) => {
+        const deadline = Date.now() + timeoutMs;
+        (function poll() {
+            if (window.Capacitor) return resolve(window.Capacitor);
+            if (Date.now() >= deadline) return resolve(null);
+            setTimeout(poll, intervalMs);
+        })();
+    });
+}
+
 (async function initAccessScreen() {
-    const Capacitor = window.Capacitor;
+    const Capacitor = await waitForCapacitor();
     const hideNativeSplash = () => Capacitor?.Plugins?.SplashScreen?.hide();
 
     if (!Capacitor) {
@@ -25,6 +42,7 @@
     const screen = document.getElementById('access-screen');
     const spinner = document.getElementById('access-spinner');
     const accessBtn = document.getElementById('access-btn');
+    const peek = document.getElementById('access-peek');
     const sheet = document.getElementById('access-sheet');
     const biometricBtn = document.getElementById('access-biometric-btn');
     const biometricLabel = document.getElementById('access-biometric-label');
@@ -84,11 +102,18 @@
     accessBtn.addEventListener('click', () => {
         accessBtn.hidden = true;
         if (hasBiometry) {
-            sheet.hidden = false;
+            // A small bouncing "pull up" handle first, per request — the
+            // actual Face ID/password choices only reveal once THAT is
+            // tapped, instead of appearing immediately.
+            peek.hidden = false;
         } else {
             // Nothing to choose between — go straight to the password form.
             showPasswordForm();
         }
+    });
+    peek?.addEventListener('click', () => {
+        peek.hidden = true;
+        sheet.hidden = false;
     });
     biometricBtn?.addEventListener('click', attemptBiometric);
     passwordBtn?.addEventListener('click', showPasswordForm);

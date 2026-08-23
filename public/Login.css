@@ -373,6 +373,17 @@ margin: -15px 0 15px;
 @keyframes access-spin{
     to{ transform: rotate(360deg); }
 }
+/* Every .access-* element below sets its own `display`, and [hidden] is
+   the same specificity as a class selector — without this, toggling
+   .hidden = true in JS on any of them (accessBtn re-hides itself once
+   tapped; the others start hidden then may return to it too) would
+   silently do nothing, the exact bug already found on .access-screen
+   itself. One rule here instead of repeating it after each one. */
+.access-btn[hidden],
+.access-peek[hidden],
+.access-sheet[hidden]{
+    display: none;
+}
 .access-btn{
     margin-top: auto;
     width: 100%;
@@ -391,6 +402,34 @@ margin: -15px 0 15px;
     gap: 0.5rem;
     cursor: pointer;
 }
+/* Small bouncing "pull up" handle — shown after Acceder, before the actual
+   sign-in options, per request. Tapping it reveals .access-sheet below. */
+.access-peek{
+    width: 100%;
+    background: #12141f;
+    border: none;
+    border-radius: 1rem 1rem 0 0;
+    padding: 0.7rem 0 1rem;
+    display: flex;
+    justify-content: center;
+    cursor: pointer;
+}
+/* Same [hidden]-vs-class-display specificity issue fixed on .access-screen
+   itself — anything that sets its own `display` needs this or toggling
+   .hidden in JS silently does nothing. */
+.access-peek[hidden]{
+    display: none;
+}
+.access-peek i{
+    font-size: 1.3rem;
+    color: #7FE1FF;
+    animation: access-peek-bounce 1.4s ease-in-out infinite;
+}
+@keyframes access-peek-bounce{
+    0%, 100%{ transform: translateY(0); }
+    50%{ transform: translateY(-4px); }
+}
+
 .access-sheet{
     position: fixed;
     left: 0;
@@ -401,42 +440,53 @@ margin: -15px 0 15px;
     padding: 1.4rem 1.3rem calc(1.6rem + env(safe-area-inset-bottom, 0px));
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    align-items: center;
+    gap: 0.9rem;
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
 }
 .access-sheet-title{
     font-family: 'Poppins', sans-serif;
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: #fff;
     text-align: center;
-    margin: 0 0 0.4rem;
+    margin: 0;
 }
-.access-sheet-opt{
+.access-sheet-icons{
+    display: flex;
+    gap: 1.6rem;
+}
+.access-icon-opt{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+}
+.access-icon-circle{
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    justify-content: center;
+    font-size: 1.1rem;
     background: #171b2c;
     border: 1px solid #232640;
-    border-radius: 0.8rem;
-    padding: 0.8rem 0.9rem;
-    color: #e6e8f5;
-    font-size: 0.82rem;
-    font-family: 'Poppins', sans-serif;
-    cursor: pointer;
-}
-.access-sheet-opt i{
-    font-size: 1.2rem;
     color: #7FE1FF;
 }
-.access-sheet-opt.primary{
+.access-icon-opt.primary .access-icon-circle{
     background: #7FE1FF;
     color: #0b0d14;
     border-color: #7FE1FF;
-    font-weight: 700;
 }
-.access-sheet-opt.primary i{
-    color: #0b0d14;
+.access-icon-caption{
+    font-size: 0.68rem;
+    color: #c7cce8;
+    font-weight: 600;
 }
 
 .toggle-box{
