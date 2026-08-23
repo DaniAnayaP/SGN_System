@@ -280,13 +280,20 @@ window.addEventListener('beforeinstallprompt', (event) => {
 });
 document.getElementById('open-app-link')?.addEventListener('click', async (event) => {
     event.preventDefault();
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+        return; // already running as the installed app — nothing to do
+    }
     if (deferredInstallPrompt) {
         deferredInstallPrompt.prompt();
         await deferredInstallPrompt.userChoice;
         deferredInstallPrompt = null;
-    } else {
-        window.location.href = '/';
+        return;
     }
+    // Chrome only offers the automatic install prompt after its own
+    // engagement heuristics are met — not guaranteed on a first visit, and
+    // there's no API to trigger it on demand. A silent no-op here reads as
+    // "the button is broken", so explain the manual path instead.
+    showError(t('login.installManually'));
 });
 
 // --- Init ------------------------------------------------------------------
