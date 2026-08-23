@@ -1742,61 +1742,53 @@
     /* The top bar's own content (department + area + cost-center pickers,
        page title, action icons) stops fitting well before the sidebar
        needs to go off-canvas (that's the 780px/550px breakpoint above, a
-       separate concern) — confirmed by testing the actual breakpoint where
-       icons start spilling past the rounded box. This was 936px before the
-       department/area pickers moved into the top bar, then 1120px once
-       those extra pickers were added — but that count assumed 6 action
-       icons, and several more (chatbot, system size, user data, business
-       profile...) get inserted into .top-bar-actions-list by Dashboard.js
-       on top of the static ones, so a business-admin account can end up
-       with 9. Confirmed live: broken all the way from 1121px up to
-       ~1979px (fine again at 1980px+, where there's finally enough room
-       for the full uncollapsed row) — raised to clear that whole range. */
-    @media (max-width: 1980px) {
-        /* ID selector to reliably beat the unconditional
-           #top-bar-actions-toggle{display:none} base rule — same
-           specificity, later in the cascade wins. */
-        #top-bar-actions-toggle{
-            display: flex;
-        }
-        .top-bar-actions-list{
-            position: absolute;
-            top: 2.6rem;
-            right: 0;
-            flex-direction: column;
-            gap: 0.3rem;
-            padding: 0.5rem;
-            background-color: var(--color-surface);
-            border-radius: 0.5rem;
-            box-shadow: 0 4px 16px var(--shadow-border), 0 0 0 1px var(--color-border);
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-0.4rem);
-            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
-            z-index: 25;
-        }
-        .top-bar-actions.open .top-bar-actions-list{
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
+       separate concern). This used to be a fixed max-width breakpoint, but
+       no single pixel number holds: it depends on how many action icons
+       Dashboard.js actually inserted for this account (6 to 9), how long
+       the picker/department labels are, and the browser's zoom level —
+       all of which change the real content width without changing the
+       viewport width. Replaced with a real measurement instead of a guess
+       — checkTopBarFit() in Dashboard.js measures whether .top-bar-title
+       actually touches the action icons and toggles this class, so it's
+       correct at any screen size, any icon count, any zoom. */
+    /* ID selector to reliably beat the unconditional
+       #top-bar-actions-toggle{display:none} base rule — same specificity,
+       later in the cascade wins. */
+    .top-bar-icons-collapsed #top-bar-actions-toggle{
+        display: flex;
+    }
+    .top-bar-icons-collapsed .top-bar-actions-list{
+        position: absolute;
+        top: 2.6rem;
+        right: 0;
+        flex-direction: column;
+        gap: 0.3rem;
+        padding: 0.5rem;
+        background-color: var(--color-surface);
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 16px var(--shadow-border), 0 0 0 1px var(--color-border);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-0.4rem);
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+        z-index: 25;
+    }
+    .top-bar-icons-collapsed .top-bar-actions.open .top-bar-actions-list{
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
     }
 
-    /* Below 1120px the action icons are already tucked behind the "more"
-       toggle (see above), but the department/area/cost-center pickers on
-       the left keep their full pill width (.cc-picker etc. are
-       flex-shrink:0, see above) and, combined with the page title, still
-       get tight enough to push past .top-bar's own rounded edge — .top-bar
-       has no overflow:hidden, so anything that doesn't fit just visibly
-       spills out instead of clipping or wrapping. Originally set to 847px,
-       but longer real pill labels ("C. Distribución", "Todos (2)") start
-       overflowing as early as ~940px — raised with margin past that.
-       Dropping just the title (same idea as the sidebars-hidden rule
-       above) frees up the room the pickers need. */
-    @media (max-width: 1000px) {
-        .top-bar .welcome-text{
-            display: none;
-        }
+    /* Second stage of the same cascade: even with the action icons already
+       tucked behind "⋮" (.top-bar-icons-collapsed above), the pickers +
+       page title can still collide with THAT button on a narrow enough
+       screen — .top-bar has no overflow:hidden, so anything that doesn't
+       fit just visibly spills out instead of clipping or wrapping.
+       checkTopBarFit() in Dashboard.js re-measures after collapsing the
+       icons and adds this second class only if still colliding, so the
+       title only disappears when it's actually necessary. */
+    .top-bar-title-hidden .welcome-text{
+        display: none;
     }
 
     /* Category placeholder screens (Cat 1/2, Ope 1/2, etc.) — page title +
