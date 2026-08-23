@@ -1367,11 +1367,20 @@ if (topBarTitleEl) {
 // registered dropdown first (see closeAllTopBarDropdowns) before deciding
 // whether to open itself.
 const topBarDropdownClosers = [];
-function registerTopBarDropdown(closeFn) {
-    topBarDropdownClosers.push(closeFn);
+function registerTopBarDropdown(closeFn, name) {
+    topBarDropdownClosers.push({ closeFn, name });
 }
-function closeAllTopBarDropdowns() {
-    topBarDropdownClosers.forEach((closeFn) => closeFn());
+// exceptName skips one registered closer — needed by every dropdown that
+// physically LIVES INSIDE .top-bar-actions-list (Configuración, Datos de
+// Usuario, Datos del Negocio, Chatbot, Tamaño del Sistema, Notificaciones):
+// calling this with no exclusion from one of THEM also closed
+// top-bar-actions itself (its own container), which set that dropdown's
+// .open class as intended but left it sitting inside a now-invisible
+// (opacity:0, visibility:hidden) ancestor — LOOKED exactly like "opens
+// then immediately closes" with no error and no timing issue to guard
+// against, because nothing was ever actually racing.
+function closeAllTopBarDropdowns(exceptName) {
+    topBarDropdownClosers.forEach(({ closeFn, name }) => { if (name !== exceptName) closeFn(); });
 }
 
 // --- Top-bar actions collapse (mobile only) ----------------------------------
@@ -1386,7 +1395,7 @@ function closeTopBarActions() {
     topBarActions?.classList.remove('open');
     topBarActionsToggle?.setAttribute('aria-expanded', 'false');
 }
-registerTopBarDropdown(closeTopBarActions);
+registerTopBarDropdown(closeTopBarActions, 'topBarActions');
 
 // openedAt guards against the exact tap that OPENS the menu also being the
 // one that closes it: some mobile browsers dispatch a synthetic click for a
@@ -1445,7 +1454,7 @@ let settingsMenuOpenedAt = 0;
 settingsBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     const wasOpen = settingsMenu.classList.contains('open');
-    closeAllTopBarDropdowns();
+    closeAllTopBarDropdowns('topBarActions');
     if (!wasOpen) {
         settingsMenu.classList.add('open');
         settingsBtn.setAttribute('aria-expanded', 'true');
@@ -1520,7 +1529,7 @@ let userInfoMenuOpenedAt = 0;
 userInfoBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     const wasOpen = userInfoMenu.classList.contains('open');
-    closeAllTopBarDropdowns();
+    closeAllTopBarDropdowns('topBarActions');
     if (!wasOpen) {
         userInfoMenu.classList.add('open');
         userInfoBtn.setAttribute('aria-expanded', 'true');
@@ -1759,7 +1768,7 @@ let businessProfileMenuOpenedAt = 0;
 businessProfileBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     const wasOpen = businessProfileMenu.classList.contains('open');
-    closeAllTopBarDropdowns();
+    closeAllTopBarDropdowns('topBarActions');
     if (!wasOpen) {
         businessProfileMenu.classList.add('open');
         businessProfileBtn.setAttribute('aria-expanded', 'true');
@@ -3897,7 +3906,7 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     chatbotBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         const wasOpen = chatbotPanel?.classList.contains('open');
-        closeAllTopBarDropdowns();
+        closeAllTopBarDropdowns('topBarActions');
         if (!wasOpen) openChatbot();
     });
     if (messagesBtn) {
@@ -4004,7 +4013,7 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     toggleBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         const wasOpen = wrapper.classList.contains('open');
-        closeAllTopBarDropdowns();
+        closeAllTopBarDropdowns('topBarActions');
         if (!wasOpen) {
             wrapper.classList.add('open');
             toggleBtn.setAttribute('aria-expanded', 'true');
@@ -4141,7 +4150,7 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
         const wasOpen = wrapper.classList.contains('open');
-        closeAllTopBarDropdowns();
+        closeAllTopBarDropdowns('topBarActions');
         if (!wasOpen) {
             wrapper.classList.add('open');
             btn.setAttribute('aria-expanded', 'true');
