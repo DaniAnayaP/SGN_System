@@ -386,8 +386,13 @@
     .dept-picker-disabled{
         display: none;
     }
-    /* Phone-size: icon only, same breakpoint as Cost Centers. */
-    @media (max-width:700px) or (max-height:550px){
+    /* Icon-only, same breakpoint as Cost Centers below. Was 700px (true
+       phone-size only), but the sidebar stays on-screen (doesn't go
+       off-canvas) until 780px — full-label pills + icons overflow the
+       top bar anywhere from 780px up to ~1000px while that sidebar is
+       still eating into the row's width, confirmed live. Raised to close
+       that gap instead of only kicking in once already at phone size. */
+    @media (max-width:1000px) or (max-height:550px){
         .dept-picker-btn{
             padding: 0.5rem;
             border-radius: 50%;
@@ -924,9 +929,9 @@
     .cc-picker-disabled{
         display: none;
     }
-    /* Phone-size: icon only, matching the established mobile breakpoint
-       used to switch the sidebar into its off-canvas mode. */
-    @media (max-width:700px) or (max-height:550px){
+    /* Icon-only — see the same breakpoint on .dept-picker-btn above for
+       why this moved from 700px to 1000px. */
+    @media (max-width:1000px) or (max-height:550px){
         .cc-picker-btn{
             padding: 0.5rem;
             border-radius: 50%;
