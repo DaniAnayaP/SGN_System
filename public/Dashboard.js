@@ -1169,6 +1169,12 @@ function wireMenuInteractions() {
     const menuItemsDropdown = document.querySelectorAll('.menu-item-dropdown');
     const menuItemsStatic = document.querySelectorAll('.menu-item-static');
 
+    // Moved from .top-bar-actions (right side) to the very start of
+    // .top-bar-title (left side, before the Departamento picker) — same
+    // element/id/listeners/behavior, just repositioned. prepend() is a
+    // no-op if it's already there, safe to run on every re-render.
+    if (sidebarsBtn) document.querySelector('.top-bar-title')?.prepend(sidebarsBtn);
+
     // sidebarsBtn/menuBtn are static markup (never recreated), but
     // wireMenuInteractions() itself re-runs on every menu render (search
     // filter, language switch, department change...) — without this guard,
