@@ -329,6 +329,13 @@ margin: -15px 0 15px;
     align-items: center;
     padding: 20vh 1.5rem 3rem;
 }
+/* [hidden] and .access-screen{display:flex} are the same specificity —
+   without this, setting screen.hidden = true in JS had no visible effect
+   at all (the flex rule kept winning), so tapping either "Usuario y
+   contraseña" or a failed Face ID attempt looked like "nothing happens". */
+.access-screen[hidden]{
+    display: none;
+}
 .access-mark{
     width: 88px;
     height: 88px;
