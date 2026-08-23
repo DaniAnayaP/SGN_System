@@ -266,5 +266,28 @@ registerForm?.addEventListener('submit', async (event) => {
     }
 });
 
+// --- "Abrir App" icon (next to the social login icons) ---------------------
+// Reuses the browser's own install prompt when it's available (captured via
+// beforeinstallprompt, same mechanism Chrome's own address-bar install icon
+// uses) — there's no API to force-launch an already-installed PWA from a
+// page, so if it's already installed (or the browser never offered to
+// install it) this just takes the user to the site itself, which is the
+// same thing the installed app shows anyway.
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+});
+document.getElementById('open-app-link')?.addEventListener('click', async (event) => {
+    event.preventDefault();
+    if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+    } else {
+        window.location.href = '/';
+    }
+});
+
 // --- Init ------------------------------------------------------------------
 loadLanguage(getStoredLang()).catch(console.error);
