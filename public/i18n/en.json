@@ -16,6 +16,8 @@
     "loginButton": "Login",
     "registerButton": "Register",
     "orLoginWith": "or login with social platforms",
+    "openApp": "Open app",
+    "installManually": "To install the app, use your browser's install icon (next to the address bar) or the ··· menu → \"Install app\".",
     "orRegisterWith": "or register with social platforms",
     "welcomeBack": "Welcome back!",
     "alreadyHaveAccount": "Already have an account?",
