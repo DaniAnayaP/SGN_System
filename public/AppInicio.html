@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title data-i18n="home.title">SGN</title>
+    <link rel="icon" href="icons/icon-512.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-512.png">
+    <meta name="theme-color" content="#0b0d14">
+    <link rel="stylesheet" href="AppInicio.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
+</head>
+<body>
+    <!-- Native-app-only home screen — reached after Acceder (Face ID or the
+         app-branded password form, see access-screen.js). Not the desktop
+         SaaS shell (Inicio-en.html/Dashboard.js) — a separate, minimal,
+         mobile-first page. -->
+    <main class="home-screen">
+        <header class="home-header">
+            <p class="home-hello" data-i18n="home.greeting">Hola,</p>
+            <h1 class="home-name" id="home-user-name">—</h1>
+        </header>
+
+        <section class="home-section">
+            <h2 class="home-section-title" data-i18n="home.quickAccess">Accesos rápidos</h2>
+            <div class="home-tiles" id="home-tiles">
+                <!-- rendered at runtime from /api/business/app-screens -->
+            </div>
+            <div class="home-empty" id="home-empty" hidden>
+                <i class="bx bx-mobile-alt" aria-hidden="true"></i>
+                <p data-i18n="home.emptyMessage">Todavía no hay pantallas de App asignadas a tu cuenta.</p>
+            </div>
+        </section>
+
+        <nav class="home-tabbar" aria-label="Main navigation">
+            <button type="button" class="home-tab active" id="home-tab-inicio">
+                <i class="bx bx-home" aria-hidden="true"></i>
+                <span data-i18n="home.tabHome">Inicio</span>
+            </button>
+            <button type="button" class="home-tab" id="home-tab-registrar">
+                <i class="bx bx-edit" aria-hidden="true"></i>
+                <span data-i18n="home.tabRegister">Registrar</span>
+            </button>
+            <button type="button" class="home-tab" id="home-tab-reportes">
+                <i class="bx bx-bar-chart-alt-2" aria-hidden="true"></i>
+                <span data-i18n="home.tabReports">Reportes</span>
+            </button>
+            <button type="button" class="home-tab" id="home-tab-perfil">
+                <i class="bx bx-user" aria-hidden="true"></i>
+                <span data-i18n="home.tabProfile">Perfil</span>
+            </button>
+        </nav>
+    </main>
+
+    <div class="home-toast-container" id="home-toast-container" aria-live="polite"></div>
+
+    <script src="AppInicio.js" defer></script>
+</body>
+</html>

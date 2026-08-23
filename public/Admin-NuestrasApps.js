@@ -14,7 +14,7 @@
 
 const catalogView = document.getElementById('apps-catalog-view');
 const detailView = document.getElementById('app-detail-view');
-const grid = document.getElementById('saas-app-grid');
+const tableBody = document.getElementById('saas-app-table-body');
 const emptyMsg = document.getElementById('apps-empty');
 const newAppBtn = document.getElementById('app-new-btn');
 
@@ -23,6 +23,8 @@ const editModalTitle = document.getElementById('app-edit-modal-title');
 const form = document.getElementById('app-form');
 const idField = document.getElementById('app-id');
 const nameField = document.getElementById('app-name');
+const sectorField = document.getElementById('app-sector');
+const statusField = document.getElementById('app-status');
 const iconField = document.getElementById('app-icon');
 const colorFromField = document.getElementById('app-color-from');
 const colorToField = document.getElementById('app-color-to');
@@ -33,12 +35,16 @@ const cancelBtn = document.getElementById('app-form-cancel');
 const screenModal = document.getElementById('app-screen-modal');
 const screenForm = document.getElementById('app-screen-form');
 const screenNameField = document.getElementById('app-screen-name');
+const screenWebKeyField = document.getElementById('app-screen-web-key');
 const screenTypeField = document.getElementById('app-screen-type');
 const screenFormError = document.getElementById('app-screen-form-error');
 const screenCancelBtn = document.getElementById('app-screen-form-cancel');
 
 let apps = [];
-let currentApp = null; // full detail (with screens/planNames) of the app open in detail view
+let currentApp = null; // full detail (with screens) of the app open in detail view
+let webScreenCatalog = []; // [{key, labelKey}], loaded once — see populateWebScreenSelect
+
+const STATUS_LABEL_KEY = { active: 'admin.planStatusActive', inactive: 'admin.planStatusInactive', development: 'menu.appStatusDevelopment' };
 
 function showError(el, message) {
     el.textContent = message;
@@ -49,23 +55,61 @@ function clearError(el) {
     el.textContent = '';
 }
 
+function webScreenLabel(key) {
+    const entry = webScreenCatalog.find((s) => s.key === key);
+    return entry ? Dashboard.t(entry.labelKey) : key;
+}
+
+async function populateWebScreenSelect() {
+    try {
+        const res = await fetch('/api/admin/web-screens-catalog', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        webScreenCatalog = data.screens || [];
+        screenWebKeyField.innerHTML = '';
+        webScreenCatalog.forEach((screen) => {
+            const option = document.createElement('option');
+            option.value = screen.key;
+            option.textContent = Dashboard.t(screen.labelKey);
+            screenWebKeyField.appendChild(option);
+        });
+    } catch {
+        // Leave the select empty — a failed load here shouldn't block the
+        // rest of the page; the add-screen modal just won't have options.
+    }
+}
+
 function renderApps() {
-    grid.innerHTML = '';
+    tableBody.innerHTML = '';
     emptyMsg.hidden = apps.length > 0;
     apps.forEach((app) => {
-        const card = document.createElement('div');
-        card.className = 'saas-app-card';
-        card.innerHTML = `
-            <div class="saas-app-icon" style="background:linear-gradient(135deg, ${app.colorFrom}, ${app.colorTo})">
-                <i class="bx ${app.icon}" aria-hidden="true"></i>
-            </div>
-            <h3>${app.name}</h3>
-            <p class="saas-app-meta">${app.screenCount > 0 ? Dashboard.t('menu.appScreenCount', { n: app.screenCount }) : Dashboard.t('menu.appNoScreens')}</p>
-            <span class="saas-app-status ${app.screenCount > 0 ? 'active' : 'empty'}">${app.screenCount > 0 ? Dashboard.t('admin.planStatusActive') : Dashboard.t('menu.appNoScreens')}</span>
-            <p class="saas-app-clients">${Dashboard.t('menu.appUsedByPlans', { n: app.planCount })}</p>
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <div class="saas-app-name-cell">
+                    <span class="saas-app-icon saas-app-icon-sm" style="background:linear-gradient(135deg, ${app.colorFrom}, ${app.colorTo})">
+                        <i class="bx ${app.icon}" aria-hidden="true"></i>
+                    </span>
+                    <b>${app.name}</b>
+                </div>
+            </td>
+            <td>${app.sector ? `<span class="sector-pill">${app.sector}</span>` : '—'}</td>
+            <td>${app.screenCount > 0 ? Dashboard.t('menu.appScreenCount', { n: app.screenCount }) : Dashboard.t('menu.appNoScreens')}</td>
+            <td><span class="saas-app-status ${app.status}">${Dashboard.t(STATUS_LABEL_KEY[app.status] || STATUS_LABEL_KEY.active)}</span></td>
+            <td>${app.createdAt ? app.createdAt.slice(0, 10) : '—'}</td>
+            <td>${app.createdBy || '—'}</td>
+            <td class="actions">
+                <button type="button" class="admin-icon-btn" aria-label="Edit" data-action="edit">
+                    <i class="bx bx-edit" aria-hidden="true"></i>
+                </button>
+            </td>
         `;
-        card.addEventListener('click', () => openDetail(app.id));
-        grid.appendChild(card);
+        row.querySelector('[data-action="edit"]').addEventListener('click', (event) => {
+            event.stopPropagation();
+            openEditModal(app);
+        });
+        row.addEventListener('click', () => openDetail(app.id));
+        tableBody.appendChild(row);
     });
 }
 
@@ -87,7 +131,8 @@ function renderDetail() {
     document.getElementById('app-detail-icon').style.background = `linear-gradient(135deg, ${currentApp.colorFrom}, ${currentApp.colorTo})`;
     document.getElementById('app-detail-icon').innerHTML = `<i class="bx ${currentApp.icon}" aria-hidden="true"></i>`;
     document.getElementById('app-detail-name').textContent = currentApp.name;
-    document.getElementById('app-detail-clients').textContent = Dashboard.t('menu.appUsedByPlans', { n: (currentApp.planNames || []).length });
+    document.getElementById('app-detail-clients').textContent =
+        `${currentApp.sector || '—'} · ${Dashboard.t(STATUS_LABEL_KEY[currentApp.status] || STATUS_LABEL_KEY.active)}`;
 
     const list = document.getElementById('app-screen-list');
     list.innerHTML = '';
@@ -96,7 +141,10 @@ function renderDetail() {
         row.className = 'saas-app-screen-row';
         row.innerHTML = `
             <div class="saas-app-screen-num">${i + 1}</div>
-            <div class="saas-app-screen-name">${screen.name}</div>
+            <div class="saas-app-screen-name">
+                ${screen.name}
+                <span class="saas-app-screen-link">${Dashboard.t('menu.appScreenWebLink')}: ${webScreenLabel(screen.webScreenKey)}</span>
+            </div>
             <div class="saas-app-screen-tag">${Dashboard.t(screen.screenType === 'readonly' ? 'menu.appScreenTypeReadonly' : 'menu.appScreenTypeGuided')}</div>
             <button type="button" class="admin-icon-btn admin-icon-btn-danger" aria-label="Delete" data-screen-id="${screen.id}">
                 <i class="bx bx-trash" aria-hidden="true"></i>
@@ -163,6 +211,7 @@ async function removeScreen(screenId) {
 function openCreateModal() {
     form.reset();
     idField.value = '';
+    statusField.value = 'active';
     editModalTitle.textContent = Dashboard.t('menu.addAppNew');
     submitBtn.textContent = Dashboard.t('admin.save');
     clearError(formError);
@@ -173,6 +222,8 @@ newAppBtn.addEventListener('click', openCreateModal);
 function openEditModal(app) {
     idField.value = app.id;
     nameField.value = app.name;
+    sectorField.value = app.sector || '';
+    statusField.value = app.status || 'active';
     iconField.value = app.icon;
     colorFromField.value = app.colorFrom;
     colorToField.value = app.colorTo;
@@ -192,7 +243,8 @@ form.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearError(formError);
     const name = nameField.value.trim();
-    if (!name) {
+    const sector = sectorField.value.trim();
+    if (!name || !sector) {
         showError(formError, Dashboard.t('admin.requiredFields'));
         return;
     }
@@ -204,7 +256,10 @@ form.addEventListener('submit', async (event) => {
             method: isCreate ? 'POST' : 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, icon: iconField.value, colorFrom: colorFromField.value, colorTo: colorToField.value }),
+            body: JSON.stringify({
+                name, sector, status: statusField.value,
+                icon: iconField.value, colorFrom: colorFromField.value, colorTo: colorToField.value,
+            }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -236,7 +291,8 @@ screenForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearError(screenFormError);
     const name = screenNameField.value.trim();
-    if (!name) {
+    const webScreenKey = screenWebKeyField.value;
+    if (!name || !webScreenKey) {
         showError(screenFormError, Dashboard.t('admin.requiredFields'));
         return;
     }
@@ -246,7 +302,7 @@ screenForm.addEventListener('submit', async (event) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, screenType: screenTypeField.value }),
+            body: JSON.stringify({ name, screenType: screenTypeField.value, webScreenKey }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -271,7 +327,7 @@ screenForm.addEventListener('submit', async (event) => {
             window.location.replace('Inicio-en.html');
             return;
         }
-        await loadApps();
+        await Promise.all([loadApps(), populateWebScreenSelect()]);
     } catch (err) {
         console.error('Admin (Nuestras APPs) failed to initialize:', err);
     }

@@ -24,6 +24,7 @@ const contactField = document.getElementById('client-contact');
 const emailField = document.getElementById('client-email');
 const phoneField = document.getElementById('client-phone');
 const planField = document.getElementById('client-plan');
+const sectorField = document.getElementById('client-sector');
 const statusField = document.getElementById('client-status');
 const missionField = document.getElementById('client-mission');
 const visionField = document.getElementById('client-vision');
@@ -65,6 +66,7 @@ const emptyMsg = document.getElementById('clients-empty');
 
 let clients = [];
 let plans = [];
+let sectors = []; // active Nuestras APPs sectors — [{sector, name, icon, colorFrom, colorTo}]
 
 function showError(message) {
     errorBanner.textContent = message;
@@ -275,7 +277,7 @@ function contractTermMonths(startDate, endDate) {
 const DATA_TABLE_CLIENT_COLUMNS = [
     'bigDateNumber', 'accountNumber', 'rfc', 'razonSocial', 'companyNickname', 'companyAbbreviation',
     'logo', 'institutionalColor', 'ownerName', 'contactName', 'billingEmail',
-    'contractStartDate', 'contractFile', 'contractWordFile', 'plan',
+    'contractStartDate', 'contractFile', 'contractWordFile', 'plan', 'sectorNegocio',
     'contractedCost', 'initialPayment', 'monthlyPayment',
     'costCenters', 'costCentersContracted', 'anexoChanges',
     'contractRegisteredDate', 'contractEndDate', 'contractTerm',
@@ -369,6 +371,17 @@ function renderClients() {
             `(${formatMoney(client.additionalCostCentersPayment || 0)} ${Dashboard.t('admin.additionalsCostCentersLabel')} + ${formatMoney(client.additionalPermissionsPayment || 0)} ${Dashboard.t('admin.additionalsPermissionsLabel')})`,
         );
 
+        const appToggleBtn = iconButton(
+            client.app_enabled ? 'bx-toggle-right' : 'bx-toggle-left',
+            Dashboard.t(client.app_enabled ? 'menu.appToggleOn' : 'menu.appToggleOff'),
+            () => toggleClientAppEnabled(client),
+            {
+                disabled: !canEditClients,
+                title: canEditClients ? Dashboard.t(client.app_enabled ? 'menu.appToggleOn' : 'menu.appToggleOff') : Dashboard.t('admin.clientEditNoPermission'),
+            },
+        );
+        appToggleBtn.classList.add(client.app_enabled ? 'admin-icon-btn-toggle-on' : 'admin-icon-btn-toggle-off');
+
         const tdActions = document.createElement('td');
         tdActions.className = 'admin-table-actions';
         tdActions.append(
@@ -390,6 +403,7 @@ function renderClients() {
                     title: canActivateClients ? '' : Dashboard.t('admin.clientActivateNoPermission'),
                 },
             ),
+            appToggleBtn,
         );
 
         tr.append(
@@ -408,6 +422,7 @@ function renderClients() {
             tdContract,
             tdContractWord,
             textCell(client.plan),
+            textCell(client.sector_negocio),
             textCell(formatMoney(client.contractedCostComputed)),
             textCell(formatMoney(client.initial_payment)),
             textCell(formatMoney(client.monthly_payment)),
@@ -475,6 +490,7 @@ function clientToPayload(client) {
         mission: client.mission, vision: client.vision, coreValues: client.core_values, history: client.history,
         rfc: client.rfc, companyNickname: client.company_nickname, companyAbbreviation: client.company_abbreviation,
         ownerName: client.owner_name, billingEmail: client.billing_email, razonSocial: client.razon_social,
+        sectorNegocio: client.sector_negocio,
         contractStartDate: client.contract_start_date, contractRegisteredDate: client.contract_registered_date,
         contractEndDate: client.contract_end_date, contractFileDataUrl: client.contract_file_data_url, contractFileName: client.contract_file_name,
         contractWordDataUrl: client.contract_word_data_url, contractWordFileName: client.contract_word_file_name,
@@ -510,6 +526,25 @@ async function toggleClientStatus(client) {
     }
 }
 
+// Independent from the rest of the record — its own dedicated route (see
+// PATCH /api/admin/clients/:id/app-enabled), same idea as toggleClientStatus
+// but never touches Estatus or anything else on the client.
+async function toggleClientAppEnabled(client) {
+    try {
+        const res = await fetch(`/api/admin/clients/${client.id}/app-enabled`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ enabled: !client.app_enabled }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        await loadClients();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
 function startEdit(client) {
     idField.value = client.id;
     companyField.value = client.company_name;
@@ -524,6 +559,13 @@ function startEdit(client) {
         planField.appendChild(option);
     }
     planField.value = client.plan || '';
+    if (client.sector_negocio && !sectorField.querySelector(`option[value="${CSS.escape(client.sector_negocio)}"]`)) {
+        const option = document.createElement('option');
+        option.value = client.sector_negocio;
+        option.textContent = client.sector_negocio;
+        sectorField.appendChild(option);
+    }
+    sectorField.value = client.sector_negocio || '';
     statusField.value = client.status;
     missionField.value = client.mission || '';
     visionField.value = client.vision || '';
@@ -622,6 +664,42 @@ async function loadPlans() {
     }
 }
 
+// --- Sector de Negocio: options come from Nuestras APPs' ACTIVE apps only ---
+// (see GET /api/admin/app-sectors) — an app in Desarrollo/Inactivo never
+// offers its sector here, same rule the server re-checks on save.
+function populateSectorSelect() {
+    const previousValue = sectorField.value;
+    sectorField.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
+    sectorField.querySelector('option[value=""]').textContent =
+        sectors.length ? Dashboard.t('menu.appSectorChoosePlaceholder') : Dashboard.t('menu.appSectorNoneAvailable');
+    sectors.forEach((s) => {
+        const option = document.createElement('option');
+        option.value = s.sector;
+        option.textContent = s.sector;
+        sectorField.appendChild(option);
+    });
+    // Same "don't silently erase a stale value" rule as populatePlanSelect.
+    if (previousValue && !sectors.some((s) => s.sector === previousValue)) {
+        const option = document.createElement('option');
+        option.value = previousValue;
+        option.textContent = previousValue;
+        sectorField.appendChild(option);
+    }
+    sectorField.value = previousValue;
+}
+
+async function loadSectors() {
+    try {
+        const res = await fetch('/api/admin/app-sectors', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        sectors = data.sectors || [];
+        populateSectorSelect();
+    } catch {
+        showError(Dashboard.t('admin.loadError'));
+    }
+}
+
 form.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearError();
@@ -653,6 +731,7 @@ form.addEventListener('submit', async (event) => {
         email,
         phone: phoneField.value.trim(),
         plan: planField.value.trim(),
+        sectorNegocio: sectorField.value.trim(),
         status: statusField.value,
         logoDataUrl: logoDataField.value || null,
         seedColor: seed,
@@ -1126,7 +1205,7 @@ function renderNewClientButton() {
         paletteWidget = window.ColorPalette.create(paletteContainer);
         document.addEventListener('dashboard:language-changed', () => paletteWidget.refreshLabels());
         renderNewClientButton();
-        await Promise.all([loadClients(), loadPlans(), loadModuleCatalog()]);
+        await Promise.all([loadClients(), loadPlans(), loadSectors(), loadModuleCatalog()]);
     } catch (err) {
         console.error('Admin (SaaS) failed to initialize:', err);
     }

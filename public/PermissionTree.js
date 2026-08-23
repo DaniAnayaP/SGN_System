@@ -140,7 +140,12 @@
     // badge instead, and allowedSectionIds is ignored (the whole tree shows,
     // not just the contracted slice), since the point is to see what's
     // blocked too, not just what's available.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null } = {}) {
+    // showAppTab: only Business-Roles.js (profile grants) and
+    // Business-Accesos.js (per-user extra grants) pass this — it's what a
+    // CLIENT's grants look like, so it doesn't make sense for Admin-Planes'
+    // plan-grants tree (a Plan isn't tied to any one client/sector anymore,
+    // see the Nuestras APPs redesign — plans.app_id is dead).
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false } = {}) {
         let sectionsData = [];
         let grantSet = new Set();
         // Which depth-0 sections and depth-1 items are expanded — set once
@@ -150,6 +155,19 @@
         // touches grantSet, so it can't change what's actually saved.
         let expandedSections = new Set();
         let expandedItems = new Set();
+        // { app: {id,name,sector,icon,colorFrom,colorTo} | null, screens: [...] }
+        // — this client's assigned App (see GET /api/business/app-screens),
+        // fetched once in init() when showAppTab is on.
+        let appInfo = { app: null, screens: [] };
+        let activeTab = 'web';
+        // Where the Web tree actually renders — stays `container` itself
+        // until renderTabs() (below) discovers there's a real App tab to
+        // show, at which point it becomes that tab's own pane div. Every
+        // existing render() call in this file keeps working unchanged
+        // either way, since it only ever touches `treeRoot`, never
+        // `container` directly.
+        let treeRoot = container;
+        let appPaneEl = null; // set by mountTabs() once init() finds a real App to show
 
         function isModuleEnabled(moduleKey) {
             return !enabledModuleKeys || enabledModuleKeys.includes(moduleKey);
@@ -447,7 +465,7 @@
         }
 
         function render() {
-            container.innerHTML = '';
+            treeRoot.innerHTML = '';
             sectionsData.forEach((section) => {
                 // A department section (anything but 'main') is gated as a
                 // whole by its own MODULE_CATALOG key — 'main' itself is
@@ -472,7 +490,7 @@
                         render();
                     });
                 }
-                container.appendChild(sectionRow.row);
+                treeRoot.appendChild(sectionRow.row);
                 if (!sectionExpanded) return;
 
                 section.items.forEach((item) => {
@@ -504,7 +522,7 @@
                             render();
                         });
                     }
-                    container.appendChild(itemRow.row);
+                    treeRoot.appendChild(itemRow.row);
                     if (!hasSubmenu || !itemExpanded) return;
 
                     item.submenu.forEach((sm) => {
@@ -519,7 +537,7 @@
                                     render();
                                 });
                             }
-                            container.appendChild(smRow.row);
+                            treeRoot.appendChild(smRow.row);
                             return;
                         }
 
@@ -552,7 +570,7 @@
                                 render();
                             });
                         }
-                        container.appendChild(smRow.row);
+                        treeRoot.appendChild(smRow.row);
                         if (!smExpandedNow) return;
 
                         sm.submenu.forEach((subSm) => {
@@ -585,17 +603,168 @@
                                     render();
                                 });
                             }
-                            container.appendChild(subRow.row);
+                            treeRoot.appendChild(subRow.row);
 
                             if (subSm.submenu && subSm.submenu.length) {
-                                renderTableColumns(container, section, item, sm, subSm, subBlocked);
+                                renderTableColumns(treeRoot, section, item, sm, subSm, subBlocked);
                             }
                             if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
-                                renderIconPermissions(container, section, item, sm, subSm, subBlocked);
+                                renderIconPermissions(treeRoot, section, item, sm, subSm, subBlocked);
                             }
                         });
                     });
                 });
+            });
+            // A Web-tab checkbox change already re-runs render() (see every
+            // .addEventListener('change', ...) above) — piggyback the App
+            // tab's own redraw on that same event instead of a separate
+            // listener, so its lock states never go stale.
+            if (appPaneEl) renderAppTab(appPaneEl);
+        }
+
+        // Is there at least one grant anywhere under this Web screen (its own
+        // visibility leaf, or any column inside it)? Scans grantSet directly
+        // rather than walking sectionsData — column-level grants (like
+        // app-screen grants themselves) never go through leafKeysUnder/
+        // expand(), so a structural walk would miss them; a flat prefix scan
+        // over the small live grantSet is simpler and always correct.
+        function isWebScreenGranted(screen) {
+            if (!screen.sectionId || !screen.itemId || !screen.submenuPrefix) return false;
+            const prefix = `${screen.sectionId}::${screen.itemId}::`;
+            for (const k of grantSet) {
+                if (!k.startsWith(prefix)) continue;
+                const submenuId = k.slice(prefix.length);
+                if (submenuId === screen.submenuPrefix || submenuId.startsWith(`${screen.submenuPrefix}/`)) return true;
+            }
+            return false;
+        }
+
+        // Same 3 mutually-exclusive levels + independent Autorizar as a
+        // Web column's own picker (COLUMN_LEVELS/COLUMN_AUTHORIZE above) —
+        // same grant ids too (so a screen's grants stay meaningful even if
+        // it's later re-pointed at a different Web screen), just a flatter
+        // "pill row" presentation per the confirmed mockup instead of an
+        // expandable tree row, and "Ver" instead of "Solo Ver" (the mockup's
+        // own reasoning: avoid reading as a duplicate of "Operar" once both
+        // sit side by side in one row rather than nested levels).
+        const APP_SCREEN_LEVELS = [
+            { id: 'solo-ver', labelKey: 'main.permVer' },
+            { id: 'ver-y-operar', labelKey: 'main.permVerYOperar' },
+            { id: 'editar', labelKey: 'main.permEditar' },
+        ];
+        const APP_SCREEN_AUTHORIZE = { id: 'autorizar', labelKey: 'main.permAutorizar' };
+
+        function renderAppScreenRow(paneEl, screen) {
+            const unlocked = isWebScreenGranted(screen);
+            const wrap = document.createElement('div');
+            wrap.className = 'perm-tree-app-row-wrap';
+
+            const row = document.createElement('div');
+            row.className = `perm-tree-app-row${unlocked ? '' : ' perm-tree-app-row-locked'}`;
+            const name = document.createElement('div');
+            name.className = 'perm-tree-app-row-name';
+            name.textContent = screen.name;
+            row.appendChild(name);
+
+            const picker = document.createElement('div');
+            picker.className = 'perm-tree-app-picker';
+            const makePill = (id, labelKey, onSelect) => {
+                const pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = 'perm-tree-app-pill';
+                pill.textContent = t(labelKey);
+                const key = keyOf('app-screens', String(screen.id), id);
+                if (grantSet.has(key)) pill.classList.add('selected');
+                pill.disabled = readOnly || !unlocked;
+                pill.addEventListener('click', () => {
+                    onSelect(key);
+                    renderAppTab(paneEl);
+                });
+                picker.appendChild(pill);
+            };
+            APP_SCREEN_LEVELS.forEach((level) => {
+                makePill(level.id, level.labelKey, (key) => {
+                    const nowSelected = !grantSet.has(key);
+                    if (nowSelected) {
+                        APP_SCREEN_LEVELS.forEach((other) => {
+                            if (other.id === level.id) return;
+                            grantSet.delete(keyOf('app-screens', String(screen.id), other.id));
+                        });
+                    }
+                    setKeys([key], nowSelected);
+                });
+            });
+            makePill(APP_SCREEN_AUTHORIZE.id, APP_SCREEN_AUTHORIZE.labelKey, (key) => {
+                setKeys([key], !grantSet.has(key));
+            });
+            row.appendChild(picker);
+            wrap.appendChild(row);
+
+            const note = document.createElement('div');
+            const webLabel = t(screen.webScreenLabelKey);
+            note.className = unlocked ? 'perm-tree-app-link-line' : 'perm-tree-app-lock-hint';
+            note.innerHTML = unlocked
+                ? `<i class="bx bx-link" aria-hidden="true"></i> ${t('main.appScreenLinkLine', { webScreen: webLabel })}`
+                : `<i class="bx bx-lock-alt" aria-hidden="true"></i> ${t('main.appScreenLockHint', { webScreen: webLabel })}`;
+            wrap.appendChild(note);
+
+            paneEl.appendChild(wrap);
+        }
+
+        // Re-run any time the Web tree changes too (see render()'s own call
+        // to this at its end) — a screen's lock state depends on LIVE,
+        // unsaved Web-tab grants, so checking a Web box should unlock its
+        // App sibling immediately, without waiting for a save.
+        function renderAppTab(paneEl) {
+            paneEl.innerHTML = '';
+            if (!appInfo.app) return;
+            const banner = document.createElement('div');
+            banner.className = 'perm-tree-app-banner';
+            banner.innerHTML = `<i class="bx ${appInfo.app.icon || 'bx-mobile-alt'}" aria-hidden="true"></i> ${t('main.appAssignedBanner', { name: appInfo.app.name })}`;
+            paneEl.appendChild(banner);
+            appInfo.screens.forEach((screen) => renderAppScreenRow(paneEl, screen));
+        }
+
+        // Only called when init() finds a real App with at least one screen
+        // to show — wraps the existing tree in a 2-tab shell (Sistema Web /
+        // Aplicación Móvil) and repoints treeRoot at the Web pane, so
+        // render() (completely unchanged otherwise) starts drawing into that
+        // pane instead of straight into `container`.
+        function mountTabs() {
+            container.innerHTML = '';
+            const tabs = document.createElement('div');
+            tabs.className = 'perm-tree-tabs';
+            const webBtn = document.createElement('button');
+            webBtn.type = 'button';
+            webBtn.className = 'perm-tree-tab active';
+            webBtn.innerHTML = `<i class="bx bx-desktop" aria-hidden="true"></i><span>${t('main.webTab')}</span>`;
+            const appBtn = document.createElement('button');
+            appBtn.type = 'button';
+            appBtn.className = 'perm-tree-tab';
+            appBtn.innerHTML = `<i class="bx bx-mobile-alt" aria-hidden="true"></i><span>${t('main.appTab')}</span>`;
+            tabs.append(webBtn, appBtn);
+
+            const webPane = document.createElement('div');
+            const appPane = document.createElement('div');
+            appPane.hidden = true;
+            container.append(tabs, webPane, appPane);
+
+            treeRoot = webPane;
+            appPaneEl = appPane;
+
+            webBtn.addEventListener('click', () => {
+                activeTab = 'web';
+                webBtn.classList.add('active');
+                appBtn.classList.remove('active');
+                webPane.hidden = false;
+                appPane.hidden = true;
+            });
+            appBtn.addEventListener('click', () => {
+                activeTab = 'app';
+                appBtn.classList.add('active');
+                webBtn.classList.remove('active');
+                webPane.hidden = true;
+                appPane.hidden = false;
             });
         }
 
@@ -705,6 +874,18 @@
                 // guessing which rows to auto-open.
                 expandedSections = new Set();
                 expandedItems = new Set();
+                if (showAppTab) {
+                    try {
+                        const res = await fetch('/api/business/app-screens', { credentials: 'include' });
+                        if (res.ok) appInfo = await res.json();
+                    } catch {
+                        appInfo = { app: null, screens: [] };
+                    }
+                    // Nothing to show a tab FOR yet — a client with no App
+                    // assigned, or one whose App has zero screens built —
+                    // stays exactly the single-tree view it always was.
+                    if (appInfo.app && appInfo.screens.length) mountTabs();
+                }
                 render();
             },
             getGrants() {

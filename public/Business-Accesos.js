@@ -106,7 +106,7 @@ async function openGrantAccessModal(user) {
         const res = await fetch(`/api/business/users/${user.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        grantTree = window.PermissionTree.create(grantAccessContainer, { allowedSectionIds, costCenters });
+        grantTree = window.PermissionTree.create(grantAccessContainer, { allowedSectionIds, costCenters, showAppTab: true });
         await grantTree.init(data.grants || []);
     } catch {
         grantAccessError.textContent = Dashboard.t('admin.loadError');

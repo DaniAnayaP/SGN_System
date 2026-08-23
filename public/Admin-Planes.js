@@ -51,32 +51,11 @@ const createdAtField = document.getElementById('plan-created-at');
 const createdByField = document.getElementById('plan-created-by');
 const endDateField = document.getElementById('plan-end-date');
 const costCentersLimitField = document.getElementById('plan-cost-centers-limit');
-const appIdField = document.getElementById('plan-app-id');
 const errorBanner = document.getElementById('plan-form-error');
 const submitBtn = document.getElementById('plan-form-submit');
 const cancelBtn = document.getElementById('plan-form-cancel');
 const tableBody = document.getElementById('plan-table-body');
 const emptyMsg = document.getElementById('plan-empty');
-
-// Nuestras APPs catalog, loaded once — populates plan-app-id's options so
-// each plan can pick which app its clients' phones show (see
-// Admin-NuestrasApps.js for where these apps themselves get built).
-async function populateAppSelect() {
-    try {
-        const res = await fetch('/api/admin/saas-apps', { credentials: 'include' });
-        if (!res.ok) return;
-        const { apps } = await res.json();
-        (apps || []).forEach((app) => {
-            const option = document.createElement('option');
-            option.value = app.id;
-            option.textContent = app.name;
-            appIdField.appendChild(option);
-        });
-    } catch {
-        // Leave just the "None yet" option — a failed load here shouldn't
-        // block opening/saving the plan itself.
-    }
-}
 
 const treeModal = document.getElementById('plan-tree-modal');
 const treeModalTitle = document.getElementById('plan-tree-modal-title');
@@ -370,7 +349,6 @@ function openEditModal(plan) {
     createdByField.value = plan.createdBy || '';
     endDateField.value = plan.endDate || '';
     costCentersLimitField.value = plan.costCentersLimit || 0;
-    appIdField.value = plan.appId || '';
     editOnlyFields.hidden = false;
     editModalTitle.textContent = Dashboard.t('admin.planEditTitle');
     submitBtn.textContent = Dashboard.t('admin.save');
@@ -438,7 +416,6 @@ form.addEventListener('submit', async (event) => {
     const createdAt = createdAtField.value || null;
     const createdBy = createdByField.value.trim();
     const endDate = endDateField.value || null;
-    const appId = appIdField.value ? Number(appIdField.value) : null;
 
     const editingId = idField.value;
     const isCreate = !editingId;
@@ -449,7 +426,7 @@ form.addEventListener('submit', async (event) => {
             method: isCreate ? 'POST' : 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, description, costCentersLimit, createdAt, createdBy, endDate, appId }),
+            body: JSON.stringify({ name, description, costCentersLimit, createdAt, createdBy, endDate }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -600,7 +577,7 @@ document.addEventListener('dashboard:language-changed', () => {
             return;
         }
         renderNewPlanButton();
-        await Promise.all([loadPlans(), populateAppSelect()]);
+        await loadPlans();
     } catch (err) {
         console.error('Admin (Planes) failed to initialize:', err);
     }

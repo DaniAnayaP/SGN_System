@@ -489,6 +489,143 @@ margin: -15px 0 15px;
     font-weight: 600;
 }
 
+/* Face ID scanning screen — shown while the native OS prompt runs (see
+   attemptBiometric in access-screen.js). Same [hidden]-vs-class-display
+   specificity fix as every other .access-* panel above. */
+.access-scan-screen{
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+.access-scan-screen[hidden]{
+    display: none;
+}
+.access-scan-circle{
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #1c1f30;
+    border: 2px solid #2a3255;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    color: #5b6b9e;
+    margin-bottom: 0.6rem;
+}
+.access-scan-title{
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #fff;
+    margin: 0;
+}
+.access-scan-sub{
+    font-size: 0.72rem;
+    color: #9BA3C4;
+    margin: 0;
+}
+
+/* App-branded login form — reached from "Usuario y contraseña" (or a
+   failed Face ID attempt). Same fields/validation as the web login form
+   below it, just styled to match this dark screen instead of the light
+   split-panel design. */
+.access-password-screen{
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4.5rem 1.6rem 2rem;
+}
+.access-password-screen[hidden]{
+    display: none;
+}
+.access-pw-back{
+    position: absolute;
+    top: 1.4rem;
+    left: 1.2rem;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    border: none;
+    background: #171b2c;
+    color: #c7cce8;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.access-pw-mark{
+    width: 64px;
+    height: 64px;
+    margin-bottom: 1.2rem;
+}
+.access-pw-title{
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #fff;
+    margin: 0 0 1.4rem;
+}
+.access-pw-form{
+    width: 100%;
+    max-width: 20rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+.access-pw-field{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: #171b2c;
+    border: 1px solid #232640;
+    border-radius: 0.7rem;
+    padding: 0.7rem 0.9rem;
+}
+.access-pw-field i:first-child{
+    color: #5b6b9e;
+    font-size: 1rem;
+}
+.access-pw-field input{
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.85rem;
+    outline: none;
+}
+.access-pw-field input::placeholder{
+    color: #5b6b9e;
+}
+.access-pw-toggle{
+    background: none;
+    border: none;
+    color: #5b6b9e;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+}
+.access-pw-error{
+    font-size: 0.72rem;
+    color: #ff8a80;
+    margin: -0.2rem 0 0;
+}
+.access-pw-error[hidden]{
+    display: none;
+}
+#access-pw-submit{
+    margin-top: 0.4rem;
+}
+
 .toggle-box{
     position: absolute;
     width: 100%;

@@ -44,6 +44,7 @@ const {
     getClientProfile,
     createClient,
     updateClient,
+    setClientAppEnabled,
     updateClientBranding,
     findClientByRfc,
     getModuleCosts,
@@ -142,6 +143,9 @@ const {
     deleteSaasApp,
     addSaasAppScreen,
     deleteSaasAppScreen,
+    listActiveAppSectors,
+    getClientAppScreens,
+    WEB_SCREEN_CATALOG,
     getPlanGrants,
     setPlanGrants,
     syncPlanModulesFromGrants,
@@ -660,7 +664,7 @@ function extractClientFields(body) {
         rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
         contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
         contractWordDataUrl, contractWordFileName,
-        monthlyPayment, initialPayment,
+        monthlyPayment, initialPayment, sectorNegocio,
     } = body;
     return {
         companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
@@ -672,8 +676,21 @@ function extractClientFields(body) {
         // updateClient hace COALESCE(@contractedCost, contracted_cost), así
         // que mandar null aquí congela el valor histórico en vez de
         // ponerlo en 0 en cada guardado futuro.
-        contractedCost: null, monthlyPayment, initialPayment,
+        contractedCost: null, monthlyPayment, initialPayment, sectorNegocio,
     };
+}
+
+// A client's Sector de Negocio must match one of the currently-ACTIVE
+// Nuestras APPs' sectors (Inactivo/Desarrollo apps never appear in the
+// picker, and the server enforces that too, not just the UI) — blank is
+// always fine (client with no App assigned yet).
+function validateSectorNegocio(sectorNegocio) {
+    if (!sectorNegocio) return null;
+    const active = listActiveAppSectors();
+    if (!active.some((s) => s.sector === sectorNegocio)) {
+        return 'El Sector de Negocio elegido no corresponde a ninguna App activa.';
+    }
+    return null;
 }
 
 app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
@@ -682,6 +699,8 @@ app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     }
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
+    const sectorError = validateSectorNegocio(req.body.sectorNegocio);
+    if (sectorError) return res.status(400).json({ message: sectorError });
     const rfc = (req.body.rfc || '').trim();
     if (rfc && findClientByRfc(rfc)) {
         return res.status(409).json({ message: 'A client with that RFC already exists.' });
@@ -711,6 +730,8 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     }
     const error = validateClientBody(req.body);
     if (error) return res.status(400).json({ message: error });
+    const sectorError = validateSectorNegocio(req.body.sectorNegocio);
+    if (sectorError) return res.status(400).json({ message: sectorError });
     const rfc = (req.body.rfc || '').trim();
     if (rfc && findClientByRfc(rfc, existing.id)) {
         return res.status(409).json({ message: 'A client with that RFC already exists.' });
@@ -731,6 +752,19 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     applyEffectiveEntitlements(client.id);
     const generatedAdmin = await applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin });
+});
+
+// Independent on/off switch for whether this client can use the mobile App
+// at all (separate from Editar — the Acciones icon in Nuestros Clientes),
+// same 'saas-clients'/'editar' grant as the rest of the record.
+app.patch('/api/admin/clients/:id/app-enabled', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar clientes.' });
+    }
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    const client = setClientAppEnabled(req.params.id, !!req.body?.enabled);
+    res.json({ client });
 });
 
 // No hard-delete route: a client can only ever be Edited or Activado/
@@ -961,7 +995,7 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
 app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    const { status, endDate, currency, costPerCostCenter, createdAt, createdBy, appId } = req.body || {};
+    const { status, endDate, currency, costPerCostCenter, createdAt, createdBy } = req.body || {};
     // The FIRST Revisión -> Activo transition only ever happens through the
     // gated POST .../activate below (requires the 'activate' SaaS grant) —
     // this plain PATCH can never do that one. Once a plan has been through
@@ -1026,7 +1060,6 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
             costPerCostCenter,
             createdAt,
             createdBy: createdBy != null ? createdBy.trim() : undefined,
-            appId,
         });
         logPlanChange({ planId: plan.id, action: 'update', changedBy: req.user.name });
         if (currency !== undefined && currency !== existing.currency) {
@@ -1177,8 +1210,23 @@ app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) =>
 // saas_apps/saas_app_screens comment in db.js. Same 'saas-apps' grant
 // shape (Ver/Editar/Crear) as saas-clients/saas-plans above, checked
 // against Equipo SaaS's SAAS_PERMISSION_CATALOG.
+const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
+
 app.get('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
     res.json({ apps: listSaasApps() });
+});
+
+// Read-only lookup behind the "Sector de Negocio" picker in Nuestros
+// Clientes — only ACTIVE apps' sectors are offered (see validateSectorNegocio
+// above, which enforces the same rule server-side on save).
+app.get('/api/admin/app-sectors', requireAuth, requireAdmin, (req, res) => {
+    res.json({ sectors: listActiveAppSectors() });
+});
+
+// The fixed catalog of Web screens/tables an App screen can map to — same
+// keys as db.js's TABLE_GRANT_PATHS, see the "add screen" modal.
+app.get('/api/admin/web-screens-catalog', requireAuth, requireAdmin, (req, res) => {
+    res.json({ screens: WEB_SCREEN_CATALOG });
 });
 
 app.get('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
@@ -1191,14 +1239,20 @@ app.post('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
     if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'crear')) {
         return res.status(403).json({ message: 'No tienes permiso para crear apps.' });
     }
-    const { name, icon, colorFrom, colorTo } = req.body || {};
+    const { name, icon, colorFrom, colorTo, sector, status } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
+    if (status !== undefined && !SAAS_APP_STATUSES.includes(status)) {
+        return res.status(400).json({ message: 'Estatus inválido.' });
+    }
     try {
-        const app_ = createSaasApp({ name: name.trim(), icon, colorFrom, colorTo });
+        const app_ = createSaasApp({
+            name: name.trim(), icon, colorFrom, colorTo,
+            sector: (sector || '').trim(), status, createdBy: req.user.name,
+        });
         res.status(201).json({ app: app_ });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return res.status(409).json({ message: 'Ya existe una app con ese nombre.' });
+            return res.status(409).json({ message: 'Ya existe una app con ese nombre o ese sector.' });
         }
         throw err;
     }
@@ -1210,8 +1264,22 @@ app.patch('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
     }
     const existing = getSaasAppById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'App not found.' });
-    const { name, icon, colorFrom, colorTo } = req.body || {};
-    res.json({ app: updateSaasApp(req.params.id, { name, icon, colorFrom, colorTo }) });
+    const { name, icon, colorFrom, colorTo, sector, status } = req.body || {};
+    if (status !== undefined && !SAAS_APP_STATUSES.includes(status)) {
+        return res.status(400).json({ message: 'Estatus inválido.' });
+    }
+    try {
+        const app_ = updateSaasApp(req.params.id, {
+            name, icon, colorFrom, colorTo,
+            sector: sector !== undefined ? sector.trim() : undefined, status,
+        });
+        res.json({ app: app_ });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'Ya existe una app con ese nombre o ese sector.' });
+        }
+        throw err;
+    }
 });
 
 app.delete('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
@@ -1230,9 +1298,15 @@ app.post('/api/admin/saas-apps/:id/screens', requireAuth, requireAdmin, (req, re
     }
     const existing = getSaasAppById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'App not found.' });
-    const { name, screenType } = req.body || {};
+    const { name, screenType, webScreenKey } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre de la pantalla es requerido.' });
-    res.status(201).json({ app: addSaasAppScreen(req.params.id, { name: name.trim(), screenType }) });
+    // Every App screen fills a real Web table — see WEB_SCREEN_CATALOG in
+    // db.js. This is what lets the permission tree lock an App screen until
+    // its Web sibling already has at least one grant.
+    if (!WEB_SCREEN_CATALOG.some((s) => s.key === webScreenKey)) {
+        return res.status(400).json({ message: 'Selecciona a qué pantalla Web corresponde.' });
+    }
+    res.status(201).json({ app: addSaasAppScreen(req.params.id, { name: name.trim(), screenType, webScreenKey }) });
 });
 
 app.delete('/api/admin/saas-apps/:id/screens/:screenId', requireAuth, requireAdmin, (req, res) => {
@@ -1328,6 +1402,15 @@ app.get('/api/business/contracted-modules', requireAuth, (req, res) => {
 // user AT a client can see their own company's branding, not just that
 // client's admin (everyone on the team sees the same sidebar identity).
 // GEIPSA/SGN staff (no clientId) get a 404: there's no client to brand for.
+// Backs the "Aplicación Móvil" tab in the permission tree (Otorgar Accesos /
+// Nuestros Perfiles) and, later, the mobile home screen — any authenticated
+// business user can read it (same visibility as branding/client-data above),
+// it's just "what App does my company have" info, nothing sensitive.
+app.get('/api/business/app-screens', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json(getClientAppScreens(req.user.clientId));
+});
+
 app.get('/api/business/branding', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const branding = getClientBranding(req.user.clientId);

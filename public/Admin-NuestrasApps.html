@@ -347,12 +347,27 @@
         </div>
 
         <section class="admin-panel" id="apps-catalog-view">
-            <p class="admin-subtitle" data-i18n="admin.appsSubtitle">Design the guided-screen app experience for each business vertical — one plan picks one app.</p>
+            <p class="admin-subtitle" data-i18n="admin.appsSubtitle">Each App belongs to one Sector de Negocio — a client's own Sector (Nuestros Clientes) is what decides which App its phones show.</p>
             <div class="admin-toolbar">
                 <button type="button" class="btn" id="app-new-btn" data-i18n="menu.addAppNew">+ Create New App</button>
             </div>
-            <div class="saas-app-grid" id="saas-app-grid">
-                <!-- rendered at runtime -->
+            <div class="data-table-wrapper" data-table-id="nuestras-apps">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="admin.planName" data-col="name">App name</th>
+                            <th data-i18n="menu.appSector" data-col="sector">Business sector</th>
+                            <th data-i18n="menu.appScreenAssignment" data-col="screens">Screen assignment</th>
+                            <th data-i18n="admin.planStatus" data-col="status">Status</th>
+                            <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
+                            <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
+                            <th data-col="actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="saas-app-table-body">
+                        <!-- rendered at runtime -->
+                    </tbody>
+                </table>
             </div>
             <p id="apps-empty" class="admin-empty" data-i18n="admin.noApps" hidden>No apps yet. Add the first one above.</p>
         </section>
@@ -396,6 +411,18 @@
                         <input id="app-name" name="name" type="text" required>
                     </div>
                     <div class="admin-field">
+                        <label for="app-sector" data-i18n="menu.appSector">Business sector</label>
+                        <input id="app-sector" name="sector" type="text" required data-i18n-placeholder="menu.appSectorPlaceholder" placeholder="e.g. Transporte / 3PL">
+                    </div>
+                    <div class="admin-field">
+                        <label for="app-status" data-i18n="admin.planStatus">Status</label>
+                        <select id="app-status" name="status">
+                            <option value="active" data-i18n="admin.planStatusActive">Active</option>
+                            <option value="inactive" data-i18n="admin.planStatusInactive">Inactive</option>
+                            <option value="development" data-i18n="menu.appStatusDevelopment">Development</option>
+                        </select>
+                    </div>
+                    <div class="admin-field">
                         <label for="app-icon" data-i18n="admin.appIcon">Icon</label>
                         <select id="app-icon" name="icon">
                             <option value="bx-truck">🚚 Transporte / 3PL</option>
@@ -431,6 +458,12 @@
                     <div class="admin-field">
                         <label for="app-screen-name" data-i18n="menu.appScreenName">Screen name</label>
                         <input id="app-screen-name" name="name" type="text" required>
+                    </div>
+                    <div class="admin-field">
+                        <label for="app-screen-web-key" data-i18n="menu.appScreenWebLink">Fills which Web screen</label>
+                        <select id="app-screen-web-key" name="webScreenKey" required>
+                            <!-- populated at runtime from /api/admin/web-screens-catalog -->
+                        </select>
                     </div>
                     <div class="admin-field">
                         <label for="app-screen-type" data-i18n="menu.appScreenType">Screen type</label>

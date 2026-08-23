@@ -36,10 +36,6 @@
         <div class="access-name">SGN</div>
         <div class="access-tag" data-i18n="login.accessTagline">Sistema de Gestión de Negocios</div>
         <div class="access-spinner" id="access-spinner"></div>
-        <button type="button" class="access-btn" id="access-btn" hidden>
-            <i class="bx bx-log-in" aria-hidden="true"></i>
-            <span data-i18n="login.accessButton">Acceder</span>
-        </button>
         <button type="button" class="access-peek" id="access-peek" hidden aria-label="Show sign-in options">
             <i class="bx bx-chevron-up" aria-hidden="true"></i>
         </button>
@@ -55,6 +51,53 @@
                     <span class="access-icon-caption" data-i18n="login.accessWithPassword">Usuario y contraseña</span>
                 </button>
             </div>
+        </div>
+
+        <!-- Shown while the native OS Face ID/fingerprint prompt is running
+             (see attemptBiometric in access-screen.js) — purely cosmetic
+             branding around that call; the actual scan is 100% handled by
+             the phone's own sensor, nothing captured or stored here. -->
+        <div class="access-scan-screen" id="access-scan-screen" hidden>
+            <span class="access-scan-circle"><i class="bx bx-scan" aria-hidden="true"></i></span>
+            <p class="access-scan-title" data-i18n="login.accessScanning">Mirando tu rostro...</p>
+            <p class="access-scan-sub" id="access-scan-sub" data-i18n="login.accessScanningSub">Face ID de tu celular</p>
+        </div>
+
+        <!-- App-branded login (dark, matches this screen) — same
+             /api/auth/login the web form uses, just a different look and
+             reached only from here. Username/password are already the
+             account's real Sistema Web credentials, nothing separate. -->
+        <div class="access-password-screen" id="access-password-screen" hidden>
+            <button type="button" class="access-pw-back" id="access-pw-back" aria-label="Back">
+                <i class="bx bx-chevron-left" aria-hidden="true"></i>
+            </button>
+            <div class="access-mark access-pw-mark">
+                <svg viewBox="0 0 1024 1024" width="100%" height="100%">
+                    <path d="M320 700 L320 470 Q320 320 512 320 Q704 320 704 470" stroke="#FFFFFF" stroke-width="72" fill="none" stroke-linecap="round"/>
+                    <circle cx="704" cy="560" r="62" fill="#FFFFFF"/>
+                    <circle cx="320" cy="700" r="62" fill="#7FE1FF"/>
+                </svg>
+            </div>
+            <p class="access-pw-title" data-i18n="login.loginHeading">Login</p>
+            <form id="access-password-form" class="access-pw-form" novalidate>
+                <div class="access-pw-field">
+                    <i class="bx bxs-user" aria-hidden="true"></i>
+                    <label for="access-pw-username" class="sr-only" data-i18n="login.usernameLabel">Username</label>
+                    <input id="access-pw-username" type="text" autocomplete="username" data-i18n-placeholder="login.usernamePlaceholder" placeholder="Username" required>
+                </div>
+                <div class="access-pw-field">
+                    <i class="bx bx-lock-alt" aria-hidden="true"></i>
+                    <label for="access-pw-password" class="sr-only" data-i18n="login.passwordLabel">Password</label>
+                    <input id="access-pw-password" type="password" autocomplete="current-password" data-i18n-placeholder="login.passwordPlaceholder" placeholder="Password" required>
+                    <button type="button" class="access-pw-toggle" id="access-pw-toggle" data-i18n-aria="login.showPassword" aria-label="Show password">
+                        <i class="bx bx-hide" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <p id="access-pw-error" class="access-pw-error" role="alert" hidden></p>
+                <button type="submit" class="access-btn" id="access-pw-submit">
+                    <span data-i18n="login.loginButton">Login</span>
+                </button>
+            </form>
         </div>
     </div>
 

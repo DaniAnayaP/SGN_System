@@ -613,6 +613,18 @@ if (!clientColumns.some((c) => c.name === 'account_number')) {
         ) WHERE account_number IS NULL
     `);
 }
+// Sector de Negocio: replaces the old plans.app_id link (a Plan is no longer
+// what decides a client's mobile-app experience). Free text matching
+// saas_apps.sector, same "no FK" convention as clients.plan -- renaming or
+// retiring an app here never breaks an existing client record. app_enabled
+// is the independent on/off toggle in Nuestros Clientes' Acciones column
+// (a client can have a sector assigned but still be switched off).
+if (!clientColumns.some((c) => c.name === 'sector_negocio')) {
+    db.exec("ALTER TABLE clients ADD COLUMN sector_negocio TEXT NOT NULL DEFAULT ''");
+}
+if (!clientColumns.some((c) => c.name === 'app_enabled')) {
+    db.exec('ALTER TABLE clients ADD COLUMN app_enabled INTEGER NOT NULL DEFAULT 0');
+}
 
 const costCenterColumns = db.prepare('PRAGMA table_info(cost_centers)').all();
 // Same "no hard-delete, only Activar/Desactivar" rule as clients, for the
@@ -766,11 +778,40 @@ if (!planColumns.some((c) => c.name === 'currency')) {
 if (!planColumns.some((c) => c.name === 'cost_per_cost_center')) {
     db.exec('ALTER TABLE plans ADD COLUMN cost_per_cost_center REAL NOT NULL DEFAULT 0');
 }
-// Which Nuestras APPs entry this plan's clients get on their phone —
-// nullable (existing plans predate this and simply show nothing app-side
-// until someone picks one), never enforced NOT NULL for that reason.
+// DEPRECATED: a Plan no longer decides a client's mobile-app experience —
+// that's now clients.sector_negocio, matched against saas_apps.sector (see
+// Nuestras APPs redesign). Column kept (never drop columns in this file) but
+// nothing reads or writes it anymore.
 if (!planColumns.some((c) => c.name === 'app_id')) {
     db.exec('ALTER TABLE plans ADD COLUMN app_id INTEGER REFERENCES saas_apps(id)');
+}
+
+// Nuestras APPs gains: sector (the business vertical this app serves —
+// what clients.sector_negocio is matched against, one app per sector),
+// status (Activo/Inactivo/Desarrollo — only 'active' apps' sectors are
+// offered on the client Sector picker), created_by (who made it, shown in
+// the table). Partial unique index (like idx_clients_rfc) so multiple
+// still-blank sectors from before this migration don't collide.
+const saasAppColumns = db.prepare('PRAGMA table_info(saas_apps)').all();
+if (!saasAppColumns.some((c) => c.name === 'sector')) {
+    db.exec("ALTER TABLE saas_apps ADD COLUMN sector TEXT NOT NULL DEFAULT ''");
+}
+if (!saasAppColumns.some((c) => c.name === 'status')) {
+    db.exec("ALTER TABLE saas_apps ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+}
+if (!saasAppColumns.some((c) => c.name === 'created_by')) {
+    db.exec("ALTER TABLE saas_apps ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_saas_apps_sector ON saas_apps(sector) WHERE sector != \'\'');
+
+// Each App screen must map to a real Web screen/table (one of
+// TABLE_GRANT_PATHS' keys, below) — it fills that same table's data, just
+// through a more guided/mobile-friendly UI. Enforced at creation (see
+// addSaasAppScreen); this is what lets the permission tree lock an App
+// screen's grant picker until its Web sibling already has one.
+const saasAppScreenColumns = db.prepare('PRAGMA table_info(saas_app_screens)').all();
+if (!saasAppScreenColumns.some((c) => c.name === 'web_screen_key')) {
+    db.exec("ALTER TABLE saas_app_screens ADD COLUMN web_screen_key TEXT NOT NULL DEFAULT ''");
 }
 
 // plan_grants: same {sectionId, itemId, submenuId} shape as profile_grants —
@@ -1299,7 +1340,7 @@ function createClient({
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
     contractWordDataUrl, contractWordFileName,
-    contractedCost, monthlyPayment, initialPayment,
+    contractedCost, monthlyPayment, initialPayment, sectorNegocio,
 }) {
     const create = db.transaction(() => {
         const accountNumber = db.prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM clients').get().n;
@@ -1311,7 +1352,7 @@ function createClient({
                     rfc, company_nickname, company_abbreviation, owner_name, billing_email, razon_social, big_date_number, account_number,
                     contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
                     contract_word_data_url, contract_word_file_name,
-                    contracted_cost, monthly_payment, initial_payment
+                    contracted_cost, monthly_payment, initial_payment, sector_negocio
                 )
                 VALUES (
                     @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
@@ -1319,7 +1360,7 @@ function createClient({
                     @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @razonSocial, @bigDateNumber, @accountNumber,
                     @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
                     @contractWordDataUrl, @contractWordFileName,
-                    @contractedCost, @monthlyPayment, @initialPayment
+                    @contractedCost, @monthlyPayment, @initialPayment, @sectorNegocio
                 )
             `)
             .run({
@@ -1334,6 +1375,7 @@ function createClient({
                 contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
                 contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
                 contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
+                sectorNegocio: sectorNegocio || '',
             }).lastInsertRowid;
     });
     return getClientById(create());
@@ -1351,8 +1393,9 @@ function updateClient(id, {
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
     contractWordDataUrl, contractWordFileName,
-    contractedCost, monthlyPayment, initialPayment,
+    contractedCost, monthlyPayment, initialPayment, sectorNegocio,
 }) {
+    const existing = getClientById(id);
     db.prepare(`
         UPDATE clients
         SET company_name = @companyName, contact_name = @contactName, email = @email,
@@ -1366,7 +1409,7 @@ function updateClient(id, {
             contract_end_date = @contractEndDate, contract_file_data_url = @contractFileDataUrl, contract_file_name = @contractFileName,
             contract_word_data_url = @contractWordDataUrl, contract_word_file_name = @contractWordFileName,
             contracted_cost = COALESCE(@contractedCost, contracted_cost),
-            monthly_payment = @monthlyPayment, initial_payment = @initialPayment
+            monthly_payment = @monthlyPayment, initial_payment = @initialPayment, sector_negocio = @sectorNegocio
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
@@ -1379,7 +1422,17 @@ function updateClient(id, {
         contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
         contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
         contractedCost: contractedCost ?? null, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
+        sectorNegocio: sectorNegocio ?? (existing ? existing.sector_negocio : '') ?? '',
     });
+    return getClientById(id);
+}
+
+// Independent from the rest of the client record (own PATCH route, its own
+// icon in Nuestros Clientes' Acciones column) — a client can have a Sector
+// assigned but still be switched off, same idea as a Plan's own
+// active/inactive status being separate from its definition fields.
+function setClientAppEnabled(id, enabled) {
+    db.prepare('UPDATE clients SET app_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, id);
     return getClientById(id);
 }
 
@@ -2822,7 +2875,6 @@ function deserializePlan(row) {
         endDate: end_date || '',
         locked: !!locked,
         costPerCostCenter: cost_per_cost_center || 0,
-        appId: app_id || null,
     };
 }
 
@@ -2865,14 +2917,14 @@ function createPlan({ name, description, modules, costCentersLimit, createdBy })
 // concern from the frozen access-tree definition (see Costo Accesos-Permisos).
 function updatePlan(id, {
     name, description, modules, costCentersLimit, status, endDate, currency, costPerCostCenter,
-    createdAt, createdBy, appId,
+    createdAt, createdBy,
 }) {
     const existing = getPlanById(id);
     db.prepare(`
         UPDATE plans SET name = @name, description = @description, modules = @modules,
             cost_centers_limit = @costCentersLimit, status = @status, end_date = @endDate,
             currency = @currency, cost_per_cost_center = @costPerCostCenter,
-            created_at = @createdAt, created_by = @createdBy, app_id = @appId
+            created_at = @createdAt, created_by = @createdBy
         WHERE id = @id
     `).run({
         id,
@@ -2886,7 +2938,6 @@ function updatePlan(id, {
         costPerCostCenter: costPerCostCenter ?? existing.costPerCostCenter ?? 0,
         createdAt: createdAt ?? existing.created_at,
         createdBy: (createdBy ?? existing.createdBy) || '',
-        appId: appId !== undefined ? appId : (existing.appId ?? null),
     });
     return getPlanById(id);
 }
@@ -2911,50 +2962,111 @@ function deletePlan(id) {
 }
 
 // --- Nuestras APPs ---------------------------------------------------------
+// Catalog of Web screens/tables an App screen is allowed to map to — the
+// same keys TABLE_GRANT_PATHS above already uses for column-level
+// permissions, so "which table does this App screen fill" and "how do we
+// check its permission grants" are always the same key, never two catalogs
+// drifting apart.
+// labelKey matches that screen's own entry in menu.json exactly, so the
+// "which Web screen" picker always shows the same name (in whichever
+// language is active) as the screen itself does everywhere else.
+const WEB_SCREEN_CATALOG = [
+    { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
+    { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
+    { key: 'mi-recurso-humano', labelKey: 'menu.opRrhhMiRecursoHumano' },
+    { key: 'transacciones-inteligentes', labelKey: 'menu.smartBusinessTransactions' },
+    { key: 'reportes-programados', labelKey: 'menu.scheduledReportsScreen' },
+    { key: 'reglas-orden-llenado', labelKey: 'menu.fieldRulesGroup' },
+];
+
 function deserializeSaasApp(row) {
     if (!row) return row;
-    const { color_from, color_to, created_at, ...rest } = row;
-    return { ...rest, colorFrom: color_from, colorTo: color_to, createdAt: created_at };
+    const { color_from, color_to, created_at, created_by, ...rest } = row;
+    return { ...rest, colorFrom: color_from, colorTo: color_to, createdAt: created_at, createdBy: created_by || '' };
 }
 
 function listSaasApps() {
     const apps = db.prepare('SELECT * FROM saas_apps ORDER BY name ASC').all().map(deserializeSaasApp);
     const screenCounts = db.prepare('SELECT app_id, COUNT(*) AS n FROM saas_app_screens GROUP BY app_id').all();
-    const planCounts = db.prepare("SELECT app_id, COUNT(*) AS n FROM plans WHERE app_id IS NOT NULL GROUP BY app_id").all();
     const screenMap = Object.fromEntries(screenCounts.map((r) => [r.app_id, r.n]));
-    const planMap = Object.fromEntries(planCounts.map((r) => [r.app_id, r.n]));
-    return apps.map((a) => ({ ...a, screenCount: screenMap[a.id] || 0, planCount: planMap[a.id] || 0 }));
+    return apps.map((a) => ({ ...a, screenCount: screenMap[a.id] || 0 }));
 }
 
 function getSaasAppById(id) {
     const app = deserializeSaasApp(db.prepare('SELECT * FROM saas_apps WHERE id = ?').get(id));
     if (!app) return app;
     const screens = db
-        .prepare('SELECT id, name, screen_type AS screenType, position FROM saas_app_screens WHERE app_id = ? ORDER BY position ASC, id ASC')
+        .prepare('SELECT id, name, screen_type AS screenType, web_screen_key AS webScreenKey, position FROM saas_app_screens WHERE app_id = ? ORDER BY position ASC, id ASC')
         .all(id);
-    const planNames = db.prepare('SELECT name FROM plans WHERE app_id = ?').all(id).map((r) => r.name);
-    return { ...app, screens, planNames };
+    return { ...app, screens };
 }
 
-function createSaasApp({ name, icon, colorFrom, colorTo }) {
+// Every ACTIVE app's sector — what Nuestros Clientes' Sector picker offers
+// (Inactivo/Desarrollo apps never appear there, even if their sector is
+// already set — see Nuestras APPs redesign).
+function listActiveAppSectors() {
+    return db
+        .prepare("SELECT sector, name, icon, color_from AS colorFrom, color_to AS colorTo FROM saas_apps WHERE status = 'active' AND sector != '' ORDER BY sector ASC")
+        .all();
+}
+
+// What a given client sees in the "Aplicación Móvil" permission tab and
+// (later) their phone's home screen: their assigned App (found by matching
+// clients.sector_negocio against an ACTIVE saas_apps.sector — same rule as
+// validateSectorNegocio in server.js) and its screens, each enriched with
+// where its underlying Web screen lives (from TABLE_GRANT_PATHS) so the
+// permission tree can check "does the Web screen already have a grant"
+// without duplicating that lookup client-side.
+function getClientAppScreens(clientId) {
+    const client = getClientById(clientId);
+    if (!client || !client.sector_negocio) return { app: null, screens: [] };
+    const app = db.prepare("SELECT * FROM saas_apps WHERE sector = ? AND status = 'active'").get(client.sector_negocio);
+    if (!app) return { app: null, screens: [] };
+    const rawScreens = db
+        .prepare('SELECT id, name, web_screen_key AS webScreenKey, position FROM saas_app_screens WHERE app_id = ? ORDER BY position ASC, id ASC')
+        .all(app.id);
+    const screens = rawScreens.map((s) => {
+        const catalogEntry = WEB_SCREEN_CATALOG.find((w) => w.key === s.webScreenKey);
+        const path = TABLE_GRANT_PATHS[s.webScreenKey];
+        return {
+            ...s,
+            webScreenLabelKey: catalogEntry ? catalogEntry.labelKey : s.webScreenKey,
+            sectionId: path ? path.sectionId : null,
+            itemId: path ? path.itemId : null,
+            submenuPrefix: path ? path.submenuPrefix : null,
+        };
+    });
+    return {
+        app: { id: app.id, name: app.name, sector: app.sector, icon: app.icon, colorFrom: app.color_from, colorTo: app.color_to },
+        screens,
+    };
+}
+
+function createSaasApp({ name, icon, colorFrom, colorTo, sector, status, createdBy }) {
     const result = db
-        .prepare('INSERT INTO saas_apps (name, icon, color_from, color_to) VALUES (@name, @icon, @colorFrom, @colorTo)')
+        .prepare('INSERT INTO saas_apps (name, icon, color_from, color_to, sector, status, created_by) VALUES (@name, @icon, @colorFrom, @colorTo, @sector, @status, @createdBy)')
         .run({
             name, icon: icon || 'bx-mobile-alt',
             colorFrom: colorFrom || '#6C7CF0', colorTo: colorTo || '#3A4BC9',
+            sector: sector || '', status: status || 'active', createdBy: createdBy || '',
         });
     return getSaasAppById(result.lastInsertRowid);
 }
 
-function updateSaasApp(id, { name, icon, colorFrom, colorTo }) {
+function updateSaasApp(id, { name, icon, colorFrom, colorTo, sector, status }) {
     const existing = getSaasAppById(id);
-    db.prepare('UPDATE saas_apps SET name = @name, icon = @icon, color_from = @colorFrom, color_to = @colorTo WHERE id = @id')
-        .run({
+    db.prepare(`
+        UPDATE saas_apps SET name = @name, icon = @icon, color_from = @colorFrom, color_to = @colorTo,
+            sector = @sector, status = @status
+        WHERE id = @id
+    `).run({
             id,
             name: name ?? existing.name,
             icon: icon ?? existing.icon,
             colorFrom: colorFrom ?? existing.colorFrom,
             colorTo: colorTo ?? existing.colorTo,
+            sector: sector ?? existing.sector,
+            status: status ?? existing.status,
         });
     return getSaasAppById(id);
 }
@@ -2963,10 +3075,10 @@ function deleteSaasApp(id) {
     db.prepare('DELETE FROM saas_apps WHERE id = ?').run(id);
 }
 
-function addSaasAppScreen(appId, { name, screenType }) {
+function addSaasAppScreen(appId, { name, screenType, webScreenKey }) {
     const maxPos = db.prepare('SELECT COALESCE(MAX(position), -1) AS maxPos FROM saas_app_screens WHERE app_id = ?').get(appId).maxPos;
-    db.prepare('INSERT INTO saas_app_screens (app_id, name, screen_type, position) VALUES (@appId, @name, @screenType, @position)')
-        .run({ appId, name, screenType: screenType || 'guided', position: maxPos + 1 });
+    db.prepare('INSERT INTO saas_app_screens (app_id, name, screen_type, web_screen_key, position) VALUES (@appId, @name, @screenType, @webScreenKey, @position)')
+        .run({ appId, name, screenType: screenType || 'guided', webScreenKey, position: maxPos + 1 });
     return getSaasAppById(appId);
 }
 
@@ -3637,6 +3749,7 @@ module.exports = {
     getClientProfile,
     createClient,
     updateClient,
+    setClientAppEnabled,
     updateClientBranding,
     findClientByRfc,
     getModuleCosts,
@@ -3739,6 +3852,9 @@ module.exports = {
     deleteSaasApp,
     addSaasAppScreen,
     deleteSaasAppScreen,
+    listActiveAppSectors,
+    getClientAppScreens,
+    WEB_SCREEN_CATALOG,
     getPlanGrants,
     setPlanGrants,
     syncPlanModulesFromGrants,

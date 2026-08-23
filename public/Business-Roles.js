@@ -200,7 +200,7 @@ async function selectProfileForPermissions(profile) {
         const res = await fetch(`/api/business/profiles/${profile.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters });
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true });
         await tree.init(data.grants || []);
         permissionsPanel.hidden = false;
         permissionsHint.hidden = true;
