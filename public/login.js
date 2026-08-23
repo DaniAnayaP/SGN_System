@@ -273,22 +273,52 @@ registerForm?.addEventListener('submit', async (event) => {
 // page, so if it's already installed (or the browser never offered to
 // install it) this just takes the user to the site itself, which is the
 // same thing the installed app shows anyway.
-function showToast(message) {
+function showToast(message, duration = 6000) {
     let container = document.querySelector('.login-toast-container');
     if (!container) {
         container = document.createElement('div');
         container.className = 'login-toast-container';
+        container.setAttribute('aria-live', 'polite');
         document.body.appendChild(container);
     }
+
     const toast = document.createElement('div');
     toast.className = 'login-toast';
-    toast.textContent = message;
-    container.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('login-toast-visible'));
-    setTimeout(() => {
+    toast.setAttribute('role', 'status');
+
+    const icon = document.createElement('span');
+    icon.className = 'login-toast-icon';
+    icon.innerHTML = '<i class="bx bx-info-circle" aria-hidden="true"></i>';
+
+    const msgEl = document.createElement('p');
+    msgEl.className = 'login-toast-message';
+    msgEl.textContent = message;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'login-toast-close';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+
+    const progress = document.createElement('div');
+    progress.className = 'login-toast-progress';
+
+    let dismissTimer = null;
+    const close = () => {
+        if (dismissTimer) clearTimeout(dismissTimer);
         toast.classList.remove('login-toast-visible');
-        setTimeout(() => toast.remove(), 250);
-    }, 5000);
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+        setTimeout(() => toast.remove(), 300);
+    };
+    closeBtn.addEventListener('click', close);
+
+    toast.append(icon, msgEl, closeBtn, progress);
+    container.appendChild(toast);
+    void toast.offsetWidth;
+    toast.classList.add('login-toast-visible');
+    progress.style.transitionDuration = `${duration}ms`;
+    progress.style.width = '0';
+    dismissTimer = setTimeout(close, duration);
 }
 
 let deferredInstallPrompt = null;

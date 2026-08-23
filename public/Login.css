@@ -257,13 +257,16 @@ margin: -15px 0 15px;
     max-width: min(24rem, calc(100vw - 2.5rem));
 }
 .login-toast{
-    padding: 0.7rem 0.9rem;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.7rem 0.9rem 0.8rem;
     border-radius: 0.5rem;
     background-color: #fff;
     color: #1a1d2b;
     box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.22);
-    font-size: 0.85rem;
-    line-height: 1.5;
     opacity: 0;
     transform: translateX(1rem);
     transition: opacity 0.2s ease, transform 0.2s ease;
@@ -271,6 +274,47 @@ margin: -15px 0 15px;
 .login-toast-visible{
     opacity: 1;
     transform: translateX(0);
+}
+.login-toast-icon{
+    flex-shrink: 0;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background-color: #1d6fa5;
+    font-size: 0.9rem;
+}
+.login-toast-message{
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    word-break: break-word;
+}
+.login-toast-close{
+    flex-shrink: 0;
+    align-self: flex-start;
+    border: none;
+    background: transparent;
+    color: #888;
+    cursor: pointer;
+    padding: 0.1rem;
+    display: flex;
+}
+.login-toast-close:hover{
+    color: #1a1d2b;
+}
+.login-toast-progress{
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 100%;
+    background-color: #1d6fa5;
+    transition: width linear;
 }
 
 .toggle-box{
