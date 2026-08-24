@@ -405,6 +405,7 @@ margin: -15px 0 15px;
 /* Small bouncing "pull up" handle — shown after Acceder, before the actual
    sign-in options, per request. Tapping it reveals .access-sheet below. */
 .access-peek{
+    margin-top: auto;
     width: 100%;
     background: #12141f;
     border: none;
@@ -495,6 +496,7 @@ margin: -15px 0 15px;
 .access-scan-screen{
     position: absolute;
     inset: 0;
+    background: radial-gradient(circle at 30% 20%, #2A3166, #0b0d14 70%);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -537,6 +539,7 @@ margin: -15px 0 15px;
 .access-password-screen{
     position: absolute;
     inset: 0;
+    background: radial-gradient(circle at 30% 20%, #2A3166, #0b0d14 70%);
     display: flex;
     flex-direction: column;
     align-items: center;
