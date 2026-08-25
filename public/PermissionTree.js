@@ -628,13 +628,18 @@
         // app-screen grants themselves) never go through leafKeysUnder/
         // expand(), so a structural walk would miss them; a flat prefix scan
         // over the small live grantSet is simpler and always correct.
+        // submenuPrefix === '' means a general main-section button with no
+        // submenu underneath it (see APP_GENERAL_BUTTONS in db.js) — unlocked
+        // only by an exact item-level grant, never a prefix match (there's no
+        // "deeper" grant to match a prefix against).
         function isWebScreenGranted(screen) {
-            if (!screen.sectionId || !screen.itemId || !screen.submenuPrefix) return false;
+            if (!screen.sectionId || !screen.itemId || screen.submenuPrefix == null) return false;
             const prefix = `${screen.sectionId}::${screen.itemId}::`;
             for (const k of grantSet) {
                 if (!k.startsWith(prefix)) continue;
                 const submenuId = k.slice(prefix.length);
-                if (submenuId === screen.submenuPrefix || submenuId.startsWith(`${screen.submenuPrefix}/`)) return true;
+                if (submenuId === screen.submenuPrefix) return true;
+                if (screen.submenuPrefix && submenuId.startsWith(`${screen.submenuPrefix}/`)) return true;
             }
             return false;
         }
@@ -702,13 +707,68 @@
 
             const note = document.createElement('div');
             const webLabel = t(screen.webScreenLabelKey);
+            const isGeneralButton = screen.submenuPrefix === '';
+            const linkKey = isGeneralButton ? 'main.appButtonLinkLine' : 'main.appScreenLinkLine';
+            const lockKey = isGeneralButton ? 'main.appButtonLockHint' : 'main.appScreenLockHint';
             note.className = unlocked ? 'perm-tree-app-link-line' : 'perm-tree-app-lock-hint';
             note.innerHTML = unlocked
-                ? `<i class="bx bx-link" aria-hidden="true"></i> ${t('main.appScreenLinkLine', { webScreen: webLabel })}`
-                : `<i class="bx bx-lock-alt" aria-hidden="true"></i> ${t('main.appScreenLockHint', { webScreen: webLabel })}`;
+                ? `<i class="bx bx-link" aria-hidden="true"></i> ${t(linkKey, { webScreen: webLabel })}`
+                : `<i class="bx bx-lock-alt" aria-hidden="true"></i> ${t(lockKey, { webScreen: webLabel })}`;
             wrap.appendChild(note);
 
             paneEl.appendChild(wrap);
+        }
+
+        // "Opciones APPs" — bulk Habilitar/Deshabilitar todo, built once and
+        // kept OUTSIDE the part of the pane renderAppTab clears on every
+        // call (a toolbar re-created on each pill click would just close
+        // itself mid-interaction). Habilitar todo only touches screens
+        // already unlocked by Web and not yet granted at any level — it
+        // never re-locks or overrides a level someone already picked.
+        function buildAppOptionsToolbar(paneEl) {
+            const picker = document.createElement('div');
+            picker.className = 'dept-picker perm-tree-app-toolbar';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dept-picker-btn';
+            btn.innerHTML = `<i class="bx bx-slider-alt" aria-hidden="true"></i><span>${t('main.appOptions', 'APP Options')}</span><i class="bx bx-chevron-down" aria-hidden="true"></i>`;
+            const dropdown = document.createElement('ul');
+            dropdown.className = 'dept-picker-dropdown';
+            dropdown.setAttribute('role', 'menu');
+
+            const makeAction = (icon, labelKey, fallback, onClick) => {
+                const li = document.createElement('li');
+                const optBtn = document.createElement('button');
+                optBtn.type = 'button';
+                optBtn.className = 'dept-option';
+                optBtn.setAttribute('role', 'menuitem');
+                optBtn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i> ${t(labelKey, fallback)}`;
+                optBtn.addEventListener('click', () => {
+                    onClick();
+                    picker.classList.remove('open');
+                    renderAppTab(paneEl);
+                });
+                li.appendChild(optBtn);
+                dropdown.appendChild(li);
+            };
+            makeAction('bx-check-circle', 'main.appEnableAll', 'Enable all', () => {
+                appInfo.screens.forEach((screen) => {
+                    if (!isWebScreenGranted(screen)) return;
+                    const hasLevel = APP_SCREEN_LEVELS.some((l) => grantSet.has(keyOf('app-screens', String(screen.id), l.id)));
+                    if (!hasLevel) setKeys([keyOf('app-screens', String(screen.id), 'solo-ver')], true);
+                });
+            });
+            makeAction('bx-x-circle', 'main.appDisableAll', 'Disable all', () => {
+                Array.from(grantSet).forEach((k) => { if (k.startsWith('app-screens::')) grantSet.delete(k); });
+            });
+
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                picker.classList.toggle('open');
+            });
+            document.addEventListener('click', () => picker.classList.remove('open'));
+            picker.append(btn, dropdown);
+            return picker;
         }
 
         // Re-run any time the Web tree changes too (see render()'s own call
@@ -716,13 +776,21 @@
         // unsaved Web-tab grants, so checking a Web box should unlock its
         // App sibling immediately, without waiting for a save.
         function renderAppTab(paneEl) {
-            paneEl.innerHTML = '';
+            let content = paneEl.querySelector('.perm-tree-app-content');
+            if (!content) {
+                paneEl.innerHTML = '';
+                if (!readOnly) paneEl.appendChild(buildAppOptionsToolbar(paneEl));
+                content = document.createElement('div');
+                content.className = 'perm-tree-app-content';
+                paneEl.appendChild(content);
+            }
+            content.innerHTML = '';
             if (!appInfo.app) return;
             const banner = document.createElement('div');
             banner.className = 'perm-tree-app-banner';
             banner.innerHTML = `<i class="bx ${appInfo.app.icon || 'bx-mobile-alt'}" aria-hidden="true"></i> ${t('main.appAssignedBanner', { name: appInfo.app.name })}`;
-            paneEl.appendChild(banner);
-            appInfo.screens.forEach((screen) => renderAppScreenRow(paneEl, screen));
+            content.appendChild(banner);
+            appInfo.screens.forEach((screen) => renderAppScreenRow(content, screen));
         }
 
         // Only called when init() finds a real App with at least one screen

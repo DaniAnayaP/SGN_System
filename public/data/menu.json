@@ -10,7 +10,6 @@
         { "id": "btn-chatbot", "labelKey": "main.chatbot", "icon": "bx-bot", "href": "#", "permissionOnly": true },
         { "id": "btn-notificaciones", "labelKey": "main.notifications", "icon": "bx-bell", "href": "#", "permissionOnly": true },
         { "id": "btn-marcadores", "labelKey": "main.bookmarks", "icon": "bx-bookmarks", "href": "#", "permissionOnly": true },
-        { "id": "btn-app-movil", "labelKey": "main.mobileAppAccess", "icon": "bx-mobile-alt", "href": "#", "permissionOnly": true },
         {
           "id": "btn-configuracion", "labelKey": "main.settings", "icon": "bx-cog", "href": "#", "permissionOnly": true,
           "submenu": [

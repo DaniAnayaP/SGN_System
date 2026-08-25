@@ -1197,6 +1197,9 @@ body.dark-mode .perm-tree-depth-2{
     color: var(--color-accent);
     border-bottom-color: var(--color-accent);
 }
+.perm-tree-app-toolbar{
+    margin: 0 0 0.9rem;
+}
 .perm-tree-app-banner{
     display: flex;
     align-items: center;

@@ -3022,6 +3022,22 @@ function listActiveAppSectors() {
         .all();
 }
 
+// General (main-section) buttons that get their own "enable in App" row
+// alongside a client's operational App screens — same unlock-then-toggle
+// rule as a table screen (see PermissionTree.js's isWebScreenGranted/
+// renderAppScreenRow), just gated on the button's own Web grant (no
+// submenu/table underneath it) instead of a whole data table. Not every
+// main-section button is here — only the ones that plausibly have their
+// own mobile equivalent (btn-configuracion is a whole nested settings
+// menu, not a single screen; the department/area/cost-center pickers and
+// user-info dropdowns aren't real navigable screens either).
+const APP_GENERAL_BUTTONS = [
+    { itemId: 'btn-mensajes', name: 'Mensajes', labelKey: 'main.messages' },
+    { itemId: 'btn-chatbot', name: 'Chatbot', labelKey: 'main.chatbot' },
+    { itemId: 'btn-notificaciones', name: 'Notificaciones', labelKey: 'main.notifications' },
+    { itemId: 'btn-marcadores', name: 'Marcadores', labelKey: 'main.bookmarks' },
+];
+
 // What a given client sees in the "Aplicación Móvil" permission tab and
 // (later) their phone's home screen: their assigned App (found by matching
 // clients.sector_negocio against an ACTIVE saas_apps.sector — same rule as
@@ -3031,7 +3047,11 @@ function listActiveAppSectors() {
 // without duplicating that lookup client-side.
 function getClientAppScreens(clientId) {
     const client = getClientById(clientId);
-    if (!client || !client.sector_negocio) return { app: null, screens: [] };
+    // app_enabled is the SaaS-level contract switch (Nuestros Clientes' own
+    // toggle, independent of Editar) — a client with no App in their
+    // contract gets nothing here at all, no matter what their Sector
+    // matches or what their own admin has granted on the Web side.
+    if (!client || !client.app_enabled || !client.sector_negocio) return { app: null, screens: [] };
     const app = db.prepare("SELECT * FROM saas_apps WHERE sector = ? AND status = 'active'").get(client.sector_negocio);
     if (!app) return { app: null, screens: [] };
     const rawScreens = db
@@ -3048,9 +3068,13 @@ function getClientAppScreens(clientId) {
             submenuPrefix: path ? path.submenuPrefix : null,
         };
     });
+    const generalButtonScreens = APP_GENERAL_BUTTONS.map((b) => ({
+        id: b.itemId, name: b.name, webScreenKey: b.itemId,
+        webScreenLabelKey: b.labelKey, sectionId: 'main', itemId: b.itemId, submenuPrefix: '',
+    }));
     return {
         app: { id: app.id, name: app.name, sector: app.sector, icon: app.icon, colorFrom: app.color_from, colorTo: app.color_to },
-        screens,
+        screens: [...screens, ...generalButtonScreens],
     };
 }
 
