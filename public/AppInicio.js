@@ -27,6 +27,8 @@ async function loadLanguage() {
     }
     document.documentElement.lang = lang;
     document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => { el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder)); });
     const titleEl = document.querySelector('title[data-i18n]');
     if (titleEl) document.title = t(titleEl.dataset.i18n);
 }
@@ -101,7 +103,7 @@ hamburgerBtn.addEventListener('click', (event) => {
     hamburgerBtn.setAttribute('aria-expanded', String(willOpen));
 });
 document.addEventListener('click', closeHamburgerMenu);
-['home-menu-messages', 'home-menu-chatbot', 'home-menu-notifications', 'home-menu-bookmarks'].forEach((id) => {
+['home-menu-messages', 'home-menu-chatbot', 'home-menu-notifications', 'home-menu-bookmarks', 'home-menu-ui-scale', 'home-menu-user-info', 'home-menu-business-profile'].forEach((id) => {
     document.getElementById(id).addEventListener('click', () => {
         closeHamburgerMenu();
         showToast(t('home.comingSoon'));
@@ -122,6 +124,30 @@ document.getElementById('home-menu-logout').addEventListener('click', async () =
 // category tabs below (comingSoon toast) rather than pretending to work.
 document.getElementById('home-dept-area-btn').addEventListener('click', () => showToast(t('home.comingSoon')));
 document.getElementById('home-cost-centers-btn').addEventListener('click', () => showToast(t('home.comingSoon')));
+
+// --- Search bar toggle ------------------------------------------------------
+const searchBtn = document.getElementById('home-search-btn');
+const searchBar = document.getElementById('home-search-bar');
+const searchInput = document.getElementById('home-search-input');
+searchBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    searchBar.hidden = !searchBar.hidden;
+    if (!searchBar.hidden) searchInput.focus();
+});
+
+// --- Breadcrumb collapse/expand — same idea as Dashboard.js's own
+// breadcrumb-toggle (bx-map-alt + chevron), just simpler: no persisted
+// localStorage preference, this page doesn't have as much vertical
+// pressure as the desktop shell to justify remembering it across visits.
+const breadcrumbTrail = document.getElementById('home-breadcrumb-trail');
+const breadcrumbToggle = document.getElementById('home-breadcrumb-toggle');
+const breadcrumbChevron = document.getElementById('home-breadcrumb-toggle-chevron');
+breadcrumbToggle.addEventListener('click', () => {
+    const collapsed = !breadcrumbTrail.hidden;
+    breadcrumbTrail.hidden = collapsed;
+    breadcrumbChevron.className = collapsed ? 'bx bx-chevron-down' : 'bx bx-chevron-up';
+    breadcrumbToggle.setAttribute('aria-label', t(collapsed ? 'main.breadcrumbExpand' : 'main.breadcrumbCollapse'));
+});
 
 // --- Bottom category tabs --------------------------------------------------
 // Only Inicio actually has content (the Accesos rápidos tiles below, from

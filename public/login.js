@@ -108,7 +108,7 @@ function applyTranslations() {
 }
 
 let langSwitching = false;
-langToggle?.addEventListener('click', async () => {
+async function toggleLanguage() {
     if (langSwitching) return;
     langSwitching = true;
     const next = currentLang === 'en' ? 'es' : 'en';
@@ -119,7 +119,12 @@ langToggle?.addEventListener('click', async () => {
     } finally {
         langSwitching = false;
     }
-});
+}
+langToggle?.addEventListener('click', toggleLanguage);
+// Same toggle, reachable from the "Acceder" splash (#access-screen) which
+// covers #lang-toggle entirely (position:fixed, higher z-index) — its own
+// dark-themed icon button, see Login.html/Login.css.
+document.getElementById('access-lang-toggle')?.addEventListener('click', toggleLanguage);
 
 // --- Panel toggle (login vs register) --------------------------------------
 registerBtn?.addEventListener('click', () => container.classList.add('active'));

@@ -56,6 +56,7 @@ body{
     flex-shrink: 0;
     object-fit: cover;
 }
+.home-client-logo-fallback[hidden]{ display: none; }
 .home-client-logo-fallback{
     background: linear-gradient(135deg, #6C7CF0, #3A4BC9);
     color: #fff;
@@ -90,6 +91,7 @@ body{
 }
 .home-pill-btn i:first-child{ color: #7FE1FF; font-size: 0.9rem; }
 .home-pill-btn i:last-child{ font-size: 0.85rem; }
+.home-pill-btn-icon-only{ padding: 0.42rem 0.5rem; gap: 0.15rem; }
 .home-hamburger-btn{
     width: 2.1rem;
     height: 2.1rem;
@@ -137,6 +139,30 @@ body{
 .home-hamburger-menu hr{ border: none; border-top: 1px solid #232640; margin: 0.3rem 0; }
 .home-hamburger-menu .home-menu-logout{ color: #ff8a8a; }
 .home-hamburger-menu .home-menu-logout i{ color: #ff8a8a; }
+.home-search-bar{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #171b2c;
+    border: 1px solid #232640;
+    border-radius: 1.2rem;
+    padding: 0.55rem 0.9rem;
+    margin-bottom: 0.9rem;
+    color: #5b6b9e;
+}
+.home-search-bar[hidden]{ display: none; }
+.home-search-bar i{ font-size: 1rem; }
+.home-search-bar input{
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.78rem;
+}
+.home-search-bar input::placeholder{ color: #5b6b9e; }
 .home-hello{
     margin: 0;
     font-size: 0.8rem;
@@ -250,16 +276,36 @@ body{
 .home-breadcrumb{
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-    padding: 0.5rem 1.4rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem calc(0.25rem + env(safe-area-inset-bottom, 0px)) 1.4rem;
     font-size: 0.64rem;
     color: #5b6b9e;
     background: #0b0d14;
     border-top: 1px solid #1c1f30;
 }
+.home-breadcrumb-trail{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.home-breadcrumb-trail[hidden]{ display: none; }
 .home-breadcrumb .current{ color: #c7cce8; font-weight: 700; }
-.home-breadcrumb i{ font-size: 0.68rem; }
+.home-breadcrumb-trail i{ font-size: 0.68rem; }
+.home-breadcrumb-toggle{
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: #5b6b9e;
+    padding: 0.2rem;
+    cursor: pointer;
+}
+.home-breadcrumb-toggle i{ font-size: 0.85rem; }
 
 .home-toast-container{
     position: fixed;

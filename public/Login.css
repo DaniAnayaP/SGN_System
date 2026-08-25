@@ -336,6 +336,22 @@ margin: -15px 0 15px;
 .access-screen[hidden]{
     display: none;
 }
+.access-lang-toggle{
+    position: absolute;
+    top: calc(1.2rem + env(safe-area-inset-top, 0px));
+    right: 1.2rem;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #c7cce8;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
 .access-mark{
     width: 88px;
     height: 88px;
