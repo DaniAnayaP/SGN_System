@@ -26,8 +26,33 @@ body{
 }
 
 .home-header{
+    position: relative;
     padding: calc(1.1rem + env(safe-area-inset-top, 0px)) 1.4rem 1rem;
 }
+.home-header-collapse-toggle{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    margin: 0.4rem auto 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: #5b6b9e;
+    font-size: 1rem;
+    cursor: pointer;
+}
+.home-header.home-header-collapsed{
+    padding-top: calc(0.3rem + env(safe-area-inset-top, 0px));
+    padding-bottom: 0.3rem;
+}
+.home-header.home-header-collapsed .home-header-top,
+.home-header.home-header-collapsed .home-header-greeting,
+.home-header.home-header-collapsed .home-search-bar{
+    display: none;
+}
+.home-header-collapsed .home-header-collapse-toggle{ margin-top: 0; }
 .home-header-top{
     display: flex;
     align-items: center;
@@ -136,6 +161,9 @@ body{
     text-align: left;
 }
 .home-hamburger-menu button i{ font-size: 1.05rem; color: #7FE1FF; }
+.home-menu-submenu{ padding-left: 1.1rem; }
+.home-menu-submenu[hidden]{ display: none; }
+#home-menu-settings[aria-expanded="true"] .bx-chevron-down{ transform: rotate(180deg); }
 .home-hamburger-menu hr{ border: none; border-top: 1px solid #232640; margin: 0.3rem 0; }
 .home-hamburger-menu .home-menu-logout{ color: #ff8a8a; }
 .home-hamburger-menu .home-menu-logout i{ color: #ff8a8a; }
@@ -307,23 +335,79 @@ body{
 }
 .home-breadcrumb-toggle i{ font-size: 0.85rem; }
 
+/* Same structure as Login.css's .login-toast* (icon/message/close/progress),
+   dark palette, pinned to one side (top-right) instead of the old
+   full-width bottom banner. */
 .home-toast-container{
     position: fixed;
-    left: 1rem;
-    right: 1rem;
-    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    top: calc(1.25rem + env(safe-area-inset-top, 0px));
+    right: 1.1rem;
+    left: 1.1rem;
+    z-index: 60;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    z-index: 50;
+    align-items: flex-end;
+    gap: 0.6rem;
     pointer-events: none;
 }
 .home-toast{
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    max-width: min(20rem, 100%);
+    padding: 0.7rem 0.9rem 0.8rem;
+    border-radius: 0.6rem;
     background: #171b2c;
     border: 1px solid #232640;
     color: #fff;
-    font-size: 0.75rem;
-    padding: 0.7rem 0.9rem;
-    border-radius: 0.6rem;
     box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: translateX(1rem);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: auto;
+}
+.home-toast-visible{
+    opacity: 1;
+    transform: translateX(0);
+}
+.home-toast-icon{
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: linear-gradient(135deg, #6C7CF0, #3A4BC9);
+    font-size: 0.85rem;
+}
+.home-toast-message{
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    word-break: break-word;
+    margin: 0;
+}
+.home-toast-close{
+    flex-shrink: 0;
+    align-self: flex-start;
+    border: none;
+    background: transparent;
+    color: #5b6b9e;
+    cursor: pointer;
+    padding: 0.1rem;
+    display: flex;
+}
+.home-toast-progress{
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 100%;
+    background: #7FE1FF;
+    transition: width linear;
 }

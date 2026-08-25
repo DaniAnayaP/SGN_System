@@ -60,6 +60,33 @@
                     <button type="button" role="menuitem" id="home-menu-bookmarks">
                         <i class="bx bx-bookmarks" aria-hidden="true"></i> <span data-i18n="main.bookmarks">Bookmarks</span>
                     </button>
+                    <button type="button" role="menuitem" id="home-menu-settings" aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-cog" aria-hidden="true"></i> <span data-i18n="main.settings">Settings</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true" style="margin-left: auto;"></i>
+                    </button>
+                    <div class="home-menu-submenu" id="home-settings-submenu" hidden>
+                        <button type="button" role="menuitem" id="home-menu-language">
+                            <i class="bx bx-globe" aria-hidden="true"></i> <span data-i18n="main.language">Language</span>
+                        </button>
+                        <button type="button" role="menuitem" id="home-menu-style">
+                            <i class="bx bx-palette" aria-hidden="true"></i> <span data-i18n="main.style">Style</span>
+                        </button>
+                        <button type="button" role="menuitem" id="home-menu-admin-business">
+                            <i class="bx bx-shopping-bag" aria-hidden="true"></i> <span data-i18n="menu.adminBusiness">Admin Business</span>
+                        </button>
+                        <button type="button" role="menuitem" id="home-menu-button-config">
+                            <i class="bx bx-slider-alt" aria-hidden="true"></i> <span data-i18n="main.buttonConfig">Button Settings</span>
+                        </button>
+                        <button type="button" role="menuitem" id="home-menu-database">
+                            <i class="bx bx-data" aria-hidden="true"></i> <span data-i18n="menu.databaseGroup">Database</span>
+                        </button>
+                        <button type="button" role="menuitem" id="home-menu-business-intelligence">
+                            <i class="bx bx-bulb" aria-hidden="true"></i> <span data-i18n="menu.businessIntelligenceGroup">Business Intelligence</span>
+                        </button>
+                        <button type="button" role="menuitem" id="home-menu-others">
+                            <i class="bx bx-dots-horizontal-rounded" aria-hidden="true"></i> <span data-i18n="main.others">Others</span>
+                        </button>
+                    </div>
                     <button type="button" role="menuitem" id="home-menu-ui-scale">
                         <i class="bx bx-text" aria-hidden="true"></i> <span data-i18n="main.uiScale">System size</span>
                     </button>
@@ -80,10 +107,13 @@
                 <label for="home-search-input" class="sr-only" data-i18n="sidebar.searchPlaceholder">Search</label>
                 <input id="home-search-input" type="search" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search" autocomplete="off">
             </div>
-            <div>
+            <div class="home-header-greeting" id="home-header-greeting">
                 <p class="home-hello" data-i18n="home.greeting">Hola,</p>
                 <h1 class="home-name" id="home-user-name">—</h1>
             </div>
+            <button type="button" class="home-header-collapse-toggle" id="home-header-collapse-toggle" aria-expanded="true" data-i18n-aria="main.topBarCollapse" aria-label="Collapse">
+                <i class="bx bx-chevron-up" aria-hidden="true"></i>
+            </button>
         </header>
 
         <section class="home-section">

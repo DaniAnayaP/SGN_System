@@ -33,14 +33,48 @@ async function loadLanguage() {
     if (titleEl) document.title = t(titleEl.dataset.i18n);
 }
 
-function showToast(message) {
+// Same structure/behavior as login.js's showToast (icon, message, close X,
+// timed progress bar), just the dark palette this page already uses —
+// "pegada a un costado" (top-right corner), not the old full-width bottom
+// banner.
+function showToast(message, duration = 4000) {
     const container = document.getElementById('home-toast-container');
     const toast = document.createElement('div');
     toast.className = 'home-toast';
     toast.setAttribute('role', 'status');
-    toast.textContent = message;
+
+    const icon = document.createElement('span');
+    icon.className = 'home-toast-icon';
+    icon.innerHTML = '<i class="bx bx-info-circle" aria-hidden="true"></i>';
+
+    const msgEl = document.createElement('p');
+    msgEl.className = 'home-toast-message';
+    msgEl.textContent = message;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'home-toast-close';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+
+    const progress = document.createElement('div');
+    progress.className = 'home-toast-progress';
+
+    let dismissTimer = null;
+    const close = () => {
+        if (dismissTimer) clearTimeout(dismissTimer);
+        toast.classList.remove('home-toast-visible');
+        setTimeout(() => toast.remove(), 300);
+    };
+    closeBtn.addEventListener('click', close);
+
+    toast.append(icon, msgEl, closeBtn, progress);
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), 2400);
+    void toast.offsetWidth;
+    toast.classList.add('home-toast-visible');
+    progress.style.transitionDuration = `${duration}ms`;
+    progress.style.width = '0';
+    dismissTimer = setTimeout(close, duration);
 }
 
 // webScreenKey -> the real Web page it fills (same keys WEB_SCREEN_CATALOG
@@ -103,11 +137,34 @@ hamburgerBtn.addEventListener('click', (event) => {
     hamburgerBtn.setAttribute('aria-expanded', String(willOpen));
 });
 document.addEventListener('click', closeHamburgerMenu);
-['home-menu-messages', 'home-menu-chatbot', 'home-menu-notifications', 'home-menu-bookmarks', 'home-menu-ui-scale', 'home-menu-user-info', 'home-menu-business-profile'].forEach((id) => {
+[
+    'home-menu-messages', 'home-menu-chatbot', 'home-menu-notifications', 'home-menu-bookmarks',
+    'home-menu-ui-scale', 'home-menu-user-info', 'home-menu-business-profile',
+    'home-menu-style', 'home-menu-admin-business', 'home-menu-button-config',
+    'home-menu-database', 'home-menu-business-intelligence', 'home-menu-others',
+].forEach((id) => {
     document.getElementById(id).addEventListener('click', () => {
         closeHamburgerMenu();
         showToast(t('home.comingSoon'));
     });
+});
+
+// "Configuración" expands into its own sub-list (same 7 items Sistema Web's
+// settings-dropdown has) instead of being one more flat action — Language
+// is the one entry actually wired up (reuses the same toggleLanguage idea
+// as the Acceder splash's own language button); the rest stay honest stubs.
+const settingsToggle = document.getElementById('home-menu-settings');
+const settingsSubmenu = document.getElementById('home-settings-submenu');
+settingsToggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const willOpen = settingsSubmenu.hidden;
+    settingsSubmenu.hidden = !willOpen;
+    settingsToggle.setAttribute('aria-expanded', String(willOpen));
+});
+document.getElementById('home-menu-language').addEventListener('click', async () => {
+    const next = (localStorage.getItem('lang') === 'en') ? 'es' : 'en';
+    localStorage.setItem('lang', next);
+    await loadLanguage();
 });
 document.getElementById('home-menu-logout').addEventListener('click', async () => {
     closeHamburgerMenu();
@@ -124,6 +181,21 @@ document.getElementById('home-menu-logout').addEventListener('click', async () =
 // category tabs below (comingSoon toast) rather than pretending to work.
 document.getElementById('home-dept-area-btn').addEventListener('click', () => showToast(t('home.comingSoon')));
 document.getElementById('home-cost-centers-btn').addEventListener('click', () => showToast(t('home.comingSoon')));
+
+// --- Collapsible header — same idea as Dashboard.js's collapsible top bar:
+// reclaim vertical space on demand, nothing lost, persisted per browser.
+const HEADER_COLLAPSED_KEY = 'homeHeaderCollapsed';
+const headerEl = document.querySelector('.home-header');
+const headerCollapseToggle = document.getElementById('home-header-collapse-toggle');
+function setHeaderCollapsed(collapsed) {
+    headerEl.classList.toggle('home-header-collapsed', collapsed);
+    headerCollapseToggle.setAttribute('aria-expanded', String(!collapsed));
+    headerCollapseToggle.setAttribute('aria-label', t(collapsed ? 'main.topBarExpand' : 'main.topBarCollapse'));
+    headerCollapseToggle.querySelector('i').className = `bx ${collapsed ? 'bx-chevron-down' : 'bx-chevron-up'}`;
+    localStorage.setItem(HEADER_COLLAPSED_KEY, String(collapsed));
+}
+headerCollapseToggle.addEventListener('click', () => setHeaderCollapsed(!headerEl.classList.contains('home-header-collapsed')));
+setHeaderCollapsed(localStorage.getItem(HEADER_COLLAPSED_KEY) === 'true');
 
 // --- Search bar toggle ------------------------------------------------------
 const searchBtn = document.getElementById('home-search-btn');
