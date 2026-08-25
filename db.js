@@ -248,6 +248,18 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_saas_app_screens_app_id ON saas_app_screens(app_id);
 
+    -- Nuestros Sectores de Negocio: the catalog Nuestras APPs' own Sector de
+    -- Negocio field picks from (was free text before, so a client's
+    -- sector_negocio and an app's sector could drift apart on a typo and
+    -- silently never match in getClientAppScreens). One flat list, no
+    -- status — a sector is either in the catalog or it isn't.
+    CREATE TABLE IF NOT EXISTS business_sectors (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL UNIQUE,
+        created_by  TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Costo $ de cada botón/módulo de MODULE_CATALOG — configurado en su
     -- propia pantalla (Costos de Módulos), usado para calcular "Pago por
     -- Anexos" en Nuestros Clientes (suma del costo de cada módulo que un
@@ -3087,6 +3099,27 @@ function deleteSaasAppScreen(appId, screenId) {
     return getSaasAppById(appId);
 }
 
+function deserializeBusinessSector(row) {
+    if (!row) return row;
+    const { created_at, created_by, ...rest } = row;
+    return { ...rest, createdAt: created_at, createdBy: created_by || '' };
+}
+
+function listBusinessSectors() {
+    return db.prepare('SELECT * FROM business_sectors ORDER BY name ASC').all().map(deserializeBusinessSector);
+}
+
+function createBusinessSector({ name, createdBy }) {
+    const result = db
+        .prepare('INSERT INTO business_sectors (name, created_by) VALUES (@name, @createdBy)')
+        .run({ name, createdBy: createdBy || '' });
+    return deserializeBusinessSector(db.prepare('SELECT * FROM business_sectors WHERE id = ?').get(result.lastInsertRowid));
+}
+
+function deleteBusinessSector(id) {
+    db.prepare('DELETE FROM business_sectors WHERE id = ?').run(id);
+}
+
 function getPlanGrants(planId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM plan_grants WHERE plan_id = ?')
@@ -3854,6 +3887,9 @@ module.exports = {
     deleteSaasAppScreen,
     listActiveAppSectors,
     getClientAppScreens,
+    listBusinessSectors,
+    createBusinessSector,
+    deleteBusinessSector,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
     setPlanGrants,

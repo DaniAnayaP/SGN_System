@@ -631,6 +631,7 @@ function buildSidebarData(data, role, activePage) {
         { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', saasItemId: 'saas-clients' },
         { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', saasItemId: 'saas-plans' },
         { id: 'admin-nuestras-apps', labelKey: 'menu.ourApps', href: 'Admin-NuestrasApps.html', saasItemId: 'saas-apps' },
+        { id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html' },
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', saasItemId: 'saas-module-costs' },
         { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));

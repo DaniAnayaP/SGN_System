@@ -1,0 +1,155 @@
+// ---------------------------------------------------------------------------
+// "Nuestros Sectores de Negocio" — the catalog Nuestras APPs' own Sector de
+// Negocio field picks from (see Admin-NuestrasApps.js's populateSectorSelect).
+// Flat list, no edit — a sector's name is either right or you delete it and
+// add the correct one, same reasoning as not letting Sector de Negocio drift
+// out of sync between a client and an app on a typo. Shell (sidebar, i18n,
+// settings, logout) comes from Dashboard.js.
+// ---------------------------------------------------------------------------
+
+const tableBody = document.getElementById('sectors-table-body');
+const emptyMsg = document.getElementById('sectors-empty');
+
+const addModal = document.getElementById('sector-add-modal');
+const form = document.getElementById('sector-form');
+const nameField = document.getElementById('sector-name');
+const formError = document.getElementById('sector-form-error');
+const submitBtn = document.getElementById('sector-form-submit');
+const cancelBtn = document.getElementById('sector-form-cancel');
+
+let sectors = [];
+
+function showError(message) {
+    formError.textContent = message;
+    formError.hidden = false;
+}
+function clearError() {
+    formError.hidden = true;
+    formError.textContent = '';
+}
+
+function renderSectors() {
+    tableBody.innerHTML = '';
+    emptyMsg.hidden = sectors.length > 0;
+    sectors.forEach((sector) => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.textContent = sector.name;
+        const tdCreatedAt = document.createElement('td');
+        tdCreatedAt.textContent = sector.createdAt ? sector.createdAt.slice(0, 10) : '—';
+        const tdCreatedBy = document.createElement('td');
+        tdCreatedBy.textContent = sector.createdBy || '—';
+        const tdActions = document.createElement('td');
+        tdActions.className = 'admin-table-actions';
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+        deleteBtn.addEventListener('click', () => removeSector(sector));
+        tdActions.append(deleteBtn);
+        tr.append(tdName, tdCreatedAt, tdCreatedBy, tdActions);
+        tableBody.appendChild(tr);
+    });
+}
+
+async function loadSectors() {
+    try {
+        const res = await fetch('/api/admin/business-sectors', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        sectors = data.sectors || [];
+        renderSectors();
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
+    }
+}
+
+async function removeSector(sector) {
+    if (!(await Dashboard.confirm(Dashboard.t('admin.confirmDeleteBusinessSector')))) return;
+    try {
+        const res = await fetch(`/api/admin/business-sectors/${sector.id}`, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) throw new Error('delete failed');
+        sectors = sectors.filter((s) => s.id !== sector.id);
+        renderSectors();
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
+function openAddModal() {
+    form.reset();
+    clearError();
+    addModal.hidden = false;
+    nameField.focus();
+}
+function closeAddModal() {
+    addModal.hidden = true;
+}
+cancelBtn.addEventListener('click', closeAddModal);
+addModal.addEventListener('click', (event) => { if (event.target === addModal) closeAddModal(); });
+
+form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearError();
+    const name = nameField.value.trim();
+    if (!name) {
+        showError(Dashboard.t('admin.requiredFields'));
+        return;
+    }
+    submitBtn.disabled = true;
+    try {
+        const res = await fetch('/api/admin/business-sectors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ name }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            showError(body.message || Dashboard.t('admin.saveError'));
+            return;
+        }
+        const { sector } = await res.json();
+        sectors = [...sectors, sector].sort((a, b) => a.name.localeCompare(b.name));
+        renderSectors();
+        closeAddModal();
+        Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
+    } catch {
+        showError(Dashboard.t('admin.saveError'));
+    } finally {
+        submitBtn.disabled = false;
+    }
+});
+
+// "+ Crear Nuevo Sector" — same toolbar-button placement/style as "+ Nuevo
+// Plan"/"+ Crear Nueva App" (see renderNewAppButton in Admin-NuestrasApps.js).
+function renderNewSectorButton() {
+    const wrapper = document.querySelector('[data-table-id="business-sectors"]');
+    const toolbar = wrapper?.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    if (toolbar.querySelector('.data-table-new-record-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-new-record-btn';
+    btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="menu.addBusinessSectorNew">${Dashboard.t('menu.addBusinessSectorNew')}</span>`;
+    btn.addEventListener('click', openAddModal);
+    toolbar.prepend(btn);
+}
+
+document.addEventListener('dashboard:language-changed', renderSectors);
+
+(async function init() {
+    try {
+        const role = await Dashboard.initDashboard({ activePage: 'admin-business-sectors' });
+        if (!role) return;
+        if (role !== 'admin') {
+            window.location.replace('Inicio-en.html');
+            return;
+        }
+        renderNewSectorButton();
+        await loadSectors();
+    } catch (err) {
+        console.error('Admin (Business Sectors) failed to initialize:', err);
+    }
+})();

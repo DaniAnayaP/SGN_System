@@ -110,6 +110,7 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
 
     async function attemptBiometric() {
         if (!hasBiometry) {
+            showToast(t('login.accessNoSessionForBiometric', "Sign in with your username and password first. Next time you'll be able to use Face ID."));
             showPasswordScreen();
             return;
         }
@@ -126,6 +127,7 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
             window.location.href = 'AppInicio.html';
         } catch {
             scanScreen.hidden = true;
+            showToast(t('login.accessBiometricFailed', "We couldn't verify your identity. Sign in with your username and password."));
             showPasswordScreen();
         }
     }

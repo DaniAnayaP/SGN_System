@@ -16,7 +16,6 @@ const catalogView = document.getElementById('apps-catalog-view');
 const detailView = document.getElementById('app-detail-view');
 const tableBody = document.getElementById('saas-app-table-body');
 const emptyMsg = document.getElementById('apps-empty');
-const newAppBtn = document.getElementById('app-new-btn');
 
 const editModal = document.getElementById('app-edit-modal');
 const editModalTitle = document.getElementById('app-edit-modal-title');
@@ -58,6 +57,24 @@ function clearError(el) {
 function webScreenLabel(key) {
     const entry = webScreenCatalog.find((s) => s.key === key);
     return entry ? Dashboard.t(entry.labelKey) : key;
+}
+
+async function populateSectorSelect() {
+    try {
+        const res = await fetch('/api/admin/business-sectors', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        sectorField.innerHTML = '';
+        (data.sectors || []).forEach((sector) => {
+            const option = document.createElement('option');
+            option.value = sector.name;
+            option.textContent = sector.name;
+            sectorField.appendChild(option);
+        });
+    } catch {
+        // Leave the select empty — a failed load here shouldn't block the
+        // rest of the page; the app modal just won't have sector options.
+    }
 }
 
 async function populateWebScreenSelect() {
@@ -217,7 +234,25 @@ function openCreateModal() {
     clearError(formError);
     editModal.hidden = false;
 }
-newAppBtn.addEventListener('click', openCreateModal);
+
+// "+ Crear Nueva App" — same toolbar-button placement/style as "+ Nuevo
+// Plan" (Admin-Planes.js's renderNewPlanButton): prepended into the
+// .data-table-zoom bar Dashboard.js already renders for every
+// .data-table-wrapper, instead of a bespoke .admin-toolbar button — keeps
+// placement and per-theme styling consistent with every other table's
+// "add" button.
+function renderNewAppButton() {
+    const wrapper = document.querySelector('[data-table-id="nuestras-apps"]');
+    const toolbar = wrapper?.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    if (toolbar.querySelector('.data-table-new-record-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-new-record-btn';
+    btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="menu.addAppNew">${Dashboard.t('menu.addAppNew')}</span>`;
+    btn.addEventListener('click', openCreateModal);
+    toolbar.prepend(btn);
+}
 
 function openEditModal(app) {
     idField.value = app.id;
@@ -327,7 +362,8 @@ screenForm.addEventListener('submit', async (event) => {
             window.location.replace('Inicio-en.html');
             return;
         }
-        await Promise.all([loadApps(), populateWebScreenSelect()]);
+        renderNewAppButton();
+        await Promise.all([loadApps(), populateWebScreenSelect(), populateSectorSelect()]);
     } catch (err) {
         console.error('Admin (Nuestras APPs) failed to initialize:', err);
     }

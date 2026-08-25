@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.ourApps">Our APPs</title>
+    <title data-i18n="menu.businessSectors">Our Business Sectors</title>
     <link rel="icon" href="icons/icon-512.png">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="menu.ourApps">Our APPs</p>
+                <p class="welcome-text" data-i18n="menu.businessSectors">Our Business Sectors</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -346,136 +346,41 @@
             </div>
         </div>
 
-        <section class="admin-panel" id="apps-catalog-view">
-            <p class="admin-subtitle" data-i18n="admin.appsSubtitle">Each App belongs to one Sector de Negocio — a client's own Sector (Nuestros Clientes) is what decides which App its phones show.</p>
-            <div class="data-table-wrapper" data-table-id="nuestras-apps">
+        <section class="admin-panel">
+            <p class="admin-subtitle" data-i18n="admin.businessSectorsSubtitle">Register the available Business Sectors here — Nuestras APPs' own Sector de Negocio field is filled from this list.</p>
+            <div class="data-table-wrapper" data-table-id="business-sectors">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="admin.appName" data-col="name">App name</th>
-                            <th data-i18n="menu.appSector" data-col="sector">Business sector</th>
-                            <th data-i18n="menu.appScreenAssignment" data-col="screens">Screen assignment</th>
-                            <th data-i18n="admin.planStatus" data-col="status">Status</th>
+                            <th data-i18n="admin.businessSectorName" data-col="name">Sector name</th>
                             <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
                             <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
                             <th data-col="actions"></th>
                         </tr>
                     </thead>
-                    <tbody id="saas-app-table-body">
+                    <tbody id="sectors-table-body">
                         <!-- rendered at runtime -->
                     </tbody>
                 </table>
             </div>
-            <p id="apps-empty" class="admin-empty" data-i18n="admin.noApps" hidden>No apps yet. Add the first one above.</p>
-        </section>
-
-        <section class="admin-panel" id="app-detail-view" hidden>
-            <button type="button" class="btn btn-secondary" id="app-detail-back-btn">
-                <i class="bx bx-arrow-back" aria-hidden="true"></i>
-                <span data-i18n="admin.back">Back</span>
-            </button>
-            <div class="saas-app-detail-head">
-                <div class="saas-app-icon" id="app-detail-icon"><i class="bx bx-mobile-alt" aria-hidden="true"></i></div>
-                <div>
-                    <h2 id="app-detail-name">—</h2>
-                    <p class="admin-subtitle" id="app-detail-clients"></p>
-                </div>
-                <button type="button" class="admin-icon-btn" id="app-detail-edit-btn" aria-label="Edit">
-                    <i class="bx bx-edit" aria-hidden="true"></i>
-                </button>
-                <button type="button" class="admin-icon-btn admin-icon-btn-danger" id="app-detail-delete-btn" aria-label="Delete">
-                    <i class="bx bx-trash" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div id="app-screen-list" class="saas-app-screen-list">
-                <!-- rendered at runtime -->
-            </div>
-            <button type="button" class="admin-add-row-btn" id="app-add-screen-btn">
-                <i class="bx bx-plus-circle" aria-hidden="true"></i>
-                <span data-i18n="menu.appAddScreen">Add another operational screen</span>
-            </button>
+            <p id="sectors-empty" class="admin-empty" data-i18n="admin.noBusinessSectors" hidden>No sectors yet. Add the first one above.</p>
         </section>
     </main>
 
-    <div class="modal-overlay" id="app-edit-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="app-edit-modal-title">
-            <h3 id="app-edit-modal-title">Edit app</h3>
-            <form id="app-form" class="admin-form" novalidate>
-                <input type="hidden" id="app-id" value="">
+    <div class="modal-overlay" id="sector-add-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-add-modal-title">
+            <h3 id="sector-add-modal-title" data-i18n="menu.addBusinessSectorNew">+ Create New Sector</h3>
+            <form id="sector-form" class="admin-form" novalidate>
                 <div class="admin-form-grid">
                     <div class="admin-field">
-                        <label for="app-name" data-i18n="admin.appName">Name</label>
-                        <input id="app-name" name="name" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="app-sector" data-i18n="menu.appSector">Business sector</label>
-                        <select id="app-sector" name="sector" required>
-                            <!-- populated at runtime from /api/admin/business-sectors -->
-                        </select>
-                    </div>
-                    <div class="admin-field">
-                        <label for="app-status" data-i18n="admin.planStatus">Status</label>
-                        <select id="app-status" name="status">
-                            <option value="active" data-i18n="admin.planStatusActive">Active</option>
-                            <option value="inactive" data-i18n="admin.planStatusInactive">Inactive</option>
-                            <option value="development" data-i18n="menu.appStatusDevelopment">Development</option>
-                        </select>
-                    </div>
-                    <div class="admin-field">
-                        <label for="app-icon" data-i18n="admin.appIcon">Icon</label>
-                        <select id="app-icon" name="icon">
-                            <option value="bx-truck">🚚 Transporte / 3PL</option>
-                            <option value="bx-restaurant">🍽️ Restaurante</option>
-                            <option value="bx-door-open">🚪 Control de Acceso</option>
-                            <option value="bx-store">🏬 Retail</option>
-                            <option value="bx-mobile-alt">📱 Genérica</option>
-                        </select>
-                    </div>
-                    <div class="admin-field">
-                        <label for="app-color-from" data-i18n="admin.appColorFrom">Color (inicio)</label>
-                        <input id="app-color-from" name="colorFrom" type="color" value="#6C7CF0">
-                    </div>
-                    <div class="admin-field">
-                        <label for="app-color-to" data-i18n="admin.appColorTo">Color (fin)</label>
-                        <input id="app-color-to" name="colorTo" type="color" value="#3A4BC9">
+                        <label for="sector-name" data-i18n="admin.businessSectorName">Sector name</label>
+                        <input id="sector-name" name="name" type="text" required>
                     </div>
                 </div>
-                <div id="app-form-error" class="admin-error" role="alert" hidden></div>
+                <div id="sector-form-error" class="admin-error" role="alert" hidden></div>
                 <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="app-form-submit" data-i18n="admin.save">Save</button>
-                    <button type="button" class="btn btn-secondary" id="app-form-cancel" data-i18n="admin.cancel">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="app-screen-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="app-screen-modal-title">
-            <h3 id="app-screen-modal-title" data-i18n="menu.appAddScreen">Add another operational screen</h3>
-            <form id="app-screen-form" class="admin-form" novalidate>
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="app-screen-name" data-i18n="menu.appScreenName">Screen name</label>
-                        <input id="app-screen-name" name="name" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="app-screen-web-key" data-i18n="menu.appScreenWebLink">Fills which Web screen</label>
-                        <select id="app-screen-web-key" name="webScreenKey" required>
-                            <!-- populated at runtime from /api/admin/web-screens-catalog -->
-                        </select>
-                    </div>
-                    <div class="admin-field">
-                        <label for="app-screen-type" data-i18n="menu.appScreenType">Screen type</label>
-                        <select id="app-screen-type" name="screenType">
-                            <option value="guided" data-i18n="menu.appScreenTypeGuided">Guided form</option>
-                            <option value="readonly" data-i18n="menu.appScreenTypeReadonly">Read-only</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="app-screen-form-error" class="admin-error" role="alert" hidden></div>
-                <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="app-screen-form-submit" data-i18n="admin.save">Save</button>
-                    <button type="button" class="btn btn-secondary" id="app-screen-form-cancel" data-i18n="admin.cancel">Cancel</button>
+                    <button type="submit" class="btn" id="sector-form-submit" data-i18n="admin.save">Save</button>
+                    <button type="button" class="btn btn-secondary" id="sector-form-cancel" data-i18n="admin.cancel">Cancel</button>
                 </div>
             </form>
         </div>
@@ -535,6 +440,6 @@
     </div>
 
     <script src="Dashboard.js"></script>
-    <script src="Admin-NuestrasApps.js"></script>
+    <script src="Admin-BusinessSectors.js"></script>
 </body>
 </html>

@@ -143,6 +143,9 @@ const {
     deleteSaasApp,
     addSaasAppScreen,
     deleteSaasAppScreen,
+    listBusinessSectors,
+    createBusinessSector,
+    deleteBusinessSector,
     listActiveAppSectors,
     getClientAppScreens,
     WEB_SCREEN_CATALOG,
@@ -1316,6 +1319,31 @@ app.delete('/api/admin/saas-apps/:id/screens/:screenId', requireAuth, requireAdm
     const existing = getSaasAppById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'App not found.' });
     res.json({ app: deleteSaasAppScreen(req.params.id, req.params.screenId) });
+});
+
+// --- Nuestros Sectores de Negocio (catalog Nuestras APPs' Sector field ------
+// picks from — see business_sectors in db.js) ---------------------------------
+app.get('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) => {
+    res.json({ sectors: listBusinessSectors() });
+});
+
+app.post('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) => {
+    const { name } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
+    try {
+        const sector = createBusinessSector({ name: name.trim(), createdBy: req.user.name });
+        res.status(201).json({ sector });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'Ya existe ese sector de negocio.' });
+        }
+        throw err;
+    }
+});
+
+app.delete('/api/admin/business-sectors/:id', requireAuth, requireAdmin, (req, res) => {
+    deleteBusinessSector(req.params.id);
+    res.status(204).end();
 });
 
 // --- Equipo SaaS (GEIPSA's own staff — role='admin' accounts) ---------------
