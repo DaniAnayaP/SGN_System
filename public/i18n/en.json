@@ -958,8 +958,15 @@
     "screenUnavailable": "This screen isn't available yet.",
     "comingSoon": "Coming soon",
     "tabHome": "Home",
-    "tabRegister": "Register",
+    "tabPanel": "Panel",
+    "tabBoard": "Board",
+    "tabCatalogs": "Catalogs",
+    "tabOperations": "Operations",
+    "tabAdmin": "Administration",
+    "tabManagement": "Management",
     "tabReports": "Reports",
-    "tabProfile": "Profile"
+    "tabSupport": "Support Material",
+    "breadcrumbHome": "Home",
+    "deptAreaButton": "Dept/Area"
   }
 }

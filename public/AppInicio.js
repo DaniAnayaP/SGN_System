@@ -87,9 +87,75 @@ function renderTiles(screens) {
     });
 }
 
-document.getElementById('home-tab-registrar').addEventListener('click', () => showToast(t('home.comingSoon')));
-document.getElementById('home-tab-reportes').addEventListener('click', () => showToast(t('home.comingSoon')));
-document.getElementById('home-tab-perfil').addEventListener('click', () => showToast(t('home.comingSoon')));
+// --- Hamburger menu: top-bar icons (same ones Sistema Web has) + logout ---
+const hamburgerBtn = document.getElementById('home-hamburger-btn');
+const hamburgerMenu = document.getElementById('home-hamburger-menu');
+function closeHamburgerMenu() {
+    hamburgerMenu.hidden = true;
+    hamburgerBtn.setAttribute('aria-expanded', 'false');
+}
+hamburgerBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const willOpen = hamburgerMenu.hidden;
+    hamburgerMenu.hidden = !willOpen;
+    hamburgerBtn.setAttribute('aria-expanded', String(willOpen));
+});
+document.addEventListener('click', closeHamburgerMenu);
+['home-menu-messages', 'home-menu-chatbot', 'home-menu-notifications', 'home-menu-bookmarks'].forEach((id) => {
+    document.getElementById(id).addEventListener('click', () => {
+        closeHamburgerMenu();
+        showToast(t('home.comingSoon'));
+    });
+});
+document.getElementById('home-menu-logout').addEventListener('click', async () => {
+    closeHamburgerMenu();
+    try {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } finally {
+        window.location.replace('Login.html');
+    }
+});
+
+// --- Depto/Área and Centro de Costos pickers -----------------------------
+// Neither is wired to real data yet — see the 2-step Depto→Área flow
+// discussed for a later pass. Honest stub for now, same pattern as the
+// category tabs below (comingSoon toast) rather than pretending to work.
+document.getElementById('home-dept-area-btn').addEventListener('click', () => showToast(t('home.comingSoon')));
+document.getElementById('home-cost-centers-btn').addEventListener('click', () => showToast(t('home.comingSoon')));
+
+// --- Bottom category tabs --------------------------------------------------
+// Only Inicio actually has content (the Accesos rápidos tiles below, from
+// this client's assigned App screens) — every other category is a stub
+// until its own mobile screen exists, same "coming soon" honesty as the
+// old Registrar/Reportes/Perfil tabs it replaces.
+const breadcrumbCurrent = document.getElementById('home-breadcrumb-current');
+document.querySelectorAll('.home-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.home-tab').forEach((other) => other.classList.remove('active'));
+        tab.classList.add('active');
+        breadcrumbCurrent.textContent = t(tab.dataset.breadcrumbKey);
+        if (tab.id !== 'home-tab-inicio') showToast(t('home.comingSoon'));
+    });
+});
+
+async function loadClientBranding() {
+    const logoImg = document.getElementById('home-client-logo');
+    const logoFallback = document.getElementById('home-client-logo-fallback');
+    const nameEl = document.getElementById('home-client-name');
+    try {
+        const res = await fetch('/api/business/branding', { credentials: 'include' });
+        if (!res.ok) return;
+        const { branding } = await res.json();
+        nameEl.textContent = branding.companyAbbreviation || branding.companyName || '';
+        if (branding.logoDataUrl) {
+            logoImg.src = branding.logoDataUrl;
+            logoImg.hidden = false;
+            logoFallback.hidden = true;
+        }
+    } catch {
+        // Fallback icon + blank name already in the markup — nothing to do.
+    }
+}
 
 (async function init() {
     await loadLanguage();
@@ -107,6 +173,7 @@ document.getElementById('home-tab-perfil').addEventListener('click', () => showT
 
         const screensData = screensRes.ok ? await screensRes.json() : { app: null, screens: [] };
         renderTiles(screensData.screens || []);
+        loadClientBranding();
     } catch (err) {
         console.error('AppInicio failed to load:', err);
         renderTiles([]);

@@ -23,8 +23,51 @@
          mobile-first page. -->
     <main class="home-screen">
         <header class="home-header">
-            <p class="home-hello" data-i18n="home.greeting">Hola,</p>
-            <h1 class="home-name" id="home-user-name">—</h1>
+            <div class="home-header-top">
+                <div class="home-client-brand">
+                    <img class="home-client-logo" id="home-client-logo" src="icons/icon-512.png" alt="" hidden>
+                    <span class="home-client-logo home-client-logo-fallback" id="home-client-logo-fallback"><i class="bx bx-buildings" aria-hidden="true"></i></span>
+                    <span class="home-client-name" id="home-client-name">—</span>
+                </div>
+                <div class="home-header-top-actions">
+                    <button type="button" class="home-pill-btn" id="home-dept-area-btn">
+                        <i class="bx bx-buildings" aria-hidden="true"></i>
+                        <span data-i18n="home.deptAreaButton">Depto/Área</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="home-pill-btn" id="home-cost-centers-btn">
+                        <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
+                        <span data-i18n="sidebar.costCenters">Cost Centers</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="home-hamburger-btn" id="home-hamburger-btn" aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-menu" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div class="home-hamburger-menu" id="home-hamburger-menu" role="menu" hidden>
+                    <button type="button" role="menuitem" id="home-menu-messages">
+                        <i class="bx bx-message" aria-hidden="true"></i> <span data-i18n="main.messages">Messages</span>
+                    </button>
+                    <button type="button" role="menuitem" id="home-menu-chatbot">
+                        <i class="bx bx-bot" aria-hidden="true"></i> <span data-i18n="main.chatbot">Chatbot</span>
+                    </button>
+                    <button type="button" role="menuitem" id="home-menu-notifications">
+                        <i class="bx bx-bell" aria-hidden="true"></i> <span data-i18n="main.notifications">Notifications</span>
+                    </button>
+                    <button type="button" role="menuitem" id="home-menu-bookmarks">
+                        <i class="bx bx-bookmarks" aria-hidden="true"></i> <span data-i18n="main.bookmarks">Bookmarks</span>
+                    </button>
+                    <hr>
+                    <button type="button" role="menuitem" class="home-menu-logout" id="home-menu-logout">
+                        <i class="bx bx-log-out-circle" aria-hidden="true"></i> <span data-i18n="sidebar.logout">Log out</span>
+                    </button>
+                </div>
+            </div>
+            <div>
+                <p class="home-hello" data-i18n="home.greeting">Hola,</p>
+                <h1 class="home-name" id="home-user-name">—</h1>
+            </div>
         </header>
 
         <section class="home-section">
@@ -38,24 +81,50 @@
             </div>
         </section>
 
-        <nav class="home-tabbar" aria-label="Main navigation">
-            <button type="button" class="home-tab active" id="home-tab-inicio">
+        <nav class="home-tabbar" id="home-tabbar" aria-label="Main navigation">
+            <button type="button" class="home-tab active" id="home-tab-inicio" data-breadcrumb-key="home.tabHome">
                 <i class="bx bx-home" aria-hidden="true"></i>
                 <span data-i18n="home.tabHome">Inicio</span>
             </button>
-            <button type="button" class="home-tab" id="home-tab-registrar">
-                <i class="bx bx-edit" aria-hidden="true"></i>
-                <span data-i18n="home.tabRegister">Registrar</span>
+            <button type="button" class="home-tab" id="home-tab-panel" data-breadcrumb-key="home.tabPanel">
+                <i class="bx bx-grid-alt" aria-hidden="true"></i>
+                <span data-i18n="home.tabPanel">Panel</span>
             </button>
-            <button type="button" class="home-tab" id="home-tab-reportes">
+            <button type="button" class="home-tab" id="home-tab-tablero" data-breadcrumb-key="home.tabBoard">
                 <i class="bx bx-bar-chart-alt-2" aria-hidden="true"></i>
+                <span data-i18n="home.tabBoard">Tablero</span>
+            </button>
+            <button type="button" class="home-tab" id="home-tab-catalogos" data-breadcrumb-key="home.tabCatalogs">
+                <i class="bx bx-book-content" aria-hidden="true"></i>
+                <span data-i18n="home.tabCatalogs">Catálogos</span>
+            </button>
+            <button type="button" class="home-tab" id="home-tab-operaciones" data-breadcrumb-key="home.tabOperations">
+                <i class="bx bx-cog" aria-hidden="true"></i>
+                <span data-i18n="home.tabOperations">Operaciones</span>
+            </button>
+            <button type="button" class="home-tab" id="home-tab-administracion" data-breadcrumb-key="home.tabAdmin">
+                <i class="bx bx-briefcase" aria-hidden="true"></i>
+                <span data-i18n="home.tabAdmin">Administración</span>
+            </button>
+            <button type="button" class="home-tab" id="home-tab-gestion" data-breadcrumb-key="home.tabManagement">
+                <i class="bx bx-task" aria-hidden="true"></i>
+                <span data-i18n="home.tabManagement">Gestión</span>
+            </button>
+            <button type="button" class="home-tab" id="home-tab-reportes" data-breadcrumb-key="home.tabReports">
+                <i class="bx bx-file" aria-hidden="true"></i>
                 <span data-i18n="home.tabReports">Reportes</span>
             </button>
-            <button type="button" class="home-tab" id="home-tab-perfil">
-                <i class="bx bx-user" aria-hidden="true"></i>
-                <span data-i18n="home.tabProfile">Perfil</span>
+            <button type="button" class="home-tab" id="home-tab-material-apoyo" data-breadcrumb-key="home.tabSupport">
+                <i class="bx bx-help-circle" aria-hidden="true"></i>
+                <span data-i18n="home.tabSupport">Material Apoyo</span>
             </button>
         </nav>
+
+        <div class="home-breadcrumb">
+            <span data-i18n="home.breadcrumbHome">Inicio</span>
+            <i class="bx bx-chevron-right" aria-hidden="true"></i>
+            <span class="current" id="home-breadcrumb-current" data-i18n="home.tabHome">Inicio</span>
+        </div>
     </main>
 
     <div class="home-toast-container" id="home-toast-container" aria-live="polite"></div>

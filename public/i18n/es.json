@@ -958,8 +958,15 @@
     "screenUnavailable": "Esta pantalla aún no está disponible.",
     "comingSoon": "Próximamente",
     "tabHome": "Inicio",
-    "tabRegister": "Registrar",
+    "tabPanel": "Panel",
+    "tabBoard": "Tablero",
+    "tabCatalogs": "Catálogos",
+    "tabOperations": "Operaciones",
+    "tabAdmin": "Administración",
+    "tabManagement": "Gestión",
     "tabReports": "Reportes",
-    "tabProfile": "Perfil"
+    "tabSupport": "Material Apoyo",
+    "breadcrumbHome": "Inicio",
+    "deptAreaButton": "Depto/Área"
   }
 }

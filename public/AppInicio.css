@@ -26,8 +26,117 @@ body{
 }
 
 .home-header{
-    padding: calc(1.6rem + env(safe-area-inset-top, 0px)) 1.4rem 1rem;
+    padding: calc(1.1rem + env(safe-area-inset-top, 0px)) 1.4rem 1rem;
 }
+.home-header-top{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+    position: relative;
+}
+.home-header-top-actions{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+.home-client-brand{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex-shrink: 1;
+}
+.home-client-logo{
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 0.4rem;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+.home-client-logo-fallback{
+    background: linear-gradient(135deg, #6C7CF0, #3A4BC9);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+}
+.home-client-name{
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #9BA3C4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.home-pill-btn{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+    background: #171b2c;
+    border: 1px solid #232640;
+    color: #c7cce8;
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 600;
+    padding: 0.42rem 0.55rem;
+    border-radius: 1.2rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.home-pill-btn i:first-child{ color: #7FE1FF; font-size: 0.9rem; }
+.home-pill-btn i:last-child{ font-size: 0.85rem; }
+.home-hamburger-btn{
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: #171b2c;
+    border: 1px solid #232640;
+    color: #c7cce8;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.home-hamburger-menu{
+    position: absolute;
+    top: 2.6rem;
+    right: 0;
+    width: 12rem;
+    background: #171b2c;
+    border: 1px solid #232640;
+    border-radius: 0.8rem;
+    padding: 0.4rem;
+    z-index: 20;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.home-hamburger-menu[hidden]{ display: none; }
+.home-hamburger-menu button{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    background: none;
+    border: none;
+    color: #c7cce8;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.55rem 0.6rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    text-align: left;
+}
+.home-hamburger-menu button i{ font-size: 1.05rem; color: #7FE1FF; }
+.home-hamburger-menu hr{ border: none; border-top: 1px solid #232640; margin: 0.3rem 0; }
+.home-hamburger-menu .home-menu-logout{ color: #ff8a8a; }
+.home-hamburger-menu .home-menu-logout i{ color: #ff8a8a; }
 .home-hello{
     margin: 0;
     font-size: 0.8rem;
@@ -107,27 +216,50 @@ body{
 .home-tabbar{
     margin-top: auto;
     display: flex;
-    justify-content: space-around;
-    padding: 0.7rem 0.5rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    justify-content: flex-start;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0.7rem 0.5rem 0.5rem;
     border-top: 1px solid #1c1f30;
     background: #0d0f1a;
 }
+.home-tabbar::-webkit-scrollbar{ display: none; }
 .home-tab{
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.2rem;
+    flex-shrink: 0;
     background: none;
     border: none;
     color: #5b6b9e;
     font-family: inherit;
-    font-size: 0.62rem;
+    font-size: 0.6rem;
     font-weight: 600;
     cursor: pointer;
-    padding: 0.2rem 0.6rem;
+    padding: 0.2rem 0.7rem;
 }
-.home-tab i{ font-size: 1.1rem; }
+.home-tab i{ font-size: 1.1rem; transition: transform 0.15s ease; }
 .home-tab.active{ color: #7FE1FF; }
+/* A small lift on the active icon is the only "selected" cue — no
+   background bubble/notch (tried, client asked for something much more
+   subtle: "solo debe subir la curva ... muy ligeramente"). */
+.home-tab.active i{ transform: translateY(-0.3rem); }
+
+.home-breadcrumb{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    padding: 0.5rem 1.4rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    font-size: 0.64rem;
+    color: #5b6b9e;
+    background: #0b0d14;
+    border-top: 1px solid #1c1f30;
+}
+.home-breadcrumb .current{ color: #c7cce8; font-weight: 700; }
+.home-breadcrumb i{ font-size: 0.68rem; }
 
 .home-toast-container{
     position: fixed;
