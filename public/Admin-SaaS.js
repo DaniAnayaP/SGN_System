@@ -282,8 +282,20 @@ const DATA_TABLE_CLIENT_COLUMNS = [
     'costCenters', 'costCentersContracted', 'anexoChanges',
     'contractRegisteredDate', 'contractEndDate', 'contractTerm',
     'permisosContratados', 'pagoPorAdicionales',
-    'username', 'status', 'actions',
+    'username', 'status',
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+    'actions',
 ];
+// The 13 "Control Interno" system columns (see getSystemColumnsForRecord in
+// db.js), in the same order as their entries above.
+const SYSTEM_COLUMN_KEYS = DATA_TABLE_CLIENT_COLUMNS.filter((k) => k.startsWith('colSys'));
+function systemCell(value) {
+    const td = textCell(value);
+    td.className = 'col-system';
+    return td;
+}
 
 function iconButton(iconClass, label, onClick, { disabled = false, title = '', danger = false } = {}) {
     const btn = document.createElement('button');
@@ -436,6 +448,7 @@ function renderClients() {
             tdPagoPorAdicionales,
             textCell(client.adminUsername),
             tdStatus,
+            ...SYSTEM_COLUMN_KEYS.map((k) => systemCell(client[k])),
             tdActions,
         );
         // Tags each cell with which logical column it is, in the same order

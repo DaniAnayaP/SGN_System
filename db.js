@@ -2887,6 +2887,10 @@ function deserializePlan(row) {
         endDate: end_date || '',
         locked: !!locked,
         costPerCostCenter: cost_per_cost_center || 0,
+        ...getSystemColumnsForRecord({
+            companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Planes',
+            centroCostos: '', createdAt: row.created_at,
+        }),
     };
 }
 
@@ -3132,7 +3136,13 @@ function deleteSaasAppScreen(appId, screenId) {
 function deserializeBusinessSector(row) {
     if (!row) return row;
     const { created_at, created_by, ...rest } = row;
-    return { ...rest, createdAt: created_at, createdBy: created_by || '' };
+    return {
+        ...rest, createdAt: created_at, createdBy: created_by || '',
+        ...getSystemColumnsForRecord({
+            companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Sectores de Negocio',
+            centroCostos: '', createdAt: created_at,
+        }),
+    };
 }
 
 function listBusinessSectors() {

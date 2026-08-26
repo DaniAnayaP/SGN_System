@@ -57,6 +57,23 @@ const cancelBtn = document.getElementById('plan-form-cancel');
 const tableBody = document.getElementById('plan-table-body');
 const emptyMsg = document.getElementById('plan-empty');
 
+// The 13 "Control Interno" system columns (see getSystemColumnsForRecord
+// in db.js) — same key order as the table's own <th data-col="colSys...">.
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+function buildSystemColumnCells(record) {
+    return SYSTEM_COLUMN_KEYS.map((k) => {
+        const td = document.createElement('td');
+        td.dataset.col = k;
+        td.className = 'col-system';
+        td.textContent = record[k] || '—';
+        return td;
+    });
+}
+
 const treeModal = document.getElementById('plan-tree-modal');
 const treeModalTitle = document.getElementById('plan-tree-modal-title');
 const treeContainer = document.getElementById('plan-tree-container');
@@ -312,7 +329,8 @@ function renderPlans() {
         tr.append(
             tdName, tdDescription, tdCreatedAt, tdCreatedBy,
             buildCostCentersLimitCell(plan), tdAccessPermCost, tdCostCenterTotal,
-            buildEndDateCell(plan), buildStatusCell(plan), buildLockedCell(plan), tdActions,
+            buildEndDateCell(plan), buildStatusCell(plan), buildLockedCell(plan),
+            ...buildSystemColumnCells(plan), tdActions,
         );
         tableBody.appendChild(tr);
     });

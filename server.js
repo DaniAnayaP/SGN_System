@@ -608,6 +608,10 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
             additionalCostCentersPayment,
             additionalPermissionsPayment,
             additionalsPaymentTotal: additionalCostCentersPayment + additionalPermissionsPayment,
+            ...getSystemColumnsForRecord({
+                companyName: client.company_name, area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Clientes',
+                centroCostos: '', createdAt: client.created_at,
+            }),
         };
     });
     res.json({ clients });

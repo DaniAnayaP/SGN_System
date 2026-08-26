@@ -7,6 +7,14 @@
 // settings, logout) comes from Dashboard.js.
 // ---------------------------------------------------------------------------
 
+// The 13 "Control Interno" system columns (see getSystemColumnsForRecord
+// in db.js) — same key order as the table's own <th data-col="colSys...">.
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+
 const tableBody = document.getElementById('sectors-table-body');
 const emptyMsg = document.getElementById('sectors-empty');
 
@@ -39,6 +47,12 @@ function renderSectors() {
         tdCreatedAt.textContent = sector.createdAt ? sector.createdAt.slice(0, 10) : '—';
         const tdCreatedBy = document.createElement('td');
         tdCreatedBy.textContent = sector.createdBy || '—';
+        const systemCols = SYSTEM_COLUMN_KEYS.map((k) => {
+            const td = document.createElement('td');
+            td.className = 'col-system';
+            td.textContent = sector[k] || '—';
+            return td;
+        });
         const tdActions = document.createElement('td');
         tdActions.className = 'admin-table-actions';
         const deleteBtn = document.createElement('button');
@@ -48,7 +62,7 @@ function renderSectors() {
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
         deleteBtn.addEventListener('click', () => removeSector(sector));
         tdActions.append(deleteBtn);
-        tr.append(tdName, tdCreatedAt, tdCreatedBy, tdActions);
+        tr.append(tdName, tdCreatedAt, tdCreatedBy, ...systemCols, tdActions);
         tableBody.appendChild(tr);
     });
 }
