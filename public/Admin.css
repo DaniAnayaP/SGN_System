@@ -1003,14 +1003,25 @@ body.dark-mode .perm-tree-depth-2{
 /* Classification group (Control Interno, etc.) — same tint the columns it
    groups already wear as their own tenue tint in the real data-table, so
    the same color reads as "one connected concept" in both places. Applied
-   on top of .perm-tree-depth-4 (renderClassificationGroup in
-   PermissionTree.js adds this class alongside it), distinguishing it from
-   the plain "Tabla <X>"/"Iconos Personalización" heading rows that also
-   live at depth 4 but carry no grant of their own. */
+   on top of .perm-tree-depth-5 (renderClassificationGroup in
+   PermissionTree.js adds this class alongside it — a sibling of the
+   table's own plain columns, also depth 5, not the "Tabla <X>" heading
+   above them at depth 4), distinguishing it from the plain "Tabla
+   <X>"/"Iconos Personalización" heading rows. */
 .perm-tree-row-classification{
     font-weight: 600;
     font-size: 0.78rem;
     color: var(--color-column-system-text);
+    background-color: var(--color-column-system-band-bg);
+    border-radius: 0.3rem;
+    margin: 0.15rem 0;
+}
+/* Wraps Control Interno's own 13 columns (depth 6) in the same tint as
+   their group header — without this, once expanded they were plain rows
+   indistinguishable from the table's OTHER columns sitting at the same
+   depth 5 (the exact complaint: "no se distingue qué opciones son de
+   Control Interno y cuáles no"). */
+.perm-tree-classification-children{
     background-color: var(--color-column-system-band-bg);
     border-radius: 0.3rem;
     margin: 0.15rem 0;

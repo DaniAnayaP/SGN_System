@@ -2994,7 +2994,13 @@ const WEB_SCREEN_CATALOG = [
 function deserializeSaasApp(row) {
     if (!row) return row;
     const { color_from, color_to, created_at, created_by, ...rest } = row;
-    return { ...rest, colorFrom: color_from, colorTo: color_to, createdAt: created_at, createdBy: created_by || '' };
+    return {
+        ...rest, colorFrom: color_from, colorTo: color_to, createdAt: created_at, createdBy: created_by || '',
+        ...getSystemColumnsForRecord({
+            companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestras APPs',
+            centroCostos: '', createdAt: created_at,
+        }),
+    };
 }
 
 function listSaasApps() {

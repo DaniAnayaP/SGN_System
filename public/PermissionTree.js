@@ -382,7 +382,14 @@
             const classChecked = classLeafKeys.filter((k) => grantSet.has(k)).length;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
-            const classRow = buildRow(t(cls.labelKey, cls.labelParams), 4, {
+            // Depth 5 — a sibling of the table's own plain columns (also 5,
+            // see renderTableColumns), not depth 4 (the "Tabla <X>" heading's
+            // own depth). Rendering it at 4 made it read as a peer of the
+            // table heading instead of a peer of the columns beside it, so
+            // its children (also forced to the shared depth-5 indent) were
+            // visually indistinguishable from every other depth-5 column —
+            // "no se distingue qué opciones son de Control Interno".
+            const classRow = buildRow(t(cls.labelKey, cls.labelParams), 5, {
                 expanded: classExpanded,
                 onToggle: () => {
                     if (classExpanded) expandedItems.delete(classTreeKey);
@@ -400,8 +407,14 @@
             }
             container.appendChild(classRow.row);
             if (!classExpanded) return;
+            // Own tinted wrapper (same band color as the header row) so the
+            // whole group reads as one visual unit distinct from the plain
+            // columns around it, not just an indent level.
+            const classChildren = document.createElement('div');
+            classChildren.className = 'perm-tree-classification-children';
+            container.appendChild(classChildren);
             cls.submenu.forEach((col) => {
-                renderColumnRow(container, section, item, `${classBase}/${col.id}`, col, 5, subBlocked);
+                renderColumnRow(classChildren, section, item, `${classBase}/${col.id}`, col, 6, subBlocked);
             });
         }
 
@@ -594,8 +607,25 @@
                             // independent leaf — "can see this pantalla" —
                             // regardless of whether it also has a Tabla of
                             // columns. Never a rollup of its columns (see
-                            // leafKeysUnder's comment for why).
-                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, subBlocked);
+                            // leafKeysUnder's comment for why). When it DOES
+                            // have a table/icons, its row also gets its own
+                            // chevron (on top of the checkbox) so the whole
+                            // "Tabla <X>" block below can be folded away as
+                            // one unit — before this, only "Tabla <X>"'s own
+                            // inner heading could collapse; the pantalla row
+                            // itself couldn't, so its table always took up
+                            // space even when you just wanted the pantalla's
+                            // own checkbox in view.
+                            const subHasDetail = (subSm.submenu && subSm.submenu.length) || (subSm.iconsSubmenu && subSm.iconsSubmenu.length);
+                            const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
+                            const subDetailExpanded = expandedItems.has(subDetailKey);
+                            const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, subHasDetail ? {
+                                expanded: subDetailExpanded,
+                                onToggle: () => {
+                                    if (subDetailExpanded) expandedItems.delete(subDetailKey);
+                                    else expandedItems.add(subDetailKey);
+                                },
+                            } : null, subBlocked);
                             if (!readOnly) {
                                 subRow.input.checked = grantSet.has(key);
                                 subRow.input.addEventListener('change', () => {
@@ -605,11 +635,13 @@
                             }
                             treeRoot.appendChild(subRow.row);
 
-                            if (subSm.submenu && subSm.submenu.length) {
-                                renderTableColumns(treeRoot, section, item, sm, subSm, subBlocked);
-                            }
-                            if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
-                                renderIconPermissions(treeRoot, section, item, sm, subSm, subBlocked);
+                            if (subHasDetail && subDetailExpanded) {
+                                if (subSm.submenu && subSm.submenu.length) {
+                                    renderTableColumns(treeRoot, section, item, sm, subSm, subBlocked);
+                                }
+                                if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
+                                    renderIconPermissions(treeRoot, section, item, sm, subSm, subBlocked);
+                                }
                             }
                         });
                     });
