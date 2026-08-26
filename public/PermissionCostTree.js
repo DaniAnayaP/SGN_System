@@ -325,12 +325,25 @@
             keys.forEach((k) => (checked ? grantSet.add(k) : grantSet.delete(k)));
         }
 
-        function buildStaticRow(labelText, depth) {
+        function buildStaticRow(labelText, depth, toggle) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth} perm-tree-row-static`;
-            const spacer = document.createElement('span');
-            spacer.className = 'perm-tree-toggle-spacer';
-            row.appendChild(spacer);
+            if (toggle) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'perm-tree-toggle';
+                btn.setAttribute('aria-expanded', String(toggle.expanded));
+                const icon = document.createElement('i');
+                icon.className = 'bx bx-chevron-down';
+                icon.setAttribute('aria-hidden', 'true');
+                btn.appendChild(icon);
+                btn.addEventListener('click', () => { toggle.onToggle(); render(); });
+                row.appendChild(btn);
+            } else {
+                const spacer = document.createElement('span');
+                spacer.className = 'perm-tree-toggle-spacer';
+                row.appendChild(spacer);
+            }
             const label = document.createElement('span');
             label.className = 'perm-tree-static-label';
             label.textContent = labelText;
@@ -441,10 +454,16 @@
             const classChecked = classLeafKeys.filter((k) => grantSet.has(k)).length;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
-            const { row, input } = buildRow(t(cls.labelKey, cls.labelParams), 4, {
+            // Depth 5 — a sibling of the table's own plain columns (also 5,
+            // see renderColumns), not depth 4 (the "Tabla <X>" heading's own
+            // depth) — same fix as PermissionTree.js's renderClassificationGroup,
+            // otherwise its children (forced to the shared depth-5 indent)
+            // are indistinguishable from every other depth-5 column.
+            const { row, input } = buildRow(t(cls.labelKey, cls.labelParams), 5, {
                 expanded: classExpanded,
                 onToggle: () => { if (classExpanded) expandedItems.delete(classTreeKey); else expandedItems.add(classTreeKey); },
             }, ...extraSlotArgs(null, classLeafKeys));
+            row.classList.add('perm-tree-row-classification');
             if (input && mode !== 'clientTricolor') {
                 input.checked = classChecked === classLeafKeys.length;
                 input.indeterminate = classChecked > 0 && classChecked < classLeafKeys.length;
@@ -452,11 +471,28 @@
             }
             container.appendChild(row);
             if (!classExpanded) return;
-            cls.submenu.forEach((col) => renderColumnRow(container, section, item, `${classBase}/${col.id}`, col, 5));
+            // Own tinted wrapper (same idea as PermissionTree.js) so the
+            // whole group reads as one visual unit distinct from the plain
+            // columns around it.
+            const classChildren = document.createElement('div');
+            classChildren.className = 'perm-tree-classification-children';
+            container.appendChild(classChildren);
+            cls.submenu.forEach((col) => renderColumnRow(classChildren, section, item, `${classBase}/${col.id}`, col, 6));
         }
 
         function renderColumns(container, section, item, sm, subSm) {
-            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4));
+            // "Tabla <X>" heading is its own collapsible unit too (same
+            // convention as PermissionTree.js's renderTableColumns) — one
+            // toggle folds just the column list, independent of the OUTER
+            // toggle on subSm's own row (see below) that hides this whole
+            // block (heading + columns) entirely.
+            const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const tableExpanded = expandedItems.has(tableTreeKey);
+            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, {
+                expanded: tableExpanded,
+                onToggle: () => { if (tableExpanded) expandedItems.delete(tableTreeKey); else expandedItems.add(tableTreeKey); },
+            }));
+            if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
                     renderClassificationGroup(container, section, item, sm, subSm, entry);
@@ -537,14 +573,24 @@
                             const key = subSm.standalone
                                 ? keyOf(section.id, subSm.id, null)
                                 : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
-                            const { row: subRowEl, input: subInput } = buildRow(t(subSm.labelKey, subSm.labelParams), 3, null, ...extraSlotArgs(key, [key]));
+                            // Own chevron (on top of the checkbox) when this
+                            // pantalla has a table — folds the whole "Tabla
+                            // <X>" block away as one unit, same fix as
+                            // PermissionTree.js's equivalent subRow.
+                            const subHasDetail = !!(subSm.submenu && subSm.submenu.length);
+                            const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
+                            const subDetailExpanded = expandedItems.has(subDetailKey);
+                            const { row: subRowEl, input: subInput } = buildRow(t(subSm.labelKey, subSm.labelParams), 3, subHasDetail ? {
+                                expanded: subDetailExpanded,
+                                onToggle: () => { if (subDetailExpanded) expandedItems.delete(subDetailKey); else expandedItems.add(subDetailKey); },
+                            } : null, ...extraSlotArgs(key, [key]));
                             if (subInput && mode !== 'clientTricolor') {
                                 subInput.checked = grantSet.has(key);
                                 subInput.addEventListener('change', () => { setKeys([key], subInput.checked); render(); });
                             }
                             container.appendChild(subRowEl);
 
-                            if (subSm.submenu && subSm.submenu.length) {
+                            if (subHasDetail && subDetailExpanded) {
                                 renderColumns(container, section, item, sm, subSm);
                             }
                         });

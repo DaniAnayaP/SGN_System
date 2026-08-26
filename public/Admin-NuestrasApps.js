@@ -115,6 +115,19 @@ function renderApps() {
             <td><span class="saas-app-status ${app.status}">${Dashboard.t(STATUS_LABEL_KEY[app.status] || STATUS_LABEL_KEY.active)}</span></td>
             <td>${app.createdAt ? app.createdAt.slice(0, 10) : '—'}</td>
             <td>${app.createdBy || '—'}</td>
+            <td class="col-system">${app.colSysEmpresa || '—'}</td>
+            <td class="col-system">${app.colSysArea || '—'}</td>
+            <td class="col-system">${app.colSysModulo || '—'}</td>
+            <td class="col-system">${app.colSysPantalla || '—'}</td>
+            <td class="col-system">${app.colSysCentroCostos || '—'}</td>
+            <td class="col-system">${app.colSysFecha || '—'}</td>
+            <td class="col-system">${app.colSysDiaNum || '—'}</td>
+            <td class="col-system">${app.colSysDiaTexto || '—'}</td>
+            <td class="col-system">${app.colSysMesNum || '—'}</td>
+            <td class="col-system">${app.colSysMesTexto || '—'}</td>
+            <td class="col-system">${app.colSysAnio || '—'}</td>
+            <td class="col-system">${app.colSysSemana || '—'}</td>
+            <td class="col-system">${app.colSysHora || '—'}</td>
             <td class="actions">
                 <button type="button" class="admin-icon-btn" aria-label="Edit" data-action="edit">
                     <i class="bx bx-edit" aria-hidden="true"></i>
