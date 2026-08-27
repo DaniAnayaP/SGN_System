@@ -30,15 +30,21 @@
                     <span class="home-client-name" id="home-client-name">—</span>
                 </div>
                 <div class="home-header-top-actions">
-                    <button type="button" class="home-pill-btn home-pill-btn-icon-only" id="home-dept-area-btn" data-i18n-aria="home.deptAreaButton" aria-label="Depto/Área">
-                        <i class="bx bx-buildings" aria-hidden="true"></i>
-                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" class="home-pill-btn" id="home-cost-centers-btn">
-                        <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
-                        <span data-i18n="home.costCentersButton">C. Cost</span>
-                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                    </button>
+                    <div class="home-picker-wrap">
+                        <button type="button" class="home-pill-btn home-pill-btn-icon-only" id="home-dept-area-btn" aria-haspopup="true" aria-expanded="false" data-i18n-aria="home.deptAreaButton" aria-label="Depto/Área">
+                            <i class="bx bx-buildings" aria-hidden="true"></i>
+                            <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                        </button>
+                        <div class="home-picker-dropdown" id="home-dept-area-dropdown" role="menu" hidden></div>
+                    </div>
+                    <div class="home-picker-wrap">
+                        <button type="button" class="home-pill-btn" id="home-cost-centers-btn" aria-haspopup="true" aria-expanded="false">
+                            <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
+                            <span id="home-cost-centers-label" data-i18n="home.costCentersButton">C. Cost</span>
+                            <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                        </button>
+                        <div class="home-picker-dropdown" id="home-cc-dropdown" role="menu" hidden></div>
+                    </div>
                     <button type="button" class="home-hamburger-btn" id="home-search-btn" data-i18n-aria="sidebar.searchPlaceholder" aria-label="Search">
                         <i class="bx bx-search" aria-hidden="true"></i>
                     </button>
@@ -180,6 +186,31 @@
     </main>
 
     <div class="home-toast-container" id="home-toast-container" aria-live="polite"></div>
+
+    <div class="home-sheet-overlay" id="home-ui-scale-overlay" hidden>
+        <div class="home-sheet" role="dialog" aria-modal="true" aria-labelledby="home-ui-scale-title">
+            <div class="home-sheet-handle"></div>
+            <h3 class="home-sheet-title" id="home-ui-scale-title" data-i18n="main.uiScale">System size</h3>
+            <p class="home-sheet-subtitle" data-i18n="home.uiScaleSubtitle">Adjust your App's text and icon size.</p>
+            <div class="home-ui-scale-preview">
+                <span class="home-ui-scale-preview-text" id="home-ui-scale-preview-text">Aa</span>
+                <p class="home-ui-scale-preview-label" data-i18n="home.uiScalePreview">Preview</p>
+            </div>
+            <div class="home-ui-scale-stepper">
+                <button type="button" class="home-ui-scale-btn" id="home-ui-scale-decrease" data-i18n-aria="main.uiScaleDecrease" aria-label="Decrease size">
+                    <i class="bx bx-minus" aria-hidden="true"></i>
+                </button>
+                <div class="home-ui-scale-value">
+                    <p class="home-ui-scale-label" id="home-ui-scale-label">Ideal</p>
+                    <p class="home-ui-scale-percent" id="home-ui-scale-percent">100%</p>
+                </div>
+                <button type="button" class="home-ui-scale-btn home-ui-scale-btn-accent" id="home-ui-scale-increase" data-i18n-aria="main.uiScaleIncrease" aria-label="Increase size">
+                    <i class="bx bx-plus" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="home-ui-scale-dots" id="home-ui-scale-dots"></div>
+        </div>
+    </div>
 
     <script src="AppInicio.js" defer></script>
 </body>

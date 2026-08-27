@@ -118,6 +118,15 @@
         return [keyOf(section.id, item.id, null)];
     }
 
+    // Web and App visibility share the same grantSet, as the exact same
+    // {sectionId,itemId,submenuId} triple used for Web, just with this
+    // suffix baked into the submenuId — same convention PermissionTree.js
+    // uses (see its own APP_SUFFIX comment). Only meaningful in
+    // grantReadonlyCost mode for now — a Plan deciding App is available at
+    // a node, same "independently combinable, locked until Ver is on" rule
+    // as Operar/Editar/Autorizar already gets there.
+    const APP_SUFFIX = '#app';
+
     function create(container, { mode = 'costEdit', currency = 'MXN', interactive = false } = {}) {
         let sectionsData = [];
         let grantSet = new Set(); // costEdit/grantReadonlyCost modes
@@ -236,7 +245,7 @@
         // never individually priced — pricing stops at Columna). colorSlot
         // (clientTricolor only) is { color, checked, onChange } — see
         // extraSlotArgs below for how callers build it.
-        function buildRow(labelText, depth, toggle, costKey, colorSlot) {
+        function buildRow(labelText, depth, toggle, costKey, colorSlot, appToggle) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
 
@@ -263,7 +272,17 @@
                 label.className = 'perm-tree-label-plain';
                 label.textContent = labelText;
                 row.appendChild(label);
-                if (costKey != null) row.appendChild(buildCostSlot(costKey));
+                if (costKey != null) {
+                    row.appendChild(buildCostSlot(costKey));
+                    const appCostWrap = document.createElement('span');
+                    appCostWrap.className = 'perm-tree-app-cost-wrap';
+                    appCostWrap.title = t('main.appVisionColumn');
+                    const appCostIcon = document.createElement('i');
+                    appCostIcon.className = 'bx bx-mobile-alt';
+                    appCostIcon.setAttribute('aria-hidden', 'true');
+                    appCostWrap.append(appCostIcon, buildCostSlot(costKey + APP_SUFFIX));
+                    row.appendChild(appCostWrap);
+                }
             } else if (mode === 'clientTricolor') {
                 const isRedInteractive = !!(colorSlot && colorSlot.color === 'red' && interactive);
                 if (isRedInteractive) {
@@ -289,6 +308,7 @@
                 // total at the bottom of the modal isn't the only place a
                 // price appears — confirmed with the user.
                 if (interactive && costKey != null) row.appendChild(buildCostSlot(costKey));
+                appendClientAppSlot(row, appToggle, costKey);
             } else {
                 const labelEl = document.createElement('label');
                 labelEl.className = 'perm-tree-check';
@@ -299,6 +319,7 @@
                 labelEl.append(input, span);
                 row.appendChild(labelEl);
                 if (costKey != null) row.appendChild(buildCostSlot(costKey));
+                appendAppToggle(row, appToggle, costKey);
             }
 
             return { row, input };
@@ -321,8 +342,126 @@
             }];
         }
 
+        // clientTricolor only — App-visibility's OWN tricolor slot, built
+        // from the App-suffixed sibling of each Web leaf key (see APP_SUFFIX
+        // below) so it colors green/yellow/red exactly like Web does, just
+        // against `#app` rows instead of plain ones. `locked` additionally
+        // marks whether the Web side itself is even covered yet (by plan or
+        // client) — a red App slot only becomes a real purchasable checkbox
+        // (see appendClientAppSlot) when it isn't locked, matching "App
+        // can't be sold without Web".
+        function appExtraSlotArgs(webLeafKeys) {
+            if (mode !== 'clientTricolor') return undefined;
+            const appKeys = webLeafKeys.map((k) => k + APP_SUFFIX);
+            const color = colorFor(appKeys);
+            const webCovered = webLeafKeys.length > 0 && webLeafKeys.every((k) => planGrantSet.has(k) || effectiveClientSet().has(k));
+            return {
+                color,
+                locked: !webCovered,
+                checked: color === 'red' && appKeys.length > 0 && appKeys.every((k) => pendingAdditions.has(k)),
+                onChange: (checked) => appKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
+            };
+        }
+
+        // Column rows price/sell App-vision as ONE toggle on the column's
+        // own "solo-ver" leaf (mirrors computeAppToggle/appColumnColorFor
+        // elsewhere in this file) — never the 4 Ver/Operar/Editar/Autorizar
+        // sub-permission keys the WEB side uses for a column.
+        function appColumnExtraSlot(soloVerKey, webLevelKeys) {
+            if (mode !== 'clientTricolor') return undefined;
+            const appKey = soloVerKey + APP_SUFFIX;
+            const color = colorFor([appKey]);
+            const webCovered = webLevelKeys.some((k) => planGrantSet.has(k) || effectiveClientSet().has(k));
+            return {
+                color,
+                locked: !webCovered,
+                checked: color === 'red' && pendingAdditions.has(appKey),
+                onChange: (checked) => (checked ? pendingAdditions.add(appKey) : pendingAdditions.delete(appKey)),
+            };
+        }
+
+        // Unchecking a Web key also drops its App-visibility sibling — "App
+        // can't stay enabled without Web" applies here too (grantReadonlyCost
+        // mode only calls this; costEdit/clientTricolor never do).
         function setKeys(keys, checked) {
-            keys.forEach((k) => (checked ? grantSet.add(k) : grantSet.delete(k)));
+            keys.forEach((k) => {
+                if (checked) grantSet.add(k);
+                else { grantSet.delete(k); grantSet.delete(k + APP_SUFFIX); }
+            });
+        }
+
+        // grantReadonlyCost only — App is a plain paired toggle per node,
+        // no eligibility filter (a Plan isn't tied to a client/sector the
+        // way PermissionTree.js's client tree is), just "locked until this
+        // same node's Web grant is on" — same rule Operar/Editar/Autorizar
+        // already follow via colInput/verGranted above.
+        function computeAppToggle(leafKeys) {
+            if (mode !== 'grantReadonlyCost') return null;
+            const grantedLeaves = leafKeys.filter((k) => grantSet.has(k));
+            const appOnCount = grantedLeaves.filter((k) => grantSet.has(k + APP_SUFFIX)).length;
+            return {
+                checked: grantedLeaves.length > 0 && appOnCount === grantedLeaves.length,
+                indeterminate: appOnCount > 0 && appOnCount < grantedLeaves.length,
+                disabled: grantedLeaves.length === 0,
+                onChange: (checked) => {
+                    grantedLeaves.forEach((k) => (checked ? grantSet.add(k + APP_SUFFIX) : grantSet.delete(k + APP_SUFFIX)));
+                    render();
+                },
+            };
+        }
+
+        // grantReadonlyCost only — costKey (the SAME key already passed to
+        // buildRow for this row's own Web cost badge) shows what THIS
+        // node's App-vision reference price is, read from the same
+        // costMap GEIPSA set in costEdit mode (key + APP_SUFFIX) — a
+        // separate, independent price from the Web one, same "priced at
+        // every level on purpose" rule the rest of this file already
+        // follows.
+        function appendAppToggle(row, appToggle, costKey) {
+            if (!appToggle) return;
+            const label = document.createElement('label');
+            label.className = 'perm-tree-app-toggle';
+            label.title = t('main.appVisionColumn');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = appToggle.checked;
+            input.indeterminate = appToggle.indeterminate;
+            input.disabled = appToggle.disabled;
+            input.addEventListener('change', () => appToggle.onChange(input.checked));
+            const icon = document.createElement('i');
+            icon.className = 'bx bx-mobile-alt';
+            icon.setAttribute('aria-hidden', 'true');
+            label.append(input, icon);
+            row.appendChild(label);
+            if (costKey != null) row.appendChild(buildCostSlot(costKey + APP_SUFFIX));
+        }
+
+        // clientTricolor only — mirrors the Web colorSlot rendering right
+        // above (badge, or a real checkbox when red + interactive), just for
+        // the App-suffixed slot built by appExtraSlotArgs/appColumnExtraSlot.
+        // A red slot stays a plain locked badge (never a clickable checkbox)
+        // when its own `locked` flag is set — Web isn't covered here yet, so
+        // there's nothing to sell App-vision on top of.
+        function appendClientAppSlot(row, appColorSlot, costKey) {
+            if (!appColorSlot) return;
+            const isRedInteractive = !!(appColorSlot.color === 'red' && interactive && !appColorSlot.locked);
+            if (isRedInteractive) {
+                const label = document.createElement('label');
+                label.className = 'perm-tree-app-toggle';
+                label.title = t('main.appVisionColumn');
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.checked = !!appColorSlot.checked;
+                input.addEventListener('change', () => { appColorSlot.onChange(input.checked); render(); });
+                const icon = document.createElement('i');
+                icon.className = 'bx bx-mobile-alt';
+                icon.setAttribute('aria-hidden', 'true');
+                label.append(input, icon);
+                row.appendChild(label);
+            } else if (appColorSlot.color) {
+                row.appendChild(buildStatusBadge(appColorSlot.color));
+            }
+            if (interactive && costKey != null) row.appendChild(buildCostSlot(costKey + APP_SUFFIX));
         }
 
         function buildStaticRow(labelText, depth, toggle) {
@@ -432,7 +571,8 @@
                     checked: color === 'red' && levelKeys.every((k) => pendingAdditions.has(k)),
                     onChange: (checked) => levelKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
                 };
-                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, colCostKey, colorSlot);
+                const soloVerKeyTri = keyOf(section.id, item.id, `${base}/solo-ver`);
+                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, colCostKey, colorSlot, appColumnExtraSlot(soloVerKeyTri, levelKeys));
                 container.appendChild(row);
                 return;
             }
@@ -443,7 +583,7 @@
             const { row: colRow, input: colInput } = buildRow(t(col.labelKey, col.labelParams), depth, {
                 expanded: colExpanded,
                 onToggle: () => { if (colExpanded) expandedItems.delete(colTreeKey); else expandedItems.add(colTreeKey); },
-            }, colCostKey);
+            }, colCostKey, undefined, computeAppToggle([soloVerKey]));
             colInput.checked = grantSet.has(soloVerKey);
             colInput.addEventListener('change', () => {
                 setKeys([soloVerKey], colInput.checked);
@@ -506,7 +646,7 @@
             const { row, input } = buildRow(t(cls.labelKey, cls.labelParams), 5, {
                 expanded: classExpanded,
                 onToggle: () => { if (classExpanded) expandedItems.delete(classTreeKey); else expandedItems.add(classTreeKey); },
-            }, ...extraSlotArgs(null, classLeafKeys));
+            }, ...extraSlotArgs(null, classLeafKeys), computeAppToggle(classLeafKeys) || appExtraSlotArgs(classLeafKeys));
             row.classList.add('perm-tree-row-classification');
             if (input && mode !== 'clientTricolor') {
                 input.checked = classChecked === classLeafKeys.length;
@@ -548,6 +688,12 @@
 
         function render() {
             container.innerHTML = '';
+            if (mode === 'grantReadonlyCost') {
+                const header = document.createElement('div');
+                header.className = 'perm-tree-app-header';
+                header.innerHTML = `<span class="perm-tree-app-header-label"><i class="bx bx-mobile-alt" aria-hidden="true"></i>${t('main.appVisionColumn')}</span>`;
+                container.appendChild(header);
+            }
             sectionsData.forEach((section) => {
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
                 const sectionChecked = sectionLeafKeys.filter((k) => grantSet.has(k)).length;
@@ -555,7 +701,7 @@
                 const { row: sectionRowEl, input: sectionInput } = buildRow(t(sectionLabelKey(section)), 0, section.items.length ? {
                     expanded: sectionExpanded,
                     onToggle: () => { if (sectionExpanded) expandedSections.delete(section.id); else expandedSections.add(section.id); },
-                } : null, ...extraSlotArgs(keyOf(section.id, null, null), sectionLeafKeys));
+                } : null, ...extraSlotArgs(keyOf(section.id, null, null), sectionLeafKeys), computeAppToggle(sectionLeafKeys) || appExtraSlotArgs(sectionLeafKeys));
                 if (sectionInput && mode !== 'clientTricolor') {
                     sectionInput.checked = sectionChecked === sectionLeafKeys.length && sectionLeafKeys.length > 0;
                     sectionInput.indeterminate = sectionChecked > 0 && sectionChecked < sectionLeafKeys.length;
@@ -573,7 +719,7 @@
                     const { row: itemRowEl, input: itemInput } = buildRow(t(item.labelKey, item.labelParams), 1, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => { if (itemExpanded) expandedItems.delete(itemKey); else expandedItems.add(itemKey); },
-                    } : null, ...extraSlotArgs(keyOf(section.id, item.id, null), itemLeafKeys));
+                    } : null, ...extraSlotArgs(keyOf(section.id, item.id, null), itemLeafKeys), computeAppToggle(itemLeafKeys) || appExtraSlotArgs(itemLeafKeys));
                     if (itemInput && mode !== 'clientTricolor') {
                         itemInput.checked = itemChecked === itemLeafKeys.length;
                         itemInput.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
@@ -586,7 +732,7 @@
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
                         const smCostKey = keyOf(section.id, item.id, sm.id);
                         if (!hasSubSubmenu) {
-                            const { row: smRowEl, input: smInput } = buildRow(t(sm.labelKey, sm.labelParams), 2, null, ...extraSlotArgs(smCostKey, [smCostKey]));
+                            const { row: smRowEl, input: smInput } = buildRow(t(sm.labelKey, sm.labelParams), 2, null, ...extraSlotArgs(smCostKey, [smCostKey]), computeAppToggle([smCostKey]) || appExtraSlotArgs([smCostKey]));
                             if (smInput && mode !== 'clientTricolor') {
                                 smInput.checked = grantSet.has(smCostKey);
                                 smInput.addEventListener('change', () => { setKeys([smCostKey], smInput.checked); render(); });
@@ -604,7 +750,7 @@
                         const { row: smRowEl2, input: smInput2 } = buildRow(t(sm.labelKey, sm.labelParams), 2, {
                             expanded: smExpandedNow,
                             onToggle: () => { if (smExpandedNow) expandedItems.delete(smKey); else expandedItems.add(smKey); },
-                        }, ...extraSlotArgs(smCostKey, smLeafKeys));
+                        }, ...extraSlotArgs(smCostKey, smLeafKeys), computeAppToggle(smLeafKeys) || appExtraSlotArgs(smLeafKeys));
                         if (smInput2 && mode !== 'clientTricolor') {
                             smInput2.checked = smChecked === smLeafKeys.length;
                             smInput2.indeterminate = smChecked > 0 && smChecked < smLeafKeys.length;
@@ -627,7 +773,7 @@
                             const { row: subRowEl, input: subInput } = buildRow(t(subSm.labelKey, subSm.labelParams), 3, subHasDetail ? {
                                 expanded: subDetailExpanded,
                                 onToggle: () => { if (subDetailExpanded) expandedItems.delete(subDetailKey); else expandedItems.add(subDetailKey); },
-                            } : null, ...extraSlotArgs(key, [key]));
+                            } : null, ...extraSlotArgs(key, [key]), computeAppToggle([key]) || appExtraSlotArgs([key]));
                             if (subInput && mode !== 'clientTricolor') {
                                 subInput.checked = grantSet.has(key);
                                 subInput.addEventListener('change', () => { setKeys([key], subInput.checked); render(); });
@@ -657,27 +803,29 @@
             let total = 0;
             sectionsData.forEach((section) => {
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
-                if (sectionLeafKeys.length && sectionLeafKeys.every((k) => set.has(k))) {
-                    total += costOf(keyOf(section.id, null, null));
-                }
+                const sectionKey = keyOf(section.id, null, null);
+                if (sectionLeafKeys.length && sectionLeafKeys.every((k) => set.has(k))) total += costOf(sectionKey);
+                if (sectionLeafKeys.length && sectionLeafKeys.every((k) => set.has(k + APP_SUFFIX))) total += costOf(sectionKey + APP_SUFFIX);
 
                 section.items.forEach((item) => {
                     const itemLeafKeys = leafKeysUnder(section, item);
-                    if (itemLeafKeys.length && itemLeafKeys.every((k) => set.has(k))) {
-                        total += costOf(keyOf(section.id, item.id, null));
-                    }
+                    const itemKey = keyOf(section.id, item.id, null);
+                    if (itemLeafKeys.length && itemLeafKeys.every((k) => set.has(k))) total += costOf(itemKey);
+                    if (itemLeafKeys.length && itemLeafKeys.every((k) => set.has(k + APP_SUFFIX))) total += costOf(itemKey + APP_SUFFIX);
                     if (!(item.submenu && item.submenu.length)) return;
 
                     item.submenu.forEach((sm) => {
                         const smCostKey = keyOf(section.id, item.id, sm.id);
                         if (!(sm.submenu && sm.submenu.length)) {
                             if (set.has(smCostKey)) total += costOf(smCostKey);
+                            if (set.has(smCostKey + APP_SUFFIX)) total += costOf(smCostKey + APP_SUFFIX);
                             return;
                         }
                         const smLeafKeys = sm.submenu.map((subSm) => (
                             subSm.standalone ? keyOf(section.id, subSm.id, null) : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
                         ));
                         if (smLeafKeys.every((k) => set.has(k))) total += costOf(smCostKey);
+                        if (smLeafKeys.every((k) => set.has(k + APP_SUFFIX))) total += costOf(smCostKey + APP_SUFFIX);
 
                         sm.submenu.forEach((subSm) => {
                             // Pantalla's OWN price — same fix as db.js's
@@ -687,14 +835,21 @@
                             // below.
                             const subSmItemId = subSm.standalone ? subSm.id : item.id;
                             const subSmSubmenuId = subSm.standalone ? null : `${sm.id}/${subSm.id}`;
-                            if (set.has(keyOf(section.id, subSmItemId, subSmSubmenuId))) {
-                                total += costOf(keyOf(section.id, subSmItemId, subSmSubmenuId));
-                            }
+                            const subSmKey = keyOf(section.id, subSmItemId, subSmSubmenuId);
+                            if (set.has(subSmKey)) total += costOf(subSmKey);
+                            if (set.has(subSmKey + APP_SUFFIX)) total += costOf(subSmKey + APP_SUFFIX);
                             if (!(subSm.submenu && subSm.submenu.length)) return;
                             subSm.submenu.forEach((col) => {
                                 const base = `${sm.id}/${subSm.id}/${col.id}`;
+                                const colKey = keyOf(section.id, item.id, base);
                                 const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
-                                if (levelKeys.some((k) => set.has(k))) total += costOf(keyOf(section.id, item.id, base));
+                                if (levelKeys.some((k) => set.has(k))) total += costOf(colKey);
+                                // App-vision for a column is its own single
+                                // "solo-ver" toggle (see appColumnExtraSlot),
+                                // never the 4 sub-permission levels.
+                                if (set.has(keyOf(section.id, item.id, `${base}/solo-ver`) + APP_SUFFIX)) {
+                                    total += costOf(colKey + APP_SUFFIX);
+                                }
                             });
                         });
                     });

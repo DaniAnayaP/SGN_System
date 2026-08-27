@@ -139,7 +139,7 @@ hamburgerBtn.addEventListener('click', (event) => {
 document.addEventListener('click', closeHamburgerMenu);
 [
     'home-menu-messages', 'home-menu-chatbot', 'home-menu-notifications', 'home-menu-bookmarks',
-    'home-menu-ui-scale', 'home-menu-user-info', 'home-menu-business-profile',
+    'home-menu-user-info', 'home-menu-business-profile',
     'home-menu-style', 'home-menu-admin-business', 'home-menu-button-config',
     'home-menu-database', 'home-menu-business-intelligence', 'home-menu-others',
 ].forEach((id) => {
@@ -175,12 +175,446 @@ document.getElementById('home-menu-logout').addEventListener('click', async () =
     }
 });
 
+// --- "Tamaño del sistema" bottom sheet -----------------------------------
+// Same 8 levels/70-140%/PUT /api/me/ui-scale as Dashboard.js's own "System
+// size" dropdown (per-account, so a change here also applies next time this
+// same user opens Sistema Web) — only the presentation differs: a mobile
+// bottom sheet with a live-scaling preview instead of a desktop dropdown.
+const UI_SCALE_LEVELS = [70, 80, 90, 100, 110, 120, 130, 140];
+const UI_SCALE_DEFAULT_LEVEL = 4;
+let currentUiScaleLevel = UI_SCALE_DEFAULT_LEVEL;
+
+const uiScaleOverlay = document.getElementById('home-ui-scale-overlay');
+const uiScaleLabelEl = document.getElementById('home-ui-scale-label');
+const uiScalePercentEl = document.getElementById('home-ui-scale-percent');
+const uiScalePreviewEl = document.getElementById('home-ui-scale-preview-text');
+const uiScaleDotsEl = document.getElementById('home-ui-scale-dots');
+const uiScaleDecreaseBtn = document.getElementById('home-ui-scale-decrease');
+const uiScaleIncreaseBtn = document.getElementById('home-ui-scale-increase');
+
+function uiScaleLabelFor(level) {
+    return level === UI_SCALE_DEFAULT_LEVEL ? t('main.uiScaleIdeal') : `${UI_SCALE_LEVELS[level - 1]}%`;
+}
+
+function renderUiScaleDots(level) {
+    uiScaleDotsEl.innerHTML = '';
+    UI_SCALE_LEVELS.forEach((_, i) => {
+        const dot = document.createElement('span');
+        dot.className = `home-ui-scale-dot${i + 1 === level ? ' active' : ''}`;
+        uiScaleDotsEl.appendChild(dot);
+    });
+}
+
+// Base preview size (1.4rem, matches .home-ui-scale-preview-text's own
+// CSS) scaled by the SAME percent :root's own font-size is about to get —
+// gives the "Aa" sample a live, immediate sense of the change even though
+// the sheet itself sits on the already-rescaled root and wouldn't otherwise
+// look any different on its own.
+function applyUiScaleLevel(level) {
+    currentUiScaleLevel = level;
+    document.documentElement.style.fontSize = `${UI_SCALE_LEVELS[level - 1]}%`;
+    uiScaleLabelEl.textContent = uiScaleLabelFor(level);
+    uiScalePercentEl.textContent = `${UI_SCALE_LEVELS[level - 1]}%`;
+    uiScalePreviewEl.style.fontSize = `${1.4 * (UI_SCALE_LEVELS[level - 1] / 100)}rem`;
+    uiScaleDecreaseBtn.disabled = level <= 1;
+    uiScaleIncreaseBtn.disabled = level >= UI_SCALE_LEVELS.length;
+    renderUiScaleDots(level);
+}
+
+async function fetchUiScaleLevel() {
+    try {
+        const res = await fetch('/api/me/ui-scale', { credentials: 'include' });
+        if (!res.ok) return UI_SCALE_DEFAULT_LEVEL;
+        const { scale } = await res.json();
+        return Number.isInteger(scale) && scale >= 1 && scale <= UI_SCALE_LEVELS.length ? scale : UI_SCALE_DEFAULT_LEVEL;
+    } catch {
+        return UI_SCALE_DEFAULT_LEVEL;
+    }
+}
+
+async function saveUiScaleLevel(level) {
+    applyUiScaleLevel(level);
+    try {
+        await fetch('/api/me/ui-scale', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ scale: level }),
+        });
+    } catch {
+        // Already applied locally — a failed save just means it won't
+        // stick next visit, not worth interrupting this one with an error.
+    }
+}
+
+function openUiScaleSheet() {
+    closeHamburgerMenu();
+    uiScaleOverlay.hidden = false;
+}
+function closeUiScaleSheet() {
+    uiScaleOverlay.hidden = true;
+}
+document.getElementById('home-menu-ui-scale').addEventListener('click', openUiScaleSheet);
+uiScaleOverlay.addEventListener('click', (event) => { if (event.target === uiScaleOverlay) closeUiScaleSheet(); });
+uiScaleDecreaseBtn.addEventListener('click', () => { if (currentUiScaleLevel > 1) saveUiScaleLevel(currentUiScaleLevel - 1); });
+uiScaleIncreaseBtn.addEventListener('click', () => { if (currentUiScaleLevel < UI_SCALE_LEVELS.length) saveUiScaleLevel(currentUiScaleLevel + 1); });
+
 // --- Depto/Área and Centro de Costos pickers -----------------------------
-// Neither is wired to real data yet — see the 2-step Depto→Área flow
-// discussed for a later pass. Honest stub for now, same pattern as the
-// category tabs below (comingSoon toast) rather than pretending to work.
-document.getElementById('home-dept-area-btn').addEventListener('click', () => showToast(t('home.comingSoon')));
-document.getElementById('home-cost-centers-btn').addEventListener('click', () => showToast(t('home.comingSoon')));
+// Real data now, ported from Dashboard.js's own pickers — this page has no
+// shared module with Dashboard.js (separate <script>, no sidebar/topbar
+// shell), so the catalogs and grant-checking helpers are duplicated here on
+// purpose, same "deliberate copy" convention PermissionCostTree.js already
+// established for PermissionTree.js.
+const DEPARTMENTS = [
+    { key: 'finance', labelKey: 'menu.finance', abbrKey: 'sidebar.deptAbbr.finance', icon: 'bx-dollar-circle' },
+    { key: 'accounting', labelKey: 'menu.accounting', abbrKey: 'sidebar.deptAbbr.accounting', icon: 'bx-calculator' },
+    { key: 'human-resources', labelKey: 'menu.humanResources', abbrKey: 'sidebar.deptAbbr.humanResources', icon: 'bx-id-card' },
+    { key: 'marketing', labelKey: 'menu.marketing', abbrKey: 'sidebar.deptAbbr.marketing', icon: 'bx-megaphone' },
+    { key: 'commercial', labelKey: 'menu.commercial', abbrKey: 'sidebar.deptAbbr.commercial', icon: 'bx-store-alt' },
+    { key: 'purchasing', labelKey: 'menu.purchasing', abbrKey: 'sidebar.deptAbbr.purchasing', icon: 'bx-cart-alt' },
+    { key: 'supply-chain', labelKey: 'menu.supplyChain', abbrKey: 'sidebar.deptAbbr.supplyChain', icon: 'bx-package' },
+    { key: 'management-control', labelKey: 'menu.managementControl', abbrKey: 'sidebar.deptAbbr.managementControl', icon: 'bx-line-chart' },
+    { key: 'general-management', labelKey: 'menu.generalManagement', abbrKey: 'sidebar.deptAbbr.generalManagement', icon: 'bx-crown' },
+    { key: 'steering-committee', labelKey: 'menu.steeringCommittee', abbrKey: 'sidebar.deptAbbr.steeringCommittee', icon: 'bx-group' },
+    { key: 'certifications', labelKey: 'menu.certifications', abbrKey: 'sidebar.deptAbbr.certifications', icon: 'bx-certification' },
+];
+const GENERIC_AREAS = [
+    { key: 'area-1', labelKey: 'menu.area.generic', labelParams: { n: 1 }, icon: 'bx-folder' },
+    { key: 'area-2', labelKey: 'menu.area.generic', labelParams: { n: 2 }, icon: 'bx-folder' },
+    { key: 'area-3', labelKey: 'menu.area.generic', labelParams: { n: 3 }, icon: 'bx-folder' },
+];
+const AREAS_BY_DEPARTMENT = {
+    'supply-chain': [
+        { key: 'sc-area-raw-material', labelKey: 'menu.area.rawMaterial', icon: 'bx-cube' },
+        { key: 'sc-area-production', labelKey: 'menu.area.production', icon: 'bx-cog' },
+        { key: 'sc-area-transport-1', labelKey: 'menu.area.transportVolume', icon: 'bx-car' },
+        { key: 'sc-area-distribution-center', labelKey: 'menu.area.distributionCenter', icon: 'bx-building' },
+        { key: 'sc-area-transport-2', labelKey: 'menu.area.transportLastMile', icon: 'bx-car' },
+        { key: 'sc-area-point-of-sale', labelKey: 'menu.area.pointOfSale', icon: 'bx-store' },
+        { key: 'sc-area-delivery', labelKey: 'menu.area.delivery', icon: 'bx-send' },
+        { key: 'sc-area-end-customer', labelKey: 'menu.area.endCustomer', icon: 'bx-user' },
+        { key: 'sc-area-customer-complaints', labelKey: 'menu.area.customerComplaints', icon: 'bx-error-circle' },
+    ],
+    finance: GENERIC_AREAS,
+    accounting: GENERIC_AREAS,
+    'human-resources': [
+        { key: 'hr-area-recruitment', labelKey: 'menu.area.recruitment', icon: 'bx-user-plus' },
+        { key: 'hr-area-personnel-admin', labelKey: 'menu.area.personnelAdmin', icon: 'bx-id-card' },
+        { key: 'hr-area-training-development', labelKey: 'menu.area.trainingDevelopment', icon: 'bx-book-open' },
+        { key: 'hr-area-compensation-benefits', labelKey: 'menu.area.compensationBenefits', icon: 'bx-money' },
+        { key: 'hr-area-organizational-development', labelKey: 'menu.area.organizationalDevelopment', icon: 'bx-sitemap' },
+        { key: 'hr-area-occupational-health-safety', labelKey: 'menu.area.occupationalHealthSafety', icon: 'bx-plus-medical' },
+        { key: 'hr-area-hris', labelKey: 'menu.area.hris', icon: 'bx-server' },
+        { key: 'hr-area-hr-analytics', labelKey: 'menu.area.hrAnalytics', icon: 'bx-line-chart' },
+    ],
+    marketing: GENERIC_AREAS,
+    commercial: GENERIC_AREAS,
+    purchasing: GENERIC_AREAS,
+    'management-control': GENERIC_AREAS,
+    'general-management': GENERIC_AREAS,
+    'steering-committee': GENERIC_AREAS,
+    certifications: [
+        { key: 'cert-area-iso-9001', labelKey: 'menu.area.iso9001', abbrKey: 'menu.area.iso9001Abbr', icon: 'bx-badge-check' },
+    ],
+};
+// home-tab-* button ids -> the areaCategories entry (data/menu.json) each
+// one represents — Inicio/Panel/Tablero aren't in this map on purpose,
+// they're the always-shown "generalItems" trio, not área-scoped categories.
+const HOME_TAB_CATEGORY_IDS = {
+    'home-tab-catalogos': 'cat-catalogos',
+    'home-tab-operaciones': 'cat-operaciones',
+    'home-tab-administracion': 'cat-admin',
+    'home-tab-gestion': 'cat-gestion',
+    'home-tab-reportes': 'cat-reportes',
+    'home-tab-material-apoyo': 'cat-material-apoyo',
+};
+
+let menuData = null;
+let effectiveGrants = [];
+let isClientAdmin = false;
+let availableDepartments = DEPARTMENTS;
+let selectedDepartment = localStorage.getItem('department') || null;
+let selectedArea = localStorage.getItem('area') || null;
+let sidebarCostCenters = [];
+
+function getStoredCostCenterSelection() {
+    const raw = localStorage.getItem('costCenterSelection');
+    if (!raw || raw === 'all') return 'all';
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return new Set(parsed);
+    } catch { /* fall through to default */ }
+    return 'all';
+}
+let selectedCostCenterIds = getStoredCostCenterSelection();
+function persistCostCenterSelection() {
+    localStorage.setItem(
+        'costCenterSelection',
+        selectedCostCenterIds === 'all' ? 'all' : JSON.stringify(Array.from(selectedCostCenterIds))
+    );
+}
+function isCostCenterSelected(id) {
+    return selectedCostCenterIds === 'all' || selectedCostCenterIds.has(id);
+}
+
+// Same 3-tier "pantalla habilitada" fallback as PermissionTree.js's own
+// isGranted()/Dashboard.js's hasScreenGrant — exact leaf, or broadened to
+// the whole item, or to the whole section.
+function isUnrestrictedClientAdmin() {
+    return isClientAdmin && effectiveGrants.length === 0;
+}
+function hasScreenGrant(sectionId, itemId, submenuId) {
+    if (isUnrestrictedClientAdmin()) return true;
+    return effectiveGrants.some((g) => (
+        (g.sectionId === sectionId && g.itemId === itemId && g.submenuId === submenuId)
+        || (g.sectionId === sectionId && g.itemId === itemId && !g.submenuId)
+        || (g.sectionId === sectionId && !g.itemId && !g.submenuId)
+    ));
+}
+function hasCostCenterPermission(ccId) {
+    if (isUnrestrictedClientAdmin()) return true;
+    return effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === 'cc-list' && g.submenuId === `cc-${ccId}`);
+}
+
+function closeAllPickerDropdowns() {
+    deptAreaDropdown.hidden = true;
+    deptAreaBtn.setAttribute('aria-expanded', 'false');
+    ccDropdown.hidden = true;
+    ccBtn.setAttribute('aria-expanded', 'false');
+    closeHamburgerMenu();
+}
+document.addEventListener('click', closeAllPickerDropdowns);
+
+const deptAreaBtn = document.getElementById('home-dept-area-btn');
+const deptAreaDropdown = document.getElementById('home-dept-area-dropdown');
+
+function updateDeptAreaLabel() {
+    const dept = availableDepartments.find((d) => d.key === selectedDepartment);
+    const area = ((selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || []).find((a) => a.key === selectedArea);
+    const parts = [
+        dept ? t(dept.abbrKey || dept.labelKey) : null,
+        area ? t(area.labelKey, area.labelParams || {}) : null,
+    ].filter(Boolean);
+    deptAreaBtn.setAttribute('aria-label', parts.length ? parts.join(' · ') : t('home.deptAreaButton'));
+}
+
+function renderDeptAreaDropdown() {
+    deptAreaDropdown.innerHTML = '';
+    if (!availableDepartments.length) {
+        const empty = document.createElement('div');
+        empty.className = 'home-picker-empty';
+        empty.textContent = t('home.deptAreaNone');
+        deptAreaDropdown.appendChild(empty);
+        return;
+    }
+    const deptLabel = document.createElement('div');
+    deptLabel.className = 'home-picker-section-label';
+    deptLabel.textContent = t('sidebar.department');
+    deptAreaDropdown.appendChild(deptLabel);
+    availableDepartments.forEach((dept) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `home-picker-option${dept.key === selectedDepartment ? ' active' : ''}`;
+        btn.innerHTML = `<i class="bx ${dept.icon}" aria-hidden="true"></i><span>${t(dept.labelKey)}</span>`;
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            selectedDepartment = selectedDepartment === dept.key ? null : dept.key;
+            localStorage.setItem('department', selectedDepartment || '');
+            // A different department has a different área list, so
+            // whatever área was picked before this switch no longer applies.
+            selectedArea = null;
+            localStorage.setItem('area', '');
+            renderDeptAreaDropdown();
+            updateDeptAreaLabel();
+            updateTabBarVisibility();
+        });
+        deptAreaDropdown.appendChild(btn);
+    });
+
+    const areas = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+    if (!areas.length) return;
+    deptAreaDropdown.appendChild(Object.assign(document.createElement('div'), { className: 'home-picker-divider' }));
+    const areaLabel = document.createElement('div');
+    areaLabel.className = 'home-picker-section-label';
+    areaLabel.textContent = t('sidebar.area');
+    deptAreaDropdown.appendChild(areaLabel);
+    areas.forEach((area) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `home-picker-option${area.key === selectedArea ? ' active' : ''}`;
+        btn.innerHTML = `<i class="bx ${area.icon}" aria-hidden="true"></i><span>${t(area.labelKey, area.labelParams || {})}</span>`;
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            selectedArea = selectedArea === area.key ? null : area.key;
+            localStorage.setItem('area', selectedArea || '');
+            renderDeptAreaDropdown();
+            updateDeptAreaLabel();
+            updateTabBarVisibility();
+            closeAllPickerDropdowns();
+        });
+        deptAreaDropdown.appendChild(btn);
+    });
+}
+
+deptAreaBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const willOpen = deptAreaDropdown.hidden;
+    closeAllPickerDropdowns();
+    if (willOpen) {
+        deptAreaDropdown.hidden = false;
+        deptAreaBtn.setAttribute('aria-expanded', 'true');
+    }
+});
+
+const ccBtn = document.getElementById('home-cost-centers-btn');
+const ccDropdown = document.getElementById('home-cc-dropdown');
+const ccLabel = document.getElementById('home-cost-centers-label');
+
+function updateCcLabel() {
+    if (!sidebarCostCenters.length) { ccLabel.textContent = t('home.costCentersButton'); return; }
+    const selected = sidebarCostCenters.filter((cc) => isCostCenterSelected(cc.id));
+    if (selected.length === 0) ccLabel.textContent = t('sidebar.costCentersNone');
+    else if (selected.length === sidebarCostCenters.length) ccLabel.textContent = t('sidebar.costCentersAllCount', { count: sidebarCostCenters.length });
+    else if (selected.length === 1) ccLabel.textContent = selected[0].code;
+    else ccLabel.textContent = t('sidebar.costCentersSelectedCount', { count: selected.length });
+}
+
+function renderCcDropdown() {
+    ccDropdown.innerHTML = '';
+    if (!sidebarCostCenters.length) {
+        const empty = document.createElement('div');
+        empty.className = 'home-picker-empty';
+        empty.textContent = t('sidebar.costCentersNone');
+        ccDropdown.appendChild(empty);
+        return;
+    }
+    const allLabel = document.createElement('label');
+    allLabel.className = 'home-picker-option';
+    const allCheckbox = document.createElement('input');
+    allCheckbox.type = 'checkbox';
+    allCheckbox.checked = sidebarCostCenters.every((cc) => isCostCenterSelected(cc.id));
+    allCheckbox.addEventListener('change', () => {
+        selectedCostCenterIds = allCheckbox.checked ? new Set(sidebarCostCenters.map((cc) => cc.id)) : new Set();
+        persistCostCenterSelection();
+        renderCcDropdown();
+        updateCcLabel();
+    });
+    allLabel.append(allCheckbox, Object.assign(document.createElement('span'), { textContent: t('sidebar.costCentersAll') }));
+    ccDropdown.appendChild(allLabel);
+    ccDropdown.appendChild(Object.assign(document.createElement('div'), { className: 'home-picker-divider' }));
+    sidebarCostCenters.forEach((cc) => {
+        const label = document.createElement('label');
+        label.className = 'home-picker-option';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = isCostCenterSelected(cc.id);
+        checkbox.addEventListener('change', () => {
+            if (selectedCostCenterIds === 'all') selectedCostCenterIds = new Set(sidebarCostCenters.map((c) => c.id));
+            if (checkbox.checked) selectedCostCenterIds.add(cc.id);
+            else selectedCostCenterIds.delete(cc.id);
+            persistCostCenterSelection();
+            updateCcLabel();
+            allCheckbox.checked = sidebarCostCenters.every((c) => isCostCenterSelected(c.id));
+        });
+        label.append(checkbox, Object.assign(document.createElement('span'), { textContent: `${cc.code} - ${cc.name}` }));
+        ccDropdown.appendChild(label);
+    });
+}
+
+ccBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const willOpen = ccDropdown.hidden;
+    closeAllPickerDropdowns();
+    if (willOpen) {
+        ccDropdown.hidden = false;
+        ccBtn.setAttribute('aria-expanded', 'true');
+    }
+});
+
+// --- Bottom category tabs, filtered to what the selected área actually
+// has granted (see effectiveAreaCategories/applyScreenGrantFilter in
+// Dashboard.js — same "drop a category with zero grant-covered pantallas"
+// rule, just producing hidden tabs here instead of a pruned sidebar tree).
+function effectiveAreaCategories() {
+    const base = menuData?.areaCategories || [];
+    const overrides = (menuData?.areaOverrides || {})[`${selectedDepartment}/${selectedArea}`];
+    if (!overrides) return base;
+    return base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat));
+}
+function categoryHasGrantedScreen(cat) {
+    if (!selectedDepartment || !selectedArea) return false;
+    return (cat.submenu || []).some((pantalla) => (
+        pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.id}`)
+    ));
+}
+function updateTabBarVisibility() {
+    const categories = effectiveAreaCategories();
+    Object.entries(HOME_TAB_CATEGORY_IDS).forEach(([tabId, catId]) => {
+        const tab = document.getElementById(tabId);
+        if (!tab) return;
+        const cat = categories.find((c) => c.id === catId);
+        tab.hidden = !(selectedDepartment && selectedArea && cat && categoryHasGrantedScreen(cat));
+    });
+    // The active tab may have just been hidden by this same narrowing —
+    // fall back to Inicio rather than leaving a hidden tab "active".
+    const activeTab = document.querySelector('.home-tab.active');
+    if (activeTab && activeTab.hidden) document.getElementById('home-tab-inicio').click();
+}
+
+async function initDeptAreaCc() {
+    try {
+        const [menuRes, modulesRes, profileRes, ccRes] = await Promise.all([
+            fetch('data/menu.json'),
+            fetch('/api/business/contracted-modules', { credentials: 'include' }),
+            fetch('/api/me/business-profile', { credentials: 'include' }),
+            fetch('/api/business/cost-centers', { credentials: 'include' }),
+        ]);
+        menuData = menuRes.ok ? await menuRes.json() : null;
+        const modules = modulesRes.ok ? await modulesRes.json() : { moduleKeys: [] };
+        availableDepartments = DEPARTMENTS.filter((d) => (modules.moduleKeys || []).includes(d.key));
+        const profileData = profileRes.ok ? await profileRes.json() : {};
+        effectiveGrants = profileData.profile?.effectiveGrants || [];
+        const ccData = ccRes.ok ? await ccRes.json() : { costCenters: [] };
+        sidebarCostCenters = (ccData.costCenters || []).filter((cc) => hasCostCenterPermission(cc.id));
+
+        // Drop a stored selection that no longer applies (department/área
+        // removed from this client's contract, or this user's own grants
+        // narrowed since the last visit).
+        if (selectedDepartment && !availableDepartments.some((d) => d.key === selectedDepartment)) {
+            selectedDepartment = null;
+            selectedArea = null;
+        }
+        if (selectedArea && !((AREAS_BY_DEPARTMENT[selectedDepartment] || []).some((a) => a.key === selectedArea))) {
+            selectedArea = null;
+        }
+        // Nothing to actually choose between — auto-pick, same as the
+        // desktop pickers do.
+        if (availableDepartments.length === 1 && !selectedDepartment) {
+            selectedDepartment = availableDepartments[0].key;
+            localStorage.setItem('department', selectedDepartment);
+        }
+        const areasForDept = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+        if (areasForDept.length === 1 && !selectedArea) {
+            selectedArea = areasForDept[0].key;
+            localStorage.setItem('area', selectedArea);
+        }
+        if (sidebarCostCenters.length === 1) {
+            selectedCostCenterIds = new Set([sidebarCostCenters[0].id]);
+            persistCostCenterSelection();
+        } else if (selectedCostCenterIds !== 'all') {
+            const validIds = new Set(sidebarCostCenters.map((cc) => cc.id));
+            selectedCostCenterIds = new Set(Array.from(selectedCostCenterIds).filter((id) => validIds.has(id)));
+        }
+
+        renderDeptAreaDropdown();
+        updateDeptAreaLabel();
+        renderCcDropdown();
+        updateCcLabel();
+        updateTabBarVisibility();
+    } catch (err) {
+        console.error('AppInicio: failed to load department/area/cost-center data:', err);
+    }
+}
 
 // --- Collapsible header — same idea as Dashboard.js's collapsible top bar:
 // reclaim vertical space on demand, nothing lost, persisted per browser.
@@ -268,10 +702,13 @@ async function loadClientBranding() {
         }
         const { user } = await meRes.json();
         document.getElementById('home-user-name').textContent = user?.name || '';
+        isClientAdmin = !!user?.isClientAdmin;
 
         const screensData = screensRes.ok ? await screensRes.json() : { app: null, screens: [] };
         renderTiles(screensData.screens || []);
         loadClientBranding();
+        initDeptAreaCc();
+        applyUiScaleLevel(await fetchUiScaleLevel());
     } catch (err) {
         console.error('AppInicio failed to load:', err);
         renderTiles([]);

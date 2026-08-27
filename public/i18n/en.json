@@ -393,6 +393,7 @@
     "accessPermCostOverlapHint": "A price set on a container level (Department/Area/Category) is counted separately from — and on top of — the prices of what's underneath it.",
     "accessPermTreeColumn": "Access / Permissions",
     "accessPermTreeCostColumn": "Cost $",
+    "accessPermTreeAppCostColumn": "App $",
     "accessPermCostsNewPlanHint": "Remember that to see and edit a new plan here, you must first create it in Nuestros Planes — it will then show up here to set its costs.",
     "costLabel": "Cost $",
     "institutionalColor": "Institutional color",
@@ -958,6 +959,9 @@
     "tabSupport": "Support Material",
     "breadcrumbHome": "Home",
     "deptAreaButton": "Dept/Area",
-    "costCentersButton": "C. Cost"
+    "deptAreaNone": "No departments available",
+    "costCentersButton": "C. Cost",
+    "uiScaleSubtitle": "Adjust your App's text and icon size.",
+    "uiScalePreview": "Preview"
   }
 }

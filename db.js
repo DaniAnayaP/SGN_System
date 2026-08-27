@@ -3316,23 +3316,39 @@ function planSmLeafKeys(section, item, sm) {
 // cost — container = fully checked, Columna = any of its 4 sub-permission
 // levels. NOT used by computeAccessCostTotal below (a plan's own total is
 // a plain sum of every priced row, independent of plan_grants).
+// App-visibility rides the exact same {sectionId,itemId,submenuId} tuple as
+// its Web counterpart, just with this suffix appended to the submenuId —
+// same convention PermissionTree.js/PermissionCostTree.js use client-side
+// (see their own GRANT_APP_SUFFIX comments). No schema change needed: it's
+// still an ordinary-looking row in plan_permission_costs/
+// client_permission_grants, just one whose submenu_id happens to end in
+// '#app'.
+const GRANT_APP_SUFFIX = '#app';
+
 function computeCostTotalForGrantSet(grantSet, costMap) {
-    const costOf = (sectionId, itemId, submenuId) => costMap.get(planTupleKey(sectionId, itemId, submenuId)) || 0;
+    const costOfKey = (key) => costMap.get(key) || 0;
     const fullyChecked = (keys) => keys.length > 0 && keys.every((k) => grantSet.has(k));
+    const appFullyChecked = (keys) => keys.length > 0 && keys.every((k) => grantSet.has(`${k}${GRANT_APP_SUFFIX}`));
 
     let total = 0;
     buildPlanTreeSections().forEach((section) => {
         const sectionLeafKeys = section.items.flatMap((item) => planItemLeafKeys(section, item));
-        if (fullyChecked(sectionLeafKeys)) total += costOf(section.id, null, null);
+        const sectionKey = planTupleKey(section.id, null, null);
+        if (fullyChecked(sectionLeafKeys)) total += costOfKey(sectionKey);
+        if (appFullyChecked(sectionLeafKeys)) total += costOfKey(sectionKey + GRANT_APP_SUFFIX);
 
         section.items.forEach((item) => {
             const itemLeafKeys = planItemLeafKeys(section, item);
-            if (fullyChecked(itemLeafKeys)) total += costOf(section.id, item.id, null);
+            const itemKey = planTupleKey(section.id, item.id, null);
+            if (fullyChecked(itemLeafKeys)) total += costOfKey(itemKey);
+            if (appFullyChecked(itemLeafKeys)) total += costOfKey(itemKey + GRANT_APP_SUFFIX);
             if (!(item.submenu && item.submenu.length)) return;
 
             item.submenu.forEach((sm) => {
                 const smLeafKeys = planSmLeafKeys(section, item, sm);
-                if (fullyChecked(smLeafKeys)) total += costOf(section.id, item.id, sm.id);
+                const smKey = planTupleKey(section.id, item.id, sm.id);
+                if (fullyChecked(smLeafKeys)) total += costOfKey(smKey);
+                if (appFullyChecked(smLeafKeys)) total += costOfKey(smKey + GRANT_APP_SUFFIX);
                 if (!(sm.submenu && sm.submenu.length)) return;
 
                 sm.submenu.forEach((subSm) => {
@@ -3345,15 +3361,23 @@ function computeCostTotalForGrantSet(grantSet, costMap) {
                     // levels is the accepted design, see file header).
                     const subSmItemId = subSm.standalone ? subSm.id : item.id;
                     const subSmSubmenuId = subSm.standalone ? null : `${sm.id}/${subSm.id}`;
-                    if (grantSet.has(planTupleKey(section.id, subSmItemId, subSmSubmenuId))) {
-                        total += costOf(section.id, subSmItemId, subSmSubmenuId);
-                    }
+                    const subSmKey = planTupleKey(section.id, subSmItemId, subSmSubmenuId);
+                    if (grantSet.has(subSmKey)) total += costOfKey(subSmKey);
+                    if (grantSet.has(subSmKey + GRANT_APP_SUFFIX)) total += costOfKey(subSmKey + GRANT_APP_SUFFIX);
                     if (!(subSm.submenu && subSm.submenu.length)) return;
                     subSm.submenu.forEach((col) => {
                         const base = `${sm.id}/${subSm.id}/${col.id}`;
+                        const colKey = planTupleKey(section.id, item.id, base);
                         const colSelected = ['solo-ver', 'ver-y-operar', 'editar', 'autorizar']
                             .some((lvl) => grantSet.has(planTupleKey(section.id, item.id, `${base}/${lvl}`)));
-                        if (colSelected) total += costOf(section.id, item.id, base);
+                        if (colSelected) total += costOfKey(colKey);
+                        // App-vision for a column is a single toggle on its
+                        // own "solo-ver" leaf (see PermissionCostTree.js's
+                        // computeAppToggle), never the 4 sub-permission
+                        // levels — mirrors how the column itself is priced
+                        // as one unit regardless of which level is checked.
+                        const soloVerKey = planTupleKey(section.id, item.id, `${base}/solo-ver`);
+                        if (grantSet.has(soloVerKey + GRANT_APP_SUFFIX)) total += costOfKey(colKey + GRANT_APP_SUFFIX);
                     });
                 });
             });

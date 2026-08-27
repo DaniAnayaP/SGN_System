@@ -393,6 +393,7 @@
     "accessPermCostOverlapHint": "Un costo puesto en un nivel contenedor (Departamento/Área/Categoría) se cuenta aparte de — y además de — los costos de lo que tiene debajo.",
     "accessPermTreeColumn": "Accesos / Permisos",
     "accessPermTreeCostColumn": "$ Costo",
+    "accessPermTreeAppCostColumn": "$ APP",
     "accessPermCostsNewPlanHint": "Recuerda que para poder ver y editar un nuevo plan aquí, primero debes crearlo en Nuestros Planes — te aparecerá aquí para modificar sus costos.",
     "costLabel": "Costo $",
     "institutionalColor": "Color institucional",
@@ -958,6 +959,9 @@
     "tabSupport": "Material Apoyo",
     "breadcrumbHome": "Inicio",
     "deptAreaButton": "Depto/Área",
-    "costCentersButton": "C. Cost"
+    "deptAreaNone": "Sin departamentos disponibles",
+    "costCentersButton": "C. Cost",
+    "uiScaleSubtitle": "Ajusta el tamaño de texto e íconos de tu App.",
+    "uiScalePreview": "Vista previa"
   }
 }
