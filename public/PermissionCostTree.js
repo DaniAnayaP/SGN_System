@@ -357,6 +357,47 @@
             { id: 'editar', labelKey: 'main.permEditar' },
         ];
         const COLUMN_AUTHORIZE = { id: 'autorizar', labelKey: 'main.permAutorizar' };
+        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check' };
+
+        // Ver y Operar/Editar/Autorizar as one connected row instead of 3
+        // stacked plain checkboxes — same fix as PermissionTree.js's own
+        // buildLevelSequenceRow (ported here since this file is a
+        // deliberate standalone copy, not a shared component). A chevron
+        // between each pair is purely decorative — grantReadonlyCost mode
+        // keeps them freely combinable, never mutually exclusive.
+        function buildLevelSequenceRow(depth, items) {
+            const row = document.createElement('div');
+            row.className = `perm-tree-row perm-tree-depth-${depth}`;
+            const spacer = document.createElement('span');
+            spacer.className = 'perm-tree-toggle-spacer';
+            row.appendChild(spacer);
+            const group = document.createElement('div');
+            group.className = 'perm-tree-level-group';
+            items.forEach((item, i) => {
+                if (i > 0) {
+                    const sep = document.createElement('i');
+                    sep.className = 'bx bx-chevron-right perm-tree-level-sep';
+                    sep.setAttribute('aria-hidden', 'true');
+                    group.appendChild(sep);
+                }
+                const label = document.createElement('label');
+                label.className = 'perm-tree-level-item';
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.checked = item.checked;
+                input.disabled = item.disabled;
+                input.addEventListener('change', () => item.onChange(input.checked));
+                const icon = document.createElement('i');
+                icon.className = `bx ${item.icon}`;
+                icon.setAttribute('aria-hidden', 'true');
+                const text = document.createElement('span');
+                text.textContent = item.label;
+                label.append(input, icon, text);
+                group.appendChild(label);
+            });
+            row.appendChild(group);
+            return row;
+        }
 
         // costEdit mode: Columna is a flat priced leaf, no expand, pricing
         // stops here (never descends into the 4 sub-permission levels).
@@ -419,24 +460,27 @@
             if (!colExpanded) return;
 
             const verGranted = grantSet.has(soloVerKey);
-            COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').forEach((level) => {
-                const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
-                const { row: levelRowEl, input: levelInput } = buildRow(t(level.labelKey), depth + 1, null, null);
-                levelInput.checked = grantSet.has(levelKey);
-                levelInput.disabled = !verGranted;
-                levelInput.addEventListener('change', () => {
-                    setKeys([levelKey], levelInput.checked);
-                    render();
-                });
-                container.appendChild(levelRowEl);
-            });
-
             const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
-            const { row: authRowEl, input: authInput } = buildRow(t(COLUMN_AUTHORIZE.labelKey), depth + 1, null, null);
-            authInput.checked = grantSet.has(authKey);
-            authInput.disabled = !verGranted;
-            authInput.addEventListener('change', () => { setKeys([authKey], authInput.checked); render(); });
-            container.appendChild(authRowEl);
+            const items = [
+                ...COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').map((level) => {
+                    const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                    return {
+                        icon: COLUMN_LEVEL_ICONS[level.id],
+                        label: t(level.labelKey),
+                        checked: grantSet.has(levelKey),
+                        disabled: !verGranted,
+                        onChange: (checked) => { setKeys([levelKey], checked); render(); },
+                    };
+                }),
+                {
+                    icon: COLUMN_LEVEL_ICONS.autorizar,
+                    label: t(COLUMN_AUTHORIZE.labelKey),
+                    checked: grantSet.has(authKey),
+                    disabled: !verGranted,
+                    onChange: (checked) => { setKeys([authKey], checked); render(); },
+                },
+            ];
+            container.appendChild(buildLevelSequenceRow(depth + 1, items));
         }
 
         // A classification (e.g. "Control Interno") groups several columns

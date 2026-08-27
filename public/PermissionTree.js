@@ -157,20 +157,67 @@
         let expandedItems = new Set();
         // { app: {id,name,sector,icon,colorFrom,colorTo} | null, screens: [...] }
         // — this client's assigned App (see GET /api/business/app-screens),
-        // fetched once in init() when showAppTab is on.
+        // fetched once in init() when showAppTab is on. screens carry the
+        // exact Web path (sectionId/itemId/submenuPrefix) TABLE_GRANT_PATHS
+        // already resolved server-side, which is also what tells us which
+        // Web leaves are even ELIGIBLE for App — see isAppEligibleKey below.
         let appInfo = { app: null, screens: [] };
-        let activeTab = 'web';
-        // Where the Web tree actually renders — stays `container` itself
-        // until renderTabs() (below) discovers there's a real App tab to
-        // show, at which point it becomes that tab's own pane div. Every
-        // existing render() call in this file keeps working unchanged
-        // either way, since it only ever touches `treeRoot`, never
-        // `container` directly.
-        let treeRoot = container;
-        let appPaneEl = null; // set by mountTabs() once init() finds a real App to show
+        // Only true once we know this client actually has an App with at
+        // least one screen (see init()) — until then every row renders
+        // exactly like before App existed, no locked/disabled App column
+        // cluttering a client who never contracted one.
+        let appColumnEnabled = false;
+        const treeRoot = container;
 
         function isModuleEnabled(moduleKey) {
             return !enabledModuleKeys || enabledModuleKeys.includes(moduleKey);
+        }
+
+        // Web and App visibility are stored side by side in the SAME
+        // grantSet, as the exact same {sectionId,itemId,submenuId} triple
+        // used for Web, just with this suffix baked into the submenuId —
+        // `keyOf('main','btn-x','foo')` (Web) vs `keyOf('main','btn-x','foo')
+        // + APP_SUFFIX` (App visibility for that same node). No schema or
+        // getGrants()/expand() change needed: split('::') still yields
+        // exactly 3 parts (the suffix has no '::' in it), so an App row
+        // round-trips through the server as an ordinary-looking grant.
+        const APP_SUFFIX = '#app';
+
+        // Does this Web leaf key sit under a pantalla/general-button this
+        // client's App actually has a screen for? Mirrors the old
+        // isWebScreenGranted's prefix match, but against appInfo.screens
+        // (the sector-based catalog from Nuestras APPs) instead of grantSet
+        // — a column/icon key is eligible whenever its own pantalla is.
+        function isAppEligibleKey(webKey) {
+            if (!appColumnEnabled) return false;
+            const [sectionId, itemId, submenuId] = webKey.split('::');
+            return appInfo.screens.some((s) => {
+                if (s.sectionId !== sectionId || s.itemId !== itemId) return false;
+                if (submenuId === s.submenuPrefix) return true;
+                return !!s.submenuPrefix && submenuId.startsWith(`${s.submenuPrefix}/`);
+            });
+        }
+
+        // Builds the App-column toggle for buildRow, shared by every level
+        // (Departamento down to Ícono) — pass the node's own Web leaf key
+        // wrapped in a 1-element array for a true leaf, or its full
+        // leafKeysUnder rollup for a container; the math is identical
+        // either way. Only the subset that's BOTH App-eligible AND
+        // currently Web-granted is actionable — toggling a container only
+        // ever touches that subset, never forces Web on to make room for it.
+        function computeAppToggle(leafKeys) {
+            if (!appColumnEnabled) return null;
+            const actionable = leafKeys.filter((k) => grantSet.has(k) && isAppEligibleKey(k));
+            const appOnCount = actionable.filter((k) => grantSet.has(k + APP_SUFFIX)).length;
+            return {
+                checked: actionable.length > 0 && appOnCount === actionable.length,
+                indeterminate: appOnCount > 0 && appOnCount < actionable.length,
+                disabled: readOnly || actionable.length === 0,
+                onChange: (checked) => {
+                    actionable.forEach((k) => (checked ? grantSet.add(k + APP_SUFFIX) : grantSet.delete(k + APP_SUFFIX)));
+                    render();
+                },
+            };
         }
 
         function expand(grants) {
@@ -189,13 +236,39 @@
             return expanded;
         }
 
+        // Small paired checkbox appended after the Web label on any row
+        // that has one — appToggle is whatever computeAppToggle() returned
+        // (null when this client has no App column at all). Kept out of
+        // readOnly's status-badge branch on purpose: nobody asked for an
+        // App status view in the read-only contract viewer yet.
+        function appendAppToggle(row, appToggle) {
+            if (!appToggle) return;
+            const label = document.createElement('label');
+            label.className = 'perm-tree-app-toggle';
+            label.title = t('main.appVisionColumn');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = appToggle.checked;
+            input.indeterminate = appToggle.indeterminate;
+            input.disabled = appToggle.disabled;
+            input.addEventListener('change', () => appToggle.onChange(input.checked));
+            const icon = document.createElement('i');
+            icon.className = 'bx bx-mobile-alt';
+            icon.setAttribute('aria-hidden', 'true');
+            label.append(input, icon);
+            row.appendChild(label);
+        }
+
         // toggle is null for leaf rows (no children to expand) — they get an
         // invisible spacer instead, so every row's checkbox/status badge
         // still lines up regardless of depth. `blocked` is only meaningful
         // in readOnly mode (see create()'s readOnly option) — draws a
         // habilitado/bloqueado status badge instead of a checkbox, and
         // returns input:null since there's nothing to check/toggle.
-        function buildRow(labelText, depth, toggle, blocked) {
+        // `appToggle` (see computeAppToggle) adds the paired App checkbox
+        // to the right of the Web one — every level from Departamento down
+        // to Ícono can carry one, not just pantallas as before.
+        function buildRow(labelText, depth, toggle, blocked, appToggle) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             if (readOnly && blocked) row.classList.add('perm-tree-row-blocked');
@@ -242,12 +315,20 @@
             span.textContent = labelText;
             label.append(input, span);
             row.appendChild(label);
+            appendAppToggle(row, appToggle);
 
             return { row, input };
         }
 
+        // Unchecking a Web key also drops its App-visibility sibling (see
+        // APP_SUFFIX above) — "App can't stay enabled without Web" applies
+        // uniformly, at every level, through this one shared spot instead
+        // of repeating the cascade at each of the checkbox handlers below.
         function setKeys(keys, checked) {
-            keys.forEach((k) => (checked ? grantSet.add(k) : grantSet.delete(k)));
+            keys.forEach((k) => {
+                if (checked) grantSet.add(k);
+                else { grantSet.delete(k); grantSet.delete(k + APP_SUFFIX); }
+            });
         }
 
         // A row with no checkbox/grant of its own — used for the "Tabla <X>"
@@ -294,6 +375,62 @@
             { id: 'editar', labelKey: 'main.permEditar' },
         ];
         const COLUMN_AUTHORIZE = { id: 'autorizar', labelKey: 'main.permAutorizar' };
+        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check' };
+
+        // Ver y Operar/Editar/Autorizar as one connected row instead of 3
+        // stacked plain checkboxes — the user's own complaint looking at
+        // this exact picker in Nuestros Planes: "no se ven bien, como
+        // secuencia". A chevron between each pair is purely decorative
+        // (they're still independently toggleable, Autorizar especially),
+        // just enough to read as one related progression rather than 3
+        // disconnected list rows. readOnly mode swaps each checkbox for a
+        // small status badge, same information buildRow's own badge branch
+        // already shows elsewhere in this file.
+        function buildLevelSequenceRow(depth, items) {
+            const row = document.createElement('div');
+            row.className = `perm-tree-row perm-tree-depth-${depth}`;
+            const spacer = document.createElement('span');
+            spacer.className = 'perm-tree-toggle-spacer';
+            row.appendChild(spacer);
+            const group = document.createElement('div');
+            group.className = 'perm-tree-level-group';
+            items.forEach((item, i) => {
+                if (i > 0) {
+                    const sep = document.createElement('i');
+                    sep.className = 'bx bx-chevron-right perm-tree-level-sep';
+                    sep.setAttribute('aria-hidden', 'true');
+                    group.appendChild(sep);
+                }
+                if (readOnly) {
+                    const span = document.createElement('span');
+                    span.className = `perm-tree-level-item perm-tree-level-item-readonly${item.checked ? ' perm-tree-level-item-on' : ''}`;
+                    const icon = document.createElement('i');
+                    icon.className = `bx ${item.checked ? 'bx-check-circle' : item.icon}`;
+                    icon.setAttribute('aria-hidden', 'true');
+                    const text = document.createElement('span');
+                    text.textContent = item.label;
+                    span.append(icon, text);
+                    group.appendChild(span);
+                    return;
+                }
+                const label = document.createElement('label');
+                label.className = 'perm-tree-level-item';
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.checked = item.checked;
+                input.disabled = item.disabled;
+                input.addEventListener('change', () => item.onChange(input.checked));
+                const icon = document.createElement('i');
+                icon.className = `bx ${item.icon}`;
+                icon.setAttribute('aria-hidden', 'true');
+                const text = document.createElement('span');
+                text.textContent = item.label;
+                label.append(input, icon, text);
+                group.appendChild(label);
+            });
+            row.appendChild(group);
+            return row;
+        }
 
         // One toggle row for a column + (when expanded) its 4 permission
         // leaves, keyed off an arbitrary `base` submenuId prefix — shared by
@@ -317,7 +454,7 @@
                     if (colExpanded) expandedItems.delete(colTreeKey);
                     else expandedItems.add(colTreeKey);
                 },
-            }, subBlocked);
+            }, subBlocked, computeAppToggle([soloVerKey]));
             if (!readOnly) {
                 colRow.input.checked = grantSet.has(soloVerKey);
                 colRow.input.addEventListener('change', () => {
@@ -334,36 +471,37 @@
             container.appendChild(colRow.row);
             if (!colExpanded) return;
 
-            COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').forEach((level) => {
-                const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
-                const levelRow = buildRow(t(level.labelKey), depth + 1, null, subBlocked);
-                if (!readOnly) {
-                    levelRow.input.checked = grantSet.has(levelKey);
-                    levelRow.input.addEventListener('change', () => {
-                        if (levelRow.input.checked) {
-                            // Uncheck the other 2 mutually-exclusive levels for this column.
-                            COLUMN_LEVELS.forEach((other) => {
-                                if (other.id === level.id) return;
-                                grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
-                            });
-                        }
-                        setKeys([levelKey], levelRow.input.checked);
-                        render();
-                    });
-                }
-                container.appendChild(levelRow.row);
-            });
-
             const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
-            const authRow = buildRow(t(COLUMN_AUTHORIZE.labelKey), depth + 1, null, subBlocked);
-            if (!readOnly) {
-                authRow.input.checked = grantSet.has(authKey);
-                authRow.input.addEventListener('change', () => {
-                    setKeys([authKey], authRow.input.checked);
-                    render();
-                });
-            }
-            container.appendChild(authRow.row);
+            const items = [
+                ...COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').map((level) => {
+                    const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                    return {
+                        icon: COLUMN_LEVEL_ICONS[level.id],
+                        label: t(level.labelKey),
+                        checked: grantSet.has(levelKey),
+                        disabled: subBlocked,
+                        onChange: (checked) => {
+                            if (checked) {
+                                // Uncheck the other 2 mutually-exclusive levels for this column.
+                                COLUMN_LEVELS.forEach((other) => {
+                                    if (other.id === level.id) return;
+                                    grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
+                                });
+                            }
+                            setKeys([levelKey], checked);
+                            render();
+                        },
+                    };
+                }),
+                {
+                    icon: COLUMN_LEVEL_ICONS.autorizar,
+                    label: t(COLUMN_AUTHORIZE.labelKey),
+                    checked: grantSet.has(authKey),
+                    disabled: subBlocked,
+                    onChange: (checked) => { setKeys([authKey], checked); render(); },
+                },
+            ];
+            container.appendChild(buildLevelSequenceRow(depth + 1, items));
         }
 
         // A classification (e.g. "Control Interno") groups several columns
@@ -395,7 +533,7 @@
                     if (classExpanded) expandedItems.delete(classTreeKey);
                     else expandedItems.add(classTreeKey);
                 },
-            }, subBlocked);
+            }, subBlocked, computeAppToggle(classLeafKeys));
             classRow.row.classList.add('perm-tree-row-classification');
             if (!readOnly) {
                 classRow.input.checked = classChecked === classLeafKeys.length;
@@ -465,7 +603,7 @@
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
-                const iconRow = buildRow(t(icon.labelKey), 5, null, subBlocked);
+                const iconRow = buildRow(t(icon.labelKey), 5, null, subBlocked, computeAppToggle([iconKey]));
                 if (!readOnly) {
                     iconRow.input.checked = grantSet.has(iconKey);
                     iconRow.input.addEventListener('change', () => {
@@ -477,8 +615,22 @@
             });
         }
 
+        // Sits once above the tree, right-aligned over where every row's own
+        // App toggle lands (buildRow always appends it last, after however
+        // much Web label text a given row has) — the only column that
+        // actually lines up vertically regardless of depth, since Web's own
+        // checkbox is inline with each row's variable-width label, not a
+        // fixed column of its own.
+        function buildAppColumnHeader() {
+            const header = document.createElement('div');
+            header.className = 'perm-tree-app-header';
+            header.innerHTML = `<span class="perm-tree-app-header-label"><i class="bx bx-mobile-alt" aria-hidden="true"></i>${t('main.appVisionColumn')}</span>`;
+            return header;
+        }
+
         function render() {
             treeRoot.innerHTML = '';
+            if (appColumnEnabled) treeRoot.appendChild(buildAppColumnHeader());
             sectionsData.forEach((section) => {
                 // A department section (anything but 'main') is gated as a
                 // whole by its own MODULE_CATALOG key — 'main' itself is
@@ -494,7 +646,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, sectionBlocked);
+                } : null, sectionBlocked, computeAppToggle(sectionLeafKeys));
                 if (!readOnly) {
                     sectionRow.input.checked = sectionChecked === sectionLeafKeys.length && sectionLeafKeys.length > 0;
                     sectionRow.input.indeterminate = sectionChecked > 0 && sectionChecked < sectionLeafKeys.length;
@@ -526,7 +678,7 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, itemBlocked);
+                    } : null, itemBlocked, computeAppToggle(itemLeafKeys));
                     if (!readOnly) {
                         itemRow.input.checked = itemChecked === itemLeafKeys.length;
                         itemRow.input.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
@@ -542,7 +694,7 @@
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
                         if (!hasSubSubmenu) {
                             const key = keyOf(section.id, item.id, sm.id);
-                            const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2, null, itemBlocked);
+                            const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2, null, itemBlocked, computeAppToggle([key]));
                             if (!readOnly) {
                                 smRow.input.checked = grantSet.has(key);
                                 smRow.input.addEventListener('change', () => {
@@ -574,7 +726,7 @@
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }, itemBlocked);
+                        }, itemBlocked, computeAppToggle(smLeafKeys));
                         if (!readOnly) {
                             smRow.input.checked = smChecked === smLeafKeys.length;
                             smRow.input.indeterminate = smChecked > 0 && smChecked < smLeafKeys.length;
@@ -625,7 +777,7 @@
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null, subBlocked);
+                            } : null, subBlocked, computeAppToggle([key]));
                             if (!readOnly) {
                                 subRow.input.checked = grantSet.has(key);
                                 subRow.input.addEventListener('change', () => {
@@ -646,225 +798,6 @@
                         });
                     });
                 });
-            });
-            // A Web-tab checkbox change already re-runs render() (see every
-            // .addEventListener('change', ...) above) — piggyback the App
-            // tab's own redraw on that same event instead of a separate
-            // listener, so its lock states never go stale.
-            if (appPaneEl) renderAppTab(appPaneEl);
-        }
-
-        // Is there at least one grant anywhere under this Web screen (its own
-        // visibility leaf, or any column inside it)? Scans grantSet directly
-        // rather than walking sectionsData — column-level grants (like
-        // app-screen grants themselves) never go through leafKeysUnder/
-        // expand(), so a structural walk would miss them; a flat prefix scan
-        // over the small live grantSet is simpler and always correct.
-        // submenuPrefix === '' means a general main-section button with no
-        // submenu underneath it (see APP_GENERAL_BUTTONS in db.js) — unlocked
-        // only by an exact item-level grant, never a prefix match (there's no
-        // "deeper" grant to match a prefix against).
-        function isWebScreenGranted(screen) {
-            if (!screen.sectionId || !screen.itemId || screen.submenuPrefix == null) return false;
-            const prefix = `${screen.sectionId}::${screen.itemId}::`;
-            for (const k of grantSet) {
-                if (!k.startsWith(prefix)) continue;
-                const submenuId = k.slice(prefix.length);
-                if (submenuId === screen.submenuPrefix) return true;
-                if (screen.submenuPrefix && submenuId.startsWith(`${screen.submenuPrefix}/`)) return true;
-            }
-            return false;
-        }
-
-        // Same 3 mutually-exclusive levels + independent Autorizar as a
-        // Web column's own picker (COLUMN_LEVELS/COLUMN_AUTHORIZE above) —
-        // same grant ids too (so a screen's grants stay meaningful even if
-        // it's later re-pointed at a different Web screen), just a flatter
-        // "pill row" presentation per the confirmed mockup instead of an
-        // expandable tree row, and "Ver" instead of "Solo Ver" (the mockup's
-        // own reasoning: avoid reading as a duplicate of "Operar" once both
-        // sit side by side in one row rather than nested levels).
-        const APP_SCREEN_LEVELS = [
-            { id: 'solo-ver', labelKey: 'main.permVer' },
-            { id: 'ver-y-operar', labelKey: 'main.permVerYOperar' },
-            { id: 'editar', labelKey: 'main.permEditar' },
-        ];
-        const APP_SCREEN_AUTHORIZE = { id: 'autorizar', labelKey: 'main.permAutorizar' };
-
-        function renderAppScreenRow(paneEl, screen) {
-            const unlocked = isWebScreenGranted(screen);
-            const wrap = document.createElement('div');
-            wrap.className = 'perm-tree-app-row-wrap';
-
-            const row = document.createElement('div');
-            row.className = `perm-tree-app-row${unlocked ? '' : ' perm-tree-app-row-locked'}`;
-            const name = document.createElement('div');
-            name.className = 'perm-tree-app-row-name';
-            name.textContent = screen.name;
-            row.appendChild(name);
-
-            const picker = document.createElement('div');
-            picker.className = 'perm-tree-app-picker';
-            const makePill = (id, labelKey, onSelect) => {
-                const pill = document.createElement('button');
-                pill.type = 'button';
-                pill.className = 'perm-tree-app-pill';
-                pill.textContent = t(labelKey);
-                const key = keyOf('app-screens', String(screen.id), id);
-                if (grantSet.has(key)) pill.classList.add('selected');
-                pill.disabled = readOnly || !unlocked;
-                pill.addEventListener('click', () => {
-                    onSelect(key);
-                    renderAppTab(paneEl);
-                });
-                picker.appendChild(pill);
-            };
-            APP_SCREEN_LEVELS.forEach((level) => {
-                makePill(level.id, level.labelKey, (key) => {
-                    const nowSelected = !grantSet.has(key);
-                    if (nowSelected) {
-                        APP_SCREEN_LEVELS.forEach((other) => {
-                            if (other.id === level.id) return;
-                            grantSet.delete(keyOf('app-screens', String(screen.id), other.id));
-                        });
-                    }
-                    setKeys([key], nowSelected);
-                });
-            });
-            makePill(APP_SCREEN_AUTHORIZE.id, APP_SCREEN_AUTHORIZE.labelKey, (key) => {
-                setKeys([key], !grantSet.has(key));
-            });
-            row.appendChild(picker);
-            wrap.appendChild(row);
-
-            const note = document.createElement('div');
-            const webLabel = t(screen.webScreenLabelKey);
-            const isGeneralButton = screen.submenuPrefix === '';
-            const linkKey = isGeneralButton ? 'main.appButtonLinkLine' : 'main.appScreenLinkLine';
-            const lockKey = isGeneralButton ? 'main.appButtonLockHint' : 'main.appScreenLockHint';
-            note.className = unlocked ? 'perm-tree-app-link-line' : 'perm-tree-app-lock-hint';
-            note.innerHTML = unlocked
-                ? `<i class="bx bx-link" aria-hidden="true"></i> ${t(linkKey, { webScreen: webLabel })}`
-                : `<i class="bx bx-lock-alt" aria-hidden="true"></i> ${t(lockKey, { webScreen: webLabel })}`;
-            wrap.appendChild(note);
-
-            paneEl.appendChild(wrap);
-        }
-
-        // "Opciones APPs" — bulk Habilitar/Deshabilitar todo, built once and
-        // kept OUTSIDE the part of the pane renderAppTab clears on every
-        // call (a toolbar re-created on each pill click would just close
-        // itself mid-interaction). Habilitar todo only touches screens
-        // already unlocked by Web and not yet granted at any level — it
-        // never re-locks or overrides a level someone already picked.
-        function buildAppOptionsToolbar(paneEl) {
-            const picker = document.createElement('div');
-            picker.className = 'dept-picker perm-tree-app-toolbar';
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'dept-picker-btn';
-            btn.innerHTML = `<i class="bx bx-slider-alt" aria-hidden="true"></i><span>${t('main.appOptions', 'APP Options')}</span><i class="bx bx-chevron-down" aria-hidden="true"></i>`;
-            const dropdown = document.createElement('ul');
-            dropdown.className = 'dept-picker-dropdown';
-            dropdown.setAttribute('role', 'menu');
-
-            const makeAction = (icon, labelKey, fallback, onClick) => {
-                const li = document.createElement('li');
-                const optBtn = document.createElement('button');
-                optBtn.type = 'button';
-                optBtn.className = 'dept-option';
-                optBtn.setAttribute('role', 'menuitem');
-                optBtn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i> ${t(labelKey, fallback)}`;
-                optBtn.addEventListener('click', () => {
-                    onClick();
-                    picker.classList.remove('open');
-                    renderAppTab(paneEl);
-                });
-                li.appendChild(optBtn);
-                dropdown.appendChild(li);
-            };
-            makeAction('bx-check-circle', 'main.appEnableAll', 'Enable all', () => {
-                appInfo.screens.forEach((screen) => {
-                    if (!isWebScreenGranted(screen)) return;
-                    const hasLevel = APP_SCREEN_LEVELS.some((l) => grantSet.has(keyOf('app-screens', String(screen.id), l.id)));
-                    if (!hasLevel) setKeys([keyOf('app-screens', String(screen.id), 'solo-ver')], true);
-                });
-            });
-            makeAction('bx-x-circle', 'main.appDisableAll', 'Disable all', () => {
-                Array.from(grantSet).forEach((k) => { if (k.startsWith('app-screens::')) grantSet.delete(k); });
-            });
-
-            btn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                picker.classList.toggle('open');
-            });
-            document.addEventListener('click', () => picker.classList.remove('open'));
-            picker.append(btn, dropdown);
-            return picker;
-        }
-
-        // Re-run any time the Web tree changes too (see render()'s own call
-        // to this at its end) — a screen's lock state depends on LIVE,
-        // unsaved Web-tab grants, so checking a Web box should unlock its
-        // App sibling immediately, without waiting for a save.
-        function renderAppTab(paneEl) {
-            let content = paneEl.querySelector('.perm-tree-app-content');
-            if (!content) {
-                paneEl.innerHTML = '';
-                if (!readOnly) paneEl.appendChild(buildAppOptionsToolbar(paneEl));
-                content = document.createElement('div');
-                content.className = 'perm-tree-app-content';
-                paneEl.appendChild(content);
-            }
-            content.innerHTML = '';
-            if (!appInfo.app) return;
-            const banner = document.createElement('div');
-            banner.className = 'perm-tree-app-banner';
-            banner.innerHTML = `<i class="bx ${appInfo.app.icon || 'bx-mobile-alt'}" aria-hidden="true"></i> ${t('main.appAssignedBanner', { name: appInfo.app.name })}`;
-            content.appendChild(banner);
-            appInfo.screens.forEach((screen) => renderAppScreenRow(content, screen));
-        }
-
-        // Only called when init() finds a real App with at least one screen
-        // to show — wraps the existing tree in a 2-tab shell (Sistema Web /
-        // Aplicación Móvil) and repoints treeRoot at the Web pane, so
-        // render() (completely unchanged otherwise) starts drawing into that
-        // pane instead of straight into `container`.
-        function mountTabs() {
-            container.innerHTML = '';
-            const tabs = document.createElement('div');
-            tabs.className = 'perm-tree-tabs';
-            const webBtn = document.createElement('button');
-            webBtn.type = 'button';
-            webBtn.className = 'perm-tree-tab active';
-            webBtn.innerHTML = `<i class="bx bx-desktop" aria-hidden="true"></i><span>${t('main.webTab')}</span>`;
-            const appBtn = document.createElement('button');
-            appBtn.type = 'button';
-            appBtn.className = 'perm-tree-tab';
-            appBtn.innerHTML = `<i class="bx bx-mobile-alt" aria-hidden="true"></i><span>${t('main.appTab')}</span>`;
-            tabs.append(webBtn, appBtn);
-
-            const webPane = document.createElement('div');
-            const appPane = document.createElement('div');
-            appPane.hidden = true;
-            container.append(tabs, webPane, appPane);
-
-            treeRoot = webPane;
-            appPaneEl = appPane;
-
-            webBtn.addEventListener('click', () => {
-                activeTab = 'web';
-                webBtn.classList.add('active');
-                appBtn.classList.remove('active');
-                webPane.hidden = false;
-                appPane.hidden = true;
-            });
-            appBtn.addEventListener('click', () => {
-                activeTab = 'app';
-                appBtn.classList.add('active');
-                webBtn.classList.remove('active');
-                webPane.hidden = true;
-                appPane.hidden = false;
             });
         }
 
@@ -981,10 +914,11 @@
                     } catch {
                         appInfo = { app: null, screens: [] };
                     }
-                    // Nothing to show a tab FOR yet — a client with no App
-                    // assigned, or one whose App has zero screens built —
-                    // stays exactly the single-tree view it always was.
-                    if (appInfo.app && appInfo.screens.length) mountTabs();
+                    // Nothing to show an App column FOR yet — a client with
+                    // no App assigned, or one whose App has zero screens
+                    // built — renders exactly like it did before App
+                    // existed, no permanently-locked column cluttering it.
+                    appColumnEnabled = !!(appInfo.app && appInfo.screens.length);
                 }
                 render();
             },
