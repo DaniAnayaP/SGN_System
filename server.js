@@ -146,7 +146,6 @@ const {
     listBusinessSectors,
     createBusinessSector,
     deleteBusinessSector,
-    listActiveAppSectors,
     getClientAppScreens,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
@@ -687,15 +686,15 @@ function extractClientFields(body) {
     };
 }
 
-// A client's Sector de Negocio must match one of the currently-ACTIVE
-// Nuestras APPs' sectors (Inactivo/Desarrollo apps never appear in the
-// picker, and the server enforces that too, not just the UI) — blank is
-// always fine (client with no App assigned yet).
+// A client's Sector de Negocio is the client's own real-world business
+// sector, picked from the Nuestras Sectores de Negocio catalog — same
+// source Nuestras APPs' own Sector field already uses. It's independent of
+// whether an App happens to exist for that sector yet (getClientAppScreens
+// simply returns nothing until GEIPSA builds one); blank is always fine.
 function validateSectorNegocio(sectorNegocio) {
     if (!sectorNegocio) return null;
-    const active = listActiveAppSectors();
-    if (!active.some((s) => s.sector === sectorNegocio)) {
-        return 'El Sector de Negocio elegido no corresponde a ninguna App activa.';
+    if (!listBusinessSectors().some((s) => s.name === sectorNegocio)) {
+        return 'El Sector de Negocio elegido no existe en el catálogo.';
     }
     return null;
 }
@@ -1221,13 +1220,6 @@ const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
 app.get('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
     res.json({ apps: listSaasApps() });
-});
-
-// Read-only lookup behind the "Sector de Negocio" picker in Nuestros
-// Clientes — only ACTIVE apps' sectors are offered (see validateSectorNegocio
-// above, which enforces the same rule server-side on save).
-app.get('/api/admin/app-sectors', requireAuth, requireAdmin, (req, res) => {
-    res.json({ sectors: listActiveAppSectors() });
 });
 
 // The fixed catalog of Web screens/tables an App screen can map to — same

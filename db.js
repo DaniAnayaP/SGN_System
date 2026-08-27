@@ -3023,15 +3023,6 @@ function getSaasAppById(id) {
     return { ...app, screens };
 }
 
-// Every ACTIVE app's sector — what Nuestros Clientes' Sector picker offers
-// (Inactivo/Desarrollo apps never appear there, even if their sector is
-// already set — see Nuestras APPs redesign).
-function listActiveAppSectors() {
-    return db
-        .prepare("SELECT sector, name, icon, color_from AS colorFrom, color_to AS colorTo FROM saas_apps WHERE status = 'active' AND sector != '' ORDER BY sector ASC")
-        .all();
-}
-
 // General (main-section) buttons that get their own "enable in App" row
 // alongside a client's operational App screens — same unlock-then-toggle
 // rule as a table screen (see PermissionTree.js's isWebScreenGranted/
@@ -3925,7 +3916,6 @@ module.exports = {
     deleteSaasApp,
     addSaasAppScreen,
     deleteSaasAppScreen,
-    listActiveAppSectors,
     getClientAppScreens,
     listBusinessSectors,
     createBusinessSector,

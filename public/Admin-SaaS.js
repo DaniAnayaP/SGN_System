@@ -66,7 +66,7 @@ const emptyMsg = document.getElementById('clients-empty');
 
 let clients = [];
 let plans = [];
-let sectors = []; // active Nuestras APPs sectors — [{sector, name, icon, colorFrom, colorTo}]
+let sectors = []; // Nuestros Sectores de Negocio catalog — [{id, name, ...}]
 
 function showError(message) {
     errorBanner.textContent = message;
@@ -677,9 +677,11 @@ async function loadPlans() {
     }
 }
 
-// --- Sector de Negocio: options come from Nuestras APPs' ACTIVE apps only ---
-// (see GET /api/admin/app-sectors) — an app in Desarrollo/Inactivo never
-// offers its sector here, same rule the server re-checks on save.
+// --- Sector de Negocio: options come from Nuestros Sectores de Negocio ---
+// (same /api/admin/business-sectors catalog Nuestras APPs' own Sector field
+// uses) — independent of whether an App already exists for that sector;
+// getClientAppScreens simply shows nothing in the permission tree until
+// GEIPSA builds one.
 function populateSectorSelect() {
     const previousValue = sectorField.value;
     sectorField.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
@@ -687,12 +689,12 @@ function populateSectorSelect() {
         sectors.length ? Dashboard.t('menu.appSectorChoosePlaceholder') : Dashboard.t('menu.appSectorNoneAvailable');
     sectors.forEach((s) => {
         const option = document.createElement('option');
-        option.value = s.sector;
-        option.textContent = s.sector;
+        option.value = s.name;
+        option.textContent = s.name;
         sectorField.appendChild(option);
     });
     // Same "don't silently erase a stale value" rule as populatePlanSelect.
-    if (previousValue && !sectors.some((s) => s.sector === previousValue)) {
+    if (previousValue && !sectors.some((s) => s.name === previousValue)) {
         const option = document.createElement('option');
         option.value = previousValue;
         option.textContent = previousValue;
@@ -703,7 +705,7 @@ function populateSectorSelect() {
 
 async function loadSectors() {
     try {
-        const res = await fetch('/api/admin/app-sectors', { credentials: 'include' });
+        const res = await fetch('/api/admin/business-sectors', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         sectors = data.sectors || [];
