@@ -60,6 +60,23 @@ function textCell(key, value) {
     return td;
 }
 
+// The 13 "Control Interno" columns — same as textCell, plus the muted
+// col-system class that visually sets them apart (see OpTransVolCombustible.js,
+// the original example this mirrors).
+function textCellSystem(key, value) {
+    const td = textCell(key, value);
+    td.classList.add('col-system');
+    return td;
+}
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+function buildSystemCells(record) {
+    return SYSTEM_COLUMN_KEYS.map((key) => textCellSystem(key, record[key]));
+}
+
 const TABLE_KEY = 'mi-recurso-humano';
 
 // Whether `key` (a PATCH bodyKey, e.g. "area") has an outstanding approval
@@ -416,6 +433,7 @@ function buildRow(worker) {
     tr.dataset.departments = JSON.stringify(worker.departments || []);
     tr.dataset.hrStatusId = worker.hrStatusId ? String(worker.hrStatusId) : '';
     tr.append(
+        ...buildSystemCells(worker),
         textCell('colHrDbId', worker.dbId),
         textCell('colHrRecordId', worker.recordCode || String(worker.recordNumber)),
         textCell('colHrFullName', worker.fullName),

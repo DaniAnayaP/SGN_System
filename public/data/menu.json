@@ -266,12 +266,45 @@
         {
           "id": "cat-operaciones-rrhh-mi-recurso-humano", "labelKey": "menu.opRrhhMiRecursoHumano", "icon": "bx-window", "href": "OpRRHHMiRecursoHumano.html",
           "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colHrFullName", "labelKey": "main.colHrFullName", "permissionOnly": true },
+            { "id": "colHrPosition", "labelKey": "main.colHrPosition", "permissionOnly": true },
+            { "id": "colHrStartDate", "labelKey": "main.colHrStartDate", "permissionOnly": true },
             { "id": "colHrArea", "labelKey": "main.colHrArea", "permissionOnly": true },
             { "id": "colHrEmail", "labelKey": "main.colHrEmail", "permissionOnly": true },
             { "id": "colHrPhone", "labelKey": "main.colHrPhone", "permissionOnly": true },
             { "id": "colHrStatus", "labelKey": "main.colHrStatus", "permissionOnly": true },
             { "id": "colHrDepartment", "labelKey": "main.colHrDepartment", "permissionOnly": true },
-            { "id": "colHrCostCenter", "labelKey": "main.colHrCostCenter", "permissionOnly": true }
+            { "id": "colHrCostCenter", "labelKey": "main.colHrCostCenter", "permissionOnly": true },
+            { "id": "colHrUsername", "labelKey": "main.colHrUsername", "permissionOnly": true },
+            { "id": "colHrUserStatus", "labelKey": "main.colHrUserStatus", "permissionOnly": true }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
           ]
         }
       ]

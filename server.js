@@ -2565,8 +2565,17 @@ app.get('/api/business/base-datos-global', requireAuth, (req, res) => {
 
 // --- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de --
 // --- Personal) — same access model as fuel records above. ------------------
-function mapHrWorker(row, pendingByRecord) {
+// Fixed per menu.json's own placement of this screen (human-resources /
+// hr-area-personnel-admin / Mi Recurso Humano) — same recipe as
+// FUEL_RECORD_*_LABEL above, see TABLE_GRANT_PATHS['mi-recurso-humano'] in
+// db.js for where these 3 come from.
+const HR_WORKER_MODULE_LABEL = 'Recursos Humanos';
+const HR_WORKER_AREA_LABEL = 'Administración de Personal';
+const HR_WORKER_SCREEN_LABEL = 'Mi Recurso Humano';
+
+function mapHrWorker(row, pendingByRecord, companyName) {
     if (!row) return row;
+    const costCenter = row.cost_center_id ? getCostCenterById(row.cost_center_id, row.client_id) : null;
     return {
         id: row.id,
         dbId: row.db_id,
@@ -2590,13 +2599,22 @@ function mapHrWorker(row, pendingByRecord) {
         // after this feature shipped) reads as false, same as inactive.
         userActive: !!row.userActive,
         pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: HR_WORKER_AREA_LABEL,
+            modulo: HR_WORKER_MODULE_LABEL,
+            pantalla: HR_WORKER_SCREEN_LABEL,
+            centroCostos: costCenter?.name || '',
+            createdAt: row.created_at,
+        }),
     };
 }
 
 app.get('/api/business/hr-workers', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'mi-recurso-humano');
-    res.json({ workers: listHrWorkers(req.user.clientId).map((w) => mapHrWorker(w, pendingByRecord)) });
+    const client = getClientById(req.user.clientId);
+    res.json({ workers: listHrWorkers(req.user.clientId).map((w) => mapHrWorker(w, pendingByRecord, client?.company_name)) });
 });
 
 app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
@@ -2628,7 +2646,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: worker.id,
         recordLabel: worker.full_name, action: 'create', changedBy: req.user.name,
     });
-    res.status(201).json({ worker: mapHrWorker(worker) });
+    res.status(201).json({ worker: mapHrWorker(worker, null, getClientById(req.user.clientId)?.company_name) });
 });
 
 app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
@@ -2656,7 +2674,7 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     }
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
     const worker = updateHrWorker(req.params.id, req.user.clientId, appliedPatch);
-    res.json({ worker: mapHrWorker(worker), pendingFields, rejectedFields });
+    res.json({ worker: mapHrWorker(worker, null, getClientById(req.user.clientId)?.company_name), pendingFields, rejectedFields });
 });
 
 // Issues this worker's login for the first time (or resets it later, e.g.
@@ -2674,7 +2692,7 @@ app.post('/api/business/hr-workers/:id/activate-user', requireAuth, async (req, 
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,
         recordLabel: existing.full_name, action: 'update', fieldKey: 'main.colHrUserActivated', changedBy: req.user.name,
     });
-    res.json({ worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId)), generated });
+    res.json({ worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId), null, getClientById(req.user.clientId)?.company_name), generated });
 });
 
 app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
