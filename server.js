@@ -1860,7 +1860,13 @@ app.post('/api/business/geo/streets', requireAuth, requireClientAdmin, (req, res
 // a client admin can create/edit/delete (a configuration decision, same
 // gating as everything else under "Administración del Negocio"), and
 // authorizing needs the specific colFieldRuleAuthorization grant.
-function mapFieldFillRule(row) {
+// Fixed per menu.json's own placement (main/btn-configuracion/
+// btn-gestion-reglas-orden) — same recipe as FUEL_RECORD_*_LABEL above.
+const FIELD_FILL_RULE_MODULE_LABEL = 'Configuración';
+const FIELD_FILL_RULE_AREA_LABEL = '';
+const FIELD_FILL_RULE_SCREEN_LABEL = 'Reglas de Orden de Llenado';
+
+function mapFieldFillRule(row, companyName) {
     if (!row) return row;
     return {
         id: row.id,
@@ -1874,6 +1880,14 @@ function mapFieldFillRule(row) {
         authorizedBy: row.authorized_by,
         authorizedAt: row.authorized_at,
         authorized: !!row.authorized_at,
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: FIELD_FILL_RULE_AREA_LABEL,
+            modulo: FIELD_FILL_RULE_MODULE_LABEL,
+            pantalla: FIELD_FILL_RULE_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
     };
 }
 function validateFieldFillRuleBody(body) {
@@ -1888,11 +1902,13 @@ app.get('/api/business/field-fill-rules', requireAuth, (req, res) => {
     const tableKey = (req.query.tableKey || '').trim();
     if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
     if (!req.user.clientId) return res.json({ rules: [] });
-    res.json({ rules: listFieldFillRules(req.user.clientId, tableKey).map(mapFieldFillRule) });
+    const companyName = getClientById(req.user.clientId)?.company_name;
+    res.json({ rules: listFieldFillRules(req.user.clientId, tableKey).map((r) => mapFieldFillRule(r, companyName)) });
 });
 app.get('/api/business/field-fill-rules/all', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.json({ rules: [] });
-    res.json({ rules: listAllFieldFillRules(req.user.clientId).map(mapFieldFillRule) });
+    const companyName = getClientById(req.user.clientId)?.company_name;
+    res.json({ rules: listAllFieldFillRules(req.user.clientId).map((r) => mapFieldFillRule(r, companyName)) });
 });
 app.post('/api/business/field-fill-rules', requireAuth, requireClientAdmin, (req, res) => {
     const error = validateFieldFillRuleBody(req.body);
@@ -1901,7 +1917,7 @@ app.post('/api/business/field-fill-rules', requireAuth, requireClientAdmin, (req
     const rule = createFieldFillRule({
         clientId: req.user.clientId, tableKey, gateCol, gateLabel, dependentCol, dependentLabel, createdBy: req.user.name,
     });
-    res.status(201).json({ rule: mapFieldFillRule(rule) });
+    res.status(201).json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
 });
 app.patch('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
     const existing = getFieldFillRuleById(req.params.id, req.user.clientId);
@@ -1911,7 +1927,7 @@ app.patch('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin,
     const { gateCol, gateLabel, dependentCol, dependentLabel } = req.body;
     try {
         const rule = updateFieldFillRule(req.params.id, req.user.clientId, { gateCol, gateLabel, dependentCol, dependentLabel });
-        res.json({ rule: mapFieldFillRule(rule) });
+        res.json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(409).json({ message: 'That dependent field already has a different rule.' });
@@ -1930,7 +1946,7 @@ app.post('/api/business/field-fill-rules/:id/authorize', requireAuth, (req, res)
         }
     }
     const rule = authorizeFieldFillRule(req.params.id, req.user.clientId, req.user.name);
-    res.json({ rule: mapFieldFillRule(rule) });
+    res.json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
 });
 app.delete('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
     deleteFieldFillRule(req.params.id, req.user.clientId);
@@ -2147,16 +2163,37 @@ function validateReportColumns(columns) {
     return null;
 }
 
+const INTELLIGENT_REPORT_MODULE_LABEL = 'Configuración';
+const INTELLIGENT_REPORT_AREA_LABEL = 'Negocio Inteligente';
+const INTELLIGENT_REPORT_SCREEN_LABEL = 'Transacciones Inteligentes de Negocio';
+
+function mapIntelligentReport(row, companyName) {
+    if (!row) return row;
+    return {
+        ...row,
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: INTELLIGENT_REPORT_AREA_LABEL,
+            modulo: INTELLIGENT_REPORT_MODULE_LABEL,
+            pantalla: INTELLIGENT_REPORT_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
 app.get('/api/business/intelligent-reports', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    res.json({ reports: listIntelligentReports(req.user.clientId) });
+    const companyName = getClientById(req.user.clientId)?.company_name;
+    const reports = listIntelligentReports(req.user.clientId).map((r) => mapIntelligentReport(r, companyName));
+    res.json({ reports });
 });
 
 app.get('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const report = getIntelligentReportById(req.params.id, req.user.clientId);
     if (!report) return res.status(404).json({ message: 'Report not found.' });
-    res.json({ report });
+    res.json({ report: mapIntelligentReport(report, getClientById(req.user.clientId)?.company_name) });
 });
 
 // Real computed data for a saved report -- same underlying records
@@ -2294,7 +2331,7 @@ app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
         recordLabel: report.name, action: 'create', changedBy: req.user.name,
     });
-    res.status(201).json({ report });
+    res.status(201).json({ report: mapIntelligentReport(report, getClientById(req.user.clientId)?.company_name) });
 });
 
 app.patch('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
@@ -2310,7 +2347,7 @@ app.patch('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
         recordLabel: report.name, action: 'update', changedBy: req.user.name,
     });
-    res.json({ report });
+    res.json({ report: mapIntelligentReport(report, getClientById(req.user.clientId)?.company_name) });
 });
 
 app.delete('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
@@ -2340,7 +2377,7 @@ app.post('/api/business/intelligent-reports/:id/authorize', requireAuth, (req, r
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
         recordLabel: report.name, action: 'update', changedBy: req.user.name,
     });
-    res.json({ report });
+    res.json({ report: mapIntelligentReport(report, getClientById(req.user.clientId)?.company_name) });
 });
 
 // --- Reportes Programados (Configuración > Negocio Inteligente) ------------
@@ -2364,9 +2401,33 @@ function validateScheduledReportPayload(req, res) {
     return { reportId, name: name.trim(), endDate: endDate?.trim() || null, deliveryMethod, recipients: recipients.trim() };
 }
 
+// Fixed per menu.json's own placement (main/btn-configuracion/
+// btn-negocio-inteligente/nit-reportes-programados) — same recipe as
+// FUEL_RECORD_*_LABEL above.
+const SCHEDULED_REPORT_MODULE_LABEL = 'Configuración';
+const SCHEDULED_REPORT_AREA_LABEL = 'Negocio Inteligente';
+const SCHEDULED_REPORT_SCREEN_LABEL = 'Reportes Programados';
+
+function mapScheduledReport(row, companyName) {
+    if (!row) return row;
+    return {
+        ...row,
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: SCHEDULED_REPORT_AREA_LABEL,
+            modulo: SCHEDULED_REPORT_MODULE_LABEL,
+            pantalla: SCHEDULED_REPORT_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
 app.get('/api/business/scheduled-reports', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    res.json({ scheduledReports: listScheduledReports(req.user.clientId) });
+    const companyName = getClientById(req.user.clientId)?.company_name;
+    const scheduledReports = listScheduledReports(req.user.clientId).map((r) => mapScheduledReport(r, companyName));
+    res.json({ scheduledReports });
 });
 
 app.post('/api/business/scheduled-reports', requireAuth, (req, res) => {
@@ -2378,7 +2439,7 @@ app.post('/api/business/scheduled-reports', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
         recordLabel: scheduledReport.name, action: 'create', changedBy: req.user.name,
     });
-    res.status(201).json({ scheduledReport });
+    res.status(201).json({ scheduledReport: mapScheduledReport(scheduledReport, getClientById(req.user.clientId)?.company_name) });
 });
 
 app.patch('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
@@ -2392,7 +2453,7 @@ app.patch('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
         recordLabel: scheduledReport.name, action: 'update', changedBy: req.user.name,
     });
-    res.json({ scheduledReport });
+    res.json({ scheduledReport: mapScheduledReport(scheduledReport, getClientById(req.user.clientId)?.company_name) });
 });
 
 app.delete('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
@@ -2422,7 +2483,7 @@ app.post('/api/business/scheduled-reports/:id/authorize', requireAuth, (req, res
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
         recordLabel: scheduledReport.name, action: 'update', changedBy: req.user.name,
     });
-    res.json({ scheduledReport });
+    res.json({ scheduledReport: mapScheduledReport(scheduledReport, getClientById(req.user.clientId)?.company_name) });
 });
 
 // --- Registro Combustible (Operaciones > Transporte Volumen) ----------------

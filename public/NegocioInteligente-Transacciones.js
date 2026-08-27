@@ -368,6 +368,14 @@ function formatDate(isoLike) {
     return `${day}/${month}/${year}`;
 }
 
+// The 13 "Control Interno" columns — see OpTransVolCombustible.js for the
+// original pattern this mirrors.
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+
 function renderReports() {
     const tbody = document.getElementById('report-table-body');
     const emptyEl = document.getElementById('report-empty');
@@ -376,15 +384,16 @@ function renderReports() {
     reports.forEach((report) => {
         const tr = document.createElement('tr');
         const cells = [
-            ['reportCompany', Dashboard.companyName || '—'],
+            ...SYSTEM_COLUMN_KEYS.map((key) => [key, report[key] || '—', true]),
             ['reportName', report.name],
             ['reportCreatedAt', formatDate(report.created_at)],
             ['reportCreatedBy', report.created_by || '—'],
             ['reportAuthorizedBy', report.authorized_by || '—'],
         ];
-        cells.forEach(([col, text]) => {
+        cells.forEach(([col, text, isSystem]) => {
             const td = document.createElement('td');
             td.dataset.col = col;
+            if (isSystem) td.className = 'col-system';
             td.textContent = text;
             tr.appendChild(td);
         });

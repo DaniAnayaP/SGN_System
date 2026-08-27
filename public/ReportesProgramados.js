@@ -129,6 +129,14 @@ document.getElementById('scheduled-save-btn').addEventListener('click', async ()
     }
 });
 
+// The 13 "Control Interno" columns — see OpTransVolCombustible.js for the
+// original pattern this mirrors.
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+
 function renderScheduledReports() {
     const tbody = document.getElementById('scheduled-table-body');
     const emptyEl = document.getElementById('scheduled-empty');
@@ -137,6 +145,7 @@ function renderScheduledReports() {
     scheduledReports.forEach((scheduled) => {
         const tr = document.createElement('tr');
         const cells = [
+            ...SYSTEM_COLUMN_KEYS.map((key) => [key, scheduled[key] || '—', true]),
             ['scheduledName', scheduled.name],
             ['scheduledCreatedBy', scheduled.created_by || '—'],
             ['scheduledAuthorizedBy', scheduled.authorized_by || '—'],
@@ -145,9 +154,10 @@ function renderScheduledReports() {
             ['scheduledDeliveryMethod', deliveryMethodLabel(scheduled.delivery_method)],
             ['scheduledRecipients', scheduled.recipients],
         ];
-        cells.forEach(([col, text]) => {
+        cells.forEach(([col, text, isSystem]) => {
             const td = document.createElement('td');
             td.dataset.col = col;
+            if (isSystem) td.className = 'col-system';
             td.textContent = text;
             tr.appendChild(td);
         });

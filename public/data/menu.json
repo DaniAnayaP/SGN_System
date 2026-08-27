@@ -29,12 +29,48 @@
                 {
                   "id": "nit-transacciones", "labelKey": "menu.smartBusinessTransactions", "permissionOnly": true,
                   "submenu": [
+                    {
+                      "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+                      "submenu": [
+                        { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                        { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                        { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                        { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                        { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                        { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                        { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                        { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                        { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                        { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                        { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                        { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                        { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+                      ]
+                    },
                     { "id": "colReportAuthorization", "labelKey": "main.colReportAuthorization", "permissionOnly": true }
                   ]
                 },
                 {
                   "id": "nit-reportes-programados", "labelKey": "menu.scheduledReportsScreen", "permissionOnly": true,
                   "submenu": [
+                    {
+                      "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+                      "submenu": [
+                        { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                        { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                        { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                        { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                        { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                        { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                        { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                        { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                        { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                        { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                        { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                        { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                        { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+                      ]
+                    },
                     { "id": "colScheduledName", "labelKey": "main.colScheduledName", "permissionOnly": true },
                     { "id": "colScheduledCreatedBy", "labelKey": "main.colScheduledCreatedBy", "permissionOnly": true },
                     { "id": "colScheduledAuthorizedBy", "labelKey": "main.colScheduledAuthorizedBy", "permissionOnly": true },
@@ -57,6 +93,24 @@
             {
               "id": "btn-gestion-reglas-orden", "labelKey": "menu.fieldRulesGroup", "icon": "bx-link", "href": "#", "permissionOnly": true,
               "submenu": [
+                {
+                  "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+                  "submenu": [
+                    { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                    { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                    { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                    { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                    { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                    { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                    { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                    { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                    { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                    { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                    { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                    { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                    { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+                  ]
+                },
                 { "id": "colFieldRuleAuthorization", "labelKey": "main.colFieldRuleAuthorization", "permissionOnly": true }
               ]
             },

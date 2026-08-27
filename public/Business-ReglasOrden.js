@@ -51,11 +51,29 @@ function formatDate(iso) {
     return d.toLocaleDateString(Dashboard.lang === 'es' ? 'es-MX' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// The 13 "Control Interno" columns — see OpTransVolCombustible.js for the
+// original pattern this mirrors.
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+function buildSystemCells(record) {
+    return SYSTEM_COLUMN_KEYS.map((key) => {
+        const td = document.createElement('td');
+        td.dataset.col = key;
+        td.className = 'col-system';
+        td.textContent = record[key] || '—';
+        return td;
+    });
+}
+
 function renderRules() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = rules.length > 0;
     rules.forEach((rule) => {
         const tr = document.createElement('tr');
+        const systemCells = buildSystemCells(rule);
 
         const tdScreen = document.createElement('td');
         tdScreen.dataset.col = 'frScreen';
@@ -111,7 +129,7 @@ function renderRules() {
         deleteBtn.addEventListener('click', () => removeRule(rule));
         tdActions.append(editBtn, deleteBtn);
 
-        tr.append(tdScreen, tdRule, tdCreatedBy, tdCreatedAt, tdAuthorizedBy, tdStatus, tdActions);
+        tr.append(...systemCells, tdScreen, tdRule, tdCreatedBy, tdCreatedAt, tdAuthorizedBy, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
 }
