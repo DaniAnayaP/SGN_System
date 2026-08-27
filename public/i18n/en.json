@@ -168,6 +168,11 @@
     "appSectorChoosePlaceholder": "Choose a sector...",
     "appToggleOn": "App enabled — click to disable",
     "appToggleOff": "App disabled — click to enable",
+    "appScreenFieldsToggle": "Available columns and icons",
+    "appScreenFieldsHint": "Only what's checked here becomes available as App visibility in the permission tree of a client with this sector.",
+    "appScreenFieldsLoadError": "Couldn't load the column catalog.",
+    "appScreenFieldsOwnColumns": "Screen columns",
+    "appScreenFieldsEmpty": "This screen has no configurable columns or icons.",
     "moduleCosts": "Access & Permissions Cost",
     "saasTeam": "SaaS Team",
     "mainSection": "General",
@@ -266,6 +271,7 @@
     "requiredFields": "Company name, contact name and email are required.",
     "loadError": "Couldn't load data. Please try again.",
     "saveError": "Error saving, please try again.",
+    "loading": "Loading...",
     "costCenterRequiredForRecord": "Select a Cost Center before saving — it's a Control Interno column and must be filled in from creation.",
     "clientSaved": "Client saved.",
     "contratacionesTitle": "Contracted Modules",
@@ -962,6 +968,8 @@
     "deptAreaNone": "No departments available",
     "costCentersButton": "C. Cost",
     "uiScaleSubtitle": "Adjust your App's text and icon size.",
-    "uiScalePreview": "Preview"
+    "uiScalePreview": "Preview",
+    "styleSubtitle": "Choose how your App looks.",
+    "messagesEmpty": "You don't have any messages yet."
   }
 }

@@ -188,14 +188,41 @@
         // isWebScreenGranted's prefix match, but against appInfo.screens
         // (the sector-based catalog from Nuestras APPs) instead of grantSet
         // — a column/icon key is eligible whenever its own pantalla is.
+        // A column/icon key's own field id, once the pantalla's submenuPrefix
+        // is stripped off the front — column keys end in "/solo-ver" (see
+        // renderColumnRow) and may pass through a classification segment
+        // (e.g. "class-control-interno") on the way, which the catalog
+        // never names its columns by, so only the segment right before
+        // "/solo-ver" is the real field id; an icon key has no such suffix
+        // and is already exactly one segment.
+        function fieldKeyFromSubmenuId(submenuId, submenuPrefix) {
+            const rest = submenuId.slice(submenuPrefix.length + 1);
+            if (rest.endsWith('/solo-ver')) {
+                const parts = rest.slice(0, -'/solo-ver'.length).split('/');
+                return parts[parts.length - 1];
+            }
+            return rest;
+        }
+
+        // Screen-level eligibility (does this client's App even have a
+        // screen for this pantalla) plus, for a column/icon key specifically,
+        // field-level eligibility against that screen's own curated list in
+        // Nuestras APPs (see saas_app_screen_fields in db.js) — an empty
+        // list there means "not curated yet", so everything under the
+        // pantalla stays eligible rather than locking out every column
+        // until GEIPSA visits that screen's checklist.
         function isAppEligibleKey(webKey) {
             if (!appColumnEnabled) return false;
             const [sectionId, itemId, submenuId] = webKey.split('::');
-            return appInfo.screens.some((s) => {
+            const screen = appInfo.screens.find((s) => {
                 if (s.sectionId !== sectionId || s.itemId !== itemId) return false;
                 if (submenuId === s.submenuPrefix) return true;
                 return !!s.submenuPrefix && submenuId.startsWith(`${s.submenuPrefix}/`);
             });
+            if (!screen) return false;
+            if (submenuId === screen.submenuPrefix) return true;
+            if (!screen.enabledFields || !screen.enabledFields.length) return true;
+            return screen.enabledFields.includes(fieldKeyFromSubmenuId(submenuId, screen.submenuPrefix));
         }
 
         // Builds the App-column toggle for buildRow, shared by every level

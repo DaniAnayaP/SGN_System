@@ -138,9 +138,8 @@ hamburgerBtn.addEventListener('click', (event) => {
 });
 document.addEventListener('click', closeHamburgerMenu);
 [
-    'home-menu-messages', 'home-menu-chatbot', 'home-menu-notifications', 'home-menu-bookmarks',
-    'home-menu-user-info', 'home-menu-business-profile',
-    'home-menu-style', 'home-menu-admin-business', 'home-menu-button-config',
+    'home-menu-notifications', 'home-menu-bookmarks',
+    'home-menu-admin-business', 'home-menu-button-config',
     'home-menu-database', 'home-menu-business-intelligence', 'home-menu-others',
 ].forEach((id) => {
     document.getElementById(id).addEventListener('click', () => {
@@ -258,6 +257,157 @@ document.getElementById('home-menu-ui-scale').addEventListener('click', openUiSc
 uiScaleOverlay.addEventListener('click', (event) => { if (event.target === uiScaleOverlay) closeUiScaleSheet(); });
 uiScaleDecreaseBtn.addEventListener('click', () => { if (currentUiScaleLevel > 1) saveUiScaleLevel(currentUiScaleLevel - 1); });
 uiScaleIncreaseBtn.addEventListener('click', () => { if (currentUiScaleLevel < UI_SCALE_LEVELS.length) saveUiScaleLevel(currentUiScaleLevel + 1); });
+
+// --- "Estilo" bottom sheet ------------------------------------------------
+// Same 4 options and 'style' localStorage key as Dashboard.js's own desktop
+// switcher — picking one here is visible next time this same user opens
+// Sistema Web too, and vice versa. Only "Claro" (no extra body class, this
+// page's current look) actually changes anything visually today; the other
+// 3 toggle the same body classes Dashboard.js's applyStyle uses, wired and
+// ready, but AppInicio.css itself has no rules for those classes yet.
+const STYLE_OPTIONS = [
+    { id: 'light', labelKey: 'main.styleLight', swatch: '#ffffff' },
+    { id: 'dark', labelKey: 'main.styleDark', swatch: '#0b0d14' },
+    { id: 'institutional', labelKey: 'main.styleInstitutional', swatch: 'linear-gradient(135deg,#1c3a5e,#0e1e33)' },
+    { id: 'futuristic', labelKey: 'main.styleFuturistic', swatch: 'linear-gradient(135deg,#6C7CF0,#3A4BC9)' },
+];
+const styleOverlay = document.getElementById('home-style-overlay');
+const styleListEl = document.getElementById('home-style-list');
+
+function getStoredStyle() {
+    const stored = localStorage.getItem('style');
+    return STYLE_OPTIONS.some((s) => s.id === stored) ? stored : 'light';
+}
+
+function applyStyle(style) {
+    document.body.classList.remove('institutional-mode', 'dark-mode', 'futuristic-mode');
+    if (style === 'institutional') document.body.classList.add('institutional-mode');
+    else if (style === 'dark') document.body.classList.add('dark-mode');
+    else if (style === 'futuristic') document.body.classList.add('futuristic-mode');
+    renderStyleList(style);
+}
+
+function renderStyleList(activeStyle) {
+    styleListEl.innerHTML = '';
+    STYLE_OPTIONS.forEach((opt) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `home-style-option${opt.id === activeStyle ? ' active' : ''}`;
+        btn.innerHTML = `
+            <span class="home-style-swatch" style="background:${opt.swatch}"></span>
+            <span>${t(opt.labelKey)}</span>
+            ${opt.id === activeStyle ? '<i class="bx bx-check home-style-check" aria-hidden="true"></i>' : ''}
+        `;
+        btn.addEventListener('click', () => {
+            localStorage.setItem('style', opt.id);
+            applyStyle(opt.id);
+        });
+        styleListEl.appendChild(btn);
+    });
+}
+
+document.getElementById('home-menu-style').addEventListener('click', () => {
+    closeHamburgerMenu();
+    renderStyleList(getStoredStyle());
+    styleOverlay.hidden = false;
+});
+styleOverlay.addEventListener('click', (event) => { if (event.target === styleOverlay) styleOverlay.hidden = true; });
+
+// --- Datos de Usuario / Datos de Usuario del Negocio (full-screen) -------
+// Same /api/me/profile and /api/me/business-profile endpoints Dashboard.js's
+// own desktop dropdowns already use — read fresh each time they're opened
+// (no cache) since either can change from other screens/sessions.
+function setSubscreenField(id, value, fallback) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value || fallback;
+}
+
+const userInfoScreen = document.getElementById('home-user-info-screen');
+document.getElementById('home-user-info-back').addEventListener('click', () => { userInfoScreen.hidden = true; });
+document.getElementById('home-menu-user-info').addEventListener('click', async () => {
+    closeHamburgerMenu();
+    userInfoScreen.hidden = false;
+    try {
+        const res = await fetch('/api/me/profile', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { profile } = await res.json();
+        const notSet = t('main.notSet');
+        setSubscreenField('home-user-info-nickname', profile.nickname, notSet);
+        setSubscreenField('home-user-info-business-email', profile.business_email, t('main.noBusinessEmail'));
+        setSubscreenField('home-user-info-name', profile.name, notSet);
+        setSubscreenField('home-user-info-phone', profile.phone, notSet);
+        setSubscreenField('home-user-info-address', profile.address, notSet);
+        setSubscreenField('home-user-info-birth-date', profile.birth_date, notSet);
+        setSubscreenField('home-user-info-id-number', profile.id_number, notSet);
+    } catch {
+        showToast(t('admin.loadError'));
+    }
+});
+
+const businessProfileScreen = document.getElementById('home-business-profile-screen');
+document.getElementById('home-business-profile-back').addEventListener('click', () => { businessProfileScreen.hidden = true; });
+document.getElementById('home-menu-business-profile').addEventListener('click', async () => {
+    closeHamburgerMenu();
+    businessProfileScreen.hidden = false;
+    try {
+        const res = await fetch('/api/me/business-profile', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { profile } = await res.json();
+        const notSet = t('main.notSet');
+        setSubscreenField('home-business-profile-position', profile.position, notSet);
+        const names = profile.profileNames || [];
+        setSubscreenField('home-business-profile-role', names.length ? names.join(', ') : null, t('main.noRoleAssigned'));
+        setSubscreenField('home-business-profile-business-email', profile.business_email, notSet);
+        setSubscreenField('home-business-profile-phone', profile.phone, notSet);
+        setSubscreenField('home-business-profile-hire-date', profile.hire_date, notSet);
+        setSubscreenField('home-business-profile-reports-to', profile.reports_to, notSet);
+    } catch {
+        showToast(t('admin.loadError'));
+    }
+});
+
+// --- Mensajes (full-screen, honest empty state — no message backend yet) --
+const messagesScreen = document.getElementById('home-messages-screen');
+document.getElementById('home-messages-back').addEventListener('click', () => { messagesScreen.hidden = true; });
+document.getElementById('home-menu-messages').addEventListener('click', () => {
+    closeHamburgerMenu();
+    messagesScreen.hidden = false;
+});
+
+// --- Chatbot (full-screen UI shell — same scope as Dashboard.js's own
+// desktop panel: a greeting plus one canned reply per message, no real AI
+// backend wired up yet) ----------------------------------------------------
+const chatbotScreen = document.getElementById('home-chatbot-screen');
+const chatbotMessagesEl = document.getElementById('home-chatbot-messages');
+let chatbotGreeted = false;
+
+function addChatMessage(text, from) {
+    const bubble = document.createElement('div');
+    bubble.className = `home-chatbot-message home-chatbot-message-${from}`;
+    bubble.textContent = text;
+    chatbotMessagesEl.appendChild(bubble);
+    chatbotMessagesEl.scrollTop = chatbotMessagesEl.scrollHeight;
+}
+
+document.getElementById('home-chatbot-back').addEventListener('click', () => { chatbotScreen.hidden = true; });
+document.getElementById('home-menu-chatbot').addEventListener('click', () => {
+    closeHamburgerMenu();
+    chatbotScreen.hidden = false;
+    if (!chatbotGreeted) {
+        addChatMessage(t('main.chatbotGreeting'), 'bot');
+        chatbotGreeted = true;
+    }
+    document.getElementById('home-chatbot-input').focus();
+});
+document.getElementById('home-chatbot-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const input = document.getElementById('home-chatbot-input');
+    const text = input.value.trim();
+    if (!text) return;
+    addChatMessage(text, 'user');
+    input.value = '';
+    setTimeout(() => addChatMessage(t('main.chatbotCannedReply'), 'bot'), 400);
+});
 
 // --- Depto/Área and Centro de Costos pickers -----------------------------
 // Real data now, ported from Dashboard.js's own pickers — this page has no
@@ -709,6 +859,7 @@ async function loadClientBranding() {
         loadClientBranding();
         initDeptAreaCc();
         applyUiScaleLevel(await fetchUiScaleLevel());
+        applyStyle(getStoredStyle());
     } catch (err) {
         console.error('AppInicio failed to load:', err);
         renderTiles([]);

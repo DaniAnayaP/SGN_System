@@ -143,6 +143,8 @@ const {
     deleteSaasApp,
     addSaasAppScreen,
     deleteSaasAppScreen,
+    getWebScreenFieldsCatalog,
+    setSaasAppScreenFields,
     listBusinessSectors,
     createBusinessSector,
     deleteBusinessSector,
@@ -1315,6 +1317,30 @@ app.delete('/api/admin/saas-apps/:id/screens/:screenId', requireAuth, requireAdm
     const existing = getSaasAppById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'App not found.' });
     res.json({ app: deleteSaasAppScreen(req.params.id, req.params.screenId) });
+});
+
+// Read-only lookup behind an App screen's own field checklist — the full
+// column/icon catalog its underlying Web screen offers (see
+// getWebScreenFieldsCatalog in db.js), independent of which of those this
+// App has actually curated yet (that's GET .../screens/:screenId/fields
+// below).
+app.get('/api/admin/web-screens-catalog/:webScreenKey/fields', requireAuth, requireAdmin, (req, res) => {
+    res.json(getWebScreenFieldsCatalog(req.params.webScreenKey));
+});
+
+app.put('/api/admin/saas-apps/:id/screens/:screenId/fields', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+        return res.status(403).json({ message: 'No tienes permiso para editar apps.' });
+    }
+    const existing = getSaasAppById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'App not found.' });
+    const screen = existing.screens.find((s) => String(s.id) === req.params.screenId);
+    if (!screen) return res.status(404).json({ message: 'Screen not found.' });
+    const { fieldKeys } = req.body || {};
+    if (!Array.isArray(fieldKeys) || fieldKeys.some((k) => typeof k !== 'string' || !k)) {
+        return res.status(400).json({ message: 'fieldKeys must be an array of strings.' });
+    }
+    res.json({ fieldKeys: setSaasAppScreenFields(req.params.screenId, fieldKeys) });
 });
 
 // --- Nuestros Sectores de Negocio (catalog Nuestras APPs' Sector field ------

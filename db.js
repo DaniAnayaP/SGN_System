@@ -248,6 +248,21 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_saas_app_screens_app_id ON saas_app_screens(app_id);
 
+    -- Which of a screen's own Web columns/icons this sector's App actually
+    -- exposes — sparse (unset = not yet curated by GEIPSA; PermissionTree.js
+    -- treats a screen with zero rows here as "everything eligible", same
+    -- rollout-friendly default the App-visibility merge already used before
+    -- this table existed) so this can be filled in gradually per app,
+    -- screen by screen, without breaking eligibility for the ones nobody's
+    -- gotten to yet.
+    CREATE TABLE IF NOT EXISTS saas_app_screen_fields (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        screen_id  INTEGER NOT NULL REFERENCES saas_app_screens(id) ON DELETE CASCADE,
+        field_key  TEXT NOT NULL,
+        UNIQUE(screen_id, field_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_app_screen_fields_screen_id ON saas_app_screen_fields(screen_id);
+
     -- Nuestros Sectores de Negocio: the catalog Nuestras APPs' own Sector de
     -- Negocio field picks from (was free text before, so a client's
     -- sector_negocio and an app's sector could drift apart on a typo and
@@ -3019,7 +3034,8 @@ function getSaasAppById(id) {
     if (!app) return app;
     const screens = db
         .prepare('SELECT id, name, screen_type AS screenType, web_screen_key AS webScreenKey, position FROM saas_app_screens WHERE app_id = ? ORDER BY position ASC, id ASC')
-        .all(id);
+        .all(id)
+        .map((s) => ({ ...s, fields: getSaasAppScreenFields(s.id) }));
     return { ...app, screens };
 }
 
@@ -3067,11 +3083,16 @@ function getClientAppScreens(clientId) {
             sectionId: path ? path.sectionId : null,
             itemId: path ? path.itemId : null,
             submenuPrefix: path ? path.submenuPrefix : null,
+            // Empty = not yet curated by GEIPSA for this screen, meaning
+            // every column/icon under it stays eligible (see
+            // saas_app_screen_fields' own comment) — PermissionTree.js
+            // only narrows eligibility down to this list once it's non-empty.
+            enabledFields: getSaasAppScreenFields(s.id),
         };
     });
     const generalButtonScreens = APP_GENERAL_BUTTONS.map((b) => ({
         id: b.itemId, name: b.name, webScreenKey: b.itemId,
-        webScreenLabelKey: b.labelKey, sectionId: 'main', itemId: b.itemId, submenuPrefix: '',
+        webScreenLabelKey: b.labelKey, sectionId: 'main', itemId: b.itemId, submenuPrefix: '', enabledFields: [],
     }));
     return {
         app: { id: app.id, name: app.name, sector: app.sector, icon: app.icon, colorFrom: app.color_from, colorTo: app.color_to },
@@ -3122,6 +3143,69 @@ function addSaasAppScreen(appId, { name, screenType, webScreenKey }) {
 function deleteSaasAppScreen(appId, screenId) {
     db.prepare('DELETE FROM saas_app_screens WHERE id = ? AND app_id = ?').run(screenId, appId);
     return getSaasAppById(appId);
+}
+
+function getSaasAppScreenFields(screenId) {
+    return db.prepare('SELECT field_key FROM saas_app_screen_fields WHERE screen_id = ?').all(screenId).map((r) => r.field_key);
+}
+
+function setSaasAppScreenFields(screenId, fieldKeys) {
+    const replace = db.transaction((keys) => {
+        db.prepare('DELETE FROM saas_app_screen_fields WHERE screen_id = ?').run(screenId);
+        const insert = db.prepare('INSERT INTO saas_app_screen_fields (screen_id, field_key) VALUES (?, ?)');
+        for (const key of keys) insert.run(screenId, key);
+    });
+    replace([...new Set(fieldKeys)]);
+    return getSaasAppScreenFields(screenId);
+}
+
+// Walks buildPlanTreeSections()'s already-resolved tree to the exact
+// pantalla node a TABLE_GRANT_PATHS entry points at. Deliberately NOT a
+// fresh raw menu.json walk: 'main'/btn-configuracion's own submenu has a
+// placeholder "btn-admin-negocio" entry that only becomes real (its
+// submenu swapped in from the actual top-level "admin-business" item) via
+// the substitution buildPlanTreeSections() already performs for the plan
+// cost tree — reusing it here means centros-costo (the one catalog entry
+// nested under that placeholder) resolves correctly instead of silently
+// coming back empty.
+function findMenuPantallaNode(sectionId, itemId, submenuPrefix) {
+    const section = buildPlanTreeSections().find((s) => s.id === sectionId);
+    let node = section?.items.find((i) => i.id === itemId);
+    for (const part of submenuPrefix.split('/')) {
+        node = node?.submenu?.find((s) => s.id === part);
+    }
+    return node || null;
+}
+
+// The full catalog of column/icon field keys a given Web screen offers —
+// what Nuestras APPs' own field checklist picks from (see
+// getSaasAppScreenFields above). Columns nested inside a classification
+// group (e.g. "Control Interno") carry that group's labelKey so the admin
+// UI can render the same Tabla > Clasificación > Columna grouping the
+// column itself already gets everywhere else. Returns { columns: [],
+// icons: [] }, both empty if webScreenKey has no TABLE_GRANT_PATHS entry or
+// the tree doesn't resolve one (defensive — every real catalog key should
+// resolve).
+function getWebScreenFieldsCatalog(webScreenKey) {
+    const grantPath = TABLE_GRANT_PATHS[webScreenKey];
+    if (!grantPath) return { columns: [], icons: [] };
+    const node = findMenuPantallaNode(grantPath.sectionId, grantPath.itemId, grantPath.submenuPrefix);
+    if (!node) return { columns: [], icons: [] };
+    // Every column leaf in menu.json carries permissionOnly:true (it marks
+    // "no real href, exists purely for the permission tree" — true of every
+    // column, not just placeholders) so it's NOT a signal to filter on
+    // here; every non-classification entry in a pantalla's submenu is a
+    // real, grantable column.
+    const columns = [];
+    (node.submenu || []).forEach((entry) => {
+        if (entry.isClassification) {
+            (entry.submenu || []).forEach((col) => columns.push({ id: col.id, labelKey: col.labelKey, classificationKey: entry.labelKey }));
+        } else {
+            columns.push({ id: entry.id, labelKey: entry.labelKey, classificationKey: null });
+        }
+    });
+    const icons = (node.iconsSubmenu || []).map((icon) => ({ id: icon.id, labelKey: icon.labelKey }));
+    return { columns, icons };
 }
 
 function deserializeBusinessSector(row) {
@@ -3940,6 +4024,9 @@ module.exports = {
     deleteSaasApp,
     addSaasAppScreen,
     deleteSaasAppScreen,
+    getSaasAppScreenFields,
+    setSaasAppScreenFields,
+    getWebScreenFieldsCatalog,
     getClientAppScreens,
     listBusinessSectors,
     createBusinessSector,

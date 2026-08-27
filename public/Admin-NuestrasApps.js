@@ -156,6 +156,13 @@ async function loadApps() {
 }
 
 // --- Detail view -------------------------------------------------------------
+// Which screens' field checklists are open (by screen id) and the fetched
+// column/icon catalog per webScreenKey (several screens can point at the
+// same Web screen, so this is cached by key, not by screen). Both reset
+// naturally on a full page reload; nothing here needs to survive that.
+const expandedScreenIds = new Set();
+const fieldCatalogCache = new Map();
+
 function renderDetail() {
     if (!currentApp) return;
     document.getElementById('app-detail-icon').style.background = `linear-gradient(135deg, ${currentApp.colorFrom}, ${currentApp.colorTo})`;
@@ -167,9 +174,16 @@ function renderDetail() {
     const list = document.getElementById('app-screen-list');
     list.innerHTML = '';
     (currentApp.screens || []).forEach((screen, i) => {
+        const expanded = expandedScreenIds.has(screen.id);
+        const wrap = document.createElement('div');
+        wrap.className = 'saas-app-screen-wrap';
+
         const row = document.createElement('div');
         row.className = 'saas-app-screen-row';
         row.innerHTML = `
+            <button type="button" class="perm-tree-toggle" aria-expanded="${expanded}" aria-label="${Dashboard.t('menu.appScreenFieldsToggle')}">
+                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+            </button>
             <div class="saas-app-screen-num">${i + 1}</div>
             <div class="saas-app-screen-name">
                 ${screen.name}
@@ -180,9 +194,126 @@ function renderDetail() {
                 <i class="bx bx-trash" aria-hidden="true"></i>
             </button>
         `;
-        row.querySelector('button').addEventListener('click', () => removeScreen(screen.id));
-        list.appendChild(row);
+        row.querySelector('.perm-tree-toggle').addEventListener('click', () => {
+            if (expandedScreenIds.has(screen.id)) expandedScreenIds.delete(screen.id);
+            else expandedScreenIds.add(screen.id);
+            renderDetail();
+        });
+        row.querySelector('.admin-icon-btn-danger').addEventListener('click', () => removeScreen(screen.id));
+        wrap.appendChild(row);
+
+        if (expanded) {
+            const panel = document.createElement('div');
+            panel.className = 'saas-app-screen-fields-panel';
+            panel.innerHTML = `<p class="admin-hint">${Dashboard.t('menu.appScreenFieldsHint')}</p>`;
+            wrap.appendChild(panel);
+            renderScreenFieldsPanel(panel, screen);
+        }
+
+        list.appendChild(wrap);
     });
+}
+
+// Which columns/icons of this screen's underlying Web table this sector's
+// App exposes — see saas_app_screen_fields in db.js. An empty saved list
+// means "not curated yet, everything eligible", so the checklist starts
+// with nothing checked in that case rather than pretending GEIPSA already
+// made a (nonexistent) all-or-nothing choice.
+async function renderScreenFieldsPanel(panel, screen) {
+    panel.innerHTML = `<p class="admin-hint">${Dashboard.t('admin.loading')}</p>`;
+    let catalog = fieldCatalogCache.get(screen.webScreenKey);
+    if (!catalog) {
+        try {
+            const res = await fetch(`/api/admin/web-screens-catalog/${screen.webScreenKey}/fields`, { credentials: 'include' });
+            if (!res.ok) throw new Error('load failed');
+            catalog = await res.json();
+            fieldCatalogCache.set(screen.webScreenKey, catalog);
+        } catch {
+            panel.innerHTML = `<p class="admin-hint">${Dashboard.t('menu.appScreenFieldsLoadError')}</p>`;
+            return;
+        }
+    }
+    panel.innerHTML = '';
+    const selected = new Set(screen.fields || []);
+
+    const groups = new Map(); // classificationKey (or null) -> columns[]
+    catalog.columns.forEach((col) => {
+        const key = col.classificationKey || null;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(col);
+    });
+    if (groups.has(null)) {
+        const tier1 = document.createElement('div');
+        tier1.className = 'picker-tier1';
+        tier1.textContent = Dashboard.t('menu.appScreenFieldsOwnColumns');
+        panel.appendChild(tier1);
+        groups.get(null).forEach((col) => panel.appendChild(buildFieldCheckboxRow(col.id, col.labelKey, selected)));
+    }
+    groups.forEach((cols, classificationKey) => {
+        if (!classificationKey) return;
+        const tier1 = document.createElement('div');
+        tier1.className = 'picker-tier1';
+        tier1.textContent = Dashboard.t(classificationKey);
+        panel.appendChild(tier1);
+        cols.forEach((col) => panel.appendChild(buildFieldCheckboxRow(col.id, col.labelKey, selected)));
+    });
+
+    if (catalog.icons.length) {
+        const tier1 = document.createElement('div');
+        tier1.className = 'picker-tier1';
+        tier1.textContent = Dashboard.t('menu.iconsPersonalization');
+        panel.appendChild(tier1);
+        catalog.icons.forEach((icon) => panel.appendChild(buildFieldCheckboxRow(icon.id, icon.labelKey, selected)));
+    }
+
+    if (!catalog.columns.length && !catalog.icons.length) {
+        panel.appendChild(Object.assign(document.createElement('p'), {
+            className: 'admin-hint', textContent: Dashboard.t('menu.appScreenFieldsEmpty'),
+        }));
+        return;
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'admin-form-actions';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn';
+    saveBtn.textContent = Dashboard.t('admin.save');
+    saveBtn.addEventListener('click', () => {
+        const fieldKeys = Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map((cb) => cb.dataset.fieldKey);
+        saveScreenFields(screen, fieldKeys);
+    });
+    actions.appendChild(saveBtn);
+    panel.appendChild(actions);
+}
+
+function buildFieldCheckboxRow(fieldKey, labelKey, selected) {
+    const label = document.createElement('label');
+    label.className = 'picker-row';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.fieldKey = fieldKey;
+    checkbox.checked = selected.has(fieldKey);
+    const span = document.createElement('span');
+    span.textContent = Dashboard.t(labelKey);
+    label.append(checkbox, span);
+    return label;
+}
+
+async function saveScreenFields(screen, fieldKeys) {
+    try {
+        const res = await fetch(`/api/admin/saas-apps/${currentApp.id}/screens/${screen.id}/fields`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ fieldKeys }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        screen.fields = fieldKeys;
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
 }
 
 async function openDetail(appId) {

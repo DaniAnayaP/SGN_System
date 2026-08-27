@@ -168,6 +168,11 @@
     "appSectorChoosePlaceholder": "Elige un sector...",
     "appToggleOn": "App habilitada — clic para deshabilitar",
     "appToggleOff": "App deshabilitada — clic para habilitar",
+    "appScreenFieldsToggle": "Columnas e íconos disponibles",
+    "appScreenFieldsHint": "Solo lo marcado aquí queda disponible como Visión APP en el árbol de permisos de un cliente con este sector.",
+    "appScreenFieldsLoadError": "No se pudo cargar el catálogo de columnas.",
+    "appScreenFieldsOwnColumns": "Columnas de la pantalla",
+    "appScreenFieldsEmpty": "Esta pantalla no tiene columnas ni íconos configurables.",
     "moduleCosts": "Costo Accesos-Permisos",
     "saasTeam": "Equipo SaaS",
     "mainSection": "General",
@@ -266,6 +271,7 @@
     "requiredFields": "Nombre de empresa, contacto y correo son obligatorios.",
     "loadError": "No se pudo cargar la información. Intenta de nuevo.",
     "saveError": "Error al guardar, vuelve a intentar.",
+    "loading": "Cargando...",
     "costCenterRequiredForRecord": "Selecciona un Centro de Costos antes de guardar — es una columna de Control Interno y debe quedar llena desde la creación.",
     "clientSaved": "Cliente guardado.",
     "contratacionesTitle": "Contrataciones",
@@ -962,6 +968,8 @@
     "deptAreaNone": "Sin departamentos disponibles",
     "costCentersButton": "C. Cost",
     "uiScaleSubtitle": "Ajusta el tamaño de texto e íconos de tu App.",
-    "uiScalePreview": "Vista previa"
+    "uiScalePreview": "Vista previa",
+    "styleSubtitle": "Elige cómo se ve tu App.",
+    "messagesEmpty": "Todavía no tienes mensajes."
   }
 }

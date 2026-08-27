@@ -212,6 +212,128 @@
         </div>
     </div>
 
+    <div class="home-sheet-overlay" id="home-style-overlay" hidden>
+        <div class="home-sheet" role="dialog" aria-modal="true" aria-labelledby="home-style-title">
+            <div class="home-sheet-handle"></div>
+            <h3 class="home-sheet-title" id="home-style-title" data-i18n="main.style">Style</h3>
+            <p class="home-sheet-subtitle" data-i18n="home.styleSubtitle">Choose how your App looks.</p>
+            <div class="home-style-list" id="home-style-list">
+                <!-- rendered at runtime -->
+            </div>
+        </div>
+    </div>
+
+    <div class="home-subscreen-overlay" id="home-user-info-screen" hidden>
+        <div class="home-subscreen">
+            <div class="home-subscreen-header">
+                <button type="button" class="home-subscreen-back" id="home-user-info-back" data-i18n-aria="admin.back" aria-label="Back">
+                    <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                </button>
+                <h2 data-i18n="main.userInfo">User Data</h2>
+            </div>
+            <div class="home-subscreen-body">
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.nickname">Nickname</span>
+                    <span id="home-user-info-nickname">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.businessEmail">Business Email</span>
+                    <span id="home-user-info-business-email">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.fullName">Full Name</span>
+                    <span id="home-user-info-name">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.phone">Phone</span>
+                    <span id="home-user-info-phone">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.address">Address</span>
+                    <span id="home-user-info-address">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.birthDate">Date of Birth</span>
+                    <span id="home-user-info-birth-date">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.idNumber">ID Number</span>
+                    <span id="home-user-info-id-number">—</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="home-subscreen-overlay" id="home-business-profile-screen" hidden>
+        <div class="home-subscreen">
+            <div class="home-subscreen-header">
+                <button type="button" class="home-subscreen-back" id="home-business-profile-back" data-i18n-aria="admin.back" aria-label="Back">
+                    <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                </button>
+                <h2 data-i18n="main.businessProfile">Business User Data</h2>
+            </div>
+            <div class="home-subscreen-body">
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.position">Position</span>
+                    <span id="home-business-profile-position">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.role">Role</span>
+                    <span id="home-business-profile-role">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.businessEmail">Business Email</span>
+                    <span id="home-business-profile-business-email">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.phone">Phone</span>
+                    <span id="home-business-profile-phone">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.hireDate">Hire Date</span>
+                    <span id="home-business-profile-hire-date">—</span>
+                </div>
+                <div class="home-subscreen-row">
+                    <span data-i18n="main.reportsTo">Reports To</span>
+                    <span id="home-business-profile-reports-to">—</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="home-subscreen-overlay" id="home-messages-screen" hidden>
+        <div class="home-subscreen">
+            <div class="home-subscreen-header">
+                <button type="button" class="home-subscreen-back" id="home-messages-back" data-i18n-aria="admin.back" aria-label="Back">
+                    <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                </button>
+                <h2 data-i18n="main.messages">Messages</h2>
+            </div>
+            <div class="home-subscreen-body home-empty">
+                <i class="bx bx-message-dots" aria-hidden="true"></i>
+                <p data-i18n="home.messagesEmpty">You don't have any messages yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="home-subscreen-overlay" id="home-chatbot-screen" hidden>
+        <div class="home-subscreen">
+            <div class="home-subscreen-header">
+                <button type="button" class="home-subscreen-back" id="home-chatbot-back" data-i18n-aria="admin.back" aria-label="Back">
+                    <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                </button>
+                <h2 data-i18n="main.chatbotTitle">Chatbot</h2>
+            </div>
+            <div class="home-chatbot-messages" id="home-chatbot-messages"></div>
+            <form class="home-chatbot-input-row" id="home-chatbot-form">
+                <input type="text" id="home-chatbot-input" data-i18n-placeholder="main.chatbotPlaceholder" placeholder="Message" autocomplete="off">
+                <button type="submit" class="home-chatbot-send" data-i18n-aria="main.chatbotSend" aria-label="Send">
+                    <i class="bx bx-send" aria-hidden="true"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
     <script src="AppInicio.js" defer></script>
 </body>
 </html>
