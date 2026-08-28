@@ -113,6 +113,19 @@ const {
     FUEL_LOADING_PATCHABLE_FIELDS,
     updateFuelLoadingRecord,
     deleteFuelLoadingRecord,
+    listUnitTypes,
+    getUnitTypeById,
+    createUnitType,
+    UNIT_TYPE_PATCHABLE_FIELDS,
+    updateUnitType,
+    deleteUnitType,
+    listFleetUnits,
+    getFleetUnitById,
+    createFleetUnit,
+    FLEET_UNIT_PATCHABLE_FIELDS,
+    updateFleetUnit,
+    deleteFleetUnit,
+    suggestFuelTypeForEcoUnit,
     getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,
@@ -2648,6 +2661,7 @@ function mapFuelLoadingRecord(row, pendingByRecord, companyName) {
         operator: row.operator,
         coordinator: row.coordinator,
         ecoUnit: row.eco_unit,
+        fuelType: row.fuel_type,
         tripBefore: row.trip_before,
         tripBeforeEvidence: row.trip_before_evidence,
         tripAfter: row.trip_after,
@@ -2711,6 +2725,161 @@ app.delete('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => 
         recordLabel: existing.eco_unit || existing.db_id, action: 'delete', changedBy: req.user.name,
     });
     deleteFuelLoadingRecord(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
+// --- Tipos de Unidad (Catálogos > Transporte Volumen) -----------------------
+// Simple reference catalog -- what the automakers already classify (Tracto
+// Camión, Camioneta, Sedán...), each with its own Tipo Combustible. Same
+// blank-create-then-PATCH-per-field flow as Carga Combustible, on both
+// platforms (see createUnitType's own note in db.js) -- no modal to keep in
+// sync with what the server actually reads.
+const UNIT_TYPE_AREA_LABEL = 'Transporte Volumen';
+const UNIT_TYPE_MODULE_LABEL = 'Cadena de Suministro';
+const UNIT_TYPE_SCREEN_LABEL = 'Tipos de Unidad';
+
+function mapUnitTypeRecord(row, pendingByRecord, companyName) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        code: row.code,
+        name: row.name,
+        fuelType: row.fuel_type,
+        status: row.status,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: UNIT_TYPE_AREA_LABEL,
+            modulo: UNIT_TYPE_MODULE_LABEL,
+            pantalla: UNIT_TYPE_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
+app.get('/api/business/unit-types', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'tipos-unidad');
+    const client = getClientById(req.user.clientId);
+    res.json({ unitTypes: listUnitTypes(req.user.clientId).map((r) => mapUnitTypeRecord(r, pendingByRecord, client?.company_name)) });
+});
+
+app.post('/api/business/unit-types', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const unitType = createUnitType({ clientId: req.user.clientId });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: unitType.id,
+        recordLabel: unitType.code, action: 'create', changedBy: req.user.name,
+    });
+    const client = getClientById(req.user.clientId);
+    res.status(201).json({ unitType: mapUnitTypeRecord(unitType, null, client?.company_name) });
+});
+
+app.patch('/api/business/unit-types/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getUnitTypeById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Unit type not found.' });
+    const patch = req.body || {};
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, UNIT_TYPE_PATCHABLE_FIELDS, 'tipos-unidad', existing.code);
+    const unitType = updateUnitType(req.params.id, req.user.clientId, appliedPatch);
+    const client = getClientById(req.user.clientId);
+    res.json({ unitType: mapUnitTypeRecord(unitType, null, client?.company_name), pendingFields, rejectedFields });
+});
+
+app.delete('/api/business/unit-types/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getUnitTypeById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Unit type not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: existing.id,
+        recordLabel: existing.code, action: 'delete', changedBy: req.user.name,
+    });
+    deleteUnitType(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
+// --- Nuestras Unidades (Operaciones > Transporte Volumen) -------------------
+// The client's real fleet -- one row per physical vehicle, keyed by its own
+// Económico (eco_id, unique per client -- confirmed product decision,
+// enforced here at the application layer since a blank record can't carry a
+// DB-level UNIQUE, see fleet_units' own schema comment). Carga Combustible
+// reads this by eco_id to SUGGEST Tipo Combustible -- open/never blocking,
+// per the same product decision: an unmatched Económico is fine, it just
+// gets no suggestion.
+const FLEET_UNIT_AREA_LABEL = 'Transporte Volumen';
+const FLEET_UNIT_MODULE_LABEL = 'Cadena de Suministro';
+const FLEET_UNIT_SCREEN_LABEL = 'Nuestras Unidades';
+
+function mapFleetUnitRecord(row, pendingByRecord, companyName) {
+    if (!row) return row;
+    const unitType = row.unit_type_id ? getUnitTypeById(row.unit_type_id, row.client_id) : null;
+    return {
+        id: row.id,
+        ecoId: row.eco_id,
+        unitTypeId: row.unit_type_id || null,
+        unitTypeName: unitType?.name || '',
+        fuelType: unitType?.fuel_type || '',
+        plates: row.plates,
+        brandModel: row.brand_model,
+        year: row.year,
+        status: row.status,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: FLEET_UNIT_AREA_LABEL,
+            modulo: FLEET_UNIT_MODULE_LABEL,
+            pantalla: FLEET_UNIT_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
+app.get('/api/business/fleet-units', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'nuestras-unidades');
+    const client = getClientById(req.user.clientId);
+    res.json({ fleetUnits: listFleetUnits(req.user.clientId).map((r) => mapFleetUnitRecord(r, pendingByRecord, client?.company_name)) });
+});
+
+app.post('/api/business/fleet-units', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const fleetUnit = createFleetUnit({ clientId: req.user.clientId });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: fleetUnit.id,
+        recordLabel: `#${fleetUnit.id}`, action: 'create', changedBy: req.user.name,
+    });
+    const client = getClientById(req.user.clientId);
+    res.status(201).json({ fleetUnit: mapFleetUnitRecord(fleetUnit, null, client?.company_name) });
+});
+
+app.patch('/api/business/fleet-units/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFleetUnitById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Fleet unit not found.' });
+    const patch = req.body || {};
+    if (typeof patch.ecoId === 'string' && patch.ecoId.trim() && patch.ecoId.trim() !== existing.eco_id) {
+        const dupe = getFleetUnitByEcoId(req.user.clientId, patch.ecoId);
+        if (dupe && dupe.id !== existing.id) {
+            return res.status(400).json({ message: 'That Económico is already registered to another unit.' });
+        }
+    }
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FLEET_UNIT_PATCHABLE_FIELDS, 'nuestras-unidades', existing.eco_id || `#${existing.id}`);
+    const fleetUnit = updateFleetUnit(req.params.id, req.user.clientId, appliedPatch);
+    const client = getClientById(req.user.clientId);
+    res.json({ fleetUnit: mapFleetUnitRecord(fleetUnit, null, client?.company_name), pendingFields, rejectedFields });
+});
+
+app.delete('/api/business/fleet-units/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFleetUnitById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Fleet unit not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: existing.id,
+        recordLabel: existing.eco_id || `#${existing.id}`, action: 'delete', changedBy: req.user.name,
+    });
+    deleteFleetUnit(req.params.id, req.user.clientId);
     res.status(204).end();
 });
 

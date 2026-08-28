@@ -158,6 +158,13 @@ const FIELDS = [
     { id: 'operator', group: 'ident', apiKey: 'operator', labelKey: 'main.colCargaOperador', hintKey: 'home.cargaHintOperador', type: 'text', icon: 'bx-user', colId: 'colCargaOperador', autoFill: true },
     { id: 'coordinator', group: 'ident', apiKey: 'coordinator', labelKey: 'main.colCargaCoordinador', hintKey: 'home.cargaHintCoordinador', type: 'text', icon: 'bx-user-check', colId: 'colCargaCoordinador' },
     { id: 'ecoUnit', group: 'ident', apiKey: 'ecoUnit', labelKey: 'main.colCargaEcoUnidad', hintKey: 'home.cargaHintEcoUnidad', type: 'text', icon: 'bx-id-card', colId: 'colCargaEcoUnidad' },
+    {
+        id: 'fuelType', group: 'ident', apiKey: 'fuelType', labelKey: 'main.colFuelType', hintKey: 'home.cargaHintTipoCombustible', type: 'select', icon: 'bx-gas-pump', colId: 'colFuelType',
+        optionGroups: [
+            { labelKey: 'main.fuelTypeGasolineGroup', options: [{ value: 'magna', labelKey: 'main.fuelTypeMagna' }, { value: 'premium', labelKey: 'main.fuelTypePremium' }] },
+            { options: [{ value: 'diesel', labelKey: 'main.fuelTypeDiesel' }] },
+        ],
+    },
     { id: 'centroCostos', group: 'ident', apiKey: 'centroCostos', labelKey: 'main.colSysCentroCostos', hintKey: 'home.cargaHintCentroCostos', type: 'costCenter', icon: 'bx-purchase-tag-alt', colId: 'colSysCentroCostos' },
     { id: 'tripBefore', group: 'op', apiKey: 'tripBefore', labelKey: 'main.colCargaTripAntes', hintKey: 'home.cargaHintTripAntes', type: 'number', icon: 'bx-tachometer', colId: 'colCargaTripAntes' },
     { id: 'tripBeforeEvidence', group: 'op', apiKey: 'tripBeforeEvidence', labelKey: 'main.colCargaTripAntesEvidencia', hintKey: 'home.cargaHintFoto', type: 'photo', icon: 'bx-camera', colId: 'colCargaTripAntesEvidencia' },
@@ -429,6 +436,12 @@ function renderFormView() {
 function fieldPreviewText(field, record) {
     const value = fieldValueFromRecord(field, record);
     if (field.type === 'photo') return t('home.cargaPhotoAttached');
+    if (field.type === 'select') {
+        for (const grp of field.optionGroups) {
+            const opt = grp.options.find((o) => o.value === value);
+            if (opt) return t(opt.labelKey);
+        }
+    }
     if (field.type === 'date' && value) {
         const d = new Date(`${value}T00:00:00`);
         return d.toLocaleDateString(document.documentElement.lang === 'es' ? 'es-MX' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -477,13 +490,44 @@ function buildFieldEl(field, record) {
     return wrap;
 }
 
+// ecoUnit -> fuelType lookup (Nuestras Unidades), built once at init — open/
+// never blocking (confirmed product decision): an Económico with no match
+// just yields no suggestion, the field stays a normal manual pick.
+let fleetFuelSuggestions = {};
+async function loadFleetFuelSuggestions() {
+    try {
+        const res = await fetch('/api/business/fleet-units', { credentials: 'include' });
+        if (!res.ok) return;
+        const { fleetUnits } = await res.json();
+        const map = {};
+        (fleetUnits || []).forEach((u) => {
+            if (u.ecoId && u.fuelType) map[u.ecoId.trim().toLowerCase()] = u.fuelType;
+        });
+        fleetFuelSuggestions = map;
+    } catch {
+        fleetFuelSuggestions = {};
+    }
+}
+
 // Every confirm — identifying field or Operación field alike — is a real
 // PATCH the moment it happens. Whether it actually applies, goes pending,
 // or gets rejected is entirely the server's call (checkAndLogFieldChanges),
-// same as it's always been for Trip antes/después/Costo Total.
+// same as it's always been for Trip antes/después/Costo Total. Confirming
+// Económico also bundles a Tipo Combustible SUGGESTION in the same PATCH
+// when Nuestras Unidades has a match and the field is still empty — still
+// goes through the normal empty->filled permission check, just like any
+// other confirm; never overwrites a value already set.
 function commitFieldValue(field, value) {
     expandedFieldIds.delete(field.id);
-    patchRecord(openRecordId, { [field.apiKey]: value });
+    const patch = { [field.apiKey]: value };
+    if (field.id === 'ecoUnit') {
+        const suggestion = fleetFuelSuggestions[String(value).trim().toLowerCase()];
+        const record = currentRecord();
+        if (suggestion && !fieldValueFromRecord(FIELDS.find((f) => f.id === 'fuelType'), record)) {
+            patch.fuelType = suggestion;
+        }
+    }
+    patchRecord(openRecordId, patch);
 }
 
 function buildFieldBody(field, record) {
@@ -512,6 +556,35 @@ function buildFieldBody(field, record) {
         });
         row.append(btn, fileInput);
         bodyWrap.appendChild(row);
+        return bodyWrap;
+    }
+
+    if (field.type === 'select') {
+        const select = document.createElement('select');
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = t('main.fuelTypeSelect');
+        select.appendChild(placeholder);
+        field.optionGroups.forEach((grp) => {
+            const target = grp.labelKey ? document.createElement('optgroup') : select;
+            if (grp.labelKey) { target.label = t(grp.labelKey); select.appendChild(target); }
+            grp.options.forEach((opt) => {
+                const o = document.createElement('option');
+                o.value = opt.value;
+                o.textContent = t(opt.labelKey);
+                target.appendChild(o);
+            });
+        });
+        select.value = fieldValueFromRecord(field, record) || '';
+        const confirmBtn = document.createElement('button');
+        confirmBtn.type = 'button';
+        confirmBtn.className = 'home-carga-field-confirm';
+        confirmBtn.textContent = t('home.cargaConfirm');
+        confirmBtn.addEventListener('click', () => {
+            if (!select.value) return;
+            commitFieldValue(field, select.value);
+        });
+        bodyWrap.append(select, confirmBtn);
         return bodyWrap;
     }
 
@@ -603,7 +676,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
             const { profile } = await businessProfileRes.json();
             effectiveGrants = profile?.effectiveGrants || [];
         }
-        await Promise.all([loadCostCenters(), loadGateMap(), loadRecords(), loadBrandingForTheme()]);
+        await Promise.all([loadCostCenters(), loadGateMap(), loadRecords(), loadFleetFuelSuggestions(), loadBrandingForTheme()]);
         applyStyle(getStoredStyle());
         render();
     } catch (err) {

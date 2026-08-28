@@ -358,6 +358,45 @@ db.exec(`
         created_at              TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Tipos de Unidad (Catálogos > Transporte Volumen): the classification
+    -- automakers already define (Tracto Camión, Camioneta, Sedán...), each
+    -- with its own Tipo Combustible -- diesel/magna/premium, same values and
+    -- i18n keys fuel_records.fuel_type already uses (main.fuelType*), so a
+    -- suggestion coming from here needs no translation of its own. code is
+    -- auto-generated (TU-01, TU-02...), never user-entered.
+    CREATE TABLE IF NOT EXISTS unit_types (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        code        TEXT NOT NULL,
+        name        TEXT NOT NULL DEFAULT '',
+        fuel_type   TEXT NOT NULL DEFAULT '',
+        status      TEXT NOT NULL DEFAULT 'active',
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Nuestras Unidades (Operaciones > Transporte Volumen): the client's real
+    -- fleet -- one row per physical vehicle, identified by its own Económico
+    -- (eco_id, the id the CLIENT assigns -- confirmed unique per client, but
+    -- NOT a DB-level UNIQUE: every record starts blank via "+ Nueva Unidad"
+    -- (see fleet_units' own create helper), and 2+ blank rows would collide
+    -- on eco_id = '' under a real constraint. Uniqueness is instead checked
+    -- at the application layer, only once eco_id is actually being set to a
+    -- non-empty value -- see the PATCH route in server.js), referencing
+    -- which Tipo de Unidad it is. Carga Combustible reads this (by eco_id)
+    -- to SUGGEST Tipo Combustible -- never blocks/forces it, an unmatched
+    -- Económico just gets no suggestion.
+    CREATE TABLE IF NOT EXISTS fleet_units (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        eco_id        TEXT NOT NULL DEFAULT '',
+        unit_type_id  INTEGER REFERENCES unit_types(id),
+        plates        TEXT NOT NULL DEFAULT '',
+        brand_model   TEXT NOT NULL DEFAULT '',
+        year          TEXT NOT NULL DEFAULT '',
+        status        TEXT NOT NULL DEFAULT 'active',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de
     -- Personal): one row per worker registration. Only full_name/position/
     -- start_date/department are required at creation; area/email/phone are
@@ -1193,6 +1232,16 @@ if (!dataTableChangesColumns.some((c) => c.name === 'authorized_by')) {
     db.exec('ALTER TABLE data_table_changes ADD COLUMN authorized_by TEXT');
 }
 
+// Tipo Combustible on Carga Combustible — added after fuel_loading_records
+// already shipped once, same diesel/magna/premium values as fuel_records'
+// own column (see FUEL_LOADING_PATCHABLE_FIELDS). Suggested (never forced)
+// from Nuestras Unidades when the typed Económico matches a registered
+// fleet unit — see suggestFuelTypeForEcoUnit.
+const fuelLoadingColumns = db.prepare('PRAGMA table_info(fuel_loading_records)').all();
+if (!fuelLoadingColumns.some((c) => c.name === 'fuel_type')) {
+    db.exec("ALTER TABLE fuel_loading_records ADD COLUMN fuel_type TEXT NOT NULL DEFAULT ''");
+}
+
 // --- Indexes -------------------------------------------------------------
 // Only for FK/lookup columns that actually appear in a WHERE clause below
 // and aren't already covered by a UNIQUE constraint's implicit index (e.g.
@@ -1605,6 +1654,8 @@ const TABLE_GRANT_PATHS = {
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
+    'tipos-unidad': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-unidades' },
+    'nuestras-unidades': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestras-unidades' },
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
     'transacciones-inteligentes': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-transacciones' },
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
@@ -2292,6 +2343,7 @@ const FUEL_LOADING_PATCHABLE_FIELDS = {
     operator: { column: 'operator', fieldKey: 'main.colCargaOperador' },
     coordinator: { column: 'coordinator', fieldKey: 'main.colCargaCoordinador' },
     ecoUnit: { column: 'eco_unit', fieldKey: 'main.colCargaEcoUnidad' },
+    fuelType: { column: 'fuel_type', fieldKey: 'main.colFuelType' },
     centroCostos: { column: 'centro_costos', fieldKey: 'main.colSysCentroCostos' },
     tripBefore: { column: 'trip_before', fieldKey: 'main.colCargaTripAntes' },
     tripBeforeEvidence: { column: 'trip_before_evidence', fieldKey: 'main.colCargaTripAntesEvidencia' },
@@ -2318,6 +2370,126 @@ function updateFuelLoadingRecord(id, clientId, patch) {
 
 function deleteFuelLoadingRecord(id, clientId) {
     db.prepare('DELETE FROM fuel_loading_records WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// --- Query helpers: Tipos de Unidad (unit_types, scoped to one client) -----
+// Simple reference catalog (Catálogos > Transporte Volumen) -- code is
+// auto-generated (TU-01, TU-02...) at creation, never user-entered. Column-
+// level Solo Ver/Ver y Operar/Editar/Autorizar permissions same as any other
+// pantalla (see TABLE_GRANT_PATHS['tipos-unidad'] in server.js), not the
+// requireClientAdmin-only gate cost centers/job positions use.
+function listUnitTypes(clientId) {
+    return db.prepare('SELECT * FROM unit_types WHERE client_id = ? ORDER BY code ASC').all(clientId);
+}
+
+function getUnitTypeById(id, clientId) {
+    return db.prepare('SELECT * FROM unit_types WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+// Created blank (code auto-generated, everything else empty) -- same reason
+// as createFuelLoadingRecord: the App's "+ Nuevo Tipo de Unidad" needs the
+// row to exist before anything is typed, so nothing confirmed is lost if the
+// user leaves mid-fill. Desktop mirrors this too (no modal) for the same
+// reason Carga Combustible's own progressive-PATCH design exists.
+function createUnitType({ clientId }) {
+    const n = db.prepare('SELECT COUNT(*) AS n FROM unit_types WHERE client_id = ?').get(clientId).n + 1;
+    const code = `TU-${String(n).padStart(2, '0')}`;
+    const result = db
+        .prepare("INSERT INTO unit_types (client_id, code, name, fuel_type, status) VALUES (@clientId, @code, '', '', '')")
+        .run({ clientId, code });
+    return getUnitTypeById(result.lastInsertRowid, clientId);
+}
+
+const UNIT_TYPE_PATCHABLE_FIELDS = {
+    name: { column: 'name', fieldKey: 'main.colUnitTypeName' },
+    fuelType: { column: 'fuel_type', fieldKey: 'main.colFuelType' },
+    status: { column: 'status', fieldKey: 'main.colUnitTypeStatus' },
+};
+
+function updateUnitType(id, clientId, patch) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(UNIT_TYPE_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE unit_types SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getUnitTypeById(id, clientId);
+}
+
+function deleteUnitType(id, clientId) {
+    db.prepare('DELETE FROM unit_types WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// --- Query helpers: Nuestras Unidades (fleet_units, scoped to one client) --
+// The client's real fleet -- eco_id (Económico) is the id the CLIENT itself
+// assigns to each physical vehicle, confirmed unique per client (one row per
+// vehicle, never re-used). unit_type_id references unit_types -- Tipo
+// Combustible is never stored redundantly here, always read live from the
+// referenced unit type (see mapFleetUnitRecord in server.js).
+function listFleetUnits(clientId) {
+    return db.prepare('SELECT * FROM fleet_units WHERE client_id = ? ORDER BY eco_id ASC').all(clientId);
+}
+
+function getFleetUnitById(id, clientId) {
+    return db.prepare('SELECT * FROM fleet_units WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function getFleetUnitByEcoId(clientId, ecoId) {
+    return db
+        .prepare('SELECT * FROM fleet_units WHERE client_id = ? AND LOWER(eco_id) = LOWER(?)')
+        .get(clientId, (ecoId || '').trim());
+}
+
+// Created blank -- same reason as createUnitType/createFuelLoadingRecord.
+function createFleetUnit({ clientId }) {
+    const result = db.prepare('INSERT INTO fleet_units (client_id) VALUES (?)').run(clientId);
+    return getFleetUnitById(result.lastInsertRowid, clientId);
+}
+
+const FLEET_UNIT_PATCHABLE_FIELDS = {
+    ecoId: { column: 'eco_id', fieldKey: 'main.colFleetEco' },
+    unitTypeId: { column: 'unit_type_id', fieldKey: 'main.colFleetUnitType' },
+    plates: { column: 'plates', fieldKey: 'main.colFleetPlates' },
+    brandModel: { column: 'brand_model', fieldKey: 'main.colFleetBrandModel' },
+    year: { column: 'year', fieldKey: 'main.colFleetYear' },
+    status: { column: 'status', fieldKey: 'main.colFleetStatus' },
+};
+
+function updateFleetUnit(id, clientId, patch) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(FLEET_UNIT_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE fleet_units SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getFleetUnitById(id, clientId);
+}
+
+function deleteFleetUnit(id, clientId) {
+    db.prepare('DELETE FROM fleet_units WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// Carga Combustible's own suggestion hook: given the Económico the user just
+// confirmed, look it up in Nuestras Unidades and return the Tipo Combustible
+// its registered Tipo de Unidad carries -- '' (no suggestion) when the
+// Económico isn't registered yet or its Tipo de Unidad has no Tipo
+// Combustible of its own. Never blocks/forces anything (confirmed product
+// decision) -- purely a value the caller can offer as a prefill.
+function suggestFuelTypeForEcoUnit(clientId, ecoUnit) {
+    const unit = getFleetUnitByEcoId(clientId, ecoUnit);
+    if (!unit || !unit.unit_type_id) return '';
+    const unitType = getUnitTypeById(unit.unit_type_id, clientId);
+    return unitType?.fuel_type || '';
 }
 
 const SYSTEM_COLUMN_MONTH_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -3096,6 +3268,8 @@ const WEB_SCREEN_CATALOG = [
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
     { key: 'carga-combustible', labelKey: 'menu.opTransVolCargaCombustible' },
+    { key: 'tipos-unidad', labelKey: 'menu.catTransVolTiposUnidades' },
+    { key: 'nuestras-unidades', labelKey: 'menu.opTransVolNuestrasUnidades' },
     { key: 'mi-recurso-humano', labelKey: 'menu.opRrhhMiRecursoHumano' },
     { key: 'transacciones-inteligentes', labelKey: 'menu.smartBusinessTransactions' },
     { key: 'reportes-programados', labelKey: 'menu.scheduledReportsScreen' },
@@ -4099,6 +4273,20 @@ module.exports = {
     FUEL_LOADING_PATCHABLE_FIELDS,
     updateFuelLoadingRecord,
     deleteFuelLoadingRecord,
+    listUnitTypes,
+    getUnitTypeById,
+    createUnitType,
+    UNIT_TYPE_PATCHABLE_FIELDS,
+    updateUnitType,
+    deleteUnitType,
+    listFleetUnits,
+    getFleetUnitById,
+    getFleetUnitByEcoId,
+    createFleetUnit,
+    FLEET_UNIT_PATCHABLE_FIELDS,
+    updateFleetUnit,
+    deleteFleetUnit,
+    suggestFuelTypeForEcoUnit,
     getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.opTransVolCargaCombustible">Fuel Loading</title>
+    <title data-i18n="menu.opTransVolNuestrasUnidades">Our Units</title>
     <link rel="icon" href="icons/icon-512.png">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
 </head>
-<body data-active-page="cat-operaciones-transporte-vol-carga-combustible">
+<body data-active-page="cat-operaciones-transporte-vol-nuestras-unidades">
     <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
         <div class="header">
             <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
@@ -352,16 +352,8 @@
                     <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
                     <div class="filter-bar-fields">
                         <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterCargaSearchHint">Site, operator, coordinator, eco unit...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterCargaSearchHint" placeholder="Site, operator, coordinator, eco unit...">
-                        </div>
-                        <div class="filter-field">
-                            <label for="filter-date-from" data-i18n="main.filterDateFrom">From date</label>
-                            <input type="date" id="filter-date-from">
-                        </div>
-                        <div class="filter-field">
-                            <label for="filter-date-to" data-i18n="main.filterDateTo">To date</label>
-                            <input type="date" id="filter-date-to">
+                            <label for="filter-search-text" data-i18n="main.filterFleetSearchHint">Eco unit, plates, brand/model...</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterFleetSearchHint" placeholder="Eco unit, plates, brand/model...">
                         </div>
                     </div>
                     <div class="filter-bar-actions">
@@ -370,7 +362,7 @@
                 </div>
             </div>
 
-            <div class="data-table-wrapper" data-table-id="carga-combustible">
+            <div class="data-table-wrapper" data-table-id="nuestras-unidades">
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -387,24 +379,18 @@
                             <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group="menu.classControlInterno" class="col-system">Year (yyyy)</th>
                             <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
                             <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
-                            <th data-i18n="main.colCargaFechaRegistro" data-col="colCargaFechaRegistro" data-group="menu.classCargaOperador">Registration Date</th>
-                            <th data-i18n="main.colCargaSitio" data-col="colCargaSitio" data-group="menu.classCargaOperador">Loading Site</th>
-                            <th data-i18n="main.colCargaOperador" data-col="colCargaOperador" data-group="menu.classCargaOperador">Operator</th>
-                            <th data-i18n="main.colCargaCoordinador" data-col="colCargaCoordinador" data-group="menu.classCargaOperador">Coordinator</th>
-                            <th data-i18n="main.colCargaEcoUnidad" data-col="colCargaEcoUnidad" data-group="menu.classCargaOperador">Eco Unit</th>
-                            <th data-i18n="main.colFuelType" data-col="colFuelType" data-group="menu.classCargaOperador">Fuel Type</th>
-                            <th data-i18n="main.colCargaTripAntes" data-col="colCargaTripAntes" data-group="menu.classCargaOperador">Trip Before Loading</th>
-                            <th data-i18n="main.colCargaTripAntesEvidencia" data-col="colCargaTripAntesEvidencia" data-group="menu.classCargaOperador">Trip Before Loading Evidence</th>
-                            <th data-i18n="main.colCargaTripDespues" data-col="colCargaTripDespues" data-group="menu.classCargaOperador">Trip After Loading</th>
-                            <th data-i18n="main.colCargaTripDespuesEvidencia" data-col="colCargaTripDespuesEvidencia" data-group="menu.classCargaOperador">Trip After Loading Evidence</th>
-                            <th data-i18n="main.colCargaCostoTotal" data-col="colCargaCostoTotal" data-group="menu.classCargaOperador">$ Total Cost</th>
-                            <th data-i18n="main.colCargaCostoTotalEvidencia" data-col="colCargaCostoTotalEvidencia" data-group="menu.classCargaOperador">Total Cost Evidence</th>
+                            <th data-i18n="main.colFleetEco" data-col="colFleetEco" data-group="menu.classNuestrasUnidades">Eco Unit</th>
+                            <th data-i18n="main.colFleetUnitType" data-col="colFleetUnitType" data-group="menu.classNuestrasUnidades">Unit Type</th>
+                            <th data-i18n="main.colFleetPlates" data-col="colFleetPlates" data-group="menu.classNuestrasUnidades">Plates</th>
+                            <th data-i18n="main.colFleetBrandModel" data-col="colFleetBrandModel" data-group="menu.classNuestrasUnidades">Brand / Model</th>
+                            <th data-i18n="main.colFleetYear" data-col="colFleetYear" data-group="menu.classNuestrasUnidades">Year</th>
+                            <th data-i18n="main.colFleetStatus" data-col="colFleetStatus" data-group="menu.classNuestrasUnidades">Status</th>
                             <th data-col="actions"></th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="data-table-empty-cell" colspan="26">
+                            <td class="data-table-empty-cell" colspan="20">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -467,58 +453,8 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="evidence-preview-modal" hidden>
-        <div class="modal-panel evidence-preview-panel" role="dialog" aria-modal="true" aria-labelledby="evidence-preview-modal-title">
-            <h3 id="evidence-preview-modal-title" data-i18n="main.evidencePreviewTitle">Evidence</h3>
-            <img class="evidence-preview-image" id="evidence-preview-image" src="" alt="">
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn btn-secondary" id="evidence-preview-close" data-i18n="main.close">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="new-record-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-record-modal-title">
-            <h3 id="new-record-modal-title" data-i18n="main.newRecord">New Record</h3>
-            <p class="admin-hint" data-i18n="main.cargaCombustibleNewRecordHint">The rest of the fields can be filled in later, directly from the row in the table.</p>
-            <div class="admin-form-grid">
-                <div class="admin-field">
-                    <label for="new-record-date" data-i18n="main.colCargaFechaRegistro">Registration Date</label>
-                    <input type="date" id="new-record-date" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-load-site" data-i18n="main.colCargaSitio">Loading Site</label>
-                    <input type="text" id="new-record-load-site" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-operator" data-i18n="main.colCargaOperador">Operator</label>
-                    <input type="text" id="new-record-operator" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-coordinator" data-i18n="main.colCargaCoordinador">Coordinator</label>
-                    <input type="text" id="new-record-coordinator" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-eco-unit" data-i18n="main.colCargaEcoUnidad">Eco Unit</label>
-                    <input type="text" id="new-record-eco-unit" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-cost-center" data-i18n="main.colSysCentroCostos">Cost Center</label>
-                    <select id="new-record-cost-center" required>
-                        <option value="" data-i18n="main.newRecordCostCenterPlaceholder">Select a Cost Center...</option>
-                    </select>
-                </div>
-            </div>
-            <div id="new-record-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="new-record-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="new-record-cancel" data-i18n="admin.cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
-
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="OpTransVolCargaCombustible.js"></script>
+    <script src="OpTransVolNuestrasUnidades.js"></script>
 </body>
 </html>

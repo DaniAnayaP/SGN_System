@@ -21,6 +21,8 @@ let rules = [];
 const DATA_TABLE_PAGES = [
     { tableKey: 'registro-combustible', labelKey: 'menu.opTransVolCombustible', page: 'OpTransVolCombustible.html' },
     { tableKey: 'carga-combustible', labelKey: 'menu.opTransVolCargaCombustible', page: 'OpTransVolCargaCombustible.html' },
+    { tableKey: 'tipos-unidad', labelKey: 'menu.catTransVolTiposUnidades', page: 'CatTransVolTiposUnidades.html' },
+    { tableKey: 'nuestras-unidades', labelKey: 'menu.opTransVolNuestrasUnidades', page: 'OpTransVolNuestrasUnidades.html' },
     { tableKey: 'centros-costo', labelKey: 'business.costCentersTitle', page: 'Business-CentrosCosto.html' },
 ];
 

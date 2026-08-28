@@ -90,6 +90,8 @@ const WEB_SCREEN_PAGES = {
     'centros-costo': { href: 'Business-CentrosCosto.html', icon: 'bx-purchase-tag-alt' },
     'registro-combustible': { href: 'OpTransVolCombustible.html', icon: 'bx-gas-pump' },
     'carga-combustible': { href: 'AppCargaCombustible.html', icon: 'bx-gas-pump' },
+    'tipos-unidad': { href: 'AppTiposUnidad.html', icon: 'bx-car' },
+    'nuestras-unidades': { href: 'AppNuestrasUnidades.html', icon: 'bx-car' },
     'mi-recurso-humano': { href: 'OpRRHHMiRecursoHumano.html', icon: 'bx-id-card' },
     'transacciones-inteligentes': { href: 'NegocioInteligente-Transacciones.html', icon: 'bx-line-chart' },
     'reglas-orden-llenado': { href: 'Business-ReglasOrden.html', icon: 'bx-link' },
@@ -102,6 +104,8 @@ const WEB_SCREEN_PAGES = {
 const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-transporte-vol-combustible': 'registro-combustible',
     'cat-operaciones-transporte-vol-carga-combustible': 'carga-combustible',
+    'cat-catalogos-transporte-vol-tipos-unidades': 'tipos-unidad',
+    'cat-operaciones-transporte-vol-nuestras-unidades': 'nuestras-unidades',
 };
 
 function renderTiles(screens) {

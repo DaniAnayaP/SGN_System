@@ -242,7 +242,48 @@
         { "id": "cat-catalogos-transporte-vol-tipos-traslado", "labelKey": "menu.catTransVolTiposTraslado", "icon": "bx-window", "href": "#" },
         { "id": "cat-catalogos-transporte-vol-contactos", "labelKey": "menu.catTransVolContactos", "icon": "bx-window", "href": "#" },
         { "id": "cat-catalogos-transporte-vol-empresas-asociadas", "labelKey": "menu.catTransVolEmpresasAsociadas", "icon": "bx-window", "href": "#" },
-        { "id": "cat-catalogos-transporte-vol-tipos-unidades", "labelKey": "menu.catTransVolTiposUnidades", "icon": "bx-window", "href": "#" },
+        {
+          "id": "cat-catalogos-transporte-vol-tipos-unidades", "labelKey": "menu.catTransVolTiposUnidades", "icon": "bx-car", "href": "CatTransVolTiposUnidades.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-tipo-unidad", "labelKey": "menu.classTipoUnidad", "isClassification": true,
+              "submenu": [
+                { "id": "colUnitTypeCode", "labelKey": "main.colUnitTypeCode", "permissionOnly": true },
+                { "id": "colUnitTypeName", "labelKey": "main.colUnitTypeName", "permissionOnly": true },
+                { "id": "colFuelType", "labelKey": "main.colFuelType", "permissionOnly": true },
+                { "id": "colUnitTypeStatus", "labelKey": "main.colUnitTypeStatus", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
+          ]
+        },
         { "id": "cat-catalogos-transporte-vol-tipos-aditamentos", "labelKey": "menu.catTransVolTiposAditamentos", "icon": "bx-window", "href": "#" }
       ],
       "cat-operaciones": [
@@ -321,12 +362,57 @@
                 { "id": "colCargaOperador", "labelKey": "main.colCargaOperador", "permissionOnly": true },
                 { "id": "colCargaCoordinador", "labelKey": "main.colCargaCoordinador", "permissionOnly": true },
                 { "id": "colCargaEcoUnidad", "labelKey": "main.colCargaEcoUnidad", "permissionOnly": true },
+                { "id": "colFuelType", "labelKey": "main.colFuelType", "permissionOnly": true },
                 { "id": "colCargaTripAntes", "labelKey": "main.colCargaTripAntes", "permissionOnly": true },
                 { "id": "colCargaTripAntesEvidencia", "labelKey": "main.colCargaTripAntesEvidencia", "permissionOnly": true },
                 { "id": "colCargaTripDespues", "labelKey": "main.colCargaTripDespues", "permissionOnly": true },
                 { "id": "colCargaTripDespuesEvidencia", "labelKey": "main.colCargaTripDespuesEvidencia", "permissionOnly": true },
                 { "id": "colCargaCostoTotal", "labelKey": "main.colCargaCostoTotal", "permissionOnly": true },
                 { "id": "colCargaCostoTotalEvidencia", "labelKey": "main.colCargaCostoTotalEvidencia", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-transporte-vol-nuestras-unidades", "labelKey": "menu.opTransVolNuestrasUnidades", "icon": "bx-car", "href": "OpTransVolNuestrasUnidades.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-nuestras-unidades", "labelKey": "menu.classNuestrasUnidades", "isClassification": true,
+              "submenu": [
+                { "id": "colFleetEco", "labelKey": "main.colFleetEco", "permissionOnly": true },
+                { "id": "colFleetUnitType", "labelKey": "main.colFleetUnitType", "permissionOnly": true },
+                { "id": "colFleetPlates", "labelKey": "main.colFleetPlates", "permissionOnly": true },
+                { "id": "colFleetBrandModel", "labelKey": "main.colFleetBrandModel", "permissionOnly": true },
+                { "id": "colFleetYear", "labelKey": "main.colFleetYear", "permissionOnly": true },
+                { "id": "colFleetStatus", "labelKey": "main.colFleetStatus", "permissionOnly": true }
               ]
             }
           ],

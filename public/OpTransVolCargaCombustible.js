@@ -98,7 +98,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 25;
+    td.colSpan = 26;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
@@ -224,6 +224,32 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
     td.append(btn, fileInput);
 }
 
+// Tipo Combustible — a real <select>, always live in the cell, same pattern
+// as Registro Combustible's own colFuelType. Suggested (never forced) from
+// Nuestras Unidades when the App confirms an Económico that matches a
+// registered fleet unit (see AppCargaCombustible.js) — on desktop it's just
+// a normal editable field, like any other.
+function buildFuelTypeCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colFuelType';
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    select.innerHTML = `
+        <option value="" data-i18n="main.fuelTypeSelect">${Dashboard.t('main.fuelTypeSelect')}</option>
+        <optgroup label="${Dashboard.t('main.fuelTypeGasolineGroup')}">
+            <option value="magna" data-i18n="main.fuelTypeMagna">${Dashboard.t('main.fuelTypeMagna')}</option>
+            <option value="premium" data-i18n="main.fuelTypePremium">${Dashboard.t('main.fuelTypePremium')}</option>
+        </optgroup>
+        <option value="diesel" data-i18n="main.fuelTypeDiesel">${Dashboard.t('main.fuelTypeDiesel')}</option>
+    `;
+    select.value = record.fuelType || '';
+    select.disabled = isPending(record, 'fuelType') || !Dashboard.canEditField(TABLE_KEY, 'colFuelType', record.fuelType || '');
+    if (select.disabled) select.title = Dashboard.t(isPending(record, 'fuelType') ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => patchFuelLoadingRecord(record.id, { fuelType: select.value }));
+    td.appendChild(select);
+    return td;
+}
+
 // Trip antes/después carga — a numeric inline-edit cell next to its own
 // dedicated evidence column (not inside the same <td>: Dashboard.
 // attachInlineEdit does td.innerHTML = '' on every render/commit, which
@@ -290,6 +316,7 @@ function buildRow(record) {
         textCell('colCargaOperador', record.operator),
         textCell('colCargaCoordinador', record.coordinator),
         textCell('colCargaEcoUnidad', record.ecoUnit),
+        buildFuelTypeCell(record),
         tdTripBefore,
         buildTripEvidenceCell(record, 'colCargaTripAntesEvidencia', 'tripBeforeEvidence', 'main.cargaUploadTripAntesEvidencia', 'main.colCargaTripAntesEvidencia'),
         tdTripAfter,
