@@ -85,6 +85,7 @@ function showToast(message, duration = 4000) {
 const WEB_SCREEN_PAGES = {
     'centros-costo': { href: 'Business-CentrosCosto.html', icon: 'bx-purchase-tag-alt', color: '#3A4BC9' },
     'registro-combustible': { href: 'OpTransVolCombustible.html', icon: 'bx-gas-pump', color: '#c9503f' },
+    'carga-combustible': { href: 'AppCargaCombustible.html', icon: 'bx-gas-pump', color: '#c9503f' },
     'mi-recurso-humano': { href: 'OpRRHHMiRecursoHumano.html', icon: 'bx-id-card', color: '#1E7B3C' },
     'transacciones-inteligentes': { href: 'NegocioInteligente-Transacciones.html', icon: 'bx-line-chart', color: '#6C7CF0' },
     'reglas-orden-llenado': { href: 'Business-ReglasOrden.html', icon: 'bx-link', color: '#B8860B' },

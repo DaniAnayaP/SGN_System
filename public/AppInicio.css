@@ -954,3 +954,156 @@ body{
     justify-content: center;
     cursor: pointer;
 }
+
+/* Carga Combustible (AppCargaCombustible.html) — a practical, one-field-at-
+   a-time form instead of Sistema Web's table. Two screens: the list of
+   active (not-yet-closed) cargas + "+ Nueva Carga", and the field-by-field
+   form for whichever carga is open, grouped Identificación/Operación, each
+   field locked until its own Regla de Orden de Llenado gate (if any) is
+   filled — same enforcement model as the desktop table's own 🔗 icon, just
+   presented as a progressive stepper instead of disabled table cells. */
+.home-carga-header{ display: block; }
+.home-carga-header-top{ display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.6rem; }
+.home-carga-progress-track{ height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
+.home-carga-progress-fill{ height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--home-accent-strong-1), var(--home-accent)); transition: width 0.3s ease; }
+.home-carga-progress-label{ margin: 0.4rem 0 0; font-size: 0.66rem; font-weight: 500; color: var(--home-on-header); opacity: 0.8; }
+
+.home-carga-new-btn{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    color: var(--home-on-accent);
+    border: none;
+    border-radius: 0.9rem;
+    padding: 0.85rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 0.3rem;
+}
+.home-carga-new-btn i{ font-size: 1.1rem; }
+.home-carga-new-btn:active{ transform: scale(0.98); }
+.home-carga-empty-note{ font-size: 0.74rem; color: var(--home-text-muted); text-align: center; padding: 1.2rem 0.5rem; margin: 0; }
+
+.home-carga-active-row{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 0.9rem;
+    border: 1px solid var(--home-border);
+    background: var(--home-surface);
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    margin-bottom: 0.5rem;
+}
+.home-carga-active-row-icon{ width: 2rem; height: 2rem; border-radius: 0.6rem; flex-shrink: 0; background: var(--home-surface-2); color: var(--home-accent); display: flex; align-items: center; justify-content: center; font-size: 1.05rem; }
+.home-carga-active-row-label{ flex: 1; min-width: 0; }
+.home-carga-active-row-label p{ margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--home-text-secondary); }
+.home-carga-active-row-label span{ font-size: 0.68rem; color: var(--home-text-muted); }
+.home-carga-active-row-progress{
+    width: 2.4rem; height: 2.4rem; border-radius: 50%; flex-shrink: 0; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.62rem; font-weight: 700; color: var(--home-accent);
+    background: conic-gradient(var(--home-accent) calc(var(--pct) * 1%), var(--home-surface-2) 0);
+}
+.home-carga-active-row-progress::before{ content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--home-surface); }
+.home-carga-active-row-progress span{ position: relative; }
+
+.home-carga-group-header{ display: flex; align-items: center; gap: 0.5rem; margin: 0.9rem 0 0.1rem; }
+.home-carga-group-header i{ font-size: 0.95rem; color: var(--home-accent); }
+.home-carga-group-header span.home-carga-group-label{ font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--home-text-tertiary); }
+.home-carga-group-tag{ margin-left: auto; font-size: 0.6rem; font-weight: 600; color: var(--home-text-muted); background: var(--home-surface); border: 1px solid var(--home-border); padding: 0.15rem 0.5rem; border-radius: 1rem; }
+
+.home-carga-field{ border-radius: 0.9rem; border: 1px solid var(--home-border); background: var(--home-surface); overflow: hidden; margin-bottom: 0.5rem; transition: opacity 0.2s ease; }
+.home-carga-field-locked{ opacity: 0.55; }
+.home-carga-field-row{ display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 0.85rem; cursor: pointer; width: 100%; text-align: left; background: none; border: none; font-family: inherit; }
+.home-carga-field-locked .home-carga-field-row{ cursor: default; }
+.home-carga-field-icon{ width: 2rem; height: 2rem; border-radius: 0.6rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.05rem; background: var(--home-surface-2); color: var(--home-text-secondary); }
+.home-carga-field-done .home-carga-field-icon{ background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); color: var(--home-on-accent); }
+.home-carga-field-label{ flex: 1; min-width: 0; }
+.home-carga-field-label p{ margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--home-text-secondary); }
+.home-carga-field-label span{ font-size: 0.7rem; color: var(--home-text-muted); }
+.home-carga-field-done .home-carga-field-label span{ color: var(--home-text-tertiary); }
+.home-carga-field-auto-tag{ font-size: 0.58rem; font-weight: 700; color: var(--home-accent-strong-2); background: var(--home-accent); padding: 0.1rem 0.4rem; border-radius: 1rem; margin-left: 0.4rem; vertical-align: 1px; }
+.home-carga-field-trailing{ font-size: 1.1rem; color: var(--home-text-muted); flex-shrink: 0; }
+.home-carga-field-trailing.icon-up{ transform: rotate(180deg); }
+.home-carga-field-body{ padding: 0 0.85rem 0.85rem; display: flex; flex-direction: column; gap: 0.55rem; }
+.home-carga-field-body input,
+.home-carga-field-body select{
+    width: 100%;
+    background: var(--home-bg);
+    border: 1px solid var(--home-border);
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.7rem;
+    color: var(--home-text-primary);
+    font-family: inherit;
+    font-size: 0.82rem;
+}
+.home-carga-field-body input:focus,
+.home-carga-field-body select:focus{ outline: none; border-color: var(--home-accent-strong-1); }
+.home-carga-field-confirm{
+    align-self: flex-end;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
+    border: none;
+    border-radius: 0.6rem;
+    padding: 0.45rem 0.9rem;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.home-carga-field-error{ font-size: 0.7rem; color: var(--home-danger); margin: 0; display: none; }
+.home-carga-field-error.show{ display: block; }
+.home-carga-photo-row{ display: flex; align-items: center; gap: 0.6rem; }
+.home-carga-photo-btn{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--home-bg);
+    border: 1px dashed var(--home-border);
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.8rem;
+    color: var(--home-text-secondary);
+    font-family: inherit;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+}
+.home-carga-photo-btn i{ color: var(--home-accent); font-size: 1rem; }
+
+.home-carga-done-card{
+    margin-top: 0.4rem;
+    border-radius: 0.9rem;
+    padding: 1.1rem;
+    text-align: center;
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    color: var(--home-on-accent);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+}
+.home-carga-done-card.show{ display: flex; }
+.home-carga-done-card i{ font-size: 1.8rem; }
+.home-carga-done-card p{ margin: 0; font-size: 0.85rem; font-weight: 600; }
+.home-carga-done-card button{
+    margin-top: 0.3rem;
+    background: var(--home-on-accent);
+    color: var(--home-accent-strong-2);
+    border: none;
+    border-radius: 0.6rem;
+    padding: 0.55rem 1.3rem;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
