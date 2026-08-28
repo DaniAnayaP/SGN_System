@@ -856,6 +856,18 @@ let availableDepartments = DEPARTMENTS;
 let selectedDepartment = localStorage.getItem('department') || null;
 let selectedArea = localStorage.getItem('area') || null;
 let sidebarCostCenters = [];
+// From GET /api/business/app-screens — a pantalla only ever gets a real,
+// tappable App experience once someone has actually gone in and turned on
+// "Visión APP" for it (PermissionTree.js's own paired checkbox). Being
+// reachable on Sistema Web is a completely separate thing: the category
+// screen picker (renderCategoryScreens) must check THIS, never a plain Web
+// grant, or a screen nobody has designed for the App yet would silently
+// open the desktop page instead of honestly saying "Próximamente".
+let grantedAppScreens = [];
+function isPantallaAppVisible(pantalla) {
+    const webScreenKey = PANTALLA_ID_TO_WEB_SCREEN_KEY[pantalla.id];
+    return !!webScreenKey && grantedAppScreens.some((s) => s.webScreenKey === webScreenKey);
+}
 
 function getStoredCostCenterSelection() {
     const raw = localStorage.getItem('costCenterSelection');
@@ -1082,10 +1094,14 @@ function grantedScreensForCategory(cat) {
 // WEB_SCREEN_PAGES), otherwise falls back to its own desktop page directly
 // (same cookie session, same pattern as Base de Datos/Negocio Inteligente).
 function resolvePantallaDestination(pantalla) {
-    if (!pantalla.href || pantalla.href === '#') return null;
+    // Reachable on Sistema Web is not the same question as "designed for
+    // the App yet" — only a pantalla someone has actually turned on Visión
+    // APP for gets a real destination here; everything else says
+    // "Próximamente" regardless of how built-out it already is on desktop.
+    if (!isPantallaAppVisible(pantalla)) return null;
     const webScreenKey = PANTALLA_ID_TO_WEB_SCREEN_KEY[pantalla.id];
-    const page = webScreenKey ? WEB_SCREEN_PAGES[webScreenKey] : null;
-    return (page && page.href) || pantalla.href;
+    const page = WEB_SCREEN_PAGES[webScreenKey];
+    return page?.href || null;
 }
 function pantallaTileInfo(pantalla) {
     const webScreenKey = PANTALLA_ID_TO_WEB_SCREEN_KEY[pantalla.id];
@@ -1378,7 +1394,8 @@ async function loadClientBranding() {
         isClientAdmin = !!user?.isClientAdmin;
 
         const screensData = screensRes.ok ? await screensRes.json() : { app: null, screens: [] };
-        renderTiles(screensData.screens || []);
+        grantedAppScreens = screensData.screens || [];
+        renderTiles(grantedAppScreens);
         loadClientBranding();
         initDeptAreaCc();
         applyUiScaleLevel(await fetchUiScaleLevel());
