@@ -155,6 +155,15 @@ let effectiveGrants = [];
 let records = [];
 let openRecordId = null;
 let view = 'list'; // 'list' | 'record'
+// A record only actually gets created on the server once its FIRST field is
+// confirmed (see commitFieldValue) — "+ Nuevo Tipo de Unidad" just opens this
+// in-memory draft (no id/code yet), so tapping it and backing out without
+// typing anything never leaves a blank type behind. Never appears in
+// `records`/the list until it's real.
+let draftRecord = null;
+function blankDraftRecord() {
+    return { id: null, code: '', name: '', fuelType: '', status: '', pendingFields: [] };
+}
 
 function isFieldFilled(value) {
     return value !== null && value !== undefined && value !== '';
@@ -169,7 +178,9 @@ function recordDoneCount(record) {
     return FIELDS.filter((f) => isFieldFilled(fieldValueFromRecord(f, record))).length;
 }
 function recordLabel(record) {
-    return record.name || `${t('home.unitTypeFallbackLabel')} ${record.code}`;
+    if (record.name) return record.name;
+    if (!record.id) return t('home.newUnitTypeButton');
+    return `${t('home.unitTypeFallbackLabel')} ${record.code}`;
 }
 
 // --- Data loading ------------------------------------------------------
@@ -185,18 +196,11 @@ async function loadRecords() {
 }
 
 // --- Create + patch ------------------------------------------------------
-async function createNewUnitType() {
-    try {
-        const res = await fetch('/api/business/unit-types', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('create failed');
-        const { unitType } = await res.json();
-        records.push(unitType);
-        openRecordId = unitType.id;
-        view = 'record';
-        render();
-    } catch {
-        showToast(t('admin.saveError'));
-    }
+function createNewUnitType() {
+    draftRecord = blankDraftRecord();
+    openRecordId = null;
+    view = 'record';
+    render();
 }
 
 async function patchRecord(id, patch) {
@@ -289,6 +293,7 @@ function renderListView() {
 }
 
 function currentRecord() {
+    if (draftRecord) return draftRecord;
     return records.find((r) => r.id === openRecordId);
 }
 
@@ -306,7 +311,7 @@ function renderFormView() {
     codeRow.className = 'home-carga-progress-label';
     codeRow.hidden = false;
     codeRow.style.margin = '0 0 0.6rem';
-    codeRow.textContent = `${t('main.colUnitTypeCode')}: ${record.code}`;
+    codeRow.textContent = `${t('main.colUnitTypeCode')}: ${record.code || '—'}`;
     bodyEl.appendChild(codeRow);
 
     FIELDS.forEach((field) => bodyEl.appendChild(buildFieldEl(field, record)));
@@ -317,6 +322,8 @@ function renderFormView() {
     deleteBtn.style.marginTop = '0.8rem';
     deleteBtn.innerHTML = `<i class="bx bx-trash" aria-hidden="true"></i><span>${t('admin.delete')}</span>`;
     deleteBtn.addEventListener('click', () => {
+        // A draft was never persisted -- nothing to confirm, just discard it.
+        if (!record.id) { draftRecord = null; view = 'list'; render(); return; }
         if (window.confirm(t('main.recordDeleteConfirm'))) deleteRecord(record.id);
     });
     bodyEl.appendChild(deleteBtn);
@@ -365,8 +372,29 @@ function buildFieldEl(field, record) {
     return wrap;
 }
 
-function commitFieldValue(field, value) {
+// The FIRST confirm on a draft is what actually creates the record --
+// creates it for real (assigns its Código), then immediately applies this
+// same field, same as if it had always existed. Every confirm after that is
+// a normal patch.
+async function commitFieldValue(field, value) {
     expandedFieldIds.delete(field.id);
+    if (draftRecord) {
+        try {
+            const res = await fetch('/api/business/unit-types', { method: 'POST', credentials: 'include' });
+            if (!res.ok) throw new Error('create failed');
+            const { unitType } = await res.json();
+            records.push(unitType);
+            openRecordId = unitType.id;
+            draftRecord = null;
+            await patchRecord(unitType.id, { [field.apiKey]: value });
+        } catch {
+            showToast(t('admin.saveError'));
+            draftRecord = null;
+            view = 'list';
+            render();
+        }
+        return;
+    }
     patchRecord(openRecordId, { [field.apiKey]: value });
 }
 
@@ -430,6 +458,9 @@ document.getElementById('carga-back').addEventListener('click', () => {
         window.location.href = 'AppInicio.html';
         return;
     }
+    // Backing out of a still-blank draft discards it -- nothing was ever
+    // persisted, so there's nothing to keep.
+    draftRecord = null;
     view = 'list';
     render();
 });

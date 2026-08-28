@@ -63,6 +63,27 @@ function isPending(record, key) {
     return (record.pendingFields || []).includes(key);
 }
 
+// A draft row (record.id === null, never persisted -- see createNewFleetUnit)
+// only actually gets created on the server once its FIRST field commits, so
+// "+ Nueva Unidad" followed by leaving the row untouched never leaves a
+// blank unit behind. Every cell's onCommit/onChange in buildRow goes through
+// this instead of calling patchFleetUnit directly. Subsequent edits on the
+// same row hit the normal path -- once created, patchFleetUnit's own
+// refreshTable() rebuilds the row from the real, persisted record.
+async function ensureCreatedThenPatch(record, patch) {
+    if (record.id) return patchFleetUnit(record.id, patch);
+    try {
+        const res = await fetch('/api/business/fleet-units', { method: 'POST', credentials: 'include' });
+        if (!res.ok) throw new Error('create failed');
+        const { fleetUnit } = await res.json();
+        record.id = fleetUnit.id;
+        await patchFleetUnit(fleetUnit.id, patch);
+    } catch (err) {
+        console.error('Nuestras Unidades: failed to create record', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
 async function patchFleetUnit(id, patch) {
     try {
         const res = await fetch(`/api/business/fleet-units/${id}`, {
@@ -111,7 +132,7 @@ function buildUnitTypeCell(record) {
     select.value = record.unitTypeId ? String(record.unitTypeId) : '';
     select.disabled = isPending(record, 'unitTypeId') || !Dashboard.canEditField(TABLE_KEY, 'colFleetUnitType', record.unitTypeId ? String(record.unitTypeId) : '');
     if (select.disabled) select.title = Dashboard.t(isPending(record, 'unitTypeId') ? 'main.changePending' : 'main.fieldLocked');
-    select.addEventListener('change', () => patchFleetUnit(record.id, { unitTypeId: select.value ? Number(select.value) : null }));
+    select.addEventListener('change', () => ensureCreatedThenPatch(record, { unitTypeId: select.value ? Number(select.value) : null }));
     td.appendChild(select);
     return td;
 }
@@ -129,7 +150,7 @@ function buildStatusCell(record) {
     select.value = record.status || '';
     select.disabled = isPending(record, 'status') || !Dashboard.canEditField(TABLE_KEY, 'colFleetStatus', record.status || '');
     if (select.disabled) select.title = Dashboard.t(isPending(record, 'status') ? 'main.changePending' : 'main.fieldLocked');
-    select.addEventListener('change', () => patchFleetUnit(record.id, { status: select.value }));
+    select.addEventListener('change', () => ensureCreatedThenPatch(record, { status: select.value }));
     td.appendChild(select);
     return td;
 }
@@ -138,21 +159,28 @@ function buildActionsCell(record, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
-    const historyBtn = document.createElement('button');
-    historyBtn.type = 'button';
-    historyBtn.className = 'admin-icon-btn';
-    historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
-    historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
-    historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-    historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
-    td.appendChild(historyBtn);
+    // A draft (record.id === null) was never persisted -- no history to
+    // show, and removing it is just discarding the row, no API call.
+    if (record.id) {
+        const historyBtn = document.createElement('button');
+        historyBtn.type = 'button';
+        historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+        historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+        historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+        historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
+        td.appendChild(historyBtn);
+    }
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
     deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
     deleteBtn.title = Dashboard.t('admin.delete');
     deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-    deleteBtn.addEventListener('click', () => deleteFleetUnit(record.id, tr));
+    deleteBtn.addEventListener('click', () => {
+        if (!record.id) { tr.remove(); ensureEmptyState(); return; }
+        deleteFleetUnit(record.id, tr);
+    });
     td.appendChild(deleteBtn);
     return td;
 }
@@ -179,7 +207,7 @@ function buildRow(record) {
         tableKey: TABLE_KEY,
         colKey: 'colFleetEco',
         pending: isPending(record, 'ecoId'),
-        onCommit: (val) => patchFleetUnit(record.id, { ecoId: val.trim() }),
+        onCommit: (val) => ensureCreatedThenPatch(record, { ecoId: val.trim() }),
     });
 
     const tdPlates = document.createElement('td');
@@ -190,7 +218,7 @@ function buildRow(record) {
         tableKey: TABLE_KEY,
         colKey: 'colFleetPlates',
         pending: isPending(record, 'plates'),
-        onCommit: (val) => patchFleetUnit(record.id, { plates: val.trim() }),
+        onCommit: (val) => ensureCreatedThenPatch(record, { plates: val.trim() }),
     });
 
     const tdBrandModel = document.createElement('td');
@@ -201,7 +229,7 @@ function buildRow(record) {
         tableKey: TABLE_KEY,
         colKey: 'colFleetBrandModel',
         pending: isPending(record, 'brandModel'),
-        onCommit: (val) => patchFleetUnit(record.id, { brandModel: val.trim() }),
+        onCommit: (val) => ensureCreatedThenPatch(record, { brandModel: val.trim() }),
     });
 
     const tdYear = document.createElement('td');
@@ -212,11 +240,11 @@ function buildRow(record) {
         tableKey: TABLE_KEY,
         colKey: 'colFleetYear',
         pending: isPending(record, 'year'),
-        onCommit: (val) => patchFleetUnit(record.id, { year: val.trim() }),
+        onCommit: (val) => ensureCreatedThenPatch(record, { year: val.trim() }),
     });
 
     const tr = document.createElement('tr');
-    tr.dataset.recordId = String(record.id);
+    tr.dataset.recordId = record.id != null ? String(record.id) : '';
     tr.append(
         ...buildSystemCells(record),
         tdEco,
@@ -280,20 +308,16 @@ function applyFleetFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFleetFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFleetFilters);
 
-async function createNewFleetUnit() {
-    try {
-        const res = await fetch('/api/business/fleet-units', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('save failed');
-        const { fleetUnit } = await res.json();
-        const tbody = getTbody();
-        const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
-        if (emptyRow) emptyRow.remove();
-        tbody.appendChild(buildRow(fleetUnit));
-        Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
-    } catch (err) {
-        console.error('Nuestras Unidades: failed to create record', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-    }
+// Only adds a local, in-memory draft row (record.id === null) -- nothing is
+// persisted server-side until its first field actually commits (see
+// ensureCreatedThenPatch), so clicking this and never touching the row never
+// leaves a blank Unidad behind.
+function createNewFleetUnit() {
+    const draft = { id: null, ecoId: '', unitTypeId: null, unitTypeName: '', fuelType: '', plates: '', brandModel: '', year: '', status: '', pendingFields: [] };
+    const tbody = getTbody();
+    const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
+    if (emptyRow) emptyRow.remove();
+    tbody.appendChild(buildRow(draft));
 }
 
 function renderNewRecordButton() {

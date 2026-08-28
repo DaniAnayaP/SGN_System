@@ -48,6 +48,27 @@ function isPending(record, key) {
     return (record.pendingFields || []).includes(key);
 }
 
+// A draft row (record.id === null, never persisted -- see createNewUnitType)
+// only actually gets created on the server once its FIRST field commits, so
+// "+ Nuevo Tipo de Unidad" followed by leaving the row untouched never
+// leaves a blank type behind. Every cell's onCommit/onChange in buildRow
+// goes through this instead of calling patchUnitType directly. Subsequent
+// edits on the same row hit the normal path -- once created, patchUnitType's
+// own refreshTable() rebuilds the row from the real, persisted record.
+async function ensureCreatedThenPatch(record, patch) {
+    if (record.id) return patchUnitType(record.id, patch);
+    try {
+        const res = await fetch('/api/business/unit-types', { method: 'POST', credentials: 'include' });
+        if (!res.ok) throw new Error('create failed');
+        const { unitType } = await res.json();
+        record.id = unitType.id;
+        await patchUnitType(unitType.id, patch);
+    } catch (err) {
+        console.error('Tipos de Unidad: failed to create record', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
 async function patchUnitType(id, patch) {
     try {
         const res = await fetch(`/api/business/unit-types/${id}`, {
@@ -95,7 +116,7 @@ function buildFuelTypeCell(record) {
     select.value = record.fuelType || '';
     select.disabled = isPending(record, 'fuelType') || !Dashboard.canEditField(TABLE_KEY, 'colFuelType', record.fuelType || '');
     if (select.disabled) select.title = Dashboard.t(isPending(record, 'fuelType') ? 'main.changePending' : 'main.fieldLocked');
-    select.addEventListener('change', () => patchUnitType(record.id, { fuelType: select.value }));
+    select.addEventListener('change', () => ensureCreatedThenPatch(record, { fuelType: select.value }));
     td.appendChild(select);
     return td;
 }
@@ -113,7 +134,7 @@ function buildStatusCell(record) {
     select.value = record.status || '';
     select.disabled = isPending(record, 'status') || !Dashboard.canEditField(TABLE_KEY, 'colUnitTypeStatus', record.status || '');
     if (select.disabled) select.title = Dashboard.t(isPending(record, 'status') ? 'main.changePending' : 'main.fieldLocked');
-    select.addEventListener('change', () => patchUnitType(record.id, { status: select.value }));
+    select.addEventListener('change', () => ensureCreatedThenPatch(record, { status: select.value }));
     td.appendChild(select);
     return td;
 }
@@ -122,21 +143,28 @@ function buildActionsCell(record, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
-    const historyBtn = document.createElement('button');
-    historyBtn.type = 'button';
-    historyBtn.className = 'admin-icon-btn';
-    historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
-    historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
-    historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-    historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
-    td.appendChild(historyBtn);
+    // A draft (record.id === null) was never persisted -- no history to
+    // show, and removing it is just discarding the row, no API call.
+    if (record.id) {
+        const historyBtn = document.createElement('button');
+        historyBtn.type = 'button';
+        historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+        historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+        historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+        historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
+        td.appendChild(historyBtn);
+    }
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
     deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
     deleteBtn.title = Dashboard.t('admin.delete');
     deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-    deleteBtn.addEventListener('click', () => deleteUnitType(record.id, tr));
+    deleteBtn.addEventListener('click', () => {
+        if (!record.id) { tr.remove(); ensureEmptyState(); return; }
+        deleteUnitType(record.id, tr);
+    });
     td.appendChild(deleteBtn);
     return td;
 }
@@ -163,11 +191,11 @@ function buildRow(record) {
         tableKey: TABLE_KEY,
         colKey: 'colUnitTypeName',
         pending: isPending(record, 'name'),
-        onCommit: (val) => patchUnitType(record.id, { name: val.trim() }),
+        onCommit: (val) => ensureCreatedThenPatch(record, { name: val.trim() }),
     });
 
     const tr = document.createElement('tr');
-    tr.dataset.recordId = String(record.id);
+    tr.dataset.recordId = record.id != null ? String(record.id) : '';
     tr.append(
         ...buildSystemCells(record),
         textCell('colUnitTypeCode', record.code),
@@ -229,20 +257,16 @@ function applyUnitTypeFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyUnitTypeFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyUnitTypeFilters);
 
-async function createNewUnitType() {
-    try {
-        const res = await fetch('/api/business/unit-types', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('save failed');
-        const { unitType } = await res.json();
-        const tbody = getTbody();
-        const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
-        if (emptyRow) emptyRow.remove();
-        tbody.appendChild(buildRow(unitType));
-        Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
-    } catch (err) {
-        console.error('Tipos de Unidad: failed to create record', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-    }
+// Only adds a local, in-memory draft row (record.id === null) -- nothing is
+// persisted server-side until its first field actually commits (see
+// ensureCreatedThenPatch), so clicking this and never touching the row never
+// leaves a blank Tipo de Unidad behind.
+function createNewUnitType() {
+    const draft = { id: null, code: '', name: '', fuelType: '', status: '', pendingFields: [] };
+    const tbody = getTbody();
+    const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
+    if (emptyRow) emptyRow.remove();
+    tbody.appendChild(buildRow(draft));
 }
 
 function renderNewRecordButton() {

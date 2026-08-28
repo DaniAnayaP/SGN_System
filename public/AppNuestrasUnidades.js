@@ -163,6 +163,15 @@ let effectiveGrants = [];
 let records = [];
 let openRecordId = null;
 let view = 'list'; // 'list' | 'record'
+// A record only actually gets created on the server once its FIRST field is
+// confirmed (see commitFieldValue) — "+ Nueva Unidad" just opens this
+// in-memory draft (no id yet), so tapping it and backing out without typing
+// anything never leaves a blank unit behind. Never appears in `records`/the
+// list until it's real.
+let draftRecord = null;
+function blankDraftRecord() {
+    return { id: null, ecoId: '', unitTypeId: null, unitTypeName: '', fuelType: '', plates: '', brandModel: '', year: '', status: '', pendingFields: [] };
+}
 
 function isFieldFilled(value) {
     return value !== null && value !== undefined && value !== '';
@@ -177,7 +186,9 @@ function recordDoneCount(record) {
     return FIELDS.filter((f) => isFieldFilled(fieldValueFromRecord(f, record))).length;
 }
 function recordLabel(record) {
-    return record.ecoId || `${t('home.fleetFallbackLabel')} #${record.id}`;
+    if (record.ecoId) return record.ecoId;
+    if (!record.id) return t('home.newFleetUnitButton');
+    return `${t('home.fleetFallbackLabel')} #${record.id}`;
 }
 
 // --- Data loading ------------------------------------------------------
@@ -193,18 +204,11 @@ async function loadRecords() {
 }
 
 // --- Create + patch ------------------------------------------------------
-async function createNewFleetUnit() {
-    try {
-        const res = await fetch('/api/business/fleet-units', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('create failed');
-        const { fleetUnit } = await res.json();
-        records.push(fleetUnit);
-        openRecordId = fleetUnit.id;
-        view = 'record';
-        render();
-    } catch {
-        showToast(t('admin.saveError'));
-    }
+function createNewFleetUnit() {
+    draftRecord = blankDraftRecord();
+    openRecordId = null;
+    view = 'record';
+    render();
 }
 
 async function patchRecord(id, patch) {
@@ -297,6 +301,7 @@ function renderListView() {
 }
 
 function currentRecord() {
+    if (draftRecord) return draftRecord;
     return records.find((r) => r.id === openRecordId);
 }
 
@@ -318,6 +323,8 @@ function renderFormView() {
     deleteBtn.style.marginTop = '0.8rem';
     deleteBtn.innerHTML = `<i class="bx bx-trash" aria-hidden="true"></i><span>${t('admin.delete')}</span>`;
     deleteBtn.addEventListener('click', () => {
+        // A draft was never persisted -- nothing to confirm, just discard it.
+        if (!record.id) { draftRecord = null; view = 'list'; render(); return; }
         if (window.confirm(t('main.recordDeleteConfirm'))) deleteRecord(record.id);
     });
     bodyEl.appendChild(deleteBtn);
@@ -367,8 +374,28 @@ function buildFieldEl(field, record) {
     return wrap;
 }
 
-function commitFieldValue(field, value) {
+// The FIRST confirm on a draft is what actually creates the record --
+// creates it for real, then immediately applies this same field, same as if
+// it had always existed. Every confirm after that is a normal patch.
+async function commitFieldValue(field, value) {
     expandedFieldIds.delete(field.id);
+    if (draftRecord) {
+        try {
+            const res = await fetch('/api/business/fleet-units', { method: 'POST', credentials: 'include' });
+            if (!res.ok) throw new Error('create failed');
+            const { fleetUnit } = await res.json();
+            records.push(fleetUnit);
+            openRecordId = fleetUnit.id;
+            draftRecord = null;
+            await patchRecord(fleetUnit.id, { [field.apiKey]: value });
+        } catch {
+            showToast(t('admin.saveError'));
+            draftRecord = null;
+            view = 'list';
+            render();
+        }
+        return;
+    }
     patchRecord(openRecordId, { [field.apiKey]: value });
 }
 
@@ -464,6 +491,9 @@ document.getElementById('carga-back').addEventListener('click', () => {
         window.location.href = 'AppInicio.html';
         return;
     }
+    // Backing out of a still-blank draft discards it -- nothing was ever
+    // persisted, so there's nothing to keep.
+    draftRecord = null;
     view = 'list';
     render();
 });
