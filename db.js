@@ -2265,20 +2265,34 @@ function getFuelLoadingRecordById(id, clientId) {
     return db.prepare('SELECT * FROM fuel_loading_records WHERE id = ? AND client_id = ?').get(id, clientId);
 }
 
-function createFuelLoadingRecord({ clientId, date, loadSite, operator, coordinator, ecoUnit, centroCostos }) {
+// Created blank — every field (including the identifying ones) is filled in
+// afterward one at a time via PATCH, each going through the same column-
+// level permission/pending-approval workflow as every other field on this
+// table (see FUEL_LOADING_PATCHABLE_FIELDS below). Unlike Registro
+// Combustible's own "+ Nuevo Registro" (which needs 4-5 fields in one shot
+// before the row exists at all), the App's one-field-at-a-time stepper
+// needs the row to exist from the very first tap so nothing already
+// confirmed is ever lost if the user leaves before finishing the rest.
+function createFuelLoadingRecord({ clientId }) {
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fuel_loading_records WHERE client_id = ?')
         .get(clientId).n;
     const result = db
         .prepare(`
             INSERT INTO fuel_loading_records (client_id, db_id, record_number, record_date, load_site, operator, coordinator, eco_unit, centro_costos)
-            VALUES (@clientId, @dbId, @recordNumber, @date, @loadSite, @operator, @coordinator, @ecoUnit, @centroCostos)
+            VALUES (@clientId, @dbId, @recordNumber, '', '', '', '', '', '')
         `)
-        .run({ clientId, dbId: generateBigDateId(), recordNumber, date, loadSite, operator, coordinator, ecoUnit, centroCostos: centroCostos || '' });
+        .run({ clientId, dbId: generateBigDateId(), recordNumber });
     return getFuelLoadingRecordById(result.lastInsertRowid, clientId);
 }
 
 const FUEL_LOADING_PATCHABLE_FIELDS = {
+    date: { column: 'record_date', fieldKey: 'main.colCargaFechaRegistro' },
+    loadSite: { column: 'load_site', fieldKey: 'main.colCargaSitio' },
+    operator: { column: 'operator', fieldKey: 'main.colCargaOperador' },
+    coordinator: { column: 'coordinator', fieldKey: 'main.colCargaCoordinador' },
+    ecoUnit: { column: 'eco_unit', fieldKey: 'main.colCargaEcoUnidad' },
+    centroCostos: { column: 'centro_costos', fieldKey: 'main.colSysCentroCostos' },
     tripBefore: { column: 'trip_before', fieldKey: 'main.colCargaTripAntes' },
     tripBeforeEvidence: { column: 'trip_before_evidence', fieldKey: 'main.colCargaTripAntesEvidencia' },
     tripAfter: { column: 'trip_after', fieldKey: 'main.colCargaTripDespues' },

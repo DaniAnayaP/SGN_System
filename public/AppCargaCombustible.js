@@ -2,22 +2,25 @@
 // Carga Combustible (App) — a practical, one-field-at-a-time form instead of
 // Sistema Web's table (see OpTransVolCargaCombustible.js for the desktop
 // version of this same data, same /api/business/fuel-loading-records
-// backend). Two screens: the list of active (not-yet-closed) cargas + "+
+// backend). Two screens: the list of active (not-yet-complete) cargas + "+
 // Nueva Carga", and the field-by-field form for whichever carga is open.
 //
-// A carga only becomes a REAL, resumable record once its 6 identifying
-// fields (Fecha/Sitio/Operador/Coordinador/Económico Unidad/Centro de
-// Costos) are all known — same as Sistema Web's own "+ Nuevo Registro",
-// which requires all of them in one POST. Until then it's just a draft held
-// in memory on this device; going back before finishing it discards it,
-// nothing was ever created server-side. Once created, Identificación is
-// read-only (Sistema Web never lets you PATCH those either) and the 6
-// Operación fields (Trip antes/después + their photo evidence, Costo Total
-// + its ticket evidence) get filled progressively via PATCH, each locked
-// until its own Regla de Orden de Llenado gate (if any) is filled — same
-// enforcement model as the desktop table's own 🔗 icon
+// "+ Nueva Carga" creates a real, blank record immediately (a real id from
+// the very first tap) — every one of its 12 fields, identifying ones
+// included, is then filled in one at a time via PATCH, each going through
+// the exact same column-level permission/pending-approval workflow as every
+// other table in this app (checkAndLogFieldChanges): confirming a field you
+// have ver-y-operar/editar on saves it right away and locks it; touching an
+// already-saved field again only works with editar, and goes to whoever
+// holds Autorizar on that column instead of applying immediately. Nothing
+// is ever held only in memory — leaving mid-way keeps everything already
+// confirmed, exactly as-is, ready to resume from "Cargas activas". Each
+// field also locks until its own Regla de Orden de Llenado gate (if any) is
+// filled — same enforcement model as the desktop table's own 🔗 icon
 // (applyFieldFillRules), just read directly here instead of through a
-// <table> cell.
+// <table> cell. With no rules configured (the default), every field starts
+// open — filling in any subset of them is always valid progress, never
+// all-or-nothing.
 // ---------------------------------------------------------------------------
 
 const SUPPORTED_LANGS = ['en', 'es'];
@@ -146,13 +149,16 @@ async function loadBrandingForTheme() {
 }
 
 // --- Field catalog -----------------------------------------------------
+// Every field's apiKey matches a real FUEL_LOADING_PATCHABLE_FIELDS key in
+// db.js — including the identifying ones and centroCostos, all uniformly
+// PATCHable now (see the file header note above).
 const FIELDS = [
     { id: 'date', group: 'ident', apiKey: 'date', labelKey: 'main.colCargaFechaRegistro', hintKey: 'home.cargaHintFecha', type: 'date', icon: 'bx-calendar', colId: 'colCargaFechaRegistro' },
     { id: 'loadSite', group: 'ident', apiKey: 'loadSite', labelKey: 'main.colCargaSitio', hintKey: 'home.cargaHintSitio', type: 'text', icon: 'bx-pin', colId: 'colCargaSitio' },
     { id: 'operator', group: 'ident', apiKey: 'operator', labelKey: 'main.colCargaOperador', hintKey: 'home.cargaHintOperador', type: 'text', icon: 'bx-user', colId: 'colCargaOperador', autoFill: true },
     { id: 'coordinator', group: 'ident', apiKey: 'coordinator', labelKey: 'main.colCargaCoordinador', hintKey: 'home.cargaHintCoordinador', type: 'text', icon: 'bx-user-check', colId: 'colCargaCoordinador' },
     { id: 'ecoUnit', group: 'ident', apiKey: 'ecoUnit', labelKey: 'main.colCargaEcoUnidad', hintKey: 'home.cargaHintEcoUnidad', type: 'text', icon: 'bx-id-card', colId: 'colCargaEcoUnidad' },
-    { id: 'centroCostos', group: 'ident', apiKey: null, labelKey: 'main.colSysCentroCostos', hintKey: 'home.cargaHintCentroCostos', type: 'costCenter', icon: 'bx-purchase-tag-alt', colId: null },
+    { id: 'centroCostos', group: 'ident', apiKey: 'centroCostos', labelKey: 'main.colSysCentroCostos', hintKey: 'home.cargaHintCentroCostos', type: 'costCenter', icon: 'bx-purchase-tag-alt', colId: 'colSysCentroCostos' },
     { id: 'tripBefore', group: 'op', apiKey: 'tripBefore', labelKey: 'main.colCargaTripAntes', hintKey: 'home.cargaHintTripAntes', type: 'number', icon: 'bx-tachometer', colId: 'colCargaTripAntes' },
     { id: 'tripBeforeEvidence', group: 'op', apiKey: 'tripBeforeEvidence', labelKey: 'main.colCargaTripAntesEvidencia', hintKey: 'home.cargaHintFoto', type: 'photo', icon: 'bx-camera', colId: 'colCargaTripAntesEvidencia' },
     { id: 'tripAfter', group: 'op', apiKey: 'tripAfter', labelKey: 'main.colCargaTripDespues', hintKey: 'home.cargaHintTripDespues', type: 'number', icon: 'bx-tachometer', colId: 'colCargaTripDespues' },
@@ -173,12 +179,19 @@ let currentNickname = '';
 let costCenters = []; // this user's own accessible cost centers
 let gateMap = {}; // dependentColId -> gateColId, authorized rules only
 let records = []; // real, persisted fuel-loading-records from the server
-let draft = null; // { values } — identificación phase, not yet POSTed
-let openRecordId = null; // id of the persisted record currently open, or null
-let view = 'list'; // 'list' | 'draft' | 'record'
+let openRecordId = null; // id of the record currently open, or null
+let view = 'list'; // 'list' | 'record'
 
 function isFieldFilled(value) {
     return value !== null && value !== undefined && value !== '' && value !== 0;
+}
+// Centro de Costos has no column of its own in the API response — the
+// server flattens it into colSysCentroCostos (Control Interno), same as
+// every other table on this system.
+function fieldValueFromRecord(field, record) {
+    if (!record) return '';
+    if (field.id === 'centroCostos') return record.colSysCentroCostos || '';
+    return record[field.apiKey];
 }
 
 // --- Permission plumbing (mirrors AppInicio.js's own, duplicated since this
@@ -206,22 +219,22 @@ async function loadGateMap() {
     }
 }
 
-function fieldValueForGateCheck(colId) {
+function fieldValueForGateCheck(colId, record) {
     const field = FIELDS.find((f) => f.colId === colId);
     if (!field) return true; // an unknown gate column can never block anything
-    if (draft && Object.prototype.hasOwnProperty.call(draft.values, field.id)) return isFieldFilled(draft.values[field.id]);
-    const record = records.find((r) => r.id === openRecordId);
-    if (record && field.apiKey) return isFieldFilled(record[field.apiKey]);
-    return false;
+    return isFieldFilled(fieldValueFromRecord(field, record));
 }
-function isFieldUnlocked(field) {
+function isFieldUnlocked(field, record) {
     const gateColId = gateMap[field.colId];
     if (!gateColId) return true;
-    return fieldValueForGateCheck(gateColId);
+    return fieldValueForGateCheck(gateColId, record);
 }
 
+// A record is "complete" (drops off Cargas activas) once every field —
+// identifying ones included — has a value. With no rules configured that's
+// entirely up to whoever's filling it in; nothing forces an order.
 function isRecordComplete(record) {
-    return OP_FIELDS.every((f) => isFieldFilled(record[f.apiKey]));
+    return FIELDS.every((f) => isFieldFilled(fieldValueFromRecord(f, record)));
 }
 function activeRecords() {
     return records.filter((r) => !isRecordComplete(r));
@@ -232,7 +245,7 @@ function recordLabel(record) {
     return `${t('home.cargaFallbackLabel')} #${record.recordNumber}`;
 }
 function recordDoneCount(record) {
-    return IDENT_FIELDS.length + OP_FIELDS.filter((f) => isFieldFilled(record[f.apiKey])).length;
+    return FIELDS.filter((f) => isFieldFilled(fieldValueFromRecord(f, record))).length;
 }
 
 // --- Data loading ----------------------------------------------------------
@@ -257,38 +270,15 @@ async function loadCostCenters() {
     }
 }
 
-// --- Draft (Identificación, pre-creation) ---------------------------------
-function freshDraftValues() {
-    const values = {};
-    IDENT_FIELDS.forEach((f) => { values[f.id] = ''; });
-    values.operator = currentNickname ? `${currentUser.name} (${currentNickname})` : (currentUser?.name || '');
-    if (costCenters.length === 1) values.centroCostos = String(costCenters[0].id);
-    return values;
-}
-function startDraft() {
-    // Centro de Costos is required from creation (Control Interno) — rather
-    // than let them into the form and only discover it's stuck on that one
-    // field, block right here with the one thing they can actually act on:
-    // asking their coordinator to get one assigned.
+// --- Create + patch ---------------------------------------------------------
+// "+ Nueva Carga" creates the real record right away (see db.js's own note
+// on createFuelLoadingRecord) — Operador (and Centro de Costos, when this
+// user only has one) are then auto-patched immediately after, same
+// "por default debe aparecer" convenience as before, just genuinely
+// persisted now instead of held locally until some later batch save.
+async function createNewCarga() {
     if (!costCenters.length) {
         showToast(t('home.cargaNoCostCenter'));
-        return;
-    }
-    draft = { values: freshDraftValues() };
-    openRecordId = null;
-    view = 'draft';
-    render();
-}
-function draftDoneCount() {
-    return IDENT_FIELDS.filter((f) => isFieldFilled(draft.values[f.id])).length;
-}
-function isDraftComplete() {
-    return IDENT_FIELDS.every((f) => isFieldFilled(draft.values[f.id]));
-}
-async function submitDraft() {
-    const cc = costCenters.find((c) => String(c.id) === String(draft.values.centroCostos));
-    if (!cc) {
-        showToast(t('admin.costCenterRequiredForRecord'));
         return;
     }
     try {
@@ -296,28 +286,27 @@ async function submitDraft() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({
-                date: draft.values.date,
-                loadSite: draft.values.loadSite,
-                operator: draft.values.operator,
-                coordinator: draft.values.coordinator,
-                ecoUnit: draft.values.ecoUnit,
-                centroCostos: `${cc.code} - ${cc.name}`,
-            }),
+            body: JSON.stringify({}),
         });
-        if (!res.ok) throw new Error('save failed');
+        if (!res.ok) throw new Error('create failed');
         const { record } = await res.json();
         records.push(record);
-        draft = null;
         openRecordId = record.id;
         view = 'record';
         render();
+        const autoPatch = {
+            operator: currentNickname ? `${currentUser.name} (${currentNickname})` : (currentUser?.name || ''),
+        };
+        if (costCenters.length === 1) {
+            const cc = costCenters[0];
+            autoPatch.centroCostos = `${cc.code} - ${cc.name}`;
+        }
+        await patchRecord(record.id, autoPatch);
     } catch {
         showToast(t('admin.saveError'));
     }
 }
 
-// --- Record (Operación, post-creation) ------------------------------------
 async function patchRecord(id, patch) {
     try {
         const res = await fetch(`/api/business/fuel-loading-records/${id}`, {
@@ -368,7 +357,7 @@ function renderListView() {
     newBtn.type = 'button';
     newBtn.className = 'home-carga-new-btn';
     newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('home.cargaNewButton')}</span>`;
-    newBtn.addEventListener('click', startDraft);
+    newBtn.addEventListener('click', createNewCarga);
     bodyEl.appendChild(newBtn);
 
     const label = document.createElement('div');
@@ -401,29 +390,28 @@ function renderListView() {
     });
 }
 
+function currentRecord() {
+    return records.find((r) => r.id === openRecordId);
+}
+
 function renderFormView() {
-    const values = view === 'draft' ? draft.values : records.find((r) => r.id === openRecordId);
-    const done = view === 'draft' ? draftDoneCount() : recordDoneCount(values);
+    const record = currentRecord();
+    const done = recordDoneCount(record);
     const total = FIELDS.length;
-    titleEl.textContent = view === 'draft' ? t('home.cargaNewButton') : recordLabel(values);
+    titleEl.textContent = recordLabel(record);
     progressTrack.hidden = false;
     progressLabel.hidden = false;
     progressFill.style.width = `${Math.round((done / total) * 100)}%`;
     progressLabel.textContent = t('home.cargaFieldsCount', { done, total });
 
     GROUPS.forEach((group) => {
-        const groupDone = group.fields.filter((f) => fieldIsDone(f)).length;
+        const groupDone = group.fields.filter((f) => isFieldFilled(fieldValueFromRecord(f, record))).length;
         const header = document.createElement('div');
         header.className = 'home-carga-group-header';
         header.innerHTML = `<i class="bx ${group.icon}" aria-hidden="true"></i><span class="home-carga-group-label">${t(group.labelKey)}</span><span class="home-carga-group-tag">${groupDone}/${group.fields.length}</span>`;
         bodyEl.appendChild(header);
-        group.fields.forEach((field) => bodyEl.appendChild(buildFieldEl(field)));
+        group.fields.forEach((field) => bodyEl.appendChild(buildFieldEl(field, record)));
     });
-
-    if (view === 'draft') {
-        if (isDraftComplete()) submitDraft();
-        return;
-    }
 
     const allDone = done === total;
     const doneCard = document.createElement('div');
@@ -438,27 +426,9 @@ function renderFormView() {
     }
 }
 
-function fieldCurrentValue(field) {
-    if (view === 'draft') return draft.values[field.id] || '';
-    const record = records.find((r) => r.id === openRecordId);
-    if (!record) return '';
-    // Centro de Costos has no apiKey of its own — the server only ever
-    // returns it flattened into colSysCentroCostos (Control Interno), same
-    // as every other table; there's no raw cost-center id to recover once
-    // the record exists, only the already-formatted "code - name" string.
-    if (field.id === 'centroCostos') return record.colSysCentroCostos || '';
-    return record[field.apiKey];
-}
-function fieldIsDone(field) {
-    return isFieldFilled(fieldCurrentValue(field));
-}
-function fieldPreviewText(field) {
-    const value = fieldCurrentValue(field);
+function fieldPreviewText(field, record) {
+    const value = fieldValueFromRecord(field, record);
     if (field.type === 'photo') return t('home.cargaPhotoAttached');
-    if (field.type === 'costCenter') {
-        const cc = costCenters.find((c) => String(c.id) === String(value));
-        return cc ? `${cc.code} - ${cc.name}` : String(value);
-    }
     if (field.type === 'date' && value) {
         const d = new Date(`${value}T00:00:00`);
         return d.toLocaleDateString(document.documentElement.lang === 'es' ? 'es-MX' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -468,13 +438,9 @@ function fieldPreviewText(field) {
 
 const expandedFieldIds = new Set();
 
-function buildFieldEl(field) {
-    const done = fieldIsDone(field);
-    // Identificación fields on an already-created record are permanent —
-    // Sistema Web never lets you PATCH them either — so they render as
-    // plain completed rows with no edit affordance once persisted.
-    const editableWhenDone = !(view === 'record' && field.group === 'ident');
-    const unlocked = view === 'draft' ? isFieldUnlocked(field) : (editableWhenDone ? isFieldUnlocked(field) : true);
+function buildFieldEl(field, record) {
+    const done = isFieldFilled(fieldValueFromRecord(field, record));
+    const unlocked = isFieldUnlocked(field, record);
     const expanded = expandedFieldIds.has(field.id);
 
     const wrap = document.createElement('div');
@@ -484,10 +450,9 @@ function buildFieldEl(field) {
     row.type = 'button';
     row.className = 'home-carga-field-row';
     const autoTag = field.autoFill && done ? `<span class="home-carga-field-auto-tag">${t('home.cargaAutoTag')}</span>` : '';
-    const subtitle = done ? fieldPreviewText(field) : (unlocked ? t(field.hintKey) : t('home.cargaLocked'));
+    const subtitle = done ? fieldPreviewText(field, record) : (unlocked ? t(field.hintKey) : t('home.cargaLocked'));
     let trailing = '<i class="bx bx-chevron-down home-carga-field-trailing"></i>';
     if (!unlocked) trailing = '<i class="bx bx-lock-alt home-carga-field-trailing"></i>';
-    else if (done && !(editableWhenDone)) trailing = '';
     else if (done) trailing = '<i class="bx bx-edit home-carga-field-trailing"></i>';
     else if (expanded) trailing = '<i class="bx bx-chevron-down home-carga-field-trailing icon-up"></i>';
     row.innerHTML = `
@@ -495,8 +460,7 @@ function buildFieldEl(field) {
         <span class="home-carga-field-label"><p>${t(field.labelKey)}${autoTag}</p><span>${subtitle}</span></span>
         ${trailing}
     `;
-    const canInteract = unlocked && (editableWhenDone || !done);
-    if (canInteract) {
+    if (unlocked) {
         row.addEventListener('click', () => {
             if (expandedFieldIds.has(field.id)) expandedFieldIds.delete(field.id);
             else expandedFieldIds.add(field.id);
@@ -507,24 +471,22 @@ function buildFieldEl(field) {
     }
     wrap.appendChild(row);
 
-    if (canInteract && expanded) {
-        wrap.appendChild(buildFieldBody(field));
+    if (unlocked && expanded) {
+        wrap.appendChild(buildFieldBody(field, record));
     }
     return wrap;
 }
 
+// Every confirm — identifying field or Operación field alike — is a real
+// PATCH the moment it happens. Whether it actually applies, goes pending,
+// or gets rejected is entirely the server's call (checkAndLogFieldChanges),
+// same as it's always been for Trip antes/después/Costo Total.
 function commitFieldValue(field, value) {
-    if (view === 'draft') {
-        draft.values[field.id] = value;
-        expandedFieldIds.delete(field.id);
-        render();
-        return;
-    }
     expandedFieldIds.delete(field.id);
     patchRecord(openRecordId, { [field.apiKey]: value });
 }
 
-function buildFieldBody(field) {
+function buildFieldBody(field, record) {
     const bodyWrap = document.createElement('div');
     bodyWrap.className = 'home-carga-field-body';
 
@@ -538,7 +500,7 @@ function buildFieldBody(field) {
         fileInput.type = 'file';
         fileInput.accept = 'image/*';
         fileInput.hidden = true;
-        const hasPhoto = isFieldFilled(fieldCurrentValue(field));
+        const hasPhoto = isFieldFilled(fieldValueFromRecord(field, record));
         btn.innerHTML = `<i class="bx bx-camera" aria-hidden="true"></i><span>${hasPhoto ? t('home.cargaChangePhoto') : t('home.cargaTakePhoto')}</span>`;
         btn.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', () => {
@@ -566,13 +528,15 @@ function buildFieldBody(field) {
         placeholder.value = '';
         placeholder.textContent = t('main.newRecordCostCenterPlaceholder');
         select.appendChild(placeholder);
+        const currentValue = fieldValueFromRecord(field, record);
         costCenters.forEach((cc) => {
             const opt = document.createElement('option');
-            opt.value = String(cc.id);
-            opt.textContent = `${cc.code} - ${cc.name}`;
+            const label = `${cc.code} - ${cc.name}`;
+            opt.value = label;
+            opt.textContent = label;
             select.appendChild(opt);
         });
-        select.value = fieldCurrentValue(field) || '';
+        select.value = currentValue || '';
         const confirmBtn = document.createElement('button');
         confirmBtn.type = 'button';
         confirmBtn.className = 'home-carga-field-confirm';
@@ -587,7 +551,7 @@ function buildFieldBody(field) {
 
     const input = document.createElement('input');
     input.type = field.type;
-    input.value = fieldCurrentValue(field) || '';
+    input.value = fieldValueFromRecord(field, record) || '';
     input.placeholder = t(field.hintKey);
     const error = document.createElement('p');
     error.className = 'home-carga-field-error';
@@ -612,10 +576,9 @@ document.getElementById('carga-back').addEventListener('click', () => {
         window.location.href = 'AppInicio.html';
         return;
     }
-    if (view === 'draft' && draftDoneCount() > 0) {
-        if (!window.confirm(t('home.cargaDiscardConfirm'))) return;
-    }
-    draft = null;
+    // Nothing is ever held only in memory anymore — every confirmed field
+    // is already saved, so leaving mid-way loses nothing and needs no
+    // discard prompt.
     view = 'list';
     render();
 });

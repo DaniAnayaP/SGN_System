@@ -82,13 +82,17 @@ function showToast(message, duration = 4000) {
 // it's about THIS page's own navigation, not app-screen data itself —
 // mirrors how every other screen's own column list in this codebase is a
 // small hand-kept catalog rather than a server round trip.
+// No per-screen color here on purpose — every tile icon uses the theme's
+// own accent gradient (.home-tile-icon's CSS, var(--home-accent-strong-1/2))
+// so it stays legible and consistent across Claro/Oscuro/Institucional/
+// Futurista instead of a hardcoded hex fighting whichever theme is active.
 const WEB_SCREEN_PAGES = {
-    'centros-costo': { href: 'Business-CentrosCosto.html', icon: 'bx-purchase-tag-alt', color: '#3A4BC9' },
-    'registro-combustible': { href: 'OpTransVolCombustible.html', icon: 'bx-gas-pump', color: '#c9503f' },
-    'carga-combustible': { href: 'AppCargaCombustible.html', icon: 'bx-gas-pump', color: '#c9503f' },
-    'mi-recurso-humano': { href: 'OpRRHHMiRecursoHumano.html', icon: 'bx-id-card', color: '#1E7B3C' },
-    'transacciones-inteligentes': { href: 'NegocioInteligente-Transacciones.html', icon: 'bx-line-chart', color: '#6C7CF0' },
-    'reglas-orden-llenado': { href: 'Business-ReglasOrden.html', icon: 'bx-link', color: '#B8860B' },
+    'centros-costo': { href: 'Business-CentrosCosto.html', icon: 'bx-purchase-tag-alt' },
+    'registro-combustible': { href: 'OpTransVolCombustible.html', icon: 'bx-gas-pump' },
+    'carga-combustible': { href: 'AppCargaCombustible.html', icon: 'bx-gas-pump' },
+    'mi-recurso-humano': { href: 'OpRRHHMiRecursoHumano.html', icon: 'bx-id-card' },
+    'transacciones-inteligentes': { href: 'NegocioInteligente-Transacciones.html', icon: 'bx-line-chart' },
+    'reglas-orden-llenado': { href: 'Business-ReglasOrden.html', icon: 'bx-link' },
 };
 
 // menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
@@ -117,7 +121,7 @@ function renderTiles(screens) {
         tile.type = 'button';
         tile.className = 'home-tile';
         tile.innerHTML = `
-            <span class="home-tile-icon"${page ? ` style="background:${page.color}"` : ''}>
+            <span class="home-tile-icon">
                 <i class="bx ${page ? page.icon : 'bx-mobile-alt'}" aria-hidden="true"></i>
             </span>
             <span>${screen.name}</span>
@@ -1120,7 +1124,7 @@ function buildCategoryTile(pantalla) {
     tile.className = `home-tile${soon ? ' soon' : ''}`;
     tile.innerHTML = `
         ${soon ? `<span class="home-tile-soon-tag">${t('home.categorySoonTag')}</span>` : ''}
-        <span class="home-tile-icon"${!soon && info ? ` style="background:${info.color}"` : ''}><i class="bx ${(!soon && info?.icon) || pantalla.icon || 'bx-window'}" aria-hidden="true"></i></span>
+        <span class="home-tile-icon"><i class="bx ${(!soon && info?.icon) || pantalla.icon || 'bx-window'}" aria-hidden="true"></i></span>
         <span>${t(pantalla.labelKey, pantalla.labelParams || {})}</span>
     `;
     tile.addEventListener('click', () => onCategoryScreenTap(pantalla));
@@ -1133,7 +1137,7 @@ function buildCategoryListRow(pantalla) {
     row.type = 'button';
     row.className = `home-category-list-row${soon ? ' soon' : ''}`;
     row.innerHTML = `
-        <span class="home-category-list-icon"${!soon && info ? ` style="background:${info.color}"` : ''}><i class="bx ${(!soon && info?.icon) || pantalla.icon || 'bx-window'}" aria-hidden="true"></i></span>
+        <span class="home-category-list-icon"><i class="bx ${(!soon && info?.icon) || pantalla.icon || 'bx-window'}" aria-hidden="true"></i></span>
         <span class="home-category-list-label">${t(pantalla.labelKey, pantalla.labelParams || {})}</span>
         ${soon ? `<span class="home-category-list-tag">${t('home.categorySoonTag')}</span>` : `<span class="home-category-list-chevron"><i class="bx bx-chevron-right" aria-hidden="true"></i></span>`}
     `;

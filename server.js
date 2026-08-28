@@ -2673,27 +2673,15 @@ app.get('/api/business/fuel-loading-records', requireAuth, (req, res) => {
     res.json({ records: listFuelLoadingRecords(req.user.clientId).map((r) => mapFuelLoadingRecord(r, pendingByRecord, client?.company_name)) });
 });
 
+// Creates a blank record immediately — no fields required up front (see
+// createFuelLoadingRecord's own note). Every field, including the
+// identifying ones, is filled in afterward one at a time via PATCH.
 app.post('/api/business/fuel-loading-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const { date, loadSite, operator, coordinator, ecoUnit, centroCostos } = req.body || {};
-    if (!date || !loadSite?.trim() || !operator?.trim() || !coordinator?.trim() || !ecoUnit?.trim()) {
-        return res.status(400).json({ message: 'date, loadSite, operator, coordinator and ecoUnit are required.' });
-    }
-    if (!centroCostos?.trim()) {
-        return res.status(400).json({ message: 'centroCostos is required.' });
-    }
-    const record = createFuelLoadingRecord({
-        clientId: req.user.clientId,
-        date,
-        loadSite: loadSite.trim(),
-        operator: operator.trim(),
-        coordinator: coordinator.trim(),
-        ecoUnit: ecoUnit.trim(),
-        centroCostos: (centroCostos || '').trim(),
-    });
+    const record = createFuelLoadingRecord({ clientId: req.user.clientId });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: record.id,
-        recordLabel: record.eco_unit, action: 'create', changedBy: req.user.name,
+        recordLabel: record.db_id, action: 'create', changedBy: req.user.name,
     });
     const client = getClientById(req.user.clientId);
     res.status(201).json({ record: mapFuelLoadingRecord(record, null, client?.company_name) });
@@ -2704,7 +2692,7 @@ app.patch('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => {
     const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
     const patch = req.body || {};
-    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FUEL_LOADING_PATCHABLE_FIELDS, 'carga-combustible', existing.eco_unit, {
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FUEL_LOADING_PATCHABLE_FIELDS, 'carga-combustible', existing.eco_unit || existing.db_id, {
         tripBeforeEvidence: (v) => (v ? '[imagen]' : ''),
         tripAfterEvidence: (v) => (v ? '[imagen]' : ''),
         totalCostEvidence: (v) => (v ? '[imagen]' : ''),
@@ -2720,7 +2708,7 @@ app.delete('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => 
     if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: existing.id,
-        recordLabel: existing.eco_unit, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.eco_unit || existing.db_id, action: 'delete', changedBy: req.user.name,
     });
     deleteFuelLoadingRecord(req.params.id, req.user.clientId);
     res.status(204).end();
