@@ -477,46 +477,6 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="new-record-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-record-modal-title">
-            <h3 id="new-record-modal-title" data-i18n="main.newRecord">New Record</h3>
-            <p class="admin-hint" data-i18n="main.cargaCombustibleNewRecordHint">The rest of the fields can be filled in later, directly from the row in the table.</p>
-            <div class="admin-form-grid">
-                <div class="admin-field">
-                    <label for="new-record-date" data-i18n="main.colCargaFechaRegistro">Registration Date</label>
-                    <input type="date" id="new-record-date" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-load-site" data-i18n="main.colCargaSitio">Loading Site</label>
-                    <input type="text" id="new-record-load-site" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-operator" data-i18n="main.colCargaOperador">Operator</label>
-                    <input type="text" id="new-record-operator" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-coordinator" data-i18n="main.colCargaCoordinador">Coordinator</label>
-                    <input type="text" id="new-record-coordinator" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-eco-unit" data-i18n="main.colCargaEcoUnidad">Eco Unit</label>
-                    <input type="text" id="new-record-eco-unit" required>
-                </div>
-                <div class="admin-field">
-                    <label for="new-record-cost-center" data-i18n="main.colSysCentroCostos">Cost Center</label>
-                    <select id="new-record-cost-center" required>
-                        <option value="" data-i18n="main.newRecordCostCenterPlaceholder">Select a Cost Center...</option>
-                    </select>
-                </div>
-            </div>
-            <div id="new-record-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="new-record-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="new-record-cancel" data-i18n="admin.cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
-
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
     <script src="OpTransVolCargaCombustible.js"></script>

@@ -5471,6 +5471,9 @@ async function initDashboard({ activePage } = {}) {
 const TABLE_GRANT_PATHS = {
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
+    'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
+    'tipos-unidad': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-unidades' },
+    'nuestras-unidades': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestras-unidades' },
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
     'transacciones-inteligentes': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-transacciones' },
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
@@ -5499,6 +5502,20 @@ function hasScreenAccess(activePage) {
     return hasScreenGrant(path.sectionId, path.itemId, path.submenuPrefix);
 }
 
+// The 13 "Control Interno" columns sit one level deeper in menu.json than a
+// table's own columns (nested inside a "class-control-interno" classification
+// group) — mirrors SYSTEM_COLUMN_IDS/columnSubmenuBase in db.js exactly. Any
+// OTHER column keeps its shallower path.
+const SYSTEM_COLUMN_CLASSIFICATION = 'class-control-interno';
+const SYSTEM_COLUMN_IDS = new Set([
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+]);
+function columnSubmenuBase(path, colKey) {
+    return SYSTEM_COLUMN_IDS.has(colKey) ? `${path.submenuPrefix}/${SYSTEM_COLUMN_CLASSIFICATION}/${colKey}` : `${path.submenuPrefix}/${colKey}`;
+}
+
 // No grant at all on a column behaves as 'solo-ver' — mirrors
 // getColumnGrantLevel in db.js exactly (kept in sync by hand, same as
 // TABLE_GRANT_PATHS itself).
@@ -5506,7 +5523,7 @@ function getColumnGrantLevel(tableKey, colKey) {
     if (!!currentUser?.isClientAdmin) return 'editar';
     const path = TABLE_GRANT_PATHS[tableKey];
     if (!path) return 'solo-ver';
-    const base = `${path.submenuPrefix}/${colKey}`;
+    const base = columnSubmenuBase(path, colKey);
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
     if (has('editar')) return 'editar';

@@ -1,24 +1,26 @@
 // ---------------------------------------------------------------------------
 // Carga Combustible — sibling of Registro Combustible (same shell via
-// Dashboard.initDashboard, same "+ Nuevo Registro" toolbar-button pattern).
+// Dashboard.initDashboard).
 //
-// "+ Nuevo Registro" only asks for the 5 fields that identify the loading
-// event (Fecha Registro, Sitio Carga, Operador, Coordinador, Económico
-// Unidad) plus Centro de Costos — everything else (Trip antes/después +
-// their photo evidence, Costo Total + its ticket evidence) starts empty and
-// gets filled in later by clicking directly on that cell in the table (see
-// Dashboard.attachInlineEdit / attachEvidenceControl below).
+// "+ Nuevo Registro" creates a real, blank record immediately (see db.js's
+// createFuelLoadingRecord) — every field, identifying ones included, is then
+// filled in one at a time by clicking directly on that cell in the table
+// (Dashboard.attachInlineEdit / attachEvidenceControl / the <select> cells
+// below), same convention as the App's own field-by-field form. Centro de
+// Costos auto-assigns right after creation when this user has exactly one
+// (mirrors AppCargaCombustible.js's own createNewCarga); "+ Nuevo Registro"
+// is blocked outright with a toast when they have none.
 //
 // Persisted via /api/business/fuel-loading-records (see server.js + db.js
 // fuel_loading_records table): POST on "+ Nuevo Registro", PATCH per field
-// the moment an inline edit or a photo upload commits.
+// the moment an inline edit, a <select> change, or a photo upload commits.
 // ---------------------------------------------------------------------------
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-transporte-vol-carga-combustible' });
         if (!role) return;
         renderNewRecordButton();
-        await refreshTable();
+        await Promise.all([refreshTable(), loadFleetFuelSuggestions()]);
     } catch (err) {
         console.error('Carga Combustible failed to initialize:', err);
     }
@@ -53,8 +55,11 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-function buildSystemCells(record) {
-    return SYSTEM_COLUMN_KEYS.map((key) => textCellSystem(key, record[key]));
+// `overrides[key]`, when given, builds that one system column's cell instead
+// of the plain read-only default — used for colSysCentroCostos below, the
+// one system column this table lets you edit after creation.
+function buildSystemCells(record, overrides = {}) {
+    return SYSTEM_COLUMN_KEYS.map((key) => (overrides[key] ? overrides[key](record) : textCellSystem(key, record[key])));
 }
 
 async function patchFuelLoadingRecord(id, patch) {
@@ -224,11 +229,30 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
     td.append(btn, fileInput);
 }
 
+// ecoUnit -> fuelType lookup (Nuestras Unidades), loaded once at init — open/
+// never blocking (confirmed product decision): an Económico with no match
+// just yields no suggestion. Mirrors AppCargaCombustible.js's own.
+let fleetFuelSuggestions = {};
+async function loadFleetFuelSuggestions() {
+    try {
+        const res = await fetch('/api/business/fleet-units', { credentials: 'include' });
+        if (!res.ok) return;
+        const { fleetUnits } = await res.json();
+        const map = {};
+        (fleetUnits || []).forEach((u) => {
+            if (u.ecoId && u.fuelType) map[u.ecoId.trim().toLowerCase()] = u.fuelType;
+        });
+        fleetFuelSuggestions = map;
+    } catch {
+        fleetFuelSuggestions = {};
+    }
+}
+
 // Tipo Combustible — a real <select>, always live in the cell, same pattern
 // as Registro Combustible's own colFuelType. Suggested (never forced) from
-// Nuestras Unidades when the App confirms an Económico that matches a
-// registered fleet unit (see AppCargaCombustible.js) — on desktop it's just
-// a normal editable field, like any other.
+// Nuestras Unidades when Económico is confirmed and matches a registered
+// fleet unit (see the Económico cell in buildRow below) — still just a
+// normal editable field otherwise, like any other.
 function buildFuelTypeCell(record) {
     const td = document.createElement('td');
     td.dataset.col = 'colFuelType';
@@ -246,6 +270,37 @@ function buildFuelTypeCell(record) {
     select.disabled = isPending(record, 'fuelType') || !Dashboard.canEditField(TABLE_KEY, 'colFuelType', record.fuelType || '');
     if (select.disabled) select.title = Dashboard.t(isPending(record, 'fuelType') ? 'main.changePending' : 'main.fieldLocked');
     select.addEventListener('change', () => patchFuelLoadingRecord(record.id, { fuelType: select.value }));
+    td.appendChild(select);
+    return td;
+}
+
+// Centro de Costos — the one Control Interno column this table lets you
+// edit after creation (see FUEL_LOADING_PATCHABLE_FIELDS in db.js). A real
+// <select> populated from this user's own sidebarCostCenters (Dashboard.js's
+// top-level `let`, same list the top-bar cc-picker itself reads from), same
+// pattern as Tipo Combustible above.
+function buildCentroCostosCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colSysCentroCostos';
+    td.classList.add('col-system');
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = Dashboard.t('main.newRecordCostCenterPlaceholder');
+    select.appendChild(placeholder);
+    (typeof sidebarCostCenters !== 'undefined' ? sidebarCostCenters : []).forEach((cc) => {
+        const label = `${cc.code} - ${cc.name}`;
+        const opt = document.createElement('option');
+        opt.value = label;
+        opt.textContent = label;
+        select.appendChild(opt);
+    });
+    const currentValue = record.colSysCentroCostos || '';
+    select.value = currentValue;
+    select.disabled = isPending(record, 'centroCostos') || !Dashboard.canEditField(TABLE_KEY, 'colSysCentroCostos', currentValue);
+    if (select.disabled) select.title = Dashboard.t(isPending(record, 'centroCostos') ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => patchFuelLoadingRecord(record.id, { centroCostos: select.value }));
     td.appendChild(select);
     return td;
 }
@@ -306,16 +361,82 @@ function buildRow(record) {
         onCommit: (val) => patchFuelLoadingRecord(record.id, { totalCost: parseFloat(val) || 0 }),
     });
 
+    const tdDate = document.createElement('td');
+    tdDate.dataset.col = 'colCargaFechaRegistro';
+    Dashboard.attachInlineEdit(tdDate, {
+        value: record.date || '',
+        inputType: 'date',
+        tableKey: TABLE_KEY,
+        colKey: 'colCargaFechaRegistro',
+        pending: isPending(record, 'date'),
+        onCommit: (val) => patchFuelLoadingRecord(record.id, { date: val }),
+    });
+
+    const tdLoadSite = document.createElement('td');
+    tdLoadSite.dataset.col = 'colCargaSitio';
+    Dashboard.attachInlineEdit(tdLoadSite, {
+        value: record.loadSite || '',
+        inputType: 'text',
+        tableKey: TABLE_KEY,
+        colKey: 'colCargaSitio',
+        pending: isPending(record, 'loadSite'),
+        onCommit: (val) => patchFuelLoadingRecord(record.id, { loadSite: val.trim() }),
+    });
+
+    const tdOperator = document.createElement('td');
+    tdOperator.dataset.col = 'colCargaOperador';
+    Dashboard.attachInlineEdit(tdOperator, {
+        value: record.operator || '',
+        inputType: 'text',
+        tableKey: TABLE_KEY,
+        colKey: 'colCargaOperador',
+        pending: isPending(record, 'operator'),
+        onCommit: (val) => patchFuelLoadingRecord(record.id, { operator: val.trim() }),
+    });
+
+    const tdCoordinator = document.createElement('td');
+    tdCoordinator.dataset.col = 'colCargaCoordinador';
+    Dashboard.attachInlineEdit(tdCoordinator, {
+        value: record.coordinator || '',
+        inputType: 'text',
+        tableKey: TABLE_KEY,
+        colKey: 'colCargaCoordinador',
+        pending: isPending(record, 'coordinator'),
+        onCommit: (val) => patchFuelLoadingRecord(record.id, { coordinator: val.trim() }),
+    });
+
+    // Confirming Económico also bundles a Tipo Combustible SUGGESTION in the
+    // same PATCH when Nuestras Unidades has a match and the field is still
+    // empty — same rule as AppCargaCombustible.js's own commitFieldValue:
+    // still goes through the normal empty->filled permission check, never
+    // overwrites a value already set.
+    const tdEcoUnit = document.createElement('td');
+    tdEcoUnit.dataset.col = 'colCargaEcoUnidad';
+    Dashboard.attachInlineEdit(tdEcoUnit, {
+        value: record.ecoUnit || '',
+        inputType: 'text',
+        tableKey: TABLE_KEY,
+        colKey: 'colCargaEcoUnidad',
+        pending: isPending(record, 'ecoUnit'),
+        onCommit: (val) => {
+            const ecoUnit = val.trim();
+            const patch = { ecoUnit };
+            const suggestion = fleetFuelSuggestions[ecoUnit.toLowerCase()];
+            if (suggestion && !record.fuelType) patch.fuelType = suggestion;
+            patchFuelLoadingRecord(record.id, patch);
+        },
+    });
+
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(record.id);
     tr.dataset.recordDate = record.date;
     tr.append(
-        ...buildSystemCells(record),
-        textCell('colCargaFechaRegistro', record.date),
-        textCell('colCargaSitio', record.loadSite),
-        textCell('colCargaOperador', record.operator),
-        textCell('colCargaCoordinador', record.coordinator),
-        textCell('colCargaEcoUnidad', record.ecoUnit),
+        ...buildSystemCells(record, { colSysCentroCostos: buildCentroCostosCell }),
+        tdDate,
+        tdLoadSite,
+        tdOperator,
+        tdCoordinator,
+        tdEcoUnit,
         buildFuelTypeCell(record),
         tdTripBefore,
         buildTripEvidenceCell(record, 'colCargaTripAntesEvidencia', 'tripBeforeEvidence', 'main.cargaUploadTripAntesEvidencia', 'main.colCargaTripAntesEvidencia'),
@@ -392,108 +513,38 @@ function applyCargaFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyCargaFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyCargaFilters);
 
-const newRecordModal = document.getElementById('new-record-modal');
-const dateInput = document.getElementById('new-record-date');
-const loadSiteInput = document.getElementById('new-record-load-site');
-const operatorInput = document.getElementById('new-record-operator');
-const coordinatorInput = document.getElementById('new-record-coordinator');
-const ecoUnitInput = document.getElementById('new-record-eco-unit');
-const costCenterSelect = document.getElementById('new-record-cost-center');
-const newRecordError = document.getElementById('new-record-error');
-const newRecordSaveBtn = document.getElementById('new-record-save');
-const newRecordCancelBtn = document.getElementById('new-record-cancel');
-
-// Dashboard.js and this page share one global scope (plain <script> tags,
-// not modules) -- sidebarCostCenters is Dashboard.js's own top-level `let`,
-// same one the top-bar cc-picker itself reads from.
-function populateCostCenterSelect() {
-    costCenterSelect.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
-    (typeof sidebarCostCenters !== 'undefined' ? sidebarCostCenters : []).forEach((cc) => {
-        const option = document.createElement('option');
-        option.value = String(cc.id);
-        option.textContent = `${cc.code} - ${cc.name}`;
-        costCenterSelect.appendChild(option);
-    });
-    // Preset to the top-bar picker's own current selection when it's
-    // unambiguous (exactly one active there) -- same convenience default,
-    // just editable here now instead of only settable from the top bar.
-    const oneSelected = typeof selectedCostCenterIds !== 'undefined'
-        && selectedCostCenterIds instanceof Set && selectedCostCenterIds.size === 1;
-    costCenterSelect.value = oneSelected ? String(Array.from(selectedCostCenterIds)[0]) : '';
-}
-
-function closeNewRecordModal() {
-    newRecordModal.hidden = true;
-}
-
-function openNewRecordModal() {
-    dateInput.value = '';
-    loadSiteInput.value = '';
-    operatorInput.value = '';
-    coordinatorInput.value = '';
-    ecoUnitInput.value = '';
-    populateCostCenterSelect();
-    newRecordError.hidden = true;
-    newRecordModal.hidden = false;
-    dateInput.focus();
-}
-
-async function saveNewRecord() {
-    const missing = [dateInput, loadSiteInput, operatorInput, coordinatorInput, ecoUnitInput].some((el) => !el.value.trim());
-    if (missing) {
-        newRecordError.textContent = Dashboard.t('login.fieldRequired');
-        newRecordError.hidden = false;
+// "+ Nuevo Registro" — creates a blank record right away (same reasoning as
+// the App's own createNewCarga in AppCargaCombustible.js): blocked outright
+// with a toast when this user has zero cost centers (nothing meaningful to
+// assign), auto-assigned right after creation when they have exactly one,
+// left for a manual pick via the Centro de Costos cell otherwise. Dashboard.js
+// and this page share one global scope (plain <script> tags, not modules) --
+// sidebarCostCenters is Dashboard.js's own top-level `let`, same one the
+// top-bar cc-picker itself reads from.
+async function createNewRecord() {
+    const costCenters = typeof sidebarCostCenters !== 'undefined' ? sidebarCostCenters : [];
+    if (!costCenters.length) {
+        Dashboard.showToast(Dashboard.t('admin.costCenterRequiredForRecord'), 'error');
         return;
     }
-    // Control Interno columns must be filled in from creation, not left
-    // blank -- block the save here rather than silently persisting a record
-    // with no Centro de Costos.
-    const selectedCc = sidebarCostCenters.find((cc) => String(cc.id) === costCenterSelect.value);
-    if (!selectedCc) {
-        newRecordError.textContent = Dashboard.t('admin.costCenterRequiredForRecord');
-        newRecordError.hidden = false;
-        return;
-    }
-    newRecordError.hidden = true;
-    newRecordSaveBtn.disabled = true;
     try {
-        const res = await fetch('/api/business/fuel-loading-records', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-                date: dateInput.value,
-                loadSite: loadSiteInput.value.trim(),
-                operator: operatorInput.value.trim(),
-                coordinator: coordinatorInput.value.trim(),
-                ecoUnit: ecoUnitInput.value.trim(),
-                centroCostos: `${selectedCc.code} - ${selectedCc.name}`,
-            }),
-        });
+        const res = await fetch('/api/business/fuel-loading-records', { method: 'POST', credentials: 'include' });
         if (!res.ok) throw new Error('save failed');
         const { record } = await res.json();
         const tbody = getTbody();
         const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
         if (emptyRow) emptyRow.remove();
         tbody.appendChild(buildRow(record));
-        closeNewRecordModal();
+        if (costCenters.length === 1) {
+            const cc = costCenters[0];
+            await patchFuelLoadingRecord(record.id, { centroCostos: `${cc.code} - ${cc.name}` });
+        }
         Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
     } catch (err) {
-        newRecordError.textContent = Dashboard.t('admin.saveError');
-        newRecordError.hidden = false;
-    } finally {
-        newRecordSaveBtn.disabled = false;
+        console.error('Carga Combustible: failed to create record', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
-
-newRecordSaveBtn.addEventListener('click', saveNewRecord);
-newRecordCancelBtn.addEventListener('click', closeNewRecordModal);
-newRecordModal.addEventListener('click', (event) => {
-    if (event.target === newRecordModal) closeNewRecordModal();
-});
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !newRecordModal.hidden) closeNewRecordModal();
-});
 
 // Inserted at the LEFT of the zoom/pin/visibility toolbar Dashboard.js
 // already builds for this table (see renderDataTableZoomControls) — that
@@ -507,6 +558,6 @@ function renderNewRecordButton() {
     btn.type = 'button';
     btn.className = 'data-table-new-record-btn';
     btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="main.newRecord">${Dashboard.t('main.newRecord')}</span>`;
-    btn.addEventListener('click', openNewRecordModal);
+    btn.addEventListener('click', createNewRecord);
     toolbar.prepend(btn);
 }
