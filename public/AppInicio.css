@@ -1,10 +1,137 @@
 *, *::before, *::after{ box-sizing: border-box; }
 
+/* Theme tokens — 4 "Estilo" options (Claro/Oscuro/Institucional/Futurista),
+   same idea as Inicio-en.css's :root/.dark-mode pair on desktop. :root is
+   "Claro" (the default, no body class — matches STYLE_OPTIONS' 'light' id
+   and getStoredStyle()'s default). --home-on-accent/--home-on-header are
+   the text color for the handful of controls that sit on an always-accent
+   or always-header-gradient background (chat bubbles, badges, the
+   subscreen header title) — kept as separate tokens (not hardcoded white)
+   so Institucional can set them to the client's own accentText/tooltipText
+   when their branding accent is light enough that white would fail
+   contrast (see applyInstitutionalTheme in AppInicio.js). */
+:root{
+    --home-bg: #f3f4fa;
+    --home-bg-grad-1: #e3e7fb;
+    --home-bg-grad-2: #f3f4fa;
+    --home-tabbar-bg: #ffffff;
+    --home-surface: #ffffff;
+    --home-surface-2: #eceefa;
+    --home-neutral-soft: #dfe2f0;
+    --home-border: #e0e3f0;
+    --home-divider: #e6e8f2;
+    --home-text-primary: #1c1f30;
+    --home-text-secondary: #454a68;
+    --home-text-tertiary: #6b7290;
+    --home-text-muted: #8890ac;
+    --home-accent: #1f8fae;
+    --home-accent-strong-1: #6C7CF0;
+    --home-accent-strong-2: #3A4BC9;
+    --home-on-accent: #ffffff;
+    --home-header-grad-1: #4A5AD8;
+    --home-header-grad-2: #2A3166;
+    --home-on-header: #ffffff;
+    --home-danger: #c8384a;
+    --home-shadow: rgba(30, 34, 60, 0.14);
+    --home-overlay-backdrop: rgba(20, 22, 40, 0.35);
+}
+
+/* Oscuro — this is exactly the palette AppInicio used unconditionally
+   before theming existed (its 'dark' swatch, #0b0d14, is this same bg),
+   preserved 1:1 here so picking "Oscuro" looks identical to the old
+   always-on look. */
+body.dark-mode{
+    --home-bg: #0b0d14;
+    --home-bg-grad-1: #2A3166;
+    --home-bg-grad-2: #0b0d14;
+    --home-tabbar-bg: #0d0f1a;
+    --home-surface: #171b2c;
+    --home-surface-2: #232640;
+    --home-neutral-soft: #2c2f4a;
+    --home-border: #232640;
+    --home-divider: #1c1f30;
+    --home-text-primary: #ffffff;
+    --home-text-secondary: #c7cce8;
+    --home-text-tertiary: #9BA3C4;
+    --home-text-muted: #5b6b9e;
+    --home-accent: #7FE1FF;
+    --home-accent-strong-1: #6C7CF0;
+    --home-accent-strong-2: #3A4BC9;
+    --home-on-accent: #ffffff;
+    --home-header-grad-1: #1c1a3a;
+    --home-header-grad-2: #0e0d1a;
+    --home-on-header: #ffffff;
+    --home-danger: #ff8a8a;
+    --home-shadow: rgba(0, 0, 0, 0.4);
+    --home-overlay-backdrop: rgba(5, 6, 12, 0.6);
+}
+
+/* Institucional — static fallback only (matches the option's own preview
+   swatch, a generic navy-blue). The real per-client look is written over
+   these same custom properties at runtime by applyInstitutionalTheme() in
+   AppInicio.js, straight from /api/business/branding's colorPalette — the
+   exact data Dashboard.js's desktop switcher already uses for its own
+   Institutional theme, just mapped onto this page's --home-* names instead
+   of Inicio-en.css's --institutional-* ones. */
+body.institutional-mode{
+    --home-bg: #0e1e33;
+    --home-bg-grad-1: #1c3a5e;
+    --home-bg-grad-2: #0e1e33;
+    --home-tabbar-bg: #0a1626;
+    --home-surface: #16304d;
+    --home-surface-2: #1f3f61;
+    --home-neutral-soft: #234867;
+    --home-border: #2a4d70;
+    --home-divider: #16283d;
+    --home-text-primary: #ffffff;
+    --home-text-secondary: #c9d9e8;
+    --home-text-tertiary: #9fb6cc;
+    --home-text-muted: #6f8ba3;
+    --home-accent: #7fd1ff;
+    --home-accent-strong-1: #2f6fae;
+    --home-accent-strong-2: #16304d;
+    --home-on-accent: #ffffff;
+    --home-header-grad-1: #1c3a5e;
+    --home-header-grad-2: #0a1626;
+    --home-on-header: #ffffff;
+    --home-danger: #ff8a8a;
+    --home-shadow: rgba(0, 0, 0, 0.4);
+    --home-overlay-backdrop: rgba(5, 10, 18, 0.6);
+}
+
+/* Futurista — a distinct violet/magenta variant, not just a recolor of
+   Oscuro's navy/cyan, so all 4 options genuinely look different. */
+body.futuristic-mode{
+    --home-bg: #06040f;
+    --home-bg-grad-1: #3d1a78;
+    --home-bg-grad-2: #06040f;
+    --home-tabbar-bg: #0a0620;
+    --home-surface: #150c2e;
+    --home-surface-2: #2a1656;
+    --home-neutral-soft: #341a68;
+    --home-border: #4a2a8a;
+    --home-divider: #24123f;
+    --home-text-primary: #ffffff;
+    --home-text-secondary: #d9c9ff;
+    --home-text-tertiary: #b39ce8;
+    --home-text-muted: #8467c4;
+    --home-accent: #FF6EF0;
+    --home-accent-strong-1: #8B5CF6;
+    --home-accent-strong-2: #4C1D95;
+    --home-on-accent: #ffffff;
+    --home-header-grad-1: #4c1d95;
+    --home-header-grad-2: #100626;
+    --home-on-header: #ffffff;
+    --home-danger: #ff6b81;
+    --home-shadow: rgba(90, 30, 180, 0.35);
+    --home-overlay-backdrop: rgba(10, 4, 25, 0.7);
+}
+
 body{
     margin: 0;
     font-family: 'Poppins', system-ui, sans-serif;
-    background: #0b0d14;
-    color: #fff;
+    background: var(--home-bg);
+    color: var(--home-text-primary);
     min-height: 100vh;
 }
 
@@ -21,7 +148,7 @@ body{
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    background: radial-gradient(circle at 30% 0%, #2A3166, #0b0d14 60%);
+    background: radial-gradient(circle at 30% 0%, var(--home-bg-grad-1), var(--home-bg-grad-2) 60%);
     padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -39,7 +166,7 @@ body{
     border: none;
     border-radius: 50%;
     background: none;
-    color: #5b6b9e;
+    color: var(--home-text-muted);
     font-size: 1rem;
     cursor: pointer;
 }
@@ -83,8 +210,8 @@ body{
 }
 .home-client-logo-fallback[hidden]{ display: none; }
 .home-client-logo-fallback{
-    background: linear-gradient(135deg, #6C7CF0, #3A4BC9);
-    color: #fff;
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    color: var(--home-on-accent);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -93,7 +220,7 @@ body{
 .home-client-name{
     font-size: 0.72rem;
     font-weight: 700;
-    color: #9BA3C4;
+    color: var(--home-text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -103,9 +230,9 @@ body{
     align-items: center;
     gap: 0.3rem;
     flex-shrink: 0;
-    background: #171b2c;
-    border: 1px solid #232640;
-    color: #c7cce8;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-secondary);
     font-family: inherit;
     font-size: 0.66rem;
     font-weight: 600;
@@ -114,7 +241,7 @@ body{
     white-space: nowrap;
     cursor: pointer;
 }
-.home-pill-btn i:first-child{ color: #7FE1FF; font-size: 0.9rem; }
+.home-pill-btn i:first-child{ color: var(--home-accent); font-size: 0.9rem; }
 .home-pill-btn i:last-child{ font-size: 0.85rem; }
 .home-pill-btn-icon-only{ padding: 0.42rem 0.5rem; gap: 0.15rem; }
 .home-picker-wrap{ position: relative; flex-shrink: 0; }
@@ -126,12 +253,12 @@ body{
     max-width: 17rem;
     max-height: 60vh;
     overflow-y: auto;
-    background: #171b2c;
-    border: 1px solid #232640;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
     border-radius: 0.8rem;
     padding: 0.4rem;
     z-index: 20;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 30px var(--home-shadow);
 }
 .home-picker-dropdown[hidden]{ display: none; }
 .home-picker-section-label{
@@ -139,7 +266,7 @@ body{
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #5b6b9e;
+    color: var(--home-text-muted);
     padding: 0.45rem 0.6rem 0.25rem;
 }
 .home-picker-option{
@@ -149,7 +276,7 @@ body{
     width: 100%;
     background: none;
     border: none;
-    color: #c7cce8;
+    color: var(--home-text-secondary);
     font-family: inherit;
     font-size: 0.78rem;
     font-weight: 600;
@@ -158,19 +285,19 @@ body{
     cursor: pointer;
     text-align: left;
 }
-.home-picker-option i{ font-size: 1rem; color: #7FE1FF; flex-shrink: 0; }
-.home-picker-option.active{ background: #232640; color: #fff; }
+.home-picker-option i{ font-size: 1rem; color: var(--home-accent); flex-shrink: 0; }
+.home-picker-option.active{ background: var(--home-surface-2); color: var(--home-text-primary); }
 .home-picker-option input[type="checkbox"]{ width: 0.9rem; height: 0.9rem; flex-shrink: 0; }
-.home-picker-divider{ border-top: 1px solid #232640; margin: 0.3rem 0; }
-.home-picker-empty{ font-size: 0.74rem; color: #5b6b9e; padding: 0.5rem 0.6rem; }
+.home-picker-divider{ border-top: 1px solid var(--home-border); margin: 0.3rem 0; }
+.home-picker-empty{ font-size: 0.74rem; color: var(--home-text-muted); padding: 0.5rem 0.6rem; }
 .home-hamburger-btn{
     width: 2.1rem;
     height: 2.1rem;
     border-radius: 50%;
     flex-shrink: 0;
-    background: #171b2c;
-    border: 1px solid #232640;
-    color: #c7cce8;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-secondary);
     font-size: 1.2rem;
     display: flex;
     align-items: center;
@@ -182,12 +309,12 @@ body{
     top: 2.6rem;
     right: 0;
     width: 12rem;
-    background: #171b2c;
-    border: 1px solid #232640;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
     border-radius: 0.8rem;
     padding: 0.4rem;
     z-index: 20;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 30px var(--home-shadow);
 }
 .home-hamburger-menu[hidden]{ display: none; }
 .home-hamburger-menu button{
@@ -197,7 +324,7 @@ body{
     width: 100%;
     background: none;
     border: none;
-    color: #c7cce8;
+    color: var(--home-text-secondary);
     font-family: inherit;
     font-size: 0.78rem;
     font-weight: 600;
@@ -206,23 +333,23 @@ body{
     cursor: pointer;
     text-align: left;
 }
-.home-hamburger-menu button i{ font-size: 1.05rem; color: #7FE1FF; }
+.home-hamburger-menu button i{ font-size: 1.05rem; color: var(--home-accent); }
 .home-menu-submenu{ padding-left: 1.1rem; }
 .home-menu-submenu[hidden]{ display: none; }
 #home-menu-settings[aria-expanded="true"] .bx-chevron-down{ transform: rotate(180deg); }
-.home-hamburger-menu hr{ border: none; border-top: 1px solid #232640; margin: 0.3rem 0; }
-.home-hamburger-menu .home-menu-logout{ color: #ff8a8a; }
-.home-hamburger-menu .home-menu-logout i{ color: #ff8a8a; }
+.home-hamburger-menu hr{ border: none; border-top: 1px solid var(--home-border); margin: 0.3rem 0; }
+.home-hamburger-menu .home-menu-logout{ color: var(--home-danger); }
+.home-hamburger-menu .home-menu-logout i{ color: var(--home-danger); }
 .home-search-bar{
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: #171b2c;
-    border: 1px solid #232640;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
     border-radius: 1.2rem;
     padding: 0.55rem 0.9rem;
     margin-bottom: 0.9rem;
-    color: #5b6b9e;
+    color: var(--home-text-muted);
 }
 .home-search-bar[hidden]{ display: none; }
 .home-search-bar i{ font-size: 1rem; }
@@ -232,15 +359,15 @@ body{
     background: none;
     border: none;
     outline: none;
-    color: #fff;
+    color: var(--home-text-primary);
     font-family: inherit;
     font-size: 0.78rem;
 }
-.home-search-bar input::placeholder{ color: #5b6b9e; }
+.home-search-bar input::placeholder{ color: var(--home-text-muted); }
 .home-hello{
     margin: 0;
     font-size: 0.8rem;
-    color: #9BA3C4;
+    color: var(--home-text-tertiary);
 }
 .home-name{
     margin: 0.15rem 0 0;
@@ -254,7 +381,7 @@ body{
 .home-section-title{
     font-size: 0.78rem;
     font-weight: 700;
-    color: #c7cce8;
+    color: var(--home-text-secondary);
     margin: 0 0 0.7rem;
 }
 
@@ -264,8 +391,8 @@ body{
     gap: 0.7rem;
 }
 .home-tile{
-    background: #171b2c;
-    border: 1px solid #232640;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
     border-radius: 0.8rem;
     padding: 0.9rem 0.5rem;
     display: flex;
@@ -281,8 +408,8 @@ body{
     width: 2.2rem;
     height: 2.2rem;
     border-radius: 0.6rem;
-    background: linear-gradient(135deg, #6C7CF0, #3A4BC9);
-    color: #fff;
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    color: var(--home-on-accent);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -291,7 +418,7 @@ body{
 .home-tile span{
     font-size: 0.68rem;
     font-weight: 600;
-    color: #c7cce8;
+    color: var(--home-text-secondary);
     text-align: center;
     line-height: 1.25;
 }
@@ -302,7 +429,7 @@ body{
     align-items: center;
     gap: 0.6rem;
     padding: 2.4rem 1rem;
-    color: #5b6b9e;
+    color: var(--home-text-muted);
 }
 .home-empty[hidden]{ display: none; }
 .home-empty i{ font-size: 1.8rem; }
@@ -321,8 +448,8 @@ body{
     overflow-x: auto;
     scrollbar-width: none;
     padding: 0.7rem 0.5rem 0.5rem;
-    border-top: 1px solid #1c1f30;
-    background: #0d0f1a;
+    border-top: 1px solid var(--home-divider);
+    background: var(--home-tabbar-bg);
 }
 .home-tabbar::-webkit-scrollbar{ display: none; }
 .home-tab{
@@ -333,7 +460,7 @@ body{
     flex-shrink: 0;
     background: none;
     border: none;
-    color: #5b6b9e;
+    color: var(--home-text-muted);
     font-family: inherit;
     font-size: 0.6rem;
     font-weight: 600;
@@ -342,7 +469,7 @@ body{
 }
 .home-tab[hidden]{ display: none; }
 .home-tab i{ font-size: 1.1rem; transition: transform 0.15s ease; }
-.home-tab.active{ color: #7FE1FF; }
+.home-tab.active{ color: var(--home-accent); }
 /* A small lift on the active icon is the only "selected" cue — no
    background bubble/notch (tried, client asked for something much more
    subtle: "solo debe subir la curva ... muy ligeramente"). */
@@ -355,9 +482,9 @@ body{
     gap: 0.5rem;
     padding: 0.4rem 1rem calc(0.25rem + env(safe-area-inset-bottom, 0px)) 1.4rem;
     font-size: 0.64rem;
-    color: #5b6b9e;
-    background: #0b0d14;
-    border-top: 1px solid #1c1f30;
+    color: var(--home-text-muted);
+    background: var(--home-bg);
+    border-top: 1px solid var(--home-divider);
 }
 .home-breadcrumb-trail{
     display: flex;
@@ -367,7 +494,7 @@ body{
     min-width: 0;
 }
 .home-breadcrumb-trail[hidden]{ display: none; }
-.home-breadcrumb .current{ color: #c7cce8; font-weight: 700; }
+.home-breadcrumb .current{ color: var(--home-text-secondary); font-weight: 700; }
 .home-breadcrumb-trail i{ font-size: 0.68rem; }
 .home-breadcrumb-toggle{
     display: flex;
@@ -376,7 +503,7 @@ body{
     flex-shrink: 0;
     background: none;
     border: none;
-    color: #5b6b9e;
+    color: var(--home-text-muted);
     padding: 0.2rem;
     cursor: pointer;
 }
@@ -406,10 +533,10 @@ body{
     max-width: min(20rem, 100%);
     padding: 0.7rem 0.9rem 0.8rem;
     border-radius: 0.6rem;
-    background: #171b2c;
-    border: 1px solid #232640;
-    color: #fff;
-    box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.5);
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-primary);
+    box-shadow: 0 8px 20px -10px var(--home-shadow);
     opacity: 0;
     transform: translateX(1rem);
     transition: opacity 0.2s ease, transform 0.2s ease;
@@ -427,8 +554,8 @@ body{
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
-    background: linear-gradient(135deg, #6C7CF0, #3A4BC9);
+    color: var(--home-on-accent);
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
     font-size: 0.85rem;
 }
 .home-toast-message{
@@ -444,7 +571,7 @@ body{
     align-self: flex-start;
     border: none;
     background: transparent;
-    color: #5b6b9e;
+    color: var(--home-text-muted);
     cursor: pointer;
     padding: 0.1rem;
     display: flex;
@@ -455,7 +582,7 @@ body{
     bottom: 0;
     height: 3px;
     width: 100%;
-    background: #7FE1FF;
+    background: var(--home-accent);
     transition: width linear;
 }
 
@@ -466,7 +593,7 @@ body{
 .home-sheet-overlay{
     position: fixed;
     inset: 0;
-    background: rgba(5, 6, 12, 0.6);
+    background: var(--home-overlay-backdrop);
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -476,18 +603,18 @@ body{
 .home-sheet{
     width: 100%;
     max-width: 30rem;
-    background: #171b2c;
-    border: 1px solid #232640;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
     border-bottom: none;
     border-radius: 1.2rem 1.2rem 0 0;
     padding: 0.5rem 1.2rem calc(1.4rem + env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 -10px 30px var(--home-shadow);
 }
 .home-sheet-handle{
     width: 2.2rem;
     height: 0.25rem;
     border-radius: 0.2rem;
-    background: #2c2f4a;
+    background: var(--home-neutral-soft);
     margin: 0 auto 1rem;
 }
 .home-sheet-title{
@@ -497,11 +624,11 @@ body{
 }
 .home-sheet-subtitle{
     font-size: 0.74rem;
-    color: #9BA3C4;
+    color: var(--home-text-tertiary);
     margin: 0 0 1.1rem;
 }
 .home-ui-scale-preview{
-    background: #0b0d14;
+    background: var(--home-bg);
     border-radius: 0.9rem;
     padding: 1rem;
     text-align: center;
@@ -509,14 +636,14 @@ body{
 }
 .home-ui-scale-preview-text{
     display: inline-block;
-    color: #c7cce8;
+    color: var(--home-text-secondary);
     font-weight: 700;
     font-size: 1.4rem;
     transition: font-size 0.15s ease;
 }
 .home-ui-scale-preview-label{
     font-size: 0.66rem;
-    color: #5b6b9e;
+    color: var(--home-text-muted);
     margin: 0.4rem 0 0;
 }
 .home-ui-scale-stepper{
@@ -530,8 +657,8 @@ body{
     height: 3.2rem;
     border-radius: 50%;
     border: none;
-    background: #232640;
-    color: #fff;
+    background: var(--home-surface-2);
+    color: var(--home-text-primary);
     font-size: 1.3rem;
     display: flex;
     align-items: center;
@@ -540,10 +667,10 @@ body{
     flex-shrink: 0;
 }
 .home-ui-scale-btn:disabled{ opacity: 0.4; cursor: not-allowed; }
-.home-ui-scale-btn-accent{ background: #6C7CF0; }
+.home-ui-scale-btn-accent{ background: var(--home-accent-strong-1); color: var(--home-on-accent); }
 .home-ui-scale-value{ text-align: center; flex: 1; min-width: 0; }
 .home-ui-scale-label{ font-size: 1rem; font-weight: 700; margin: 0; }
-.home-ui-scale-percent{ font-size: 0.7rem; color: #5b6b9e; margin: 0.15rem 0 0; }
+.home-ui-scale-percent{ font-size: 0.7rem; color: var(--home-text-muted); margin: 0.15rem 0 0; }
 .home-ui-scale-dots{
     display: flex;
     justify-content: center;
@@ -555,21 +682,20 @@ body{
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 50%;
-    background: #2c2f4a;
+    background: var(--home-neutral-soft);
 }
 .home-ui-scale-dot.active{
     width: 0.55rem;
     height: 0.55rem;
-    background: #7FE1FF;
+    background: var(--home-accent);
 }
 
 /* Estilo — same bottom-sheet shell as "Tamaño del sistema", just a plain
-   options list instead of a stepper. Only "Claro" (no extra class, this
-   page's own default look) is a real visual change today — Oscuro/
-   Institucional/Futurista persist and toggle the same body classes
-   Dashboard.js's desktop switcher uses, ready for whichever CSS eventually
-   themes this page for them, but AppInicio.css itself doesn't define those
-   looks yet, so picking one won't visibly change anything until it does. */
+   options list instead of a stepper. All 4 options are real, distinct
+   themes (see the --home-* token blocks at the top of this file); the
+   swatch colors below are representative previews shown before picking,
+   not a constraint on the theme's actual (and for Institucional,
+   per-client) palette. */
 .home-style-list{
     display: flex;
     flex-direction: column;
@@ -586,21 +712,110 @@ body{
     border-radius: 0.8rem;
     cursor: pointer;
     text-align: left;
-    color: #c7cce8;
+    color: var(--home-text-secondary);
     font-family: inherit;
     font-size: 0.85rem;
     font-weight: 600;
 }
-.home-style-option.active{ background: #232640; color: #fff; }
+.home-style-option.active{ background: var(--home-surface-2); color: var(--home-text-primary); }
 .home-style-swatch{
     width: 1.8rem;
     height: 1.8rem;
     border-radius: 0.5rem;
     flex-shrink: 0;
-    border: 2px solid #3a3654;
+    border: 2px solid var(--home-border);
 }
-.home-style-option.active .home-style-swatch{ border-color: #7c76f0; }
-.home-style-check{ margin-left: auto; color: #7FE1FF; font-size: 1.1rem; }
+.home-style-option.active .home-style-swatch{ border-color: var(--home-accent-strong-1); }
+.home-style-check{ margin-left: auto; color: var(--home-accent); font-size: 1.1rem; }
+
+/* Configuración de Botones — a sheet of 4 rows (current value + chevron),
+   each opening a second sheet (#home-config-picker-overlay, reusing
+   .home-style-list's option look) with the real choices — same 2-level
+   flow as Sistema Web's own submenu + separate modal for each picker. */
+.home-config-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.home-config-row{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0.7rem 0.4rem;
+    border-radius: 0.6rem;
+    cursor: pointer;
+    text-align: left;
+    color: var(--home-text-secondary);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--home-divider);
+}
+.home-config-row:last-child{ border-bottom: none; }
+.home-config-row > i:first-child{ color: var(--home-accent); font-size: 1.05rem; flex-shrink: 0; }
+.home-config-row-label{ flex-shrink: 0; }
+.home-config-row-value{
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    color: var(--home-text-muted);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.home-config-row > i:last-child{ color: var(--home-text-muted); font-size: 1rem; flex-shrink: 0; }
+.home-config-picker-actions{ margin-top: 1rem; }
+.home-config-picker-save{
+    width: 100%;
+    padding: 0.7rem;
+    border: none;
+    border-radius: 0.8rem;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.home-style-option input[type="checkbox"]{ width: 0.95rem; height: 0.95rem; flex-shrink: 0; }
+
+/* Administración del Negocio — a full-screen nested list mirroring the same
+   admin-business menu.json submenu Sistema Web's top-bar Settings mirrors
+   (buildBusinessAdminSubmenuList): folders (no href of their own, e.g.
+   "Servicio Contratado") toggle their own nested list open/closed, leaves
+   (a real href, e.g. "Nuestros Centros Costos") link straight to that
+   existing desktop admin page — same cookie session, so it just works. */
+.home-admin-list{ display: flex; flex-direction: column; }
+.home-admin-list-nested{ display: flex; flex-direction: column; }
+.home-admin-list-nested[hidden]{ display: none; }
+.home-admin-list-toggle,
+.home-admin-list-link{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--home-divider);
+    padding: 0.8rem 1.2rem;
+    color: var(--home-text-secondary);
+    text-decoration: none;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+.home-admin-list-toggle i:first-child,
+.home-admin-list-link i:first-child{ color: var(--home-accent); font-size: 1.05rem; flex-shrink: 0; }
+.home-admin-list-toggle span,
+.home-admin-list-link span{ flex: 1; min-width: 0; }
+.home-admin-list-toggle i:last-child{ color: var(--home-text-muted); font-size: 1rem; transition: transform 0.15s ease; }
+.home-admin-list-toggle.open i:last-child{ transform: rotate(180deg); }
 
 /* Datos de Usuario / Datos de Usuario del Negocio — a full-screen
    sub-view instead of a bottom sheet: a longer, plain read-only list
@@ -609,7 +824,7 @@ body{
 .home-subscreen-overlay{
     position: fixed;
     inset: 0;
-    background: #0b0d14;
+    background: var(--home-bg);
     z-index: 30;
     display: flex;
     flex-direction: column;
@@ -626,11 +841,11 @@ body{
     align-items: center;
     gap: 0.8rem;
     padding: calc(1rem + env(safe-area-inset-top, 0px)) 1.2rem 1rem;
-    background: linear-gradient(160deg, #1c1a3a, #0e0d1a);
+    background: linear-gradient(160deg, var(--home-header-grad-1), var(--home-header-grad-2));
     flex-shrink: 0;
 }
 .home-subscreen-header h2{
-    color: #fff;
+    color: var(--home-on-header);
     font-size: 1rem;
     font-weight: 700;
     margin: 0;
@@ -640,9 +855,9 @@ body{
     height: 2.1rem;
     border-radius: 50%;
     flex-shrink: 0;
-    background: #171b2c;
-    border: 1px solid #232640;
-    color: #c7cce8;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-secondary);
     font-size: 1.1rem;
     display: flex;
     align-items: center;
@@ -660,15 +875,15 @@ body{
     align-items: baseline;
     gap: 1rem;
     padding: 0.8rem 0;
-    border-bottom: 1px solid #1c1f30;
+    border-bottom: 1px solid var(--home-divider);
     font-size: 0.82rem;
 }
 .home-subscreen-row > span:first-child{
-    color: #5b6b9e;
+    color: var(--home-text-muted);
     flex-shrink: 0;
 }
 .home-subscreen-row > span:last-child{
-    color: #fff;
+    color: var(--home-text-primary);
     text-align: right;
     font-weight: 600;
 }
@@ -694,15 +909,15 @@ body{
 }
 .home-chatbot-message-bot{
     align-self: flex-start;
-    background: #171b2c;
-    color: #c7cce8;
-    border: 1px solid #232640;
+    background: var(--home-surface);
+    color: var(--home-text-secondary);
+    border: 1px solid var(--home-border);
     border-bottom-left-radius: 0.3rem;
 }
 .home-chatbot-message-user{
     align-self: flex-end;
-    background: #6C7CF0;
-    color: #fff;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
     border-bottom-right-radius: 0.3rem;
 }
 .home-chatbot-input-row{
@@ -710,27 +925,27 @@ body{
     align-items: center;
     gap: 0.6rem;
     padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid #1c1f30;
+    border-top: 1px solid var(--home-divider);
     flex-shrink: 0;
 }
 .home-chatbot-input-row input{
     flex: 1;
     padding: 0.6rem 0.9rem;
-    border: 1px solid #232640;
+    border: 1px solid var(--home-border);
     border-radius: 1.2rem;
-    background: #171b2c;
-    color: #fff;
+    background: var(--home-surface);
+    color: var(--home-text-primary);
     font-size: 0.82rem;
 }
-.home-chatbot-input-row input:focus{ outline: none; border-color: #6C7CF0; }
+.home-chatbot-input-row input:focus{ outline: none; border-color: var(--home-accent-strong-1); }
 .home-chatbot-send{
     width: 2.3rem;
     height: 2.3rem;
     border-radius: 50%;
     flex-shrink: 0;
     border: none;
-    background: #6C7CF0;
-    color: #fff;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
     font-size: 1rem;
     display: flex;
     align-items: center;

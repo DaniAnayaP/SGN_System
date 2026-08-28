@@ -970,6 +970,8 @@
     "uiScaleSubtitle": "Ajusta el tamaño de texto e íconos de tu App.",
     "uiScalePreview": "Vista previa",
     "styleSubtitle": "Elige cómo se ve tu App.",
-    "messagesEmpty": "Todavía no tienes mensajes."
+    "messagesEmpty": "Todavía no tienes mensajes.",
+    "buttonConfigSubtitle": "Elige qué hace tu Botón de Salir y cuáles Departamento/Área/Centros de Costo se abren por defecto.",
+    "adminBusinessEmpty": "Todavía no hay nada configurado aquí."
   }
 }

@@ -137,16 +137,48 @@ hamburgerBtn.addEventListener('click', (event) => {
     hamburgerBtn.setAttribute('aria-expanded', String(willOpen));
 });
 document.addEventListener('click', closeHamburgerMenu);
-[
-    'home-menu-notifications', 'home-menu-bookmarks',
-    'home-menu-admin-business', 'home-menu-button-config',
-    'home-menu-database', 'home-menu-business-intelligence', 'home-menu-others',
-].forEach((id) => {
+['home-menu-notifications', 'home-menu-bookmarks', 'home-menu-others'].forEach((id) => {
     document.getElementById(id).addEventListener('click', () => {
         closeHamburgerMenu();
         showToast(t('home.comingSoon'));
     });
 });
+document.getElementById('home-menu-database').addEventListener('click', () => {
+    window.location.href = 'BaseDatos-Empresa.html';
+});
+document.getElementById('home-menu-business-intelligence').addEventListener('click', () => {
+    window.location.href = 'NegocioInteligente-Transacciones.html';
+});
+
+// "Administración del Negocio" / "Configuración de Botones" / "Base de
+// Datos" / "Negocio Inteligente" are gated by the same hasSettingsSubPermission
+// check Dashboard.js's top-bar Settings dropdown uses (mirrors
+// syncSettingsSubmenuVisibility) — hidden until effectiveGrants loads (see
+// syncSettingsMenuVisibility, called once initDeptAreaCc() resolves), same
+// "unrestricted client admin sees everything" bypass as every other
+// permission check on this page.
+function hasSettingsSubPermission(submenuId) {
+    if (isUnrestrictedClientAdmin()) return true;
+    if (effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-configuracion' && !g.submenuId)) return true;
+    return effectiveGrants.some((g) => g.submenuId === submenuId || (g.submenuId && g.submenuId.startsWith(`${submenuId}/`)));
+}
+
+function getAdminBusinessItem() {
+    const mainSection = menuData?.sections?.find((s) => s.id === 'main');
+    return mainSection?.items?.find((i) => i.id === 'admin-business') || null;
+}
+
+function syncSettingsMenuVisibility() {
+    const adminBusinessBtn = document.getElementById('home-menu-admin-business');
+    const buttonConfigBtn = document.getElementById('home-menu-button-config');
+    const databaseBtn = document.getElementById('home-menu-database');
+    const biBtn = document.getElementById('home-menu-business-intelligence');
+    const navigableAdminItems = (getAdminBusinessItem()?.submenu || []).filter((i) => !i.permissionOnly);
+    if (adminBusinessBtn) adminBusinessBtn.hidden = !hasSettingsSubPermission('btn-admin-negocio') || !navigableAdminItems.length;
+    if (buttonConfigBtn) buttonConfigBtn.hidden = !hasSettingsSubPermission('btn-config-botones');
+    if (databaseBtn) databaseBtn.hidden = !hasSettingsSubPermission('btn-base-datos');
+    if (biBtn) biBtn.hidden = !hasSettingsSubPermission('btn-negocio-inteligente');
+}
 
 // "Configuración" expands into its own sub-list (same 7 items Sistema Web's
 // settings-dropdown has) instead of being one more flat action — Language
@@ -261,10 +293,11 @@ uiScaleIncreaseBtn.addEventListener('click', () => { if (currentUiScaleLevel < U
 // --- "Estilo" bottom sheet ------------------------------------------------
 // Same 4 options and 'style' localStorage key as Dashboard.js's own desktop
 // switcher — picking one here is visible next time this same user opens
-// Sistema Web too, and vice versa. Only "Claro" (no extra body class, this
-// page's current look) actually changes anything visually today; the other
-// 3 toggle the same body classes Dashboard.js's applyStyle uses, wired and
-// ready, but AppInicio.css itself has no rules for those classes yet.
+// Sistema Web too, and vice versa. All 4 are real themes (see the --home-*
+// token blocks at the top of AppInicio.css); Institucional additionally
+// gets its colors overwritten at runtime from this client's own branding
+// (see applyInstitutionalTheme below), same source Dashboard.js's desktop
+// switcher already uses for its own Institutional theme.
 const STYLE_OPTIONS = [
     { id: 'light', labelKey: 'main.styleLight', swatch: '#ffffff' },
     { id: 'dark', labelKey: 'main.styleDark', swatch: '#0b0d14' },
@@ -273,6 +306,54 @@ const STYLE_OPTIONS = [
 ];
 const styleOverlay = document.getElementById('home-style-overlay');
 const styleListEl = document.getElementById('home-style-list');
+let clientColorPalette = null;
+let clientPrimaryColor = null;
+
+const INSTITUTIONAL_THEME_PROPS = [
+    '--home-bg', '--home-bg-grad-1', '--home-bg-grad-2', '--home-tabbar-bg',
+    '--home-surface', '--home-surface-2', '--home-neutral-soft',
+    '--home-border', '--home-divider',
+    '--home-text-primary', '--home-text-secondary', '--home-text-tertiary', '--home-text-muted',
+    '--home-accent', '--home-accent-strong-1', '--home-accent-strong-2', '--home-on-accent',
+    '--home-header-grad-1', '--home-header-grad-2', '--home-on-header',
+];
+
+function applyInstitutionalTheme() {
+    const palette = clientColorPalette
+        || (clientPrimaryColor && window.ColorPalette ? window.ColorPalette.suggestPalette(clientPrimaryColor) : null);
+    if (!palette) return;
+    // Set on body (not documentElement) — body.institutional-mode's own CSS
+    // rule redefines these same custom properties as a static fallback, and
+    // a class-selector rule on body always wins over an inline value
+    // inherited from an ancestor (html); setting the inline override on
+    // body itself is what makes it take precedence instead.
+    const root = document.body.style;
+    root.setProperty('--home-bg', palette.bg || '#0e1e33');
+    root.setProperty('--home-bg-grad-1', palette.bg || '#0e1e33');
+    root.setProperty('--home-bg-grad-2', palette.bg || '#0e1e33');
+    root.setProperty('--home-tabbar-bg', palette.bg || '#0e1e33');
+    root.setProperty('--home-surface', palette.surface || '#16304d');
+    root.setProperty('--home-surface-2', palette.surface || '#16304d');
+    root.setProperty('--home-neutral-soft', palette.surface || '#16304d');
+    root.setProperty('--home-border', palette.border || '#2a4d70');
+    root.setProperty('--home-divider', palette.border || '#2a4d70');
+    root.setProperty('--home-text-primary', palette.textPrimary || '#ffffff');
+    root.setProperty('--home-text-secondary', palette.textSecondary || '#c9d9e8');
+    root.setProperty('--home-text-tertiary', palette.textSecondary || '#c9d9e8');
+    root.setProperty('--home-text-muted', palette.textSecondary || '#c9d9e8');
+    root.setProperty('--home-accent', palette.accent || '#7fd1ff');
+    root.setProperty('--home-accent-strong-1', palette.accent || '#2f6fae');
+    root.setProperty('--home-accent-strong-2', palette.accent || '#2f6fae');
+    root.setProperty('--home-on-accent', palette.accentText || '#ffffff');
+    root.setProperty('--home-header-grad-1', palette.tooltipBg || '#1c3a5e');
+    root.setProperty('--home-header-grad-2', palette.tooltipBg || '#1c3a5e');
+    root.setProperty('--home-on-header', palette.tooltipText || '#ffffff');
+}
+
+function clearInstitutionalTheme() {
+    const root = document.body.style;
+    INSTITUTIONAL_THEME_PROPS.forEach((prop) => root.removeProperty(prop));
+}
 
 function getStoredStyle() {
     const stored = localStorage.getItem('style');
@@ -281,8 +362,11 @@ function getStoredStyle() {
 
 function applyStyle(style) {
     document.body.classList.remove('institutional-mode', 'dark-mode', 'futuristic-mode');
-    if (style === 'institutional') document.body.classList.add('institutional-mode');
-    else if (style === 'dark') document.body.classList.add('dark-mode');
+    clearInstitutionalTheme();
+    if (style === 'institutional') {
+        document.body.classList.add('institutional-mode');
+        applyInstitutionalTheme();
+    } else if (style === 'dark') document.body.classList.add('dark-mode');
     else if (style === 'futuristic') document.body.classList.add('futuristic-mode');
     renderStyleList(style);
 }
@@ -312,6 +396,243 @@ document.getElementById('home-menu-style').addEventListener('click', () => {
     styleOverlay.hidden = false;
 });
 styleOverlay.addEventListener('click', (event) => { if (event.target === styleOverlay) styleOverlay.hidden = true; });
+
+// --- "Administración del Negocio" (full-screen nested list) --------------
+// Same recursive shape as Dashboard.js's buildBusinessAdminSubmenuList: a
+// PURE folder (no href of its own, e.g. "Servicio Contratado") becomes its
+// own collapsed-by-default toggle; a leaf (real href) is always a plain
+// link, straight to that existing desktop admin page.
+function buildAdminBusinessList(items) {
+    const wrap = document.createElement('div');
+    (items || []).filter((i) => !i.permissionOnly).forEach((item) => {
+        const hasRealHref = item.href && item.href !== '#';
+        const navigableChildren = (item.submenu || []).filter((c) => !c.permissionOnly);
+        if (!hasRealHref && navigableChildren.length) {
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'home-admin-list-toggle';
+            toggle.innerHTML = `${item.icon ? `<i class="bx ${item.icon}" aria-hidden="true"></i>` : ''}<span>${t(item.labelKey, item.labelParams || {})}</span><i class="bx bx-chevron-down" aria-hidden="true"></i>`;
+            const nested = buildAdminBusinessList(navigableChildren);
+            nested.className = 'home-admin-list-nested';
+            nested.hidden = true;
+            nested.style.paddingLeft = '1rem';
+            toggle.addEventListener('click', () => {
+                nested.hidden = !nested.hidden;
+                toggle.classList.toggle('open', !nested.hidden);
+            });
+            wrap.appendChild(toggle);
+            wrap.appendChild(nested);
+        } else {
+            const a = document.createElement('a');
+            a.className = 'home-admin-list-link';
+            a.href = item.href || '#';
+            a.innerHTML = `${item.icon ? `<i class="bx ${item.icon}" aria-hidden="true"></i>` : ''}<span>${t(item.labelKey, item.labelParams || {})}</span>`;
+            wrap.appendChild(a);
+        }
+    });
+    return wrap;
+}
+
+const adminBusinessScreen = document.getElementById('home-admin-business-screen');
+document.getElementById('home-admin-business-back').addEventListener('click', () => { adminBusinessScreen.hidden = true; });
+document.getElementById('home-menu-admin-business').addEventListener('click', () => {
+    closeHamburgerMenu();
+    const listEl = document.getElementById('home-admin-business-list');
+    const emptyEl = document.getElementById('home-admin-business-empty');
+    const navigable = (getAdminBusinessItem()?.submenu || []).filter((i) => !i.permissionOnly);
+    listEl.innerHTML = '';
+    if (navigable.length) {
+        emptyEl.hidden = true;
+        listEl.appendChild(buildAdminBusinessList(navigable));
+    } else {
+        emptyEl.hidden = false;
+    }
+    adminBusinessScreen.hidden = false;
+});
+
+// --- "Configuración de Botones" (bottom sheet + a shared 2nd-level picker
+// sheet) — mirrors Sistema Web's own submenu: Exit Button mode (ask before
+// exiting vs. exit directly, localStorage 'logoutMode' only, same key
+// Dashboard.js reads) plus Departamento/Área/Centro de Costos DEFAULTS
+// (persisted server-side via PUT /api/me/defaults so they follow this user
+// to their next login, on top of applying immediately here). ---------------
+function getLogoutMode() {
+    return localStorage.getItem('logoutMode') === 'direct' ? 'direct' : 'confirm';
+}
+
+async function saveDefaults(partial) {
+    try {
+        await fetch('/api/me/defaults', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(partial),
+        });
+    } catch {
+        // Best-effort — the pick already applied locally either way.
+    }
+}
+
+function updateConfigRowValues() {
+    document.getElementById('home-config-exit-value').textContent =
+        getLogoutMode() === 'direct' ? t('main.logoutModeDirect') : t('main.logoutModeConfirm');
+    const dept = availableDepartments.find((d) => d.key === selectedDepartment);
+    document.getElementById('home-config-dept-value').textContent = dept ? t(dept.labelKey) : t('main.notSet');
+    const area = ((selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || []).find((a) => a.key === selectedArea);
+    document.getElementById('home-config-area-value').textContent = area ? t(area.labelKey, area.labelParams || {}) : t('main.notSet');
+    if (!sidebarCostCenters.length) {
+        document.getElementById('home-config-cc-value').textContent = t('main.notSet');
+    } else if (selectedCostCenterIds === 'all' || sidebarCostCenters.every((cc) => isCostCenterSelected(cc.id))) {
+        document.getElementById('home-config-cc-value').textContent = t('sidebar.costCentersAll');
+    } else {
+        document.getElementById('home-config-cc-value').textContent = String(
+            sidebarCostCenters.filter((cc) => isCostCenterSelected(cc.id)).length
+        );
+    }
+}
+
+const buttonConfigOverlay = document.getElementById('home-button-config-overlay');
+document.getElementById('home-menu-button-config').addEventListener('click', () => {
+    closeHamburgerMenu();
+    updateConfigRowValues();
+    buttonConfigOverlay.hidden = false;
+});
+buttonConfigOverlay.addEventListener('click', (event) => { if (event.target === buttonConfigOverlay) buttonConfigOverlay.hidden = true; });
+
+const configPickerOverlay = document.getElementById('home-config-picker-overlay');
+const configPickerTitle = document.getElementById('home-config-picker-title');
+const configPickerHint = document.getElementById('home-config-picker-hint');
+const configPickerList = document.getElementById('home-config-picker-list');
+const configPickerCcActions = document.getElementById('home-config-picker-cc-actions');
+const configPickerCcSaveBtn = document.getElementById('home-config-picker-cc-save');
+
+function buildConfigPickerOption(labelText, iconClass, isActive, onSelect) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `home-style-option${isActive ? ' active' : ''}`;
+    btn.innerHTML = `<i class="bx ${iconClass}" aria-hidden="true"></i><span>${labelText}</span>${isActive ? '<i class="bx bx-check home-style-check" aria-hidden="true"></i>' : ''}`;
+    btn.addEventListener('click', onSelect);
+    return btn;
+}
+
+function openExitModePicker() {
+    configPickerTitle.textContent = t('main.exitMenu');
+    configPickerHint.textContent = '';
+    configPickerCcActions.hidden = true;
+    configPickerList.innerHTML = '';
+    const current = getLogoutMode();
+    [
+        { id: 'confirm', labelKey: 'main.logoutModeConfirm', icon: 'bx-message-alt-question' },
+        { id: 'direct', labelKey: 'main.logoutModeDirect', icon: 'bx-log-out' },
+    ].forEach((opt) => {
+        configPickerList.appendChild(buildConfigPickerOption(t(opt.labelKey), opt.icon, opt.id === current, () => {
+            localStorage.setItem('logoutMode', opt.id);
+            updateConfigRowValues();
+            configPickerOverlay.hidden = true;
+        }));
+    });
+}
+
+function openDepartmentDefaultPicker() {
+    configPickerTitle.textContent = t('sidebar.department');
+    configPickerHint.textContent = t('main.defaultPickerDeptHint');
+    configPickerCcActions.hidden = true;
+    configPickerList.innerHTML = '';
+    availableDepartments.forEach((dept) => {
+        configPickerList.appendChild(buildConfigPickerOption(t(dept.labelKey), dept.icon, dept.key === selectedDepartment, () => {
+            selectedDepartment = dept.key;
+            localStorage.setItem('department', dept.key);
+            selectedArea = null;
+            localStorage.setItem('area', '');
+            renderDeptAreaDropdown();
+            updateDeptAreaLabel();
+            updateTabBarVisibility();
+            updateConfigRowValues();
+            saveDefaults({ department: dept.key, area: null });
+            configPickerOverlay.hidden = true;
+        }));
+    });
+}
+
+function openAreaDefaultPicker() {
+    configPickerTitle.textContent = t('sidebar.area');
+    configPickerCcActions.hidden = true;
+    configPickerList.innerHTML = '';
+    const areas = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+    if (!areas.length) {
+        configPickerHint.textContent = t('main.defaultPickerAreaNoDept');
+        return;
+    }
+    configPickerHint.textContent = t('main.defaultPickerAreaHint');
+    areas.forEach((area) => {
+        configPickerList.appendChild(buildConfigPickerOption(t(area.labelKey, area.labelParams || {}), area.icon, area.key === selectedArea, () => {
+            selectedArea = area.key;
+            localStorage.setItem('area', area.key);
+            renderDeptAreaDropdown();
+            updateDeptAreaLabel();
+            updateTabBarVisibility();
+            updateConfigRowValues();
+            saveDefaults({ area: area.key });
+            configPickerOverlay.hidden = true;
+        }));
+    });
+}
+
+function openCostCenterDefaultPicker() {
+    configPickerTitle.textContent = t('sidebar.costCenters');
+    configPickerHint.textContent = t('main.defaultPickerCcHint');
+    configPickerList.innerHTML = '';
+    if (!sidebarCostCenters.length) {
+        configPickerCcActions.hidden = true;
+        return;
+    }
+    configPickerCcActions.hidden = false;
+    const allLabel = document.createElement('label');
+    allLabel.className = 'home-style-option';
+    const allCheckbox = document.createElement('input');
+    allCheckbox.type = 'checkbox';
+    allCheckbox.checked = sidebarCostCenters.every((cc) => isCostCenterSelected(cc.id));
+    allCheckbox.addEventListener('change', () => {
+        configPickerList.querySelectorAll('input[type="checkbox"]:not(:first-child)').forEach((cb) => { cb.checked = allCheckbox.checked; });
+    });
+    const allSpan = document.createElement('span');
+    allSpan.textContent = t('sidebar.costCentersAll');
+    allLabel.append(allCheckbox, allSpan);
+    configPickerList.appendChild(allLabel);
+    sidebarCostCenters.forEach((cc) => {
+        const label = document.createElement('label');
+        label.className = 'home-style-option';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.ccId = cc.id;
+        checkbox.checked = isCostCenterSelected(cc.id);
+        checkbox.addEventListener('change', () => {
+            allCheckbox.checked = Array.from(configPickerList.querySelectorAll('input[data-cc-id]')).every((cb) => cb.checked);
+        });
+        const span = document.createElement('span');
+        span.textContent = `${cc.code} - ${cc.name}`;
+        label.append(checkbox, span);
+        configPickerList.appendChild(label);
+    });
+}
+
+configPickerCcSaveBtn.addEventListener('click', () => {
+    const boxes = Array.from(configPickerList.querySelectorAll('input[data-cc-id]'));
+    const checkedIds = boxes.filter((cb) => cb.checked).map((cb) => Number(cb.dataset.ccId));
+    selectedCostCenterIds = checkedIds.length === sidebarCostCenters.length ? 'all' : new Set(checkedIds);
+    persistCostCenterSelection();
+    renderCcDropdown();
+    updateCcLabel();
+    updateConfigRowValues();
+    saveDefaults({ costCenters: selectedCostCenterIds === 'all' ? 'all' : checkedIds });
+    configPickerOverlay.hidden = true;
+});
+
+document.getElementById('home-config-exit-btn').addEventListener('click', () => { openExitModePicker(); configPickerOverlay.hidden = false; });
+document.getElementById('home-config-dept-btn').addEventListener('click', () => { openDepartmentDefaultPicker(); configPickerOverlay.hidden = false; });
+document.getElementById('home-config-area-btn').addEventListener('click', () => { openAreaDefaultPicker(); configPickerOverlay.hidden = false; });
+document.getElementById('home-config-cc-btn').addEventListener('click', () => { openCostCenterDefaultPicker(); configPickerOverlay.hidden = false; });
+configPickerOverlay.addEventListener('click', (event) => { if (event.target === configPickerOverlay) configPickerOverlay.hidden = true; });
 
 // --- Datos de Usuario / Datos de Usuario del Negocio (full-screen) -------
 // Same /api/me/profile and /api/me/business-profile endpoints Dashboard.js's
@@ -761,6 +1082,7 @@ async function initDeptAreaCc() {
         renderCcDropdown();
         updateCcLabel();
         updateTabBarVisibility();
+        syncSettingsMenuVisibility();
     } catch (err) {
         console.error('AppInicio: failed to load department/area/cost-center data:', err);
     }
@@ -834,6 +1156,9 @@ async function loadClientBranding() {
             logoImg.hidden = false;
             logoFallback.hidden = true;
         }
+        clientColorPalette = branding.colorPalette || null;
+        clientPrimaryColor = branding.primaryColor || null;
+        if (getStoredStyle() === 'institutional') applyInstitutionalTheme();
     } catch {
         // Fallback icon + blank name already in the markup — nothing to do.
     }

@@ -223,6 +223,54 @@
         </div>
     </div>
 
+    <div class="home-sheet-overlay" id="home-button-config-overlay" hidden>
+        <div class="home-sheet" role="dialog" aria-modal="true" aria-labelledby="home-button-config-title">
+            <div class="home-sheet-handle"></div>
+            <h3 class="home-sheet-title" id="home-button-config-title" data-i18n="main.buttonConfig">Button Settings</h3>
+            <p class="home-sheet-subtitle" data-i18n="home.buttonConfigSubtitle">Choose what your Exit Button and default Department/Area/Cost Centers do.</p>
+            <div class="home-config-list">
+                <button type="button" class="home-config-row" id="home-config-exit-btn">
+                    <i class="bx bx-log-out" aria-hidden="true"></i>
+                    <span class="home-config-row-label" data-i18n="main.exitButton">Exit Button</span>
+                    <span class="home-config-row-value" id="home-config-exit-value">—</span>
+                    <i class="bx bx-chevron-right" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="home-config-row" id="home-config-dept-btn">
+                    <i class="bx bx-buildings" aria-hidden="true"></i>
+                    <span class="home-config-row-label" data-i18n="sidebar.department">Department</span>
+                    <span class="home-config-row-value" id="home-config-dept-value">—</span>
+                    <i class="bx bx-chevron-right" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="home-config-row" id="home-config-area-btn">
+                    <i class="bx bx-collection" aria-hidden="true"></i>
+                    <span class="home-config-row-label" data-i18n="sidebar.area">Area</span>
+                    <span class="home-config-row-value" id="home-config-area-value">—</span>
+                    <i class="bx bx-chevron-right" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="home-config-row" id="home-config-cc-btn">
+                    <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
+                    <span class="home-config-row-label" data-i18n="sidebar.costCenters">Cost Centers</span>
+                    <span class="home-config-row-value" id="home-config-cc-value">—</span>
+                    <i class="bx bx-chevron-right" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="home-sheet-overlay" id="home-config-picker-overlay" hidden>
+        <div class="home-sheet" role="dialog" aria-modal="true" aria-labelledby="home-config-picker-title">
+            <div class="home-sheet-handle"></div>
+            <h3 class="home-sheet-title" id="home-config-picker-title">—</h3>
+            <p class="home-sheet-subtitle" id="home-config-picker-hint"></p>
+            <div class="home-style-list" id="home-config-picker-list">
+                <!-- rendered at runtime -->
+            </div>
+            <div class="home-config-picker-actions" id="home-config-picker-cc-actions" hidden>
+                <button type="button" class="home-config-picker-save" id="home-config-picker-cc-save" data-i18n="admin.save">Save</button>
+            </div>
+        </div>
+    </div>
+
     <div class="home-subscreen-overlay" id="home-user-info-screen" hidden>
         <div class="home-subscreen">
             <div class="home-subscreen-header">
@@ -301,6 +349,24 @@
         </div>
     </div>
 
+    <div class="home-subscreen-overlay" id="home-admin-business-screen" hidden>
+        <div class="home-subscreen">
+            <div class="home-subscreen-header">
+                <button type="button" class="home-subscreen-back" id="home-admin-business-back" data-i18n-aria="admin.back" aria-label="Back">
+                    <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                </button>
+                <h2 data-i18n="menu.adminBusiness">Admin Business</h2>
+            </div>
+            <div class="home-subscreen-body">
+                <div class="home-admin-list" id="home-admin-business-list"></div>
+                <div class="home-empty" id="home-admin-business-empty" hidden>
+                    <i class="bx bx-folder-open" aria-hidden="true"></i>
+                    <p data-i18n="home.adminBusinessEmpty">Nothing to show here yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="home-subscreen-overlay" id="home-messages-screen" hidden>
         <div class="home-subscreen">
             <div class="home-subscreen-header">
@@ -334,6 +400,7 @@
         </div>
     </div>
 
+    <script src="ColorPalette.js"></script>
     <script src="AppInicio.js" defer></script>
 </body>
 </html>
