@@ -266,6 +266,14 @@ function freshDraftValues() {
     return values;
 }
 function startDraft() {
+    // Centro de Costos is required from creation (Control Interno) — rather
+    // than let them into the form and only discover it's stuck on that one
+    // field, block right here with the one thing they can actually act on:
+    // asking their coordinator to get one assigned.
+    if (!costCenters.length) {
+        showToast(t('home.cargaNoCostCenter'));
+        return;
+    }
     draft = { values: freshDraftValues() };
     openRecordId = null;
     view = 'draft';

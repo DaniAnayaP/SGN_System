@@ -134,7 +134,7 @@
             </button>
         </header>
 
-        <section class="home-section">
+        <section class="home-section" id="home-quick-access-section">
             <h2 class="home-section-title" data-i18n="home.quickAccess">Accesos rápidos</h2>
             <div class="home-tiles" id="home-tiles">
                 <!-- rendered at runtime from /api/business/app-screens -->
@@ -142,6 +142,26 @@
             <div class="home-empty" id="home-empty" hidden>
                 <i class="bx bx-mobile-alt" aria-hidden="true"></i>
                 <p data-i18n="home.emptyMessage">Todavía no hay pantallas de App asignadas a tu cuenta.</p>
+            </div>
+        </section>
+
+        <section class="home-section" id="home-category-section" hidden>
+            <div class="home-category-header">
+                <h2 class="home-section-title" id="home-category-title">—</h2>
+                <div class="home-category-view-toggle" id="home-category-view-toggle" hidden>
+                    <button type="button" class="home-category-view-btn" id="home-category-view-grid" data-i18n-aria="home.viewGrid" aria-label="Grid">
+                        <i class="bx bx-grid-alt" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="home-category-view-btn" id="home-category-view-list" data-i18n-aria="home.viewList" aria-label="List">
+                        <i class="bx bx-list-ul" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="home-tiles" id="home-category-tiles"></div>
+            <div class="home-category-list" id="home-category-list" hidden></div>
+            <div class="home-empty" id="home-category-empty" hidden>
+                <i class="bx bx-folder-open" aria-hidden="true"></i>
+                <p data-i18n="home.categoryEmpty">No hay pantallas disponibles en esta categoría.</p>
             </div>
         </section>
 

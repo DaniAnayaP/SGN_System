@@ -562,6 +562,7 @@
     "addUser": "Agregar usuario",
     "language": "Idioma",
     "style": "Estilo",
+    "screenViewToggle": "Vista de pantallas",
     "others": "Otros",
     "buttonConfig": "Configuración botones",
     "exitButton": "Botón Salir",
@@ -1017,6 +1018,13 @@
     "cargaHintTripDespues": "Kilometraje después de cargar",
     "cargaHintCosto": "Monto pagado en la carga",
     "cargaHintTicket": "Foto del ticket",
-    "cargaHintFoto": "Foto del odómetro"
+    "cargaHintFoto": "Foto del odómetro",
+    "cargaNoCostCenter": "No tienes un centro de costos asignado. Consulta con tu coordinador.",
+    "categoryEmpty": "No hay pantallas disponibles en esta categoría.",
+    "screenComingSoon": "Próximamente: {label}",
+    "screenOpening": "Abriendo {label}…",
+    "viewGrid": "Cuadrícula",
+    "viewList": "Lista",
+    "categorySoonTag": "Pronto"
   }
 }

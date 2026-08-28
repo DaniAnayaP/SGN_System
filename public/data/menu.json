@@ -114,6 +114,7 @@
                 { "id": "colFieldRuleAuthorization", "labelKey": "main.colFieldRuleAuthorization", "permissionOnly": true }
               ]
             },
+            { "id": "btn-vista-pantallas", "labelKey": "main.screenViewToggle", "icon": "bx-grid-alt", "href": "#", "permissionOnly": true },
             { "id": "btn-otros", "labelKey": "main.others", "icon": "bx-dots-horizontal-rounded", "href": "#", "permissionOnly": true }
           ]
         },

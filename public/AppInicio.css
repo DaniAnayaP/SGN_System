@@ -392,6 +392,7 @@ body{
     grid-template-columns: repeat(3, 1fr);
     gap: 0.7rem;
 }
+.home-tiles[hidden]{ display: none; }
 .home-tile{
     background: var(--home-surface);
     border: 1px solid var(--home-border);
@@ -424,6 +425,62 @@ body{
     text-align: center;
     line-height: 1.25;
 }
+
+/* "Pronto" tiles (menu.json pantallas with no real href yet) — same tile,
+   just dimmed with a corner tag, reused by both Accesos rápidos (never
+   actually needs this today, every curated App screen is real) and the
+   category screen picker below. */
+.home-tile{ position: relative; }
+.home-tile.soon{ opacity: 0.55; }
+.home-tile.soon .home-tile-icon{ background: var(--home-surface-2); color: var(--home-text-muted); }
+.home-tile-soon-tag{
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: var(--home-text-muted);
+    background: var(--home-bg);
+    border: 1px solid var(--home-border);
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.6rem;
+}
+
+/* Category screen picker (Catálogos/Operaciones/Administración/...) — tapping
+   a bottom-tab category shows the real pantallas menu.json grants this
+   user for the selected departamento/área here, in either grid (reuses
+   .home-tile above) or list form, whichever this user last picked (the
+   toggle itself only shows with the btn-vista-pantallas permission grant —
+   see syncSettingsMenuVisibility-style gating in AppInicio.js). */
+.home-category-header{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.7rem; }
+.home-category-header .home-section-title{ margin: 0; }
+.home-category-view-toggle{ display: flex; background: var(--home-surface); border: 1px solid var(--home-border); border-radius: 0.6rem; padding: 0.15rem; gap: 0.15rem; flex-shrink: 0; }
+.home-category-view-toggle[hidden]{ display: none; }
+.home-category-view-btn{ display: flex; align-items: center; justify-content: center; width: 1.8rem; height: 1.6rem; border-radius: 0.4rem; background: none; border: none; color: var(--home-text-muted); font-size: 0.95rem; cursor: pointer; }
+.home-category-view-btn.active{ background: var(--home-accent-strong-1); color: var(--home-on-accent); }
+.home-category-list{ display: flex; flex-direction: column; }
+.home-category-list[hidden]{ display: none; }
+.home-category-list-row{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--home-divider);
+    padding: 0.75rem 0.1rem;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+.home-category-list-row:last-child{ border-bottom: none; }
+.home-category-list-row.soon{ opacity: 0.55; }
+.home-category-list-icon{ width: 2rem; height: 2rem; border-radius: 0.55rem; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); color: var(--home-on-accent); }
+.home-category-list-row.soon .home-category-list-icon{ background: var(--home-surface-2); color: var(--home-text-muted); }
+.home-category-list-label{ flex: 1; min-width: 0; font-size: 0.78rem; font-weight: 600; color: var(--home-text-secondary); }
+.home-category-list-tag{ font-size: 0.6rem; font-weight: 700; color: var(--home-text-muted); background: var(--home-bg); border: 1px solid var(--home-border); padding: 0.1rem 0.45rem; border-radius: 0.6rem; flex-shrink: 0; }
+.home-category-list-chevron{ color: var(--home-text-muted); font-size: 1.1rem; flex-shrink: 0; }
 
 .home-empty{
     display: flex;

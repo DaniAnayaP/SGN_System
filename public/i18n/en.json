@@ -562,6 +562,7 @@
     "addUser": "Add user",
     "language": "Language",
     "style": "Style",
+    "screenViewToggle": "Screen view",
     "others": "Others",
     "buttonConfig": "Button Settings",
     "exitButton": "Exit Button",
@@ -1017,6 +1018,13 @@
     "cargaHintTripDespues": "Odometer reading after loading",
     "cargaHintCosto": "Amount paid for the loading",
     "cargaHintTicket": "Photo of the receipt",
-    "cargaHintFoto": "Photo of the odometer"
+    "cargaHintFoto": "Photo of the odometer",
+    "cargaNoCostCenter": "You don't have a cost center assigned. Check with your coordinator.",
+    "categoryEmpty": "No screens available in this category.",
+    "screenComingSoon": "Coming soon: {label}",
+    "screenOpening": "Opening {label}…",
+    "viewGrid": "Grid",
+    "viewList": "List",
+    "categorySoonTag": "Soon"
   }
 }

@@ -91,6 +91,15 @@ const WEB_SCREEN_PAGES = {
     'reglas-orden-llenado': { href: 'Business-ReglasOrden.html', icon: 'bx-link', color: '#B8860B' },
 };
 
+// menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
+// screen picker below (renderCategoryScreens) — only needed for pantallas
+// that have curated tile info; anything missing here just falls back to
+// its own menu.json href (the desktop page) with a generic icon.
+const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
+    'cat-operaciones-transporte-vol-combustible': 'registro-combustible',
+    'cat-operaciones-transporte-vol-carga-combustible': 'carga-combustible',
+};
+
 function renderTiles(screens) {
     const tilesEl = document.getElementById('home-tiles');
     const emptyEl = document.getElementById('home-empty');
@@ -1054,6 +1063,130 @@ function categoryHasGrantedScreen(cat) {
         pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.id}`)
     ));
 }
+// Same grant check as categoryHasGrantedScreen, but returning the actual
+// pantallas instead of a yes/no — this is what the category tab itself
+// renders once tapped (see renderCategoryScreens).
+function grantedScreensForCategory(cat) {
+    if (!selectedDepartment || !selectedArea) return [];
+    return (cat.submenu || []).filter((pantalla) => (
+        pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.id}`)
+    ));
+}
+// A pantalla with href "#" has no real screen yet (same "Próximamente"
+// honesty as every other stub in this app). One with a real href opens the
+// App-native page when one is curated (PANTALLA_ID_TO_WEB_SCREEN_KEY ->
+// WEB_SCREEN_PAGES), otherwise falls back to its own desktop page directly
+// (same cookie session, same pattern as Base de Datos/Negocio Inteligente).
+function resolvePantallaDestination(pantalla) {
+    if (!pantalla.href || pantalla.href === '#') return null;
+    const webScreenKey = PANTALLA_ID_TO_WEB_SCREEN_KEY[pantalla.id];
+    const page = webScreenKey ? WEB_SCREEN_PAGES[webScreenKey] : null;
+    return (page && page.href) || pantalla.href;
+}
+function pantallaTileInfo(pantalla) {
+    const webScreenKey = PANTALLA_ID_TO_WEB_SCREEN_KEY[pantalla.id];
+    return (webScreenKey && WEB_SCREEN_PAGES[webScreenKey]) || null;
+}
+
+// --- Category screen picker (Catálogos/Operaciones/Administración/...) ---
+// Tapping a bottom-tab category used to just show a "Coming soon" toast —
+// this renders the real pantallas menu.json grants this user for the
+// selected departamento/área instead, same tile look Accesos rápidos
+// already uses (or a compact list, whichever this user last picked). The
+// view-mode toggle itself only shows with the btn-vista-pantallas grant.
+let categoryViewMode = localStorage.getItem('categoryViewMode') === 'list' ? 'list' : 'grid';
+let activeCategoryId = null;
+const quickAccessSection = document.getElementById('home-quick-access-section');
+const categorySection = document.getElementById('home-category-section');
+const categoryTitleEl = document.getElementById('home-category-title');
+const categoryTilesEl = document.getElementById('home-category-tiles');
+const categoryListEl = document.getElementById('home-category-list');
+const categoryEmptyEl = document.getElementById('home-category-empty');
+const categoryViewToggle = document.getElementById('home-category-view-toggle');
+const categoryViewGridBtn = document.getElementById('home-category-view-grid');
+const categoryViewListBtn = document.getElementById('home-category-view-list');
+
+function onCategoryScreenTap(pantalla) {
+    const destination = resolvePantallaDestination(pantalla);
+    if (destination) window.location.href = destination;
+    else showToast(t('home.screenComingSoon', { label: t(pantalla.labelKey, pantalla.labelParams || {}) }));
+}
+
+function buildCategoryTile(pantalla) {
+    const soon = !resolvePantallaDestination(pantalla);
+    const info = pantallaTileInfo(pantalla);
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = `home-tile${soon ? ' soon' : ''}`;
+    tile.innerHTML = `
+        ${soon ? `<span class="home-tile-soon-tag">${t('home.categorySoonTag')}</span>` : ''}
+        <span class="home-tile-icon"${!soon && info ? ` style="background:${info.color}"` : ''}><i class="bx ${(!soon && info?.icon) || pantalla.icon || 'bx-window'}" aria-hidden="true"></i></span>
+        <span>${t(pantalla.labelKey, pantalla.labelParams || {})}</span>
+    `;
+    tile.addEventListener('click', () => onCategoryScreenTap(pantalla));
+    return tile;
+}
+function buildCategoryListRow(pantalla) {
+    const soon = !resolvePantallaDestination(pantalla);
+    const info = pantallaTileInfo(pantalla);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `home-category-list-row${soon ? ' soon' : ''}`;
+    row.innerHTML = `
+        <span class="home-category-list-icon"${!soon && info ? ` style="background:${info.color}"` : ''}><i class="bx ${(!soon && info?.icon) || pantalla.icon || 'bx-window'}" aria-hidden="true"></i></span>
+        <span class="home-category-list-label">${t(pantalla.labelKey, pantalla.labelParams || {})}</span>
+        ${soon ? `<span class="home-category-list-tag">${t('home.categorySoonTag')}</span>` : `<span class="home-category-list-chevron"><i class="bx bx-chevron-right" aria-hidden="true"></i></span>`}
+    `;
+    row.addEventListener('click', () => onCategoryScreenTap(pantalla));
+    return row;
+}
+
+function setCategoryViewMode(mode) {
+    categoryViewMode = mode;
+    localStorage.setItem('categoryViewMode', mode);
+    categoryViewGridBtn.classList.toggle('active', mode === 'grid');
+    categoryViewListBtn.classList.toggle('active', mode === 'list');
+    categoryTilesEl.hidden = mode !== 'grid';
+    categoryListEl.hidden = mode !== 'list';
+}
+categoryViewGridBtn.addEventListener('click', () => setCategoryViewMode('grid'));
+categoryViewListBtn.addEventListener('click', () => setCategoryViewMode('list'));
+
+function renderCategoryScreens(catId) {
+    activeCategoryId = catId;
+    const categories = effectiveAreaCategories();
+    const cat = categories.find((c) => c.id === catId);
+    const screens = cat ? grantedScreensForCategory(cat) : [];
+    categoryTitleEl.textContent = cat ? t(cat.labelKey, cat.labelParams || {}) : '';
+    categoryViewToggle.hidden = !hasSettingsSubPermission('btn-vista-pantallas');
+    categoryTilesEl.innerHTML = '';
+    categoryListEl.innerHTML = '';
+    if (!screens.length) {
+        categoryEmptyEl.hidden = false;
+        categoryTilesEl.hidden = true;
+        categoryListEl.hidden = true;
+        return;
+    }
+    categoryEmptyEl.hidden = true;
+    screens.forEach((pantalla) => {
+        categoryTilesEl.appendChild(buildCategoryTile(pantalla));
+        categoryListEl.appendChild(buildCategoryListRow(pantalla));
+    });
+    setCategoryViewMode(categoryViewMode);
+}
+
+function showQuickAccessSection() {
+    activeCategoryId = null;
+    quickAccessSection.hidden = false;
+    categorySection.hidden = true;
+    document.getElementById('home-header-greeting').hidden = false;
+}
+function showCategorySection(catId) {
+    quickAccessSection.hidden = true;
+    categorySection.hidden = false;
+    document.getElementById('home-header-greeting').hidden = true;
+    renderCategoryScreens(catId);
+}
 function updateTabBarVisibility() {
     const categories = effectiveAreaCategories();
     Object.entries(HOME_TAB_CATEGORY_IDS).forEach(([tabId, catId]) => {
@@ -1063,9 +1196,13 @@ function updateTabBarVisibility() {
         tab.hidden = !(selectedDepartment && selectedArea && cat && categoryHasGrantedScreen(cat));
     });
     // The active tab may have just been hidden by this same narrowing —
-    // fall back to Inicio rather than leaving a hidden tab "active".
+    // fall back to Inicio rather than leaving a hidden tab "active". If a
+    // category is still active and still visible, its own content may have
+    // just changed underneath it (a different área grants different
+    // pantallas) — refresh it in place.
     const activeTab = document.querySelector('.home-tab.active');
     if (activeTab && activeTab.hidden) document.getElementById('home-tab-inicio').click();
+    else if (activeCategoryId) renderCategoryScreens(activeCategoryId);
 }
 
 async function initDeptAreaCc() {
@@ -1174,7 +1311,14 @@ document.querySelectorAll('.home-tab').forEach((tab) => {
         document.querySelectorAll('.home-tab').forEach((other) => other.classList.remove('active'));
         tab.classList.add('active');
         breadcrumbCurrent.textContent = t(tab.dataset.breadcrumbKey);
-        if (tab.id !== 'home-tab-inicio') showToast(t('home.comingSoon'));
+        const catId = HOME_TAB_CATEGORY_IDS[tab.id];
+        if (tab.id === 'home-tab-inicio') showQuickAccessSection();
+        else if (catId) showCategorySection(catId);
+        else {
+            // Panel/Tablero — no App-native screen for these yet.
+            showQuickAccessSection();
+            showToast(t('home.comingSoon'));
+        }
     });
 });
 
