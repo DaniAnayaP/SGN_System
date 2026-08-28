@@ -332,6 +332,32 @@ db.exec(`
         created_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Carga Combustible (Operaciones > Transporte Volumen, sibling of
+    -- Registro Combustible): one row per fuel loading event. Only the
+    -- identifying fields (record_date/load_site/operator/coordinator/
+    -- eco_unit/centro_costos) are required at creation ("+ Nuevo Registro");
+    -- the trip-km/cost fields (each with its own photo/ticket evidence) are
+    -- filled in later via inline edit, same convention as fuel_records.
+    CREATE TABLE IF NOT EXISTS fuel_loading_records (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id               INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id                   TEXT NOT NULL,
+        record_number           INTEGER NOT NULL,
+        record_date             TEXT NOT NULL,
+        load_site               TEXT NOT NULL,
+        operator                TEXT NOT NULL,
+        coordinator             TEXT NOT NULL,
+        eco_unit                TEXT NOT NULL,
+        centro_costos           TEXT NOT NULL DEFAULT '',
+        trip_before             REAL NOT NULL DEFAULT 0,
+        trip_before_evidence    TEXT NOT NULL DEFAULT '',
+        trip_after              REAL NOT NULL DEFAULT 0,
+        trip_after_evidence     TEXT NOT NULL DEFAULT '',
+        total_cost              REAL NOT NULL DEFAULT 0,
+        total_cost_evidence     TEXT NOT NULL DEFAULT '',
+        created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de
     -- Personal): one row per worker registration. Only full_name/position/
     -- start_date/department are required at creation; area/email/phone are
@@ -1578,6 +1604,7 @@ function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fie
 const TABLE_GRANT_PATHS = {
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
+    'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
     'mi-recurso-humano': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-operaciones/cat-operaciones-rrhh-mi-recurso-humano' },
     'transacciones-inteligentes': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-transacciones' },
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
@@ -2227,6 +2254,56 @@ function updateFuelRecord(id, clientId, patch) {
 
 function deleteFuelRecord(id, clientId) {
     db.prepare('DELETE FROM fuel_records WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// --- Query helpers: Carga Combustible (fuel_loading_records) ---------------
+function listFuelLoadingRecords(clientId) {
+    return db.prepare('SELECT * FROM fuel_loading_records WHERE client_id = ? ORDER BY record_number ASC').all(clientId);
+}
+
+function getFuelLoadingRecordById(id, clientId) {
+    return db.prepare('SELECT * FROM fuel_loading_records WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function createFuelLoadingRecord({ clientId, date, loadSite, operator, coordinator, ecoUnit, centroCostos }) {
+    const recordNumber = db
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fuel_loading_records WHERE client_id = ?')
+        .get(clientId).n;
+    const result = db
+        .prepare(`
+            INSERT INTO fuel_loading_records (client_id, db_id, record_number, record_date, load_site, operator, coordinator, eco_unit, centro_costos)
+            VALUES (@clientId, @dbId, @recordNumber, @date, @loadSite, @operator, @coordinator, @ecoUnit, @centroCostos)
+        `)
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, date, loadSite, operator, coordinator, ecoUnit, centroCostos: centroCostos || '' });
+    return getFuelLoadingRecordById(result.lastInsertRowid, clientId);
+}
+
+const FUEL_LOADING_PATCHABLE_FIELDS = {
+    tripBefore: { column: 'trip_before', fieldKey: 'main.colCargaTripAntes' },
+    tripBeforeEvidence: { column: 'trip_before_evidence', fieldKey: 'main.colCargaTripAntesEvidencia' },
+    tripAfter: { column: 'trip_after', fieldKey: 'main.colCargaTripDespues' },
+    tripAfterEvidence: { column: 'trip_after_evidence', fieldKey: 'main.colCargaTripDespuesEvidencia' },
+    totalCost: { column: 'total_cost', fieldKey: 'main.colCargaCostoTotal' },
+    totalCostEvidence: { column: 'total_cost_evidence', fieldKey: 'main.colCargaCostoTotalEvidencia' },
+};
+
+function updateFuelLoadingRecord(id, clientId, patch) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(FUEL_LOADING_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE fuel_loading_records SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getFuelLoadingRecordById(id, clientId);
+}
+
+function deleteFuelLoadingRecord(id, clientId) {
+    db.prepare('DELETE FROM fuel_loading_records WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
 const SYSTEM_COLUMN_MONTH_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -3004,6 +3081,7 @@ function deletePlan(id) {
 const WEB_SCREEN_CATALOG = [
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
+    { key: 'carga-combustible', labelKey: 'menu.opTransVolCargaCombustible' },
     { key: 'mi-recurso-humano', labelKey: 'menu.opRrhhMiRecursoHumano' },
     { key: 'transacciones-inteligentes', labelKey: 'menu.smartBusinessTransactions' },
     { key: 'reportes-programados', labelKey: 'menu.scheduledReportsScreen' },
@@ -4001,6 +4079,12 @@ module.exports = {
     createFuelRecord,
     updateFuelRecord,
     deleteFuelRecord,
+    listFuelLoadingRecords,
+    getFuelLoadingRecordById,
+    createFuelLoadingRecord,
+    FUEL_LOADING_PATCHABLE_FIELDS,
+    updateFuelLoadingRecord,
+    deleteFuelLoadingRecord,
     getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,

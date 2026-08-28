@@ -107,6 +107,12 @@ const {
     createFuelRecord,
     updateFuelRecord,
     deleteFuelRecord,
+    listFuelLoadingRecords,
+    getFuelLoadingRecordById,
+    createFuelLoadingRecord,
+    FUEL_LOADING_PATCHABLE_FIELDS,
+    updateFuelLoadingRecord,
+    deleteFuelLoadingRecord,
     getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,
@@ -2621,6 +2627,102 @@ app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
         recordLabel: existing.eco_unit, action: 'delete', changedBy: req.user.name,
     });
     deleteFuelRecord(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
+// --- Carga Combustible (Operaciones > Transporte Volumen, sibling of ------
+// Registro Combustible) — same shape/permission model as fuel-records above,
+// just its own table/fields (see FUEL_LOADING_PATCHABLE_FIELDS in db.js).
+const FUEL_LOADING_AREA_LABEL = 'Transporte Volumen';
+const FUEL_LOADING_MODULE_LABEL = 'Cadena de Suministro';
+const FUEL_LOADING_SCREEN_LABEL = 'Carga Combustible';
+
+function mapFuelLoadingRecord(row, pendingByRecord, companyName) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        dbId: row.db_id,
+        recordNumber: row.record_number,
+        date: row.record_date,
+        loadSite: row.load_site,
+        operator: row.operator,
+        coordinator: row.coordinator,
+        ecoUnit: row.eco_unit,
+        tripBefore: row.trip_before,
+        tripBeforeEvidence: row.trip_before_evidence,
+        tripAfter: row.trip_after,
+        tripAfterEvidence: row.trip_after_evidence,
+        totalCost: row.total_cost,
+        totalCostEvidence: row.total_cost_evidence,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: FUEL_LOADING_AREA_LABEL,
+            modulo: FUEL_LOADING_MODULE_LABEL,
+            pantalla: FUEL_LOADING_SCREEN_LABEL,
+            centroCostos: row.centro_costos,
+            createdAt: row.created_at,
+        }),
+    };
+}
+
+app.get('/api/business/fuel-loading-records', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'carga-combustible');
+    const client = getClientById(req.user.clientId);
+    res.json({ records: listFuelLoadingRecords(req.user.clientId).map((r) => mapFuelLoadingRecord(r, pendingByRecord, client?.company_name)) });
+});
+
+app.post('/api/business/fuel-loading-records', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { date, loadSite, operator, coordinator, ecoUnit, centroCostos } = req.body || {};
+    if (!date || !loadSite?.trim() || !operator?.trim() || !coordinator?.trim() || !ecoUnit?.trim()) {
+        return res.status(400).json({ message: 'date, loadSite, operator, coordinator and ecoUnit are required.' });
+    }
+    if (!centroCostos?.trim()) {
+        return res.status(400).json({ message: 'centroCostos is required.' });
+    }
+    const record = createFuelLoadingRecord({
+        clientId: req.user.clientId,
+        date,
+        loadSite: loadSite.trim(),
+        operator: operator.trim(),
+        coordinator: coordinator.trim(),
+        ecoUnit: ecoUnit.trim(),
+        centroCostos: (centroCostos || '').trim(),
+    });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: record.id,
+        recordLabel: record.eco_unit, action: 'create', changedBy: req.user.name,
+    });
+    const client = getClientById(req.user.clientId);
+    res.status(201).json({ record: mapFuelLoadingRecord(record, null, client?.company_name) });
+});
+
+app.patch('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
+    const patch = req.body || {};
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FUEL_LOADING_PATCHABLE_FIELDS, 'carga-combustible', existing.eco_unit, {
+        tripBeforeEvidence: (v) => (v ? '[imagen]' : ''),
+        tripAfterEvidence: (v) => (v ? '[imagen]' : ''),
+        totalCostEvidence: (v) => (v ? '[imagen]' : ''),
+    });
+    const record = updateFuelLoadingRecord(req.params.id, req.user.clientId, appliedPatch);
+    const client = getClientById(req.user.clientId);
+    res.json({ record: mapFuelLoadingRecord(record, null, client?.company_name), pendingFields, rejectedFields });
+});
+
+app.delete('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: existing.id,
+        recordLabel: existing.eco_unit, action: 'delete', changedBy: req.user.name,
+    });
+    deleteFuelLoadingRecord(req.params.id, req.user.clientId);
     res.status(204).end();
 });
 

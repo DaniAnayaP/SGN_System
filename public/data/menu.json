@@ -291,6 +291,55 @@
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
           ]
         },
+        {
+          "id": "cat-operaciones-transporte-vol-carga-combustible", "labelKey": "menu.opTransVolCargaCombustible", "icon": "bx-gas-pump", "href": "OpTransVolCargaCombustible.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-carga-operador", "labelKey": "menu.classCargaOperador", "isClassification": true,
+              "submenu": [
+                { "id": "colCargaFechaRegistro", "labelKey": "main.colCargaFechaRegistro", "permissionOnly": true },
+                { "id": "colCargaSitio", "labelKey": "main.colCargaSitio", "permissionOnly": true },
+                { "id": "colCargaOperador", "labelKey": "main.colCargaOperador", "permissionOnly": true },
+                { "id": "colCargaCoordinador", "labelKey": "main.colCargaCoordinador", "permissionOnly": true },
+                { "id": "colCargaEcoUnidad", "labelKey": "main.colCargaEcoUnidad", "permissionOnly": true },
+                { "id": "colCargaTripAntes", "labelKey": "main.colCargaTripAntes", "permissionOnly": true },
+                { "id": "colCargaTripAntesEvidencia", "labelKey": "main.colCargaTripAntesEvidencia", "permissionOnly": true },
+                { "id": "colCargaTripDespues", "labelKey": "main.colCargaTripDespues", "permissionOnly": true },
+                { "id": "colCargaTripDespuesEvidencia", "labelKey": "main.colCargaTripDespuesEvidencia", "permissionOnly": true },
+                { "id": "colCargaCostoTotal", "labelKey": "main.colCargaCostoTotal", "permissionOnly": true },
+                { "id": "colCargaCostoTotalEvidencia", "labelKey": "main.colCargaCostoTotalEvidencia", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
+          ]
+        },
         { "id": "cat-operaciones-transporte-vol-ingresos", "labelKey": "menu.opTransVolIngresos", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-gastos", "labelKey": "menu.opTransVolGastos", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-inventario", "labelKey": "menu.opTransVolInventario", "icon": "bx-window", "href": "#" }

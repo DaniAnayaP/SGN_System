@@ -20,6 +20,7 @@ let rules = [];
 // way a hand-maintained column list would.
 const DATA_TABLE_PAGES = [
     { tableKey: 'registro-combustible', labelKey: 'menu.opTransVolCombustible', page: 'OpTransVolCombustible.html' },
+    { tableKey: 'carga-combustible', labelKey: 'menu.opTransVolCargaCombustible', page: 'OpTransVolCargaCombustible.html' },
     { tableKey: 'centros-costo', labelKey: 'business.costCentersTitle', page: 'Business-CentrosCosto.html' },
 ];
 
