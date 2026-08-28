@@ -317,8 +317,7 @@ body{
     box-shadow: 0 10px 30px var(--home-shadow);
 }
 .home-hamburger-menu[hidden]{ display: none; }
-.home-hamburger-menu button,
-.home-hamburger-menu a{
+.home-hamburger-menu button{
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -326,7 +325,6 @@ body{
     background: none;
     border: none;
     color: var(--home-text-secondary);
-    text-decoration: none;
     font-family: inherit;
     font-size: 0.78rem;
     font-weight: 600;
@@ -335,8 +333,7 @@ body{
     cursor: pointer;
     text-align: left;
 }
-.home-hamburger-menu button i,
-.home-hamburger-menu a i{ font-size: 1.05rem; color: var(--home-accent); }
+.home-hamburger-menu button i{ font-size: 1.05rem; color: var(--home-accent); }
 .home-menu-submenu{ padding-left: 1.1rem; }
 .home-menu-submenu[hidden]{ display: none; }
 #home-menu-settings[aria-expanded="true"] .bx-chevron-down,

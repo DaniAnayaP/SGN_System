@@ -161,6 +161,17 @@ function wireMenuGroupToggle(toggleId, submenuId) {
 wireMenuGroupToggle('home-menu-database', 'home-database-submenu');
 wireMenuGroupToggle('home-menu-business-intelligence', 'home-business-intelligence-submenu');
 
+// Their own screens aren't built for the App yet (Base Datos Global /
+// Transacciones Inteligentes de Negocio are desktop-only for now) — so
+// unlike Administración del Negocio's leaves, these show "Próximamente"
+// instead of navigating to Sistema Web's page.
+['home-database-company-item', 'home-business-intelligence-item'].forEach((id) => {
+    document.getElementById(id).addEventListener('click', () => {
+        closeHamburgerMenu();
+        showToast(t('home.comingSoon'));
+    });
+});
+
 // "Administración del Negocio" / "Configuración de Botones" / "Base de
 // Datos" / "Negocio Inteligente" are gated by the same hasSettingsSubPermission
 // check Dashboard.js's top-bar Settings dropdown uses (mirrors
