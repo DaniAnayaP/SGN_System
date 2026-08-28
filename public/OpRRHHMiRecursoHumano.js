@@ -168,6 +168,10 @@ async function loadJobPositions() {
         jobPositions = [];
     }
 }
+// Option value is the Puesto's id (not its name) -- createHrWorker needs the
+// real id to link job_position_id (see db.js), which is what Roles' own
+// per-Puesto permissions key off. position (the frozen text label sent
+// alongside it) is still derived from this same selection at save time.
 function populateJobPositionSelect(select) {
     select.innerHTML = '';
     const placeholder = document.createElement('option');
@@ -176,7 +180,7 @@ function populateJobPositionSelect(select) {
     select.appendChild(placeholder);
     jobPositions.forEach((jp) => {
         const opt = document.createElement('option');
-        opt.value = jp.name;
+        opt.value = jp.id;
         opt.textContent = jp.name;
         select.appendChild(opt);
     });
@@ -542,7 +546,7 @@ function closeNewRecordModal() {
 // openNewRecordModal, which re-runs every time the modal opens) so the
 // listener never stacks duplicates.
 positionInput.addEventListener('change', () => {
-    const jp = jobPositions.find((p) => p.name === positionInput.value);
+    const jp = jobPositions.find((p) => String(p.id) === positionInput.value);
     const allowedIds = jobPositionCostCenterIds(jp);
     const currentValue = costCenterSelect.value ? Number(costCenterSelect.value) : null;
     const keepValue = currentValue && (!allowedIds || allowedIds.includes(currentValue)) ? currentValue : null;
@@ -573,6 +577,8 @@ async function saveNewRecord() {
     }
     newRecordError.hidden = true;
     newRecordSaveBtn.disabled = true;
+    const jobPositionId = Number(positionInput.value) || null;
+    const selectedJobPosition = jobPositions.find((p) => p.id === jobPositionId);
     try {
         const res = await fetch('/api/business/hr-workers', {
             method: 'POST',
@@ -582,7 +588,8 @@ async function saveNewRecord() {
                 givenNames: givenNamesInput.value.trim(),
                 surnames: surnamesInput.value.trim(),
                 email: emailInput.value.trim(),
-                position: positionInput.value.trim(),
+                position: selectedJobPosition?.name || '',
+                jobPositionId,
                 startDate: startDateInput.value,
                 departments,
                 costCenterId: costCenterSelect.value ? Number(costCenterSelect.value) : null,

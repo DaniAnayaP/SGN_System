@@ -63,13 +63,16 @@ const {
     getCostCenterById,
     createCostCenter,
     updateCostCenter,
+    updateCostCenterNickname,
     setCostCenterStatus,
     listCountries,
     listStates,
+    listMunicipalities,
     listLocalities,
     listStreets,
     createCountry,
     createState,
+    createMunicipality,
     createLocality,
     createStreet,
     listFieldFillRules,
@@ -196,22 +199,15 @@ const {
     getUserProfileById,
     getUserBusinessProfileById,
     getUserEffectiveGrants,
-    getUserProfileGrants,
+    getUserJobPositionGrants,
     getUserDefaults,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,
-    listProfiles,
-    getProfileById,
-    createProfile,
-    updateProfile,
-    deleteProfile,
-    getProfileGrants,
-    setProfileGrants,
+    getJobPositionGrants,
+    setJobPositionGrants,
     getUserGrants,
     setUserGrants,
-    getUserProfiles,
-    setUserProfiles,
 } = require('./db');
 
 const app = express();
@@ -855,9 +851,10 @@ app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
 
 // Read-only support views: lets GEIPSA see a client's own team (Business-
 // Usuarios list, minus the auto-provisioned admin) and one user's actual
-// access (profiles + extra grants + the effective union of both) without
-// needing that client's own login — useful for diagnosing "I granted
-// everything but the buttons still don't show" style reports.
+// access (their Puesto's default grants + extra grants + the effective
+// union of both) without needing that client's own login — useful for
+// diagnosing "I granted everything but the buttons still don't show" style
+// reports.
 app.get('/api/admin/clients/:id/business-users', requireAuth, requireAdmin, (req, res) => {
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
@@ -870,7 +867,7 @@ app.get('/api/admin/clients/:id/business-users/:userId/access', requireAuth, req
     const user = getUserById(req.params.userId, req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found.' });
     res.json({
-        profiles: getUserProfiles(req.params.userId),
+        jobPositionGrants: getUserJobPositionGrants(req.params.userId),
         extraGrants: getUserGrants(req.params.userId),
         effectiveGrants: getUserEffectiveGrants(req.params.userId),
     });
@@ -1555,45 +1552,25 @@ app.patch('/api/business/users/:id', requireAuth, requireClientAdmin, (req, res)
 // Administración del Negocio — hence the 403s below on every route in this
 // file that would otherwise let a client touch that one user's
 // profiles/grants.
-app.get('/api/business/users/:id/profiles', requireAuth, requireClientAdmin, (req, res) => {
-    const user = getUserById(req.params.id, req.user.clientId);
-    if (!user) return res.status(404).json({ message: 'User not found.' });
-    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
-    res.json({ profiles: getUserProfiles(req.params.id) });
-});
-
-app.put('/api/business/users/:id/profiles', requireAuth, requireClientAdmin, (req, res) => {
-    const user = getUserById(req.params.id, req.user.clientId);
-    if (!user) return res.status(404).json({ message: 'User not found.' });
-    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
-    const { profileIds } = req.body || {};
-    if (!Array.isArray(profileIds)) {
-        return res.status(400).json({ message: 'profileIds must be an array.' });
-    }
-    // Every profileId must belong to this same client — otherwise a client
-    // admin could assign another client's profile by guessing its id.
-    const validIds = profileIds.filter((pid) => getProfileById(pid, req.user.clientId));
-    res.json({ profiles: setUserProfiles(req.params.id, validIds) });
-});
-
 // Self-service version of the route below -- any authenticated business
 // user can check their OWN active permissions ("Servicio Contratado" ->
 // "Mis Accesos y Permisos"), no admin grant required, since it's their own
-// data. Same profile + extra shape "Permisos Activados" already uses.
+// data. Same Puesto + extra shape "Permisos Activados" already uses.
 app.get('/api/business/me/grants', requireAuth, (req, res) => {
-    res.json({ grants: getUserGrants(req.user.sub), profileGrants: getUserProfileGrants(req.user.sub) });
+    res.json({ grants: getUserGrants(req.user.sub), jobPositionGrants: getUserJobPositionGrants(req.user.sub) });
 });
 
 app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
     if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
-    // grants = the extra layer this screen's own edit modal manages;
-    // profileGrants = everything this user already gets from their assigned
-    // profile(s) -- surfaced here too so "Permisos Activados" (read-only)
-    // can show the full effective picture (profile + extra) without a
-    // second round trip.
-    res.json({ grants: getUserGrants(req.params.id), profileGrants: getUserProfileGrants(req.params.id) });
+    // grants = "Permisos Adicionales", the extra layer this screen's own
+    // edit modal manages; jobPositionGrants = everything this user already
+    // gets by default from their own Puesto de Trabajo (see Roles) --
+    // surfaced here too so "Permisos Activados" (read-only) can show the
+    // full effective picture (Puesto + adicionales) without a second round
+    // trip.
+    res.json({ grants: getUserGrants(req.params.id), jobPositionGrants: getUserJobPositionGrants(req.params.id) });
 });
 
 app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
@@ -1606,44 +1583,24 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     res.json({ grants: setUserGrants(req.params.id, grants) });
 });
 
-app.get('/api/business/profiles', requireAuth, requireClientAdmin, (req, res) => {
-    res.json({ profiles: listProfiles(req.user.clientId) });
+// Roles: what a Puesto de Trabajo grants by default to anyone hired into it
+// (see job_position_grants, hr_workers.job_position_id) -- replaces the old
+// freely-named Perfiles entirely; the catalog itself (create/rename/
+// deactivate a Puesto) is still managed from Business-PuestosTrabajo.html /
+// GET-POST-PATCH-DELETE /api/business/job-positions above.
+app.get('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getJobPositionById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Job position not found.' });
+    res.json({ grants: getJobPositionGrants(req.params.id) });
 });
 
-app.post('/api/business/profiles', requireAuth, requireClientAdmin, (req, res) => {
-    const { name, description } = req.body || {};
-    if (!name) return res.status(400).json({ message: 'name is required.' });
-    res.status(201).json({ profile: createProfile({ clientId: req.user.clientId, name, description }) });
-});
-
-app.patch('/api/business/profiles/:id', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getProfileById(req.params.id, req.user.clientId);
-    if (!existing) return res.status(404).json({ message: 'Profile not found.' });
-    const { name, description } = req.body || {};
-    if (!name) return res.status(400).json({ message: 'name is required.' });
-    res.json({ profile: updateProfile(req.params.id, req.user.clientId, { name, description }) });
-});
-
-app.delete('/api/business/profiles/:id', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getProfileById(req.params.id, req.user.clientId);
-    if (!existing) return res.status(404).json({ message: 'Profile not found.' });
-    deleteProfile(req.params.id, req.user.clientId);
-    res.status(204).end();
-});
-
-app.get('/api/business/profiles/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getProfileById(req.params.id, req.user.clientId);
-    if (!existing) return res.status(404).json({ message: 'Profile not found.' });
-    res.json({ grants: getProfileGrants(req.params.id) });
-});
-
-app.put('/api/business/profiles/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getProfileById(req.params.id, req.user.clientId);
-    if (!existing) return res.status(404).json({ message: 'Profile not found.' });
+app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getJobPositionById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Job position not found.' });
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
-    res.json({ grants: setProfileGrants(req.params.id, grants) });
+    res.json({ grants: setJobPositionGrants(req.params.id, grants) });
 });
 
 // --- Column-level permission enforcement (Solo Ver / Ver y Operar / -------
@@ -1738,9 +1695,9 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
 // Negocio" — but any authenticated user at the client can READ the list,
 // since every client user needs it for the sidebar's Centro de Costo picker.
 function validateCostCenterBody(body) {
-    const { countryId, stateId, localityId, streetId, sucursal, name } = body || {};
-    if (!countryId || !stateId || !localityId || !streetId || !sucursal || !name) {
-        return 'countryId, stateId, localityId, streetId, sucursal and name are required.';
+    const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name } = body || {};
+    if (!countryId || !stateId || !municipalityId || !localityId || !streetId || !sucursal || !name) {
+        return 'countryId, stateId, municipalityId, localityId, streetId, sucursal and name are required.';
     }
     return null;
 }
@@ -1767,9 +1724,11 @@ function mapCostCenter(row, companyName) {
         recordCode: row.record_code,
         countryId: row.country_id,
         stateId: row.state_id,
+        municipalityId: row.municipality_id,
         localityId: row.locality_id,
         streetId: row.street_id,
         sucursal: row.sucursal,
+        nickname: row.nickname,
         ...getSystemColumnsForRecord({
             companyName,
             area: COST_CENTER_AREA_LABEL,
@@ -1797,10 +1756,10 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
     if (countCostCenters(req.user.clientId, req.user.isTestAccount) >= client.cost_centers_limit) {
         return res.status(409).json({ message: 'Cost center limit reached for this client.' });
     }
-    const { countryId, stateId, localityId, streetId, sucursal, name, description, responsible } = req.body;
+    const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible } = req.body;
     try {
         const costCenter = createCostCenter({
-            clientId: req.user.clientId, countryId, stateId, localityId, streetId, sucursal, name, description, responsible,
+            clientId: req.user.clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible,
             isTestData: req.user.isTestAccount,
         });
         logTableChange({
@@ -1821,10 +1780,10 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
     const error = validateCostCenterBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { countryId, stateId, localityId, streetId, sucursal, name, description, responsible } = req.body;
+    const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible } = req.body;
     try {
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, {
-            countryId, stateId, localityId, streetId, sucursal, name, description, responsible,
+            countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible,
         }, req.user.isTestAccount);
         // requireClientAdmin-gated route: req.user.isClientAdmin is always
         // true here, so every field always lands in appliedPatch and
@@ -1861,6 +1820,23 @@ app.patch('/api/business/cost-centers/:id/status', requireAuth, requireClientAdm
     res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
 });
 
+// Apodo -- a free-text label the client can rename anytime, independent of
+// código/record_code (both stay permanent/derived from the geo picks, see
+// buildCostCenterCodeBase). Its own tiny route, same "quien menos, más
+// rápido" reasoning as .../status just above, so renaming doesn't need the
+// whole geo cascade resubmitted.
+app.patch('/api/business/cost-centers/:id/nickname', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getCostCenterById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
+    const nickname = (req.body?.nickname || '').trim();
+    const costCenter = updateCostCenterNickname(req.params.id, req.user.clientId, nickname, req.user.isTestAccount);
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
+        recordLabel: costCenter.code, action: 'update', fieldKey: 'business.ccNickname', changedBy: req.user.name,
+    });
+    res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
+});
+
 // --- Geo catalog (País/Estado/Localidad/Calle behind a Centro de Costos'
 // código) -- shared across every client on the SaaS, see db.js's own comment
 // on the geo_* tables. Reads are open to any authenticated user (harmless,
@@ -1874,6 +1850,11 @@ app.get('/api/business/geo/states', requireAuth, (req, res) => {
     const countryId = Number(req.query.countryId) || 0;
     if (!countryId) return res.status(400).json({ message: 'countryId is required.' });
     res.json({ items: listStates(countryId) });
+});
+app.get('/api/business/geo/municipalities', requireAuth, (req, res) => {
+    const stateId = Number(req.query.stateId) || 0;
+    if (!stateId) return res.status(400).json({ message: 'stateId is required.' });
+    res.json({ items: listMunicipalities(stateId) });
 });
 app.get('/api/business/geo/localities', requireAuth, (req, res) => {
     const stateId = Number(req.query.stateId) || 0;
@@ -1895,6 +1876,12 @@ app.post('/api/business/geo/states', requireAuth, requireClientAdmin, (req, res)
     const name = (req.body?.name || '').trim();
     if (!countryId || !name) return res.status(400).json({ message: 'countryId and name are required.' });
     res.status(201).json({ item: createState(countryId, name) });
+});
+app.post('/api/business/geo/municipalities', requireAuth, requireClientAdmin, (req, res) => {
+    const stateId = Number(req.body?.stateId) || 0;
+    const name = (req.body?.name || '').trim();
+    if (!stateId || !name) return res.status(400).json({ message: 'stateId and name are required.' });
+    res.status(201).json({ item: createMunicipality(stateId, name) });
 });
 app.post('/api/business/geo/localities', requireAuth, requireClientAdmin, (req, res) => {
     const stateId = Number(req.body?.stateId) || 0;
@@ -2980,15 +2967,18 @@ app.get('/api/business/hr-workers', requireAuth, (req, res) => {
 
 app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const { givenNames, surnames, position, startDate, departments, costCenterId, email } = req.body || {};
-    if (!givenNames?.trim() || !surnames?.trim() || !position?.trim() || !startDate || !Array.isArray(departments) || !departments.length || !email?.trim()) {
-        return res.status(400).json({ message: 'givenNames, surnames, position, startDate, at least one department, and email are required.' });
+    const { givenNames, surnames, position, jobPositionId, startDate, departments, costCenterId, email } = req.body || {};
+    if (!givenNames?.trim() || !surnames?.trim() || !position?.trim() || !jobPositionId || !startDate || !Array.isArray(departments) || !departments.length || !email?.trim()) {
+        return res.status(400).json({ message: 'givenNames, surnames, position, jobPositionId, startDate, at least one department, and email are required.' });
     }
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
         return res.status(400).json({ message: 'email must be a valid email address.' });
     }
     if (usernameOrEmailExists(null, email.trim())) {
         return res.status(409).json({ message: 'That email is already in use by another account.' });
+    }
+    if (!getJobPositionById(jobPositionId, req.user.clientId, req.user.isTestAccount)) {
+        return res.status(400).json({ message: 'jobPositionId does not belong to this client.' });
     }
     if (costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId, req.user.isTestAccount)) {
         return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
@@ -2998,6 +2988,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
         givenNames: givenNames.trim(),
         surnames: surnames.trim(),
         position: position.trim(),
+        jobPositionId,
         startDate,
         departments,
         costCenterId: costCenterId || null,

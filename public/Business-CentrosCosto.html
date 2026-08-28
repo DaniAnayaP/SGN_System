@@ -380,6 +380,7 @@
                             <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno">Week</th>
                             <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno">Time</th>
                             <th data-i18n="business.ccCode" data-col="ccCode">Code</th>
+                            <th data-i18n="business.ccNickname" data-col="ccNickname">Nickname</th>
                             <th data-i18n="business.ccBranch" data-col="ccSucursal">Branch</th>
                             <th data-i18n="business.ccName" data-col="ccName">Name</th>
                             <th data-i18n="business.ccResponsible" data-col="ccResponsible">Responsible</th>
@@ -432,6 +433,17 @@
                     <div class="cc-add-new-row" id="cc-state-add-row" hidden>
                         <input type="text" id="cc-state-add-input" data-i18n-placeholder="business.ccAddNewState" placeholder="New state">
                         <button type="button" class="btn btn-secondary" id="cc-state-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+                <div class="admin-field">
+                    <label for="cc-municipality" data-i18n="business.ccMunicipality">Municipality</label>
+                    <div class="cc-select-row">
+                        <select id="cc-municipality" disabled></select>
+                        <button type="button" class="cc-add-new-btn" id="cc-municipality-add-toggle" title="Add new municipality" disabled>+</button>
+                    </div>
+                    <div class="cc-add-new-row" id="cc-municipality-add-row" hidden>
+                        <input type="text" id="cc-municipality-add-input" data-i18n-placeholder="business.ccAddNewMunicipality" placeholder="New municipality">
+                        <button type="button" class="btn btn-secondary" id="cc-municipality-add-confirm" data-i18n="admin.add">Add</button>
                     </div>
                 </div>
                 <div class="admin-field">

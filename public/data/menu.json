@@ -149,7 +149,6 @@
             { "id": "ab-client-data", "labelKey": "menu.clientData", "href": "Business-DatosCliente.html", "icon": "bx-id-card" },
             { "id": "ab-roles", "labelKey": "menu.roles", "href": "Business-Roles.html", "icon": "bx-shield" },
             { "id": "ab-users", "labelKey": "menu.users", "href": "Business-Usuarios.html", "icon": "bx-group" },
-            { "id": "ab-access-permissions", "labelKey": "menu.accessPermissions", "href": "Business-Accesos.html", "icon": "bx-key" },
             { "id": "ab-upcoming-updates", "labelKey": "menu.upcomingUpdates", "href": "#", "icon": "bx-calendar" },
             { "id": "ab-training-sessions", "labelKey": "menu.trainingSessions", "href": "#", "icon": "bx-chalkboard" }
           ]

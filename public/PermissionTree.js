@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
 // Reusable Departamento > Área > Apartado > Pantalla > Columna checkbox
 // tree, built from data/menu.json. Used by both Business-Roles.html
-// (profile grants) and Business-Accesos.html (per-user extra grants).
+// (Puesto de Trabajo grants) and Business-Usuarios.html (per-user Permisos
+// Adicionales).
 //
 // Internally, state is always stored EXPANDED at the leaf (pantalla) level —
 // simpler and more robust than trying to track partial/broad grants during

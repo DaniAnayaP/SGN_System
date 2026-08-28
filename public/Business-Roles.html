@@ -347,45 +347,31 @@
         </div>
 
         <section class="admin-panel">
-            <p class="admin-subtitle" data-i18n="business.rolesSubtitle">Create reusable profiles and configure which modules, sections, and screens they grant access to.</p>
+            <p class="admin-subtitle" data-i18n="business.rolesSubtitle">Configure what each Puesto de Trabajo grants by default — anyone hired into it (Mi Recurso Humano) gets these accesses automatically.</p>
 
-            <form id="profile-form" class="admin-form" novalidate>
-                <input type="hidden" id="profile-id" value="">
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="profile-name" data-i18n="business.profileName">Profile name</label>
-                        <input id="profile-name" name="name" type="text" required>
-                    </div>
-                    <div class="admin-field">
-                        <label for="profile-description" data-i18n="business.profileDescription">Description</label>
-                        <input id="profile-description" name="description" type="text">
-                    </div>
-                </div>
-                <div id="profile-form-error" class="admin-error" role="alert" hidden></div>
-                <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="profile-form-submit" data-i18n="business.addProfile">Add profile</button>
-                    <button type="button" class="btn btn-secondary" id="profile-form-cancel" data-i18n="admin.cancel" hidden>Cancel</button>
-                </div>
-            </form>
-
+            <!-- No create/edit/delete here on purpose -- the catalog itself
+                 (add a Puesto, rename it, retire it) is Business-
+                 PuestosTrabajo.html's job. This screen only configures what
+                 each already-existing Puesto grants. -->
             <div class="admin-table-wrap">
                 <table class="admin-table">
                     <thead>
                         <tr>
-                            <th data-i18n="business.profileName">Profile name</th>
-                            <th data-i18n="business.profileDescription">Description</th>
+                            <th data-i18n="business.jobPositionName">Job position name</th>
+                            <th data-i18n="business.jobPositionAbbreviation">Abbreviation</th>
+                            <th data-i18n="main.colHrStatus">Status</th>
                             <th></th>
                         </tr>
                     </thead>
-                    <tbody id="profiles-table-body">
+                    <tbody id="job-positions-table-body">
                         <!-- rendered at runtime -->
                     </tbody>
                 </table>
-                <p id="profiles-empty" class="admin-empty" data-i18n="business.noProfiles" hidden>No profiles yet. Create the first one above.</p>
+                <p id="job-positions-empty" class="admin-empty" data-i18n="business.noJobPositionsForRoles" hidden>No job positions yet — create one first in Puestos de Trabajo.</p>
             </div>
 
-            <h3 id="permissions-heading" style="margin-top: 2rem; margin-bottom: 0.5rem; font-size: 0.95rem;" data-i18n="business.permissionsTitle">Access for this profile</h3>
-            <p id="permissions-hint" class="admin-hint" data-i18n="business.selectProfileHint">Create or select a profile above to configure its access.</p>
+            <h3 id="permissions-heading" style="margin-top: 2rem; margin-bottom: 0.5rem; font-size: 0.95rem;" data-i18n="business.permissionsTitle">Access for this job position</h3>
+            <p id="permissions-hint" class="admin-hint" data-i18n="business.selectJobPositionHint">Select a job position above to configure its access.</p>
             <div id="permissions-panel" hidden>
                 <div id="permission-tree-container"></div>
                 <div class="admin-form-actions" style="margin-top: 1.25rem;">

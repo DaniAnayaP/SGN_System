@@ -102,6 +102,17 @@ db.exec(`
         name        TEXT NOT NULL,
         UNIQUE(country_id, name)
     );
+    -- Municipio sits alongside Localidad in the Centro de Costos modal (both
+    -- pick from the selected Estado, independently of each other) rather
+    -- than nesting Localidad inside it -- Localidad's own cascade/FK stay
+    -- exactly as they were so every cost center created before this table
+    -- existed keeps working unchanged; see buildCostCenterCodeBase.
+    CREATE TABLE IF NOT EXISTS geo_municipalities (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        state_id  INTEGER NOT NULL REFERENCES geo_states(id) ON DELETE CASCADE,
+        name      TEXT NOT NULL,
+        UNIQUE(state_id, name)
+    );
     CREATE TABLE IF NOT EXISTS geo_localities (
         id        INTEGER PRIMARY KEY AUTOINCREMENT,
         state_id  INTEGER NOT NULL REFERENCES geo_states(id) ON DELETE CASCADE,
@@ -148,6 +159,20 @@ db.exec(`
         status        TEXT NOT NULL DEFAULT 'active',
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE(client_id, name)
+    );
+
+    -- What a Puesto de Trabajo grants by default -- configured from Roles
+    -- (Business-Roles.html), same {sectionId, itemId, submenuId} shape as
+    -- the old profile_grants below. Every hr_worker hired into a Puesto
+    -- (see hr_workers.job_position_id) inherits exactly this set the moment
+    -- their account activates; user_grants (below) still layers individual
+    -- extras on top, same as it always has.
+    CREATE TABLE IF NOT EXISTS job_position_grants (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_position_id  INTEGER NOT NULL REFERENCES job_positions(id) ON DELETE CASCADE,
+        section_id       TEXT NOT NULL,
+        item_id          TEXT,
+        submenu_id       TEXT
     );
 
     -- Transacciones Inteligentes de Negocio: a client-defined report is just
@@ -761,6 +786,20 @@ if (!costCenterColumns.some((c) => c.name === 'country_id')) {
     db.exec('ALTER TABLE cost_centers ADD COLUMN street_id INTEGER REFERENCES geo_streets(id)');
     db.exec("ALTER TABLE cost_centers ADD COLUMN sucursal TEXT NOT NULL DEFAULT ''");
 }
+// Municipio, added later than the block above -- own guard, own column,
+// same "keeps old rows NULL until next edit" reasoning. geo_municipalities
+// is created above (before this runs) so the REFERENCES target exists.
+if (!costCenterColumns.some((c) => c.name === 'municipality_id')) {
+    db.exec('ALTER TABLE cost_centers ADD COLUMN municipality_id INTEGER REFERENCES geo_municipalities(id)');
+}
+// Apodo: a free-text, always-editable display label, independent of code/
+// record_code (both stay permanent/derived-from-geo -- see
+// computeCostCenterRecordCode's own note on why record_code is frozen).
+// Purely so a client can call SMX11 "Bodega Toluca" without that renaming
+// anything else linked to this cost center.
+if (!costCenterColumns.some((c) => c.name === 'nickname')) {
+    db.exec("ALTER TABLE cost_centers ADD COLUMN nickname TEXT NOT NULL DEFAULT ''");
+}
 
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
@@ -1165,6 +1204,27 @@ ensureColumn('clients', 'training_user_id', 'INTEGER REFERENCES users(id)');
     'cost_centers', 'job_positions', 'hr_workers', 'hr_status_catalog',
     'fuel_records', 'fuel_loading_records', 'unit_types', 'fleet_units',
 ].forEach((table) => ensureColumn(table, 'is_test_data', 'INTEGER NOT NULL DEFAULT 0'));
+
+// A worker's real link to the Puestos de Trabajo catalog (see Roles/
+// job_position_grants above) -- position (TEXT) stays as the frozen label
+// typed/picked at hiring time (never re-synced if the Puesto is renamed
+// later), same idea as record_code being frozen elsewhere in this file.
+// Nullable: a worker registered before this column existed just has no
+// Puesto-derived grants until an admin re-picks their Puesto.
+ensureColumn('hr_workers', 'job_position_id', 'INTEGER REFERENCES job_positions(id)');
+// One-time best-effort backfill for every worker hired before this column
+// existed: match their frozen position label back to a job_positions row
+// with the exact same name, same client -- harmless if nothing matches
+// (job_position_id just stays NULL, same as today), safe to re-run every
+// startup since it only ever touches rows still missing a match.
+db.prepare(`
+    UPDATE hr_workers
+    SET job_position_id = (
+        SELECT jp.id FROM job_positions jp
+        WHERE jp.client_id = hr_workers.client_id AND jp.name = hr_workers.position
+    )
+    WHERE job_position_id IS NULL AND position != ''
+`).run();
 
 // Seed set for a brand-new client's Estatus RH catalog (also used to
 // backfill any client that predates hr_status_catalog, below). A client can
@@ -1981,6 +2041,9 @@ function listCountries() {
 function listStates(countryId) {
     return db.prepare('SELECT * FROM geo_states WHERE country_id = ? ORDER BY name ASC').all(countryId);
 }
+function listMunicipalities(stateId) {
+    return db.prepare('SELECT * FROM geo_municipalities WHERE state_id = ? ORDER BY name ASC').all(stateId);
+}
 function listLocalities(stateId) {
     return db.prepare('SELECT * FROM geo_localities WHERE state_id = ? ORDER BY name ASC').all(stateId);
 }
@@ -2003,6 +2066,13 @@ function createState(countryId, name) {
     if (existing) return existing;
     const { lastInsertRowid } = db.prepare('INSERT INTO geo_states (country_id, name) VALUES (?, ?)').run(countryId, trimmed);
     return db.prepare('SELECT * FROM geo_states WHERE id = ?').get(lastInsertRowid);
+}
+function createMunicipality(stateId, name) {
+    const trimmed = (name || '').trim();
+    const existing = db.prepare('SELECT * FROM geo_municipalities WHERE state_id = ? AND name = ? COLLATE NOCASE').get(stateId, trimmed);
+    if (existing) return existing;
+    const { lastInsertRowid } = db.prepare('INSERT INTO geo_municipalities (state_id, name) VALUES (?, ?)').run(stateId, trimmed);
+    return db.prepare('SELECT * FROM geo_municipalities WHERE id = ?').get(lastInsertRowid);
 }
 function createLocality(stateId, name) {
     const trimmed = (name || '').trim();
@@ -2088,9 +2158,9 @@ function deleteFieldFillRule(id, clientId) {
     db.prepare('DELETE FROM field_fill_rules WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
-function createCostCenter({ clientId, countryId, stateId, localityId, streetId, sucursal, name, description, responsible, isTestData = false }) {
+function createCostCenter({ clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, nickname, isTestData = false }) {
     const client = getClientById(clientId);
-    const baseCode = buildCostCenterCodeBase(client, countryId, stateId, localityId, streetId, sucursal);
+    const baseCode = buildCostCenterCodeBase(client, countryId, stateId, municipalityId, localityId, streetId, sucursal);
     const create = db.transaction(() => {
         const code = generateUniqueCostCenterCode(clientId, baseCode);
         // Practice cost centers get their own account-number sequence,
@@ -2103,20 +2173,20 @@ function createCostCenter({ clientId, countryId, stateId, localityId, streetId, 
             .prepare(`
                 INSERT INTO cost_centers (
                     client_id, code, name, description, responsible,
-                    country_id, state_id, locality_id, street_id, sucursal,
-                    account_number, record_code, is_test_data
+                    country_id, state_id, municipality_id, locality_id, street_id, sucursal,
+                    account_number, record_code, is_test_data, nickname
                 )
                 VALUES (
                     @clientId, @code, @name, @description, @responsible,
-                    @countryId, @stateId, @localityId, @streetId, @sucursal,
-                    @accountNumber, @recordCode, @isTestData
+                    @countryId, @stateId, @municipalityId, @localityId, @streetId, @sucursal,
+                    @accountNumber, @recordCode, @isTestData, @nickname
                 )
             `)
             .run({
                 clientId, code, name, description: description || '', responsible: responsible || '',
-                countryId, stateId, localityId, streetId, sucursal: sucursal || '',
+                countryId, stateId, municipalityId: municipalityId || null, localityId, streetId, sucursal: sucursal || '',
                 accountNumber, recordCode: computeCostCenterRecordCode(clientId, code, accountNumber),
-                isTestData: isTestData ? 1 : 0,
+                isTestData: isTestData ? 1 : 0, nickname: nickname || '',
             });
         return result.lastInsertRowid;
     });
@@ -2137,19 +2207,30 @@ const COST_CENTER_FIELDS = {
 // -- unlike record_code (frozen forever at creation, see
 // computeCostCenterRecordCode's own comment), código is allowed to change on
 // edit since it exists to reflect the currently-selected location.
-function updateCostCenter(id, clientId, { countryId, stateId, localityId, streetId, sucursal, name, description, responsible }, forTestAccount = false) {
+function updateCostCenter(id, clientId, { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible }, forTestAccount = false) {
     const client = getClientById(clientId);
-    const baseCode = buildCostCenterCodeBase(client, countryId, stateId, localityId, streetId, sucursal);
+    const baseCode = buildCostCenterCodeBase(client, countryId, stateId, municipalityId, localityId, streetId, sucursal);
     const code = generateUniqueCostCenterCode(clientId, baseCode, id);
     db.prepare(`
         UPDATE cost_centers
         SET code = @code, name = @name, description = @description, responsible = @responsible,
-            country_id = @countryId, state_id = @stateId, locality_id = @localityId, street_id = @streetId, sucursal = @sucursal
+            country_id = @countryId, state_id = @stateId, municipality_id = @municipalityId,
+            locality_id = @localityId, street_id = @streetId, sucursal = @sucursal
         WHERE id = @id AND client_id = @clientId
     `).run({
         id, clientId, code, name, description: description || '', responsible: responsible || '',
-        countryId, stateId, localityId, streetId, sucursal: sucursal || '',
+        countryId, stateId, municipalityId: municipalityId || null, localityId, streetId, sucursal: sucursal || '',
     });
+    return getCostCenterById(id, clientId, forTestAccount);
+}
+
+// Apodo -- separate from updateCostCenter on purpose: it never touches
+// code/record_code (see buildCostCenterCodeBase's own note), so it doesn't
+// need a geo cascade re-validated or a new código computed, unlike every
+// other editable field on this table. Free to change as many times as the
+// client wants.
+function updateCostCenterNickname(id, clientId, nickname, forTestAccount = false) {
+    db.prepare('UPDATE cost_centers SET nickname = ? WHERE id = ? AND client_id = ?').run((nickname || '').trim(), id, clientId);
     return getCostCenterById(id, clientId, forTestAccount);
 }
 
@@ -2202,6 +2283,28 @@ function updateJobPosition(id, clientId, { name, abbreviation, costCenterScope, 
 
 function deleteJobPosition(id, clientId) {
     db.prepare('DELETE FROM job_positions WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// What this Puesto grants by default (Roles screen) -- same replace-all-on-
+// save shape as the old setProfileGrants, just keyed by job_position_id.
+function getJobPositionGrants(jobPositionId) {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM job_position_grants WHERE job_position_id = ?')
+        .all(jobPositionId);
+}
+function setJobPositionGrants(jobPositionId, grants) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM job_position_grants WHERE job_position_id = ?').run(jobPositionId);
+        const insert = db.prepare(`
+            INSERT INTO job_position_grants (job_position_id, section_id, item_id, submenu_id)
+            VALUES (@jobPositionId, @sectionId, @itemId, @submenuId)
+        `);
+        for (const g of rows) {
+            insert.run({ jobPositionId, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
+        }
+    });
+    replace(grants);
+    return getJobPositionGrants(jobPositionId);
 }
 
 // --- Query helpers: Estatus RH catalog (Administración de Personal, scoped
@@ -2932,22 +3035,26 @@ function computeCostCenterRecordCode(clientId, code, accountNumber) {
     return `${companyCode}${code}${COST_CENTER_RECORD_SCREEN_CODE}${padAccountNumber(accountNumber)}`;
 }
 
-// A Centro de Costos' own código -- Empresa + País + Estado + Localidad +
-// Calle + Sucursal, one letter each (see the cascading picker in
+// A Centro de Costos' own código -- Empresa + País + Estado + Municipio +
+// Localidad + Calle + Sucursal, one letter each (see the cascading picker in
 // Business-CentrosCosto.js). Unlike record_code above, this one is allowed
 // to change on edit, since it exists to describe the currently-selected
-// location, not to act as a permanent accounting reference.
+// location, not to act as a permanent accounting reference. A cost center
+// created before Municipio existed simply has no municipalityId -- its
+// letter falls back to 'X' like any other unset level, same as this always
+// worked for a level with nothing selected.
 function costCenterCodeLetter(word) {
     return (stripAccents(word || '').trim().charAt(0) || 'X').toUpperCase();
 }
-function buildCostCenterCodeBase(client, countryId, stateId, localityId, streetId, sucursal) {
+function buildCostCenterCodeBase(client, countryId, stateId, municipalityId, localityId, streetId, sucursal) {
     const country = countryId ? db.prepare('SELECT name FROM geo_countries WHERE id = ?').get(countryId) : null;
     const state = stateId ? db.prepare('SELECT name FROM geo_states WHERE id = ?').get(stateId) : null;
+    const municipality = municipalityId ? db.prepare('SELECT name FROM geo_municipalities WHERE id = ?').get(municipalityId) : null;
     const locality = localityId ? db.prepare('SELECT name FROM geo_localities WHERE id = ?').get(localityId) : null;
     const street = streetId ? db.prepare('SELECT name FROM geo_streets WHERE id = ?').get(streetId) : null;
     return [
         client?.company_abbreviation || client?.company_name,
-        country?.name, state?.name, locality?.name, street?.name, sucursal,
+        country?.name, state?.name, municipality?.name, locality?.name, street?.name, sucursal,
     ].map(costCenterCodeLetter).join('');
 }
 // Two different real places can share the same 6 first letters (two states
@@ -2971,7 +3078,7 @@ function generateUniqueCostCenterCode(clientId, baseCode, excludeId) {
 // from the table (that's the only place a real, usable password ever gets
 // issued). async because hashing can't happen inside db.transaction()
 // (must stay fully synchronous — see activateClient's own note above).
-async function createHrWorker({ clientId, givenNames, surnames, position, startDate, departments, costCenterId, email, isTestData = false }) {
+async function createHrWorker({ clientId, givenNames, surnames, position, jobPositionId, startDate, departments, costCenterId, email, isTestData = false }) {
     const fullName = `${givenNames} ${surnames}`.replace(/\s+/g, ' ').trim();
     const username = generateUniqueUsername(computeHrUsername(givenNames, surnames));
     const passwordHash = await hashPassword(generateRandomPassword());
@@ -2993,16 +3100,16 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
             .prepare(`
                 INSERT INTO hr_workers (
                     client_id, db_id, record_number, record_code, given_names, surnames, full_name,
-                    position, start_date, department, departments, cost_center_id, email, user_id, hr_status_id, is_test_data
+                    position, job_position_id, start_date, department, departments, cost_center_id, email, user_id, hr_status_id, is_test_data
                 )
                 VALUES (
                     @clientId, @dbId, @recordNumber, @recordCode, @givenNames, @surnames, @fullName,
-                    @position, @startDate, @department, @departments, @costCenterId, @email, @userId, @hrStatusId, @isTestData
+                    @position, @jobPositionId, @startDate, @department, @departments, @costCenterId, @email, @userId, @hrStatusId, @isTestData
                 )
             `)
             .run({
                 clientId, dbId: generateBigDateId(), recordNumber, recordCode, givenNames, surnames, fullName,
-                position, startDate,
+                position, jobPositionId: jobPositionId || null, startDate,
                 // Legacy single-value column, kept NOT NULL by its original
                 // schema (no default) — no longer read anywhere (departments
                 // below is authoritative), just satisfied here so the insert
@@ -4116,10 +4223,12 @@ function getUserProfileById(id) {
         .get(id);
 }
 
-// Backs the top-bar "Datos de Usuario del Negocio" panel — Rol and Permisos
-// come from the real profiles/grants tables (getUserProfiles/getUserGrants,
-// defined further down); business_email/phone are the same columns already
-// shown in "Datos de Usuario" (reused here, not duplicated data); position,
+// Backs the top-bar "Datos de Usuario del Negocio" panel — Rol is now this
+// user's own Puesto de Trabajo (via hr_workers.job_position_id, see Roles/
+// job_position_grants above) instead of a separately-assigned Perfil;
+// Permisos still comes from getUserEffectiveGrants (Puesto + Permisos
+// Adicionales, unchanged). business_email/phone are the same columns
+// already shown in "Datos de Usuario" (reused here, not duplicated data);
 // assigned cost-center/areas/departments, hire_date and reports_to are
 // plain columns with no assignment UI yet (see the migration above), same
 // "blank until someone fills it in" idea.
@@ -4132,10 +4241,17 @@ function getUserBusinessProfileById(id) {
         `)
         .get(id);
     if (!user) return null;
+    const jobPosition = db
+        .prepare(`
+            SELECT jp.name FROM job_positions jp
+            JOIN hr_workers hw ON hw.job_position_id = jp.id
+            WHERE hw.user_id = ?
+        `)
+        .get(id);
     const effectiveGrants = getUserEffectiveGrants(id);
     return {
         ...user,
-        profileNames: getUserProfiles(id).map((p) => p.name),
+        profileNames: jobPosition ? [jobPosition.name] : [],
         effectiveGrants,
         grantsCount: effectiveGrants.length,
     };
@@ -4198,54 +4314,9 @@ function setUserUiScale(userId, level) {
     return getUserUiScale(userId);
 }
 
-// --- Query helpers: profiles (perfiles, scoped to one client) ----------------
-function listProfiles(clientId) {
-    return db.prepare('SELECT * FROM profiles WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
-}
-
-function getProfileById(id, clientId) {
-    return db.prepare('SELECT * FROM profiles WHERE id = ? AND client_id = ?').get(id, clientId);
-}
-
-function createProfile({ clientId, name, description }) {
-    const result = db
-        .prepare('INSERT INTO profiles (client_id, name, description) VALUES (@clientId, @name, @description)')
-        .run({ clientId, name, description: description || '' });
-    return getProfileById(result.lastInsertRowid, clientId);
-}
-
-function updateProfile(id, clientId, { name, description }) {
-    db.prepare('UPDATE profiles SET name = @name, description = @description WHERE id = @id AND client_id = @clientId')
-        .run({ id, clientId, name, description: description || '' });
-    return getProfileById(id, clientId);
-}
-
-function deleteProfile(id, clientId) {
-    db.prepare('DELETE FROM profiles WHERE id = ? AND client_id = ?').run(id, clientId);
-}
-
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
-function getProfileGrants(profileId) {
-    return db
-        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM profile_grants WHERE profile_id = ?')
-        .all(profileId);
-}
-
-function setProfileGrants(profileId, grants) {
-    const replace = db.transaction((rows) => {
-        db.prepare('DELETE FROM profile_grants WHERE profile_id = ?').run(profileId);
-        const insert = db.prepare(`
-            INSERT INTO profile_grants (profile_id, section_id, item_id, submenu_id)
-            VALUES (@profileId, @sectionId, @itemId, @submenuId)
-        `);
-        for (const g of rows) {
-            insert.run({ profileId, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
-        }
-    });
-    replace(grants);
-    return getProfileGrants(profileId);
-}
-
+// (Perfiles/profiles removed -- Roles is now Puesto de Trabajo-based, see
+// job_position_grants/getJobPositionGrants above.)
 function getUserGrants(userId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM user_grants WHERE user_id = ?')
@@ -4257,25 +4328,33 @@ function getUserGrants(userId) {
 // view, which needs profile-derived and extra grants as 2 separate sets
 // (see PermissionCostTree.js's clientTricolor mode) rather than the single
 // deduplicated union getUserEffectiveGrants returns below.
-function getUserProfileGrants(userId) {
+// Default grants a user carries from their own Puesto de Trabajo (see
+// hr_workers.job_position_id / job_position_grants above) -- replaces the
+// old profiles/user_profiles-based lookup entirely: a business user's
+// baseline access now comes from the Puesto they were hired into, not a
+// separately-assigned Perfil. A user with no hr_workers row at all (or one
+// with no Puesto picked yet) simply gets none here -- see
+// isUnrestrictedClientAdmin for why the client admin account itself never
+// needs this path.
+function getUserJobPositionGrants(userId) {
     return db
         .prepare(`
-            SELECT DISTINCT pg.section_id AS sectionId, pg.item_id AS itemId, pg.submenu_id AS submenuId
-            FROM profile_grants pg
-            JOIN user_profiles up ON up.profile_id = pg.profile_id
-            WHERE up.user_id = ?
+            SELECT DISTINCT jpg.section_id AS sectionId, jpg.item_id AS itemId, jpg.submenu_id AS submenuId
+            FROM job_position_grants jpg
+            JOIN hr_workers hw ON hw.job_position_id = jpg.job_position_id
+            WHERE hw.user_id = ?
         `)
         .all(userId);
 }
 
-// Union of what every profile assigned to this user grants plus their own
-// extra grants (getUserGrants) — the full "everything this user can
-// actually see" set shown by the "Permisos" field in Datos de Usuario del
-// Negocio, deduplicated by section/item/submenu.
+// Union of what this user's Puesto de Trabajo grants plus their own extra
+// grants (getUserGrants, "Permisos Adicionales") — the full "everything this
+// user can actually see" set every real authorization check in server.js
+// reads, deduplicated by section/item/submenu.
 function getUserEffectiveGrants(userId) {
     const seen = new Set();
     const combined = [];
-    for (const g of [...getUserProfileGrants(userId), ...getUserGrants(userId)]) {
+    for (const g of [...getUserJobPositionGrants(userId), ...getUserGrants(userId)]) {
         const key = `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -4300,27 +4379,6 @@ function setUserGrants(userId, grants) {
 }
 
 // --- Query helpers: user <-> profile assignment -------------------------------
-function getUserProfiles(userId) {
-    return db
-        .prepare(`
-            SELECT p.* FROM profiles p
-            JOIN user_profiles up ON up.profile_id = p.id
-            WHERE up.user_id = ?
-            ORDER BY p.name
-        `)
-        .all(userId);
-}
-
-function setUserProfiles(userId, profileIds) {
-    const replace = db.transaction((ids) => {
-        db.prepare('DELETE FROM user_profiles WHERE user_id = ?').run(userId);
-        const insert = db.prepare('INSERT INTO user_profiles (user_id, profile_id) VALUES (?, ?)');
-        for (const profileId of ids) insert.run(userId, profileId);
-    });
-    replace(profileIds);
-    return getUserProfiles(userId);
-}
-
 module.exports = {
     db,
     MODULE_CATALOG,
@@ -4368,13 +4426,16 @@ module.exports = {
     getCostCenterById,
     createCostCenter,
     updateCostCenter,
+    updateCostCenterNickname,
     setCostCenterStatus,
     listCountries,
     listStates,
+    listMunicipalities,
     listLocalities,
     listStreets,
     createCountry,
     createState,
+    createMunicipality,
     createLocality,
     createStreet,
     listFieldFillRules,
@@ -4492,20 +4553,13 @@ module.exports = {
     getUserProfileById,
     getUserBusinessProfileById,
     getUserEffectiveGrants,
-    getUserProfileGrants,
+    getUserJobPositionGrants,
     getUserDefaults,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,
-    listProfiles,
-    getProfileById,
-    createProfile,
-    updateProfile,
-    deleteProfile,
-    getProfileGrants,
-    setProfileGrants,
+    getJobPositionGrants,
+    setJobPositionGrants,
     getUserGrants,
     setUserGrants,
-    getUserProfiles,
-    setUserProfiles,
 };

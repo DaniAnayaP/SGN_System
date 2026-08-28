@@ -82,6 +82,18 @@ function renderCostCenters() {
         const tdCode = document.createElement('td');
         tdCode.dataset.col = 'ccCode';
         tdCode.textContent = cc.code;
+        // Código is generated and frozen (see buildCostCenterCodeBase) --
+        // Apodo is the client's own free-text, always-editable stand-in for
+        // it, click-to-edit same as every other inline cell in this app (no
+        // per-column grant here: this whole screen is already
+        // requireClientAdmin-gated, see the row-editable comment above).
+        const tdNickname = document.createElement('td');
+        tdNickname.dataset.col = 'ccNickname';
+        Dashboard.attachInlineEdit(tdNickname, {
+            value: cc.nickname || '',
+            inputType: 'text',
+            onCommit: (value) => saveCostCenterNickname(cc, value),
+        });
         const tdSucursal = document.createElement('td');
         tdSucursal.dataset.col = 'ccSucursal';
         tdSucursal.textContent = cc.sucursal || '—';
@@ -132,7 +144,7 @@ function renderCostCenters() {
         toggleBtn.addEventListener('click', () => toggleCostCenterStatus(cc));
         tdActions.append(historyBtn, editBtn, toggleBtn);
 
-        tr.append(tdCode, tdSucursal, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
+        tr.append(tdCode, tdNickname, tdSucursal, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
     refreshLimitStatus();
@@ -147,7 +159,7 @@ function applyCcFilters() {
     const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
     tableBody.querySelectorAll('tr').forEach((tr) => {
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['ccCode', 'ccSucursal', 'ccName', 'ccResponsible', 'ccDescription']
+        const haystack = ['ccCode', 'ccNickname', 'ccSucursal', 'ccName', 'ccResponsible', 'ccDescription']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !haystack.includes(text);
@@ -171,6 +183,28 @@ async function toggleCostCenterStatus(cc) {
         const { costCenter } = await res.json();
         costCenters = costCenters.map((c) => (c.id === costCenter.id ? costCenter : c));
         renderCostCenters();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
+// Own tiny endpoint (not the full updateCostCenter/PUT-the-whole-modal
+// route) since Apodo never touches código/geo -- committing it shouldn't
+// need every other field resubmitted. Doesn't re-render the table (unlike
+// toggleCostCenterStatus): attachInlineEdit already updates its own cell,
+// and a full renderCostCenters() here would blow away the input mid-edit.
+async function saveCostCenterNickname(cc, nickname) {
+    try {
+        const res = await fetch(`/api/business/cost-centers/${cc.id}/nickname`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ nickname }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const { costCenter } = await res.json();
+        costCenters = costCenters.map((c) => (c.id === costCenter.id ? costCenter : c));
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -207,7 +241,12 @@ const modalSaveBtn = document.getElementById('cc-modal-save');
 const modalCancelBtn = document.getElementById('cc-modal-cancel');
 const codePreviewValue = document.getElementById('cc-code-preview-value');
 
-const LEVEL_ORDER = ['country', 'state', 'locality', 'street'];
+// Municipio sits alongside Localidad -- both are children of Estado (see
+// db.js's geo_municipalities comment) rather than Localidad nesting inside
+// it, so a cost center created before Municipio existed keeps reloading its
+// already-picked Localidad exactly as before (still keyed off state_id) the
+// first time someone opens it for edit.
+const LEVEL_ORDER = ['country', 'state', 'municipality', 'locality', 'street'];
 const cascadeLevels = {
     country: {
         select: document.getElementById('cc-country'), addToggle: document.getElementById('cc-country-add-toggle'),
@@ -226,6 +265,15 @@ const cascadeLevels = {
         createUrl: () => '/api/business/geo/states',
         createBody: (name, parentId) => ({ countryId: parentId, name }),
         titleKey: 'business.ccAddNewState',
+    },
+    municipality: {
+        select: document.getElementById('cc-municipality'), addToggle: document.getElementById('cc-municipality-add-toggle'),
+        addRow: document.getElementById('cc-municipality-add-row'), addInput: document.getElementById('cc-municipality-add-input'),
+        addConfirm: document.getElementById('cc-municipality-add-confirm'), items: [], parent: 'state',
+        listUrl: (parentId) => `/api/business/geo/municipalities?stateId=${parentId}`,
+        createUrl: () => '/api/business/geo/municipalities',
+        createBody: (name, parentId) => ({ stateId: parentId, name }),
+        titleKey: 'business.ccAddNewMunicipality',
     },
     locality: {
         select: document.getElementById('cc-locality'), addToggle: document.getElementById('cc-locality-add-toggle'),
@@ -304,10 +352,19 @@ async function loadLevel(levelKey, parentId) {
 LEVEL_ORDER.forEach((levelKey, idx) => {
     const level = cascadeLevels[levelKey];
     level.select.addEventListener('change', async () => {
+        // Reloads only levels that actually DESCEND from this one (tracked
+        // via `affected`, keyed off each level's own declared .parent) --
+        // not just "everything after it in display order". Municipio and
+        // Localidad are siblings that both read Estado directly: changing
+        // Municipio must NOT wipe out an already-picked Localidad/Calle,
+        // since neither one depends on Municipio at all.
+        const affected = new Set([levelKey]);
         for (let i = idx + 1; i < LEVEL_ORDER.length; i++) {
             const childKey = LEVEL_ORDER[i];
-            const parentKey = LEVEL_ORDER[i - 1];
-            await loadLevel(childKey, cascadeLevels[parentKey].select.value || null);
+            const child = cascadeLevels[childKey];
+            if (!child.parent || !affected.has(child.parent)) continue;
+            await loadLevel(childKey, cascadeLevels[child.parent].select.value || null);
+            affected.add(childKey);
         }
         updateCodePreview();
     });
@@ -364,6 +421,7 @@ async function openNewModal() {
 
     await loadLevel('country', null);
     await loadLevel('state', null);
+    await loadLevel('municipality', null);
     await loadLevel('locality', null);
     await loadLevel('street', null);
     updateCodePreview();
@@ -385,6 +443,12 @@ async function openEditModal(cc) {
     cascadeLevels.country.select.value = cc.countryId || '';
     await loadLevel('state', cc.countryId || null);
     cascadeLevels.state.select.value = cc.stateId || '';
+    // Municipio and Localidad are independent siblings under Estado (see
+    // the LEVEL_ORDER comment above) -- a cost center from before Municipio
+    // existed just has municipalityId blank here, which reloadLevel already
+    // renders as its own normal "nothing selected" state.
+    await loadLevel('municipality', cc.stateId || null);
+    cascadeLevels.municipality.select.value = cc.municipalityId || '';
     await loadLevel('locality', cc.stateId || null);
     cascadeLevels.locality.select.value = cc.localityId || '';
     await loadLevel('street', cc.localityId || null);
@@ -402,11 +466,12 @@ async function saveCcModal() {
     modalError.hidden = true;
     const countryId = Number(cascadeLevels.country.select.value) || null;
     const stateId = Number(cascadeLevels.state.select.value) || null;
+    const municipalityId = Number(cascadeLevels.municipality.select.value) || null;
     const localityId = Number(cascadeLevels.locality.select.value) || null;
     const streetId = Number(cascadeLevels.street.select.value) || null;
     const sucursal = sucursalField.value.trim();
     const name = nameField.value.trim();
-    if (!countryId || !stateId || !localityId || !streetId || !sucursal || !name) {
+    if (!countryId || !stateId || !municipalityId || !localityId || !streetId || !sucursal || !name) {
         modalError.textContent = Dashboard.t('admin.requiredFields');
         modalError.hidden = false;
         return;
@@ -423,7 +488,7 @@ async function saveCcModal() {
             method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ countryId, stateId, localityId, streetId, sucursal, name, responsible, description }),
+            body: JSON.stringify({ countryId, stateId, municipalityId, localityId, streetId, sucursal, name, responsible, description }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));

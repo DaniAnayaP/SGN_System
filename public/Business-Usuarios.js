@@ -1,23 +1,145 @@
 // ---------------------------------------------------------------------------
-// "Usuarios" — Administración del Negocio: enable/disable existing accounts
-// (every one of them auto-created from Mi Recurso Humano, never from here —
-// see OpRRHHMiRecursoHumano.js) and assign one or more profiles (perfiles)
-// to each. Shell (sidebar, i18n, settings, logout) comes from Dashboard.js.
+// "Usuarios" — Administración del Negocio: every account auto-created from
+// Mi Recurso Humano (never from here), with 2 actions per row:
+//   - Permisos Activados (read-only): what this user can ACTUALLY see today
+//     — their own Puesto de Trabajo's default grants (green) + Permisos
+//     Adicionales (yellow) + neither (red/locked), same PermissionCostTree
+//     "clientTricolor" tree Nuestros Clientes' own "Permisos Contratados"
+//     modal already uses.
+//   - Permisos Adicionales (editable): grant extra modules/apartados/
+//     pantallas on top of whatever this user's Puesto already gives them —
+//     same idea as a client's own Permisos Adicionales in Admin-SaaS. Never
+//     removes access, only adds.
+// No profile-assignment UI here anymore: a user's baseline access comes
+// straight from the Puesto they were hired into (see Roles). This screen
+// used to be split across Usuarios + Accesos y Permisos; they're merged
+// here now, one table instead of two showing overlapping data.
+// Shell comes from Dashboard.js.
 // ---------------------------------------------------------------------------
+
+let users = [];
+let allowedSectionIds = null;
+let costCenters = [];
+let activeUserId = null;
+let grantTree = null;
 
 const tableBody = document.getElementById('users-table-body');
 const emptyMsg = document.getElementById('users-empty');
 
-const assignSelect = document.getElementById('assign-user-select');
-const assignHint = document.getElementById('assign-hint');
-const assignPanel = document.getElementById('assign-panel');
-const assignList = document.getElementById('assign-profiles-list');
-const assignSaveBtn = document.getElementById('assign-save');
-const assignSaveStatus = document.getElementById('assign-save-status');
+async function loadContractedModules() {
+    try {
+        const res = await fetch('/api/business/contracted-modules', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        allowedSectionIds = data.moduleKeys || [];
+    } catch {
+        allowedSectionIds = [];
+    }
+}
 
-let users = [];
-let profiles = [];
+async function loadCostCentersForTree() {
+    try {
+        const res = await fetch('/api/business/cost-centers', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        costCenters = data.costCenters || [];
+    } catch {
+        costCenters = [];
+    }
+}
 
+// --- Permisos Activados (read-only, Puesto vs. adicional vs. ninguno) ------
+const activePermsModal = document.getElementById('active-perms-modal');
+const activePermsSubtitle = document.getElementById('active-perms-subtitle');
+const activePermsContainer = document.getElementById('active-perms-container');
+const activePermsError = document.getElementById('active-perms-error');
+
+async function openActivePermsModal(user) {
+    activePermsSubtitle.textContent = `${user.name} (${user.username})`;
+    activePermsError.hidden = true;
+    activePermsContainer.innerHTML = '';
+    activePermsModal.hidden = false;
+    try {
+        const res = await fetch(`/api/business/users/${user.id}/grants`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        const tree = window.PermissionCostTree.create(activePermsContainer, { mode: 'clientTricolor', interactive: false });
+        await tree.init(data.jobPositionGrants || [], [], data.grants || []);
+    } catch {
+        activePermsError.textContent = Dashboard.t('admin.loadError');
+        activePermsError.hidden = false;
+    }
+}
+
+function closeActivePermsModal() {
+    activePermsModal.hidden = true;
+}
+
+document.getElementById('active-perms-close').addEventListener('click', closeActivePermsModal);
+activePermsModal.addEventListener('click', (event) => { if (event.target === activePermsModal) closeActivePermsModal(); });
+
+// --- Permisos Adicionales (editable extra grants) ---------------------------
+const grantAccessModal = document.getElementById('grant-access-modal');
+const grantAccessSubtitle = document.getElementById('grant-access-subtitle');
+const grantAccessContainer = document.getElementById('grant-access-container');
+const grantAccessError = document.getElementById('grant-access-error');
+const grantAccessSaveBtn = document.getElementById('grant-access-save');
+
+async function openGrantAccessModal(user) {
+    activeUserId = user.id;
+    grantAccessSubtitle.textContent = `${user.name} (${user.username})`;
+    grantAccessError.hidden = true;
+    grantAccessContainer.innerHTML = '';
+    grantAccessModal.hidden = false;
+    try {
+        const res = await fetch(`/api/business/users/${user.id}/grants`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        grantTree = window.PermissionTree.create(grantAccessContainer, { allowedSectionIds, costCenters, showAppTab: true });
+        await grantTree.init(data.grants || []);
+    } catch {
+        grantAccessError.textContent = Dashboard.t('admin.loadError');
+        grantAccessError.hidden = false;
+    }
+}
+
+function closeGrantAccessModal() {
+    grantAccessModal.hidden = true;
+    grantTree = null;
+    activeUserId = null;
+}
+
+document.getElementById('grant-access-cancel').addEventListener('click', closeGrantAccessModal);
+grantAccessModal.addEventListener('click', (event) => { if (event.target === grantAccessModal) closeGrantAccessModal(); });
+
+grantAccessSaveBtn.addEventListener('click', async () => {
+    if (!activeUserId || !grantTree) return;
+    grantAccessSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/business/users/${activeUserId}/grants`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ grants: grantTree.getGrants() }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        closeGrantAccessModal();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+    } catch {
+        grantAccessError.textContent = Dashboard.t('admin.saveError');
+        grantAccessError.hidden = false;
+    } finally {
+        grantAccessSaveBtn.disabled = false;
+    }
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!activePermsModal.hidden) closeActivePermsModal();
+    if (!grantAccessModal.hidden) closeGrantAccessModal();
+});
+
+// --- Activar / Inactivar -----------------------------------------------------
 async function toggleUserActive(user) {
     try {
         const res = await fetch(`/api/business/users/${user.id}`, {
@@ -28,67 +150,132 @@ async function toggleUserActive(user) {
         });
         if (!res.ok) throw new Error('save failed');
         await loadUsers();
-        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
 
-async function renderUsersTable() {
+// --- Table --------------------------------------------------------------
+function operationalBadgeClass(status) {
+    if (status === 'active') return 'admin-badge-activo';
+    if (status === 'inactive') return 'admin-badge-inactivo';
+    return 'admin-badge-suspendido';
+}
+function operationalLabelKey(status) {
+    if (status === 'active') return 'business.hrStatusEffectActive';
+    if (status === 'inactive') return 'business.hrStatusEffectInactive';
+    return 'business.hrStatusEffectSuspended';
+}
+
+function renderUsersTable() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = users.length > 0;
-    for (const user of users) {
+    users.forEach((user) => {
         const tr = document.createElement('tr');
+        tr.dataset.operationalStatus = user.operationalStatus || 'active';
+
         const tdUsername = document.createElement('td');
+        tdUsername.dataset.col = 'accUsername';
         tdUsername.textContent = user.username;
         const tdName = document.createElement('td');
+        tdName.dataset.col = 'accName';
         tdName.textContent = user.name;
         const tdEmail = document.createElement('td');
+        tdEmail.dataset.col = 'accEmail';
         tdEmail.textContent = user.email;
-        const tdProfiles = document.createElement('td');
-        tdProfiles.textContent = '…';
         const tdCreated = document.createElement('td');
+        tdCreated.dataset.col = 'accCreated';
         tdCreated.textContent = (user.created_at || '').slice(0, 10);
-        const tdStatus = document.createElement('td');
-        const badge = document.createElement('span');
-        badge.className = `admin-badge admin-badge-${user.active ? 'activo' : 'inactivo'}`;
-        badge.textContent = Dashboard.t(user.active ? 'main.filterActive' : 'main.filterInactive');
-        const toggleBtn = document.createElement('button');
-        toggleBtn.type = 'button';
-        toggleBtn.className = 'admin-icon-btn';
-        toggleBtn.innerHTML = `<i class="bx ${user.active ? 'bx-x-circle' : 'bx-check-circle'}" aria-hidden="true"></i>`;
-        toggleBtn.setAttribute('aria-label', Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate'));
-        toggleBtn.title = Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate');
-        toggleBtn.addEventListener('click', () => toggleUserActive(user));
-        tdStatus.append(badge, toggleBtn);
-        tr.append(tdUsername, tdName, tdEmail, tdProfiles, tdCreated, tdStatus);
+
+        // Estatus RH — read-only here, sourced from Recursos Humanos /
+        // Administración de Personal / Mi Recurso Humano (Business-EstatusRH
+        // catalog). Never editable from this screen.
+        const tdHrStatus = document.createElement('td');
+        tdHrStatus.dataset.col = 'accHrStatus';
+        if (user.hrStatusName) {
+            const badge = document.createElement('span');
+            badge.className = `admin-badge ${operationalBadgeClass(user.hrStatusEffect)}`;
+            badge.textContent = user.hrStatusName;
+            tdHrStatus.appendChild(badge);
+        } else {
+            tdHrStatus.textContent = '—';
+        }
+
+        // Estatus Operativo — derived from Estatus RH (see
+        // computeOperationalStatus in db.js). The manual toggle is only
+        // clickable when Estatus RH is Activo (or this user has no HR
+        // record at all) — any other Estatus RH value forces Suspendido/
+        // Inactivo here and the toggle shows locked instead.
+        const tdOperationalStatus = document.createElement('td');
+        tdOperationalStatus.dataset.col = 'accOperationalStatus';
+        const opBadge = document.createElement('span');
+        opBadge.className = `admin-badge ${operationalBadgeClass(user.operationalStatus)}`;
+        opBadge.textContent = Dashboard.t(operationalLabelKey(user.operationalStatus));
+        const opToggleBtn = document.createElement('button');
+        opToggleBtn.type = 'button';
+        opToggleBtn.className = 'admin-icon-btn';
+        const isForcedByHr = user.hrStatusEffect === 'suspended' || user.hrStatusEffect === 'inactive';
+        if (isForcedByHr) {
+            opToggleBtn.disabled = true;
+            opToggleBtn.innerHTML = '<i class="bx bx-lock-alt" aria-hidden="true"></i>';
+            opToggleBtn.setAttribute('aria-label', Dashboard.t('business.accesosOperationalLocked'));
+            opToggleBtn.title = Dashboard.t('business.accesosOperationalLocked');
+        } else {
+            opToggleBtn.innerHTML = `<i class="bx ${user.active ? 'bx-x-circle' : 'bx-check-circle'}" aria-hidden="true"></i>`;
+            opToggleBtn.setAttribute('aria-label', Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate'));
+            opToggleBtn.title = Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate');
+            opToggleBtn.addEventListener('click', () => toggleUserActive(user));
+        }
+        tdOperationalStatus.append(opBadge, opToggleBtn);
+
+        const tdActivePerms = document.createElement('td');
+        tdActivePerms.dataset.col = 'accActivePerms';
+        const activePermsBtn = document.createElement('button');
+        activePermsBtn.type = 'button';
+        activePermsBtn.className = 'admin-icon-btn';
+        activePermsBtn.setAttribute('aria-label', Dashboard.t('business.accesosActivePermsBtn'));
+        activePermsBtn.title = Dashboard.t('business.accesosActivePermsBtn');
+        activePermsBtn.innerHTML = '<i class="bx bx-sitemap" aria-hidden="true"></i>';
+        activePermsBtn.addEventListener('click', () => openActivePermsModal(user));
+        tdActivePerms.appendChild(activePermsBtn);
+
+        const tdActions = document.createElement('td');
+        tdActions.dataset.col = 'actions';
+        tdActions.className = 'admin-table-actions';
+        const grantBtn = document.createElement('button');
+        grantBtn.type = 'button';
+        grantBtn.className = 'admin-icon-btn';
+        grantBtn.setAttribute('aria-label', Dashboard.t('business.accesosGrantTitle'));
+        grantBtn.title = Dashboard.t('business.accesosGrantTitle');
+        grantBtn.innerHTML = '<i class="bx bx-key" aria-hidden="true"></i>';
+        grantBtn.addEventListener('click', () => openGrantAccessModal(user));
+        tdActions.appendChild(grantBtn);
+
+        tr.append(tdUsername, tdName, tdEmail, tdCreated, tdHrStatus, tdOperationalStatus, tdActivePerms, tdActions);
         tableBody.appendChild(tr);
-
-        fetch(`/api/business/users/${user.id}/profiles`, { credentials: 'include' })
-            .then((r) => (r.ok ? r.json() : { profiles: [] }))
-            .then((data) => {
-                const names = (data.profiles || []).map((p) => p.name);
-                tdProfiles.textContent = names.length ? names.join(', ') : '—';
-            })
-            .catch(() => {
-                tdProfiles.textContent = '—';
-            });
-    }
-}
-
-function populateAssignSelect() {
-    const previousValue = assignSelect.value;
-    assignSelect.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
-    users.forEach((user) => {
-        const option = document.createElement('option');
-        option.value = user.id;
-        option.textContent = `${user.name} (${user.username})`;
-        assignSelect.appendChild(option);
     });
-    if (users.some((u) => String(u.id) === previousValue)) {
-        assignSelect.value = previousValue;
-    }
+    applyUsersFilters();
 }
+
+// Filtro panel (see Dashboard.js for the Filtrar/Limpiar toolbar buttons and
+// the generic open/close wiring — this page only owns what the fields mean).
+function applyUsersFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    const operationalStatus = document.getElementById('filter-operational-status')?.value || '';
+    tableBody.querySelectorAll('tr').forEach((tr) => {
+        let visible = true;
+        if (text) {
+            const haystack = ['accUsername', 'accName', 'accEmail']
+                .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+                .join(' ');
+            if (!haystack.includes(text)) visible = false;
+        }
+        if (operationalStatus && tr.dataset.operationalStatus !== operationalStatus) visible = false;
+        tr.hidden = !visible;
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyUsersFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyUsersFilters);
 
 async function loadUsers() {
     try {
@@ -96,104 +283,12 @@ async function loadUsers() {
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         users = data.users || [];
-        await renderUsersTable();
-        populateAssignSelect();
-    } catch {
-        Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
-    }
-}
-
-async function loadProfiles() {
-    try {
-        const res = await fetch('/api/business/profiles', { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        profiles = data.profiles || [];
-    } catch {
-        profiles = [];
-    }
-}
-
-function renderAssignList(assignedIds) {
-    assignList.innerHTML = '';
-    if (!profiles.length) {
-        const p = document.createElement('p');
-        p.className = 'admin-hint';
-        p.textContent = Dashboard.t('business.noProfilesYet');
-        assignList.appendChild(p);
-        return;
-    }
-    profiles.forEach((profile) => {
-        const row = document.createElement('div');
-        row.className = 'admin-module-row';
-        const name = document.createElement('span');
-        name.className = 'admin-module-name';
-        name.textContent = profile.name;
-        const label = document.createElement('label');
-        label.className = 'admin-switch';
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.checked = assignedIds.includes(profile.id);
-        input.dataset.profileId = profile.id;
-        const track = document.createElement('span');
-        track.className = 'admin-switch-track';
-        label.append(input, track);
-        row.append(name, label);
-        assignList.appendChild(row);
-    });
-}
-
-async function loadAssignmentsForUser(userId) {
-    assignSaveStatus.textContent = '';
-    try {
-        const res = await fetch(`/api/business/users/${userId}/profiles`, { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        const assignedIds = (data.profiles || []).map((p) => p.id);
-        renderAssignList(assignedIds);
-        assignPanel.hidden = false;
-        assignHint.hidden = true;
-    } catch {
-        assignPanel.hidden = true;
-        assignHint.textContent = Dashboard.t('admin.loadError');
-        assignHint.hidden = false;
-    }
-}
-
-assignSelect.addEventListener('change', () => {
-    const userId = assignSelect.value;
-    if (!userId) {
-        assignPanel.hidden = true;
-        assignHint.textContent = Dashboard.t('business.noUserSelected');
-        assignHint.hidden = false;
-        return;
-    }
-    loadAssignmentsForUser(userId);
-});
-
-assignSaveBtn.addEventListener('click', async () => {
-    const userId = assignSelect.value;
-    if (!userId) return;
-    const profileIds = Array.from(assignList.querySelectorAll('input[type="checkbox"]:checked'))
-        .map((input) => Number(input.dataset.profileId));
-
-    assignSaveBtn.disabled = true;
-    try {
-        const res = await fetch(`/api/business/users/${userId}/profiles`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ profileIds }),
-        });
-        if (!res.ok) throw new Error('save failed');
         renderUsersTable();
-        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-    } finally {
-        assignSaveBtn.disabled = false;
+        emptyMsg.textContent = Dashboard.t('admin.loadError');
+        emptyMsg.hidden = false;
     }
-});
+}
 
 document.addEventListener('dashboard:language-changed', () => {
     renderUsersTable();
@@ -203,7 +298,7 @@ document.addEventListener('dashboard:language-changed', () => {
     try {
         const role = await Dashboard.initDashboard({ activePage: 'business-users' });
         if (!role) return;
-        await Promise.all([loadUsers(), loadProfiles()]);
+        await Promise.all([loadUsers(), loadContractedModules(), loadCostCentersForTree()]);
     } catch (err) {
         console.error('Business (Usuarios) failed to initialize:', err);
     }

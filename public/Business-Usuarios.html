@@ -350,20 +350,48 @@
             <!-- No "create user" form here on purpose — every account is
                  auto-provisioned the moment its person is registered in Mi
                  Recurso Humano (see createHrWorker in db.js). This screen
-                 only enables/disables an existing account and assigns its
-                 profiles/permissions below. -->
-            <p class="admin-subtitle" data-i18n="business.usersSubtitle">Users are created automatically from Mi Recurso Humano — enable/disable them and assign profiles here.</p>
+                 only enables/disables an existing account and manages its
+                 Permisos Adicionales below -- baseline access comes from
+                 the user's own Puesto de Trabajo (see Roles), not something
+                 assigned per-user here anymore. -->
+            <p class="admin-subtitle" data-i18n="business.usersSubtitle">Users are created automatically from Mi Recurso Humano — their Puesto de Trabajo (Roles) sets their default access; grant anything extra here.</p>
 
-            <div class="admin-table-wrap">
-                <table class="admin-table">
+            <div class="filter-bar" id="filter-bar">
+                <div class="filter-bar-panel">
+                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
+                    <div class="filter-bar-fields">
+                        <div class="filter-field">
+                            <label for="filter-search-text" data-i18n="business.name">Full name</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="business.name" placeholder="Full name">
+                        </div>
+                        <div class="filter-field">
+                            <label for="filter-operational-status" data-i18n="business.accesosOperationalStatusCol">Estatus Operativo</label>
+                            <select id="filter-operational-status">
+                                <option value="" data-i18n="main.filterAll">All</option>
+                                <option value="active" data-i18n="business.hrStatusEffectActive">Activo</option>
+                                <option value="suspended" data-i18n="business.hrStatusEffectSuspended">Suspendido</option>
+                                <option value="inactive" data-i18n="business.hrStatusEffectInactive">Inactivo</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-bar-actions">
+                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-table-wrapper" data-table-id="usuarios">
+                <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="business.username">Username</th>
-                            <th data-i18n="business.name">Full name</th>
-                            <th data-i18n="admin.email">Email</th>
-                            <th data-i18n="business.profilesLabel">Profiles</th>
-                            <th data-i18n="business.createdAt">Created</th>
-                            <th data-i18n="main.colHrUserStatus">User Status</th>
+                            <th data-i18n="business.username" data-col="accUsername">Username</th>
+                            <th data-i18n="business.name" data-col="accName">Full name</th>
+                            <th data-i18n="admin.email" data-col="accEmail">Email</th>
+                            <th data-i18n="business.createdAt" data-col="accCreated">Created</th>
+                            <th data-i18n="business.accesosHrStatusCol" data-col="accHrStatus">HR Status</th>
+                            <th data-i18n="business.accesosOperationalStatusCol" data-col="accOperationalStatus">Estatus Operativo</th>
+                            <th data-i18n="business.accesosActivePermsCol" data-col="accActivePerms">Active Permissions</th>
+                            <th data-col="actions"></th>
                         </tr>
                     </thead>
                     <tbody id="users-table-body">
@@ -372,26 +400,42 @@
                 </table>
                 <p id="users-empty" class="admin-empty" data-i18n="business.usersEmpty" hidden>No users yet — register someone in Mi Recurso Humano first.</p>
             </div>
-
-            <h3 style="margin-top: 2rem; margin-bottom: 0.75rem; font-size: 0.95rem;" data-i18n="business.assignProfilesTitle">Assign profiles</h3>
-            <div class="admin-select-row">
-                <label for="assign-user-select" data-i18n="business.selectUser">Select a user</label>
-                <select id="assign-user-select">
-                    <option value="" data-i18n="business.selectUserPlaceholder">Choose a user...</option>
-                </select>
-            </div>
-            <p id="assign-hint" class="admin-hint" data-i18n="business.noUserSelected">Select a user above to manage their profiles.</p>
-            <div id="assign-panel" hidden>
-                <div class="admin-module-list" id="assign-profiles-list">
-                    <!-- rendered at runtime -->
-                </div>
-                <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                    <button type="button" class="btn" id="assign-save" data-i18n="admin.save">Save</button>
-                </div>
-                <p id="assign-save-status" class="admin-save-status"></p>
-            </div>
         </section>
     </main>
+
+    <div class="modal-overlay" id="active-perms-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="active-perms-title" style="max-width: 48rem;">
+            <h3 id="active-perms-title" data-i18n="business.accesosActivePermsTitle">Active Permissions</h3>
+            <p id="active-perms-subtitle" class="admin-subtitle"></p>
+            <p class="admin-hint perm-tree-legend">
+                <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
+                <span data-i18n="business.accesosLegendProfile">Granted by job position</span>
+                <span class="perm-tree-status perm-tree-status-extra"><i class="bx bx-plus-circle" aria-hidden="true"></i></span>
+                <span data-i18n="business.accesosLegendExtra">Granted extra</span>
+                <span class="perm-tree-status perm-tree-status-blocked"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>
+                <span data-i18n="business.accesosLegendNone">No access</span>
+            </p>
+            <div id="active-perms-container"></div>
+            <div id="active-perms-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" id="active-perms-close" data-i18n="admin.cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="grant-access-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="grant-access-title" style="max-width: 48rem;">
+            <h3 id="grant-access-title" data-i18n="business.accesosGrantTitle">Grant Access</h3>
+            <p id="grant-access-subtitle" class="admin-subtitle"></p>
+            <p class="admin-hint" data-i18n="business.extraAccessHint">This is in addition to whatever their Puesto de Trabajo already grants — it never removes access.</p>
+            <div id="grant-access-container"></div>
+            <div id="grant-access-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="grant-access-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="grant-access-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -448,6 +492,8 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
+    <script src="PermissionTree.js"></script>
+    <script src="PermissionCostTree.js"></script>
     <script src="Business-Usuarios.js"></script>
 </body>
 </html>

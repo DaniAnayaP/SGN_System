@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // "Mis Accesos y Permisos" (Servicio Contratado) — a self-service, read-only
 // view of what the CURRENTLY LOGGED-IN business user can actually see today:
-// profile-derived grants (green) + extra grants (yellow) + neither
-// (red/locked). Same PermissionCostTree "clientTricolor" tree Accesos y
-// Permisos' own "Permisos Activados" modal already uses for looking up
+// grants from their own Puesto de Trabajo (green) + Permisos Adicionales
+// (yellow) + neither (red/locked). Same PermissionCostTree "clientTricolor"
+// tree Usuarios' own "Permisos Activados" modal already uses for looking up
 // ANOTHER user (admin-only there) — this page is the same tree pointed at
 // GET /api/business/me/grants instead, open to any authenticated user since
 // it's their own data. Shell comes from Dashboard.js.
@@ -20,7 +20,7 @@ async function loadMyAccess() {
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         const tree = window.PermissionCostTree.create(container, { mode: 'clientTricolor', interactive: false });
-        await tree.init(data.profileGrants || [], [], data.grants || []);
+        await tree.init(data.jobPositionGrants || [], [], data.grants || []);
     } catch {
         errorBanner.textContent = Dashboard.t('admin.loadError');
         errorBanner.hidden = false;
