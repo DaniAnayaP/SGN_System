@@ -45,6 +45,7 @@ const {
     createClient,
     updateClient,
     setClientAppEnabled,
+    deleteClientCompletely,
     updateClientBranding,
     findClientByRfc,
     getModuleCosts,
@@ -794,11 +795,26 @@ app.patch('/api/admin/clients/:id/app-enabled', requireAuth, requireAdmin, (req,
     res.json({ client });
 });
 
-// No hard-delete route: a client can only ever be Edited or Activado/
-// Desactivado (see PATCH above, status field) — once a client is on file it
-// stays on file. Deleting also isn't possible from the UI (see Admin-SaaS.js
-// renderClients) — this comment is the one remaining trace of the old
-// DELETE /api/admin/clients/:id route.
+// A real client can only ever be Edited or Activado/Desactivado (see PATCH
+// above, status field) — once it's on file it stays on file, same reasoning
+// as ever (no one should casually delete a paying customer's whole account).
+// This ONE route breaks that rule on purpose, for a TEST client only: type-
+// the-company-name confirm client-side (Admin-SaaS.js) plus its own narrow
+// 'reset' Equipo SaaS grant (separate from 'editar'/'activar' — nobody gets
+// this just by having the other two), so it's not something a normal
+// Activar/Editar grant accidentally opens up.
+app.post('/api/admin/clients/:id/reset', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'reset')) {
+        return res.status(403).json({ message: 'No tienes permiso para reiniciar clientes.' });
+    }
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    if (req.body?.companyName !== existing.company_name) {
+        return res.status(400).json({ message: 'El nombre de la empresa no coincide.' });
+    }
+    deleteClientCompletely(req.params.id);
+    res.status(204).end();
+});
 
 app.get('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
     const existing = getClientById(req.params.id);

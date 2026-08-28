@@ -63,6 +63,12 @@ const SAAS_PERMISSION_CATALOG = [
             { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
             { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
             { subItemId: 'activar', labelKey: 'admin.saasActionActivate' },
+            // Deliberately its own leaf, separate from editar/activar --
+            // hard-deletes a client and everything under it (see POST
+            // /api/admin/clients/:id/reset), only for resetting a TEST
+            // client back to zero. Nobody gets this just by already having
+            // Editar/Activar.
+            { subItemId: 'reset', labelKey: 'admin.saasActionReset' },
         ],
     },
     {

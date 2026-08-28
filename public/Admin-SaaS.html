@@ -707,6 +707,22 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="reset-client-modal" hidden>
+        <div class="modal-panel" role="alertdialog" aria-modal="true" aria-labelledby="reset-client-modal-title">
+            <h3 id="reset-client-modal-title" data-i18n="admin.clientResetTitle">Reset test client</h3>
+            <p id="reset-client-warning" class="admin-error" style="display: block;"></p>
+            <div class="admin-field">
+                <label for="reset-client-confirm-input" id="reset-client-confirm-label" data-i18n="admin.clientResetConfirmLabel">Type the company's exact name to confirm:</label>
+                <input type="text" id="reset-client-confirm-input" autocomplete="off">
+            </div>
+            <div id="reset-client-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-danger" id="reset-client-confirm-btn" disabled data-i18n="admin.clientResetConfirmBtn">Delete everything</button>
+                <button type="button" class="btn btn-secondary" id="reset-client-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
             <h3 id="business-summary-modal-title" data-i18n="main.businessProfile">Business User Data</h3>

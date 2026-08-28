@@ -318,6 +318,7 @@ function renderClients() {
     // not per row: it's the same grant for every row on this screen.
     const canEditClients = Dashboard.hasSaasScreenGrant('saas-clients', 'editar');
     const canActivateClients = Dashboard.hasSaasScreenGrant('saas-clients', 'activar');
+    const canResetClients = Dashboard.hasSaasScreenGrant('saas-clients', 'reset');
     clients.forEach((client) => {
         const tr = document.createElement('tr');
         tr.dataset.status = client.status;
@@ -416,6 +417,11 @@ function renderClients() {
                 },
             ),
             appToggleBtn,
+            iconButton('bx-trash-alt', Dashboard.t('admin.clientResetTooltip'), () => openResetClientModal(client), {
+                disabled: !canResetClients,
+                title: canResetClients ? Dashboard.t('admin.clientResetTooltip') : Dashboard.t('admin.clientResetNoPermission'),
+                danger: true,
+            }),
         );
 
         tr.append(
@@ -1177,6 +1183,70 @@ adminAccessModal.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !adminAccessModal.hidden) closeAdminAccessModal();
+});
+
+// Reiniciar (borrar todo) — the ONE hard-delete this screen exposes, and
+// only for a TEST client (see server.js's own comment on why every OTHER
+// client action stops at Activar/Desactivar). Gated behind its own narrow
+// 'reset' Equipo SaaS grant, PLUS this type-the-company-name confirm so a
+// stray click can never trigger it — the confirm button stays disabled
+// until what's typed matches exactly.
+const resetClientModal = document.getElementById('reset-client-modal');
+const resetClientWarning = document.getElementById('reset-client-warning');
+const resetClientInput = document.getElementById('reset-client-confirm-input');
+const resetClientError = document.getElementById('reset-client-error');
+const resetClientConfirmBtn = document.getElementById('reset-client-confirm-btn');
+const resetClientCancelBtn = document.getElementById('reset-client-cancel');
+let resetClientTarget = null;
+
+function closeResetClientModal() {
+    resetClientModal.hidden = true;
+    resetClientTarget = null;
+    resetClientInput.value = '';
+}
+
+function openResetClientModal(client) {
+    resetClientTarget = client;
+    resetClientWarning.textContent = Dashboard.t('admin.clientResetWarning', { company: client.company_name });
+    resetClientInput.value = '';
+    resetClientConfirmBtn.disabled = true;
+    resetClientError.hidden = true;
+    resetClientModal.hidden = false;
+    resetClientInput.focus();
+}
+
+resetClientInput.addEventListener('input', () => {
+    resetClientConfirmBtn.disabled = !resetClientTarget || resetClientInput.value !== resetClientTarget.company_name;
+});
+
+resetClientConfirmBtn.addEventListener('click', async () => {
+    if (!resetClientTarget || resetClientInput.value !== resetClientTarget.company_name) return;
+    resetClientConfirmBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/clients/${resetClientTarget.id}/reset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ companyName: resetClientTarget.company_name }),
+        });
+        if (!res.ok) throw new Error('reset failed');
+        const company = resetClientTarget.company_name;
+        closeResetClientModal();
+        await loadClients();
+        Dashboard.showToast(Dashboard.t('admin.clientResetSuccess', { company }), 'success');
+    } catch {
+        resetClientError.textContent = Dashboard.t('admin.saveError');
+        resetClientError.hidden = false;
+        resetClientConfirmBtn.disabled = false;
+    }
+});
+
+resetClientCancelBtn.addEventListener('click', closeResetClientModal);
+resetClientModal.addEventListener('click', (event) => {
+    if (event.target === resetClientModal) closeResetClientModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !resetClientModal.hidden) closeResetClientModal();
 });
 
 document.addEventListener('dashboard:language-changed', () => {

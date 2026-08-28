@@ -401,6 +401,10 @@ body.dark-mode .admin-error{
     cursor: not-allowed;
     filter: none;
 }
+.btn-danger{
+    background: #c8384a;
+    color: #ffffff;
+}
 
 /* Centro de Costos — cascading País/Estado/Localidad/Calle picker inside
    the "+ Nuevo Centro Costos" modal (see Business-CentrosCosto.js). Each

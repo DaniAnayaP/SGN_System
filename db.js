@@ -1538,6 +1538,33 @@ function setClientAppEnabled(id, enabled) {
     return getClientById(id);
 }
 
+// Deliberately the ONLY hard-delete this file has for a client -- everywhere
+// else, "once a client is on file it stays on file" (see server.js's own
+// comment on the removed DELETE /api/admin/clients/:id route). This exists
+// specifically to reset a TEST client back to zero (see POST
+// /api/admin/clients/:id/reset, gated behind its own 'reset' Equipo SaaS
+// grant + a type-the-company-name confirm client-side) -- not meant for a
+// real customer's account.
+//
+// Every OTHER client_id-referencing table has ON DELETE CASCADE and cleans
+// itself up the moment `clients` loses this row. Three references don't
+// (added later via ALTER TABLE, see cost_centers' own schema comment for
+// why that matters) and would otherwise block the delete outright since
+// foreign_keys=ON: clients.admin_user_id -> users.id, hr_workers.user_id ->
+// users.id, and users/profiles.client_id -> clients.id themselves. Order
+// below breaks each in turn before finally removing the client row.
+function deleteClientCompletely(clientId) {
+    const resetClient = db.transaction((id) => {
+        db.prepare('UPDATE clients SET admin_user_id = NULL WHERE id = ?').run(id);
+        const hrWorkersDeleted = db.prepare('DELETE FROM hr_workers WHERE client_id = ?').run(id).changes;
+        const profilesDeleted = db.prepare('DELETE FROM profiles WHERE client_id = ?').run(id).changes;
+        const usersDeleted = db.prepare('DELETE FROM users WHERE client_id = ?').run(id).changes;
+        db.prepare('DELETE FROM clients WHERE id = ?').run(id);
+        return { hrWorkersDeleted, profilesDeleted, usersDeleted };
+    });
+    return resetClient(clientId);
+}
+
 // --- RFC duplicate check ------------------------------------------------------
 // Business key for "no duplicate clients" — see POST /api/admin/clients.
 // excludeId lets an update check against every OTHER client (a client
@@ -4188,6 +4215,7 @@ module.exports = {
     createClient,
     updateClient,
     setClientAppEnabled,
+    deleteClientCompletely,
     updateClientBranding,
     findClientByRfc,
     getModuleCosts,
