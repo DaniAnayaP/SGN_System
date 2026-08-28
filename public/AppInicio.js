@@ -143,12 +143,23 @@ document.addEventListener('click', closeHamburgerMenu);
         showToast(t('home.comingSoon'));
     });
 });
-document.getElementById('home-menu-database').addEventListener('click', () => {
-    window.location.href = 'BaseDatos-Empresa.html';
-});
-document.getElementById('home-menu-business-intelligence').addEventListener('click', () => {
-    window.location.href = 'NegocioInteligente-Transacciones.html';
-});
+// Database / Business Intelligence are collapsible groups here too — same
+// shape as Sistema Web's own Settings dropdown (a toggle that reveals its
+// real item(s) instead of navigating straight there itself). Both currently
+// have exactly one child (mirrors the desktop submenu 1:1); more can be
+// added later the same way "Administración del Negocio" nests many.
+function wireMenuGroupToggle(toggleId, submenuId) {
+    const toggle = document.getElementById(toggleId);
+    const submenu = document.getElementById(submenuId);
+    toggle.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const willOpen = submenu.hidden;
+        submenu.hidden = !willOpen;
+        toggle.setAttribute('aria-expanded', String(willOpen));
+    });
+}
+wireMenuGroupToggle('home-menu-database', 'home-database-submenu');
+wireMenuGroupToggle('home-menu-business-intelligence', 'home-business-intelligence-submenu');
 
 // "Administración del Negocio" / "Configuración de Botones" / "Base de
 // Datos" / "Negocio Inteligente" are gated by the same hasSettingsSubPermission
@@ -176,8 +187,20 @@ function syncSettingsMenuVisibility() {
     const navigableAdminItems = (getAdminBusinessItem()?.submenu || []).filter((i) => !i.permissionOnly);
     if (adminBusinessBtn) adminBusinessBtn.hidden = !hasSettingsSubPermission('btn-admin-negocio') || !navigableAdminItems.length;
     if (buttonConfigBtn) buttonConfigBtn.hidden = !hasSettingsSubPermission('btn-config-botones');
-    if (databaseBtn) databaseBtn.hidden = !hasSettingsSubPermission('btn-base-datos');
-    if (biBtn) biBtn.hidden = !hasSettingsSubPermission('btn-negocio-inteligente');
+    if (databaseBtn) {
+        databaseBtn.hidden = !hasSettingsSubPermission('btn-base-datos');
+        if (databaseBtn.hidden) {
+            databaseBtn.setAttribute('aria-expanded', 'false');
+            document.getElementById('home-database-submenu').hidden = true;
+        }
+    }
+    if (biBtn) {
+        biBtn.hidden = !hasSettingsSubPermission('btn-negocio-inteligente');
+        if (biBtn.hidden) {
+            biBtn.setAttribute('aria-expanded', 'false');
+            document.getElementById('home-business-intelligence-submenu').hidden = true;
+        }
+    }
 }
 
 // "Configuración" expands into its own sub-list (same 7 items Sistema Web's
@@ -196,6 +219,7 @@ document.getElementById('home-menu-language').addEventListener('click', async ()
     const next = (localStorage.getItem('lang') === 'en') ? 'es' : 'en';
     localStorage.setItem('lang', next);
     await loadLanguage();
+    updateDatabaseCompanyLabel();
 });
 document.getElementById('home-menu-logout').addEventListener('click', async () => {
     closeHamburgerMenu();
@@ -1142,6 +1166,18 @@ document.querySelectorAll('.home-tab').forEach((tab) => {
     });
 });
 
+// Same "Base Datos {abbr}" convention as Dashboard.js's own
+// updateDatabaseMenuLabel — re-run after loadLanguage() too (its blanket
+// data-i18n pass would otherwise wipe the appended abbreviation back to the
+// bare base label on every language switch).
+let clientCompanyAbbreviation = null;
+function updateDatabaseCompanyLabel() {
+    const databaseLabel = document.getElementById('home-database-company-label');
+    if (!databaseLabel) return;
+    const base = t('menu.databaseCompany');
+    databaseLabel.textContent = clientCompanyAbbreviation ? `${base} ${clientCompanyAbbreviation}` : base;
+}
+
 async function loadClientBranding() {
     const logoImg = document.getElementById('home-client-logo');
     const logoFallback = document.getElementById('home-client-logo-fallback');
@@ -1159,6 +1195,8 @@ async function loadClientBranding() {
         clientColorPalette = branding.colorPalette || null;
         clientPrimaryColor = branding.primaryColor || null;
         if (getStoredStyle() === 'institutional') applyInstitutionalTheme();
+        clientCompanyAbbreviation = branding.companyAbbreviation || null;
+        updateDatabaseCompanyLabel();
     } catch {
         // Fallback icon + blank name already in the markup — nothing to do.
     }
