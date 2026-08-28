@@ -856,17 +856,35 @@ let availableDepartments = DEPARTMENTS;
 let selectedDepartment = localStorage.getItem('department') || null;
 let selectedArea = localStorage.getItem('area') || null;
 let sidebarCostCenters = [];
-// From GET /api/business/app-screens — a pantalla only ever gets a real,
-// tappable App experience once someone has actually gone in and turned on
-// "Visión APP" for it (PermissionTree.js's own paired checkbox). Being
-// reachable on Sistema Web is a completely separate thing: the category
-// screen picker (renderCategoryScreens) must check THIS, never a plain Web
-// grant, or a screen nobody has designed for the App yet would silently
-// open the desktop page instead of honestly saying "Próximamente".
+// From GET /api/business/app-screens — the client's assigned App template
+// (Nuestras APPs' own screen catalog, sector-wide). Only used to build the
+// "Accesos rápidos" tiles below; NOT what decides whether the category
+// screen picker can open a given pantalla (see isPantallaAppVisible).
 let grantedAppScreens = [];
-function isPantallaAppVisible(pantalla) {
-    const webScreenKey = PANTALLA_ID_TO_WEB_SCREEN_KEY[pantalla.id];
-    return !!webScreenKey && grantedAppScreens.some((s) => s.webScreenKey === webScreenKey);
+
+// A pantalla only ever gets a real, tappable App experience once someone
+// has actually gone in and turned on "Visión APP" for it — PermissionTree.js's
+// own paired checkbox, saved as an ordinary grant whose submenuId happens to
+// end in '#app' (see GRANT_APP_SUFFIX there and in db.js). Being reachable on
+// Sistema Web is a completely separate thing: the category screen picker
+// (renderCategoryScreens) must check THIS exact grant, never a plain Web
+// grant and never the Nuestras APPs catalog (that only gates whether the
+// checkbox itself can be turned on — once it has been, this is the signal
+// that actually matters), or a screen nobody has designed for the App yet
+// would silently open the desktop page instead of honestly saying
+// "Próximamente". No broadening fallback on purpose (unlike hasScreenGrant):
+// checking the App box at a higher level (item/section) writes this exact
+// suffixed key onto every leaf underneath at save time (see
+// PermissionTree.js's computeAppToggle), so an exact match is always enough
+// — reusing hasScreenGrant's "whole item granted" fallback here would wrongly
+// treat plain broad Web access as App-visibility too.
+function hasAppVisionGrant(sectionId, itemId, submenuId) {
+    if (isUnrestrictedClientAdmin()) return true;
+    return effectiveGrants.some((g) => g.sectionId === sectionId && g.itemId === itemId && g.submenuId === `${submenuId}#app`);
+}
+function isPantallaAppVisible(pantalla, catId) {
+    if (!selectedDepartment || !selectedArea) return false;
+    return hasAppVisionGrant(selectedDepartment, selectedArea, `${catId}/${pantalla.id}`);
 }
 
 function getStoredCostCenterSelection() {
@@ -1093,12 +1111,12 @@ function grantedScreensForCategory(cat) {
 // App-native page when one is curated (PANTALLA_ID_TO_WEB_SCREEN_KEY ->
 // WEB_SCREEN_PAGES), otherwise falls back to its own desktop page directly
 // (same cookie session, same pattern as Base de Datos/Negocio Inteligente).
-function resolvePantallaDestination(pantalla) {
+function resolvePantallaDestination(pantalla, catId) {
     // Reachable on Sistema Web is not the same question as "designed for
     // the App yet" — only a pantalla someone has actually turned on Visión
     // APP for gets a real destination here; everything else says
     // "Próximamente" regardless of how built-out it already is on desktop.
-    if (!isPantallaAppVisible(pantalla)) return null;
+    if (!isPantallaAppVisible(pantalla, catId)) return null;
     const webScreenKey = PANTALLA_ID_TO_WEB_SCREEN_KEY[pantalla.id];
     const page = WEB_SCREEN_PAGES[webScreenKey];
     return page?.href || null;
@@ -1126,14 +1144,14 @@ const categoryViewToggle = document.getElementById('home-category-view-toggle');
 const categoryViewGridBtn = document.getElementById('home-category-view-grid');
 const categoryViewListBtn = document.getElementById('home-category-view-list');
 
-function onCategoryScreenTap(pantalla) {
-    const destination = resolvePantallaDestination(pantalla);
+function onCategoryScreenTap(pantalla, catId) {
+    const destination = resolvePantallaDestination(pantalla, catId);
     if (destination) window.location.href = destination;
     else showToast(t('home.screenComingSoon', { label: t(pantalla.labelKey, pantalla.labelParams || {}) }));
 }
 
-function buildCategoryTile(pantalla) {
-    const soon = !resolvePantallaDestination(pantalla);
+function buildCategoryTile(pantalla, catId) {
+    const soon = !resolvePantallaDestination(pantalla, catId);
     const info = pantallaTileInfo(pantalla);
     const tile = document.createElement('button');
     tile.type = 'button';
@@ -1143,11 +1161,11 @@ function buildCategoryTile(pantalla) {
         <span class="home-tile-icon"><i class="bx ${(!soon && info?.icon) || pantalla.icon || 'bx-window'}" aria-hidden="true"></i></span>
         <span>${t(pantalla.labelKey, pantalla.labelParams || {})}</span>
     `;
-    tile.addEventListener('click', () => onCategoryScreenTap(pantalla));
+    tile.addEventListener('click', () => onCategoryScreenTap(pantalla, catId));
     return tile;
 }
-function buildCategoryListRow(pantalla) {
-    const soon = !resolvePantallaDestination(pantalla);
+function buildCategoryListRow(pantalla, catId) {
+    const soon = !resolvePantallaDestination(pantalla, catId);
     const info = pantallaTileInfo(pantalla);
     const row = document.createElement('button');
     row.type = 'button';
@@ -1157,7 +1175,7 @@ function buildCategoryListRow(pantalla) {
         <span class="home-category-list-label">${t(pantalla.labelKey, pantalla.labelParams || {})}</span>
         ${soon ? `<span class="home-category-list-tag">${t('home.categorySoonTag')}</span>` : `<span class="home-category-list-chevron"><i class="bx bx-chevron-right" aria-hidden="true"></i></span>`}
     `;
-    row.addEventListener('click', () => onCategoryScreenTap(pantalla));
+    row.addEventListener('click', () => onCategoryScreenTap(pantalla, catId));
     return row;
 }
 
@@ -1189,8 +1207,8 @@ function renderCategoryScreens(catId) {
     }
     categoryEmptyEl.hidden = true;
     screens.forEach((pantalla) => {
-        categoryTilesEl.appendChild(buildCategoryTile(pantalla));
-        categoryListEl.appendChild(buildCategoryListRow(pantalla));
+        categoryTilesEl.appendChild(buildCategoryTile(pantalla, catId));
+        categoryListEl.appendChild(buildCategoryListRow(pantalla, catId));
     });
     setCategoryViewMode(categoryViewMode);
 }

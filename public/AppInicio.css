@@ -149,7 +149,6 @@ body{
     display: flex;
     flex-direction: column;
     background: radial-gradient(circle at 30% 0%, var(--home-bg-grad-1), var(--home-bg-grad-2) 60%);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .home-header{
