@@ -46,6 +46,7 @@ const {
     updateClient,
     setClientAppEnabled,
     deleteClientCompletely,
+    provisionTrainingAccount,
     updateClientBranding,
     findClientByRfc,
     getModuleCosts,
@@ -360,6 +361,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             role: user.role,
             clientId: user.client_id,
             isClientAdmin: !!user.is_client_admin,
+            isTestAccount: !!user.is_test_account,
         },
         JWT_SECRET,
         { expiresIn: '8h' }
@@ -646,13 +648,15 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
 async function applyClientLifecycle(client) {
     if (client.status === 'activo') {
         const { user, generatedPassword } = await activateClient(client.id);
-        if (generatedPassword) {
-            return { username: user.username, password: generatedPassword };
-        }
-        return null;
+        const training = await provisionTrainingAccount(client.id);
+        const generatedAdmin = generatedPassword ? { username: user.username, password: generatedPassword } : null;
+        const generatedTrainingAccount = training.generatedPassword
+            ? { username: training.user.username, password: training.generatedPassword }
+            : null;
+        return { generatedAdmin, generatedTrainingAccount };
     }
     deactivateClientUsers(client.id);
-    return null;
+    return { generatedAdmin: null, generatedTrainingAccount: null };
 }
 
 // A plan's módulos + centros de costo limit (set in Planes y Paquetes) get
@@ -692,7 +696,7 @@ function extractClientFields(body) {
         rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
         contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
         contractWordDataUrl, contractWordFileName,
-        monthlyPayment, initialPayment, sectorNegocio,
+        monthlyPayment, initialPayment, sectorNegocio, isTest,
     } = body;
     return {
         companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
@@ -704,7 +708,7 @@ function extractClientFields(body) {
         // updateClient hace COALESCE(@contractedCost, contracted_cost), así
         // que mandar null aquí congela el valor histórico en vez de
         // ponerlo en 0 en cada guardado futuro.
-        contractedCost: null, monthlyPayment, initialPayment, sectorNegocio,
+        contractedCost: null, monthlyPayment, initialPayment, sectorNegocio, isTest,
     };
 }
 
@@ -735,8 +739,8 @@ app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     }
     const client = createClient(extractClientFields(req.body));
     applyEffectiveEntitlements(client.id);
-    const generatedAdmin = await applyClientLifecycle(client);
-    res.status(201).json({ client: getClientById(client.id), generatedAdmin });
+    const { generatedAdmin, generatedTrainingAccount } = await applyClientLifecycle(client);
+    res.status(201).json({ client: getClientById(client.id), generatedAdmin, generatedTrainingAccount });
 });
 
 app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) => {
@@ -778,8 +782,8 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
         setClientAddenda(req.params.id, { extraCostCenters, extraModules: getClientAddenda(req.params.id).extraModules });
     }
     applyEffectiveEntitlements(client.id);
-    const generatedAdmin = await applyClientLifecycle(client);
-    res.json({ client: getClientById(client.id), generatedAdmin });
+    const { generatedAdmin, generatedTrainingAccount } = await applyClientLifecycle(client);
+    res.json({ client: getClientById(client.id), generatedAdmin, generatedTrainingAccount });
 });
 
 // Independent on/off switch for whether this client can use the mobile App
@@ -1781,7 +1785,7 @@ app.get('/api/business/cost-centers', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const client = getClientById(req.user.clientId);
     res.json({
-        costCenters: listCostCenters(req.user.clientId).map((cc) => mapCostCenter(cc, client.company_name)),
+        costCenters: listCostCenters(req.user.clientId, req.user.isTestAccount).map((cc) => mapCostCenter(cc, client.company_name)),
         limit: client.cost_centers_limit,
     });
 });
@@ -1790,13 +1794,14 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
     const error = validateCostCenterBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const client = getClientById(req.user.clientId);
-    if (countCostCenters(req.user.clientId) >= client.cost_centers_limit) {
+    if (countCostCenters(req.user.clientId, req.user.isTestAccount) >= client.cost_centers_limit) {
         return res.status(409).json({ message: 'Cost center limit reached for this client.' });
     }
     const { countryId, stateId, localityId, streetId, sucursal, name, description, responsible } = req.body;
     try {
         const costCenter = createCostCenter({
             clientId: req.user.clientId, countryId, stateId, localityId, streetId, sucursal, name, description, responsible,
+            isTestData: req.user.isTestAccount,
         });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
@@ -1812,7 +1817,7 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
 });
 
 app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getCostCenterById(req.params.id, req.user.clientId);
+    const existing = getCostCenterById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
     const error = validateCostCenterBody(req.body);
     if (error) return res.status(400).json({ message: error });
@@ -1820,7 +1825,7 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     try {
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, {
             countryId, stateId, localityId, streetId, sucursal, name, description, responsible,
-        });
+        }, req.user.isTestAccount);
         // requireClientAdmin-gated route: req.user.isClientAdmin is always
         // true here, so every field always lands in appliedPatch and
         // pending/rejected are always empty — this call only exists for its
@@ -1844,11 +1849,11 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
 // permanent accounting sequence (same reasoning as clients themselves, see
 // db.js's own migration comment), so only Activar/Desactivar from here on.
 app.patch('/api/business/cost-centers/:id/status', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getCostCenterById(req.params.id, req.user.clientId);
+    const existing = getCostCenterById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
     const { status } = req.body || {};
     if (status !== 'active' && status !== 'inactive') return res.status(400).json({ message: 'status must be active or inactive.' });
-    const costCenter = setCostCenterStatus(req.params.id, req.user.clientId, status);
+    const costCenter = setCostCenterStatus(req.params.id, req.user.clientId, status, req.user.isTestAccount);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
         recordLabel: costCenter.code, action: 'update', changedBy: req.user.name,
@@ -2031,21 +2036,21 @@ function validateJobPositionBody(body, { requireName = true } = {}) {
 
 app.get('/api/business/job-positions', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    res.json({ jobPositions: listJobPositions(req.user.clientId) });
+    res.json({ jobPositions: listJobPositions(req.user.clientId, req.user.isTestAccount) });
 });
 
 app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, res) => {
     const error = validateJobPositionBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { name, abbreviation, costCenterScope, status } = req.body;
-    if (Array.isArray(costCenterScope) && costCenterScope.some((id) => !getCostCenterById(id, req.user.clientId))) {
+    if (Array.isArray(costCenterScope) && costCenterScope.some((id) => !getCostCenterById(id, req.user.clientId, req.user.isTestAccount))) {
         return res.status(400).json({ message: 'costCenterScope contains a cost center that does not belong to this client.' });
     }
     try {
         const jobPosition = createJobPosition({
             clientId: req.user.clientId, name: name.trim(), abbreviation: (abbreviation || '').trim(),
             costCenterScope: Array.isArray(costCenterScope) ? JSON.stringify(costCenterScope) : 'all',
-            status,
+            status, isTestData: req.user.isTestAccount,
         });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: jobPosition.id,
@@ -2061,12 +2066,12 @@ app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, r
 });
 
 app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getJobPositionById(req.params.id, req.user.clientId);
+    const existing = getJobPositionById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Job position not found.' });
     const error = validateJobPositionBody(req.body, { requireName: false });
     if (error) return res.status(400).json({ message: error });
     const { name, abbreviation, costCenterScope, status } = req.body;
-    if (Array.isArray(costCenterScope) && costCenterScope.some((id) => !getCostCenterById(id, req.user.clientId))) {
+    if (Array.isArray(costCenterScope) && costCenterScope.some((id) => !getCostCenterById(id, req.user.clientId, req.user.isTestAccount))) {
         return res.status(400).json({ message: 'costCenterScope contains a cost center that does not belong to this client.' });
     }
     const patch = {
@@ -2082,7 +2087,7 @@ app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (r
     // logTableChange side effect.
     checkAndLogFieldChanges(req, existing, patch, JOB_POSITION_FIELDS, 'puestos-trabajo', existing.name);
     try {
-        const jobPosition = updateJobPosition(req.params.id, req.user.clientId, patch);
+        const jobPosition = updateJobPosition(req.params.id, req.user.clientId, patch, req.user.isTestAccount);
         res.json({ jobPosition });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -2093,7 +2098,7 @@ app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (r
 });
 
 app.delete('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getJobPositionById(req.params.id, req.user.clientId);
+    const existing = getJobPositionById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Job position not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: existing.id,
@@ -2125,7 +2130,7 @@ function validateHrStatusCatalogBody(body, { requireName = true } = {}) {
 
 app.get('/api/business/hr-status-catalog', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    res.json({ hrStatuses: listHrStatusCatalog(req.user.clientId) });
+    res.json({ hrStatuses: listHrStatusCatalog(req.user.clientId, req.user.isTestAccount) });
 });
 
 app.post('/api/business/hr-status-catalog', requireAuth, requireClientAdmin, (req, res) => {
@@ -2135,6 +2140,7 @@ app.post('/api/business/hr-status-catalog', requireAuth, requireClientAdmin, (re
     try {
         const hrStatus = createHrStatusCatalogEntry({
             clientId: req.user.clientId, name: name.trim(), operationalEffect, status,
+            isTestData: req.user.isTestAccount,
         });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'estatus-rh', recordId: hrStatus.id,
@@ -2150,7 +2156,7 @@ app.post('/api/business/hr-status-catalog', requireAuth, requireClientAdmin, (re
 });
 
 app.patch('/api/business/hr-status-catalog/:id', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getHrStatusCatalogById(req.params.id, req.user.clientId);
+    const existing = getHrStatusCatalogById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'HR status not found.' });
     const error = validateHrStatusCatalogBody(req.body, { requireName: false });
     if (error) return res.status(400).json({ message: error });
@@ -2162,7 +2168,7 @@ app.patch('/api/business/hr-status-catalog/:id', requireAuth, requireClientAdmin
     };
     checkAndLogFieldChanges(req, existing, patch, HR_STATUS_CATALOG_FIELDS, 'estatus-rh', existing.name);
     try {
-        const hrStatus = updateHrStatusCatalogEntry(req.params.id, req.user.clientId, patch);
+        const hrStatus = updateHrStatusCatalogEntry(req.params.id, req.user.clientId, patch, req.user.isTestAccount);
         res.json({ hrStatus });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -2173,7 +2179,7 @@ app.patch('/api/business/hr-status-catalog/:id', requireAuth, requireClientAdmin
 });
 
 app.delete('/api/business/hr-status-catalog/:id', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getHrStatusCatalogById(req.params.id, req.user.clientId);
+    const existing = getHrStatusCatalogById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'HR status not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'estatus-rh', recordId: existing.id,
@@ -2260,7 +2266,7 @@ app.get('/api/business/intelligent-reports/:id/results', requireAuth, (req, res)
     if (!report) return res.status(404).json({ message: 'Report not found.' });
     const client = getClientById(req.user.clientId);
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'registro-combustible');
-    const records = listFuelRecords(req.user.clientId).map((r) => mapFuelRecord(r, pendingByRecord, client?.company_name));
+    const records = listFuelRecords(req.user.clientId, req.user.isTestAccount).map((r) => mapFuelRecord(r, pendingByRecord, client?.company_name));
     const rows = computeIntelligentReportRows(report, records);
     res.json({ report: { name: report.name, columns: report.columns }, rows });
 });
@@ -2593,7 +2599,7 @@ app.get('/api/business/fuel-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'registro-combustible');
     const client = getClientById(req.user.clientId);
-    res.json({ records: listFuelRecords(req.user.clientId).map((r) => mapFuelRecord(r, pendingByRecord, client?.company_name)) });
+    res.json({ records: listFuelRecords(req.user.clientId, req.user.isTestAccount).map((r) => mapFuelRecord(r, pendingByRecord, client?.company_name)) });
 });
 
 app.post('/api/business/fuel-records', requireAuth, (req, res) => {
@@ -2617,6 +2623,7 @@ app.post('/api/business/fuel-records', requireAuth, (req, res) => {
         driver: driver.trim(),
         coordinator: coordinator.trim(),
         centroCostos: (centroCostos || '').trim(),
+        isTestData: req.user.isTestAccount,
     });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: record.id,
@@ -2628,7 +2635,7 @@ app.post('/api/business/fuel-records', requireAuth, (req, res) => {
 
 app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getFuelRecordById(req.params.id, req.user.clientId);
+    const existing = getFuelRecordById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
     const patch = req.body || {};
     // The lock/diff check runs on the raw patch (never sanitized — see
@@ -2642,14 +2649,14 @@ app.patch('/api/business/fuel-records/:id', requireAuth, (req, res) => {
         tripKmBeforeEvidence: (v) => (v ? '[imagen]' : ''),
         tripKmAfterEvidence: (v) => (v ? '[imagen]' : ''),
     });
-    const record = updateFuelRecord(req.params.id, req.user.clientId, appliedPatch);
+    const record = updateFuelRecord(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
     res.json({ record: mapFuelRecord(record, null, client?.company_name), pendingFields, rejectedFields });
 });
 
 app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getFuelRecordById(req.params.id, req.user.clientId);
+    const existing = getFuelRecordById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: existing.id,
@@ -2700,7 +2707,7 @@ app.get('/api/business/fuel-loading-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'carga-combustible');
     const client = getClientById(req.user.clientId);
-    res.json({ records: listFuelLoadingRecords(req.user.clientId).map((r) => mapFuelLoadingRecord(r, pendingByRecord, client?.company_name)) });
+    res.json({ records: listFuelLoadingRecords(req.user.clientId, req.user.isTestAccount).map((r) => mapFuelLoadingRecord(r, pendingByRecord, client?.company_name)) });
 });
 
 // Creates a blank record immediately — no fields required up front (see
@@ -2708,7 +2715,7 @@ app.get('/api/business/fuel-loading-records', requireAuth, (req, res) => {
 // identifying ones, is filled in afterward one at a time via PATCH.
 app.post('/api/business/fuel-loading-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const record = createFuelLoadingRecord({ clientId: req.user.clientId });
+    const record = createFuelLoadingRecord({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: record.id,
         recordLabel: record.db_id, action: 'create', changedBy: req.user.name,
@@ -2719,7 +2726,7 @@ app.post('/api/business/fuel-loading-records', requireAuth, (req, res) => {
 
 app.patch('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId);
+    const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
     const patch = req.body || {};
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FUEL_LOADING_PATCHABLE_FIELDS, 'carga-combustible', existing.eco_unit || existing.db_id, {
@@ -2727,14 +2734,14 @@ app.patch('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => {
         tripAfterEvidence: (v) => (v ? '[imagen]' : ''),
         totalCostEvidence: (v) => (v ? '[imagen]' : ''),
     });
-    const record = updateFuelLoadingRecord(req.params.id, req.user.clientId, appliedPatch);
+    const record = updateFuelLoadingRecord(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
     res.json({ record: mapFuelLoadingRecord(record, null, client?.company_name), pendingFields, rejectedFields });
 });
 
 app.delete('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId);
+    const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: existing.id,
@@ -2778,12 +2785,12 @@ app.get('/api/business/unit-types', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'tipos-unidad');
     const client = getClientById(req.user.clientId);
-    res.json({ unitTypes: listUnitTypes(req.user.clientId).map((r) => mapUnitTypeRecord(r, pendingByRecord, client?.company_name)) });
+    res.json({ unitTypes: listUnitTypes(req.user.clientId, req.user.isTestAccount).map((r) => mapUnitTypeRecord(r, pendingByRecord, client?.company_name)) });
 });
 
 app.post('/api/business/unit-types', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const unitType = createUnitType({ clientId: req.user.clientId });
+    const unitType = createUnitType({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: unitType.id,
         recordLabel: unitType.code, action: 'create', changedBy: req.user.name,
@@ -2794,18 +2801,18 @@ app.post('/api/business/unit-types', requireAuth, (req, res) => {
 
 app.patch('/api/business/unit-types/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getUnitTypeById(req.params.id, req.user.clientId);
+    const existing = getUnitTypeById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Unit type not found.' });
     const patch = req.body || {};
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, UNIT_TYPE_PATCHABLE_FIELDS, 'tipos-unidad', existing.code);
-    const unitType = updateUnitType(req.params.id, req.user.clientId, appliedPatch);
+    const unitType = updateUnitType(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
     res.json({ unitType: mapUnitTypeRecord(unitType, null, client?.company_name), pendingFields, rejectedFields });
 });
 
 app.delete('/api/business/unit-types/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getUnitTypeById(req.params.id, req.user.clientId);
+    const existing = getUnitTypeById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Unit type not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: existing.id,
@@ -2829,7 +2836,7 @@ const FLEET_UNIT_SCREEN_LABEL = 'Nuestras Unidades';
 
 function mapFleetUnitRecord(row, pendingByRecord, companyName) {
     if (!row) return row;
-    const unitType = row.unit_type_id ? getUnitTypeById(row.unit_type_id, row.client_id) : null;
+    const unitType = row.unit_type_id ? getUnitTypeById(row.unit_type_id, row.client_id, !!row.is_test_data) : null;
     return {
         id: row.id,
         ecoId: row.eco_id,
@@ -2856,12 +2863,12 @@ app.get('/api/business/fleet-units', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'nuestras-unidades');
     const client = getClientById(req.user.clientId);
-    res.json({ fleetUnits: listFleetUnits(req.user.clientId).map((r) => mapFleetUnitRecord(r, pendingByRecord, client?.company_name)) });
+    res.json({ fleetUnits: listFleetUnits(req.user.clientId, req.user.isTestAccount).map((r) => mapFleetUnitRecord(r, pendingByRecord, client?.company_name)) });
 });
 
 app.post('/api/business/fleet-units', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const fleetUnit = createFleetUnit({ clientId: req.user.clientId });
+    const fleetUnit = createFleetUnit({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: fleetUnit.id,
         recordLabel: `#${fleetUnit.id}`, action: 'create', changedBy: req.user.name,
@@ -2872,24 +2879,24 @@ app.post('/api/business/fleet-units', requireAuth, (req, res) => {
 
 app.patch('/api/business/fleet-units/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getFleetUnitById(req.params.id, req.user.clientId);
+    const existing = getFleetUnitById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fleet unit not found.' });
     const patch = req.body || {};
     if (typeof patch.ecoId === 'string' && patch.ecoId.trim() && patch.ecoId.trim() !== existing.eco_id) {
-        const dupe = getFleetUnitByEcoId(req.user.clientId, patch.ecoId);
+        const dupe = getFleetUnitByEcoId(req.user.clientId, patch.ecoId, req.user.isTestAccount);
         if (dupe && dupe.id !== existing.id) {
             return res.status(400).json({ message: 'That Económico is already registered to another unit.' });
         }
     }
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FLEET_UNIT_PATCHABLE_FIELDS, 'nuestras-unidades', existing.eco_id || `#${existing.id}`);
-    const fleetUnit = updateFleetUnit(req.params.id, req.user.clientId, appliedPatch);
+    const fleetUnit = updateFleetUnit(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
     res.json({ fleetUnit: mapFleetUnitRecord(fleetUnit, null, client?.company_name), pendingFields, rejectedFields });
 });
 
 app.delete('/api/business/fleet-units/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getFleetUnitById(req.params.id, req.user.clientId);
+    const existing = getFleetUnitById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fleet unit not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: existing.id,
@@ -2910,7 +2917,7 @@ app.get('/api/business/base-datos-global', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const client = getClientById(req.user.clientId);
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'registro-combustible');
-    const records = listFuelRecords(req.user.clientId).map((r) => ({
+    const records = listFuelRecords(req.user.clientId, req.user.isTestAccount).map((r) => ({
         ...mapFuelRecord(r, pendingByRecord, client?.company_name),
         sourceTable: 'registro-combustible',
     }));
@@ -2929,7 +2936,7 @@ const HR_WORKER_SCREEN_LABEL = 'Mi Recurso Humano';
 
 function mapHrWorker(row, pendingByRecord, companyName) {
     if (!row) return row;
-    const costCenter = row.cost_center_id ? getCostCenterById(row.cost_center_id, row.client_id) : null;
+    const costCenter = row.cost_center_id ? getCostCenterById(row.cost_center_id, row.client_id, !!row.is_test_data) : null;
     return {
         id: row.id,
         dbId: row.db_id,
@@ -2968,7 +2975,7 @@ app.get('/api/business/hr-workers', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'mi-recurso-humano');
     const client = getClientById(req.user.clientId);
-    res.json({ workers: listHrWorkers(req.user.clientId).map((w) => mapHrWorker(w, pendingByRecord, client?.company_name)) });
+    res.json({ workers: listHrWorkers(req.user.clientId, req.user.isTestAccount).map((w) => mapHrWorker(w, pendingByRecord, client?.company_name)) });
 });
 
 app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
@@ -2983,7 +2990,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     if (usernameOrEmailExists(null, email.trim())) {
         return res.status(409).json({ message: 'That email is already in use by another account.' });
     }
-    if (costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId)) {
+    if (costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId, req.user.isTestAccount)) {
         return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
     }
     const worker = await createHrWorker({
@@ -2995,6 +3002,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
         departments,
         costCenterId: costCenterId || null,
         email: email.trim(),
+        isTestData: req.user.isTestAccount,
     });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: worker.id,
@@ -3005,7 +3013,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
 
 app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getHrWorkerById(req.params.id, req.user.clientId);
+    const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
     const patch = { ...req.body };
     if (Object.prototype.hasOwnProperty.call(patch, 'departments')) {
@@ -3019,15 +3027,15 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
         patch.departments = JSON.stringify(patch.departments);
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'costCenterId') && patch.costCenterId != null
-        && !getCostCenterById(patch.costCenterId, req.user.clientId)) {
+        && !getCostCenterById(patch.costCenterId, req.user.clientId, req.user.isTestAccount)) {
         return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'hrStatusId')
-        && !getHrStatusCatalogById(patch.hrStatusId, req.user.clientId)) {
+        && !getHrStatusCatalogById(patch.hrStatusId, req.user.clientId, req.user.isTestAccount)) {
         return res.status(400).json({ message: 'hrStatusId does not belong to this client.' });
     }
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
-    const worker = updateHrWorker(req.params.id, req.user.clientId, appliedPatch);
+    const worker = updateHrWorker(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     res.json({ worker: mapHrWorker(worker, null, getClientById(req.user.clientId)?.company_name), pendingFields, rejectedFields });
 });
 
@@ -3038,20 +3046,20 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
 // activating a client (see applyClientLifecycle).
 app.post('/api/business/hr-workers/:id/activate-user', requireAuth, async (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getHrWorkerById(req.params.id, req.user.clientId);
+    const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
-    const generated = await activateHrWorkerUser(req.params.id, req.user.clientId);
+    const generated = await activateHrWorkerUser(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!generated) return res.status(409).json({ message: 'This worker has no linked account.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,
         recordLabel: existing.full_name, action: 'update', fieldKey: 'main.colHrUserActivated', changedBy: req.user.name,
     });
-    res.json({ worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId), null, getClientById(req.user.clientId)?.company_name), generated });
+    res.json({ worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount), null, getClientById(req.user.clientId)?.company_name), generated });
 });
 
 app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getHrWorkerById(req.params.id, req.user.clientId);
+    const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,

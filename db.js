@@ -1136,22 +1136,29 @@ const DEFAULT_HR_STATUSES = [
     ['Permiso con Goce de Sueldo', 'suspended'],
     ['Rescisión de Contrato', 'inactive'],
 ];
-const insertHrStatusCatalogEntry = db.prepare('INSERT INTO hr_status_catalog (client_id, name, operational_effect) VALUES (?, ?, ?)');
-function ensureDefaultHrStatusCatalog(clientId) {
-    const existing = db.prepare('SELECT COUNT(*) AS n FROM hr_status_catalog WHERE client_id = ?').get(clientId).n;
+const insertHrStatusCatalogEntry = db.prepare('INSERT INTO hr_status_catalog (client_id, name, operational_effect, is_test_data) VALUES (?, ?, ?, ?)');
+// Seeded separately per is_test_data so the Capacitación account (see
+// provisionTrainingAccount) gets its own independent copy of the same
+// defaults the first time it looks -- never shares/consumes the real
+// client's own catalog, and renaming/removing an entry on one side never
+// touches the other.
+function ensureDefaultHrStatusCatalog(clientId, forTestAccount = false) {
+    const isTestData = forTestAccount ? 1 : 0;
+    const existing = db.prepare('SELECT COUNT(*) AS n FROM hr_status_catalog WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData).n;
     if (existing > 0) return;
     const seed = db.transaction(() => {
-        DEFAULT_HR_STATUSES.forEach(([name, effect]) => insertHrStatusCatalogEntry.run(clientId, name, effect));
+        DEFAULT_HR_STATUSES.forEach(([name, effect]) => insertHrStatusCatalogEntry.run(clientId, name, effect, isTestData));
     });
     seed();
 }
 // Every worker is Activo by definition the moment they're registered (see
 // createHrWorker below) — looks up this client's own Activo entry,
 // seeding their catalog first if it's still empty.
-function getDefaultActiveHrStatusId(clientId) {
-    ensureDefaultHrStatusCatalog(clientId);
-    const row = db.prepare("SELECT id FROM hr_status_catalog WHERE client_id = ? AND name = 'Activo' ORDER BY id ASC LIMIT 1").get(clientId)
-        || db.prepare("SELECT id FROM hr_status_catalog WHERE client_id = ? AND operational_effect = 'active' ORDER BY id ASC LIMIT 1").get(clientId);
+function getDefaultActiveHrStatusId(clientId, forTestAccount = false) {
+    ensureDefaultHrStatusCatalog(clientId, forTestAccount);
+    const isTestData = forTestAccount ? 1 : 0;
+    const row = db.prepare("SELECT id FROM hr_status_catalog WHERE client_id = ? AND is_test_data = ? AND name = 'Activo' ORDER BY id ASC LIMIT 1").get(clientId, isTestData)
+        || db.prepare("SELECT id FROM hr_status_catalog WHERE client_id = ? AND is_test_data = ? AND operational_effect = 'active' ORDER BY id ASC LIMIT 1").get(clientId, isTestData);
     return row ? row.id : null;
 }
 
@@ -1242,6 +1249,44 @@ if (!fuelLoadingColumns.some((c) => c.name === 'fuel_type')) {
     db.exec("ALTER TABLE fuel_loading_records ADD COLUMN fuel_type TEXT NOT NULL DEFAULT ''");
 }
 
+// Small helper for the repetitive "add this column to that table if it's
+// not there yet" migration shape already used by hand throughout this file
+// -- reached for here specifically because the next migration needs the
+// exact same one-line change repeated across 11 different tables. table/
+// column/definition are always hardcoded call-site literals, never request
+// input, so string-building the ALTER TABLE here is safe.
+function ensureColumn(table, column, definition) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!columns.some((c) => c.name === column)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+}
+
+// Cliente de Pruebas (Nuestros Clientes) + cuenta de Capacitación (Pruebas +
+// Apodo Empresa, auto-provisionada junto con Admin+ABBR — see
+// provisionTrainingAccount) + el aislamiento real de datos que la vuelve
+// segura para entrenar sin afectar operación real: cada tabla de datos de
+// negocio gana su propia is_test_data, siempre 0 para uso normal y 1 para
+// todo lo que la cuenta de Capacitación crea. Cada list*() de abajo filtra
+// por ella según quién pregunta (ver su propio comentario), y cada create*()
+// la estampa según quién crea -- ningún registro de práctica se mezcla con
+// la operación real del cliente, ni al revés.
+ensureColumn('users', 'is_test_account', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('clients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('clients', 'training_user_id', 'INTEGER REFERENCES users(id)');
+// Deliberately NOT every client_id-scoped table: Field Fill Rules,
+// Transacciones Inteligentes and Reportes Programados are configuration a
+// client builds ONCE (which fields gate which, which report to compute) --
+// isolating those would mean Capacitación trains against rules/reports that
+// don't match what the real client actually configured, defeating the point
+// of training on "cómo funcionan ciertas cosas" for THIS client. Only the
+// day-to-day business records that would visibly clutter a real list get
+// their own is_test_data.
+[
+    'cost_centers', 'job_positions', 'hr_workers', 'hr_status_catalog',
+    'fuel_records', 'fuel_loading_records', 'unit_types', 'fleet_units',
+].forEach((table) => ensureColumn(table, 'is_test_data', 'INTEGER NOT NULL DEFAULT 0'));
+
 // --- Indexes -------------------------------------------------------------
 // Only for FK/lookup columns that actually appear in a WHERE clause below
 // and aren't already covered by a UNIQUE constraint's implicit index (e.g.
@@ -1290,13 +1335,13 @@ function usernameOrEmailExists(username, email) {
         .get(username, email);
 }
 
-function createUser({ username, email, passwordHash, name, clientId = null, isClientAdmin = false, role = 'user', active = true }) {
+function createUser({ username, email, passwordHash, name, clientId = null, isClientAdmin = false, role = 'user', active = true, isTestAccount = false }) {
     const result = db
         .prepare(`
-            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin, role, active)
-            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin, @role, @active)
+            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin, role, active, is_test_account)
+            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin, @role, @active, @isTestAccount)
         `)
-        .run({ username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0, role, active: active ? 1 : 0 });
+        .run({ username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0, role, active: active ? 1 : 0, isTestAccount: isTestAccount ? 1 : 0 });
     return db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 }
 
@@ -1377,6 +1422,49 @@ async function activateClient(clientId) {
     return { user, generatedPassword: password };
 }
 
+// Same auto-provisioning shape as activateClient just above, for the
+// per-client "Pruebas<ApodoEmpresa>" training account (see the is_test_data
+// migration block near the top of this file) — a real, fully unrestricted
+// client-admin account (isClientAdmin: true, zero grants -> unrestricted,
+// see isUnrestrictedClientAdmin) whose every write lands with
+// is_test_data = 1, so it can be used freely for capacitación without ever
+// touching the client's real records. Uses company_nickname (Apodo Empresa)
+// per the user's own naming choice; falls back to the same abbreviation
+// activateClient uses when a client has no nickname set.
+async function provisionTrainingAccount(clientId) {
+    const client = getClientById(clientId);
+    if (!client) throw new Error('Client not found.');
+
+    if (client.training_user_id) {
+        db.prepare('UPDATE users SET active = 1 WHERE id = ?').run(client.training_user_id);
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(client.training_user_id);
+        return { user, generatedPassword: null };
+    }
+
+    const nickname = (client.company_nickname || '').trim() || generateClientAbbreviation(client.company_name);
+    const nicknameSlug = nickname.replace(/[^a-zA-Z0-9]/g, '') || generateClientAbbreviation(client.company_name);
+    const username = generateUniqueUsername(`Pruebas${nicknameSlug}`);
+    const password = generateRandomPassword();
+    const email = `${username.toLowerCase()}@example.invalid`;
+    const passwordHash = await hashPassword(password);
+
+    const create = db.transaction(() => {
+        const user = createUser({
+            username,
+            email,
+            passwordHash,
+            name: `Pruebas ${client.company_name}`,
+            clientId,
+            isClientAdmin: true,
+            isTestAccount: true,
+        });
+        db.prepare('UPDATE clients SET training_user_id = ? WHERE id = ?').run(user.id, clientId);
+        return user;
+    });
+    const user = create();
+    return { user, generatedPassword: password };
+}
+
 function deactivateClientUsers(clientId) {
     db.prepare('UPDATE users SET active = 0 WHERE client_id = ?').run(clientId);
 }
@@ -1442,7 +1530,7 @@ function createClient({
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
     contractWordDataUrl, contractWordFileName,
-    contractedCost, monthlyPayment, initialPayment, sectorNegocio,
+    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest,
 }) {
     const create = db.transaction(() => {
         const accountNumber = db.prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM clients').get().n;
@@ -1454,7 +1542,7 @@ function createClient({
                     rfc, company_nickname, company_abbreviation, owner_name, billing_email, razon_social, big_date_number, account_number,
                     contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
                     contract_word_data_url, contract_word_file_name,
-                    contracted_cost, monthly_payment, initial_payment, sector_negocio
+                    contracted_cost, monthly_payment, initial_payment, sector_negocio, is_test
                 )
                 VALUES (
                     @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
@@ -1462,7 +1550,7 @@ function createClient({
                     @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @razonSocial, @bigDateNumber, @accountNumber,
                     @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
                     @contractWordDataUrl, @contractWordFileName,
-                    @contractedCost, @monthlyPayment, @initialPayment, @sectorNegocio
+                    @contractedCost, @monthlyPayment, @initialPayment, @sectorNegocio, @isTest
                 )
             `)
             .run({
@@ -1477,7 +1565,7 @@ function createClient({
                 contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
                 contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
                 contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
-                sectorNegocio: sectorNegocio || '',
+                sectorNegocio: sectorNegocio || '', isTest: isTest ? 1 : 0,
             }).lastInsertRowid;
     });
     return getClientById(create());
@@ -1495,7 +1583,7 @@ function updateClient(id, {
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
     contractWordDataUrl, contractWordFileName,
-    contractedCost, monthlyPayment, initialPayment, sectorNegocio,
+    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest,
 }) {
     const existing = getClientById(id);
     db.prepare(`
@@ -1511,7 +1599,8 @@ function updateClient(id, {
             contract_end_date = @contractEndDate, contract_file_data_url = @contractFileDataUrl, contract_file_name = @contractFileName,
             contract_word_data_url = @contractWordDataUrl, contract_word_file_name = @contractWordFileName,
             contracted_cost = COALESCE(@contractedCost, contracted_cost),
-            monthly_payment = @monthlyPayment, initial_payment = @initialPayment, sector_negocio = @sectorNegocio
+            monthly_payment = @monthlyPayment, initial_payment = @initialPayment, sector_negocio = @sectorNegocio,
+            is_test = @isTest
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
@@ -1525,6 +1614,7 @@ function updateClient(id, {
         contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
         contractedCost: contractedCost ?? null, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
         sectorNegocio: sectorNegocio ?? (existing ? existing.sector_negocio : '') ?? '',
+        isTest: isTest != null ? (isTest ? 1 : 0) : (existing ? existing.is_test : 0),
     });
     return getClientById(id);
 }
@@ -1555,7 +1645,11 @@ function setClientAppEnabled(id, enabled) {
 // below breaks each in turn before finally removing the client row.
 function deleteClientCompletely(clientId) {
     const resetClient = db.transaction((id) => {
-        db.prepare('UPDATE clients SET admin_user_id = NULL WHERE id = ?').run(id);
+        // training_user_id needs the same treatment as admin_user_id just
+        // below: both are non-cascading FKs into users (added via ALTER
+        // TABLE), so the referencing clients row must be nulled out BEFORE
+        // the users DELETE below or that DELETE violates the FK.
+        db.prepare('UPDATE clients SET admin_user_id = NULL, training_user_id = NULL WHERE id = ?').run(id);
         const hrWorkersDeleted = db.prepare('DELETE FROM hr_workers WHERE client_id = ?').run(id).changes;
         const profilesDeleted = db.prepare('DELETE FROM profiles WHERE client_id = ?').run(id).changes;
         const usersDeleted = db.prepare('DELETE FROM users WHERE client_id = ?').run(id).changes;
@@ -1857,16 +1951,23 @@ function setClientAddenda(clientId, { extraCostCenters, extraModules }) {
 }
 
 // --- Query helpers: cost centers (Centros de Costo, scoped to one client) ----
-function listCostCenters(clientId) {
-    return db.prepare('SELECT * FROM cost_centers WHERE client_id = ? ORDER BY code ASC').all(clientId);
+// forTestAccount (here and in every other list*/create* pair below) is
+// req.user.isTestAccount, threaded straight through from server.js -- the
+// Capacitación account (see provisionTrainingAccount) only ever sees/creates
+// is_test_data=1 rows, everyone else only ever sees/creates is_test_data=0
+// ones. Never a user choice, never a query param a client could tamper
+// with -- it's a property of WHO is asking, decided once at login (the JWT
+// payload) same as isClientAdmin already is.
+function listCostCenters(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM cost_centers WHERE client_id = ? AND is_test_data = ? ORDER BY code ASC').all(clientId, forTestAccount ? 1 : 0);
 }
 
-function countCostCenters(clientId) {
-    return db.prepare('SELECT COUNT(*) AS n FROM cost_centers WHERE client_id = ?').get(clientId).n;
+function countCostCenters(clientId, forTestAccount = false) {
+    return db.prepare('SELECT COUNT(*) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ?').get(clientId, forTestAccount ? 1 : 0).n;
 }
 
-function getCostCenterById(id, clientId) {
-    return db.prepare('SELECT * FROM cost_centers WHERE id = ? AND client_id = ?').get(id, clientId);
+function getCostCenterById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM cost_centers WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
 // --- Query helpers: geo catalog (País/Estado/Localidad/Calle, global) -------
@@ -1983,35 +2084,39 @@ function deleteFieldFillRule(id, clientId) {
     db.prepare('DELETE FROM field_fill_rules WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
-function createCostCenter({ clientId, countryId, stateId, localityId, streetId, sucursal, name, description, responsible }) {
+function createCostCenter({ clientId, countryId, stateId, localityId, streetId, sucursal, name, description, responsible, isTestData = false }) {
     const client = getClientById(clientId);
     const baseCode = buildCostCenterCodeBase(client, countryId, stateId, localityId, streetId, sucursal);
     const create = db.transaction(() => {
         const code = generateUniqueCostCenterCode(clientId, baseCode);
+        // Practice cost centers get their own account-number sequence,
+        // starting from 1, so training never consumes/skips a number out of
+        // the client's real accounting sequence.
         const accountNumber = db
-            .prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM cost_centers WHERE client_id = ?')
-            .get(clientId).n;
+            .prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ?')
+            .get(clientId, isTestData ? 1 : 0).n;
         const result = db
             .prepare(`
                 INSERT INTO cost_centers (
                     client_id, code, name, description, responsible,
                     country_id, state_id, locality_id, street_id, sucursal,
-                    account_number, record_code
+                    account_number, record_code, is_test_data
                 )
                 VALUES (
                     @clientId, @code, @name, @description, @responsible,
                     @countryId, @stateId, @localityId, @streetId, @sucursal,
-                    @accountNumber, @recordCode
+                    @accountNumber, @recordCode, @isTestData
                 )
             `)
             .run({
                 clientId, code, name, description: description || '', responsible: responsible || '',
                 countryId, stateId, localityId, streetId, sucursal: sucursal || '',
                 accountNumber, recordCode: computeCostCenterRecordCode(clientId, code, accountNumber),
+                isTestData: isTestData ? 1 : 0,
             });
         return result.lastInsertRowid;
     });
-    return getCostCenterById(create(), clientId);
+    return getCostCenterById(create(), clientId, isTestData);
 }
 
 // Used only for change-history diffing (see logFieldChanges) — updateCostCenter
@@ -2028,7 +2133,7 @@ const COST_CENTER_FIELDS = {
 // -- unlike record_code (frozen forever at creation, see
 // computeCostCenterRecordCode's own comment), código is allowed to change on
 // edit since it exists to reflect the currently-selected location.
-function updateCostCenter(id, clientId, { countryId, stateId, localityId, streetId, sucursal, name, description, responsible }) {
+function updateCostCenter(id, clientId, { countryId, stateId, localityId, streetId, sucursal, name, description, responsible }, forTestAccount = false) {
     const client = getClientById(clientId);
     const baseCode = buildCostCenterCodeBase(client, countryId, stateId, localityId, streetId, sucursal);
     const code = generateUniqueCostCenterCode(clientId, baseCode, id);
@@ -2041,7 +2146,7 @@ function updateCostCenter(id, clientId, { countryId, stateId, localityId, street
         id, clientId, code, name, description: description || '', responsible: responsible || '',
         countryId, stateId, localityId, streetId, sucursal: sucursal || '',
     });
-    return getCostCenterById(id, clientId);
+    return getCostCenterById(id, clientId, forTestAccount);
 }
 
 // No hard-delete -- account_number/record_code are a permanent accounting
@@ -2049,25 +2154,31 @@ function updateCostCenter(id, clientId, { countryId, stateId, localityId, street
 // migration block near the top of this file). Deleting a row here would
 // leave a hole in that sequence, which is exactly what this rule exists to
 // prevent.
-function setCostCenterStatus(id, clientId, status) {
+function setCostCenterStatus(id, clientId, status, forTestAccount = false) {
     db.prepare('UPDATE cost_centers SET status = @status WHERE id = @id AND client_id = @clientId').run({ id, clientId, status });
-    return getCostCenterById(id, clientId);
+    return getCostCenterById(id, clientId, forTestAccount);
 }
 
 // --- Query helpers: job positions (Puestos de Trabajo, scoped to one client) -
-function listJobPositions(clientId) {
-    return db.prepare('SELECT * FROM job_positions WHERE client_id = ? ORDER BY name ASC').all(clientId);
+function listJobPositions(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM job_positions WHERE client_id = ? AND is_test_data = ? ORDER BY name ASC').all(clientId, forTestAccount ? 1 : 0);
 }
 
-function getJobPositionById(id, clientId) {
-    return db.prepare('SELECT * FROM job_positions WHERE id = ? AND client_id = ?').get(id, clientId);
+function getJobPositionById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM job_positions WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
-function createJobPosition({ clientId, name, abbreviation, costCenterScope, status }) {
+// NOTE: job_positions.name is still UNIQUE(client_id, name) at the schema
+// level (predates is_test_data, and SQLite can't ALTER a table-level UNIQUE
+// without a full table rebuild -- too risky to do blind against a real
+// production file for this one edge case). A practice Puesto de Trabajo
+// that happens to share its exact name with a real one will fail to save;
+// picking a slightly different name (or vice versa) is the workaround.
+function createJobPosition({ clientId, name, abbreviation, costCenterScope, status, isTestData = false }) {
     const result = db
-        .prepare('INSERT INTO job_positions (client_id, name, abbreviation, cost_center_scope, status) VALUES (@clientId, @name, @abbreviation, @costCenterScope, @status)')
-        .run({ clientId, name, abbreviation: abbreviation || '', costCenterScope: costCenterScope || 'all', status: status || 'active' });
-    return getJobPositionById(result.lastInsertRowid, clientId);
+        .prepare('INSERT INTO job_positions (client_id, name, abbreviation, cost_center_scope, status, is_test_data) VALUES (@clientId, @name, @abbreviation, @costCenterScope, @status, @isTestData)')
+        .run({ clientId, name, abbreviation: abbreviation || '', costCenterScope: costCenterScope || 'all', status: status || 'active', isTestData: isTestData ? 1 : 0 });
+    return getJobPositionById(result.lastInsertRowid, clientId, isTestData);
 }
 
 const JOB_POSITION_FIELDS = {
@@ -2077,12 +2188,12 @@ const JOB_POSITION_FIELDS = {
     status: { column: 'status', fieldKey: 'business.jobPositionStatus' },
 };
 
-function updateJobPosition(id, clientId, { name, abbreviation, costCenterScope, status }) {
+function updateJobPosition(id, clientId, { name, abbreviation, costCenterScope, status }, forTestAccount = false) {
     db.prepare(`
         UPDATE job_positions SET name = @name, abbreviation = @abbreviation, cost_center_scope = @costCenterScope, status = @status
         WHERE id = @id AND client_id = @clientId
     `).run({ id, clientId, name, abbreviation: abbreviation || '', costCenterScope: costCenterScope || 'all', status });
-    return getJobPositionById(id, clientId);
+    return getJobPositionById(id, clientId, forTestAccount);
 }
 
 function deleteJobPosition(id, clientId) {
@@ -2092,20 +2203,20 @@ function deleteJobPosition(id, clientId) {
 // --- Query helpers: Estatus RH catalog (Administración de Personal, scoped
 // to one client) — see DEFAULT_HR_STATUSES/ensureDefaultHrStatusCatalog
 // above for the seed this starts from.
-function listHrStatusCatalog(clientId) {
-    ensureDefaultHrStatusCatalog(clientId);
-    return db.prepare('SELECT * FROM hr_status_catalog WHERE client_id = ? ORDER BY id ASC').all(clientId);
+function listHrStatusCatalog(clientId, forTestAccount = false) {
+    ensureDefaultHrStatusCatalog(clientId, forTestAccount);
+    return db.prepare('SELECT * FROM hr_status_catalog WHERE client_id = ? AND is_test_data = ? ORDER BY id ASC').all(clientId, forTestAccount ? 1 : 0);
 }
 
-function getHrStatusCatalogById(id, clientId) {
-    return db.prepare('SELECT * FROM hr_status_catalog WHERE id = ? AND client_id = ?').get(id, clientId);
+function getHrStatusCatalogById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM hr_status_catalog WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
-function createHrStatusCatalogEntry({ clientId, name, operationalEffect, status }) {
+function createHrStatusCatalogEntry({ clientId, name, operationalEffect, status, isTestData = false }) {
     const result = db
-        .prepare('INSERT INTO hr_status_catalog (client_id, name, operational_effect, status) VALUES (@clientId, @name, @operationalEffect, @status)')
-        .run({ clientId, name, operationalEffect: operationalEffect || 'suspended', status: status || 'active' });
-    return getHrStatusCatalogById(result.lastInsertRowid, clientId);
+        .prepare('INSERT INTO hr_status_catalog (client_id, name, operational_effect, status, is_test_data) VALUES (@clientId, @name, @operationalEffect, @status, @isTestData)')
+        .run({ clientId, name, operationalEffect: operationalEffect || 'suspended', status: status || 'active', isTestData: isTestData ? 1 : 0 });
+    return getHrStatusCatalogById(result.lastInsertRowid, clientId, isTestData);
 }
 
 const HR_STATUS_CATALOG_FIELDS = {
@@ -2114,12 +2225,12 @@ const HR_STATUS_CATALOG_FIELDS = {
     status: { column: 'status', fieldKey: 'business.hrStatusCatalogStatus' },
 };
 
-function updateHrStatusCatalogEntry(id, clientId, { name, operationalEffect, status }) {
+function updateHrStatusCatalogEntry(id, clientId, { name, operationalEffect, status }, forTestAccount = false) {
     db.prepare(`
         UPDATE hr_status_catalog SET name = @name, operational_effect = @operationalEffect, status = @status
         WHERE id = @id AND client_id = @clientId
     `).run({ id, clientId, name, operationalEffect: operationalEffect || 'suspended', status: status || 'active' });
-    return getHrStatusCatalogById(id, clientId);
+    return getHrStatusCatalogById(id, clientId, forTestAccount);
 }
 
 function deleteHrStatusCatalogEntry(id, clientId) {
@@ -2274,25 +2385,27 @@ function authorizeScheduledReport(id, clientId, authorizedBy) {
 }
 
 // --- Query helpers: Registro Combustible (fuel_records, scoped to a client) -
-function listFuelRecords(clientId) {
-    return db.prepare('SELECT * FROM fuel_records WHERE client_id = ? ORDER BY record_number ASC').all(clientId);
+function listFuelRecords(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM fuel_records WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC').all(clientId, forTestAccount ? 1 : 0);
 }
 
-function getFuelRecordById(id, clientId) {
-    return db.prepare('SELECT * FROM fuel_records WHERE id = ? AND client_id = ?').get(id, clientId);
+function getFuelRecordById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM fuel_records WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
-function createFuelRecord({ clientId, date, ecoUnit, driver, coordinator, centroCostos }) {
+function createFuelRecord({ clientId, date, ecoUnit, driver, coordinator, centroCostos, isTestData = false }) {
+    // Practice records get their own record_number sequence, starting from
+    // 1, same reasoning as cost_centers' account_number above.
     const recordNumber = db
-        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fuel_records WHERE client_id = ?')
-        .get(clientId).n;
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fuel_records WHERE client_id = ? AND is_test_data = ?')
+        .get(clientId, isTestData ? 1 : 0).n;
     const result = db
         .prepare(`
-            INSERT INTO fuel_records (client_id, db_id, record_number, record_date, eco_unit, driver, coordinator, centro_costos)
-            VALUES (@clientId, @dbId, @recordNumber, @date, @ecoUnit, @driver, @coordinator, @centroCostos)
+            INSERT INTO fuel_records (client_id, db_id, record_number, record_date, eco_unit, driver, coordinator, centro_costos, is_test_data)
+            VALUES (@clientId, @dbId, @recordNumber, @date, @ecoUnit, @driver, @coordinator, @centroCostos, @isTestData)
         `)
-        .run({ clientId, dbId: generateBigDateId(), recordNumber, date, ecoUnit, driver, coordinator, centroCostos: centroCostos || '' });
-    return getFuelRecordById(result.lastInsertRowid, clientId);
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, date, ecoUnit, driver, coordinator, centroCostos: centroCostos || '', isTestData: isTestData ? 1 : 0 });
+    return getFuelRecordById(result.lastInsertRowid, clientId, isTestData);
 }
 
 // Whitelist of columns a PATCH may touch — everything filled in later via
@@ -2315,7 +2428,7 @@ const FUEL_PATCHABLE_FIELDS = {
     internalMovement: { column: 'internal_movement', fieldKey: 'main.colFuelInternalMovement' },
 };
 
-function updateFuelRecord(id, clientId, patch) {
+function updateFuelRecord(id, clientId, patch, forTestAccount = false) {
     const sets = [];
     const params = { id, clientId };
     for (const [key, { column }] of Object.entries(FUEL_PATCHABLE_FIELDS)) {
@@ -2327,7 +2440,7 @@ function updateFuelRecord(id, clientId, patch) {
     if (sets.length) {
         db.prepare(`UPDATE fuel_records SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
     }
-    return getFuelRecordById(id, clientId);
+    return getFuelRecordById(id, clientId, forTestAccount);
 }
 
 function deleteFuelRecord(id, clientId) {
@@ -2335,12 +2448,12 @@ function deleteFuelRecord(id, clientId) {
 }
 
 // --- Query helpers: Carga Combustible (fuel_loading_records) ---------------
-function listFuelLoadingRecords(clientId) {
-    return db.prepare('SELECT * FROM fuel_loading_records WHERE client_id = ? ORDER BY record_number ASC').all(clientId);
+function listFuelLoadingRecords(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM fuel_loading_records WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC').all(clientId, forTestAccount ? 1 : 0);
 }
 
-function getFuelLoadingRecordById(id, clientId) {
-    return db.prepare('SELECT * FROM fuel_loading_records WHERE id = ? AND client_id = ?').get(id, clientId);
+function getFuelLoadingRecordById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM fuel_loading_records WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
 // Created blank — every field (including the identifying ones) is filled in
@@ -2351,17 +2464,17 @@ function getFuelLoadingRecordById(id, clientId) {
 // before the row exists at all), the App's one-field-at-a-time stepper
 // needs the row to exist from the very first tap so nothing already
 // confirmed is ever lost if the user leaves before finishing the rest.
-function createFuelLoadingRecord({ clientId }) {
+function createFuelLoadingRecord({ clientId, isTestData = false }) {
     const recordNumber = db
-        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fuel_loading_records WHERE client_id = ?')
-        .get(clientId).n;
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fuel_loading_records WHERE client_id = ? AND is_test_data = ?')
+        .get(clientId, isTestData ? 1 : 0).n;
     const result = db
         .prepare(`
-            INSERT INTO fuel_loading_records (client_id, db_id, record_number, record_date, load_site, operator, coordinator, eco_unit, centro_costos)
-            VALUES (@clientId, @dbId, @recordNumber, '', '', '', '', '', '')
+            INSERT INTO fuel_loading_records (client_id, db_id, record_number, record_date, load_site, operator, coordinator, eco_unit, centro_costos, is_test_data)
+            VALUES (@clientId, @dbId, @recordNumber, '', '', '', '', '', '', @isTestData)
         `)
-        .run({ clientId, dbId: generateBigDateId(), recordNumber });
-    return getFuelLoadingRecordById(result.lastInsertRowid, clientId);
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0 });
+    return getFuelLoadingRecordById(result.lastInsertRowid, clientId, isTestData);
 }
 
 const FUEL_LOADING_PATCHABLE_FIELDS = {
@@ -2380,7 +2493,7 @@ const FUEL_LOADING_PATCHABLE_FIELDS = {
     totalCostEvidence: { column: 'total_cost_evidence', fieldKey: 'main.colCargaCostoTotalEvidencia' },
 };
 
-function updateFuelLoadingRecord(id, clientId, patch) {
+function updateFuelLoadingRecord(id, clientId, patch, forTestAccount = false) {
     const sets = [];
     const params = { id, clientId };
     for (const [key, { column }] of Object.entries(FUEL_LOADING_PATCHABLE_FIELDS)) {
@@ -2392,7 +2505,7 @@ function updateFuelLoadingRecord(id, clientId, patch) {
     if (sets.length) {
         db.prepare(`UPDATE fuel_loading_records SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
     }
-    return getFuelLoadingRecordById(id, clientId);
+    return getFuelLoadingRecordById(id, clientId, forTestAccount);
 }
 
 function deleteFuelLoadingRecord(id, clientId) {
@@ -2405,26 +2518,28 @@ function deleteFuelLoadingRecord(id, clientId) {
 // level Solo Ver/Ver y Operar/Editar/Autorizar permissions same as any other
 // pantalla (see TABLE_GRANT_PATHS['tipos-unidad'] in server.js), not the
 // requireClientAdmin-only gate cost centers/job positions use.
-function listUnitTypes(clientId) {
-    return db.prepare('SELECT * FROM unit_types WHERE client_id = ? ORDER BY code ASC').all(clientId);
+function listUnitTypes(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM unit_types WHERE client_id = ? AND is_test_data = ? ORDER BY code ASC').all(clientId, forTestAccount ? 1 : 0);
 }
 
-function getUnitTypeById(id, clientId) {
-    return db.prepare('SELECT * FROM unit_types WHERE id = ? AND client_id = ?').get(id, clientId);
+function getUnitTypeById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM unit_types WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
 // Created blank (code auto-generated, everything else empty) -- same reason
 // as createFuelLoadingRecord: the App's "+ Nuevo Tipo de Unidad" needs the
 // row to exist before anything is typed, so nothing confirmed is lost if the
 // user leaves mid-fill. Desktop mirrors this too (no modal) for the same
-// reason Carga Combustible's own progressive-PATCH design exists.
-function createUnitType({ clientId }) {
-    const n = db.prepare('SELECT COUNT(*) AS n FROM unit_types WHERE client_id = ?').get(clientId).n + 1;
+// reason Carga Combustible's own progressive-PATCH design exists. Practice
+// codes count from their own TU-01 too, same reasoning as every other
+// sequence in this file.
+function createUnitType({ clientId, isTestData = false }) {
+    const n = db.prepare('SELECT COUNT(*) AS n FROM unit_types WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData ? 1 : 0).n + 1;
     const code = `TU-${String(n).padStart(2, '0')}`;
     const result = db
-        .prepare("INSERT INTO unit_types (client_id, code, name, fuel_type, status) VALUES (@clientId, @code, '', '', '')")
-        .run({ clientId, code });
-    return getUnitTypeById(result.lastInsertRowid, clientId);
+        .prepare("INSERT INTO unit_types (client_id, code, name, fuel_type, status, is_test_data) VALUES (@clientId, @code, '', '', '', @isTestData)")
+        .run({ clientId, code, isTestData: isTestData ? 1 : 0 });
+    return getUnitTypeById(result.lastInsertRowid, clientId, isTestData);
 }
 
 const UNIT_TYPE_PATCHABLE_FIELDS = {
@@ -2433,7 +2548,7 @@ const UNIT_TYPE_PATCHABLE_FIELDS = {
     status: { column: 'status', fieldKey: 'main.colUnitTypeStatus' },
 };
 
-function updateUnitType(id, clientId, patch) {
+function updateUnitType(id, clientId, patch, forTestAccount = false) {
     const sets = [];
     const params = { id, clientId };
     for (const [key, { column }] of Object.entries(UNIT_TYPE_PATCHABLE_FIELDS)) {
@@ -2445,7 +2560,7 @@ function updateUnitType(id, clientId, patch) {
     if (sets.length) {
         db.prepare(`UPDATE unit_types SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
     }
-    return getUnitTypeById(id, clientId);
+    return getUnitTypeById(id, clientId, forTestAccount);
 }
 
 function deleteUnitType(id, clientId) {
@@ -2458,24 +2573,24 @@ function deleteUnitType(id, clientId) {
 // vehicle, never re-used). unit_type_id references unit_types -- Tipo
 // Combustible is never stored redundantly here, always read live from the
 // referenced unit type (see mapFleetUnitRecord in server.js).
-function listFleetUnits(clientId) {
-    return db.prepare('SELECT * FROM fleet_units WHERE client_id = ? ORDER BY eco_id ASC').all(clientId);
+function listFleetUnits(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM fleet_units WHERE client_id = ? AND is_test_data = ? ORDER BY eco_id ASC').all(clientId, forTestAccount ? 1 : 0);
 }
 
-function getFleetUnitById(id, clientId) {
-    return db.prepare('SELECT * FROM fleet_units WHERE id = ? AND client_id = ?').get(id, clientId);
+function getFleetUnitById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM fleet_units WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
-function getFleetUnitByEcoId(clientId, ecoId) {
+function getFleetUnitByEcoId(clientId, ecoId, forTestAccount = false) {
     return db
-        .prepare('SELECT * FROM fleet_units WHERE client_id = ? AND LOWER(eco_id) = LOWER(?)')
-        .get(clientId, (ecoId || '').trim());
+        .prepare('SELECT * FROM fleet_units WHERE client_id = ? AND is_test_data = ? AND LOWER(eco_id) = LOWER(?)')
+        .get(clientId, forTestAccount ? 1 : 0, (ecoId || '').trim());
 }
 
 // Created blank -- same reason as createUnitType/createFuelLoadingRecord.
-function createFleetUnit({ clientId }) {
-    const result = db.prepare('INSERT INTO fleet_units (client_id) VALUES (?)').run(clientId);
-    return getFleetUnitById(result.lastInsertRowid, clientId);
+function createFleetUnit({ clientId, isTestData = false }) {
+    const result = db.prepare('INSERT INTO fleet_units (client_id, is_test_data) VALUES (?, ?)').run(clientId, isTestData ? 1 : 0);
+    return getFleetUnitById(result.lastInsertRowid, clientId, isTestData);
 }
 
 const FLEET_UNIT_PATCHABLE_FIELDS = {
@@ -2487,7 +2602,7 @@ const FLEET_UNIT_PATCHABLE_FIELDS = {
     status: { column: 'status', fieldKey: 'main.colFleetStatus' },
 };
 
-function updateFleetUnit(id, clientId, patch) {
+function updateFleetUnit(id, clientId, patch, forTestAccount = false) {
     const sets = [];
     const params = { id, clientId };
     for (const [key, { column }] of Object.entries(FLEET_UNIT_PATCHABLE_FIELDS)) {
@@ -2499,7 +2614,7 @@ function updateFleetUnit(id, clientId, patch) {
     if (sets.length) {
         db.prepare(`UPDATE fleet_units SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
     }
-    return getFleetUnitById(id, clientId);
+    return getFleetUnitById(id, clientId, forTestAccount);
 }
 
 function deleteFleetUnit(id, clientId) {
@@ -2512,10 +2627,10 @@ function deleteFleetUnit(id, clientId) {
 // Económico isn't registered yet or its Tipo de Unidad has no Tipo
 // Combustible of its own. Never blocks/forces anything (confirmed product
 // decision) -- purely a value the caller can offer as a prefill.
-function suggestFuelTypeForEcoUnit(clientId, ecoUnit) {
-    const unit = getFleetUnitByEcoId(clientId, ecoUnit);
+function suggestFuelTypeForEcoUnit(clientId, ecoUnit, forTestAccount = false) {
+    const unit = getFleetUnitByEcoId(clientId, ecoUnit, forTestAccount);
     if (!unit || !unit.unit_type_id) return '';
-    const unitType = getUnitTypeById(unit.unit_type_id, clientId);
+    const unitType = getUnitTypeById(unit.unit_type_id, clientId, forTestAccount);
     return unitType?.fuel_type || '';
 }
 
@@ -2723,7 +2838,7 @@ function computeIntelligentReportRows(report, records) {
 // LEFT JOIN so the auto-created account's username/active state rides along
 // wherever a worker record is fetched — same pattern as listClients'
 // adminUsername join.
-function listHrWorkers(clientId) {
+function listHrWorkers(clientId, forTestAccount = false) {
     return db
         .prepare(`
             SELECT hr_workers.*, users.username AS username, users.active AS userActive,
@@ -2731,13 +2846,13 @@ function listHrWorkers(clientId) {
             FROM hr_workers
             LEFT JOIN users ON users.id = hr_workers.user_id
             LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
-            WHERE hr_workers.client_id = ?
+            WHERE hr_workers.client_id = ? AND hr_workers.is_test_data = ?
             ORDER BY hr_workers.record_number ASC
         `)
-        .all(clientId);
+        .all(clientId, forTestAccount ? 1 : 0);
 }
 
-function getHrWorkerById(id, clientId) {
+function getHrWorkerById(id, clientId, forTestAccount = false) {
     return db
         .prepare(`
             SELECT hr_workers.*, users.username AS username, users.active AS userActive,
@@ -2745,9 +2860,9 @@ function getHrWorkerById(id, clientId) {
             FROM hr_workers
             LEFT JOIN users ON users.id = hr_workers.user_id
             LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
-            WHERE hr_workers.id = ? AND hr_workers.client_id = ?
+            WHERE hr_workers.id = ? AND hr_workers.client_id = ? AND hr_workers.is_test_data = ?
         `)
-        .get(id, clientId);
+        .get(id, clientId, forTestAccount ? 1 : 0);
 }
 
 // First-name-initial + second-name-initial (duplicated if there's only one
@@ -2783,11 +2898,11 @@ function computeHrUsername(givenNames, surnames) {
 // changing, later must not retroactively rewrite an already-issued
 // worker's record number.
 const HR_RECORD_SCREEN_CODE = 'MRH';
-function computeHrRecordCode(clientId, costCenterId, recordNumber) {
+function computeHrRecordCode(clientId, costCenterId, recordNumber, forTestAccount = false) {
     const client = getClientById(clientId);
     const companyCode = stripAccents(client?.company_abbreviation || client?.company_name || '')
         .replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3) || 'CLI';
-    const costCenter = costCenterId ? getCostCenterById(costCenterId, clientId) : null;
+    const costCenter = costCenterId ? getCostCenterById(costCenterId, clientId, forTestAccount) : null;
     const costCenterCode = costCenter ? costCenter.code : 'SCC';
     return `${companyCode}${costCenterCode}${HR_RECORD_SCREEN_CODE}${recordNumber}`;
 }
@@ -2852,18 +2967,18 @@ function generateUniqueCostCenterCode(clientId, baseCode, excludeId) {
 // from the table (that's the only place a real, usable password ever gets
 // issued). async because hashing can't happen inside db.transaction()
 // (must stay fully synchronous — see activateClient's own note above).
-async function createHrWorker({ clientId, givenNames, surnames, position, startDate, departments, costCenterId, email }) {
+async function createHrWorker({ clientId, givenNames, surnames, position, startDate, departments, costCenterId, email, isTestData = false }) {
     const fullName = `${givenNames} ${surnames}`.replace(/\s+/g, ' ').trim();
     const username = generateUniqueUsername(computeHrUsername(givenNames, surnames));
     const passwordHash = await hashPassword(generateRandomPassword());
 
     const recordNumber = db
-        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM hr_workers WHERE client_id = ?')
-        .get(clientId).n;
-    const recordCode = computeHrRecordCode(clientId, costCenterId, recordNumber);
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM hr_workers WHERE client_id = ? AND is_test_data = ?')
+        .get(clientId, isTestData ? 1 : 0).n;
+    const recordCode = computeHrRecordCode(clientId, costCenterId, recordNumber, isTestData);
     // Outside the transaction below since it may itself seed (and thus
     // write to) hr_status_catalog on this client's very first worker.
-    const activeHrStatusId = getDefaultActiveHrStatusId(clientId);
+    const activeHrStatusId = getDefaultActiveHrStatusId(clientId, isTestData);
 
     const create = db.transaction(() => {
         const user = createUser({
@@ -2874,11 +2989,11 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
             .prepare(`
                 INSERT INTO hr_workers (
                     client_id, db_id, record_number, record_code, given_names, surnames, full_name,
-                    position, start_date, department, departments, cost_center_id, email, user_id, hr_status_id
+                    position, start_date, department, departments, cost_center_id, email, user_id, hr_status_id, is_test_data
                 )
                 VALUES (
                     @clientId, @dbId, @recordNumber, @recordCode, @givenNames, @surnames, @fullName,
-                    @position, @startDate, @department, @departments, @costCenterId, @email, @userId, @hrStatusId
+                    @position, @startDate, @department, @departments, @costCenterId, @email, @userId, @hrStatusId, @isTestData
                 )
             `)
             .run({
@@ -2891,10 +3006,11 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
                 department: (departments && departments[0]) || '',
                 departments: JSON.stringify(departments || []),
                 costCenterId: costCenterId || null, email, userId: user.id, hrStatusId: activeHrStatusId,
+                isTestData: isTestData ? 1 : 0,
             });
         return result.lastInsertRowid;
     });
-    return getHrWorkerById(create(), clientId);
+    return getHrWorkerById(create(), clientId, isTestData);
 }
 
 // Issues a brand-new password and turns on login for this worker's account
@@ -2905,8 +3021,8 @@ async function createHrWorker({ clientId, givenNames, surnames, position, startD
 // in this app (see activateClient). Returns null if this worker has no
 // linked account (shouldn't happen for anything created after this
 // feature shipped).
-async function activateHrWorkerUser(workerId, clientId) {
-    const worker = getHrWorkerById(workerId, clientId);
+async function activateHrWorkerUser(workerId, clientId, forTestAccount = false) {
+    const worker = getHrWorkerById(workerId, clientId, forTestAccount);
     if (!worker || !worker.user_id) return null;
     const password = generateRandomPassword();
     const passwordHash = await hashPassword(password);
@@ -2927,7 +3043,7 @@ const HR_WORKER_PATCHABLE_FIELDS = {
 // departments arrives already JSON-stringified by the caller (server.js) —
 // never re-serialized here, so it diffs/compares as a plain string exactly
 // like every other column (see checkAndLogFieldChanges' raw-value diff).
-function updateHrWorker(id, clientId, patch) {
+function updateHrWorker(id, clientId, patch, forTestAccount = false) {
     const sets = [];
     const params = { id, clientId };
     for (const [key, { column }] of Object.entries(HR_WORKER_PATCHABLE_FIELDS)) {
@@ -2950,11 +3066,11 @@ function updateHrWorker(id, clientId, patch) {
     if (Object.prototype.hasOwnProperty.call(patch, 'hrStatusId')) {
         const entry = db.prepare('SELECT operational_effect FROM hr_status_catalog WHERE id = ? AND client_id = ?').get(patch.hrStatusId, clientId);
         if (entry?.operational_effect === 'inactive') {
-            const worker = getHrWorkerById(id, clientId);
+            const worker = getHrWorkerById(id, clientId, forTestAccount);
             if (worker?.user_id) db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(worker.user_id);
         }
     }
-    return getHrWorkerById(id, clientId);
+    return getHrWorkerById(id, clientId, forTestAccount);
 }
 
 function deleteHrWorker(id, clientId) {
@@ -4364,6 +4480,7 @@ module.exports = {
     setSaasUserGrants,
     hasSaasGrant,
     activateClient,
+    provisionTrainingAccount,
     deactivateClientUsers,
     listBusinessUsers,
     getUserById,

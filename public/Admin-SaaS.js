@@ -26,6 +26,7 @@ const phoneField = document.getElementById('client-phone');
 const planField = document.getElementById('client-plan');
 const sectorField = document.getElementById('client-sector');
 const statusField = document.getElementById('client-status');
+const isTestField = document.getElementById('client-is-test');
 const missionField = document.getElementById('client-mission');
 const visionField = document.getElementById('client-vision');
 const valuesField = document.getElementById('client-values');
@@ -329,6 +330,12 @@ function renderClients() {
         statusBadge.className = `admin-badge admin-badge-${client.status}`;
         statusBadge.textContent = statusLabel(client.status);
         tdStatus.appendChild(statusBadge);
+        if (client.is_test) {
+            const testBadge = document.createElement('span');
+            testBadge.className = 'client-test-badge';
+            testBadge.textContent = Dashboard.t('admin.clientIsTestBadge');
+            tdStatus.appendChild(testBadge);
+        }
 
         const tdContract = document.createElement('td');
         tdContract.appendChild(iconButton('bx-file-blank', Dashboard.t('admin.viewContract'), () => {
@@ -586,6 +593,7 @@ function startEdit(client) {
     }
     sectorField.value = client.sector_negocio || '';
     statusField.value = client.status;
+    isTestField.checked = !!client.is_test;
     missionField.value = client.mission || '';
     visionField.value = client.vision || '';
     valuesField.value = client.core_values || '';
@@ -754,6 +762,7 @@ form.addEventListener('submit', async (event) => {
         plan: planField.value.trim(),
         sectorNegocio: sectorField.value.trim(),
         status: statusField.value,
+        isTest: isTestField.checked,
         logoDataUrl: logoDataField.value || null,
         seedColor: seed,
         colorPalette: currentPalette,
@@ -794,7 +803,7 @@ form.addEventListener('submit', async (event) => {
             showError(translateClientFormError(body.message));
             return;
         }
-        const { generatedAdmin } = await res.json();
+        const { generatedAdmin, generatedTrainingAccount } = await res.json();
         // The saved client in this response is missing the computed fields
         // (contractedCostComputed, additionalPermissionsPayment, etc.) only
         // GET /api/admin/clients fills in — reload instead of splicing in
@@ -803,6 +812,7 @@ form.addEventListener('submit', async (event) => {
         await loadClients();
         resetForm();
         if (generatedAdmin) showGeneratedAdmin(generatedAdmin);
+        if (generatedTrainingAccount) showGeneratedTraining(generatedTrainingAccount);
         Dashboard.showToast(Dashboard.t(isCreate ? 'main.recordSaved' : 'main.changeSaved'), 'success');
     } catch {
         showError(Dashboard.t('admin.saveError'));
@@ -834,6 +844,24 @@ function showGeneratedAdmin({ username, password }) {
 
 generatedAdminDismiss.addEventListener('click', () => {
     generatedAdminBox.hidden = true;
+});
+
+// --- One-time generated Pruebas<Apodo> credentials (same idea as the admin
+// box above, shown alongside it the first time a client is activated) ------
+const generatedTrainingBox = document.getElementById('generated-training-box');
+const generatedTrainingUsername = document.getElementById('generated-training-username');
+const generatedTrainingPassword = document.getElementById('generated-training-password');
+const generatedTrainingDismiss = document.getElementById('generated-training-dismiss');
+
+function showGeneratedTraining({ username, password }) {
+    generatedTrainingUsername.textContent = username;
+    generatedTrainingPassword.textContent = password;
+    generatedTrainingBox.hidden = false;
+    generatedTrainingBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+generatedTrainingDismiss.addEventListener('click', () => {
+    generatedTrainingBox.hidden = true;
 });
 
 // --- Cambios de Anexos: read-only history of every módulo that entered or

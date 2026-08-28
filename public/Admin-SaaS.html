@@ -362,6 +362,18 @@
                     <button type="button" class="btn btn-secondary" id="generated-admin-dismiss" data-i18n="admin.dismiss">Dismiss</button>
                 </div>
 
+                <div id="generated-training-box" class="admin-generated-credentials" role="alert" hidden>
+                    <p class="admin-generated-title" data-i18n="admin.generatedTrainingTitle">Training account created</p>
+                    <p class="admin-generated-note" data-i18n="admin.generatedTrainingNote">This password is shown only once — copy it now if GEIPSA staff will use this account for capacitación.</p>
+                    <div class="admin-generated-row">
+                        <span data-i18n="business.username">Username</span>: <strong id="generated-training-username"></strong>
+                    </div>
+                    <div class="admin-generated-row">
+                        <span data-i18n="business.password">Password</span>: <strong id="generated-training-password"></strong>
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="generated-training-dismiss" data-i18n="admin.dismiss">Dismiss</button>
+                </div>
+
                 <div class="filter-bar" id="filter-bar">
                     <div class="filter-bar-panel">
                         <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
@@ -490,6 +502,12 @@
                             <option value="activo" data-i18n="admin.statusActivo">Active</option>
                             <option value="inactivo" data-i18n="admin.statusInactivo">Inactive</option>
                         </select>
+                    </div>
+                    <div class="admin-field admin-checkbox-field">
+                        <label for="client-is-test">
+                            <input type="checkbox" id="client-is-test" name="isTest">
+                            <span data-i18n="admin.clientIsTestLabel">Test client (internal GEIPSA use)</span>
+                        </label>
                     </div>
                 </div>
 

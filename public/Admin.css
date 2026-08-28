@@ -405,6 +405,35 @@ body.dark-mode .admin-error{
     background: #c8384a;
     color: #ffffff;
 }
+.admin-checkbox-field{
+    justify-content: flex-end;
+}
+.admin-checkbox-field label{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--color-text-primary);
+    font-weight: 500;
+}
+.admin-checkbox-field input[type="checkbox"]{
+    width: 1.05rem;
+    height: 1.05rem;
+    cursor: pointer;
+}
+.client-test-badge{
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: #fdf0d5;
+    color: #8a5a00;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    vertical-align: middle;
+}
 
 /* Centro de Costos — cascading País/Estado/Localidad/Calle picker inside
    the "+ Nuevo Centro Costos" modal (see Business-CentrosCosto.js). Each
