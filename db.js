@@ -1124,6 +1124,48 @@ if (!fuelRecordColumns.some((c) => c.name === 'centro_costos')) {
 // worker is billed against), and user_id (the login account auto-created
 // alongside this worker — see createHrWorker) all added after hr_workers
 // already shipped once.
+// Small helper for the repetitive "add this column to that table if it's
+// not there yet" migration shape already used by hand throughout this file
+// -- reached for here specifically because the next migration needs the
+// exact same one-line change repeated across 11 different tables. table/
+// column/definition are always hardcoded call-site literals, never request
+// input, so string-building the ALTER TABLE here is safe.
+function ensureColumn(table, column, definition) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!columns.some((c) => c.name === column)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+}
+
+// Cliente de Pruebas (Nuestros Clientes) + cuenta de Capacitación (Pruebas +
+// Apodo Empresa, auto-provisionada junto con Admin+ABBR — see
+// provisionTrainingAccount) + el aislamiento real de datos que la vuelve
+// segura para entrenar sin afectar operación real: cada tabla de datos de
+// negocio gana su propia is_test_data, siempre 0 para uso normal y 1 para
+// todo lo que la cuenta de Capacitación crea. Cada list*() de abajo filtra
+// por ella según quién pregunta (ver su propio comentario), y cada create*()
+// la estampa según quién crea -- ningún registro de práctica se mezcla con
+// la operación real del cliente, ni al revés. Runs BEFORE
+// insertHrStatusCatalogEntry just below, since that prepared statement
+// references is_test_data at module-load time -- hr_status_catalog must
+// already have the column by then, or better-sqlite3 throws immediately
+// and the whole server fails to start.
+ensureColumn('users', 'is_test_account', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('clients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('clients', 'training_user_id', 'INTEGER REFERENCES users(id)');
+// Deliberately NOT every client_id-scoped table: Field Fill Rules,
+// Transacciones Inteligentes and Reportes Programados are configuration a
+// client builds ONCE (which fields gate which, which report to compute) --
+// isolating those would mean Capacitación trains against rules/reports that
+// don't match what the real client actually configured, defeating the point
+// of training on "cómo funcionan ciertas cosas" for THIS client. Only the
+// day-to-day business records that would visibly clutter a real list get
+// their own is_test_data.
+[
+    'cost_centers', 'job_positions', 'hr_workers', 'hr_status_catalog',
+    'fuel_records', 'fuel_loading_records', 'unit_types', 'fleet_units',
+].forEach((table) => ensureColumn(table, 'is_test_data', 'INTEGER NOT NULL DEFAULT 0'));
+
 // Seed set for a brand-new client's Estatus RH catalog (also used to
 // backfill any client that predates hr_status_catalog, below). A client can
 // freely rename/add/remove entries afterward from Business-EstatusRH.html —
@@ -1248,44 +1290,6 @@ const fuelLoadingColumns = db.prepare('PRAGMA table_info(fuel_loading_records)')
 if (!fuelLoadingColumns.some((c) => c.name === 'fuel_type')) {
     db.exec("ALTER TABLE fuel_loading_records ADD COLUMN fuel_type TEXT NOT NULL DEFAULT ''");
 }
-
-// Small helper for the repetitive "add this column to that table if it's
-// not there yet" migration shape already used by hand throughout this file
-// -- reached for here specifically because the next migration needs the
-// exact same one-line change repeated across 11 different tables. table/
-// column/definition are always hardcoded call-site literals, never request
-// input, so string-building the ALTER TABLE here is safe.
-function ensureColumn(table, column, definition) {
-    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
-    if (!columns.some((c) => c.name === column)) {
-        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-    }
-}
-
-// Cliente de Pruebas (Nuestros Clientes) + cuenta de Capacitación (Pruebas +
-// Apodo Empresa, auto-provisionada junto con Admin+ABBR — see
-// provisionTrainingAccount) + el aislamiento real de datos que la vuelve
-// segura para entrenar sin afectar operación real: cada tabla de datos de
-// negocio gana su propia is_test_data, siempre 0 para uso normal y 1 para
-// todo lo que la cuenta de Capacitación crea. Cada list*() de abajo filtra
-// por ella según quién pregunta (ver su propio comentario), y cada create*()
-// la estampa según quién crea -- ningún registro de práctica se mezcla con
-// la operación real del cliente, ni al revés.
-ensureColumn('users', 'is_test_account', 'INTEGER NOT NULL DEFAULT 0');
-ensureColumn('clients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
-ensureColumn('clients', 'training_user_id', 'INTEGER REFERENCES users(id)');
-// Deliberately NOT every client_id-scoped table: Field Fill Rules,
-// Transacciones Inteligentes and Reportes Programados are configuration a
-// client builds ONCE (which fields gate which, which report to compute) --
-// isolating those would mean Capacitación trains against rules/reports that
-// don't match what the real client actually configured, defeating the point
-// of training on "cómo funcionan ciertas cosas" for THIS client. Only the
-// day-to-day business records that would visibly clutter a real list get
-// their own is_test_data.
-[
-    'cost_centers', 'job_positions', 'hr_workers', 'hr_status_catalog',
-    'fuel_records', 'fuel_loading_records', 'unit_types', 'fleet_units',
-].forEach((table) => ensureColumn(table, 'is_test_data', 'INTEGER NOT NULL DEFAULT 0'));
 
 // --- Indexes -------------------------------------------------------------
 // Only for FK/lookup columns that actually appear in a WHERE clause below
