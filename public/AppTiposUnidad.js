@@ -403,31 +403,53 @@ function buildFieldBody(field, record) {
     bodyWrap.className = 'home-carga-field-body';
 
     if (field.type === 'select') {
-        const select = document.createElement('select');
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = t('main.fuelTypeSelect');
-        select.appendChild(placeholder);
-        field.optionGroups.forEach((grp) => {
-            const target = grp.labelKey ? document.createElement('optgroup') : select;
-            if (grp.labelKey) { target.label = t(grp.labelKey); select.appendChild(target); }
+        const currentValue = fieldValueFromRecord(field, record) || '';
+        const selectedOpt = field.optionGroups.flatMap((g) => g.options).find((o) => o.value === currentValue);
+
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'home-select-trigger';
+        trigger.setAttribute('aria-expanded', 'false');
+        const valueSpan = document.createElement('span');
+        valueSpan.className = `home-select-trigger-value${selectedOpt ? '' : ' placeholder'}`;
+        valueSpan.textContent = selectedOpt ? t(selectedOpt.labelKey) : t('main.fuelTypeSelect');
+        trigger.innerHTML = `
+            <span class="home-select-trigger-text">
+                <span class="home-select-trigger-label">${t(field.labelKey)}</span>
+            </span>
+            <i class="bx bx-chevron-down" aria-hidden="true"></i>
+        `;
+        trigger.querySelector('.home-select-trigger-text').appendChild(valueSpan);
+
+        const options = document.createElement('div');
+        options.className = 'home-select-options';
+        options.hidden = true;
+        field.optionGroups.forEach((grp, i) => {
+            if (i > 0) options.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-divider' }));
+            if (grp.labelKey) {
+                const label = document.createElement('div');
+                label.className = 'home-select-group-label';
+                label.textContent = t(grp.labelKey);
+                options.appendChild(label);
+            }
             grp.options.forEach((opt) => {
-                const o = document.createElement('option');
-                o.value = opt.value;
-                o.textContent = t(opt.labelKey);
-                target.appendChild(o);
+                const isActive = opt.value === currentValue;
+                const optBtn = document.createElement('button');
+                optBtn.type = 'button';
+                optBtn.className = `home-select-option${grp.labelKey ? ' indent' : ''}${isActive ? ' active' : ''}`;
+                optBtn.innerHTML = `<span>${t(opt.labelKey)}</span>${isActive ? '<i class="bx bx-check" aria-hidden="true"></i>' : ''}`;
+                optBtn.addEventListener('click', () => {
+                    options.hidden = true;
+                    commitFieldValue(field, opt.value);
+                });
+                options.appendChild(optBtn);
             });
         });
-        select.value = fieldValueFromRecord(field, record) || '';
-        const confirmBtn = document.createElement('button');
-        confirmBtn.type = 'button';
-        confirmBtn.className = 'home-carga-field-confirm';
-        confirmBtn.textContent = t('home.cargaConfirm');
-        confirmBtn.addEventListener('click', () => {
-            if (!select.value) return;
-            commitFieldValue(field, select.value);
+        trigger.addEventListener('click', () => {
+            options.hidden = !options.hidden;
+            trigger.setAttribute('aria-expanded', String(!options.hidden));
         });
-        bodyWrap.append(select, confirmBtn);
+        bodyWrap.append(trigger, options);
         return bodyWrap;
     }
 

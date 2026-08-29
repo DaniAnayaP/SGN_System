@@ -1130,6 +1130,75 @@ body{
 }
 .home-carga-field-error{ font-size: 0.7rem; color: var(--home-danger); margin: 0; display: none; }
 .home-carga-field-error.show{ display: block; }
+
+/* Custom select field -- replaces the native <select>/<optgroup> (see
+   buildFieldBody's old 'select' branch), which renders as each OS's own
+   unstyled picker sheet and can't pick up the App's own colors/theme.
+   Tapping an option commits it immediately (no separate Confirmar step),
+   same "one tap, done" pattern the Departamento/Área/Centro de Costos
+   pickers already use. */
+.home-select-trigger{
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    background: var(--home-bg);
+    border: 1px solid var(--home-border);
+    border-radius: 0.6rem;
+    padding: 0.5rem 0.7rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+.home-select-trigger:focus{ outline: none; border-color: var(--home-accent-strong-1); }
+.home-select-trigger-text{ display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.home-select-trigger-label{
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--home-text-muted);
+}
+.home-select-trigger-value{ font-size: 0.82rem; font-weight: 600; color: var(--home-text-primary); }
+.home-select-trigger-value.placeholder{ color: var(--home-text-muted); font-weight: 500; }
+.home-select-trigger i{ color: var(--home-accent); font-size: 0.95rem; margin-top: 0.15rem; flex-shrink: 0; transition: transform 0.15s ease; }
+.home-select-trigger[aria-expanded="true"] i{ transform: rotate(180deg); }
+.home-select-options{
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    border-radius: 0.6rem;
+    padding: 0.3rem;
+    margin-top: -0.15rem;
+}
+.home-select-options[hidden]{ display: none; }
+.home-select-group-label{
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--home-text-muted);
+    padding: 0.4rem 0.5rem 0.15rem;
+}
+.home-select-option{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--home-text-secondary);
+    padding: 0.5rem 0.55rem;
+    border-radius: 0.45rem;
+    cursor: pointer;
+    text-align: left;
+}
+.home-select-option.indent{ padding-left: 1.3rem; }
+.home-select-option.active{ background: var(--home-surface-2); color: var(--home-text-primary); }
+.home-select-option i{ color: var(--home-accent); font-size: 0.85rem; }
+.home-select-divider{ border-top: 1px solid var(--home-divider); margin: 0.25rem 0.1rem; }
 .home-carga-photo-row{ display: flex; align-items: center; gap: 0.6rem; }
 .home-carga-photo-btn{
     display: flex;
