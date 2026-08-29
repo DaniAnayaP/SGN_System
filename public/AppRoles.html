@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title data-i18n="menu.roles">Roles</title>
+    <link rel="icon" href="icons/icon-512.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-512.png">
+    <meta name="theme-color" content="#0b0d14">
+    <link rel="stylesheet" href="AppInicio.css">
+    <!-- PermissionTree.js's own .perm-tree-* rules live here -- every one of
+         them is qualified (class/attribute, never a bare tag selector), so
+         loading the whole admin stylesheet doesn't bleed into this page's
+         own AppInicio.css-styled header/list/buttons. -->
+    <link rel="stylesheet" href="Admin.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+</head>
+<body>
+    <!-- Native App screen for Roles — same list + drill-in shell as Tipos de
+         Unidad (see AppTiposUnidad.html), except drilling into a Puesto opens
+         the shared PermissionTree.js checkbox tree (same component Business-
+         Roles.js's own desktop screen uses) instead of a guided field form —
+         a Puesto's accesses are a tree, not a handful of flat fields. See
+         AppRoles.js for the window.Dashboard.t shim PermissionTree.js needs
+         (it calls that for every label; this app shell has its own lighter
+         i18n loader instead of Dashboard.js). -->
+    <div class="home-screen">
+        <div class="home-subscreen">
+            <div class="home-subscreen-header home-carga-header">
+                <div class="home-carga-header-top">
+                    <button type="button" class="home-subscreen-back" id="carga-back" data-i18n-aria="admin.back" aria-label="Back">
+                        <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                    </button>
+                    <h2 data-i18n="menu.roles" id="carga-title">Roles</h2>
+                </div>
+            </div>
+            <div class="home-subscreen-body" id="carga-body"></div>
+        </div>
+    </div>
+
+    <div class="home-toast-container" id="home-toast-container"></div>
+
+    <script src="ColorPalette.js"></script>
+    <script src="PermissionTree.js"></script>
+    <script src="AppRoles.js" defer></script>
+</body>
+</html>

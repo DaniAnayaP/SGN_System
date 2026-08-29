@@ -1885,6 +1885,7 @@ const TABLE_GRANT_PATHS = {
     'transacciones-inteligentes': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-transacciones' },
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
     'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
+    'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -3590,6 +3591,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'transacciones-inteligentes', labelKey: 'menu.smartBusinessTransactions' },
     { key: 'reportes-programados', labelKey: 'menu.scheduledReportsScreen' },
     { key: 'reglas-orden-llenado', labelKey: 'menu.fieldRulesGroup' },
+    { key: 'roles', labelKey: 'menu.roles' },
 ];
 
 function deserializeSaasApp(row) {

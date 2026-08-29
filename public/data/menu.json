@@ -147,7 +147,14 @@
             { "id": "ab-expansions", "labelKey": "menu.expansions", "href": "#", "icon": "bx-trending-up" },
             { "id": "ab-business-config", "labelKey": "menu.businessConfig", "href": "Business-Config.html", "icon": "bx-palette" },
             { "id": "ab-client-data", "labelKey": "menu.clientData", "href": "Business-DatosCliente.html", "icon": "bx-id-card" },
-            { "id": "ab-roles", "labelKey": "menu.roles", "href": "Business-Roles.html", "icon": "bx-shield" },
+            {
+              "id": "ab-roles", "labelKey": "menu.roles", "href": "Business-Roles.html", "icon": "bx-shield",
+              "submenu": [
+                { "id": "roleName", "labelKey": "business.jobPositionName", "permissionOnly": true },
+                { "id": "roleAbbreviation", "labelKey": "business.jobPositionAbbreviation", "permissionOnly": true },
+                { "id": "roleStatus", "labelKey": "business.jobPositionStatus", "permissionOnly": true }
+              ]
+            },
             { "id": "ab-users", "labelKey": "menu.users", "href": "Business-Usuarios.html", "icon": "bx-group" },
             { "id": "ab-upcoming-updates", "labelKey": "menu.upcomingUpdates", "href": "#", "icon": "bx-calendar" },
             { "id": "ab-training-sessions", "labelKey": "menu.trainingSessions", "href": "#", "icon": "bx-chalkboard" }

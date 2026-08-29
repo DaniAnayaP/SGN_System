@@ -95,6 +95,7 @@ const WEB_SCREEN_PAGES = {
     'mi-recurso-humano': { href: 'OpRRHHMiRecursoHumano.html', icon: 'bx-id-card' },
     'transacciones-inteligentes': { href: 'NegocioInteligente-Transacciones.html', icon: 'bx-line-chart' },
     'reglas-orden-llenado': { href: 'Business-ReglasOrden.html', icon: 'bx-link' },
+    'roles': { href: 'AppRoles.html', icon: 'bx-shield' },
 };
 
 // menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
