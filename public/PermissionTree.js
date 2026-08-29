@@ -485,8 +485,16 @@
                                     if (other.id === level.id) return;
                                     grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
                                 });
+                                setKeys([levelKey], true);
+                            } else {
+                                // Ver y Operar/Editar are escalating tiers ON
+                                // TOP of Solo Ver, not a raise-then-nothing
+                                // toggle -- turning one off always falls back
+                                // to the Solo Ver baseline instead of leaving
+                                // the column with zero access.
+                                setKeys([levelKey], false);
+                                setKeys([soloVerKey], true);
                             }
-                            setKeys([levelKey], checked);
                             render();
                         },
                     };
