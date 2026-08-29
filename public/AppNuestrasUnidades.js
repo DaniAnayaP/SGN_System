@@ -399,30 +399,83 @@ async function commitFieldValue(field, value) {
     patchRecord(openRecordId, { [field.apiKey]: value });
 }
 
-// Positions a .home-select-options panel (position:fixed, see AppInicio.css)
-// right below its own trigger, flipping above it when there isn't enough
-// room below (a field near the bottom of a long form) -- and closes it on
-// scroll, since a fixed-position panel doesn't move with the page and would
-// otherwise visually detach from the trigger it belongs to.
-function openFloatingOptions(trigger, options) {
-    const rect = trigger.getBoundingClientRect();
-    options.style.left = `${rect.left}px`;
-    options.style.width = `${rect.width}px`;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    if (spaceBelow < 200 && rect.top > spaceBelow) {
-        options.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-        options.style.top = '';
-    } else {
-        options.style.top = `${rect.bottom + 4}px`;
-        options.style.bottom = '';
-    }
-    options.hidden = false;
-    trigger.setAttribute('aria-expanded', 'true');
-    window.addEventListener('scroll', () => closeFloatingOptions(trigger, options), { capture: true, once: true });
+// Bottom sheet for a field's options -- appended straight to <body>, so it
+// escapes .home-carga-field's own overflow:hidden entirely (never a
+// descendant of it) instead of needing position tricks. Tapping an option,
+// or the dimmed scrim around the sheet, closes it. optionGroups entries take
+// EITHER labelKey (i18n, the fixed fuelType/status catalogs) or a literal
+// label (free-text data, e.g. a unit type's own name) -- never both.
+function openSelectSheet(titleText, optionGroups, currentValue, onPick) {
+    const scrim = document.createElement('div');
+    scrim.className = 'home-select-scrim';
+    const sheet = document.createElement('div');
+    sheet.className = 'home-select-sheet';
+    sheet.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-sheet-handle' }));
+    const title = document.createElement('div');
+    title.className = 'home-select-sheet-title';
+    title.textContent = titleText;
+    sheet.appendChild(title);
+    optionGroups.forEach((grp, i) => {
+        if (i > 0) sheet.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-divider' }));
+        if (grp.labelKey) {
+            const label = document.createElement('div');
+            label.className = 'home-select-group-label';
+            label.textContent = t(grp.labelKey);
+            sheet.appendChild(label);
+        }
+        grp.options.forEach((opt) => {
+            const isActive = opt.value === currentValue;
+            const text = opt.labelKey ? t(opt.labelKey) : (opt.label || '');
+            const optBtn = document.createElement('button');
+            optBtn.type = 'button';
+            optBtn.className = `home-select-option${grp.labelKey ? ' indent' : ''}${isActive ? ' active' : ''}`;
+            optBtn.innerHTML = `<span>${text}</span>${isActive ? '<i class="bx bx-check" aria-hidden="true"></i>' : ''}`;
+            optBtn.addEventListener('click', () => {
+                scrim.remove();
+                onPick(opt.value);
+            });
+            sheet.appendChild(optBtn);
+        });
+    });
+    scrim.addEventListener('click', (event) => { if (event.target === scrim) scrim.remove(); });
+    scrim.appendChild(sheet);
+    document.body.appendChild(scrim);
 }
-function closeFloatingOptions(trigger, options) {
-    options.hidden = true;
-    trigger.setAttribute('aria-expanded', 'false');
+
+// Same custom-trigger look as the 'select' branch below, sourced from
+// unitTypesCache (free-text names, not an i18n catalog) instead of
+// field.optionGroups.
+function buildUnitTypeTrigger(field, record) {
+    const bodyWrap = document.createElement('div');
+    bodyWrap.className = 'home-carga-field-body';
+    if (!unitTypesCache.length) {
+        const err = document.createElement('p');
+        err.className = 'home-carga-field-error show';
+        err.textContent = t('home.fleetNoUnitTypes');
+        bodyWrap.appendChild(err);
+        return bodyWrap;
+    }
+    const currentValue = record.unitTypeId ? String(record.unitTypeId) : '';
+    const selectedUt = unitTypesCache.find((ut) => String(ut.id) === currentValue);
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'home-select-trigger';
+    const valueSpan = document.createElement('span');
+    valueSpan.className = `home-select-trigger-value${selectedUt ? '' : ' placeholder'}`;
+    valueSpan.textContent = selectedUt ? (selectedUt.name || selectedUt.code) : t('main.fleetUnitTypeSelect');
+    trigger.innerHTML = `
+        <span class="home-select-trigger-text">
+            <span class="home-select-trigger-label">${t(field.labelKey)}</span>
+        </span>
+        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+    `;
+    trigger.querySelector('.home-select-trigger-text').appendChild(valueSpan);
+    trigger.addEventListener('click', () => {
+        const groups = [{ options: unitTypesCache.map((ut) => ({ value: String(ut.id), label: ut.name || ut.code })) }];
+        openSelectSheet(t(field.labelKey), groups, currentValue, (value) => commitFieldValue(field, Number(value)));
+    });
+    bodyWrap.appendChild(trigger);
+    return bodyWrap;
 }
 
 function buildFieldBody(field, record) {
@@ -430,35 +483,7 @@ function buildFieldBody(field, record) {
     bodyWrap.className = 'home-carga-field-body';
 
     if (field.type === 'unitType') {
-        if (!unitTypesCache.length) {
-            const err = document.createElement('p');
-            err.className = 'home-carga-field-error show';
-            err.textContent = t('home.fleetNoUnitTypes');
-            bodyWrap.appendChild(err);
-            return bodyWrap;
-        }
-        const select = document.createElement('select');
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = t('main.fleetUnitTypeSelect');
-        select.appendChild(placeholder);
-        unitTypesCache.forEach((ut) => {
-            const opt = document.createElement('option');
-            opt.value = String(ut.id);
-            opt.textContent = ut.name || ut.code;
-            select.appendChild(opt);
-        });
-        select.value = record.unitTypeId ? String(record.unitTypeId) : '';
-        const confirmBtn = document.createElement('button');
-        confirmBtn.type = 'button';
-        confirmBtn.className = 'home-carga-field-confirm';
-        confirmBtn.textContent = t('home.cargaConfirm');
-        confirmBtn.addEventListener('click', () => {
-            if (!select.value) return;
-            commitFieldValue(field, Number(select.value));
-        });
-        bodyWrap.append(select, confirmBtn);
-        return bodyWrap;
+        return buildUnitTypeTrigger(field, record);
     }
 
     if (field.type === 'select') {
@@ -468,7 +493,6 @@ function buildFieldBody(field, record) {
         const trigger = document.createElement('button');
         trigger.type = 'button';
         trigger.className = 'home-select-trigger';
-        trigger.setAttribute('aria-expanded', 'false');
         const valueSpan = document.createElement('span');
         valueSpan.className = `home-select-trigger-value${selectedOpt ? '' : ' placeholder'}`;
         valueSpan.textContent = selectedOpt ? t(selectedOpt.labelKey) : t('main.fuelTypeSelect');
@@ -479,39 +503,10 @@ function buildFieldBody(field, record) {
             <i class="bx bx-chevron-down" aria-hidden="true"></i>
         `;
         trigger.querySelector('.home-select-trigger-text').appendChild(valueSpan);
-
-        const options = document.createElement('div');
-        options.className = 'home-select-options';
-        options.hidden = true;
-        field.optionGroups.forEach((grp, i) => {
-            if (i > 0) options.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-divider' }));
-            if (grp.labelKey) {
-                const label = document.createElement('div');
-                label.className = 'home-select-group-label';
-                label.textContent = t(grp.labelKey);
-                options.appendChild(label);
-            }
-            grp.options.forEach((opt) => {
-                const isActive = opt.value === currentValue;
-                const optBtn = document.createElement('button');
-                optBtn.type = 'button';
-                optBtn.className = `home-select-option${grp.labelKey ? ' indent' : ''}${isActive ? ' active' : ''}`;
-                optBtn.innerHTML = `<span>${t(opt.labelKey)}</span>${isActive ? '<i class="bx bx-check" aria-hidden="true"></i>' : ''}`;
-                optBtn.addEventListener('click', () => {
-                    closeFloatingOptions(trigger, options);
-                    commitFieldValue(field, opt.value);
-                });
-                options.appendChild(optBtn);
-            });
-        });
         trigger.addEventListener('click', () => {
-            if (!options.hidden) closeFloatingOptions(trigger, options);
-            else openFloatingOptions(trigger, options);
+            openSelectSheet(t(field.labelKey), field.optionGroups, currentValue, (value) => commitFieldValue(field, value));
         });
-        const fieldWrap = document.createElement('div');
-        fieldWrap.className = 'home-select-field';
-        fieldWrap.append(trigger, options);
-        bodyWrap.appendChild(fieldWrap);
+        bodyWrap.appendChild(trigger);
         return bodyWrap;
     }
 

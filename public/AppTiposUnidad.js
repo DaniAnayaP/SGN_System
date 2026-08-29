@@ -398,30 +398,45 @@ async function commitFieldValue(field, value) {
     patchRecord(openRecordId, { [field.apiKey]: value });
 }
 
-// Positions a .home-select-options panel (position:fixed, see AppInicio.css)
-// right below its own trigger, flipping above it when there isn't enough
-// room below (a field near the bottom of a long form) -- and closes it on
-// scroll, since a fixed-position panel doesn't move with the page and would
-// otherwise visually detach from the trigger it belongs to.
-function openFloatingOptions(trigger, options) {
-    const rect = trigger.getBoundingClientRect();
-    options.style.left = `${rect.left}px`;
-    options.style.width = `${rect.width}px`;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    if (spaceBelow < 200 && rect.top > spaceBelow) {
-        options.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-        options.style.top = '';
-    } else {
-        options.style.top = `${rect.bottom + 4}px`;
-        options.style.bottom = '';
-    }
-    options.hidden = false;
-    trigger.setAttribute('aria-expanded', 'true');
-    window.addEventListener('scroll', () => closeFloatingOptions(trigger, options), { capture: true, once: true });
-}
-function closeFloatingOptions(trigger, options) {
-    options.hidden = true;
-    trigger.setAttribute('aria-expanded', 'false');
+// Bottom sheet for a 'select' field's options -- appended straight to
+// <body>, so it escapes .home-carga-field's own overflow:hidden entirely
+// (never a descendant of it) instead of needing position tricks. Tapping
+// an option, or the dimmed scrim around the sheet, closes it.
+function openSelectSheet(titleText, optionGroups, currentValue, onPick) {
+    const scrim = document.createElement('div');
+    scrim.className = 'home-select-scrim';
+    const sheet = document.createElement('div');
+    sheet.className = 'home-select-sheet';
+    sheet.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-sheet-handle' }));
+    const title = document.createElement('div');
+    title.className = 'home-select-sheet-title';
+    title.textContent = titleText;
+    sheet.appendChild(title);
+    optionGroups.forEach((grp, i) => {
+        if (i > 0) sheet.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-divider' }));
+        if (grp.labelKey) {
+            const label = document.createElement('div');
+            label.className = 'home-select-group-label';
+            label.textContent = t(grp.labelKey);
+            sheet.appendChild(label);
+        }
+        grp.options.forEach((opt) => {
+            const isActive = opt.value === currentValue;
+            const text = opt.labelKey ? t(opt.labelKey) : (opt.label || '');
+            const optBtn = document.createElement('button');
+            optBtn.type = 'button';
+            optBtn.className = `home-select-option${grp.labelKey ? ' indent' : ''}${isActive ? ' active' : ''}`;
+            optBtn.innerHTML = `<span>${text}</span>${isActive ? '<i class="bx bx-check" aria-hidden="true"></i>' : ''}`;
+            optBtn.addEventListener('click', () => {
+                scrim.remove();
+                onPick(opt.value);
+            });
+            sheet.appendChild(optBtn);
+        });
+    });
+    scrim.addEventListener('click', (event) => { if (event.target === scrim) scrim.remove(); });
+    scrim.appendChild(sheet);
+    document.body.appendChild(scrim);
 }
 
 function buildFieldBody(field, record) {
@@ -435,7 +450,6 @@ function buildFieldBody(field, record) {
         const trigger = document.createElement('button');
         trigger.type = 'button';
         trigger.className = 'home-select-trigger';
-        trigger.setAttribute('aria-expanded', 'false');
         const valueSpan = document.createElement('span');
         valueSpan.className = `home-select-trigger-value${selectedOpt ? '' : ' placeholder'}`;
         valueSpan.textContent = selectedOpt ? t(selectedOpt.labelKey) : t('main.fuelTypeSelect');
@@ -446,39 +460,10 @@ function buildFieldBody(field, record) {
             <i class="bx bx-chevron-down" aria-hidden="true"></i>
         `;
         trigger.querySelector('.home-select-trigger-text').appendChild(valueSpan);
-
-        const options = document.createElement('div');
-        options.className = 'home-select-options';
-        options.hidden = true;
-        field.optionGroups.forEach((grp, i) => {
-            if (i > 0) options.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-divider' }));
-            if (grp.labelKey) {
-                const label = document.createElement('div');
-                label.className = 'home-select-group-label';
-                label.textContent = t(grp.labelKey);
-                options.appendChild(label);
-            }
-            grp.options.forEach((opt) => {
-                const isActive = opt.value === currentValue;
-                const optBtn = document.createElement('button');
-                optBtn.type = 'button';
-                optBtn.className = `home-select-option${grp.labelKey ? ' indent' : ''}${isActive ? ' active' : ''}`;
-                optBtn.innerHTML = `<span>${t(opt.labelKey)}</span>${isActive ? '<i class="bx bx-check" aria-hidden="true"></i>' : ''}`;
-                optBtn.addEventListener('click', () => {
-                    closeFloatingOptions(trigger, options);
-                    commitFieldValue(field, opt.value);
-                });
-                options.appendChild(optBtn);
-            });
-        });
         trigger.addEventListener('click', () => {
-            if (!options.hidden) closeFloatingOptions(trigger, options);
-            else openFloatingOptions(trigger, options);
+            openSelectSheet(t(field.labelKey), field.optionGroups, currentValue, (value) => commitFieldValue(field, value));
         });
-        const fieldWrap = document.createElement('div');
-        fieldWrap.className = 'home-select-field';
-        fieldWrap.append(trigger, options);
-        bodyWrap.appendChild(fieldWrap);
+        bodyWrap.appendChild(trigger);
         return bodyWrap;
     }
 

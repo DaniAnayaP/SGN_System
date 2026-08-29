@@ -1163,33 +1163,53 @@ body{
 .home-select-trigger-value.placeholder{ color: var(--home-text-muted); font-weight: 500; }
 .home-select-trigger i{ color: var(--home-accent); font-size: 0.95rem; margin-top: 0.15rem; flex-shrink: 0; transition: transform 0.15s ease; }
 .home-select-trigger[aria-expanded="true"] i{ transform: rotate(180deg); }
-/* position:fixed (top/left/width set from the trigger's own
-   getBoundingClientRect() in JS right before opening, see toggleSelect
-   below) rather than position:absolute -- the field card this lives
-   inside (.home-carga-field) has overflow:hidden for its own rounded
-   corners, which would otherwise clip the floating panel instead of
-   letting it hover over the rest of the form the way the Departamento/
-   Área/Centro de Costos pickers already float (same border/shadow as
-   those, .home-picker-dropdown). */
-.home-select-options{
+/* Bottom sheet (appended straight to <body>, see openFloatingOptions in
+   each App file -- escapes .home-carga-field's own overflow:hidden by
+   never being its descendant in the first place) instead of a small
+   anchored dropdown: a full-width panel that rises from the bottom over a
+   dimmed scrim, closer in scale/feel to each OS's own native <select>
+   sheet this replaced, just carrying the App's own colors/theme instead
+   of the system's. Tapping an option (or the scrim itself) closes it. */
+.home-select-scrim{
     position: fixed;
-    max-height: 60vh;
+    inset: 0;
+    background: rgba(10, 12, 20, 0.42);
+    z-index: 30;
+    display: flex;
+    align-items: flex-end;
+}
+.home-select-scrim[hidden]{ display: none; }
+.home-select-sheet{
+    width: 100%;
+    max-height: 70vh;
     overflow-y: auto;
     background: var(--home-surface);
-    border: 1px solid var(--home-border);
-    border-radius: 0.6rem;
-    padding: 0.3rem;
-    z-index: 30;
-    box-shadow: 0 10px 30px var(--home-shadow);
+    border-radius: 1rem 1rem 0 0;
+    padding: 0.7rem 0 max(0.6rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 24px var(--home-shadow);
 }
-.home-select-options[hidden]{ display: none; }
+.home-select-sheet-handle{
+    width: 2.2rem;
+    height: 0.22rem;
+    border-radius: 999px;
+    background: var(--home-border);
+    margin: 0 auto 0.5rem;
+}
+.home-select-sheet-title{
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--home-text-muted);
+    padding: 0 1rem 0.4rem;
+}
 .home-select-group-label{
-    font-size: 0.58rem;
+    font-size: 0.62rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--home-text-muted);
-    padding: 0.4rem 0.5rem 0.15rem;
+    padding: 0.3rem 1rem 0.15rem;
 }
 .home-select-option{
     display: flex;
@@ -1199,18 +1219,17 @@ body{
     background: none;
     border: none;
     font-family: inherit;
-    font-size: 0.78rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--home-text-secondary);
-    padding: 0.5rem 0.55rem;
-    border-radius: 0.45rem;
+    padding: 0.65rem 1rem;
     cursor: pointer;
     text-align: left;
 }
-.home-select-option.indent{ padding-left: 1.3rem; }
+.home-select-option.indent{ padding-left: 1.9rem; }
 .home-select-option.active{ background: var(--home-surface-2); color: var(--home-text-primary); }
-.home-select-option i{ color: var(--home-accent); font-size: 0.85rem; }
-.home-select-divider{ border-top: 1px solid var(--home-divider); margin: 0.25rem 0.1rem; }
+.home-select-option i{ color: var(--home-accent); font-size: 1rem; }
+.home-select-divider{ border-top: 1px solid var(--home-divider); margin: 0.2rem 0; }
 .home-carga-photo-row{ display: flex; align-items: center; gap: 0.6rem; }
 .home-carga-photo-btn{
     display: flex;
