@@ -993,7 +993,7 @@
     "changeHistoryUser": "Usuario",
     "changeHistoryRecord": "Registro",
     "changeHistoryChange": "Cambio",
-    "fieldLocked": "Ya se guardó — necesitas permiso para modificarlo",
+    "fieldLocked": "Usted no está habilitado para hacer modificaciones en esta opción, consulte con su coordinador",
     "tablePrefix": "Tabla",
     "permSoloVer": "Solo Ver",
     "permVerYOperar": "Operar",
