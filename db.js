@@ -3446,7 +3446,7 @@ function deserializePlan(row) {
         businessSectorId: business_sector_id || null,
         ...getSystemColumnsForRecord({
             companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Planes',
-            centroCostos: '', createdAt: row.created_at,
+            centroCostos: 'SGN', createdAt: row.created_at,
         }),
     };
 }
@@ -3573,7 +3573,7 @@ function deserializeSaasApp(row) {
         ...rest, colorFrom: color_from, colorTo: color_to, createdAt: created_at, createdBy: created_by || '',
         ...getSystemColumnsForRecord({
             companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestras APPs',
-            centroCostos: '', createdAt: created_at,
+            centroCostos: 'SGN', createdAt: created_at,
         }),
     };
 }
@@ -3771,7 +3771,7 @@ function deserializeBusinessSector(row) {
         ...rest, createdAt: created_at, createdBy: created_by || '',
         ...getSystemColumnsForRecord({
             companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Sectores de Negocio',
-            centroCostos: '', createdAt: created_at,
+            centroCostos: 'SGN', createdAt: created_at,
         }),
     };
 }

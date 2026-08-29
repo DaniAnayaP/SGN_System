@@ -1027,7 +1027,7 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
         const plan = createPlan({
             name: name.trim(), description,
             modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0,
-            createdBy: req.user.name, businessSectorId: businessSectorId || null,
+            createdBy: `${req.user.username} - ${req.user.name}`, businessSectorId: businessSectorId || null,
         });
         logPlanChange({ planId: plan.id, action: 'create', changedBy: req.user.name });
         res.status(201).json({ plan });
