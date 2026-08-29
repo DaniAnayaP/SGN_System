@@ -1597,6 +1597,7 @@ function getClientBranding(id) {
     const row = db
         .prepare(`
             SELECT company_name AS companyName, company_abbreviation AS companyAbbreviation,
+                   company_nickname AS companyNickname,
                    logo_data_url AS logoDataUrl,
                    primary_color AS primaryColor, secondary_color AS secondaryColor,
                    seed_color AS seedColor, color_palette AS colorPaletteRaw

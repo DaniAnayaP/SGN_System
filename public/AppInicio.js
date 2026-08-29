@@ -1385,6 +1385,10 @@ async function loadClientBranding() {
         if (!res.ok) return;
         const { branding } = await res.json();
         nameEl.textContent = branding.companyAbbreviation || branding.companyName || '';
+        if (isClientAdmin) {
+            const greetingEl = document.getElementById('home-user-name');
+            greetingEl.textContent = branding.companyNickname || branding.companyAbbreviation || branding.companyName || greetingEl.textContent;
+        }
         if (branding.logoDataUrl) {
             logoImg.src = branding.logoDataUrl;
             logoImg.hidden = false;
@@ -1403,17 +1407,28 @@ async function loadClientBranding() {
 (async function init() {
     await loadLanguage();
     try {
-        const [meRes, screensRes] = await Promise.all([
+        const [meRes, screensRes, profileRes] = await Promise.all([
             fetch('/api/me', { credentials: 'include' }),
             fetch('/api/business/app-screens', { credentials: 'include' }),
+            fetch('/api/me/profile', { credentials: 'include' }),
         ]);
         if (!meRes.ok) {
             window.location.replace('Login.html');
             return;
         }
         const { user } = await meRes.json();
-        document.getElementById('home-user-name').textContent = user?.name || '';
         isClientAdmin = !!user?.isClientAdmin;
+        // The auto-provisioned client-admin account's `name` is frozen as
+        // "Admin <razón social completa>" (see activateClient in db.js) --
+        // never meant to be read aloud, so it greets with the client's own
+        // Apodo Empresa instead (filled in once loadClientBranding()
+        // resolves, below; this is just what shows before that lands). A
+        // person greets by their own Apodo (users.nickname, set in Datos de
+        // Usuario), falling back to their real name until they set one.
+        const profile = profileRes.ok ? (await profileRes.json()).profile : null;
+        document.getElementById('home-user-name').textContent = isClientAdmin
+            ? (user?.name || '')
+            : (profile?.nickname?.trim() || user?.name || '');
 
         const screensData = screensRes.ok ? await screensRes.json() : { app: null, screens: [] };
         grantedAppScreens = screensData.screens || [];
