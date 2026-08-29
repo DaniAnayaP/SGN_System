@@ -138,7 +138,6 @@ const {
     createHrWorker,
     activateHrWorkerUser,
     updateHrWorker,
-    deleteHrWorker,
     getTableChanges,
     logTableChange,
     getColumnGrantLevel,
@@ -3159,17 +3158,9 @@ app.post('/api/business/hr-workers/:id/resend-credentials-email', requireAuth, a
     res.json({ emailSent, emailTo: existing.personal_email });
 });
 
-app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {
-    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
-    if (!existing) return res.status(404).json({ message: 'Worker not found.' });
-    logTableChange({
-        clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,
-        recordLabel: existing.full_name, action: 'delete', changedBy: req.user.name,
-    });
-    deleteHrWorker(req.params.id, req.user.clientId);
-    res.status(204).end();
-});
+// No DELETE route -- a worker leaving is a Rescisión de Contrato Estatus
+// (see Business-EstatusRH.html), same "Activar/Desactivar only" rule as
+// clients/cost centers/sectors.
 
 // --- Historial de cambios (control de cambios icon, generic across every ---
 // --- .data-table — see openChangeHistory in Dashboard.js) -------------------

@@ -3238,10 +3238,6 @@ function updateHrWorker(id, clientId, patch, forTestAccount = false) {
     return getHrWorkerById(id, clientId, forTestAccount);
 }
 
-function deleteHrWorker(id, clientId) {
-    db.prepare('DELETE FROM hr_workers WHERE id = ? AND client_id = ?').run(id, clientId);
-}
-
 // --- One-time data migration: seed "Ver y Operar" for pre-existing access --
 // Before this round, filling an EMPTY cell in these tables was always
 // unrestricted for anyone who could see the pantalla at all (no grant check
@@ -4597,7 +4593,6 @@ module.exports = {
     computeHrUsername,
     activateHrWorkerUser,
     updateHrWorker,
-    deleteHrWorker,
     listPlans,
     getPlanById,
     getPlanByName,

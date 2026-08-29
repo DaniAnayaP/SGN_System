@@ -263,20 +263,12 @@ function ensureEmptyState() {
     tbody.appendChild(tr);
 }
 
-async function deleteWorker(id, tr) {
-    if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;
-    try {
-        const res = await fetch(`/api/business/hr-workers/${id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) throw new Error('delete failed');
-        tr.remove();
-        ensureEmptyState();
-    } catch (err) {
-        console.error('Mi Recurso Humano: failed to delete record', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-    }
-}
-
-function buildActionsCell(worker, tr) {
+// No hard-delete -- a worker leaving is a Rescisión de Contrato Estatus
+// (see Business-EstatusRH.html), same "Activar/Desactivar only" rule as
+// clients/cost centers/sectors, so their record_code/history/username
+// stay intact instead of leaving a hole. buildStatusCell's own <select>
+// (right below) is the only way to change that now.
+function buildActionsCell(worker) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
@@ -288,14 +280,6 @@ function buildActionsCell(worker, tr) {
     historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, worker.id));
     td.appendChild(historyBtn);
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-    deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-    deleteBtn.title = Dashboard.t('admin.delete');
-    deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-    deleteBtn.addEventListener('click', () => deleteWorker(worker.id, tr));
-    td.appendChild(deleteBtn);
     return td;
 }
 
@@ -432,7 +416,7 @@ function buildRow(worker) {
         buildStatusCell(worker),
         textCell('colHrUsername', worker.username),
         buildUserStatusCell(worker),
-        buildActionsCell(worker, tr),
+        buildActionsCell(worker),
     );
     // Row-editable legend (see Dashboard.js renderDataTableColumnControls) —
     // same reasoning as OpTransVolCombustible.js: a row counts as editable
