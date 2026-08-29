@@ -359,38 +359,6 @@
             });
         }
 
-        // A row with no checkbox/grant of its own — used for the "Iconos
-        // Personalización" heading (each icon underneath is already a
-        // single flat checkbox, nothing to bulk-select there). `toggle`,
-        // when given, adds the same chevron expand/collapse button
-        // buildRow's checkbox rows use, so a long list can be folded away
-        // as a whole; omit it for a row that's just permanently visible.
-        function buildStaticRow(labelText, depth, toggle) {
-            const row = document.createElement('div');
-            row.className = `perm-tree-row perm-tree-depth-${depth} perm-tree-row-static`;
-            if (toggle) {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'perm-tree-toggle';
-                btn.setAttribute('aria-expanded', String(toggle.expanded));
-                const icon = document.createElement('i');
-                icon.className = 'bx bx-chevron-down';
-                icon.setAttribute('aria-hidden', 'true');
-                btn.appendChild(icon);
-                btn.addEventListener('click', () => { toggle.onToggle(); render(); });
-                row.appendChild(btn);
-            } else {
-                const spacer = document.createElement('span');
-                spacer.className = 'perm-tree-toggle-spacer';
-                row.appendChild(spacer);
-            }
-            const label = document.createElement('span');
-            label.className = 'perm-tree-static-label';
-            label.textContent = labelText;
-            row.appendChild(label);
-            return row;
-        }
-
         // "Solo Ver"/"Ver y Operar"/"Editar" are mutually exclusive (a
         // column can be in at most one of these 3 modes at a time) —
         // "Autorizar" is a fully independent 4th toggle, combinable with
@@ -610,11 +578,15 @@
             });
         }
 
-        function cascadeSubSmDetail(section, item, sm, subSm, checked) {
-            cascadeTableColumns(section, item, sm, subSm, checked);
+        function cascadeIcons(section, item, sm, subSm, checked) {
             (subSm.iconsSubmenu || []).forEach((icon) => {
                 setKeys([keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`)], checked);
             });
+        }
+
+        function cascadeSubSmDetail(section, item, sm, subSm, checked) {
+            cascadeTableColumns(section, item, sm, subSm, checked);
+            cascadeIcons(section, item, sm, subSm, checked);
         }
 
         // A column counts as "covered" if it has ANY of the 3 mutually
@@ -708,17 +680,30 @@
         // Limpiar/Zoom) a pantalla's table offers. Unlike a Columna, an icon
         // has no Ver y Operar/Editar/Autorizar distinction — it's simply
         // shown or not (see Dashboard.js: hasIconGrant) — so each one is a
-        // single ordinary leaf, same shape as a plain pantalla checkbox.
+        // single ordinary leaf, same shape as a plain pantalla checkbox. The
+        // heading itself has the same select-all checkbox as "Tabla <X>"
+        // right above it: checking it grants every icon in one go, and its
+        // own checked/indeterminate state reflects that same coverage back.
         function renderIconPermissions(container, section, item, sm, subSm, subBlocked) {
             const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const iconsExpanded = expandedItems.has(iconsTreeKey);
-            container.appendChild(buildStaticRow(t('menu.iconsPersonalization'), 4, {
+            const iconsRow = buildRow(t('menu.iconsPersonalization'), 4, {
                 expanded: iconsExpanded,
                 onToggle: () => {
                     if (iconsExpanded) expandedItems.delete(iconsTreeKey);
                     else expandedItems.add(iconsTreeKey);
                 },
-            }));
+            }, subBlocked, null);
+            if (!readOnly) {
+                const { total, coveredCount } = iconsCoverage(section, item, sm, subSm);
+                iconsRow.input.checked = total > 0 && coveredCount === total;
+                iconsRow.input.indeterminate = coveredCount > 0 && coveredCount < total;
+                iconsRow.input.addEventListener('change', () => {
+                    cascadeIcons(section, item, sm, subSm, iconsRow.input.checked);
+                    render();
+                });
+            }
+            container.appendChild(iconsRow.row);
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
