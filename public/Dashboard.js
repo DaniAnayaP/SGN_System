@@ -5078,15 +5078,22 @@ function applyClientBranding(branding) {
             }
         }
     }
+    // Apodo Empresa over the real razón social everywhere a client's own
+    // name shows in the shell — same reasoning as the App home greeting
+    // (see AppInicio.js): "GRUPO EMPRESARIAL INTEGRADOR DE PRODUCTOS Y
+    // SERVICIOS ANAYA" isn't what anyone actually wants to read in a sidebar
+    // or a browser tab, "GEIPSA" is. Falls back to the full name until a
+    // client has an Apodo set.
+    const displayName = branding.companyNickname || branding.companyName;
     const brandLabel = document.querySelector('.brand span');
-    if (brandLabel && branding.companyName) brandLabel.textContent = branding.companyName;
+    if (brandLabel && displayName) brandLabel.textContent = displayName;
     // Tab title: prefix whatever this page's own title already says (already
     // re-translated by applyStaticTranslations before this runs) with the
     // client's name, so e.g. "Roles" becomes "Acme Corp — Roles".
-    if (branding.companyName) {
+    if (displayName) {
         const titleEl = document.querySelector('title[data-i18n]');
         const pageTitle = titleEl ? t(titleEl.dataset.i18n) : document.title;
-        document.title = `${branding.companyName} — ${pageTitle}`;
+        document.title = `${displayName} — ${pageTitle}`;
     }
 }
 
@@ -5118,7 +5125,7 @@ async function loadPersonalizedReports() {
         if (!personalizados) return;
         personalizados.submenu = (reports || []).map((report) => ({
             id: `report-${report.id}`,
-            label: `${clientBranding?.companyName || ''} - ${report.name}`,
+            label: `${clientBranding?.companyNickname || clientBranding?.companyName || ''} - ${report.name}`,
             href: `NegocioInteligente-ReporteResultados.html?id=${report.id}`,
         }));
         renderFilteredMenu();
