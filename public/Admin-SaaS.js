@@ -830,20 +830,75 @@ document.addEventListener('keydown', (event) => {
 });
 
 // --- One-time generated admin credentials (shown when a client is activated) -
+// The password only ever exists in this box's own memory (never stored
+// anywhere recoverable server-side — see applyClientLifecycle's comment in
+// server.js), so "Mostrar"/"Reenviar correo" both work purely off the
+// `current` closure below; neither survives a dismiss or page reload.
 const generatedAdminBox = document.getElementById('generated-admin-box');
 const generatedAdminUsername = document.getElementById('generated-admin-username');
 const generatedAdminPassword = document.getElementById('generated-admin-password');
+const generatedAdminReveal = document.getElementById('generated-admin-reveal');
+const generatedAdminEmailSent = document.getElementById('generated-admin-email-sent');
+const generatedAdminEmailTo = document.getElementById('generated-admin-email-to');
+const generatedAdminEmailFailed = document.getElementById('generated-admin-email-failed');
+const generatedAdminResend = document.getElementById('generated-admin-resend');
 const generatedAdminDismiss = document.getElementById('generated-admin-dismiss');
+let currentGeneratedAdmin = null;
 
-function showGeneratedAdmin({ username, password }) {
-    generatedAdminUsername.textContent = username;
-    generatedAdminPassword.textContent = password;
+function renderGeneratedAdminPassword(revealed) {
+    generatedAdminPassword.textContent = revealed ? currentGeneratedAdmin.password : '••••••••••••';
+    generatedAdminReveal.textContent = Dashboard.t(revealed ? 'admin.hidePassword' : 'admin.showPassword');
+}
+
+function showGeneratedAdmin(generatedAdmin) {
+    currentGeneratedAdmin = generatedAdmin;
+    generatedAdminUsername.textContent = generatedAdmin.username;
+    const emailKnown = !!generatedAdmin.emailTo;
+    generatedAdminEmailSent.hidden = !(emailKnown && generatedAdmin.emailSent);
+    generatedAdminEmailFailed.hidden = !generatedAdmin.emailSent;
+    generatedAdminEmailTo.textContent = generatedAdmin.emailTo || '';
+    // Only worth hiding behind "Mostrar" when it actually reached the
+    // client's inbox — if it didn't, this screen is the only remaining
+    // copy, so show it plainly instead of adding a click before someone
+    // can even read it.
+    generatedAdminReveal.hidden = !generatedAdmin.emailSent;
+    renderGeneratedAdminPassword(!generatedAdmin.emailSent);
     generatedAdminBox.hidden = false;
     generatedAdminBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+let generatedAdminRevealed = false;
+generatedAdminReveal.addEventListener('click', () => {
+    generatedAdminRevealed = !generatedAdminRevealed;
+    renderGeneratedAdminPassword(generatedAdminRevealed);
+});
+
+generatedAdminResend.addEventListener('click', async () => {
+    if (!currentGeneratedAdmin) return;
+    generatedAdminResend.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/clients/${currentGeneratedAdmin.clientId}/resend-admin-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ username: currentGeneratedAdmin.username, password: currentGeneratedAdmin.password }),
+        });
+        if (!res.ok) throw new Error('resend failed');
+        const { emailSent, emailTo } = await res.json();
+        currentGeneratedAdmin = { ...currentGeneratedAdmin, emailSent, emailTo };
+        Dashboard.showToast(Dashboard.t(emailSent ? 'main.changeSaved' : 'admin.saveError'), emailSent ? 'success' : 'error');
+        if (emailSent) showGeneratedAdmin(currentGeneratedAdmin);
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    } finally {
+        generatedAdminResend.disabled = false;
+    }
+});
+
 generatedAdminDismiss.addEventListener('click', () => {
     generatedAdminBox.hidden = true;
+    currentGeneratedAdmin = null;
+    generatedAdminRevealed = false;
 });
 
 // --- One-time generated Pruebas<Apodo> credentials (same idea as the admin

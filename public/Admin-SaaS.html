@@ -353,13 +353,27 @@
                 <div id="generated-admin-box" class="admin-generated-credentials" role="alert" hidden>
                     <p class="admin-generated-title" data-i18n="admin.generatedAdminTitle">New client admin account created</p>
                     <p class="admin-generated-note" data-i18n="admin.generatedAdminNote">This password is shown only once — copy it now and share it with the client securely.</p>
+                    <div id="generated-admin-email-sent" class="admin-generated-email-status admin-generated-email-status-ok" hidden>
+                        <i class="bx bx-check-circle" aria-hidden="true"></i>
+                        <span data-i18n="admin.generatedAdminEmailSent">We emailed the username and password to</span>
+                        <strong id="generated-admin-email-to"></strong>
+                    </div>
+                    <div id="generated-admin-email-failed" class="admin-generated-email-status admin-generated-email-status-warn" hidden>
+                        <i class="bx bx-error-circle" aria-hidden="true"></i>
+                        <span data-i18n="admin.generatedAdminEmailFailed">Couldn't email this automatically — copy the password and share it manually.</span>
+                    </div>
                     <div class="admin-generated-row">
                         <span data-i18n="business.username">Username</span>: <strong id="generated-admin-username"></strong>
                     </div>
                     <div class="admin-generated-row">
-                        <span data-i18n="business.password">Password</span>: <strong id="generated-admin-password"></strong>
+                        <span data-i18n="business.password">Password</span>:
+                        <strong id="generated-admin-password"></strong>
+                        <button type="button" class="admin-generated-reveal-btn" id="generated-admin-reveal" hidden data-i18n="admin.showPassword">Show</button>
                     </div>
-                    <button type="button" class="btn btn-secondary" id="generated-admin-dismiss" data-i18n="admin.dismiss">Dismiss</button>
+                    <div class="admin-generated-actions">
+                        <button type="button" class="btn btn-secondary" id="generated-admin-resend" data-i18n="admin.resendEmail">Resend email</button>
+                        <button type="button" class="btn btn-secondary" id="generated-admin-dismiss" data-i18n="admin.dismiss">Dismiss</button>
+                    </div>
                 </div>
 
                 <div id="generated-training-box" class="admin-generated-credentials" role="alert" hidden>

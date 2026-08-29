@@ -33,6 +33,7 @@ const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
 const { hashPassword, verifyPassword } = require('./password');
+const { sendMail } = require('./mailer');
 const {
     findUserByUsername,
     usernameOrEmailExists,
@@ -639,16 +640,33 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
     res.json({ clients });
 });
 
+function adminCredentialsEmailBody(client, username, password) {
+    return `Se creó tu cuenta de administrador en SGN para ${client.company_name}.\n\n`
+        + `Usuario: ${username}\nContraseña: ${password}\n\n`
+        + 'Guarda esta contraseña en un lugar seguro — no se puede recuperar después de este correo.';
+}
+
 // Runs after every create/update: 'activo' provisions (or reactivates) the
 // client's admin user and their whole team; anything else locks all of them
-// out. Returns { username, password } only the one time a NEW admin user is
-// created — that's the only chance to hand the password to GEIPSA, since it's
-// never stored anywhere in recoverable form.
+// out. Returns { username, password, emailSent, emailTo } only the one time
+// a NEW admin user is created — that's the only chance to hand the password
+// to anyone, since it's never stored anywhere in recoverable form. Also
+// tries emailing it to the client's own registered contact address
+// (client.email) right away; emailSent tells the frontend whether to lead
+// with "ya se envió" or fall back to showing the password prominently.
 async function applyClientLifecycle(client) {
     if (client.status === 'activo') {
         const { user, generatedPassword } = await activateClient(client.id);
         const training = await provisionTrainingAccount(client.id);
-        const generatedAdmin = generatedPassword ? { username: user.username, password: generatedPassword } : null;
+        let generatedAdmin = null;
+        if (generatedPassword) {
+            const emailSent = await sendMail({
+                to: client.email,
+                subject: `Acceso a SGN — ${client.company_name}`,
+                text: adminCredentialsEmailBody(client, user.username, generatedPassword),
+            });
+            generatedAdmin = { clientId: client.id, username: user.username, password: generatedPassword, emailSent, emailTo: client.email };
+        }
         const generatedTrainingAccount = training.generatedPassword
             ? { username: training.user.username, password: training.generatedPassword }
             : null;
@@ -783,6 +801,29 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     applyEffectiveEntitlements(client.id);
     const { generatedAdmin, generatedTrainingAccount } = await applyClientLifecycle(client);
     res.json({ client: getClientById(client.id), generatedAdmin, generatedTrainingAccount });
+});
+
+// "Reenviar correo" on the one-time generated-admin panel -- the password
+// is never stored anywhere recoverable (see applyClientLifecycle's own
+// comment), so this only ever resends the SAME username/password the
+// browser already has in memory from that original response; it can't
+// look one up server-side. Stops being usable the moment that panel is
+// dismissed or the page reloads, same "shown once" lifetime as the
+// password itself.
+app.post('/api/admin/clients/:id/resend-admin-email', requireAuth, requireAdmin, async (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'activar')) {
+        return res.status(403).json({ message: 'No tienes permiso para activar/desactivar clientes.' });
+    }
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    const { username, password } = req.body || {};
+    if (!username || !password) return res.status(400).json({ message: 'username and password are required.' });
+    const emailSent = await sendMail({
+        to: client.email,
+        subject: `Acceso a SGN — ${client.company_name}`,
+        text: adminCredentialsEmailBody(client, username, password),
+    });
+    res.json({ emailSent, emailTo: client.email });
 });
 
 // Independent on/off switch for whether this client can use the mobile App
