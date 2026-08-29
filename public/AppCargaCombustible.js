@@ -530,6 +530,32 @@ function commitFieldValue(field, value) {
     patchRecord(openRecordId, patch);
 }
 
+// Positions a .home-select-options panel (position:fixed, see AppInicio.css)
+// right below its own trigger, flipping above it when there isn't enough
+// room below (a field near the bottom of a long form) -- and closes it on
+// scroll, since a fixed-position panel doesn't move with the page and would
+// otherwise visually detach from the trigger it belongs to.
+function openFloatingOptions(trigger, options) {
+    const rect = trigger.getBoundingClientRect();
+    options.style.left = `${rect.left}px`;
+    options.style.width = `${rect.width}px`;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow < 200 && rect.top > spaceBelow) {
+        options.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+        options.style.top = '';
+    } else {
+        options.style.top = `${rect.bottom + 4}px`;
+        options.style.bottom = '';
+    }
+    options.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    window.addEventListener('scroll', () => closeFloatingOptions(trigger, options), { capture: true, once: true });
+}
+function closeFloatingOptions(trigger, options) {
+    options.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+}
+
 function buildFieldBody(field, record) {
     const bodyWrap = document.createElement('div');
     bodyWrap.className = 'home-carga-field-body';
@@ -596,17 +622,20 @@ function buildFieldBody(field, record) {
                 optBtn.className = `home-select-option${grp.labelKey ? ' indent' : ''}${isActive ? ' active' : ''}`;
                 optBtn.innerHTML = `<span>${t(opt.labelKey)}</span>${isActive ? '<i class="bx bx-check" aria-hidden="true"></i>' : ''}`;
                 optBtn.addEventListener('click', () => {
-                    options.hidden = true;
+                    closeFloatingOptions(trigger, options);
                     commitFieldValue(field, opt.value);
                 });
                 options.appendChild(optBtn);
             });
         });
         trigger.addEventListener('click', () => {
-            options.hidden = !options.hidden;
-            trigger.setAttribute('aria-expanded', String(!options.hidden));
+            if (!options.hidden) closeFloatingOptions(trigger, options);
+            else openFloatingOptions(trigger, options);
         });
-        bodyWrap.append(trigger, options);
+        const fieldWrap = document.createElement('div');
+        fieldWrap.className = 'home-select-field';
+        fieldWrap.append(trigger, options);
+        bodyWrap.appendChild(fieldWrap);
         return bodyWrap;
     }
 

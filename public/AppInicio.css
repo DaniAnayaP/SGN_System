@@ -1163,12 +1163,24 @@ body{
 .home-select-trigger-value.placeholder{ color: var(--home-text-muted); font-weight: 500; }
 .home-select-trigger i{ color: var(--home-accent); font-size: 0.95rem; margin-top: 0.15rem; flex-shrink: 0; transition: transform 0.15s ease; }
 .home-select-trigger[aria-expanded="true"] i{ transform: rotate(180deg); }
+/* position:fixed (top/left/width set from the trigger's own
+   getBoundingClientRect() in JS right before opening, see toggleSelect
+   below) rather than position:absolute -- the field card this lives
+   inside (.home-carga-field) has overflow:hidden for its own rounded
+   corners, which would otherwise clip the floating panel instead of
+   letting it hover over the rest of the form the way the Departamento/
+   Área/Centro de Costos pickers already float (same border/shadow as
+   those, .home-picker-dropdown). */
 .home-select-options{
+    position: fixed;
+    max-height: 60vh;
+    overflow-y: auto;
     background: var(--home-surface);
     border: 1px solid var(--home-border);
     border-radius: 0.6rem;
     padding: 0.3rem;
-    margin-top: -0.15rem;
+    z-index: 30;
+    box-shadow: 0 10px 30px var(--home-shadow);
 }
 .home-select-options[hidden]{ display: none; }
 .home-select-group-label{
