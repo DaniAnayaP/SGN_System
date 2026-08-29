@@ -314,7 +314,7 @@
     "businessSectorsSubtitle": "Register the available Business Sectors here — Nuestras APPs' own Sector de Negocio field is filled from this list.",
     "businessSectorName": "Sector name",
     "noBusinessSectors": "No sectors yet. Add the first one above.",
-    "sectorTreeColumn": "Default access",
+    "sectorTreeColumn": "Permissions",
     "sectorTreeTitle": "Default access for this sector",
     "sectorTreeHint": "A new Plan aimed at this sector starts with exactly this — from there each Plan can add or remove on its own.",
     "sectorDefaultTag": "Default",

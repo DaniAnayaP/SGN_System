@@ -314,7 +314,7 @@
     "businessSectorsSubtitle": "Da de alta aquí los Sectores de Negocio disponibles — el campo Sector de Negocio de Nuestras APPs se llena con esta lista.",
     "businessSectorName": "Nombre del sector",
     "noBusinessSectors": "Aún no hay sectores. Agrega el primero arriba.",
-    "sectorTreeColumn": "Accesos por default",
+    "sectorTreeColumn": "Permisos",
     "sectorTreeTitle": "Accesos por default de este sector",
     "sectorTreeHint": "Un Plan nuevo dirigido a este sector empieza exactamente con esto — desde ahí cada Plan puede agregar o quitar por su cuenta.",
     "sectorDefaultTag": "Default",
