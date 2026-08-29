@@ -42,8 +42,10 @@ function renderSectors() {
     sectors.forEach((sector) => {
         const tr = document.createElement('tr');
         const tdName = document.createElement('td');
+        tdName.dataset.col = 'name';
         tdName.textContent = sector.name;
         const tdPermissions = document.createElement('td');
+        tdPermissions.dataset.col = 'permissions';
         const treeBtn = document.createElement('button');
         treeBtn.type = 'button';
         treeBtn.className = 'admin-icon-btn';
@@ -53,16 +55,20 @@ function renderSectors() {
         treeBtn.addEventListener('click', () => openSectorTreeModal(sector));
         tdPermissions.appendChild(treeBtn);
         const tdCreatedAt = document.createElement('td');
+        tdCreatedAt.dataset.col = 'createdAt';
         tdCreatedAt.textContent = sector.createdAt ? sector.createdAt.slice(0, 10) : '—';
         const tdCreatedBy = document.createElement('td');
+        tdCreatedBy.dataset.col = 'createdBy';
         tdCreatedBy.textContent = sector.createdBy || '—';
         const systemCols = SYSTEM_COLUMN_KEYS.map((k) => {
             const td = document.createElement('td');
             td.className = 'col-system';
+            td.dataset.col = k;
             td.textContent = sector[k] || '—';
             return td;
         });
         const tdActions = document.createElement('td');
+        tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
