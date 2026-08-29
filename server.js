@@ -209,6 +209,7 @@ const {
     getUserUiScale,
     setUserUiScale,
     getJobPositionGrants,
+    getJobPositionDepartments,
     setJobPositionGrants,
     getUserGrants,
     setUserGrants,
@@ -2099,7 +2100,14 @@ function validateJobPositionBody(body, { requireName = true } = {}) {
 
 app.get('/api/business/job-positions', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    res.json({ jobPositions: listJobPositions(req.user.clientId, req.user.isTestAccount) });
+    // departments: which Departamentos this Puesto's own tree touches (see
+    // getJobPositionDepartments) -- included here, not just the admin-only
+    // grants-detail route, so Mi Recurso Humano's "Nuevo Registro" can show
+    // a live preview of "Departamento Asignado" for whoever picks a Puesto,
+    // without needing requireClientAdmin just to see it.
+    const jobPositions = listJobPositions(req.user.clientId, req.user.isTestAccount)
+        .map((jp) => ({ ...jp, departments: getJobPositionDepartments(jp.id) }));
+    res.json({ jobPositions });
 });
 
 app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, res) => {
@@ -3010,7 +3018,10 @@ function mapHrWorker(row, pendingByRecord, companyName) {
         fullName: row.full_name,
         position: row.position,
         startDate: row.start_date,
-        departments: JSON.parse(row.departments || '[]'),
+        // Live reflection of whatever this worker's Puesto currently grants
+        // in Roles -- never the stored/manually-picked value anymore (see
+        // getJobPositionDepartments), so it can't drift from the real tree.
+        departments: getJobPositionDepartments(row.job_position_id),
         costCenterId: row.cost_center_id,
         area: row.area,
         email: row.email,
@@ -3043,9 +3054,9 @@ app.get('/api/business/hr-workers', requireAuth, (req, res) => {
 
 app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const { givenNames, surnames, position, jobPositionId, startDate, departments, costCenterId, email } = req.body || {};
-    if (!givenNames?.trim() || !surnames?.trim() || !position?.trim() || !jobPositionId || !startDate || !Array.isArray(departments) || !departments.length || !email?.trim()) {
-        return res.status(400).json({ message: 'givenNames, surnames, position, jobPositionId, startDate, at least one department, and email are required.' });
+    const { givenNames, surnames, position, jobPositionId, startDate, costCenterId, email } = req.body || {};
+    if (!givenNames?.trim() || !surnames?.trim() || !position?.trim() || !jobPositionId || !startDate || !email?.trim()) {
+        return res.status(400).json({ message: 'givenNames, surnames, position, jobPositionId, startDate, and email are required.' });
     }
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
         return res.status(400).json({ message: 'email must be a valid email address.' });
@@ -3066,7 +3077,6 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
         position: position.trim(),
         jobPositionId,
         startDate,
-        departments,
         costCenterId: costCenterId || null,
         email: email.trim(),
         isTestData: req.user.isTestAccount,
@@ -3083,16 +3093,6 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
     const patch = { ...req.body };
-    if (Object.prototype.hasOwnProperty.call(patch, 'departments')) {
-        if (!Array.isArray(patch.departments) || !patch.departments.length) {
-            return res.status(400).json({ message: 'departments must be a non-empty array.' });
-        }
-        // Stringified up front so it diffs/compares as a plain string
-        // against existing.departments (also a JSON string) in
-        // checkAndLogFieldChanges — an array would never equal that via
-        // its raw-value String() comparison.
-        patch.departments = JSON.stringify(patch.departments);
-    }
     if (Object.prototype.hasOwnProperty.call(patch, 'costCenterId') && patch.costCenterId != null
         && !getCostCenterById(patch.costCenterId, req.user.clientId, req.user.isTestAccount)) {
         return res.status(400).json({ message: 'costCenterId does not belong to this client.' });

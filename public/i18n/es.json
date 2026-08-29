@@ -971,6 +971,7 @@
     "colHrPosition": "Puesto",
     "colHrStartDate": "Fecha de Ingreso",
     "colHrDepartment": "Departamento Asignado",
+    "colHrDepartmentReflectsRole": "Se calcula del Puesto de Trabajo asignado — para cambiarlo, edita el árbol del Puesto en Roles.",
     "colHrArea": "Área Asignada",
     "colHrCostCenter": "Centro de Costos",
     "colHrEmail": "Correo Electrónico",

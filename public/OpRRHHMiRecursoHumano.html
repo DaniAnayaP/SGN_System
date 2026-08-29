@@ -526,31 +526,12 @@
             </div>
             <div class="admin-field" style="margin-top: 1rem;">
                 <label data-i18n="main.colHrDepartment">Assigned Department</label>
-                <div class="hr-department-checklist" id="new-record-departments">
-                    <!-- rendered at runtime -->
-                </div>
+                <div class="hr-department-preview" id="new-record-departments">—</div>
             </div>
             <div id="new-record-error" class="admin-error" role="alert" hidden></div>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
                 <button type="button" class="btn" id="new-record-save" data-i18n="admin.save">Save</button>
                 <button type="button" class="btn btn-secondary" id="new-record-cancel" data-i18n="admin.cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Click-to-edit for the Departamento(s) column later — same checklist
-         widget as new-record-modal's, just reused against an existing row
-         instead of a fresh one. -->
-    <div class="modal-overlay" id="edit-departments-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="edit-departments-modal-title">
-            <h3 id="edit-departments-modal-title" data-i18n="main.colHrDepartment">Assigned Department</h3>
-            <div class="hr-department-checklist" id="edit-departments-list">
-                <!-- rendered at runtime -->
-            </div>
-            <div id="edit-departments-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="edit-departments-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="edit-departments-cancel" data-i18n="admin.cancel">Cancel</button>
             </div>
         </div>
     </div>

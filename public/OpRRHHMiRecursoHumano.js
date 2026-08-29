@@ -47,7 +47,6 @@ const DEPARTMENT_LABEL_KEYS = {
     finance: 'menu.finance',
     certifications: 'menu.certifications',
 };
-const DEPARTMENT_OPTIONS = Object.entries(DEPARTMENT_LABEL_KEYS).map(([value, labelKey]) => ({ value, labelKey }));
 
 function pad(n, len = 2) {
     return String(n).padStart(len, '0');
@@ -234,29 +233,12 @@ function jobPositionCostCenterIds(jp) {
     }
 }
 
-// --- Departamento(s) Asignado(s) — multi-select checklist, shared by the
-// "+ Nuevo Registro" modal and the click-to-edit modal on an existing row.
-function buildDepartmentChecklist(container, selectedValues) {
-    container.innerHTML = '';
-    const header = document.createElement('div');
-    header.className = 'hr-department-checklist-header';
-    header.textContent = Dashboard.t('main.colHrDepartment');
-    container.appendChild(header);
-    const selected = new Set(selectedValues || []);
-    DEPARTMENT_OPTIONS.forEach((opt) => {
-        const label = document.createElement('label');
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.value = opt.value;
-        input.checked = selected.has(opt.value);
-        const span = document.createElement('span');
-        span.textContent = Dashboard.t(opt.labelKey);
-        label.append(input, span);
-        container.appendChild(label);
-    });
-}
-function getChecklistValues(container) {
-    return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value);
+// --- Departamento(s) Asignado(s) — always a live reflection of whichever
+// Puesto is picked (see getJobPositionDepartments in db.js); "Nuevo
+// Registro" just previews it as plain text as soon as a Puesto is chosen,
+// nothing to check by hand anymore.
+function renderDepartmentPreview(container, jobPosition) {
+    container.textContent = formatDepartments(jobPosition?.departments);
 }
 function formatDepartments(departments) {
     if (!departments || !departments.length) return '—';
@@ -344,25 +326,15 @@ function buildStatusCell(worker) {
     return td;
 }
 
-// Departamento(s) — click-to-edit, opens edit-departments-modal (a plain
-// text cell can't represent "more than one selected" well, so this isn't
-// the usual attachInlineEdit text-input pattern).
+// Departamento(s) — plain, non-editable: always a live reflection of
+// whatever the worker's own Puesto grants in Roles (see
+// getJobPositionDepartments in db.js), never something picked by hand here
+// anymore. Editing it means editing the Puesto's tree in Roles instead.
 function buildDepartmentCell(worker) {
     const td = document.createElement('td');
     td.dataset.col = 'colHrDepartment';
     td.textContent = formatDepartments(worker.departments);
-    const editable = Dashboard.canEditField(TABLE_KEY, 'colHrDepartment', (worker.departments || []).join(','));
-    if (isPending(worker, 'departments')) {
-        td.classList.add('editable-cell-pending');
-        td.title = Dashboard.t('main.changePending');
-    } else if (!editable) {
-        td.classList.add('editable-cell-locked');
-        td.title = Dashboard.t('main.fieldLocked');
-    } else {
-        td.classList.add('editable-cell');
-        td.title = Dashboard.t('main.fuelClickToEdit');
-        td.onclick = () => openEditDepartmentsModal(worker);
-    }
+    td.title = Dashboard.t('main.colHrDepartmentReflectsRole');
     return td;
 }
 
@@ -530,7 +502,7 @@ const emailInput = document.getElementById('new-record-email');
 const positionInput = document.getElementById('new-record-position');
 const startDateInput = document.getElementById('new-record-start-date');
 const costCenterSelect = document.getElementById('new-record-cost-center');
-const departmentsChecklist = document.getElementById('new-record-departments');
+const departmentsPreview = document.getElementById('new-record-departments');
 const newRecordError = document.getElementById('new-record-error');
 const newRecordSaveBtn = document.getElementById('new-record-save');
 const newRecordCancelBtn = document.getElementById('new-record-cancel');
@@ -551,6 +523,7 @@ positionInput.addEventListener('change', () => {
     const currentValue = costCenterSelect.value ? Number(costCenterSelect.value) : null;
     const keepValue = currentValue && (!allowedIds || allowedIds.includes(currentValue)) ? currentValue : null;
     populateCostCenterSelect(costCenterSelect, keepValue, allowedIds);
+    renderDepartmentPreview(departmentsPreview, jp);
 });
 
 function openNewRecordModal() {
@@ -560,16 +533,14 @@ function openNewRecordModal() {
     populateJobPositionSelect(positionInput);
     startDateInput.value = '';
     populateCostCenterSelect(costCenterSelect, null);
-    buildDepartmentChecklist(departmentsChecklist, []);
+    renderDepartmentPreview(departmentsPreview, null);
     newRecordError.hidden = true;
     newRecordModal.hidden = false;
     givenNamesInput.focus();
 }
 
 async function saveNewRecord() {
-    const departments = getChecklistValues(departmentsChecklist);
-    const missing = [givenNamesInput, surnamesInput, emailInput, positionInput, startDateInput].some((el) => !el.value.trim())
-        || !departments.length;
+    const missing = [givenNamesInput, surnamesInput, emailInput, positionInput, startDateInput].some((el) => !el.value.trim());
     if (missing) {
         newRecordError.textContent = Dashboard.t('login.fieldRequired');
         newRecordError.hidden = false;
@@ -591,7 +562,6 @@ async function saveNewRecord() {
                 position: selectedJobPosition?.name || '',
                 jobPositionId,
                 startDate: startDateInput.value,
-                departments,
                 costCenterId: costCenterSelect.value ? Number(costCenterSelect.value) : null,
             }),
         });
@@ -626,44 +596,6 @@ document.addEventListener('keydown', (event) => {
 });
 
 // --- Departamento(s) click-to-edit ----------------------------------------
-const editDepartmentsModal = document.getElementById('edit-departments-modal');
-const editDepartmentsList = document.getElementById('edit-departments-list');
-const editDepartmentsError = document.getElementById('edit-departments-error');
-const editDepartmentsSaveBtn = document.getElementById('edit-departments-save');
-const editDepartmentsCancelBtn = document.getElementById('edit-departments-cancel');
-let editingDepartmentsWorkerId = null;
-
-function openEditDepartmentsModal(worker) {
-    editingDepartmentsWorkerId = worker.id;
-    buildDepartmentChecklist(editDepartmentsList, worker.departments || []);
-    editDepartmentsError.hidden = true;
-    editDepartmentsModal.hidden = false;
-}
-function closeEditDepartmentsModal() {
-    editDepartmentsModal.hidden = true;
-    editingDepartmentsWorkerId = null;
-}
-editDepartmentsCancelBtn.addEventListener('click', closeEditDepartmentsModal);
-editDepartmentsModal.addEventListener('click', (event) => {
-    if (event.target === editDepartmentsModal) closeEditDepartmentsModal();
-});
-editDepartmentsSaveBtn.addEventListener('click', async () => {
-    const departments = getChecklistValues(editDepartmentsList);
-    if (!departments.length) {
-        editDepartmentsError.textContent = Dashboard.t('login.fieldRequired');
-        editDepartmentsError.hidden = false;
-        return;
-    }
-    editDepartmentsSaveBtn.disabled = true;
-    try {
-        const saved = await patchWorker(editingDepartmentsWorkerId, { departments });
-        closeEditDepartmentsModal();
-        if (saved) Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
-    } finally {
-        editDepartmentsSaveBtn.disabled = false;
-    }
-});
-
 // --- Activar Usuario / credenciales generadas -----------------------------
 const credentialsModal = document.getElementById('hr-credentials-modal');
 const credentialsUsername = document.getElementById('hr-credentials-username');

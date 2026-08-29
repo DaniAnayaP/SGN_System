@@ -971,6 +971,7 @@
     "colHrPosition": "Position",
     "colHrStartDate": "Start Date",
     "colHrDepartment": "Assigned Department",
+    "colHrDepartmentReflectsRole": "Computed from the assigned Puesto de Trabajo — to change it, edit that Puesto's tree in Roles.",
     "colHrArea": "Assigned Area",
     "colHrCostCenter": "Cost Center",
     "colHrEmail": "Email",

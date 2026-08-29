@@ -2320,6 +2320,21 @@ function deleteJobPosition(id, clientId) {
     db.prepare('DELETE FROM job_positions WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
+// Which Departamentos (section_id, e.g. 'finance'/'human-resources') a
+// Puesto's own tree touches at all -- 'main' excluded, it's not a real
+// Departamento. Live, not stored: a worker's own "Departamento Asignado"
+// (see mapHrWorker in server.js) is computed from THIS every time, so
+// editing a Puesto's tree in Roles instantly updates it for every worker
+// holding that Puesto, instead of a frozen value someone has to remember
+// to re-save.
+function getJobPositionDepartments(jobPositionId) {
+    if (!jobPositionId) return [];
+    return db
+        .prepare("SELECT DISTINCT section_id AS sectionId FROM job_position_grants WHERE job_position_id = ? AND section_id != 'main'")
+        .all(jobPositionId)
+        .map((r) => r.sectionId);
+}
+
 // What this Puesto grants by default (Roles screen) -- same replace-all-on-
 // save shape as the old setProfileGrants, just keyed by job_position_id.
 function getJobPositionGrants(jobPositionId) {
@@ -3113,7 +3128,7 @@ function generateUniqueCostCenterCode(clientId, baseCode, excludeId) {
 // from the table (that's the only place a real, usable password ever gets
 // issued). async because hashing can't happen inside db.transaction()
 // (must stay fully synchronous — see activateClient's own note above).
-async function createHrWorker({ clientId, givenNames, surnames, position, jobPositionId, startDate, departments, costCenterId, email, isTestData = false }) {
+async function createHrWorker({ clientId, givenNames, surnames, position, jobPositionId, startDate, costCenterId, email, isTestData = false }) {
     const fullName = `${givenNames} ${surnames}`.replace(/\s+/g, ' ').trim();
     const username = generateUniqueUsername(computeHrUsername(givenNames, surnames));
     const passwordHash = await hashPassword(generateRandomPassword());
@@ -3145,12 +3160,14 @@ async function createHrWorker({ clientId, givenNames, surnames, position, jobPos
             .run({
                 clientId, dbId: generateBigDateId(), recordNumber, recordCode, givenNames, surnames, fullName,
                 position, jobPositionId: jobPositionId || null, startDate,
-                // Legacy single-value column, kept NOT NULL by its original
-                // schema (no default) — no longer read anywhere (departments
-                // below is authoritative), just satisfied here so the insert
-                // doesn't fail its constraint.
-                department: (departments && departments[0]) || '',
-                departments: JSON.stringify(departments || []),
+                // Both legacy single-value/JSON columns, kept NOT NULL by
+                // their original schema (no default) -- neither is read
+                // anywhere anymore, "Departamento Asignado" is now always
+                // computed live from the Puesto's own tree (see
+                // getJobPositionDepartments), just satisfied here so the
+                // insert doesn't fail its constraint.
+                department: '',
+                departments: '[]',
                 costCenterId: costCenterId || null, email, userId: user.id, hrStatusId: activeHrStatusId,
                 isTestData: isTestData ? 1 : 0,
             });
@@ -3182,13 +3199,9 @@ const HR_WORKER_PATCHABLE_FIELDS = {
     email: { column: 'email', fieldKey: 'main.colHrEmail' },
     phone: { column: 'phone', fieldKey: 'main.colHrPhone' },
     hrStatusId: { column: 'hr_status_id', fieldKey: 'main.colHrStatus' },
-    departments: { column: 'departments', fieldKey: 'main.colHrDepartment' },
     costCenterId: { column: 'cost_center_id', fieldKey: 'main.colHrCostCenter' },
 };
 
-// departments arrives already JSON-stringified by the caller (server.js) —
-// never re-serialized here, so it diffs/compares as a plain string exactly
-// like every other column (see checkAndLogFieldChanges' raw-value diff).
 function updateHrWorker(id, clientId, patch, forTestAccount = false) {
     const sets = [];
     const params = { id, clientId };
@@ -4637,6 +4650,7 @@ module.exports = {
     getUserUiScale,
     setUserUiScale,
     getJobPositionGrants,
+    getJobPositionDepartments,
     setJobPositionGrants,
     getUserGrants,
     setUserGrants,
