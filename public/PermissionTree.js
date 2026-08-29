@@ -359,12 +359,12 @@
             });
         }
 
-        // A row with no checkbox/grant of its own — used for the "Tabla <X>"
-        // heading (a pantalla's table is always exactly one; nothing
-        // meaningful to select/deselect at that level). `toggle`, when
-        // given, adds the same chevron expand/collapse button buildRow's
-        // checkbox rows use, so a long column list can be folded away as a
-        // whole; omit it for a row that's just permanently visible.
+        // A row with no checkbox/grant of its own — used for the "Iconos
+        // Personalización" heading (each icon underneath is already a
+        // single flat checkbox, nothing to bulk-select there). `toggle`,
+        // when given, adds the same chevron expand/collapse button
+        // buildRow's checkbox rows use, so a long list can be folded away
+        // as a whole; omit it for a row that's just permanently visible.
         function buildStaticRow(labelText, depth, toggle) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth} perm-tree-row-static`;
@@ -592,7 +592,7 @@
         // choice per column, never implied by "this pantalla is visible".
         // Unchecking clears a column's own level entirely, same as picking
         // no level by hand.
-        function cascadeSubSmDetail(section, item, sm, subSm, checked) {
+        function cascadeTableColumns(section, item, sm, subSm, checked) {
             (subSm.submenu || []).forEach((entry) => {
                 const cols = entry.isClassification ? entry.submenu : [entry];
                 cols.forEach((col) => {
@@ -606,20 +606,26 @@
                     if (checked) setKeys([keyOf(section.id, item.id, `${colBase}/solo-ver`)], true);
                 });
             });
+        }
+
+        function cascadeSubSmDetail(section, item, sm, subSm, checked) {
+            cascadeTableColumns(section, item, sm, subSm, checked);
             (subSm.iconsSubmenu || []).forEach((icon) => {
                 setKeys([keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`)], checked);
             });
         }
 
-        // Mirrors cascadeSubSmDetail's own traversal, but only counts —
-        // a column counts as "covered" if it has ANY of the 3 mutually
+        // A column counts as "covered" if it has ANY of the 3 mutually
         // exclusive levels set (not just Solo Ver: someone may have raised
         // it straight to Ver y Operar/Editar by hand, that still means
-        // "this column has access"). Used only to decide the pantalla
-        // checkbox's own visual state below -- never touches leafKeysUnder
-        // or any of the Departamento/Área/Apartado rollup math, which keeps
-        // reading the pantalla's own single grant key exactly as before.
-        function subSmDetailCoverage(section, item, sm, subSm) {
+        // "this column has access"). Split in two (table columns vs.
+        // icons) so the "Tabla <X>" heading's own checkbox below can
+        // reflect/cascade just its half, while the pantalla-level checkbox
+        // (subSmDetailCoverage) keeps combining both -- never touches
+        // leafKeysUnder or any of the Departamento/Área/Apartado rollup
+        // math, which keeps reading each row's own single grant key
+        // exactly as before.
+        function tableColumnsCoverage(section, item, sm, subSm) {
             let total = 0;
             let coveredCount = 0;
             (subSm.submenu || []).forEach((entry) => {
@@ -634,6 +640,12 @@
                     }
                 });
             });
+            return { total, coveredCount };
+        }
+
+        function iconsCoverage(section, item, sm, subSm) {
+            let total = 0;
+            let coveredCount = 0;
             (subSm.iconsSubmenu || []).forEach((icon) => {
                 total += 1;
                 if (grantSet.has(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`))) coveredCount += 1;
@@ -641,24 +653,44 @@
             return { total, coveredCount };
         }
 
+        function subSmDetailCoverage(section, item, sm, subSm) {
+            const table = tableColumnsCoverage(section, item, sm, subSm);
+            const icons = iconsCoverage(section, item, sm, subSm);
+            return { total: table.total + icons.total, coveredCount: table.coveredCount + icons.coveredCount };
+        }
+
         // Renders the "Tabla <pantalla>" heading + one row per entry in the
         // pantalla's own column list — either a plain column, or (when
         // marked isClassification) a group like "Control Interno" that
-        // nests several columns under one shared toggle. The heading itself
-        // is now a toggle too (same expandedItems Set/collapsed-by-default
-        // convention as every other row here) so a long column list
-        // (Control Interno's 13 plus a pantalla's own) can be folded away
-        // as a whole instead of always taking up the full height.
+        // nests several columns under one shared toggle. The heading has
+        // both a chevron (same expandedItems Set/collapsed-by-default
+        // convention as every other row here, so a long column list --
+        // Control Interno's 13 plus a pantalla's own -- can be folded away
+        // as a whole) AND its own checkbox: checking it puts every column
+        // underneath on Solo Ver in one go (Iconos untouched, that's a
+        // separate bulk toggle below); its checked/indeterminate state
+        // reflects that same coverage back, same "Control Interno inside
+        // Área" pattern used one level in and one level out from here.
         function renderTableColumns(container, section, item, sm, subSm, subBlocked) {
             const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const tableExpanded = expandedItems.has(tableTreeKey);
-            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, {
+            const tableRow = buildRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, {
                 expanded: tableExpanded,
                 onToggle: () => {
                     if (tableExpanded) expandedItems.delete(tableTreeKey);
                     else expandedItems.add(tableTreeKey);
                 },
-            }));
+            }, subBlocked, null);
+            if (!readOnly) {
+                const { total, coveredCount } = tableColumnsCoverage(section, item, sm, subSm);
+                tableRow.input.checked = total > 0 && coveredCount === total;
+                tableRow.input.indeterminate = coveredCount > 0 && coveredCount < total;
+                tableRow.input.addEventListener('change', () => {
+                    cascadeTableColumns(section, item, sm, subSm, tableRow.input.checked);
+                    render();
+                });
+            }
+            container.appendChild(tableRow.row);
             if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
