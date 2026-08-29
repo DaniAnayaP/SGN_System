@@ -95,8 +95,14 @@ async function openGrantAccessModal(user) {
         const res = await fetch(`/api/business/users/${user.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        grantTree = window.PermissionTree.create(grantAccessContainer, { allowedSectionIds, costCenters, showAppTab: true });
-        await grantTree.init(data.grants || []);
+        // Tricolor, same as Nuestros Clientes' own Permisos Adicionales
+        // (Admin-SaaS.js): what the Puesto already grants shows green/locked
+        // instead of an indistinguishable blank checklist, so this reads as
+        // "add something EXTRA" rather than "reassign everything from
+        // scratch" -- restricted to allowedSectionIds so a user can never be
+        // offered a módulo their own client hasn't contracted.
+        grantTree = window.PermissionCostTree.create(grantAccessContainer, { mode: 'clientTricolor', interactive: true, allowedSectionIds });
+        await grantTree.init(data.jobPositionGrants || [], [], data.grants || []);
     } catch {
         grantAccessError.textContent = Dashboard.t('admin.loadError');
         grantAccessError.hidden = false;
@@ -120,7 +126,7 @@ grantAccessSaveBtn.addEventListener('click', async () => {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ grants: grantTree.getGrants() }),
+            body: JSON.stringify({ grants: grantTree.getClientGrants() }),
         });
         if (!res.ok) throw new Error('save failed');
         closeGrantAccessModal();

@@ -51,6 +51,7 @@ const createdAtField = document.getElementById('plan-created-at');
 const createdByField = document.getElementById('plan-created-by');
 const endDateField = document.getElementById('plan-end-date');
 const costCentersLimitField = document.getElementById('plan-cost-centers-limit');
+const businessSectorField = document.getElementById('plan-sector');
 const errorBanner = document.getElementById('plan-form-error');
 const submitBtn = document.getElementById('plan-form-submit');
 const cancelBtn = document.getElementById('plan-form-cancel');
@@ -87,6 +88,29 @@ let plans = [];
 let devModeOverride = false;
 let selectedPlanId = null;
 let tree = null;
+let businessSectors = [];
+
+function businessSectorName(id) {
+    return businessSectors.find((s) => s.id === id)?.name || '';
+}
+
+async function loadBusinessSectors() {
+    try {
+        const res = await fetch('/api/admin/business-sectors', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        businessSectors = data.sectors || [];
+        businessSectorField.querySelectorAll('option:not([value=""])').forEach((opt) => opt.remove());
+        businessSectors.forEach((sector) => {
+            const opt = document.createElement('option');
+            opt.value = sector.id;
+            opt.textContent = sector.name;
+            businessSectorField.appendChild(opt);
+        });
+    } catch {
+        businessSectors = [];
+    }
+}
 
 function showError(message) {
     errorBanner.textContent = message;
@@ -249,6 +273,9 @@ function renderPlans() {
         const tdDescription = document.createElement('td');
         tdDescription.dataset.col = 'description';
         tdDescription.textContent = plan.description || '—';
+        const tdBusinessSector = document.createElement('td');
+        tdBusinessSector.dataset.col = 'businessSector';
+        tdBusinessSector.textContent = businessSectorName(plan.businessSectorId) || '—';
         const tdCreatedAt = document.createElement('td');
         tdCreatedAt.dataset.col = 'createdAt';
         tdCreatedAt.textContent = formatDate(plan.created_at);
@@ -327,7 +354,7 @@ function renderPlans() {
         tdActions.appendChild(deleteBtn);
 
         tr.append(
-            tdName, tdDescription, tdCreatedAt, tdCreatedBy,
+            tdName, tdDescription, tdBusinessSector, tdCreatedAt, tdCreatedBy,
             buildCostCentersLimitCell(plan), tdAccessPermCost, tdCostCenterTotal,
             buildEndDateCell(plan), buildStatusCell(plan), buildLockedCell(plan),
             ...buildSystemColumnCells(plan), tdActions,
@@ -347,7 +374,7 @@ function applyPlanFilters() {
     tableBody.querySelectorAll('tr').forEach((tr) => {
         let visible = true;
         if (text) {
-            const haystack = ['name', 'description', 'createdBy']
+            const haystack = ['name', 'description', 'businessSector', 'createdBy']
                 .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
                 .join(' ');
             if (!haystack.includes(text)) visible = false;
@@ -363,6 +390,7 @@ function openEditModal(plan) {
     idField.value = plan.id;
     nameField.value = plan.name;
     descriptionField.value = plan.description || '';
+    businessSectorField.value = plan.businessSectorId || '';
     createdAtField.value = plan.created_at ? plan.created_at.slice(0, 10) : '';
     createdByField.value = plan.createdBy || '';
     endDateField.value = plan.endDate || '';
@@ -430,6 +458,7 @@ form.addEventListener('submit', async (event) => {
         return;
     }
     const description = descriptionField.value.trim();
+    const businessSectorId = businessSectorField.value ? Number(businessSectorField.value) : null;
     const costCentersLimit = Math.max(0, parseInt(costCentersLimitField.value, 10) || 0);
     const createdAt = createdAtField.value || null;
     const createdBy = createdByField.value.trim();
@@ -444,7 +473,7 @@ form.addEventListener('submit', async (event) => {
             method: isCreate ? 'POST' : 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, description, costCentersLimit, createdAt, createdBy, endDate }),
+            body: JSON.stringify({ name, description, businessSectorId, costCentersLimit, createdAt, createdBy, endDate }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -510,7 +539,10 @@ async function selectPlanForTree(plan) {
         // instead, when locked.
         treeContainer.innerHTML = '';
         tree = window.PermissionCostTree.create(treeContainer, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN' });
-        await tree.init(grantsData.grants || [], costsData.costs || []);
+        // sectorGrants (from the same response) tags each leaf this plan's
+        // own Sector already covers as "(Default)" -- purely informational,
+        // see PermissionCostTree.js's sectorDefaultSet.
+        await tree.init(grantsData.grants || [], costsData.costs || [], null, grantsData.sectorGrants || []);
         treeContainer.classList.toggle('perm-tree-view-only', locked);
         treeModal.hidden = false;
     } catch {
@@ -595,6 +627,7 @@ document.addEventListener('dashboard:language-changed', () => {
             return;
         }
         renderNewPlanButton();
+        await loadBusinessSectors();
         await loadPlans();
     } catch (err) {
         console.error('Admin (Planes) failed to initialize:', err);

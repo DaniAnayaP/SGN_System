@@ -172,6 +172,9 @@ const {
     listBusinessSectors,
     createBusinessSector,
     deleteBusinessSector,
+    getBusinessSectorById,
+    getSectorGrants,
+    setSectorGrants,
     getClientAppScreens,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
@@ -1019,12 +1022,12 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
     }
     const error = validatePlanBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, description, modules, costCentersLimit } = req.body;
+    const { name, description, modules, costCentersLimit, businessSectorId } = req.body;
     try {
         const plan = createPlan({
             name: name.trim(), description,
             modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0,
-            createdBy: req.user.name,
+            createdBy: req.user.name, businessSectorId: businessSectorId || null,
         });
         logPlanChange({ planId: plan.id, action: 'create', changedBy: req.user.name });
         res.status(201).json({ plan });
@@ -1082,7 +1085,7 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     // costPerCostCenter) — always allowed, even locked. Pricing is a
     // separate, ongoing commercial concern from the frozen access-tree
     // definition (see Costo Accesos-Permisos) — never gated by `locked`.
-    const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit', 'createdAt', 'createdBy']
+    const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit', 'createdAt', 'createdBy', 'businessSectorId']
         .some((k) => Object.prototype.hasOwnProperty.call(req.body || {}, k));
     if (isDefinitionChange && existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
         return res.status(409).json({ message: 'Este plan ya fue guardado y no puede modificarse.' });
@@ -1091,7 +1094,7 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
         const error = validatePlanBody({ ...existing, ...req.body });
         if (error) return res.status(400).json({ message: error });
     }
-    const { name, description, modules, costCentersLimit } = req.body;
+    const { name, description, modules, costCentersLimit, businessSectorId } = req.body;
     try {
         const plan = updatePlan(req.params.id, {
             name: name != null ? name.trim() : undefined,
@@ -1104,6 +1107,7 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
             costPerCostCenter,
             createdAt,
             createdBy: createdBy != null ? createdBy.trim() : undefined,
+            businessSectorId,
         });
         logPlanChange({ planId: plan.id, action: 'update', changedBy: req.user.name });
         if (currency !== undefined && currency !== existing.currency) {
@@ -1161,7 +1165,13 @@ app.delete('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
 app.get('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    res.json({ grants: getPlanGrants(req.params.id), locked: existing.locked });
+    // sectorGrants: this plan's OWN Sector's CURRENT defaults (live, not a
+    // frozen copy) -- purely so the tree can tag each row "(Default)" when
+    // it still matches what the Sector currently grants; the plan's actual
+    // saved grants (above) are the only thing that ever gets sent back on
+    // save, so editing the Sector later never silently changes this plan.
+    const sectorGrants = existing.businessSectorId ? getSectorGrants(existing.businessSectorId) : [];
+    res.json({ grants: getPlanGrants(req.params.id), sectorGrants, locked: existing.locked });
 });
 
 // Editable freely while the plan is in Revisión (any number of saves) —
@@ -1402,6 +1412,24 @@ app.post('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) =>
 app.delete('/api/admin/business-sectors/:id', requireAuth, requireAdmin, (req, res) => {
     deleteBusinessSector(req.params.id);
     res.status(204).end();
+});
+
+// What this Sector grants by default -- a new Plan aimed at this Sector
+// copies this ONCE at creation time (see createPlan in db.js), then the two
+// evolve independently.
+app.get('/api/admin/business-sectors/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    const existing = getBusinessSectorById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Sector not found.' });
+    res.json({ grants: getSectorGrants(req.params.id) });
+});
+
+app.put('/api/admin/business-sectors/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    const existing = getBusinessSectorById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Sector not found.' });
+    const { grants } = req.body || {};
+    const error = validateGrants(grants);
+    if (error) return res.status(400).json({ message: error });
+    res.json({ grants: setSectorGrants(req.params.id, grants) });
 });
 
 // --- Equipo SaaS (GEIPSA's own staff — role='admin' accounts) ---------------

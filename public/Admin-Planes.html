@@ -379,6 +379,7 @@
                         <tr>
                             <th data-i18n="admin.planName" data-col="name">Plan name</th>
                             <th data-i18n="admin.planDescription" data-col="description">Description</th>
+                            <th data-i18n="admin.planBusinessSector" data-col="businessSector">Business sector</th>
                             <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
                             <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
                             <th data-i18n="admin.costCentersLimit" data-col="costCentersLimit">Cost centers limit</th>
@@ -438,6 +439,12 @@
                     <div class="admin-field">
                         <label for="plan-description" data-i18n="admin.planDescription">Description</label>
                         <input id="plan-description" name="description" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="plan-sector" data-i18n="admin.planBusinessSector">Business sector</label>
+                        <select id="plan-sector" name="businessSectorId">
+                            <option value="" data-i18n="admin.planBusinessSectorNone">No sector — start with a blank tree</option>
+                        </select>
                     </div>
                 </div>
                 <div class="admin-form-grid" id="plan-edit-only-fields">

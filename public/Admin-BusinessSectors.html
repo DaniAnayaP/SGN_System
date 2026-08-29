@@ -353,6 +353,7 @@
                     <thead>
                         <tr>
                             <th data-i18n="admin.businessSectorName" data-col="name">Sector name</th>
+                            <th data-i18n="admin.sectorTreeColumn" data-col="permissions">Default access</th>
                             <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
                             <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
                             <th class="col-system" data-group="menu.classControlInterno" data-i18n="main.colSysEmpresa" data-col="colSysEmpresa">Company</th>
@@ -396,6 +397,19 @@
                     <button type="button" class="btn btn-secondary" id="sector-form-cancel" data-i18n="admin.cancel">Cancel</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="sector-tree-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-tree-modal-title" style="max-width: 48rem;">
+            <h3 id="sector-tree-modal-title" data-i18n="admin.sectorTreeTitle">Default access for this sector</h3>
+            <p class="admin-hint" data-i18n="admin.sectorTreeHint">A new Plan aimed at this sector starts with exactly this — from there each Plan can add or remove on its own.</p>
+            <div id="sector-tree-container"></div>
+            <div id="sector-tree-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="sector-tree-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="sector-tree-close" data-i18n="admin.cancel">Close</button>
+            </div>
         </div>
     </div>
 
@@ -453,6 +467,7 @@
     </div>
 
     <script src="Dashboard.js"></script>
+    <script src="PermissionTree.js"></script>
     <script src="Admin-BusinessSectors.js"></script>
 </body>
 </html>

@@ -43,6 +43,15 @@ function renderSectors() {
         const tr = document.createElement('tr');
         const tdName = document.createElement('td');
         tdName.textContent = sector.name;
+        const tdPermissions = document.createElement('td');
+        const treeBtn = document.createElement('button');
+        treeBtn.type = 'button';
+        treeBtn.className = 'admin-icon-btn';
+        treeBtn.setAttribute('aria-label', Dashboard.t('admin.sectorTreeTitle'));
+        treeBtn.title = Dashboard.t('admin.sectorTreeTitle');
+        treeBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
+        treeBtn.addEventListener('click', () => openSectorTreeModal(sector));
+        tdPermissions.appendChild(treeBtn);
         const tdCreatedAt = document.createElement('td');
         tdCreatedAt.textContent = sector.createdAt ? sector.createdAt.slice(0, 10) : '—';
         const tdCreatedBy = document.createElement('td');
@@ -62,7 +71,7 @@ function renderSectors() {
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
         deleteBtn.addEventListener('click', () => removeSector(sector));
         tdActions.append(deleteBtn);
-        tr.append(tdName, tdCreatedAt, tdCreatedBy, ...systemCols, tdActions);
+        tr.append(tdName, tdPermissions, tdCreatedAt, tdCreatedBy, ...systemCols, tdActions);
         tableBody.appendChild(tr);
     });
 }
@@ -150,6 +159,64 @@ function renderNewSectorButton() {
     btn.addEventListener('click', openAddModal);
     toolbar.prepend(btn);
 }
+
+// --- Default access tree per sector (mirrors Business-Roles.js's per-
+// Puesto panel, opened as a modal instead of an inline panel — same
+// "pantalla alterna" idea Nuestros Planes' own tree modal already uses) ---
+const sectorTreeModal = document.getElementById('sector-tree-modal');
+const sectorTreeModalTitle = document.getElementById('sector-tree-modal-title');
+const sectorTreeContainer = document.getElementById('sector-tree-container');
+const sectorTreeError = document.getElementById('sector-tree-error');
+const sectorTreeSaveBtn = document.getElementById('sector-tree-save');
+const sectorTreeCloseBtn = document.getElementById('sector-tree-close');
+
+let sectorTree = null;
+let selectedSectorId = null;
+
+async function openSectorTreeModal(sector) {
+    selectedSectorId = sector.id;
+    sectorTreeModalTitle.textContent = `${Dashboard.t('admin.sectorTreeTitle')} — ${sector.name}`;
+    sectorTreeError.hidden = true;
+    sectorTreeContainer.innerHTML = '';
+    sectorTreeModal.hidden = false;
+    try {
+        const res = await fetch(`/api/admin/business-sectors/${sector.id}/grants`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        sectorTree = window.PermissionTree.create(sectorTreeContainer, { showAppTab: true });
+        await sectorTree.init(data.grants || []);
+    } catch {
+        sectorTreeError.textContent = Dashboard.t('admin.loadError');
+        sectorTreeError.hidden = false;
+    }
+}
+
+function closeSectorTreeModal() {
+    sectorTreeModal.hidden = true;
+    sectorTree = null;
+    selectedSectorId = null;
+}
+sectorTreeCloseBtn.addEventListener('click', closeSectorTreeModal);
+sectorTreeModal.addEventListener('click', (event) => { if (event.target === sectorTreeModal) closeSectorTreeModal(); });
+
+sectorTreeSaveBtn.addEventListener('click', async () => {
+    if (!selectedSectorId || !sectorTree) return;
+    sectorTreeSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/business-sectors/${selectedSectorId}/grants`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ grants: sectorTree.getGrants() }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    } finally {
+        sectorTreeSaveBtn.disabled = false;
+    }
+});
 
 document.addEventListener('dashboard:language-changed', renderSectors);
 

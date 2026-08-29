@@ -127,13 +127,28 @@
     // as Operar/Editar/Autorizar already gets there.
     const APP_SUFFIX = '#app';
 
-    function create(container, { mode = 'costEdit', currency = 'MXN', interactive = false } = {}) {
+    // allowedSectionIds: clientTricolor only, optional -- restricts the tree
+    // to a client's own contracted módulos (plus 'main', always kept, same
+    // convention PermissionTree.js already uses) for the "Permisos
+    // Adicionales" case (Business-Usuarios.js), where a business user must
+    // never be offered a módulo their own client hasn't contracted. Admin-
+    // SaaS's own use of this component (Nuestros Clientes' Permisos
+    // Contratados/Adicionales) never passes it, so the whole system menu
+    // keeps showing there exactly as before -- GEIPSA needs to see
+    // everything, contracted or not, to decide what to sell.
+    function create(container, { mode = 'costEdit', currency = 'MXN', interactive = false, allowedSectionIds = null } = {}) {
         let sectionsData = [];
         let grantSet = new Set(); // costEdit/grantReadonlyCost modes
         let planGrantSet = new Set(); // clientTricolor: coverage granted by the client's PLAN (green)
         let clientGrantSet = new Set(); // clientTricolor: already-saved "+ adicionales" sold to THIS client (yellow)
         let pendingAdditions = new Set(); // clientTricolor + interactive: unsaved additions toggled in this session
         let costMap = new Map(); // tupleKey -> cost, editable in costEdit mode, read-only reference otherwise
+        // grantReadonlyCost only -- a Plan's own Sector's CURRENT raw grants
+        // (see Sector -> Plan, Admin-Planes.js), used only to label a LEAF
+        // row "(Default)" when the Sector itself already covers it (isGranted
+        // handles the same broad-parent-grant fallback everywhere else in
+        // this file does) -- never affects what's actually checked/saved.
+        let sectorDefaultSet = new Set();
         let expandedSections = new Set();
         let expandedItems = new Set();
 
@@ -317,6 +332,20 @@
                 const span = document.createElement('span');
                 span.textContent = labelText;
                 labelEl.append(input, span);
+                // grantReadonlyCost only -- a leaf this Plan's own Sector
+                // already grants by default (see init()'s sectorDefaultSet),
+                // so whoever's building the Plan can see at a glance which
+                // ones are the sector's own baseline vs. what THIS plan adds
+                // beyond it. Never affects checked state or what gets saved.
+                if (sectorDefaultSet.size && costKey != null) {
+                    const [sId, iId, smId] = costKey.split('::');
+                    if (isGranted(sectorDefaultSet, sId, iId || null, smId || null)) {
+                        const tag = document.createElement('span');
+                        tag.className = 'perm-tree-default-tag';
+                        tag.textContent = t('admin.sectorDefaultTag');
+                        labelEl.appendChild(tag);
+                    }
+                }
                 row.appendChild(labelEl);
                 if (costKey != null) row.appendChild(buildCostSlot(costKey));
                 appendAppToggle(row, appToggle, costKey);
@@ -860,8 +889,11 @@
 
         return {
             // clientGrants is only meaningful (and only fetched by callers)
-            // in clientTricolor mode — ignored otherwise.
-            async init(initialGrants, initialCosts, clientGrants) {
+            // in clientTricolor mode — ignored otherwise. sectorDefaultGrants
+            // is the grantReadonlyCost analogue: a Plan's own Sector's raw
+            // grants, ignored in every other mode.
+            async init(initialGrants, initialCosts, clientGrants, sectorDefaultGrants) {
+                sectorDefaultSet = new Set((sectorDefaultGrants || []).map((g) => keyOf(g.sectionId, g.itemId, g.submenuId)));
                 const { sections: allSections, areaCategories, areaOverrides, areas } = await loadMenuData();
                 const mainSection = allSections.find((s) => s.id === 'main');
                 const generalItems = (mainSection?.items || []).filter((i) => ['home', 'panel', 'dashboard'].includes(i.id));
@@ -872,7 +904,10 @@
                     .filter(Boolean)
                     .map((i) => ({ ...i, standalone: true }));
 
-                sectionsData = allSections.map((s) => {
+                const scopedSections = allowedSectionIds
+                    ? allSections.filter((s) => s.id === 'main' || allowedSectionIds.includes(s.id))
+                    : allSections;
+                sectionsData = scopedSections.map((s) => {
                     if (s.id !== 'main') {
                         const deptAreas = (areas && areas[s.id]) || GENERIC_AREAS;
                         const areaItems = deptAreas.map((area) => ({

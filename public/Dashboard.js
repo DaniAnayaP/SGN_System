@@ -5384,6 +5384,17 @@ async function initDashboard({ activePage } = {}) {
             return null;
         }
         availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
+        // Narrow further to departments this SPECIFIC user actually has any
+        // grant in (their Puesto de Trabajo's defaults + Permisos
+        // Adicionales, already loaded into cachedBusinessProfile.effectiveGrants
+        // by loadBusinessProfile() above) -- an unrestricted client admin
+        // (Admin+ABBR, or the Capacitación account) skips this: they have
+        // zero grant rows by design, which means "sees everything", not
+        // "sees nothing" (see isUnrestrictedClientAdmin's own comment).
+        if (!isUnrestrictedClientAdmin()) {
+            const grantedSectionIds = new Set((cachedBusinessProfile?.effectiveGrants || []).map((g) => g.sectionId));
+            availableDepartments = availableDepartments.filter((d) => grantedSectionIds.has(d.key));
+        }
         if (!availableDepartments.some((d) => d.key === selectedDepartment)) {
             selectedDepartment = availableDepartments.length === 1 ? availableDepartments[0].key : null;
             localStorage.setItem('department', selectedDepartment || '');

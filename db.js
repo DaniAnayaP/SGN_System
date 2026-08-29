@@ -916,6 +916,14 @@ if (!planColumns.some((c) => c.name === 'cost_per_cost_center')) {
 if (!planColumns.some((c) => c.name === 'app_id')) {
     db.exec('ALTER TABLE plans ADD COLUMN app_id INTEGER REFERENCES saas_apps(id)');
 }
+// Sector → Plan → Cliente: a Plan is now aimed at one Sector de Negocio
+// (Premium/Básico for Transporte, say) -- its own plan_grants gets seeded
+// ONCE from that sector's sector_grants the moment the plan is created
+// (see createPlan), then evolves independently, same one-time-copy pattern
+// used throughout this file (activateClient, DEFAULT_HR_STATUSES...).
+if (!planColumns.some((c) => c.name === 'business_sector_id')) {
+    db.exec('ALTER TABLE plans ADD COLUMN business_sector_id INTEGER REFERENCES business_sectors(id)');
+}
 
 // Nuestras APPs gains: sector (the business vertical this app serves —
 // what clients.sector_negocio is matched against, one app per sector),
@@ -965,6 +973,22 @@ db.exec(`
         submenu_id  TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_plan_grants_plan_id ON plan_grants(plan_id);
+
+    -- sector_grants: what a Sector de Negocio grants by default -- same
+    -- {sectionId, itemId, submenuId} shape as plan_grants. A Plan tied to a
+    -- Sector (plans.business_sector_id, added later in this file) copies
+    -- this ONCE into its own plan_grants the moment it's created (see
+    -- createPlan) — after that the two are fully independent, so editing a
+    -- Sector's defaults later never silently rewrites a Plan someone already
+    -- customized.
+    CREATE TABLE IF NOT EXISTS sector_grants (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_sector_id  INTEGER NOT NULL REFERENCES business_sectors(id) ON DELETE CASCADE,
+        section_id          TEXT NOT NULL,
+        item_id             TEXT,
+        submenu_id          TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_sector_grants_sector_id ON sector_grants(business_sector_id);
 
     CREATE TABLE IF NOT EXISTS plan_changes (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3408,7 +3432,7 @@ seedSaasScreenActionGrants();
 // Contrataciones edits per-client — see applyPlanToClient in server.js.
 function deserializePlan(row) {
     if (!row) return row;
-    const { modules, cost_centers_limit, created_by, end_date, locked, cost_per_cost_center, app_id, ...rest } = row;
+    const { modules, cost_centers_limit, created_by, end_date, locked, cost_per_cost_center, app_id, business_sector_id, ...rest } = row;
     let parsedModules = [];
     try { parsedModules = JSON.parse(modules) || []; } catch { parsedModules = []; }
     return {
@@ -3419,6 +3443,7 @@ function deserializePlan(row) {
         endDate: end_date || '',
         locked: !!locked,
         costPerCostCenter: cost_per_cost_center || 0,
+        businessSectorId: business_sector_id || null,
         ...getSystemColumnsForRecord({
             companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Planes',
             centroCostos: '', createdAt: row.created_at,
@@ -3441,18 +3466,28 @@ function getPlanByName(name) {
 // New plans start in 'revision' — they only reach 'active' through the
 // dedicated activatePlan() below (gated server-side by the 'activate'
 // SaaS grant), never directly via a plain field edit.
-function createPlan({ name, description, modules, costCentersLimit, createdBy }) {
-    const result = db
-        .prepare(`
-            INSERT INTO plans (name, description, modules, cost_centers_limit, created_by, status)
-            VALUES (@name, @description, @modules, @costCentersLimit, @createdBy, 'revision')
-        `)
-        .run({
-            name, description: description || '',
-            modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0,
-            createdBy: createdBy || '',
-        });
-    return getPlanById(result.lastInsertRowid);
+// businessSectorId seeds this plan's own plan_grants ONCE, straight from
+// that sector's current sector_grants (see the migration comment above) --
+// after this, the two evolve independently: editing the Sector's own
+// defaults later never reaches back into a Plan that already copied them.
+function createPlan({ name, description, modules, costCentersLimit, createdBy, businessSectorId }) {
+    const create = db.transaction(() => {
+        const result = db
+            .prepare(`
+                INSERT INTO plans (name, description, modules, cost_centers_limit, created_by, status, business_sector_id)
+                VALUES (@name, @description, @modules, @costCentersLimit, @createdBy, 'revision', @businessSectorId)
+            `)
+            .run({
+                name, description: description || '',
+                modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0,
+                createdBy: createdBy || '', businessSectorId: businessSectorId || null,
+            });
+        if (businessSectorId) {
+            setPlanGrants(result.lastInsertRowid, getSectorGrants(businessSectorId));
+        }
+        return result.lastInsertRowid;
+    });
+    return getPlanById(create());
 }
 
 // Definition fields (name/description/modules/costCentersLimit) are the
@@ -3465,14 +3500,14 @@ function createPlan({ name, description, modules, costCentersLimit, createdBy })
 // concern from the frozen access-tree definition (see Costo Accesos-Permisos).
 function updatePlan(id, {
     name, description, modules, costCentersLimit, status, endDate, currency, costPerCostCenter,
-    createdAt, createdBy,
+    createdAt, createdBy, businessSectorId,
 }) {
     const existing = getPlanById(id);
     db.prepare(`
         UPDATE plans SET name = @name, description = @description, modules = @modules,
             cost_centers_limit = @costCentersLimit, status = @status, end_date = @endDate,
             currency = @currency, cost_per_cost_center = @costPerCostCenter,
-            created_at = @createdAt, created_by = @createdBy
+            created_at = @createdAt, created_by = @createdBy, business_sector_id = @businessSectorId
         WHERE id = @id
     `).run({
         id,
@@ -3486,6 +3521,7 @@ function updatePlan(id, {
         costPerCostCenter: costPerCostCenter ?? existing.costPerCostCenter ?? 0,
         createdAt: createdAt ?? existing.created_at,
         createdBy: (createdBy ?? existing.createdBy) || '',
+        businessSectorId: businessSectorId ?? existing.businessSectorId ?? null,
     });
     return getPlanById(id);
 }
@@ -3753,6 +3789,32 @@ function createBusinessSector({ name, createdBy }) {
 
 function deleteBusinessSector(id) {
     db.prepare('DELETE FROM business_sectors WHERE id = ?').run(id);
+}
+
+function getBusinessSectorById(id) {
+    return deserializeBusinessSector(db.prepare('SELECT * FROM business_sectors WHERE id = ?').get(id));
+}
+
+// What this Sector grants by default (Nuestros Sectores de Negocio screen)
+// -- same replace-all-on-save shape as plan/profile/job-position grants.
+function getSectorGrants(sectorId) {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM sector_grants WHERE business_sector_id = ?')
+        .all(sectorId);
+}
+function setSectorGrants(sectorId, grants) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM sector_grants WHERE business_sector_id = ?').run(sectorId);
+        const insert = db.prepare(`
+            INSERT INTO sector_grants (business_sector_id, section_id, item_id, submenu_id)
+            VALUES (@sectorId, @sectionId, @itemId, @submenuId)
+        `);
+        for (const g of rows) {
+            insert.run({ sectorId, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
+        }
+    });
+    replace(grants);
+    return getSectorGrants(sectorId);
 }
 
 function getPlanGrants(planId) {
@@ -4168,7 +4230,8 @@ function listBusinessUsers(clientId) {
         .prepare(`
             SELECT users.id, users.username, users.email, users.name, users.role, users.active,
                    users.is_client_admin, users.created_at,
-                   hr_status_catalog.name AS hrStatusName, hr_status_catalog.operational_effect AS hrStatusEffect
+                   hr_status_catalog.name AS hrStatusName, hr_status_catalog.operational_effect AS hrStatusEffect,
+                   hr_workers.position AS jobPositionLabel
             FROM users
             LEFT JOIN hr_workers ON hr_workers.user_id = users.id
             LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
@@ -4526,6 +4589,9 @@ module.exports = {
     listBusinessSectors,
     createBusinessSector,
     deleteBusinessSector,
+    getBusinessSectorById,
+    getSectorGrants,
+    setSectorGrants,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
     setPlanGrants,

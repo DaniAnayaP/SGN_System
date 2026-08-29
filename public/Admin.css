@@ -1154,6 +1154,21 @@ body.dark-mode .perm-tree-depth-2{
     background-color: color-mix(in srgb, #c9860b 18%, transparent);
     color: #c9860b;
 }
+/* grantReadonlyCost mode only (Nuestros Planes' shield modal) -- marks a
+   leaf that this Plan's own Sector already grants by default, see
+   PermissionCostTree.js's sectorDefaultSet. */
+.perm-tree-default-tag{
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+    white-space: nowrap;
+}
 .perm-tree-status-label{
     flex: 1;
     min-width: 0;
