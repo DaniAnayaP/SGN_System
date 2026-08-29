@@ -993,7 +993,7 @@
     "changeHistoryUser": "User",
     "changeHistoryRecord": "Record",
     "changeHistoryChange": "Change",
-    "fieldLocked": "You are not authorized to make changes to this option, check with your coordinator",
+    "fieldLocked": "You are not authorized to make changes to this option, check with your Direct Supervisor",
     "tablePrefix": "Table",
     "permSoloVer": "View Only",
     "permVerYOperar": "Operate",
