@@ -584,6 +584,63 @@
             });
         }
 
+        // Cascades a pantalla's own checkbox (see its onChange above) into
+        // every column of its Tabla (classification groups expanded to
+        // their own columns) plus every one of its Iconos, all in one go.
+        // Checking always lands each column on Solo Ver ONLY -- Ver y
+        // Operar/Editar/Autorizar stay a deliberate, individually-made
+        // choice per column, never implied by "this pantalla is visible".
+        // Unchecking clears a column's own level entirely, same as picking
+        // no level by hand.
+        function cascadeSubSmDetail(section, item, sm, subSm, checked) {
+            (subSm.submenu || []).forEach((entry) => {
+                const cols = entry.isClassification ? entry.submenu : [entry];
+                cols.forEach((col) => {
+                    const colBase = entry.isClassification
+                        ? `${sm.id}/${subSm.id}/${entry.id}/${col.id}`
+                        : `${sm.id}/${subSm.id}/${entry.id}`;
+                    [...COLUMN_LEVELS, COLUMN_AUTHORIZE].forEach((level) => {
+                        if (checked && level.id === 'solo-ver') return;
+                        grantSet.delete(keyOf(section.id, item.id, `${colBase}/${level.id}`));
+                    });
+                    if (checked) setKeys([keyOf(section.id, item.id, `${colBase}/solo-ver`)], true);
+                });
+            });
+            (subSm.iconsSubmenu || []).forEach((icon) => {
+                setKeys([keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`)], checked);
+            });
+        }
+
+        // Mirrors cascadeSubSmDetail's own traversal, but only counts —
+        // a column counts as "covered" if it has ANY of the 3 mutually
+        // exclusive levels set (not just Solo Ver: someone may have raised
+        // it straight to Ver y Operar/Editar by hand, that still means
+        // "this column has access"). Used only to decide the pantalla
+        // checkbox's own visual state below -- never touches leafKeysUnder
+        // or any of the Departamento/Área/Apartado rollup math, which keeps
+        // reading the pantalla's own single grant key exactly as before.
+        function subSmDetailCoverage(section, item, sm, subSm) {
+            let total = 0;
+            let coveredCount = 0;
+            (subSm.submenu || []).forEach((entry) => {
+                const cols = entry.isClassification ? entry.submenu : [entry];
+                cols.forEach((col) => {
+                    const colBase = entry.isClassification
+                        ? `${sm.id}/${subSm.id}/${entry.id}/${col.id}`
+                        : `${sm.id}/${subSm.id}/${entry.id}`;
+                    total += 1;
+                    if (COLUMN_LEVELS.some((level) => grantSet.has(keyOf(section.id, item.id, `${colBase}/${level.id}`)))) {
+                        coveredCount += 1;
+                    }
+                });
+            });
+            (subSm.iconsSubmenu || []).forEach((icon) => {
+                total += 1;
+                if (grantSet.has(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`))) coveredCount += 1;
+            });
+            return { total, coveredCount };
+        }
+
         // Renders the "Tabla <pantalla>" heading + one row per entry in the
         // pantalla's own column list — either a plain column, or (when
         // marked isClassification) a group like "Control Interno" that
@@ -807,9 +864,47 @@
                                 },
                             } : null, subBlocked, computeAppToggle([key]));
                             if (!readOnly) {
-                                subRow.input.checked = grantSet.has(key);
+                                let subChecked = grantSet.has(key);
+                                let subIndeterminate = false;
+                                if (subHasDetail) {
+                                    const { total, coveredCount } = subSmDetailCoverage(section, item, sm, subSm);
+                                    if (total > 0 && coveredCount === total) {
+                                        // Every column/icon underneath is already
+                                        // covered by hand -- heal the pantalla's own
+                                        // key too, so it genuinely IS fully granted
+                                        // (keeps Área/Categoría/Departamento's own
+                                        // counts, which read this same key, accurate)
+                                        // instead of just LOOKING checked.
+                                        grantSet.add(key);
+                                        subChecked = true;
+                                    } else if (!subChecked && total > 0 && coveredCount > 0) {
+                                        // Partial coverage the user built by hand
+                                        // without ever checking the pantalla itself --
+                                        // shown as a hint only, same as Control Interno
+                                        // reflecting Área. Never revokes an explicit
+                                        // pantalla-level check made earlier (that stays
+                                        // solid even if a column was unchecked after).
+                                        subIndeterminate = true;
+                                    }
+                                }
+                                subRow.input.checked = subChecked;
+                                subRow.input.indeterminate = subIndeterminate;
                                 subRow.input.addEventListener('change', () => {
                                     setKeys([key], subRow.input.checked);
+                                    // Checking/unchecking the pantalla itself
+                                    // also cascades into its own Tabla/Iconos
+                                    // (if it has any) -- same "check the
+                                    // container, get everything nested" the
+                                    // Control Interno group already does one
+                                    // level in, just one level further out.
+                                    // Each column still only ever gets Solo
+                                    // Ver from this (never Ver y Operar/
+                                    // Editar/Autorizar) -- those stay a
+                                    // deliberate per-column choice, this only
+                                    // guarantees "at least visible".
+                                    if (subHasDetail) {
+                                        cascadeSubSmDetail(section, item, sm, subSm, subRow.input.checked);
+                                    }
                                     render();
                                 });
                             }
