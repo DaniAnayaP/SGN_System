@@ -1416,6 +1416,35 @@ body.dark-mode .perm-tree-depth-2{
     color: var(--color-accent);
     font-weight: 600;
 }
+/* PermissionCostTree.js's columnLevels option (Business-Usuarios.js's
+   per-user "Otorgar Accesos" only) -- a level already granted by the
+   user's Puesto (green) or already saved as an individual adicional
+   (yellow) shows locked/checked and tinted, same palette as
+   .perm-tree-status-enabled/-extra, instead of the plain grey
+   :has(input:disabled) treatment every other locked level gets. Both
+   modifiers pair with :has(input:disabled) too (these items are always
+   disabled) — needs equal-or-higher specificity than the plain
+   .perm-tree-level-item:has(input:disabled) rule above, or its
+   opacity:0.5 wins regardless of source order (same trap as the App
+   shell's [hidden] rules earlier this session). */
+.perm-tree-level-item.perm-tree-level-item-green:has(input:disabled){
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+    opacity: 1;
+    cursor: default;
+}
+.perm-tree-level-item-green input[type="checkbox"]{
+    accent-color: #2c8f4a;
+}
+.perm-tree-level-item.perm-tree-level-item-yellow:has(input:disabled){
+    background-color: color-mix(in srgb, #c9860b 18%, transparent);
+    color: #c9860b;
+    opacity: 1;
+    cursor: default;
+}
+.perm-tree-level-item-yellow input[type="checkbox"]{
+    accent-color: #c9860b;
+}
 
 /* Contrataciones */
 .admin-module-list{

@@ -46,6 +46,17 @@
 //     getClientGrants(). Pricing still stops at Columna, same as costEdit:
 //     ticking a Columna's red box grants (and prices) the whole column at
 //     once, not its 4 sub-permission rows individually.
+//
+//     `columnLevels: true` (Business-Usuarios.js's per-USER "Otorgar
+//     Accesos" only — never the pricing screens above) opts a Columna back
+//     into the same 4-level Solo Ver/Ver y Operar/Editar/Autorizar picker
+//     PermissionTree.js's Roles tree has, since a real user (unlike a
+//     priced plan/client módulo) needs to say WHICH level they're getting,
+//     not just "this column, yes or no". Each level keeps its own
+//     green/yellow/red coloring (green = the user's Puesto already grants
+//     it and can't be removed here; yellow = already saved as an
+//     individual "adicional"; red = available to add, checkable only when
+//     interactive) instead of the whole column collapsing into one color.
 // ---------------------------------------------------------------------------
 
 (function () {
@@ -136,7 +147,7 @@
     // Contratados/Adicionales) never passes it, so the whole system menu
     // keeps showing there exactly as before -- GEIPSA needs to see
     // everything, contracted or not, to decide what to sell.
-    function create(container, { mode = 'costEdit', currency = 'MXN', interactive = false, allowedSectionIds = null } = {}) {
+    function create(container, { mode = 'costEdit', currency = 'MXN', interactive = false, allowedSectionIds = null, columnLevels = false } = {}) {
         let sectionsData = [];
         let grantSet = new Set(); // costEdit/grantReadonlyCost modes
         let planGrantSet = new Set(); // clientTricolor: coverage granted by the client's PLAN (green)
@@ -535,7 +546,7 @@
                     group.appendChild(sep);
                 }
                 const label = document.createElement('label');
-                label.className = 'perm-tree-level-item';
+                label.className = `perm-tree-level-item${item.lockedColor ? ` perm-tree-level-item-${item.lockedColor}` : ''}`;
                 const input = document.createElement('input');
                 input.type = 'checkbox';
                 input.checked = item.checked;
@@ -575,6 +586,52 @@
             if (mode === 'costEdit') {
                 const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, colCostKey);
                 container.appendChild(row);
+                return;
+            }
+
+            if (mode === 'clientTricolor' && columnLevels) {
+                const soloVerKeyTri = keyOf(section.id, item.id, `${base}/solo-ver`);
+                const subLevelKeys = COLUMN_LEVELS.filter((l) => l.id !== 'solo-ver')
+                    .concat(COLUMN_AUTHORIZE)
+                    .map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
+                const soloVerColor = columnColorFor([soloVerKeyTri]);
+                const colTreeKey = `col::${section.id}::${item.id}::${base}`;
+                const colExpanded = expandedItems.has(colTreeKey);
+                const colorSlot = {
+                    color: soloVerColor,
+                    checked: soloVerColor === 'red' && interactive && pendingAdditions.has(soloVerKeyTri),
+                    onChange: (checked) => {
+                        if (checked) pendingAdditions.add(soloVerKeyTri);
+                        else {
+                            pendingAdditions.delete(soloVerKeyTri);
+                            // Operar/Editar/Autorizar can't stay pending without Ver.
+                            subLevelKeys.forEach((k) => pendingAdditions.delete(k));
+                        }
+                        render();
+                    },
+                };
+                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, {
+                    expanded: colExpanded,
+                    onToggle: () => { if (colExpanded) expandedItems.delete(colTreeKey); else expandedItems.add(colTreeKey); },
+                }, colCostKey, colorSlot, appColumnExtraSlot(soloVerKeyTri, [soloVerKeyTri, ...subLevelKeys]));
+                container.appendChild(row);
+                if (!colExpanded) return;
+
+                const verGranted = soloVerColor !== 'red';
+                const items = COLUMN_LEVELS.filter((l) => l.id !== 'solo-ver').concat(COLUMN_AUTHORIZE).map((level) => {
+                    const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                    const levelColor = columnColorFor([levelKey]);
+                    const locked = levelColor !== 'red';
+                    return {
+                        icon: COLUMN_LEVEL_ICONS[level.id],
+                        label: t(level.labelKey),
+                        checked: locked || (interactive && pendingAdditions.has(levelKey)),
+                        disabled: locked || !interactive || !verGranted,
+                        lockedColor: locked ? levelColor : undefined,
+                        onChange: (checked) => { if (checked) pendingAdditions.add(levelKey); else pendingAdditions.delete(levelKey); render(); },
+                    };
+                });
+                container.appendChild(buildLevelSequenceRow(depth + 1, items));
                 return;
             }
 
