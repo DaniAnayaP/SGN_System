@@ -1390,7 +1390,16 @@ function registerTopBarDropdown(closeFn, name) {
 // then immediately closes" with no error and no timing issue to guard
 // against, because nothing was ever actually racing.
 function closeAllTopBarDropdowns(exceptName) {
-    topBarDropdownClosers.forEach(({ closeFn, name }) => { if (name !== exceptName) closeFn(); });
+    // Bare calls (no exceptName) come from every OTHER picker's own click
+    // handler (dept/area/cc, settings, user info, business profile,
+    // notifications...) and none of them pass their own name — so
+    // `name !== exceptName` was comparing undefined !== undefined for
+    // every one of them and skipping ALL of them, closing only the one
+    // dropdown that happens to be registered with a real name
+    // ('topBarActions'). `!name` makes every unnamed closer close
+    // unconditionally; a named one still only stays open when it's the
+    // caller's own exceptName.
+    topBarDropdownClosers.forEach(({ closeFn, name }) => { if (!name || name !== exceptName) closeFn(); });
 }
 
 // --- Top-bar actions collapse (mobile only) ----------------------------------
