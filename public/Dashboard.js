@@ -4674,7 +4674,7 @@ function syncButtonConfigShortcuts() {
 // icon shows whenever the user has been granted the parent OR any single
 // child (a lingering itemId-only grant from before this submenu existed
 // still works too).
-const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
+const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-tamano-sistema', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
 function hasSettingsAccess() {
     if (isUnrestrictedClientAdmin()) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];

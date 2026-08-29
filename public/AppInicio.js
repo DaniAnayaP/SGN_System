@@ -216,7 +216,7 @@ function hasMainButtonPermission(itemId) {
     if (isUnrestrictedClientAdmin()) return true;
     return effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === itemId);
 }
-const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
+const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-tamano-sistema', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
 function hasSettingsAccess() {
     if (isUnrestrictedClientAdmin()) return true;
     return effectiveGrants.some((g) => {
