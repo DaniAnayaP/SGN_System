@@ -224,6 +224,11 @@ body{
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Same specificity trap as .home-hamburger-menu button/.home-tab -- a bare
+   [hidden] loses to this class's own display:flex, so hiding a picker with
+   nothing to choose (see updatePickerButtonsVisibility in AppInicio.js)
+   needs the extra specificity here too. */
+.home-pill-btn[hidden]{ display: none; }
 .home-pill-btn{
     display: flex;
     align-items: center;

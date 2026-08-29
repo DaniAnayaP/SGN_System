@@ -570,7 +570,7 @@ function updateConfigRowValues() {
         getLogoutMode() === 'direct' ? t('main.logoutModeDirect') : t('main.logoutModeConfirm');
     const dept = availableDepartments.find((d) => d.key === selectedDepartment);
     document.getElementById('home-config-dept-value').textContent = dept ? t(dept.labelKey) : t('main.notSet');
-    const area = ((selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || []).find((a) => a.key === selectedArea);
+    const area = availableAreasForDepartment(selectedDepartment).find((a) => a.key === selectedArea);
     document.getElementById('home-config-area-value').textContent = area ? t(area.labelKey, area.labelParams || {}) : t('main.notSet');
     if (!sidebarCostCenters.length) {
         document.getElementById('home-config-cc-value').textContent = t('main.notSet');
@@ -650,7 +650,7 @@ function openAreaDefaultPicker() {
     configPickerTitle.textContent = t('sidebar.area');
     configPickerCcActions.hidden = true;
     configPickerList.innerHTML = '';
-    const areas = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+    const areas = availableAreasForDepartment(selectedDepartment);
     if (!areas.length) {
         configPickerHint.textContent = t('main.defaultPickerAreaNoDept');
         return;
@@ -957,6 +957,19 @@ function isCostCenterSelected(id) {
 function isUnrestrictedClientAdmin() {
     return isClientAdmin && effectiveGrants.length === 0;
 }
+
+// availableDepartments already narrows to what THIS user has any grant in
+// (see initDeptAreaCc) -- the Área list under a picked department needs the
+// exact same narrowing (an área is itemId under that department's own
+// sectionId), which nothing here ever did. Same gap exists in Dashboard.js's
+// own renderAreaPickerOptions (checked -- never filtered either), so this
+// isn't "App fell behind Web" like the other navigation fixes, just a gap
+// nobody had closed on either side yet.
+function availableAreasForDepartment(deptKey) {
+    const areas = (deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [];
+    if (isUnrestrictedClientAdmin()) return areas;
+    return areas.filter((a) => effectiveGrants.some((g) => g.sectionId === deptKey && g.itemId === a.key));
+}
 function hasScreenGrant(sectionId, itemId, submenuId) {
     if (isUnrestrictedClientAdmin()) return true;
     return effectiveGrants.some((g) => (
@@ -984,7 +997,7 @@ const deptAreaDropdown = document.getElementById('home-dept-area-dropdown');
 
 function updateDeptAreaLabel() {
     const dept = availableDepartments.find((d) => d.key === selectedDepartment);
-    const area = ((selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || []).find((a) => a.key === selectedArea);
+    const area = availableAreasForDepartment(selectedDepartment).find((a) => a.key === selectedArea);
     const parts = [
         dept ? t(dept.abbrKey || dept.labelKey) : null,
         area ? t(area.labelKey, area.labelParams || {}) : null,
@@ -992,7 +1005,18 @@ function updateDeptAreaLabel() {
     deptAreaBtn.setAttribute('aria-label', parts.length ? parts.join(' · ') : t('home.deptAreaButton'));
 }
 
+// Nothing meaningful to choose (at most one department AND at most one
+// área under it) -- hide the whole picker, same "single option = auto-pick,
+// no picker shown at all" rule Dashboard.js's own dept-picker-disabled/
+// cc-picker-disabled already apply on Web. Re-run every time this dropdown
+// itself is rebuilt (department changed -> área count may have too).
+function updateDeptAreaButtonVisibility() {
+    const areaCount = availableAreasForDepartment(selectedDepartment).length;
+    deptAreaBtn.hidden = availableDepartments.length <= 1 && areaCount <= 1;
+}
+
 function renderDeptAreaDropdown() {
+    updateDeptAreaButtonVisibility();
     deptAreaDropdown.innerHTML = '';
     if (!availableDepartments.length) {
         const empty = document.createElement('div');
@@ -1025,7 +1049,7 @@ function renderDeptAreaDropdown() {
         deptAreaDropdown.appendChild(btn);
     });
 
-    const areas = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+    const areas = availableAreasForDepartment(selectedDepartment);
     if (!areas.length) return;
     deptAreaDropdown.appendChild(Object.assign(document.createElement('div'), { className: 'home-picker-divider' }));
     const areaLabel = document.createElement('div');
@@ -1074,6 +1098,12 @@ function updateCcLabel() {
 }
 
 function renderCcDropdown() {
+    // Same "nothing to choose, hide the picker" rule as Departamento/Área
+    // above -- matches Dashboard.js's own cc-picker-disabled on Web. Unlike
+    // Departamento/Área, Centro de Costos can have MORE THAN ONE selected at
+    // once (or "Todos"), so the threshold is still just "more than one
+    // available to pick from", same as everywhere else.
+    ccBtn.hidden = sidebarCostCenters.length <= 1;
     ccDropdown.innerHTML = '';
     if (!sidebarCostCenters.length) {
         const empty = document.createElement('div');
@@ -1337,7 +1367,7 @@ async function initDeptAreaCc() {
             selectedDepartment = null;
             selectedArea = null;
         }
-        if (selectedArea && !((AREAS_BY_DEPARTMENT[selectedDepartment] || []).some((a) => a.key === selectedArea))) {
+        if (selectedArea && !availableAreasForDepartment(selectedDepartment).some((a) => a.key === selectedArea)) {
             selectedArea = null;
         }
         // Nothing to actually choose between — auto-pick, same as the
@@ -1346,7 +1376,7 @@ async function initDeptAreaCc() {
             selectedDepartment = availableDepartments[0].key;
             localStorage.setItem('department', selectedDepartment);
         }
-        const areasForDept = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+        const areasForDept = availableAreasForDepartment(selectedDepartment);
         if (areasForDept.length === 1 && !selectedArea) {
             selectedArea = areasForDept[0].key;
             localStorage.setItem('area', selectedArea);

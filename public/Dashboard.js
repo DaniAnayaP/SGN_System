@@ -857,7 +857,7 @@ function getPanelCategories() {
 function updateAreaPickerLabel() {
     const label = document.getElementById('area-picker-label');
     if (!label) return;
-    const areas = AREAS_BY_DEPARTMENT[selectedDepartment] || [];
+    const areas = availableAreasForDepartment(selectedDepartment);
     const area = areas.find((a) => a.key === selectedArea);
     label.textContent = area ? t(area.abbrKey || area.labelKey, area.labelParams || {}) : t('sidebar.area');
     document.querySelectorAll('.area-option').forEach((btn) => {
@@ -871,7 +871,7 @@ function renderAreaPickerOptions() {
     const dropdown = document.getElementById('area-picker-dropdown');
     if (!dropdown) return;
     dropdown.innerHTML = '';
-    const areas = AREAS_BY_DEPARTMENT[selectedDepartment] || [];
+    const areas = availableAreasForDepartment(selectedDepartment);
     areas.forEach((area) => {
         const li = document.createElement('li');
         li.setAttribute('role', 'none');
@@ -899,7 +899,7 @@ function renderAreaPickerOptions() {
 function updateAreaPickerVisibility() {
     const picker = document.getElementById('area-picker');
     if (!picker || currentRole === 'admin') return;
-    const areas = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+    const areas = availableAreasForDepartment(selectedDepartment);
     if (areas.length === 1) {
         if (selectedArea !== areas[0].key) {
             selectedArea = areas[0].key;
@@ -4598,6 +4598,19 @@ function isUnrestrictedClientAdmin() {
     return !!currentUser?.isClientAdmin && (cachedBusinessProfile?.effectiveGrants || []).length === 0;
 }
 
+// availableDepartments (see applyLoginDefaults/wherever it's narrowed) only
+// ever filtered by this user's own grants at the Departamento level -- the
+// Área picker under a chosen department never got the same treatment, so it
+// always listed every área the CLIENT has, regardless of which ones this
+// specific user was actually granted (an área is itemId under that
+// department's own sectionId).
+function availableAreasForDepartment(deptKey) {
+    const areas = (deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [];
+    if (isUnrestrictedClientAdmin()) return areas;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    return areas.filter((a) => grants.some((g) => g.sectionId === deptKey && g.itemId === a.key));
+}
+
 // "Pantalla habilitada" — whether this specific {sectionId, itemId,
 // submenuId} leaf is covered by the user's grants, using the SAME 3-tier
 // fallback as PermissionTree.js's own isGranted() (exact leaf, OR a
@@ -4820,7 +4833,7 @@ function openAreaDefaultPicker() {
     defaultPickerTitle.textContent = t('sidebar.area');
     defaultPickerCcActions.hidden = true;
     defaultPickerList.innerHTML = '';
-    const areas = (selectedDepartment && AREAS_BY_DEPARTMENT[selectedDepartment]) || [];
+    const areas = availableAreasForDepartment(selectedDepartment);
     if (!areas.length) {
         defaultPickerHint.textContent = t('main.defaultPickerAreaNoDept');
         return;
@@ -5189,7 +5202,7 @@ function findAreaCategoryTrail(targetFile) {
     const crumbs = [];
     const deptDef = DEPARTMENTS.find((d) => d.key === selectedDepartment);
     if (deptDef) crumbs.push({ label: t(deptDef.labelKey), href: null });
-    const areaDef = (AREAS_BY_DEPARTMENT[selectedDepartment] || []).find((a) => a.key === selectedArea);
+    const areaDef = availableAreasForDepartment(selectedDepartment).find((a) => a.key === selectedArea);
     if (areaDef) crumbs.push({ label: t(areaDef.labelKey, areaDef.labelParams || {}), href: null });
     catTrail.forEach((item) => crumbs.push(crumbFromItem(item)));
     return crumbs;
