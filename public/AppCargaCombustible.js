@@ -165,7 +165,7 @@ const FIELDS = [
             { options: [{ value: 'diesel', labelKey: 'main.fuelTypeDiesel' }] },
         ],
     },
-    { id: 'centroCostos', group: 'ident', apiKey: 'centroCostos', labelKey: 'main.colSysCentroCostos', hintKey: 'home.cargaHintCentroCostos', type: 'costCenter', icon: 'bx-purchase-tag-alt', colId: 'colSysCentroCostos' },
+    { id: 'centroCostos', group: 'ident', apiKey: 'centroCostos', labelKey: 'main.colSysCentroCostos', hintKey: 'home.cargaHintCentroCostos', type: 'costCenter', icon: 'bx-purchase-tag-alt', colId: 'colSysCentroCostos', autoFill: true },
     { id: 'tripBefore', group: 'op', apiKey: 'tripBefore', labelKey: 'main.colCargaTripAntes', hintKey: 'home.cargaHintTripAntes', type: 'number', icon: 'bx-tachometer', colId: 'colCargaTripAntes' },
     { id: 'tripBeforeEvidence', group: 'op', apiKey: 'tripBeforeEvidence', labelKey: 'main.colCargaTripAntesEvidencia', hintKey: 'home.cargaHintFoto', type: 'photo', icon: 'bx-camera', colId: 'colCargaTripAntesEvidencia' },
     { id: 'tripAfter', group: 'op', apiKey: 'tripAfter', labelKey: 'main.colCargaTripDespues', hintKey: 'home.cargaHintTripDespues', type: 'number', icon: 'bx-tachometer', colId: 'colCargaTripDespues' },
@@ -450,12 +450,28 @@ function fieldPreviewText(field, record) {
 }
 
 const expandedFieldIds = new Set();
+const SHEET_FIELD_TYPES = ['select', 'costCenter'];
 
-// select fields open their sheet straight from the collapsed row's own
-// tap -- unlike text/photo/costCenter, there's no in-place body to reveal
+// select/costCenter fields open their sheet straight from the collapsed
+// row's own tap -- unlike text/photo, there's no in-place body to reveal
 // first, so the usual "tap to expand, tap again to interact" two-step
 // would just be one pointless extra tap before the same sheet opens anyway.
 function openSheetForField(field, record) {
+    if (field.type === 'costCenter') {
+        if (!costCenters.length) { showToast(t('home.cargaNoCostCenter')); return; }
+        if (costCenters.length === 1) {
+            const cc = costCenters[0];
+            commitFieldValue(field, `${cc.code} - ${cc.name}`);
+            return;
+        }
+        const currentValue = fieldValueFromRecord(field, record) || '';
+        const groups = [{ options: costCenters.map((cc) => {
+            const label = `${cc.code} - ${cc.name}`;
+            return { value: label, label };
+        }) }];
+        openSelectSheet(t(field.labelKey), groups, currentValue, (value) => commitFieldValue(field, value));
+        return;
+    }
     const currentValue = fieldValueFromRecord(field, record) || '';
     openSelectSheet(t(field.labelKey), field.optionGroups, currentValue, (value) => commitFieldValue(field, value));
 }
@@ -482,9 +498,10 @@ function buildFieldEl(field, record) {
         <span class="home-carga-field-label"><p>${t(field.labelKey)}${autoTag}</p><span>${subtitle}</span></span>
         ${trailing}
     `;
+    const opensSheet = SHEET_FIELD_TYPES.includes(field.type);
     if (unlocked) {
         row.addEventListener('click', () => {
-            if (field.type === 'select') { openSheetForField(field, record); return; }
+            if (opensSheet) { openSheetForField(field, record); return; }
             if (expandedFieldIds.has(field.id)) expandedFieldIds.delete(field.id);
             else expandedFieldIds.add(field.id);
             render();
@@ -494,7 +511,7 @@ function buildFieldEl(field, record) {
     }
     wrap.appendChild(row);
 
-    if (unlocked && expanded && field.type !== 'select') {
+    if (unlocked && expanded && !opensSheet) {
         wrap.appendChild(buildFieldBody(field, record));
     }
     return wrap;
@@ -607,40 +624,6 @@ function buildFieldBody(field, record) {
         });
         row.append(btn, fileInput);
         bodyWrap.appendChild(row);
-        return bodyWrap;
-    }
-
-    if (field.type === 'costCenter') {
-        if (!costCenters.length) {
-            const err = document.createElement('p');
-            err.className = 'home-carga-field-error show';
-            err.textContent = t('admin.costCenterRequiredForRecord');
-            bodyWrap.appendChild(err);
-            return bodyWrap;
-        }
-        const select = document.createElement('select');
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = t('main.newRecordCostCenterPlaceholder');
-        select.appendChild(placeholder);
-        const currentValue = fieldValueFromRecord(field, record);
-        costCenters.forEach((cc) => {
-            const opt = document.createElement('option');
-            const label = `${cc.code} - ${cc.name}`;
-            opt.value = label;
-            opt.textContent = label;
-            select.appendChild(opt);
-        });
-        select.value = currentValue || '';
-        const confirmBtn = document.createElement('button');
-        confirmBtn.type = 'button';
-        confirmBtn.className = 'home-carga-field-confirm';
-        confirmBtn.textContent = t('home.cargaConfirm');
-        confirmBtn.addEventListener('click', () => {
-            if (!select.value) return;
-            commitFieldValue(field, select.value);
-        });
-        bodyWrap.append(select, confirmBtn);
         return bodyWrap;
     }
 
