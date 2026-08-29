@@ -2112,15 +2112,43 @@ function validateJobPositionBody(body, { requireName = true } = {}) {
     return null;
 }
 
+// Control Interno for both Puestos de Trabajo's own catalog table and
+// Roles' read-only mirror of the same list -- neither had it before.
+const JOB_POSITION_AREA_LABEL = '';
+const JOB_POSITION_MODULE_LABEL = 'Administración del Negocio';
+const JOB_POSITION_SCREEN_LABEL = 'Roles';
+
+function mapJobPosition(row, companyName) {
+    if (!row) return row;
+    return {
+        ...row,
+        // departments: which Departamentos this Puesto's own tree touches
+        // (see getJobPositionDepartments) -- included here, not just the
+        // admin-only grants-detail route, so Mi Recurso Humano's "Nuevo
+        // Registro" can show a live preview of "Departamento Asignado" for
+        // whoever picks a Puesto, without needing requireClientAdmin just
+        // to see it.
+        departments: getJobPositionDepartments(row.id),
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: JOB_POSITION_AREA_LABEL,
+            modulo: JOB_POSITION_MODULE_LABEL,
+            pantalla: JOB_POSITION_SCREEN_LABEL,
+            // No single cost center to self-reference the way Cost Centers'
+            // own record does -- cost_center_scope is a list of allowed
+            // ones for whoever gets hired into this Puesto, not this
+            // record's own identity -- so this stays honestly blank.
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
 app.get('/api/business/job-positions', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    // departments: which Departamentos this Puesto's own tree touches (see
-    // getJobPositionDepartments) -- included here, not just the admin-only
-    // grants-detail route, so Mi Recurso Humano's "Nuevo Registro" can show
-    // a live preview of "Departamento Asignado" for whoever picks a Puesto,
-    // without needing requireClientAdmin just to see it.
+    const client = getClientById(req.user.clientId);
     const jobPositions = listJobPositions(req.user.clientId, req.user.isTestAccount)
-        .map((jp) => ({ ...jp, departments: getJobPositionDepartments(jp.id) }));
+        .map((jp) => mapJobPosition(jp, client?.company_name));
     res.json({ jobPositions });
 });
 
@@ -2141,7 +2169,7 @@ app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, r
             clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: jobPosition.id,
             recordLabel: jobPosition.name, action: 'create', changedBy: changedByLabel(req),
         });
-        res.status(201).json({ jobPosition });
+        res.status(201).json({ jobPosition: mapJobPosition(jobPosition, getClientById(req.user.clientId)?.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(409).json({ message: 'A job position with that name already exists.' });
@@ -2173,7 +2201,7 @@ app.patch('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (r
     checkAndLogFieldChanges(req, existing, patch, JOB_POSITION_FIELDS, 'puestos-trabajo', existing.name);
     try {
         const jobPosition = updateJobPosition(req.params.id, req.user.clientId, patch, req.user.isTestAccount);
-        res.json({ jobPosition });
+        res.json({ jobPosition: mapJobPosition(jobPosition, getClientById(req.user.clientId)?.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(409).json({ message: 'A job position with that name already exists.' });

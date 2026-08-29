@@ -45,6 +45,12 @@ async function loadCostCentersForTree() {
     }
 }
 
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+
 function renderJobPositions() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = jobPositions.length > 0;
@@ -52,16 +58,27 @@ function renderJobPositions() {
         const tr = document.createElement('tr');
 
         const tdName = document.createElement('td');
+        tdName.dataset.col = 'name';
         tdName.textContent = jp.name;
         const tdAbbreviation = document.createElement('td');
+        tdAbbreviation.dataset.col = 'abbreviation';
         tdAbbreviation.textContent = jp.abbreviation || '—';
         const tdStatus = document.createElement('td');
+        tdStatus.dataset.col = 'status';
         const badge = document.createElement('span');
         badge.className = `admin-badge admin-badge-${jp.status === 'inactive' ? 'inactivo' : 'activo'}`;
         badge.textContent = Dashboard.t(jp.status === 'inactive' ? 'main.filterInactive' : 'main.filterActive');
         tdStatus.appendChild(badge);
+        const systemCols = SYSTEM_COLUMN_KEYS.map((k) => {
+            const td = document.createElement('td');
+            td.className = 'col-system';
+            td.dataset.col = k;
+            td.textContent = jp[k] || '—';
+            return td;
+        });
 
         const tdActions = document.createElement('td');
+        tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
         const configureBtn = document.createElement('button');
         configureBtn.type = 'button';
@@ -71,7 +88,7 @@ function renderJobPositions() {
         configureBtn.addEventListener('click', () => selectJobPositionForPermissions(jp));
         tdActions.appendChild(configureBtn);
 
-        tr.append(tdName, tdAbbreviation, tdStatus, tdActions);
+        tr.append(tdName, tdAbbreviation, tdStatus, ...systemCols, tdActions);
         tableBody.appendChild(tr);
     });
 }
