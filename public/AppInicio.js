@@ -204,6 +204,44 @@ function hasSettingsSubPermission(submenuId) {
     return effectiveGrants.some((g) => g.submenuId === submenuId || (g.submenuId && g.submenuId.startsWith(`${submenuId}/`)));
 }
 
+// Mirrors Dashboard.js's own hasMainButtonPermission/hasSettingsAccess/
+// TOP_BAR_BUTTONS exactly — this page never had them at all, so its
+// hamburger menu (Mensajes/Chatbot/Notificaciones/Marcadores/Configuración/
+// Datos de Usuario/Datos de Usuario del Negocio) and bottom tab bar's
+// Inicio/Panel/Tablero (the 3 tabs HOME_TAB_CATEGORY_IDS never covered,
+// unlike Catálogos/Operaciones/etc.) always showed regardless of what was
+// actually granted. 'home'/'panel'/'dashboard' aren't in MODULE_CATALOG, so
+// they're grant-only, no contract check.
+function hasMainButtonPermission(itemId) {
+    if (isUnrestrictedClientAdmin()) return true;
+    return effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === itemId);
+}
+const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
+function hasSettingsAccess() {
+    if (isUnrestrictedClientAdmin()) return true;
+    return effectiveGrants.some((g) => {
+        if (g.sectionId !== 'main' || g.itemId !== 'btn-configuracion') return false;
+        if (!g.submenuId) return true;
+        return SETTINGS_SUBITEM_IDS.some((id) => g.submenuId === id || g.submenuId.startsWith(`${id}/`));
+    });
+}
+const TOP_BAR_MENU_ITEMS = [
+    { moduleKey: 'btn-mensajes', elementId: 'home-menu-messages', check: () => hasMainButtonPermission('btn-mensajes') },
+    { moduleKey: 'btn-chatbot', elementId: 'home-menu-chatbot', check: () => hasMainButtonPermission('btn-chatbot') },
+    { moduleKey: 'btn-notificaciones', elementId: 'home-menu-notifications', check: () => hasMainButtonPermission('btn-notificaciones') },
+    { moduleKey: 'btn-marcadores', elementId: 'home-menu-bookmarks', check: () => hasMainButtonPermission('btn-marcadores') },
+    { moduleKey: 'btn-configuracion', elementId: 'home-menu-settings', check: hasSettingsAccess },
+    { moduleKey: 'btn-datos-usuario', elementId: 'home-menu-user-info', check: () => hasMainButtonPermission('btn-datos-usuario') },
+    { moduleKey: 'btn-datos-usuario-negocio', elementId: 'home-menu-business-profile', check: () => hasMainButtonPermission('btn-datos-usuario-negocio') },
+];
+function syncTopBarMenuVisibility() {
+    TOP_BAR_MENU_ITEMS.forEach(({ moduleKey, elementId, check }) => {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.hidden = !(contractedModuleKeys.includes(moduleKey) && check());
+    });
+}
+
 function getAdminBusinessItem() {
     const mainSection = menuData?.sections?.find((s) => s.id === 'main');
     return mainSection?.items?.find((i) => i.id === 'admin-business') || null;
@@ -857,6 +895,7 @@ const HOME_TAB_CATEGORY_IDS = {
 let menuData = null;
 let effectiveGrants = [];
 let isClientAdmin = false;
+let contractedModuleKeys = [];
 let availableDepartments = DEPARTMENTS;
 let selectedDepartment = localStorage.getItem('department') || null;
 let selectedArea = localStorage.getItem('area') || null;
@@ -1230,6 +1269,12 @@ function showCategorySection(catId) {
     document.getElementById('home-header-greeting').hidden = true;
     renderCategoryScreens(catId);
 }
+// itemId null for home-tab-inicio: it's the App's own permanent landing tab
+// (shows "Accesos rápidos", never a distinct Web page the way Panel/Tablero
+// map to Panel.html/Inicio-en.html), and doubles as the fallback below when
+// another tab gets hidden out from under the user -- hiding it too would
+// risk leaving someone with no tab left to fall back to at all.
+const HOME_TAB_ITEM_IDS = { 'home-tab-panel': 'panel', 'home-tab-tablero': 'dashboard' };
 function updateTabBarVisibility() {
     const categories = effectiveAreaCategories();
     Object.entries(HOME_TAB_CATEGORY_IDS).forEach(([tabId, catId]) => {
@@ -1238,14 +1283,22 @@ function updateTabBarVisibility() {
         const cat = categories.find((c) => c.id === catId);
         tab.hidden = !(selectedDepartment && selectedArea && cat && categoryHasGrantedScreen(cat));
     });
+    Object.entries(HOME_TAB_ITEM_IDS).forEach(([tabId, itemId]) => {
+        const tab = document.getElementById(tabId);
+        if (!tab) return;
+        tab.hidden = !hasMainButtonPermission(itemId);
+    });
     // The active tab may have just been hidden by this same narrowing —
-    // fall back to Inicio rather than leaving a hidden tab "active". If a
-    // category is still active and still visible, its own content may have
-    // just changed underneath it (a different área grants different
-    // pantallas) — refresh it in place.
+    // fall back to the first tab still visible (usually Inicio, but not
+    // necessarily anymore now that it can be hidden too) rather than
+    // leaving a hidden tab "active". If a category is still active and
+    // still visible, its own content may have just changed underneath it
+    // (a different área grants different pantallas) — refresh it in place.
     const activeTab = document.querySelector('.home-tab.active');
-    if (activeTab && activeTab.hidden) document.getElementById('home-tab-inicio').click();
-    else if (activeCategoryId) renderCategoryScreens(activeCategoryId);
+    if (activeTab && activeTab.hidden) {
+        const firstVisible = Array.from(document.querySelectorAll('.home-tab')).find((tab) => !tab.hidden);
+        if (firstVisible) firstVisible.click();
+    } else if (activeCategoryId) renderCategoryScreens(activeCategoryId);
 }
 
 async function initDeptAreaCc() {
@@ -1258,9 +1311,22 @@ async function initDeptAreaCc() {
         ]);
         menuData = menuRes.ok ? await menuRes.json() : null;
         const modules = modulesRes.ok ? await modulesRes.json() : { moduleKeys: [] };
-        availableDepartments = DEPARTMENTS.filter((d) => (modules.moduleKeys || []).includes(d.key));
+        contractedModuleKeys = modules.moduleKeys || [];
+        availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
         const profileData = profileRes.ok ? await profileRes.json() : {};
         effectiveGrants = profileData.profile?.effectiveGrants || [];
+        // Narrow further to departments THIS user actually has any grant in
+        // (Puesto de Trabajo defaults + Permisos Adicionales) -- same fix
+        // Dashboard.js's own department picker already got; this page had
+        // its own separate copy of the logic that was never updated to
+        // match, which is why it kept showing every contracted department
+        // regardless of what was actually granted. Skipped for an
+        // unrestricted client admin (isUnrestrictedClientAdmin -- zero
+        // grant rows by design means "sees everything", not "sees nothing").
+        if (!isUnrestrictedClientAdmin()) {
+            const grantedSectionIds = new Set(effectiveGrants.map((g) => g.sectionId));
+            availableDepartments = availableDepartments.filter((d) => grantedSectionIds.has(d.key));
+        }
         const ccData = ccRes.ok ? await ccRes.json() : { costCenters: [] };
         sidebarCostCenters = (ccData.costCenters || []).filter((cc) => hasCostCenterPermission(cc.id));
 
@@ -1299,6 +1365,7 @@ async function initDeptAreaCc() {
         updateCcLabel();
         updateTabBarVisibility();
         syncSettingsMenuVisibility();
+        syncTopBarMenuVisibility();
     } catch (err) {
         console.error('AppInicio: failed to load department/area/cost-center data:', err);
     }
