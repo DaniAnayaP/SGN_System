@@ -316,6 +316,13 @@ body{
     box-shadow: 0 10px 30px var(--home-shadow);
 }
 .home-hamburger-menu[hidden]{ display: none; }
+/* .home-hamburger-menu button below sets display:flex on every item --
+   same specificity as a bare [hidden] selector, so a hidden button (see
+   AppInicio.js's syncTopBarMenuVisibility/syncSettingsMenuVisibility)
+   would otherwise still render at display:flex, hidden attribute or not.
+   The extra class here (same fix .home-tab[hidden] already needed and
+   got, just below) outweighs it regardless of source order. */
+.home-hamburger-menu button[hidden]{ display: none; }
 .home-hamburger-menu button{
     display: flex;
     align-items: center;
