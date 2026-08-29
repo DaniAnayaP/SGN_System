@@ -1942,16 +1942,33 @@ function dataTableConfigStorageKey(tableId) {
     return `${DATA_TABLE_COLUMNS_KEY_PREFIX}${tableId}`;
 }
 
-// Reconciles stored config against the table's LIVE columns, so a future
-// change to which columns a table has (added/removed/renamed in the HTML)
-// never leaves a user with a broken or silently-lossy customization: unknown
-// stored keys are dropped, live keys missing from the stored order are
-// appended (never hidden by surprise).
+// Order-independent fingerprint of a table's column SET (not its order) —
+// used only to detect "this table's columns changed since I saved my
+// layout", never to decide the actual order itself.
+function dataTableColumnsSignature(columnKeys) {
+    return [...columnKeys].sort().join('|');
+}
+
+// Reconciles stored config against the table's LIVE columns. Dropping/
+// renaming a column here always falls back to a clean default (below) — the
+// column SET changing at all invalidates the whole saved layout, rather
+// than surgically patching order/pinned/hidden/widths around just the
+// columns that moved. A screen picking up a brand-new column (like
+// Nuestros Sectores de Negocio's own "Accesos por default") used to just
+// tack it onto the END of everyone's already-saved order, landing it
+// nowhere near where its <th> actually sits in the markup and making the
+// whole row look shifted — this way, a real structural change instead
+// resets that ONE table back to its natural, correct layout for everyone,
+// same as a first-ever visit. A no-op (same signature) still behaves
+// exactly as before: nothing about someone's customization changes.
 function loadDataTableConfig(tableId, columnKeys) {
     let stored = null;
     try {
         stored = JSON.parse(localStorage.getItem(dataTableConfigStorageKey(tableId)) || 'null');
     } catch {
+        stored = null;
+    }
+    if (stored && stored.signature !== dataTableColumnsSignature(columnKeys)) {
         stored = null;
     }
     const keySet = new Set(columnKeys);
@@ -1965,7 +1982,7 @@ function loadDataTableConfig(tableId, columnKeys) {
     // :first-child behavior until the user customizes it via the picker.
     if (!pinned) pinned = columnKeys[0] ? [columnKeys[0]] : [];
     pinned = pinned.slice(0, DATA_TABLE_PIN_MAX);
-    return { order, hidden, widths, pinned };
+    return { order, hidden, widths, pinned, signature: dataTableColumnsSignature(columnKeys) };
 }
 
 function saveDataTableConfig(tableId, config) {
@@ -2102,6 +2119,7 @@ function resetDataTableColumnLayout(tableId) {
         hidden: [],
         widths: { ...state.naturalWidths },
         pinned: state.columnKeys[0] ? [state.columnKeys[0]] : [],
+        signature: dataTableColumnsSignature(state.columnKeys),
     };
     saveDataTableConfig(tableId, state.config);
     applyDataTableColumnLayout(tableId);
