@@ -291,11 +291,14 @@ db.exec(`
     -- Nuestros Sectores de Negocio: the catalog Nuestras APPs' own Sector de
     -- Negocio field picks from (was free text before, so a client's
     -- sector_negocio and an app's sector could drift apart on a typo and
-    -- silently never match in getClientAppScreens). One flat list, no
-    -- status — a sector is either in the catalog or it isn't.
+    -- silently never match in getClientAppScreens). No hard-delete -- Planes
+    -- and Nuestras APPs already reference a sector by id, same "Activar/
+    -- Desactivar only" rule as clients/cost centers (see their own migration
+    -- comments) so a delete can't leave those with a dangling reference.
     CREATE TABLE IF NOT EXISTS business_sectors (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         name        TEXT NOT NULL UNIQUE,
+        status      TEXT NOT NULL DEFAULT 'active',
         created_by  TEXT NOT NULL DEFAULT '',
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -1216,6 +1219,7 @@ function ensureColumn(table, column, definition) {
 ensureColumn('users', 'is_test_account', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('clients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('clients', 'training_user_id', 'INTEGER REFERENCES users(id)');
+ensureColumn('business_sectors', 'status', "TEXT NOT NULL DEFAULT 'active'");
 // Deliberately NOT every client_id-scoped table: Field Fill Rules,
 // Transacciones Inteligentes and Reportes Programados are configuration a
 // client builds ONCE (which fields gate which, which report to compute) --
@@ -1440,7 +1444,8 @@ function promoteToAdmin(username) {
 
 // --- Client lifecycle: auto-provisioned "Admin+ABBR" user -------------------
 // When a client is set to status 'activo', it gets exactly one admin user
-// (username "Admin" + an abbreviation derived from the company name). That
+// (username "Admin" + company_nickname/Apodo Empresa, falling back to an
+// abbreviation of the real company name only when no Apodo is set). That
 // user — and only that user — can then manage the client's own
 // users/profiles/access (see requireClientAdmin in server.js). Setting the
 // client to any other status deactivates that admin and every user they (or
@@ -1488,7 +1493,12 @@ async function activateClient(clientId) {
         return { user, generatedPassword: null };
     }
 
-    const abbr = generateClientAbbreviation(client.company_name);
+    // Prefer company_nickname (Apodo Empresa) over the company's real legal
+    // name — same rule provisionTrainingAccount already follows below, this
+    // was just never wired up here despite that function's own comment
+    // claiming it was.
+    const nickname = (client.company_nickname || '').trim() || generateClientAbbreviation(client.company_name);
+    const abbr = nickname.replace(/[^a-zA-Z0-9]/g, '') || generateClientAbbreviation(client.company_name);
     const username = generateUniqueUsername(`Admin${abbr}`);
     const password = generateRandomPassword();
     const email = client.email || `${username.toLowerCase()}@example.invalid`;
@@ -3787,8 +3797,9 @@ function createBusinessSector({ name, createdBy }) {
     return deserializeBusinessSector(db.prepare('SELECT * FROM business_sectors WHERE id = ?').get(result.lastInsertRowid));
 }
 
-function deleteBusinessSector(id) {
-    db.prepare('DELETE FROM business_sectors WHERE id = ?').run(id);
+function setBusinessSectorStatus(id, status) {
+    db.prepare('UPDATE business_sectors SET status = ? WHERE id = ?').run(status, id);
+    return getBusinessSectorById(id);
 }
 
 function getBusinessSectorById(id) {
@@ -4588,7 +4599,7 @@ module.exports = {
     getClientAppScreens,
     listBusinessSectors,
     createBusinessSector,
-    deleteBusinessSector,
+    setBusinessSectorStatus,
     getBusinessSectorById,
     getSectorGrants,
     setSectorGrants,

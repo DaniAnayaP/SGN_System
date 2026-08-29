@@ -171,7 +171,7 @@ const {
     setSaasAppScreenFields,
     listBusinessSectors,
     createBusinessSector,
-    deleteBusinessSector,
+    setBusinessSectorStatus,
     getBusinessSectorById,
     getSectorGrants,
     setSectorGrants,
@@ -1409,9 +1409,15 @@ app.post('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) =>
     }
 });
 
-app.delete('/api/admin/business-sectors/:id', requireAuth, requireAdmin, (req, res) => {
-    deleteBusinessSector(req.params.id);
-    res.status(204).end();
+// No DELETE route -- Planes and Nuestras APPs already reference a sector by
+// id, same "Activar/Desactivar only" rule as clients/cost centers.
+app.patch('/api/admin/business-sectors/:id/status', requireAuth, requireAdmin, (req, res) => {
+    const existing = getBusinessSectorById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Sector not found.' });
+    const { status } = req.body || {};
+    if (status !== 'active' && status !== 'inactive') return res.status(400).json({ message: 'status must be active or inactive.' });
+    const sector = setBusinessSectorStatus(req.params.id, status);
+    res.json({ sector });
 });
 
 // What this Sector grants by default -- a new Plan aimed at this Sector

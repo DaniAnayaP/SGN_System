@@ -318,7 +318,6 @@
     "sectorTreeTitle": "Accesos por default de este sector",
     "sectorTreeHint": "Un Plan nuevo dirigido a este sector empieza exactamente con esto — desde ahí cada Plan puede agregar o quitar por su cuenta.",
     "sectorDefaultTag": "Default",
-    "confirmDeleteBusinessSector": "¿Eliminar este sector de negocio?",
     "appIcon": "Ícono",
     "appColorFrom": "Color (inicio)",
     "appColorTo": "Color (fin)",

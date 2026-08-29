@@ -60,6 +60,12 @@ function renderSectors() {
         const tdCreatedBy = document.createElement('td');
         tdCreatedBy.dataset.col = 'createdBy';
         tdCreatedBy.textContent = sector.createdBy || '—';
+        const tdStatus = document.createElement('td');
+        tdStatus.dataset.col = 'status';
+        const statusBadge = document.createElement('span');
+        statusBadge.className = `admin-badge admin-badge-${sector.status === 'inactive' ? 'inactivo' : 'activo'}`;
+        statusBadge.textContent = Dashboard.t(sector.status === 'inactive' ? 'main.filterInactive' : 'main.filterActive');
+        tdStatus.appendChild(statusBadge);
         const systemCols = SYSTEM_COLUMN_KEYS.map((k) => {
             const td = document.createElement('td');
             td.className = 'col-system';
@@ -70,14 +76,15 @@ function renderSectors() {
         const tdActions = document.createElement('td');
         tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => removeSector(sector));
-        tdActions.append(deleteBtn);
-        tr.append(tdName, tdPermissions, tdCreatedAt, tdCreatedBy, ...systemCols, tdActions);
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'admin-icon-btn';
+        toggleBtn.innerHTML = `<i class="bx ${sector.status === 'inactive' ? 'bx-check-circle' : 'bx-x-circle'}" aria-hidden="true"></i>`;
+        toggleBtn.setAttribute('aria-label', Dashboard.t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate'));
+        toggleBtn.title = Dashboard.t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate');
+        toggleBtn.addEventListener('click', () => toggleSectorStatus(sector));
+        tdActions.append(toggleBtn);
+        tr.append(tdName, tdPermissions, tdCreatedAt, tdCreatedBy, tdStatus, ...systemCols, tdActions);
         tableBody.appendChild(tr);
     });
 }
@@ -94,12 +101,18 @@ async function loadSectors() {
     }
 }
 
-async function removeSector(sector) {
-    if (!(await Dashboard.confirm(Dashboard.t('admin.confirmDeleteBusinessSector')))) return;
+async function toggleSectorStatus(sector) {
+    const nextStatus = sector.status === 'inactive' ? 'active' : 'inactive';
     try {
-        const res = await fetch(`/api/admin/business-sectors/${sector.id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) throw new Error('delete failed');
-        sectors = sectors.filter((s) => s.id !== sector.id);
+        const res = await fetch(`/api/admin/business-sectors/${sector.id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ status: nextStatus }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const { sector: updated } = await res.json();
+        sectors = sectors.map((s) => (s.id === updated.id ? updated : s));
         renderSectors();
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
