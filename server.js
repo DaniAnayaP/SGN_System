@@ -214,6 +214,21 @@ const {
     setUserGrants,
 } = require('./db');
 
+// Change-history "Usuario" column shows whoever made the change -- for the
+// auto-provisioned client-admin account, req.user.name is still frozen as
+// "Admin <razón social completa>" (see activateClient in db.js), never
+// meant to be read there any more than in the sidebar/App greeting (already
+// fixed to use company_nickname/Apodo Empresa instead). Falls back to
+// req.user.name for every other kind of account, whose own real name is
+// exactly what should show.
+function changedByLabel(req) {
+    if (req.user.isClientAdmin && req.user.clientId) {
+        const client = getClientById(req.user.clientId);
+        if (client?.company_nickname) return client.company_nickname;
+    }
+    return req.user.name;
+}
+
 const app = express();
 
 // Railway (like Heroku/most PaaS) puts the app behind a reverse proxy, which
@@ -1070,7 +1085,7 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
             modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0,
             createdBy: `${req.user.username} - ${req.user.name}`, businessSectorId: businessSectorId || null,
         });
-        logPlanChange({ planId: plan.id, action: 'create', changedBy: req.user.name });
+        logPlanChange({ planId: plan.id, action: 'create', changedBy: changedByLabel(req) });
         res.status(201).json({ plan });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -1150,12 +1165,12 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
             createdBy: createdBy != null ? createdBy.trim() : undefined,
             businessSectorId,
         });
-        logPlanChange({ planId: plan.id, action: 'update', changedBy: req.user.name });
+        logPlanChange({ planId: plan.id, action: 'update', changedBy: changedByLabel(req) });
         if (currency !== undefined && currency !== existing.currency) {
-            logPlanChange({ planId: plan.id, action: 'update', fieldKey: 'admin.planCurrency', oldValue: existing.currency, newValue: currency, changedBy: req.user.name });
+            logPlanChange({ planId: plan.id, action: 'update', fieldKey: 'admin.planCurrency', oldValue: existing.currency, newValue: currency, changedBy: changedByLabel(req) });
         }
         if (costPerCostCenter !== undefined && costPerCostCenter !== existing.costPerCostCenter) {
-            logPlanChange({ planId: plan.id, action: 'update', fieldKey: 'admin.costPerCostCenter', oldValue: String(existing.costPerCostCenter), newValue: String(costPerCostCenter), changedBy: req.user.name });
+            logPlanChange({ planId: plan.id, action: 'update', fieldKey: 'admin.costPerCostCenter', oldValue: String(existing.costPerCostCenter), newValue: String(costPerCostCenter), changedBy: changedByLabel(req) });
         }
         res.json({ plan: { ...plan, accessPermissionsCost: computeAccessCostTotal(plan.id) } });
     } catch (err) {
@@ -1184,7 +1199,7 @@ app.post('/api/admin/plans/:id/activate', requireAuth, requireAdmin, (req, res) 
     const plan = activatePlan(req.params.id);
     logPlanChange({
         planId: plan.id, action: 'update', fieldKey: 'admin.planStatus',
-        oldValue: 'revision', newValue: 'active', changedBy: req.user.name,
+        oldValue: 'revision', newValue: 'active', changedBy: changedByLabel(req),
     });
     res.json({ plan });
 });
@@ -1240,7 +1255,7 @@ app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
     syncPlanModulesFromGrants(req.params.id);
     logPlanChange({
         planId: req.params.id, action: 'update', fieldKey: 'admin.activeTree',
-        oldValue: '', newValue: `${saved.length}`, changedBy: req.user.name,
+        oldValue: '', newValue: `${saved.length}`, changedBy: changedByLabel(req),
     });
     res.json({ grants: saved });
 });
@@ -1283,12 +1298,12 @@ app.put('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req
         plan = updatePlan(req.params.id, { currency });
         logPlanChange({
             planId: req.params.id, action: 'update', fieldKey: 'admin.planCurrency',
-            oldValue: existing.currency, newValue: currency, changedBy: req.user.name,
+            oldValue: existing.currency, newValue: currency, changedBy: changedByLabel(req),
         });
     }
     logPlanChange({
         planId: req.params.id, action: 'update', fieldKey: 'admin.accessPermissionsCost',
-        oldValue: '', newValue: `${saved.length}`, changedBy: req.user.name,
+        oldValue: '', newValue: `${saved.length}`, changedBy: changedByLabel(req),
     });
     res.json({ costs: saved, plan: { ...plan, accessPermissionsCost: computeAccessCostTotal(req.params.id) } });
 });
@@ -1751,7 +1766,7 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
             fieldKey: c.fieldKey,
             oldValue: sanitize ? sanitize(c.oldValue) : c.oldValue,
             newValue: sanitize ? sanitize(c.newValue) : c.newValue,
-            changedBy: req.user.name,
+            changedBy: changedByLabel(req),
         });
     });
     pending.forEach((c) => createPendingChange({
@@ -1840,7 +1855,7 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
         });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
-            recordLabel: costCenter.code, action: 'create', changedBy: req.user.name,
+            recordLabel: costCenter.code, action: 'create', changedBy: changedByLabel(req),
         });
         res.status(201).json({ costCenter: mapCostCenter(costCenter, client.company_name) });
     } catch (err) {
@@ -1891,7 +1906,7 @@ app.patch('/api/business/cost-centers/:id/status', requireAuth, requireClientAdm
     const costCenter = setCostCenterStatus(req.params.id, req.user.clientId, status, req.user.isTestAccount);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
-        recordLabel: costCenter.code, action: 'update', changedBy: req.user.name,
+        recordLabel: costCenter.code, action: 'update', changedBy: changedByLabel(req),
     });
     res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
 });
@@ -1908,7 +1923,7 @@ app.patch('/api/business/cost-centers/:id/nickname', requireAuth, requireClientA
     const costCenter = updateCostCenterNickname(req.params.id, req.user.clientId, nickname, req.user.isTestAccount);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
-        recordLabel: costCenter.code, action: 'update', fieldKey: 'business.ccNickname', changedBy: req.user.name,
+        recordLabel: costCenter.code, action: 'update', fieldKey: 'business.ccNickname', changedBy: changedByLabel(req),
     });
     res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
 });
@@ -2124,7 +2139,7 @@ app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, r
         });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: jobPosition.id,
-            recordLabel: jobPosition.name, action: 'create', changedBy: req.user.name,
+            recordLabel: jobPosition.name, action: 'create', changedBy: changedByLabel(req),
         });
         res.status(201).json({ jobPosition });
     } catch (err) {
@@ -2172,7 +2187,7 @@ app.delete('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (
     if (!existing) return res.status(404).json({ message: 'Job position not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: existing.id,
-        recordLabel: existing.name, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
     });
     deleteJobPosition(req.params.id, req.user.clientId);
     res.status(204).end();
@@ -2214,7 +2229,7 @@ app.post('/api/business/hr-status-catalog', requireAuth, requireClientAdmin, (re
         });
         logTableChange({
             clientId: req.user.clientId, tableKey: 'estatus-rh', recordId: hrStatus.id,
-            recordLabel: hrStatus.name, action: 'create', changedBy: req.user.name,
+            recordLabel: hrStatus.name, action: 'create', changedBy: changedByLabel(req),
         });
         res.status(201).json({ hrStatus });
     } catch (err) {
@@ -2253,7 +2268,7 @@ app.delete('/api/business/hr-status-catalog/:id', requireAuth, requireClientAdmi
     if (!existing) return res.status(404).json({ message: 'HR status not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'estatus-rh', recordId: existing.id,
-        recordLabel: existing.name, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
     });
     deleteHrStatusCatalogEntry(req.params.id, req.user.clientId);
     res.status(204).end();
@@ -2458,7 +2473,7 @@ app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
     });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
-        recordLabel: report.name, action: 'create', changedBy: req.user.name,
+        recordLabel: report.name, action: 'create', changedBy: changedByLabel(req),
     });
     res.status(201).json({ report: mapIntelligentReport(report, getClientById(req.user.clientId)?.company_name) });
 });
@@ -2474,7 +2489,7 @@ app.patch('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
     const report = updateIntelligentReport(req.params.id, req.user.clientId, { name: name.trim(), columns });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
-        recordLabel: report.name, action: 'update', changedBy: req.user.name,
+        recordLabel: report.name, action: 'update', changedBy: changedByLabel(req),
     });
     res.json({ report: mapIntelligentReport(report, getClientById(req.user.clientId)?.company_name) });
 });
@@ -2485,7 +2500,7 @@ app.delete('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Report not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: existing.id,
-        recordLabel: existing.name, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
     });
     deleteIntelligentReport(req.params.id, req.user.clientId);
     res.status(204).end();
@@ -2504,7 +2519,7 @@ app.post('/api/business/intelligent-reports/:id/authorize', requireAuth, (req, r
     const report = authorizeIntelligentReport(req.params.id, req.user.clientId, req.user.name);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
-        recordLabel: report.name, action: 'update', changedBy: req.user.name,
+        recordLabel: report.name, action: 'update', changedBy: changedByLabel(req),
     });
     res.json({ report: mapIntelligentReport(report, getClientById(req.user.clientId)?.company_name) });
 });
@@ -2566,7 +2581,7 @@ app.post('/api/business/scheduled-reports', requireAuth, (req, res) => {
     const scheduledReport = createScheduledReport({ clientId: req.user.clientId, createdBy: req.user.name, ...payload });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
-        recordLabel: scheduledReport.name, action: 'create', changedBy: req.user.name,
+        recordLabel: scheduledReport.name, action: 'create', changedBy: changedByLabel(req),
     });
     res.status(201).json({ scheduledReport: mapScheduledReport(scheduledReport, getClientById(req.user.clientId)?.company_name) });
 });
@@ -2580,7 +2595,7 @@ app.patch('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
     const scheduledReport = updateScheduledReport(req.params.id, req.user.clientId, payload);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
-        recordLabel: scheduledReport.name, action: 'update', changedBy: req.user.name,
+        recordLabel: scheduledReport.name, action: 'update', changedBy: changedByLabel(req),
     });
     res.json({ scheduledReport: mapScheduledReport(scheduledReport, getClientById(req.user.clientId)?.company_name) });
 });
@@ -2592,7 +2607,7 @@ app.delete('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
     deleteScheduledReport(req.params.id, req.user.clientId);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: existing.id,
-        recordLabel: existing.name, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
     });
     res.status(204).end();
 });
@@ -2610,7 +2625,7 @@ app.post('/api/business/scheduled-reports/:id/authorize', requireAuth, (req, res
     const scheduledReport = authorizeScheduledReport(req.params.id, req.user.clientId, req.user.name);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
-        recordLabel: scheduledReport.name, action: 'update', changedBy: req.user.name,
+        recordLabel: scheduledReport.name, action: 'update', changedBy: changedByLabel(req),
     });
     res.json({ scheduledReport: mapScheduledReport(scheduledReport, getClientById(req.user.clientId)?.company_name) });
 });
@@ -2697,7 +2712,7 @@ app.post('/api/business/fuel-records', requireAuth, (req, res) => {
     });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: record.id,
-        recordLabel: record.eco_unit, action: 'create', changedBy: req.user.name,
+        recordLabel: record.eco_unit, action: 'create', changedBy: changedByLabel(req),
     });
     const client = getClientById(req.user.clientId);
     res.status(201).json({ record: mapFuelRecord(record, null, client?.company_name) });
@@ -2730,7 +2745,7 @@ app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: existing.id,
-        recordLabel: existing.eco_unit, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.eco_unit, action: 'delete', changedBy: changedByLabel(req),
     });
     deleteFuelRecord(req.params.id, req.user.clientId);
     res.status(204).end();
@@ -2788,7 +2803,7 @@ app.post('/api/business/fuel-loading-records', requireAuth, (req, res) => {
     const record = createFuelLoadingRecord({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: record.id,
-        recordLabel: record.db_id, action: 'create', changedBy: req.user.name,
+        recordLabel: record.db_id, action: 'create', changedBy: changedByLabel(req),
     });
     const client = getClientById(req.user.clientId);
     res.status(201).json({ record: mapFuelLoadingRecord(record, null, client?.company_name) });
@@ -2815,7 +2830,7 @@ app.delete('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => 
     if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: existing.id,
-        recordLabel: existing.eco_unit || existing.db_id, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.eco_unit || existing.db_id, action: 'delete', changedBy: changedByLabel(req),
     });
     deleteFuelLoadingRecord(req.params.id, req.user.clientId);
     res.status(204).end();
@@ -2863,7 +2878,7 @@ app.post('/api/business/unit-types', requireAuth, (req, res) => {
     const unitType = createUnitType({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: unitType.id,
-        recordLabel: unitType.code, action: 'create', changedBy: req.user.name,
+        recordLabel: unitType.code, action: 'create', changedBy: changedByLabel(req),
     });
     const client = getClientById(req.user.clientId);
     res.status(201).json({ unitType: mapUnitTypeRecord(unitType, null, client?.company_name) });
@@ -2886,7 +2901,7 @@ app.delete('/api/business/unit-types/:id', requireAuth, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Unit type not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: existing.id,
-        recordLabel: existing.code, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.code, action: 'delete', changedBy: changedByLabel(req),
     });
     deleteUnitType(req.params.id, req.user.clientId);
     res.status(204).end();
@@ -2941,7 +2956,7 @@ app.post('/api/business/fleet-units', requireAuth, (req, res) => {
     const fleetUnit = createFleetUnit({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: fleetUnit.id,
-        recordLabel: `#${fleetUnit.id}`, action: 'create', changedBy: req.user.name,
+        recordLabel: `#${fleetUnit.id}`, action: 'create', changedBy: changedByLabel(req),
     });
     const client = getClientById(req.user.clientId);
     res.status(201).json({ fleetUnit: mapFleetUnitRecord(fleetUnit, null, client?.company_name) });
@@ -2970,7 +2985,7 @@ app.delete('/api/business/fleet-units/:id', requireAuth, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Fleet unit not found.' });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: existing.id,
-        recordLabel: existing.eco_id || `#${existing.id}`, action: 'delete', changedBy: req.user.name,
+        recordLabel: existing.eco_id || `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
     });
     deleteFleetUnit(req.params.id, req.user.clientId);
     res.status(204).end();
@@ -3087,7 +3102,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: worker.id,
-        recordLabel: worker.full_name, action: 'create', changedBy: req.user.name,
+        recordLabel: worker.full_name, action: 'create', changedBy: changedByLabel(req),
     });
     res.status(201).json({ worker: mapHrWorker(worker, null, getClientById(req.user.clientId)?.company_name) });
 });
@@ -3130,7 +3145,7 @@ app.post('/api/business/hr-workers/:id/activate-user', requireAuth, async (req, 
     logTableChange({
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,
         recordLabel: existing.full_name, action: 'update', fieldKey: 'main.colHrUserActivated',
-        oldValue: '—', newValue: generated.username, changedBy: req.user.name,
+        oldValue: '—', newValue: generated.username, changedBy: changedByLabel(req),
     });
     res.json({
         worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount), null, getClientById(req.user.clientId)?.company_name),
