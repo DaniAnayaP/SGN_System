@@ -1240,6 +1240,11 @@ ensureColumn('business_sectors', 'status', "TEXT NOT NULL DEFAULT 'active'");
 // Nullable: a worker registered before this column existed just has no
 // Puesto-derived grants until an admin re-picks their Puesto.
 ensureColumn('hr_workers', 'job_position_id', 'INTEGER REFERENCES job_positions(id)');
+// Distinct from `email` (the worker's login/institutional address, set at
+// hiring and used to sign into SGN) -- a brand-new hire often can't check
+// that inbox yet, so the one-time activation password is emailed here
+// instead (see activateHrWorkerUser).
+ensureColumn('hr_workers', 'personal_email', "TEXT NOT NULL DEFAULT ''");
 // One-time best-effort backfill for every worker hired before this column
 // existed: match their frozen position label back to a job_positions row
 // with the exact same name, same client -- harmless if nothing matches
@@ -3128,7 +3133,7 @@ function generateUniqueCostCenterCode(clientId, baseCode, excludeId) {
 // from the table (that's the only place a real, usable password ever gets
 // issued). async because hashing can't happen inside db.transaction()
 // (must stay fully synchronous — see activateClient's own note above).
-async function createHrWorker({ clientId, givenNames, surnames, position, jobPositionId, startDate, costCenterId, email, isTestData = false }) {
+async function createHrWorker({ clientId, givenNames, surnames, position, jobPositionId, startDate, costCenterId, email, personalEmail, isTestData = false }) {
     const fullName = `${givenNames} ${surnames}`.replace(/\s+/g, ' ').trim();
     const username = generateUniqueUsername(computeHrUsername(givenNames, surnames));
     const passwordHash = await hashPassword(generateRandomPassword());
@@ -3150,16 +3155,16 @@ async function createHrWorker({ clientId, givenNames, surnames, position, jobPos
             .prepare(`
                 INSERT INTO hr_workers (
                     client_id, db_id, record_number, record_code, given_names, surnames, full_name,
-                    position, job_position_id, start_date, department, departments, cost_center_id, email, user_id, hr_status_id, is_test_data
+                    position, job_position_id, start_date, department, departments, cost_center_id, email, personal_email, user_id, hr_status_id, is_test_data
                 )
                 VALUES (
                     @clientId, @dbId, @recordNumber, @recordCode, @givenNames, @surnames, @fullName,
-                    @position, @jobPositionId, @startDate, @department, @departments, @costCenterId, @email, @userId, @hrStatusId, @isTestData
+                    @position, @jobPositionId, @startDate, @department, @departments, @costCenterId, @email, @personalEmail, @userId, @hrStatusId, @isTestData
                 )
             `)
             .run({
                 clientId, dbId: generateBigDateId(), recordNumber, recordCode, givenNames, surnames, fullName,
-                position, jobPositionId: jobPositionId || null, startDate,
+                position, jobPositionId: jobPositionId || null, startDate, personalEmail: personalEmail || '',
                 // Both legacy single-value/JSON columns, kept NOT NULL by
                 // their original schema (no default) -- neither is read
                 // anywhere anymore, "Departamento Asignado" is now always
@@ -3197,6 +3202,7 @@ async function activateHrWorkerUser(workerId, clientId, forTestAccount = false) 
 const HR_WORKER_PATCHABLE_FIELDS = {
     area: { column: 'area', fieldKey: 'main.colHrArea' },
     email: { column: 'email', fieldKey: 'main.colHrEmail' },
+    personalEmail: { column: 'personal_email', fieldKey: 'main.colHrPersonalEmail' },
     phone: { column: 'phone', fieldKey: 'main.colHrPhone' },
     hrStatusId: { column: 'hr_status_id', fieldKey: 'main.colHrStatus' },
     costCenterId: { column: 'cost_center_id', fieldKey: 'main.colHrCostCenter' },

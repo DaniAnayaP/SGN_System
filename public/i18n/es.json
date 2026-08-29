@@ -975,6 +975,8 @@
     "colHrArea": "Área Asignada",
     "colHrCostCenter": "Centro de Costos",
     "colHrEmail": "Correo Electrónico",
+    "colHrPersonalEmail": "Correo Personal",
+    "hrPersonalEmailHint": "Se usa para enviar la contraseña de acceso cuando el trabajador todavía no puede revisar su correo de trabajo.",
     "colHrPhone": "Teléfono",
     "colHrStatus": "Estatus",
     "colHrUsername": "Usuario",

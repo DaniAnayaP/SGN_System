@@ -396,6 +396,14 @@ function buildRow(worker) {
         onCommit: (val) => patchWorker(worker.id, { email: val }),
     });
 
+    const tdPersonalEmail = document.createElement('td');
+    tdPersonalEmail.dataset.col = 'colHrPersonalEmail';
+    Dashboard.attachInlineEdit(tdPersonalEmail, {
+        value: worker.personalEmail || '', inputType: 'email', tableKey: TABLE_KEY, colKey: 'colHrPersonalEmail',
+        pending: isPending(worker, 'personalEmail'),
+        onCommit: (val) => patchWorker(worker.id, { personalEmail: val }),
+    });
+
     const tdPhone = document.createElement('td');
     tdPhone.dataset.col = 'colHrPhone';
     Dashboard.attachInlineEdit(tdPhone, {
@@ -419,6 +427,7 @@ function buildRow(worker) {
         tdArea,
         buildCostCenterCell(worker),
         tdEmail,
+        tdPersonalEmail,
         tdPhone,
         buildStatusCell(worker),
         textCell('colHrUsername', worker.username),
@@ -499,6 +508,7 @@ const newRecordModal = document.getElementById('new-record-modal');
 const givenNamesInput = document.getElementById('new-record-given-names');
 const surnamesInput = document.getElementById('new-record-surnames');
 const emailInput = document.getElementById('new-record-email');
+const personalEmailInput = document.getElementById('new-record-personal-email');
 const positionInput = document.getElementById('new-record-position');
 const startDateInput = document.getElementById('new-record-start-date');
 const costCenterSelect = document.getElementById('new-record-cost-center');
@@ -530,6 +540,7 @@ function openNewRecordModal() {
     givenNamesInput.value = '';
     surnamesInput.value = '';
     emailInput.value = '';
+    personalEmailInput.value = '';
     populateJobPositionSelect(positionInput);
     startDateInput.value = '';
     populateCostCenterSelect(costCenterSelect, null);
@@ -559,6 +570,7 @@ async function saveNewRecord() {
                 givenNames: givenNamesInput.value.trim(),
                 surnames: surnamesInput.value.trim(),
                 email: emailInput.value.trim(),
+                personalEmail: personalEmailInput.value.trim(),
                 position: selectedJobPosition?.name || '',
                 jobPositionId,
                 startDate: startDateInput.value,
@@ -595,12 +607,66 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !newRecordModal.hidden) closeNewRecordModal();
 });
 
-// --- Departamento(s) click-to-edit ----------------------------------------
 // --- Activar Usuario / credenciales generadas -----------------------------
+// The password only ever exists in this modal's own memory (never stored
+// anywhere recoverable server-side — see activateHrWorkerUser's comment in
+// db.js), so "Mostrar"/"Reenviar correo" both work purely off `current`
+// below; neither survives a Close or page reload.
 const credentialsModal = document.getElementById('hr-credentials-modal');
 const credentialsUsername = document.getElementById('hr-credentials-username');
 const credentialsPassword = document.getElementById('hr-credentials-password');
+const credentialsReveal = document.getElementById('hr-credentials-reveal');
+const credentialsEmailSent = document.getElementById('hr-credentials-email-sent');
+const credentialsEmailTo = document.getElementById('hr-credentials-email-to');
+const credentialsEmailFailed = document.getElementById('hr-credentials-email-failed');
+const credentialsResendBtn = document.getElementById('hr-credentials-resend');
 const credentialsCloseBtn = document.getElementById('hr-credentials-close');
+let currentCredentials = null;
+let credentialsRevealed = false;
+
+function renderCredentialsPassword(revealed) {
+    credentialsPassword.textContent = revealed ? currentCredentials.password : '••••••••••••';
+    credentialsReveal.textContent = Dashboard.t(revealed ? 'admin.hidePassword' : 'admin.showPassword');
+}
+
+function showCredentials(workerId, generated) {
+    currentCredentials = { workerId, username: generated.username, password: generated.password };
+    credentialsRevealed = false;
+    credentialsUsername.textContent = generated.username;
+    const emailKnown = !!generated.emailTo;
+    credentialsEmailSent.hidden = !(emailKnown && generated.emailSent);
+    credentialsEmailFailed.hidden = !!generated.emailSent;
+    credentialsEmailTo.textContent = generated.emailTo || '';
+    credentialsReveal.hidden = !generated.emailSent;
+    renderCredentialsPassword(!generated.emailSent);
+    credentialsModal.hidden = false;
+}
+
+credentialsReveal.addEventListener('click', () => {
+    credentialsRevealed = !credentialsRevealed;
+    renderCredentialsPassword(credentialsRevealed);
+});
+
+credentialsResendBtn.addEventListener('click', async () => {
+    if (!currentCredentials) return;
+    credentialsResendBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/business/hr-workers/${currentCredentials.workerId}/resend-credentials-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ username: currentCredentials.username, password: currentCredentials.password }),
+        });
+        if (!res.ok) throw new Error('resend failed');
+        const { emailSent, emailTo } = await res.json();
+        Dashboard.showToast(Dashboard.t(emailSent ? 'main.changeSaved' : 'admin.saveError'), emailSent ? 'success' : 'error');
+        if (emailSent) showCredentials(currentCredentials.workerId, { ...currentCredentials, emailSent, emailTo });
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    } finally {
+        credentialsResendBtn.disabled = false;
+    }
+});
 
 async function activateWorkerUser(workerId) {
     try {
@@ -611,16 +677,17 @@ async function activateWorkerUser(workerId) {
             return;
         }
         const { generated } = await res.json();
-        credentialsUsername.textContent = generated.username;
-        credentialsPassword.textContent = generated.password;
-        credentialsModal.hidden = false;
+        showCredentials(workerId, generated);
         await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano: failed to activate user', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
-credentialsCloseBtn.addEventListener('click', () => { credentialsModal.hidden = true; });
+credentialsCloseBtn.addEventListener('click', () => {
+    credentialsModal.hidden = true;
+    currentCredentials = null;
+});
 credentialsModal.addEventListener('click', (event) => {
     if (event.target === credentialsModal) credentialsModal.hidden = true;
 });

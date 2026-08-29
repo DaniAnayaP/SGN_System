@@ -412,6 +412,7 @@
                             <th data-i18n="main.colHrArea" data-col="colHrArea">Assigned Area</th>
                             <th data-i18n="main.colHrCostCenter" data-col="colHrCostCenter">Cost Center</th>
                             <th data-i18n="main.colHrEmail" data-col="colHrEmail">Email</th>
+                            <th data-i18n="main.colHrPersonalEmail" data-col="colHrPersonalEmail">Personal email</th>
                             <th data-i18n="main.colHrPhone" data-col="colHrPhone">Phone</th>
                             <th data-i18n="main.colHrStatus" data-col="colHrStatus">Status</th>
                             <th data-i18n="main.colHrUsername" data-col="colHrUsername">User</th>
@@ -421,7 +422,7 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="data-table-empty-cell" colspan="14">
+                            <td class="data-table-empty-cell" colspan="15">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -508,6 +509,11 @@
                     <input type="email" id="new-record-email" required>
                 </div>
                 <div class="admin-field">
+                    <label for="new-record-personal-email" data-i18n="main.colHrPersonalEmail">Personal email</label>
+                    <input type="email" id="new-record-personal-email">
+                    <p class="admin-hint" data-i18n="main.hrPersonalEmailHint">Used to send the login password when a new hire can't check their work email yet.</p>
+                </div>
+                <div class="admin-field">
                     <label for="new-record-position" data-i18n="main.colHrPosition">Position</label>
                     <select id="new-record-position" required>
                         <option value="" data-i18n="main.fuelSelectReason">Select...</option>
@@ -544,6 +550,15 @@
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="hr-credentials-modal-title">
             <h3 id="hr-credentials-modal-title" data-i18n="main.hrCredentialsTitle">User activated</h3>
             <p class="admin-hint" data-i18n="main.hrCredentialsHint">Copy this password now — it won't be shown again.</p>
+            <div id="hr-credentials-email-sent" class="admin-generated-email-status admin-generated-email-status-ok" hidden>
+                <i class="bx bx-check-circle" aria-hidden="true"></i>
+                <span data-i18n="admin.generatedAdminEmailSent">We emailed the username and password to</span>
+                <strong id="hr-credentials-email-to"></strong>
+            </div>
+            <div id="hr-credentials-email-failed" class="admin-generated-email-status admin-generated-email-status-warn" hidden>
+                <i class="bx bx-error-circle" aria-hidden="true"></i>
+                <span data-i18n="admin.generatedAdminEmailFailed">Couldn't email this automatically — copy the password and share it manually.</span>
+            </div>
             <dl class="user-info-fields">
                 <div class="user-info-field">
                     <dt data-i18n="business.username">Username</dt>
@@ -551,10 +566,14 @@
                 </div>
                 <div class="user-info-field">
                     <dt data-i18n="business.password">Password</dt>
-                    <dd id="hr-credentials-password">—</dd>
+                    <dd>
+                        <span id="hr-credentials-password">—</span>
+                        <button type="button" class="admin-generated-reveal-btn" id="hr-credentials-reveal" hidden data-i18n="admin.showPassword">Show</button>
+                    </dd>
                 </div>
             </dl>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+            <div class="admin-generated-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" id="hr-credentials-resend" data-i18n="admin.resendEmail">Resend email</button>
                 <button type="button" class="btn" id="hr-credentials-close" data-i18n="admin.close">Close</button>
             </div>
         </div>

@@ -3025,6 +3025,7 @@ function mapHrWorker(row, pendingByRecord, companyName) {
         costCenterId: row.cost_center_id,
         area: row.area,
         email: row.email,
+        personalEmail: row.personal_email,
         phone: row.phone,
         hrStatusId: row.hr_status_id,
         hrStatusName: row.hrStatusName,
@@ -3054,12 +3055,15 @@ app.get('/api/business/hr-workers', requireAuth, (req, res) => {
 
 app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const { givenNames, surnames, position, jobPositionId, startDate, costCenterId, email } = req.body || {};
+    const { givenNames, surnames, position, jobPositionId, startDate, costCenterId, email, personalEmail } = req.body || {};
     if (!givenNames?.trim() || !surnames?.trim() || !position?.trim() || !jobPositionId || !startDate || !email?.trim()) {
         return res.status(400).json({ message: 'givenNames, surnames, position, jobPositionId, startDate, and email are required.' });
     }
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
         return res.status(400).json({ message: 'email must be a valid email address.' });
+    }
+    if (personalEmail?.trim() && !/^\S+@\S+\.\S+$/.test(personalEmail.trim())) {
+        return res.status(400).json({ message: 'personalEmail must be a valid email address.' });
     }
     if (usernameOrEmailExists(null, email.trim())) {
         return res.status(409).json({ message: 'That email is already in use by another account.' });
@@ -3079,6 +3083,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
         startDate,
         costCenterId: costCenterId || null,
         email: email.trim(),
+        personalEmail: (personalEmail || '').trim(),
         isTestData: req.user.isTestAccount,
     });
     logTableChange({
@@ -3117,11 +3122,41 @@ app.post('/api/business/hr-workers/:id/activate-user', requireAuth, async (req, 
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
     const generated = await activateHrWorkerUser(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!generated) return res.status(409).json({ message: 'This worker has no linked account.' });
+    const emailSent = await sendMail({
+        to: existing.personal_email,
+        subject: `Acceso a SGN — ${existing.full_name}`,
+        text: `Se activó tu cuenta en SGN.\n\nUsuario: ${generated.username}\nContraseña: ${generated.password}\n\n`
+            + 'Guarda esta contraseña en un lugar seguro — no se puede recuperar después de este correo.',
+    });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,
-        recordLabel: existing.full_name, action: 'update', fieldKey: 'main.colHrUserActivated', changedBy: req.user.name,
+        recordLabel: existing.full_name, action: 'update', fieldKey: 'main.colHrUserActivated',
+        oldValue: '—', newValue: generated.username, changedBy: req.user.name,
     });
-    res.json({ worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount), null, getClientById(req.user.clientId)?.company_name), generated });
+    res.json({
+        worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount), null, getClientById(req.user.clientId)?.company_name),
+        generated: { ...generated, emailSent, emailTo: existing.personal_email },
+    });
+});
+
+// "Reenviar correo" on the one-time hr-credentials-modal -- same reasoning
+// as the client admin's own resend route: the password only ever exists in
+// the browser's own memory from the activate-user response above, so this
+// just resends the SAME username/password, nowhere to look it up again
+// server-side.
+app.post('/api/business/hr-workers/:id/resend-credentials-email', requireAuth, async (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Worker not found.' });
+    const { username, password } = req.body || {};
+    if (!username || !password) return res.status(400).json({ message: 'username and password are required.' });
+    const emailSent = await sendMail({
+        to: existing.personal_email,
+        subject: `Acceso a SGN — ${existing.full_name}`,
+        text: `Se activó tu cuenta en SGN.\n\nUsuario: ${username}\nContraseña: ${password}\n\n`
+            + 'Guarda esta contraseña en un lugar seguro — no se puede recuperar después de este correo.',
+    });
+    res.json({ emailSent, emailTo: existing.personal_email });
 });
 
 app.delete('/api/business/hr-workers/:id', requireAuth, (req, res) => {

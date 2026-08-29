@@ -975,6 +975,8 @@
     "colHrArea": "Assigned Area",
     "colHrCostCenter": "Cost Center",
     "colHrEmail": "Email",
+    "colHrPersonalEmail": "Personal Email",
+    "hrPersonalEmailHint": "Used to send the login password when a new hire can't check their work email yet.",
     "colHrPhone": "Phone",
     "colHrStatus": "Status",
     "colHrUsername": "User",
