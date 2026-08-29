@@ -471,11 +471,18 @@
             const colTreeKey = `col::${section.id}::${item.id}::${base}`;
             const colExpanded = expandedItems.has(colTreeKey);
             const soloVerKey = keyOf(section.id, item.id, `${base}/solo-ver`);
-            // The column's own row IS "Solo Ver" -- its checkbox toggles that
-            // grant directly, same mutual-exclusion rule as the other 2
-            // levels below. Expanding it reveals just Ver y Operar/Editar
-            // (Solo Ver no longer needs its own separate child row) plus the
-            // independent Autorizar toggle.
+            // The column's own row reflects "does this column have ANY of
+            // the 3 mutually exclusive levels" -- not just Solo Ver -- so
+            // raising it straight to Ver y Operar/Editar from the expanded
+            // row below doesn't make this checkbox look like access got
+            // REMOVED (it used to read only the Solo Ver key, so choosing
+            // Operar visually unchecked it even though Operar implies you
+            // can still see it). Expanding it reveals Ver y Operar/Editar
+            // plus the independent Autorizar toggle. Clicking it straight
+            // ON (from fully off) grants the Solo Ver baseline, same as
+            // before; clicking it OFF clears whichever of the 3 was
+            // actually active, so the box never lies about there being
+            // some access left behind it.
             const colRow = buildRow(t(col.labelKey, col.labelParams), depth, {
                 expanded: colExpanded,
                 onToggle: () => {
@@ -484,15 +491,10 @@
                 },
             }, subBlocked, computeAppToggle([soloVerKey]));
             if (!readOnly) {
-                colRow.input.checked = grantSet.has(soloVerKey);
+                const levelKeys = COLUMN_LEVELS.map((level) => keyOf(section.id, item.id, `${base}/${level.id}`));
+                colRow.input.checked = levelKeys.some((k) => grantSet.has(k));
                 colRow.input.addEventListener('change', () => {
-                    if (colRow.input.checked) {
-                        COLUMN_LEVELS.forEach((other) => {
-                            if (other.id === 'solo-ver') return;
-                            grantSet.delete(keyOf(section.id, item.id, `${base}/${other.id}`));
-                        });
-                    }
-                    setKeys([soloVerKey], colRow.input.checked);
+                    setKeys(colRow.input.checked ? [soloVerKey] : levelKeys, colRow.input.checked);
                     render();
                 });
             }
