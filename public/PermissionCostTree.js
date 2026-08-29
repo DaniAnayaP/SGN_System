@@ -493,32 +493,6 @@
             if (interactive && costKey != null) row.appendChild(buildCostSlot(costKey + APP_SUFFIX));
         }
 
-        function buildStaticRow(labelText, depth, toggle) {
-            const row = document.createElement('div');
-            row.className = `perm-tree-row perm-tree-depth-${depth} perm-tree-row-static`;
-            if (toggle) {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'perm-tree-toggle';
-                btn.setAttribute('aria-expanded', String(toggle.expanded));
-                const icon = document.createElement('i');
-                icon.className = 'bx bx-chevron-down';
-                icon.setAttribute('aria-hidden', 'true');
-                btn.appendChild(icon);
-                btn.addEventListener('click', () => { toggle.onToggle(); render(); });
-                row.appendChild(btn);
-            } else {
-                const spacer = document.createElement('span');
-                spacer.className = 'perm-tree-toggle-spacer';
-                row.appendChild(spacer);
-            }
-            const label = document.createElement('span');
-            label.className = 'perm-tree-static-label';
-            label.textContent = labelText;
-            row.appendChild(label);
-            return row;
-        }
-
         const COLUMN_LEVELS = [
             { id: 'solo-ver', labelKey: 'main.permSoloVer' },
             { id: 'ver-y-operar', labelKey: 'main.permVerYOperar' },
@@ -693,18 +667,70 @@
             cls.submenu.forEach((col) => renderColumnRow(classChildren, section, item, `${classBase}/${col.id}`, col, 6));
         }
 
+        // Every column's own "solo-ver" key under this pantalla's Tabla,
+        // classification groups expanded to their own columns -- same
+        // traversal renderColumns itself walks below, reused so the "Tabla
+        // <X>" heading's own checkbox (select every column at once) and its
+        // checked/indeterminate reflection read/write the exact same set.
+        function tableSoloVerKeys(section, item, sm, subSm) {
+            const keys = [];
+            (subSm.submenu || []).forEach((entry) => {
+                const cols = entry.isClassification ? entry.submenu : [entry];
+                cols.forEach((col) => {
+                    const colBase = entry.isClassification
+                        ? `${sm.id}/${subSm.id}/${entry.id}/${col.id}`
+                        : `${sm.id}/${subSm.id}/${entry.id}`;
+                    keys.push(keyOf(section.id, item.id, `${colBase}/solo-ver`));
+                });
+            });
+            return keys;
+        }
+
+        // Mirrors PermissionTree.js's cascadeTableColumns -- checking the
+        // heading lands every column on Solo Ver only (Operar/Editar/
+        // Autorizar stay a deliberate per-column choice); unchecking clears
+        // all 4 levels for every column.
+        function cascadeTableColumns(section, item, sm, subSm, checked) {
+            (subSm.submenu || []).forEach((entry) => {
+                const cols = entry.isClassification ? entry.submenu : [entry];
+                cols.forEach((col) => {
+                    const colBase = entry.isClassification
+                        ? `${sm.id}/${subSm.id}/${entry.id}/${col.id}`
+                        : `${sm.id}/${subSm.id}/${entry.id}`;
+                    [...COLUMN_LEVELS, COLUMN_AUTHORIZE].forEach((level) => {
+                        if (checked && level.id === 'solo-ver') return;
+                        grantSet.delete(keyOf(section.id, item.id, `${colBase}/${level.id}`));
+                    });
+                    if (checked) setKeys([keyOf(section.id, item.id, `${colBase}/solo-ver`)], true);
+                });
+            });
+        }
+
         function renderColumns(container, section, item, sm, subSm) {
             // "Tabla <X>" heading is its own collapsible unit too (same
-            // convention as PermissionTree.js's renderTableColumns) — one
-            // toggle folds just the column list, independent of the OUTER
-            // toggle on subSm's own row (see below) that hides this whole
-            // block (heading + columns) entirely.
+            // convention as PermissionTree.js's renderTableColumns), and (in
+            // grantReadonlyCost mode) now has its own select-all checkbox
+            // too, same as PermissionTree.js's just got -- one toggle folds
+            // just the column list, independent of the OUTER toggle on
+            // subSm's own row (see below) that hides this whole block
+            // (heading + columns) entirely.
             const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const tableExpanded = expandedItems.has(tableTreeKey);
-            container.appendChild(buildStaticRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, {
+            const tableLeafKeys = tableSoloVerKeys(section, item, sm, subSm);
+            const tableChecked = tableLeafKeys.filter((k) => grantSet.has(k)).length;
+            const { row: tableRowEl, input: tableInput } = buildRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, {
                 expanded: tableExpanded,
                 onToggle: () => { if (tableExpanded) expandedItems.delete(tableTreeKey); else expandedItems.add(tableTreeKey); },
-            }));
+            }, ...extraSlotArgs(null, tableLeafKeys), computeAppToggle(tableLeafKeys) || appExtraSlotArgs(tableLeafKeys));
+            if (tableInput && mode !== 'clientTricolor') {
+                tableInput.checked = tableLeafKeys.length > 0 && tableChecked === tableLeafKeys.length;
+                tableInput.indeterminate = tableChecked > 0 && tableChecked < tableLeafKeys.length;
+                tableInput.addEventListener('change', () => {
+                    cascadeTableColumns(section, item, sm, subSm, tableInput.checked);
+                    render();
+                });
+            }
+            container.appendChild(tableRowEl);
             if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
