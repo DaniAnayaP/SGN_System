@@ -1315,6 +1315,36 @@ body.dark-mode .perm-tree-depth-2{
     cursor: not-allowed;
     opacity: 0.4;
 }
+/* clientTricolor mode's read-only App-vision badge (PermissionCostTree.js's
+   appendClientAppSlot) -- same bx-mobile-alt icon as the interactive
+   .perm-tree-app-toggle above, just tinted green/amarillo/rojo like the
+   row's own Web status badge instead of a checkbox, so a viewer with no
+   edit rights (Business-MisAccesos.js) can still tell App status apart
+   from Web status at a glance instead of two identical lock icons. */
+.perm-tree-app-status{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+.perm-tree-app-status i{
+    font-size: 0.75rem;
+}
+.perm-tree-app-status-green{
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+}
+.perm-tree-app-status-yellow{
+    background-color: color-mix(in srgb, #c9860b 18%, transparent);
+    color: #c9860b;
+}
+.perm-tree-app-status-red{
+    background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
+    color: var(--color-text-secondary);
+}
 /* App-vision's own price column — costEdit mode (Costos de Módulos) gets a
    second, independent cost input per row (see PermissionCostTree.js's
    costEdit branch); grantReadonlyCost/clientTricolor show the same slot

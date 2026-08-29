@@ -470,7 +470,12 @@
         // the App-suffixed slot built by appExtraSlotArgs/appColumnExtraSlot.
         // A red slot stays a plain locked badge (never a clickable checkbox)
         // when its own `locked` flag is set — Web isn't covered here yet, so
-        // there's nothing to sell App-vision on top of.
+        // there's nothing to sell App-vision on top of. The read-only badge
+        // keeps the bx-mobile-alt icon (just tinted, not a checkbox) instead
+        // of reusing buildStatusBadge's generic check/lock glyphs — those
+        // are IDENTICAL to the row's own Web status badge right next to it,
+        // so a read-only viewer (see Business-MisAccesos.js) couldn't tell
+        // App status was even being shown at all.
         function appendClientAppSlot(row, appColorSlot, costKey) {
             if (!appColorSlot) return;
             const isRedInteractive = !!(appColorSlot.color === 'red' && interactive && !appColorSlot.locked);
@@ -488,7 +493,14 @@
                 label.append(input, icon);
                 row.appendChild(label);
             } else if (appColorSlot.color) {
-                row.appendChild(buildStatusBadge(appColorSlot.color));
+                const badge = document.createElement('span');
+                badge.className = `perm-tree-app-status perm-tree-app-status-${appColorSlot.color}`;
+                badge.title = t('main.appVisionColumn');
+                const icon = document.createElement('i');
+                icon.className = 'bx bx-mobile-alt';
+                icon.setAttribute('aria-hidden', 'true');
+                badge.appendChild(icon);
+                row.appendChild(badge);
             }
             if (interactive && costKey != null) row.appendChild(buildCostSlot(costKey + APP_SUFFIX));
         }
