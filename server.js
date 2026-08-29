@@ -1779,9 +1779,10 @@ function validateCostCenterBody(body) {
 
 // Control Interno for Servicio Contratado's own table -- same recipe as
 // FUEL_RECORD_*_LABEL/mapFuelRecord above, this table's 3 fixed labels.
-// Centro Costos itself stays blank: a cost center record isn't tied to
-// ANOTHER cost center the way an operational record (a fuel purchase, an
-// HR worker) is, so there's nothing meaningful to put there.
+// Centro Costos here is self-referential -- a cost center record's own
+// "which cost center" is itself, same as GEIPSA's own admin catalogs (see
+// db.js's Nuestros Planes/Sectores) stamp their own SGN cost center rather
+// than leaving it blank.
 const COST_CENTER_AREA_LABEL = '';
 const COST_CENTER_MODULE_LABEL = 'Administración del Negocio';
 const COST_CENTER_SCREEN_LABEL = 'Servicio Contratado';
@@ -1809,7 +1810,7 @@ function mapCostCenter(row, companyName) {
             area: COST_CENTER_AREA_LABEL,
             modulo: COST_CENTER_MODULE_LABEL,
             pantalla: COST_CENTER_SCREEN_LABEL,
-            centroCostos: '',
+            centroCostos: row.name || '',
             createdAt: row.created_at,
         }),
     };
