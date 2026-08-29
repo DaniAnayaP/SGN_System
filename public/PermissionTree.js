@@ -589,6 +589,25 @@
             cascadeIcons(section, item, sm, subSm, checked);
         }
 
+        function subSmHasDetail(subSm) {
+            return !!((subSm.submenu && subSm.submenu.length) || (subSm.iconsSubmenu && subSm.iconsSubmenu.length));
+        }
+
+        // Every non-standalone pantalla under `item` that has its own
+        // Tabla/Iconos -- used so checking a Departamento/Área/Apartado
+        // checkbox cascades all the way down into every pantalla's detail
+        // underneath it, same as checking the pantalla itself already does,
+        // instead of stopping at the pantalla's own single leaf key.
+        function detailedSubSmUnder(item) {
+            const result = [];
+            (item.submenu || []).forEach((sm) => {
+                (sm.submenu || []).forEach((subSm) => {
+                    if (!subSm.standalone && subSmHasDetail(subSm)) result.push({ sm, subSm });
+                });
+            });
+            return result;
+        }
+
         // A column counts as "covered" if it has ANY of the 3 mutually
         // exclusive levels set (not just Solo Ver: someone may have raised
         // it straight to Ver y Operar/Editar by hand, that still means
@@ -756,6 +775,11 @@
                     sectionRow.input.indeterminate = sectionChecked > 0 && sectionChecked < sectionLeafKeys.length;
                     sectionRow.input.addEventListener('change', () => {
                         setKeys(sectionLeafKeys, sectionRow.input.checked);
+                        section.items.forEach((item) => {
+                            detailedSubSmUnder(item).forEach(({ sm, subSm }) => {
+                                cascadeSubSmDetail(section, item, sm, subSm, sectionRow.input.checked);
+                            });
+                        });
                         render();
                     });
                 }
@@ -788,6 +812,9 @@
                         itemRow.input.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
                         itemRow.input.addEventListener('change', () => {
                             setKeys(itemLeafKeys, itemRow.input.checked);
+                            detailedSubSmUnder(item).forEach(({ sm, subSm }) => {
+                                cascadeSubSmDetail(section, item, sm, subSm, itemRow.input.checked);
+                            });
                             render();
                         });
                     }
@@ -836,6 +863,10 @@
                             smRow.input.indeterminate = smChecked > 0 && smChecked < smLeafKeys.length;
                             smRow.input.addEventListener('change', () => {
                                 setKeys(smLeafKeys, smRow.input.checked);
+                                sm.submenu.forEach((subSm) => {
+                                    if (subSm.standalone || !subSmHasDetail(subSm)) return;
+                                    cascadeSubSmDetail(section, item, sm, subSm, smRow.input.checked);
+                                });
                                 render();
                             });
                         }
@@ -872,7 +903,7 @@
                             // itself couldn't, so its table always took up
                             // space even when you just wanted the pantalla's
                             // own checkbox in view.
-                            const subHasDetail = (subSm.submenu && subSm.submenu.length) || (subSm.iconsSubmenu && subSm.iconsSubmenu.length);
+                            const subHasDetail = subSmHasDetail(subSm);
                             const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
                             const subDetailExpanded = expandedItems.has(subDetailKey);
                             const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, subHasDetail ? {
