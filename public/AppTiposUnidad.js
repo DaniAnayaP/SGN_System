@@ -342,6 +342,15 @@ function fieldPreviewText(field, record) {
 
 const expandedFieldIds = new Set();
 
+// select fields open their sheet straight from the collapsed row's own
+// tap -- unlike a plain text field, there's no in-place body to reveal
+// first, so the usual "tap to expand, tap again to interact" two-step
+// would just be one pointless extra tap before the same sheet opens anyway.
+function openSheetForField(field, record) {
+    const currentValue = fieldValueFromRecord(field, record) || '';
+    openSelectSheet(t(field.labelKey), field.optionGroups, currentValue, (value) => commitFieldValue(field, value));
+}
+
 function buildFieldEl(field, record) {
     const done = isFieldFilled(fieldValueFromRecord(field, record));
     const expanded = expandedFieldIds.has(field.id);
@@ -362,13 +371,14 @@ function buildFieldEl(field, record) {
         ${trailing}
     `;
     row.addEventListener('click', () => {
+        if (field.type === 'select') { openSheetForField(field, record); return; }
         if (expandedFieldIds.has(field.id)) expandedFieldIds.delete(field.id);
         else expandedFieldIds.add(field.id);
         render();
     });
     wrap.appendChild(row);
 
-    if (expanded) wrap.appendChild(buildFieldBody(field, record));
+    if (expanded && field.type !== 'select') wrap.appendChild(buildFieldBody(field, record));
     return wrap;
 }
 
@@ -442,30 +452,6 @@ function openSelectSheet(titleText, optionGroups, currentValue, onPick) {
 function buildFieldBody(field, record) {
     const bodyWrap = document.createElement('div');
     bodyWrap.className = 'home-carga-field-body';
-
-    if (field.type === 'select') {
-        const currentValue = fieldValueFromRecord(field, record) || '';
-        const selectedOpt = field.optionGroups.flatMap((g) => g.options).find((o) => o.value === currentValue);
-
-        const trigger = document.createElement('button');
-        trigger.type = 'button';
-        trigger.className = 'home-select-trigger';
-        const valueSpan = document.createElement('span');
-        valueSpan.className = `home-select-trigger-value${selectedOpt ? '' : ' placeholder'}`;
-        valueSpan.textContent = selectedOpt ? t(selectedOpt.labelKey) : t('main.fuelTypeSelect');
-        trigger.innerHTML = `
-            <span class="home-select-trigger-text">
-                <span class="home-select-trigger-label">${t(field.labelKey)}</span>
-            </span>
-            <i class="bx bx-chevron-down" aria-hidden="true"></i>
-        `;
-        trigger.querySelector('.home-select-trigger-text').appendChild(valueSpan);
-        trigger.addEventListener('click', () => {
-            openSelectSheet(t(field.labelKey), field.optionGroups, currentValue, (value) => commitFieldValue(field, value));
-        });
-        bodyWrap.appendChild(trigger);
-        return bodyWrap;
-    }
 
     const input = document.createElement('input');
     input.type = field.type;
