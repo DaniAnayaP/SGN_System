@@ -224,12 +224,16 @@ document.addEventListener('sgn:offline-queue-changed', refreshOfflinePendingIds)
 
 async function patchRecord(id, patch) {
     const recordKey = `nuestras-unidades:${id}`;
-    const description = `${t('menu.opTransVolNuestrasUnidades')} · ${recordLabel(currentRecord() || {})}`;
+    const before = currentRecord() || {};
+    const description = `${t('menu.opTransVolNuestrasUnidades')} · ${recordLabel(before)}`;
+    // Fase 3 (choques) -- see AppCargaCombustible.js's own patchRecord.
+    const baseline = {};
+    Object.keys(patch).forEach((key) => { baseline[key] = before[key]; });
     try {
         const result = await window.SgnOfflineSync.offlineAwareFetch(
             `/api/business/fleet-units/${id}`,
             { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(patch) },
-            description, recordKey,
+            description, recordKey, baseline,
         );
         if (result.queued) {
             const idx = records.findIndex((r) => r.id === id);

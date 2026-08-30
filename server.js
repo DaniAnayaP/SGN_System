@@ -148,6 +148,7 @@ const {
     listPendingChangesForClient,
     getPendingColumnsByRecord,
     resolvePendingChange,
+    getLastChangedBy,
     listPendingChangesRequestedBy,
     markPendingChangesSeenForRequester,
     createAccessDeniedAlert,
@@ -1783,16 +1784,39 @@ app.get('/api/business/org-chart', requireAuth, (req, res) => {
 // table) — never the value used to decide whether something actually
 // changed, and never what's stored in pending_changes (which needs the raw
 // value to actually reconstruct the field once approved).
-function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, recordLabel, sanitizers = {}) {
+// options.baseline (Fase 3, offline-queue conflicts): { [key]: valueThisFieldHadWhenTheOfflineEditWasCaptured }.
+// A field with a baseline entry that no longer matches `existing[column]`
+// means somebody else changed it for real in between -- Carlos edited
+// Tipo Combustible offline, reconnects, and it turns out someone already
+// changed it while he had no signal. That field is pulled OUT of the normal
+// applied/pending/rejected flow entirely and reported back as a conflict
+// instead, UNLESS its key is also in options.overrideConflicts (the
+// client's follow-up request after the user confirmed "sí, aplícalo de
+// todos modos" on that specific conflict) -- then it's treated as a normal
+// edit of an existing value, except a resulting "pending" always escalates
+// to one specific person (see below) instead of the whole Autorizar pool.
+function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, recordLabel, sanitizers = {}, options = {}) {
+    const { baseline = null, overrideConflicts = [] } = options;
     const applied = [];
     const pending = [];
     const rejected = [];
+    const conflicts = [];
     let grants = null;
     for (const [key, { column, fieldKey }] of Object.entries(fieldsMap)) {
         if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
         const oldValue = existing[column];
         const newValue = patch[key];
         if (String(oldValue ?? '') === String(newValue ?? '')) continue;
+
+        const isOverride = overrideConflicts.includes(key);
+        if (baseline && Object.prototype.hasOwnProperty.call(baseline, key) && !isOverride
+            && String(oldValue ?? '') !== String(baseline[key] ?? '')) {
+            conflicts.push({
+                key, fieldKey, currentValue: oldValue, offlineValue: newValue,
+                changedBy: getLastChangedBy(existing.client_id, tableKey, existing.id, fieldKey),
+            });
+            continue;
+        }
 
         if (req.user.isClientAdmin) {
             applied.push({ key, fieldKey, oldValue, newValue });
@@ -1813,7 +1837,14 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
         }
 
         if (level === 'editar' && !hasPendingChangeForField(existing.client_id, tableKey, existing.id, key)) {
-            pending.push({ key, fieldKey, oldValue, newValue });
+            // A conflict override always escalates to one named person
+            // (the acting user's Jefe Directo, or themselves when they
+            // already hold Autorizar) rather than the general Autorizar
+            // pool for this column -- see resolveDirectSupervisorUserId.
+            const escalatedToUserId = isOverride
+                ? (canAuthorizeColumn(grants, tableKey, colKey) ? req.user.sub : resolveDirectSupervisorUserId(req.user.sub))
+                : null;
+            pending.push({ key, fieldKey, oldValue, newValue, escalatedToUserId });
         } else {
             rejected.push(fieldKey);
         }
@@ -1834,7 +1865,7 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
     pending.forEach((c) => createPendingChange({
         clientId: existing.client_id, tableKey, recordId: existing.id, recordLabel,
         fieldKey: c.fieldKey, columnKey: c.key, oldValue: c.oldValue, newValue: c.newValue,
-        requestedBy: req.user.name, requestedByUserId: req.user.sub,
+        requestedBy: req.user.name, requestedByUserId: req.user.sub, escalatedToUserId: c.escalatedToUserId,
     }));
     // Notificaciones' "Alertas" tab: same moment the acting user themselves
     // sees the "Usted no está habilitado..." toast, their Jefe Directo (see
@@ -1850,7 +1881,10 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
         });
     }
 
-    return { appliedPatch, pendingFields: pending.map((c) => c.fieldKey), rejectedFields: rejected };
+    return {
+        appliedPatch, pendingFields: pending.map((c) => c.fieldKey), rejectedFields: rejected,
+        conflictFields: conflicts,
+    };
 }
 
 // --- Centros de Costo (cost centers, scoped to one client) -------------------
@@ -2916,15 +2950,15 @@ app.patch('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
-    const patch = req.body || {};
-    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FUEL_LOADING_PATCHABLE_FIELDS, 'carga-combustible', existing.eco_unit || existing.db_id, {
+    const { baseline, overrideConflicts, ...patch } = req.body || {};
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, FUEL_LOADING_PATCHABLE_FIELDS, 'carga-combustible', existing.eco_unit || existing.db_id, {
         tripBeforeEvidence: (v) => (v ? '[imagen]' : ''),
         tripAfterEvidence: (v) => (v ? '[imagen]' : ''),
         totalCostEvidence: (v) => (v ? '[imagen]' : ''),
-    });
+    }, { baseline, overrideConflicts });
     const record = updateFuelLoadingRecord(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
-    res.json({ record: mapFuelLoadingRecord(record, null, client?.company_name), pendingFields, rejectedFields });
+    res.json({ record: mapFuelLoadingRecord(record, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
 });
 
 app.delete('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => {
@@ -2991,11 +3025,11 @@ app.patch('/api/business/unit-types/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getUnitTypeById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Unit type not found.' });
-    const patch = req.body || {};
-    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, UNIT_TYPE_PATCHABLE_FIELDS, 'tipos-unidad', existing.code);
+    const { baseline, overrideConflicts, ...patch } = req.body || {};
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, UNIT_TYPE_PATCHABLE_FIELDS, 'tipos-unidad', existing.code, {}, { baseline, overrideConflicts });
     const unitType = updateUnitType(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
-    res.json({ unitType: mapUnitTypeRecord(unitType, null, client?.company_name), pendingFields, rejectedFields });
+    res.json({ unitType: mapUnitTypeRecord(unitType, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
 });
 
 app.delete('/api/business/unit-types/:id', requireAuth, (req, res) => {
@@ -3069,17 +3103,17 @@ app.patch('/api/business/fleet-units/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getFleetUnitById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fleet unit not found.' });
-    const patch = req.body || {};
+    const { baseline, overrideConflicts, ...patch } = req.body || {};
     if (typeof patch.ecoId === 'string' && patch.ecoId.trim() && patch.ecoId.trim() !== existing.eco_id) {
         const dupe = getFleetUnitByEcoId(req.user.clientId, patch.ecoId, req.user.isTestAccount);
         if (dupe && dupe.id !== existing.id) {
             return res.status(400).json({ message: 'That Económico is already registered to another unit.' });
         }
     }
-    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, FLEET_UNIT_PATCHABLE_FIELDS, 'nuestras-unidades', existing.eco_id || `#${existing.id}`);
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, FLEET_UNIT_PATCHABLE_FIELDS, 'nuestras-unidades', existing.eco_id || `#${existing.id}`, {}, { baseline, overrideConflicts });
     const fleetUnit = updateFleetUnit(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
-    res.json({ fleetUnit: mapFleetUnitRecord(fleetUnit, null, client?.company_name), pendingFields, rejectedFields });
+    res.json({ fleetUnit: mapFleetUnitRecord(fleetUnit, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
 });
 
 app.delete('/api/business/fleet-units/:id', requireAuth, (req, res) => {
@@ -3306,12 +3340,24 @@ app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
 const PENDING_CHANGE_APPLIERS = {
     'registro-combustible': (recordId, clientId, patch) => updateFuelRecord(recordId, clientId, patch),
     'mi-recurso-humano': (recordId, clientId, patch) => updateHrWorker(recordId, clientId, patch),
+    // Fase 3 (choques de la cola offline) escalates a conflict override to
+    // pending_changes same as any other "editar" on an existing value --
+    // these 3 were missing here entirely, which would have 500'd the
+    // approve route the moment anyone tried to authorize one.
+    'carga-combustible': (recordId, clientId, patch) => updateFuelLoadingRecord(recordId, clientId, patch),
+    'tipos-unidad': (recordId, clientId, patch) => updateUnitType(recordId, clientId, patch),
+    'nuestras-unidades': (recordId, clientId, patch) => updateFleetUnit(recordId, clientId, patch),
 };
 const PENDING_CHANGE_SANITIZERS = {
     'registro-combustible': {
         ticketEvidence: (v) => (v ? '[imagen]' : ''),
         tripKmBeforeEvidence: (v) => (v ? '[imagen]' : ''),
         tripKmAfterEvidence: (v) => (v ? '[imagen]' : ''),
+    },
+    'carga-combustible': {
+        tripBeforeEvidence: (v) => (v ? '[imagen]' : ''),
+        tripAfterEvidence: (v) => (v ? '[imagen]' : ''),
+        totalCostEvidence: (v) => (v ? '[imagen]' : ''),
     },
 };
 
@@ -3329,7 +3375,7 @@ app.post('/api/business/pending-changes/:id/approve', requireAuth, (req, res) =>
     if (!pc || pc.client_id !== req.user.clientId) return res.status(404).json({ message: 'Pending change not found.' });
     if (pc.status !== 'pending') return res.status(409).json({ message: 'This change was already resolved.' });
     const colKey = pc.field_key.split('.').pop();
-    if (!req.user.isClientAdmin) {
+    if (!req.user.isClientAdmin && pc.escalated_to_user_id !== req.user.sub) {
         const grants = getUserEffectiveGrants(req.user.sub);
         if (!canAuthorizeColumn(grants, pc.table_key, colKey)) {
             return res.status(403).json({ message: 'No tienes permiso para autorizar esta columna.' });
@@ -3355,7 +3401,7 @@ app.post('/api/business/pending-changes/:id/reject', requireAuth, (req, res) => 
     const pc = getPendingChangeById(req.params.id);
     if (!pc || pc.client_id !== req.user.clientId) return res.status(404).json({ message: 'Pending change not found.' });
     if (pc.status !== 'pending') return res.status(409).json({ message: 'This change was already resolved.' });
-    if (!req.user.isClientAdmin) {
+    if (!req.user.isClientAdmin && pc.escalated_to_user_id !== req.user.sub) {
         const grants = getUserEffectiveGrants(req.user.sub);
         if (!canAuthorizeColumn(grants, pc.table_key, pc.field_key.split('.').pop())) {
             return res.status(403).json({ message: 'No tienes permiso para rechazar esta columna.' });
@@ -3379,7 +3425,13 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
     let autorizar = allPending;
     if (!req.user.isClientAdmin) {
         const grants = getUserEffectiveGrants(req.user.sub);
-        autorizar = allPending.filter((c) => canAuthorizeColumn(grants, c.table_key, c.field_key.split('.').pop()));
+        // A Fase 3 conflict-override escalation targets ONE named person
+        // (see checkAndLogFieldChanges's escalatedToUserId) regardless of
+        // whether they generally hold Autorizar on that column -- included
+        // here even when canAuthorizeColumn would otherwise say no.
+        autorizar = allPending.filter((c) => (
+            c.escalated_to_user_id === req.user.sub || canAuthorizeColumn(grants, c.table_key, c.field_key.split('.').pop())
+        ));
     }
     res.json({
         alertas: listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub),

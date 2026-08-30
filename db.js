@@ -1407,6 +1407,15 @@ if (!jobPositionColumns.some((c) => c.name === 'reports_to_job_position_id')) {
 // listPendingChangesForClient).
 ensureColumn('pending_changes', 'seen_at', 'TEXT');
 
+// escalated_to_user_id added after pending_changes already shipped once --
+// Fase 3 offline-conflict overrides (see checkAndLogFieldChanges's
+// overrideConflicts option) target ONE specific person (the acting user's
+// Jefe Directo, or the acting user themselves when they already hold
+// Autorizar) regardless of who generally holds Autorizar on that column --
+// NULL for every ordinary pending change, which keeps working exactly as
+// before (visibility driven by canAuthorizeColumn alone).
+ensureColumn('pending_changes', 'escalated_to_user_id', 'INTEGER');
+
 // requested_by/authorized_by added after data_table_changes already shipped
 // once — nullable, only ever filled for rows created via an approved
 // pending_changes row (see resolvePendingChange's caller in server.js);
@@ -1906,6 +1915,19 @@ function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fie
     });
 }
 
+// Who most recently touched this exact field -- used by the offline-queue
+// conflict check (see checkAndLogFieldChanges's baseline option in
+// server.js) to name whoever's change a replayed offline edit would
+// otherwise silently clobber.
+function getLastChangedBy(clientId, tableKey, recordId, fieldKey) {
+    const row = db.prepare(`
+        SELECT changed_by AS changedBy FROM data_table_changes
+        WHERE client_id = ? AND table_key = ? AND record_id = ? AND field_key = ?
+        ORDER BY changed_at DESC, id DESC LIMIT 1
+    `).get(clientId, tableKey, recordId, fieldKey);
+    return row ? row.changedBy : '';
+}
+
 // Column-level permission ("Solo Ver" / "Ver y Operar" / "Editar" +
 // "Autorizar") — each editable pantalla is a real node in the SAME menu
 // tree PermissionTree.js already renders (see public/data/menu.json — the
@@ -1975,15 +1997,15 @@ function canAuthorizeColumn(grants, tableKey, colKey) {
 
 // --- Pending changes (real approval workflow for "Editar" on an ---------
 // --- already-saved value — see checkAndLogFieldChanges in server.js) -----
-function createPendingChange({ clientId, tableKey, recordId, recordLabel, fieldKey, columnKey, oldValue, newValue, requestedBy, requestedByUserId }) {
+function createPendingChange({ clientId, tableKey, recordId, recordLabel, fieldKey, columnKey, oldValue, newValue, requestedBy, requestedByUserId, escalatedToUserId }) {
     const result = db.prepare(`
-        INSERT INTO pending_changes (client_id, table_key, record_id, record_label, field_key, column_key, old_value, new_value, requested_by, requested_by_user_id)
-        VALUES (@clientId, @tableKey, @recordId, @recordLabel, @fieldKey, @columnKey, @oldValue, @newValue, @requestedBy, @requestedByUserId)
+        INSERT INTO pending_changes (client_id, table_key, record_id, record_label, field_key, column_key, old_value, new_value, requested_by, requested_by_user_id, escalated_to_user_id)
+        VALUES (@clientId, @tableKey, @recordId, @recordLabel, @fieldKey, @columnKey, @oldValue, @newValue, @requestedBy, @requestedByUserId, @escalatedToUserId)
     `).run({
         clientId, tableKey, recordId, recordLabel: recordLabel || '', fieldKey, columnKey,
         oldValue: oldValue == null ? '' : String(oldValue),
         newValue: newValue == null ? '' : String(newValue),
-        requestedBy: requestedBy || '', requestedByUserId,
+        requestedBy: requestedBy || '', requestedByUserId, escalatedToUserId: escalatedToUserId || null,
     });
     return getPendingChangeById(result.lastInsertRowid);
 }
@@ -4649,6 +4671,7 @@ module.exports = {
     listPendingChangesForClient,
     getPendingColumnsByRecord,
     resolvePendingChange,
+    getLastChangedBy,
     listPendingChangesRequestedBy,
     markPendingChangesSeenForRequester,
     createAccessDeniedAlert,

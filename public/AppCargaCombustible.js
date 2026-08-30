@@ -329,12 +329,20 @@ document.addEventListener('sgn:offline-queue-changed', refreshOfflinePendingIds)
 
 async function patchRecord(id, patch) {
     const recordKey = `carga-combustible:${id}`;
-    const description = `${t('menu.opTransVolCargaCombustible')} · ${recordLabel(currentRecord() || {})}`;
+    const before = currentRecord() || {};
+    const description = `${t('menu.opTransVolCargaCombustible')} · ${recordLabel(before)}`;
+    // Fase 3 (choques): what each field being patched looked like right
+    // before this edit -- if the server's real value has moved past this
+    // by the time the queue replays, that's someone else's real change
+    // this offline edit would otherwise silently clobber (see
+    // AppOfflineSync.js's flushOfflineQueue).
+    const baseline = {};
+    Object.keys(patch).forEach((key) => { baseline[key] = before[key]; });
     try {
         const result = await window.SgnOfflineSync.offlineAwareFetch(
             `/api/business/fuel-loading-records/${id}`,
             { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(patch) },
-            description, recordKey,
+            description, recordKey, baseline,
         );
         if (result.queued) {
             // Optimistic: apply the patch to the local copy right away so

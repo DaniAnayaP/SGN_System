@@ -1073,6 +1073,7 @@
     "cargaAutoTag": "auto",
     "cargaSavedOffline": "Sin internet — guardado en tu celular, se sube solo al reconectar.",
     "offlineWaitingForSignal": "Esperando señal para subir",
+    "offlineConflictConfirm": "{changedBy} ya actualizó este cambio ({field}) mientras no tenías señal. ¿Aún así desea aplicar su cambio?",
     "cargaPhotoAttached": "Foto adjunta",
     "cargaChangePhoto": "Cambiar foto",
     "cargaTakePhoto": "Tomar foto",
