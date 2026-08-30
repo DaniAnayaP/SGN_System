@@ -3778,6 +3778,19 @@ function renderDataTableColumnControls() {
 
         if (wrapper.dataset.colObserverAttached) return;
         wrapper.dataset.colObserverAttached = '1';
+        // ResizeObserver's own first callback is asynchronous (queued for
+        // the next frame), so a table that's already visible with its real
+        // width by this point would otherwise sit uninitialized -- no pin/
+        // reorder/resize/hide, no sticky columns -- until something ELSE
+        // happens to resize its wrapper later (which may never happen).
+        // Confirmed live: this was silently leaving "Nuestros Clientes"
+        // fully uninitialized on a normal page load. Try immediately for
+        // the already-visible case; keep the observer too, for a table
+        // that starts hidden (0 width, e.g. an inactive tab) and only
+        // gains real size once switched to.
+        if (wrapper.getBoundingClientRect().width > 0) {
+            initDataTableColumns(wrapper, index);
+        }
         const ro = new ResizeObserver((entries) => {
             for (const entry of entries) {
                 if (entry.contentRect.width > 0) {
