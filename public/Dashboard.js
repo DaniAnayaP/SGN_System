@@ -5145,7 +5145,14 @@ async function performLogout() {
             }
         }
 
-        const greeting = cachedUserProfile?.nickname || currentUser?.name || currentUser?.username || '';
+        // The auto-provisioned client-admin account's own `name` is frozen
+        // as "Admin <razón social completa>" (see activateClient in db.js)
+        // -- never meant to be read aloud, so it greets with the client's
+        // own Apodo Empresa instead, same substitution the home screen/
+        // change-history labels already make for this exact account.
+        const greeting = currentUser?.isClientAdmin
+            ? (clientBranding?.companyNickname || clientBranding?.companyName || currentUser?.name || '')
+            : (cachedUserProfile?.nickname || currentUser?.name || currentUser?.username || '');
         const message = greeting
             ? t('sidebar.logoutConfirmGreeting', { name: greeting })
             : t('sidebar.logoutConfirm');
