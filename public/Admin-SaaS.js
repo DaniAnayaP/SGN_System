@@ -280,6 +280,7 @@ const DATA_TABLE_CLIENT_COLUMNS = [
     'bigDateNumber', 'accountNumber', 'rfc', 'razonSocial', 'companyNickname', 'companyAbbreviation',
     'logo', 'institutionalColor', 'ownerName', 'contactName', 'billingEmail',
     'contractStartDate', 'contractFile', 'contractWordFile', 'plan', 'sectorNegocio',
+    'equipmentRecommendations',
     'contractedCost', 'initialPayment', 'monthlyPayment',
     'costCenters', 'costCentersContracted', 'anexoChanges',
     'contractRegisteredDate', 'contractEndDate', 'contractTerm',
