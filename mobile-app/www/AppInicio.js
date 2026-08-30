@@ -337,6 +337,11 @@ document.getElementById('home-menu-logout').addEventListener('click', async () =
     try {
         await fetch(apiUrl('/api/auth/logout'), { method: 'POST', credentials: 'include' });
     } finally {
+        // Clears the native access-screen's "trust an offline session"
+        // marker (see access-screen.js) -- an explicit logout must not
+        // leave that flag around to let the lock screen wave someone back
+        // in the next time the app opens with no signal.
+        localStorage.removeItem('sgnHadSession');
         window.location.replace('Login.html');
     }
 });

@@ -17,6 +17,11 @@
 // pretending to authenticate.
 // ---------------------------------------------------------------------------
 
+// Plain localStorage marker (not the httpOnly session cookie itself) used
+// only to remember "we confirmed a real session last time we had network" --
+// see its one read site below for why.
+const HAD_SESSION_KEY = 'sgnHadSession';
+
 // window.Capacitor is injected by the native bridge, but there's no
 // guarantee it exists the instant a deferred script starts running —
 // checking exactly once, immediately, meant this whole screen worked or
@@ -71,7 +76,35 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
         fetch(apiUrl('/api/me'), { credentials: 'include' }),
         Capacitor.Plugins?.BiometricAuthNative?.checkBiometry?.() ?? Promise.reject(),
     ]);
-    const hasSession = sessionResult.status === 'fulfilled' && sessionResult.value.ok;
+    // sessionResult REJECTS only when the fetch itself never reached the
+    // server (no signal) -- a real answer from the server (even a 401)
+    // always FULFILLS, just with .ok false. Treating "no network" the same
+    // as "not logged in" is exactly the bug reported live: closing the app
+    // with a perfectly valid session, losing signal, and reopening it
+    // dumped the user back on a password form that can't submit without a
+    // network either -- a dead end. HAD_SESSION_KEY is a plain (non-
+    // httpOnly) local marker set right after a real login/session
+    // confirmation, so this one spot can fall back to "was logged in last
+    // time we could actually check" instead of hard-failing when offline.
+    // It's advisory only: every real API call still lives or dies by the
+    // actual session cookie, so a truly expired session just starts
+    // failing those calls for real the moment one is attempted online.
+    let hasSession;
+    if (sessionResult.status === 'fulfilled') {
+        hasSession = sessionResult.value.ok;
+        if (hasSession) localStorage.setItem(HAD_SESSION_KEY, '1');
+        else localStorage.removeItem(HAD_SESSION_KEY);
+    } else {
+        hasSession = localStorage.getItem(HAD_SESSION_KEY) === '1';
+    }
+    // No network AND we're trusting a remembered session: there's nothing
+    // left to confirm (biometric still needs the OS prompt, password still
+    // needs the server) and no point making the user tap through either --
+    // go straight in, same destination biometric success already uses.
+    if (hasSession && sessionResult.status === 'rejected') {
+        window.location.href = 'AppInicio.html';
+        return;
+    }
     const biometry = biometryResult.status === 'fulfilled' ? biometryResult.value : null;
     const BiometricAuth = Capacitor.Plugins?.BiometricAuthNative;
 
@@ -179,6 +212,7 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
                 return;
             }
             sessionStorage.setItem('applyLoginDefaults', '1');
+            localStorage.setItem(HAD_SESSION_KEY, '1');
             window.location.href = 'AppInicio.html';
         } catch {
             showPwError(t('login.genericError', 'Something went wrong. Please try again.'));
