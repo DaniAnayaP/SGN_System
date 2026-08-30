@@ -432,6 +432,7 @@
                                 <th data-i18n="admin.contractWordFile" data-col="contractWordFile">Contract (Word)</th>
                                 <th data-i18n="admin.plan" data-col="plan">Plan / package</th>
                                 <th data-i18n="menu.appSector" data-col="sectorNegocio">Business sector</th>
+                                <th data-i18n="admin.equipmentRecommendations" data-col="equipmentRecommendations">Equipment recommendations</th>
                                 <th data-i18n="admin.contractedCost" data-col="contractedCost">Contracted cost $</th>
                                 <th data-i18n="admin.initialPayment" data-col="initialPayment">Initial payment</th>
                                 <th data-i18n="admin.monthlyPayment" data-col="monthlyPayment">Monthly payment</th>
@@ -516,6 +517,10 @@
                             <option value="activo" data-i18n="admin.statusActivo">Active</option>
                             <option value="inactivo" data-i18n="admin.statusInactivo">Inactive</option>
                         </select>
+                    </div>
+                    <div class="admin-field" style="grid-column: 1 / -1;">
+                        <label for="client-equipment-recommendations" data-i18n="admin.equipmentRecommendations">Equipment recommendations</label>
+                        <textarea id="client-equipment-recommendations" name="equipmentRecommendations" rows="3" data-i18n-placeholder="admin.equipmentRecommendationsHint" placeholder="e.g. Android 10+, 4GB RAM, stable connection for offline sync..."></textarea>
                     </div>
                     <div class="admin-field admin-checkbox-field">
                         <label for="client-is-test">

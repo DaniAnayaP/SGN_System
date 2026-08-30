@@ -259,6 +259,8 @@
     "vision": "Vision",
     "coreValues": "Values",
     "history": "History",
+    "equipmentRecommendations": "Equipment Recommendations",
+    "equipmentRecommendationsHint": "e.g. Android 10+, 4GB RAM, stable connection for offline sync...",
     "status": "Status",
     "statusActivo": "Active",
     "statusInactivo": "Inactive",

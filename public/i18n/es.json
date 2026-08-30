@@ -259,6 +259,8 @@
     "vision": "Visión",
     "coreValues": "Valores",
     "history": "Historia",
+    "equipmentRecommendations": "Recomendaciones de Equipos",
+    "equipmentRecommendationsHint": "Ej. Android 10+, 4GB RAM, conexión estable para la sincronización sin internet...",
     "status": "Estado",
     "statusActivo": "Activo",
     "statusInactivo": "Inactivo",

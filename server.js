@@ -736,7 +736,7 @@ function extractClientFields(body) {
         rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
         contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
         contractWordDataUrl, contractWordFileName,
-        monthlyPayment, initialPayment, sectorNegocio, isTest,
+        monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations,
     } = body;
     return {
         companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
@@ -748,7 +748,7 @@ function extractClientFields(body) {
         // updateClient hace COALESCE(@contractedCost, contracted_cost), así
         // que mandar null aquí congela el valor histórico en vez de
         // ponerlo en 0 en cada guardado futuro.
-        contractedCost: null, monthlyPayment, initialPayment, sectorNegocio, isTest,
+        contractedCost: null, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations,
     };
 }
 

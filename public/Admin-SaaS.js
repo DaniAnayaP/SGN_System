@@ -31,6 +31,7 @@ const missionField = document.getElementById('client-mission');
 const visionField = document.getElementById('client-vision');
 const valuesField = document.getElementById('client-values');
 const historyField = document.getElementById('client-history');
+const equipmentRecommendationsField = document.getElementById('client-equipment-recommendations');
 const logoInput = document.getElementById('client-logo');
 const logoDataField = document.getElementById('client-logo-data');
 const logoPreview = document.getElementById('client-logo-preview');
@@ -448,6 +449,7 @@ function renderClients() {
             tdContractWord,
             textCell(client.plan),
             textCell(client.sector_negocio),
+            textCell(client.equipment_recommendations),
             textCell(formatMoney(client.contractedCostComputed)),
             textCell(formatMoney(client.initial_payment)),
             textCell(formatMoney(client.monthly_payment)),
@@ -514,6 +516,7 @@ function clientToPayload(client) {
         logoDataUrl: client.logo_data_url, seedColor: client.seed_color,
         colorPalette: client.color_palette ? JSON.parse(client.color_palette) : null,
         mission: client.mission, vision: client.vision, coreValues: client.core_values, history: client.history,
+        equipmentRecommendations: client.equipment_recommendations,
         rfc: client.rfc, companyNickname: client.company_nickname, companyAbbreviation: client.company_abbreviation,
         ownerName: client.owner_name, billingEmail: client.billing_email, razonSocial: client.razon_social,
         sectorNegocio: client.sector_negocio,
@@ -598,6 +601,7 @@ function startEdit(client) {
     visionField.value = client.vision || '';
     valuesField.value = client.core_values || '';
     historyField.value = client.history || '';
+    equipmentRecommendationsField.value = client.equipment_recommendations || '';
     setLogoPreview(client.logo_data_url || '');
     rfcField.value = client.rfc || '';
     nicknameField.value = client.company_nickname || '';
@@ -770,6 +774,7 @@ form.addEventListener('submit', async (event) => {
         vision: visionField.value.trim(),
         coreValues: valuesField.value.trim(),
         history: historyField.value.trim(),
+        equipmentRecommendations: equipmentRecommendationsField.value.trim(),
         rfc,
         companyNickname: nicknameField.value.trim(),
         companyAbbreviation: abbreviationField.value.trim().slice(0, 6),

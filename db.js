@@ -671,6 +671,14 @@ if (!clientColumns.some((c) => c.name === 'core_values')) {
 if (!clientColumns.some((c) => c.name === 'history')) {
     db.exec("ALTER TABLE clients ADD COLUMN history TEXT NOT NULL DEFAULT ''");
 }
+// GEIPSA's own free-text note on what phones/PCs this client's team should
+// use for the system to run well -- written once the project's finished
+// enough to know real requirements (e.g. offline sync needs decent local
+// storage), never client-editable, same "GEIPSA writes it, client just
+// reads it" shape as the rest of Nuestros Clientes.
+if (!clientColumns.some((c) => c.name === 'equipment_recommendations')) {
+    db.exec("ALTER TABLE clients ADD COLUMN equipment_recommendations TEXT NOT NULL DEFAULT ''");
+}
 // Anexos: per-client extras on top of whatever their plan already grants
 // (e.g. plan gives 5 centros de costo, an anexo adds 2 more for THIS client
 // only — the plan itself, and every other client on it, stays untouched).
@@ -1672,7 +1680,7 @@ function createClient({
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
     contractWordDataUrl, contractWordFileName,
-    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest,
+    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations,
 }) {
     const create = db.transaction(() => {
         const accountNumber = db.prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM clients').get().n;
@@ -1684,7 +1692,7 @@ function createClient({
                     rfc, company_nickname, company_abbreviation, owner_name, billing_email, razon_social, big_date_number, account_number,
                     contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
                     contract_word_data_url, contract_word_file_name,
-                    contracted_cost, monthly_payment, initial_payment, sector_negocio, is_test
+                    contracted_cost, monthly_payment, initial_payment, sector_negocio, is_test, equipment_recommendations
                 )
                 VALUES (
                     @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
@@ -1692,7 +1700,7 @@ function createClient({
                     @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @razonSocial, @bigDateNumber, @accountNumber,
                     @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
                     @contractWordDataUrl, @contractWordFileName,
-                    @contractedCost, @monthlyPayment, @initialPayment, @sectorNegocio, @isTest
+                    @contractedCost, @monthlyPayment, @initialPayment, @sectorNegocio, @isTest, @equipmentRecommendations
                 )
             `)
             .run({
@@ -1707,7 +1715,7 @@ function createClient({
                 contractEndDate: contractEndDate || null, contractFileDataUrl: contractFileDataUrl || null, contractFileName: contractFileName || null,
                 contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
                 contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
-                sectorNegocio: sectorNegocio || '', isTest: isTest ? 1 : 0,
+                sectorNegocio: sectorNegocio || '', isTest: isTest ? 1 : 0, equipmentRecommendations: equipmentRecommendations || '',
             }).lastInsertRowid;
     });
     return getClientById(create());
@@ -1725,7 +1733,7 @@ function updateClient(id, {
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
     contractWordDataUrl, contractWordFileName,
-    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest,
+    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations,
 }) {
     const existing = getClientById(id);
     db.prepare(`
@@ -1742,7 +1750,7 @@ function updateClient(id, {
             contract_word_data_url = @contractWordDataUrl, contract_word_file_name = @contractWordFileName,
             contracted_cost = COALESCE(@contractedCost, contracted_cost),
             monthly_payment = @monthlyPayment, initial_payment = @initialPayment, sector_negocio = @sectorNegocio,
-            is_test = @isTest
+            is_test = @isTest, equipment_recommendations = @equipmentRecommendations
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
@@ -1757,6 +1765,7 @@ function updateClient(id, {
         contractedCost: contractedCost ?? null, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
         sectorNegocio: sectorNegocio ?? (existing ? existing.sector_negocio : '') ?? '',
         isTest: isTest != null ? (isTest ? 1 : 0) : (existing ? existing.is_test : 0),
+        equipmentRecommendations: equipmentRecommendations ?? (existing ? existing.equipment_recommendations : '') ?? '',
     });
     return getClientById(id);
 }
