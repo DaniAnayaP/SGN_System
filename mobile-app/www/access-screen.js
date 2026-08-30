@@ -82,28 +82,32 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
     // as "not logged in" is exactly the bug reported live: closing the app
     // with a perfectly valid session, losing signal, and reopening it
     // dumped the user back on a password form that can't submit without a
-    // network either -- a dead end. HAD_SESSION_KEY is a plain (non-
-    // httpOnly) local marker set right after a real login/session
-    // confirmation, so this one spot can fall back to "was logged in last
-    // time we could actually check" instead of hard-failing when offline.
-    // It's advisory only: every real API call still lives or dies by the
-    // actual session cookie, so a truly expired session just starts
-    // failing those calls for real the moment one is attempted online.
+    // network either -- a dead end, since password login itself always
+    // needs the server. HAD_SESSION_KEY is a plain (non-httpOnly) local
+    // marker set right after a real login/session confirmation, so this one
+    // spot can fall back to "was logged in last time we could actually
+    // check" instead of hard-failing when offline -- this alone does NOT
+    // let anyone in; it only feeds hasSession below, which is what makes
+    // Face ID/fingerprint available as an option (a real, local re-
+    // confirmation the OS itself performs, no network needed) instead of
+    // leaving password as the only -- offline-impossible -- way in. A
+    // device with no biometric enrolled still can't get past this screen
+    // offline, by design: something has to actually confirm it's the same
+    // person, and password can't do that without a connection.
+    //
+    // Only ever SET here, never cleared on a 401 -- confirmed live on a
+    // spotty connection (WiFi hanging on under "airplane mode") that a
+    // single flaky request can come back a real, fulfilled 401 (session
+    // momentarily unconfirmable, not actually logged out) and wiping the
+    // flag right then locked the user out exactly like the no-network case
+    // this was built to fix. Logging out (AppInicio.js) is the only place
+    // that should ever clear it.
     let hasSession;
     if (sessionResult.status === 'fulfilled') {
         hasSession = sessionResult.value.ok;
         if (hasSession) localStorage.setItem(HAD_SESSION_KEY, '1');
-        else localStorage.removeItem(HAD_SESSION_KEY);
     } else {
         hasSession = localStorage.getItem(HAD_SESSION_KEY) === '1';
-    }
-    // No network AND we're trusting a remembered session: there's nothing
-    // left to confirm (biometric still needs the OS prompt, password still
-    // needs the server) and no point making the user tap through either --
-    // go straight in, same destination biometric success already uses.
-    if (hasSession && sessionResult.status === 'rejected') {
-        window.location.href = 'AppInicio.html';
-        return;
     }
     const biometry = biometryResult.status === 'fulfilled' ? biometryResult.value : null;
     const BiometricAuth = Capacitor.Plugins?.BiometricAuthNative;
