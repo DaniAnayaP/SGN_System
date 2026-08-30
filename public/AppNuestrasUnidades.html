@@ -10,6 +10,11 @@
     <meta name="theme-color" content="#0b0d14">
     <link rel="stylesheet" href="AppInicio.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
 </head>
 <body>
     <!-- Native App screen for Nuestras Unidades — same one-field-at-a-time shell
