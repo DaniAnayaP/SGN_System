@@ -4895,6 +4895,14 @@ function syncSettingsSubmenuVisibility() {
     if (databaseGroup && !hasSettingsSubPermission('btn-base-datos')) databaseGroup.hidden = true;
     if (businessIntelligenceGroup && !hasSettingsSubPermission('btn-negocio-inteligente')) businessIntelligenceGroup.hidden = true;
     if (othersGroup && !hasSettingsSubPermission('btn-otros')) othersGroup.hidden = true;
+    // Tamaño del Sistema isn't a row inside this dropdown -- it's built as
+    // its OWN separate top-bar icon (see the #ui-scale-menu wrapper further
+    // down), so it never went through this function's per-row hiding at
+    // all and showed for every user regardless of grant, unlike every
+    // other Configuración sub-item above.
+    document.querySelectorAll('#ui-scale-menu').forEach((menu) => {
+        if (!hasSettingsSubPermission('btn-tamano-sistema')) menu.classList.add('top-bar-btn-hidden');
+    });
 }
 
 // --- Default Departamento/Área/Centro de Costos picker — opened from

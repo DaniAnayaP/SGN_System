@@ -279,6 +279,18 @@ function getAdminBusinessItem() {
 }
 
 function syncSettingsMenuVisibility() {
+    const languageBtn = document.getElementById('home-menu-language');
+    const styleBtn = document.getElementById('home-menu-style');
+    const othersBtn = document.getElementById('home-menu-others');
+    // Tamaño del Sistema isn't nested inside home-settings-submenu at all --
+    // same as Dashboard.js's own #ui-scale-menu, it's its own separate
+    // hamburger row, sibling to "Configuración" itself, so it never went
+    // through this function and showed for every user regardless of grant.
+    const uiScaleBtn = document.getElementById('home-menu-ui-scale');
+    if (languageBtn) languageBtn.hidden = !hasSettingsSubPermission('btn-idioma');
+    if (styleBtn) styleBtn.hidden = !hasSettingsSubPermission('btn-estilo');
+    if (othersBtn) othersBtn.hidden = !hasSettingsSubPermission('btn-otros');
+    if (uiScaleBtn) uiScaleBtn.hidden = !hasSettingsSubPermission('btn-tamano-sistema');
     const adminBusinessBtn = document.getElementById('home-menu-admin-business');
     const buttonConfigBtn = document.getElementById('home-menu-button-config');
     const databaseBtn = document.getElementById('home-menu-database');
