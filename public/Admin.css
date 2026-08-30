@@ -1446,6 +1446,72 @@ body.dark-mode .perm-tree-depth-2{
     accent-color: #c9860b;
 }
 
+/* Nuestra Estructura Organizacional -- the read-only chart below the
+   Reporta-a table (Business-EstructuraOrganizacional.js's buildTreeNode).
+   Root(s) side by side, each with its own children row nested underneath;
+   a vertical stub connects a node to its own children row only (no
+   horizontal rail across siblings — keeps a lopsided chart from needing an
+   SVG connector layer for a first version). */
+.admin-section-title{
+    margin: 1.5rem 0 0.75rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+.org-chart-tree{
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding: 0.5rem 0.25rem 1.5rem;
+}
+.org-tree-node{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+}
+.org-node{
+    background: var(--color-surface);
+    border: 1.5px solid var(--color-border);
+    border-radius: 0.55rem;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    text-align: center;
+    min-width: 9rem;
+    box-shadow: 0 2px 6px var(--shadow-border);
+}
+.org-node-title{
+    display: block;
+}
+.org-node-person{
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--color-accent);
+}
+.org-node-empty{
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-text-secondary);
+}
+.org-tree-branch{
+    width: 1.5px;
+    height: 1.1rem;
+    background: var(--color-border);
+}
+.org-tree-children{
+    display: flex;
+    gap: 1.4rem;
+    align-items: flex-start;
+}
+
 /* Contrataciones */
 .admin-module-list{
     display: flex;

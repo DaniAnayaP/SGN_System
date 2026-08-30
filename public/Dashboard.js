@@ -4076,20 +4076,24 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeUiScaleMenu();
 });
 
-// --- Notifications dropdown (Autorizar approval alerts) ---------------------
+// --- Notifications dropdown (Alertas / Avisos / Solicitudes / Autorizar) ---
 // Converts the existing static #notifications-btn (already present, plain,
 // in every page's top bar) into a proper dropdown — same JS-built pattern
 // as #ui-scale-menu above, reusing .user-info-menu/.user-info-dropdown for
-// the toggle+panel mechanics. Badge + list come from
-// GET /api/business/pending-changes, already filtered server-side to
-// whatever THIS user can actually authorize (admin: everything at the
-// client; else: only columns they hold Autorizar on) — an empty badge here
-// just means "nothing for you to approve", not "nothing pending anywhere".
+// the toggle+panel mechanics. All 4 tabs come from one combined payload
+// (GET /api/business/notifications, already scoped server-side to this
+// user): Autorizar = pending changes I can approve (the only tab this
+// dropdown originally had); Solicitudes/Avisos = changes I MYSELF
+// requested, still pending vs. already resolved; Alertas = access-denied
+// notices addressed to me as someone's Jefe Directo.
 const PENDING_CHANGE_TABLE_LABELS = {
     'registro-combustible': 'menu.opTransVolCombustible',
     'mi-recurso-humano': 'menu.opRrhhMiRecursoHumano',
 };
+const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar'];
 let notificationsListEl = null;
+let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [] };
+let activeNotificationTab = 'alertas';
 
 function closeNotificationsMenu() {
     document.querySelectorAll('#notifications-menu').forEach((menu) => menu.classList.remove('open'));
@@ -4102,6 +4106,45 @@ function setNotificationsBadge(count) {
         badge.hidden = count <= 0;
         badge.textContent = count > 99 ? '99+' : String(count);
     });
+}
+
+// dd-mm-aa, matching the format the user asked for — SQLite's
+// datetime('now') gives "YYYY-MM-DD HH:MM:SS" (UTC); just re-sliced, no
+// timezone conversion (same "good enough, not a legal timestamp" precedent
+// as every other date shown straight from a DB column in this app).
+function formatNotificationDate(sqliteDatetime) {
+    const [y, m, d] = (sqliteDatetime || '').slice(0, 10).split('-');
+    return y && m && d ? `${d}-${m}-${y.slice(2)}` : '';
+}
+
+function renderAlertRow(alert) {
+    const row = document.createElement('div');
+    row.className = `notifications-item notifications-item-alert${alert.seen_at ? '' : ' notifications-item-unseen'}`;
+    row.innerHTML = `
+        <div class="notifications-item-meta">#${alert.seq} · ${formatNotificationDate(alert.created_at)}</div>
+        <div class="notifications-item-desc">
+            <b>${alert.acting_user_label}</b>, ${t('main.notificationAttemptedChangePrefix')}
+            <b>${t(alert.field_key)} / ${t(alert.screen_key)}</b>, ${t('main.notificationAttemptedChangeSuffix')}
+        </div>
+    `;
+    return row;
+}
+
+// Solicitudes (showOutcome: false, still pending) / Avisos (showOutcome:
+// true, already resolved — shows who approved/rejected it and when).
+function renderRequestRow(change, { showOutcome = false } = {}) {
+    const row = document.createElement('div');
+    row.className = `notifications-item${showOutcome && !change.seen_at ? ' notifications-item-unseen' : ''}`;
+    const tableLabel = t(PENDING_CHANGE_TABLE_LABELS[change.table_key] || change.table_key);
+    const outcome = showOutcome
+        ? `<div class="notifications-item-meta">${t(change.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected')} — ${change.resolved_by || '—'} · ${formatNotificationDate(change.resolved_at)}</div>`
+        : '';
+    row.innerHTML = `
+        <div class="notifications-item-meta">${tableLabel} · ${change.record_label || '—'}</div>
+        <div class="notifications-item-desc">${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"</div>
+        ${outcome}
+    `;
+    return row;
 }
 
 function renderNotificationRow(change) {
@@ -4132,28 +4175,59 @@ async function resolvePendingNotification(id, action, row) {
         }
         row.remove();
         showToast(action === 'approve' ? t('main.notificationApproved') : t('main.notificationRejected'), 'success');
-        loadPendingChanges();
+        loadNotifications();
     } catch {
         showToast(t('admin.saveError'), 'error');
     }
 }
 
-async function loadPendingChanges() {
+// Switching tabs never re-fetches — notificationsData is already the full
+// combined payload from loadNotifications(); opening Alertas/Avisos marks
+// that tab's unseen rows seen (fire-and-forget, badge already reflected
+// what was fetched a moment ago).
+function renderActiveNotificationTab() {
+    document.querySelectorAll('.notifications-tab').forEach((tabBtn) => {
+        tabBtn.classList.toggle('active', tabBtn.dataset.tab === activeNotificationTab);
+    });
+    document.querySelectorAll('.notifications-tab-count').forEach((el) => {
+        el.textContent = String(notificationsData[el.dataset.tab]?.length || 0);
+    });
+    if (!notificationsListEl) return;
+    notificationsListEl.innerHTML = '';
+    const items = notificationsData[activeNotificationTab] || [];
+    if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'notifications-empty';
+        empty.textContent = t('main.notificationsEmpty');
+        notificationsListEl.appendChild(empty);
+    } else {
+        items.forEach((item) => {
+            let row;
+            if (activeNotificationTab === 'alertas') row = renderAlertRow(item);
+            else if (activeNotificationTab === 'avisos') row = renderRequestRow(item, { showOutcome: true });
+            else if (activeNotificationTab === 'solicitudes') row = renderRequestRow(item);
+            else row = renderNotificationRow(item);
+            notificationsListEl.appendChild(row);
+        });
+    }
+    if (activeNotificationTab === 'alertas' && items.some((a) => !a.seen_at)) {
+        fetch('/api/business/notifications/alertas/mark-seen', { method: 'POST', credentials: 'include' }).catch(() => {});
+    }
+    if (activeNotificationTab === 'avisos' && items.some((a) => !a.seen_at)) {
+        fetch('/api/business/notifications/avisos/mark-seen', { method: 'POST', credentials: 'include' }).catch(() => {});
+    }
+}
+
+async function loadNotifications() {
     if (!notificationsListEl) return;
     try {
-        const res = await fetch('/api/business/pending-changes', { credentials: 'include' });
+        const res = await fetch('/api/business/notifications', { credentials: 'include' });
         if (!res.ok) return;
-        const { changes } = await res.json();
-        setNotificationsBadge(changes.length);
-        notificationsListEl.innerHTML = '';
-        if (!changes.length) {
-            const empty = document.createElement('div');
-            empty.className = 'notifications-empty';
-            empty.textContent = t('main.notificationsEmpty');
-            notificationsListEl.appendChild(empty);
-            return;
-        }
-        changes.forEach((change) => notificationsListEl.appendChild(renderNotificationRow(change)));
+        notificationsData = await res.json();
+        const unseenAlertas = notificationsData.alertas.filter((a) => !a.seen_at).length;
+        const unseenAvisos = notificationsData.avisos.filter((a) => !a.seen_at).length;
+        setNotificationsBadge(unseenAlertas + unseenAvisos + notificationsData.autorizar.length);
+        renderActiveNotificationTab();
     } catch {
         // Leave whatever was already rendered — no network/parse errors surfaced here.
     }
@@ -4177,13 +4251,24 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
     const dropdown = document.createElement('div');
     dropdown.className = 'user-info-dropdown notifications-dropdown';
     dropdown.innerHTML = `
-        <div class="user-info-group">
-            <h4>${t('main.notificationsTitle')}</h4>
-            <div class="notifications-list" data-role="list"></div>
+        <div class="notifications-tabs" role="tablist">
+            ${NOTIFICATION_TABS.map((tabKey) => `
+                <button type="button" class="notifications-tab${tabKey === activeNotificationTab ? ' active' : ''}" data-tab="${tabKey}" role="tab">
+                    <span>${t(`main.notificationsTab_${tabKey}`)}</span>
+                    <span class="notifications-tab-count" data-tab="${tabKey}">0</span>
+                </button>
+            `).join('')}
         </div>
+        <div class="notifications-list" data-role="list"></div>
     `;
     wrapper.appendChild(dropdown);
     notificationsListEl = dropdown.querySelector('[data-role="list"]');
+    dropdown.querySelectorAll('.notifications-tab').forEach((tabBtn) => {
+        tabBtn.addEventListener('click', () => {
+            activeNotificationTab = tabBtn.dataset.tab;
+            renderActiveNotificationTab();
+        });
+    });
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
         const wasOpen = wrapper.classList.contains('open');
@@ -4191,7 +4276,7 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
         if (!wasOpen) {
             wrapper.classList.add('open');
             btn.setAttribute('aria-expanded', 'true');
-            loadPendingChanges();
+            loadNotifications();
         }
     });
 });
@@ -4204,7 +4289,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 if (document.getElementById('notifications-menu')) {
-    loadPendingChanges();
+    loadNotifications();
 }
 
 // --- Sidebar search: live-filters the menu items actually rendered right

@@ -1488,12 +1488,63 @@
         text-align: center;
     }
     .notifications-dropdown{
-        width: 20rem;
+        width: 22rem;
+        padding-top: 0.5rem;
+    }
+    /* Alertas / Avisos / Solicitudes / Autorizar tab strip -- one active tab
+       at a time, count pill per tab so an empty category is obvious before
+       even clicking into it. */
+    .notifications-tabs{
+        display: flex;
+        gap: 0.2rem;
+        margin: 0 0 0.6rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .notifications-tab{
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+        padding: 0.35rem 0.2rem;
+        border: none;
+        border-radius: 0.4rem;
+        background: none;
+        color: var(--color-text-secondary);
+        font-size: 0.66rem;
+        font-weight: 600;
+        text-align: center;
+    }
+    .notifications-tab.active{
+        background: var(--color-bg);
+        color: var(--color-text-primary);
+    }
+    .notifications-tab-count{
+        font-size: 0.62rem;
+        font-weight: 700;
+        min-width: 1.1rem;
+        padding: 0 0.25rem;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--color-text-secondary) 20%, transparent);
+        color: var(--color-text-secondary);
+    }
+    .notifications-tab.active .notifications-tab-count{
+        background: var(--color-accent);
+        color: var(--color-surface);
     }
     .notifications-list{
         display: flex;
         flex-direction: column;
         gap: 0.6rem;
+    }
+    /* Alertas' own left stripe (danger — someone tried and couldn't) vs. the
+       plain neutral card every other tab's rows use. */
+    .notifications-item-alert{
+        border-left: 3px solid #c8384a;
+    }
+    .notifications-item-unseen{
+        background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
     }
     .notifications-empty{
         font-size: 0.8rem;

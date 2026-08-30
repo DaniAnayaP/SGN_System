@@ -457,6 +457,9 @@
         },
         {
           "id": "cat-catalogos-estatus-rh", "labelKey": "menu.catEstatusRH", "icon": "bx-id-card", "href": "Business-EstatusRH.html"
+        },
+        {
+          "id": "cat-catalogos-estructura-organizacional", "labelKey": "menu.catEstructuraOrganizacional", "icon": "bx-sitemap", "href": "Business-EstructuraOrganizacional.html"
         }
       ],
       "cat-operaciones": [

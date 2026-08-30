@@ -509,7 +509,29 @@ db.exec(`
         requested_at          TEXT NOT NULL DEFAULT (datetime('now')),
         resolved_by           TEXT,
         resolved_by_user_id   INTEGER,
-        resolved_at           TEXT
+        resolved_at           TEXT,
+        seen_at               TEXT
+    );
+
+    -- Alertas informativas para el Jefe Directo -- una fila cada vez que
+    -- checkAndLogFieldChanges rechaza un campo por falta de permiso (el
+    -- mismo momento en que el propio usuario ve el toast "Usted no está
+    -- habilitado..."). Nunca requiere autorización, solo avisa: seq es el
+    -- consecutivo "#11" por cliente (no global), recipient_user_id se
+    -- resuelve subiendo la cadena reports_to_job_position_id (ver
+    -- resolveDirectSupervisorUserId) y puede quedar NULL si nadie ocupa
+    -- ningún puesto superior todavía -- la alerta se guarda igual, para
+    -- cuando alguien sí lo ocupe, pero no le aparece a nadie mientras tanto.
+    CREATE TABLE IF NOT EXISTS access_denied_alerts (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id           INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        seq                 INTEGER NOT NULL,
+        acting_user_label   TEXT NOT NULL,
+        field_key           TEXT NOT NULL,
+        screen_key          TEXT NOT NULL,
+        recipient_user_id   INTEGER,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        seen_at             TEXT
     );
 
     -- Marca de migraciones de DATOS de una sola vez (a diferencia de las
@@ -1360,6 +1382,22 @@ if (!jobPositionColumns.some((c) => c.name === 'cost_center_scope')) {
     const backfillScope = db.prepare('UPDATE job_positions SET cost_center_scope = ? WHERE id = ?');
     jobPositionsWithSingleCC.forEach((row) => backfillScope.run(JSON.stringify([row.cost_center_id]), row.id));
 }
+// Nuestra Estructura Organizacional's own "bosquejo" -- which OTHER Puesto
+// this one reports to. Self-referencing, nullable (top of the chart), one
+// per Puesto (not per hr_worker): whoever is hired into a Puesto inherits
+// its place in the chart automatically, same as job_position_grants already
+// works for permissions. No cycle detection — trusted admin input, same as
+// every other free-form relationship in this file.
+if (!jobPositionColumns.some((c) => c.name === 'reports_to_job_position_id')) {
+    db.exec('ALTER TABLE job_positions ADD COLUMN reports_to_job_position_id INTEGER REFERENCES job_positions(id)');
+}
+
+// seen_at added after pending_changes already shipped once -- powers the
+// Notificaciones "Avisos" tab (a resolved request the requester hasn't
+// opened yet); NULL forever for rows still 'pending' (those live in
+// "Solicitudes"/"Autorizar" instead, see listPendingChangesRequestedBy/
+// listPendingChangesForClient).
+ensureColumn('pending_changes', 'seen_at', 'TEXT');
 
 // requested_by/authorized_by added after data_table_changes already shipped
 // once — nullable, only ever filled for rows created via an approved
@@ -1985,6 +2023,57 @@ function resolvePendingChange(id, { status, resolvedBy, resolvedByUserId }) {
     return getPendingChangeById(id);
 }
 
+// Notificaciones' own "Solicitudes" (still pending, requested by ME) and
+// "Avisos" (already resolved, requested by ME, not opened yet) tabs --
+// same pending_changes rows Autorizar already reads, just filtered by
+// requester instead of by who can authorize.
+function listPendingChangesRequestedBy(clientId, userId, statuses) {
+    const placeholders = statuses.map(() => '?').join(',');
+    return db.prepare(`
+        SELECT * FROM pending_changes
+        WHERE client_id = ? AND requested_by_user_id = ? AND status IN (${placeholders})
+        ORDER BY COALESCE(resolved_at, requested_at) DESC, id DESC
+        LIMIT 50
+    `).all(clientId, userId, ...statuses);
+}
+
+function markPendingChangesSeenForRequester(clientId, userId) {
+    db.prepare(`
+        UPDATE pending_changes SET seen_at = datetime('now')
+        WHERE client_id = ? AND requested_by_user_id = ? AND status != 'pending' AND seen_at IS NULL
+    `).run(clientId, userId);
+}
+
+// --- Access-denied alerts (Notificaciones' "Alertas" tab) -------------------
+// One row per rejected field attempt (see checkAndLogFieldChanges in
+// server.js), addressed to the acting user's Jefe Directo
+// (resolveDirectSupervisorUserId above). seq is the "#11" consecutive
+// number the user asked for, scoped per client (not global) so it stays
+// meaningful to whoever's reading it.
+function createAccessDeniedAlert({ clientId, actingUserLabel, fieldKey, screenKey, recipientUserId }) {
+    const seq = db.prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM access_denied_alerts WHERE client_id = ?').get(clientId).n;
+    const result = db.prepare(`
+        INSERT INTO access_denied_alerts (client_id, seq, acting_user_label, field_key, screen_key, recipient_user_id)
+        VALUES (@clientId, @seq, @actingUserLabel, @fieldKey, @screenKey, @recipientUserId)
+    `).run({ clientId, seq, actingUserLabel, fieldKey, screenKey, recipientUserId: recipientUserId || null });
+    return db.prepare('SELECT * FROM access_denied_alerts WHERE id = ?').get(result.lastInsertRowid);
+}
+
+function listAccessDeniedAlertsForUser(clientId, userId) {
+    return db.prepare(`
+        SELECT * FROM access_denied_alerts WHERE client_id = ? AND recipient_user_id = ?
+        ORDER BY seq DESC
+        LIMIT 50
+    `).all(clientId, userId);
+}
+
+function markAccessDeniedAlertsSeen(clientId, userId) {
+    db.prepare(`
+        UPDATE access_denied_alerts SET seen_at = datetime('now')
+        WHERE client_id = ? AND recipient_user_id = ? AND seen_at IS NULL
+    `).run(clientId, userId);
+}
+
 // Self-service version for the client's own admin (Business-Config page):
 // only branding fields, never company_name/status/plan/etc.
 function updateClientBranding(clientId, { logoDataUrl, seedColor, colorPalette }) {
@@ -2361,6 +2450,54 @@ function setJobPositionGrants(jobPositionId, grants) {
     });
     replace(grants);
     return getJobPositionGrants(jobPositionId);
+}
+
+// --- Query helpers: Nuestra Estructura Organizacional (org chart, scoped to
+// one client) -- the "bosquejo" lives entirely on job_positions.reports_to_
+// job_position_id (see the migration above); this just reads it back with
+// whichever hr_workers are CURRENTLY hired into each Puesto attached, so
+// the same chart fills itself in from Operación (Mi Recurso Humano)
+// without a separate assignment step.
+function getOrgChartPositions(clientId) {
+    const positions = db.prepare(`
+        SELECT id, name, reports_to_job_position_id AS reportsToJobPositionId
+        FROM job_positions WHERE client_id = ? AND status = 'active'
+        ORDER BY name ASC
+    `).all(clientId);
+    const workersByPosition = new Map();
+    db.prepare(`
+        SELECT job_position_id AS jobPositionId, id, full_name AS fullName, user_id AS userId
+        FROM hr_workers WHERE client_id = ? AND job_position_id IS NOT NULL
+    `).all(clientId).forEach((w) => {
+        if (!workersByPosition.has(w.jobPositionId)) workersByPosition.set(w.jobPositionId, []);
+        workersByPosition.get(w.jobPositionId).push({ id: w.id, fullName: w.fullName, userId: w.userId });
+    });
+    return positions.map((p) => ({ ...p, workers: workersByPosition.get(p.id) || [] }));
+}
+
+function setJobPositionReportsTo(id, clientId, reportsToJobPositionId) {
+    db.prepare('UPDATE job_positions SET reports_to_job_position_id = ? WHERE id = ? AND client_id = ?')
+        .run(reportsToJobPositionId || null, id, clientId);
+    return getJobPositionById(id, clientId);
+}
+
+// Walks the org chart upward from a user's own Puesto until it finds
+// another Puesto with at least one real hr_worker (with a login) assigned
+// to it -- that person is the "Jefe Directo" for access-denied alerts (see
+// createAccessDeniedAlert). Stops (returns null) at the top of the chart,
+// if the user has no Puesto at all, or after 20 hops (cycle guard --
+// reports_to has no cycle detection on write, see the migration above).
+function resolveDirectSupervisorUserId(userId) {
+    const worker = db.prepare('SELECT job_position_id AS jobPositionId FROM hr_workers WHERE user_id = ?').get(userId);
+    let jobPositionId = worker?.jobPositionId;
+    for (let hop = 0; jobPositionId && hop < 20; hop += 1) {
+        const position = db.prepare('SELECT reports_to_job_position_id AS reportsToJobPositionId FROM job_positions WHERE id = ?').get(jobPositionId);
+        if (!position || !position.reportsToJobPositionId) return null;
+        jobPositionId = position.reportsToJobPositionId;
+        const supervisor = db.prepare('SELECT user_id AS userId FROM hr_workers WHERE job_position_id = ? AND user_id IS NOT NULL LIMIT 1').get(jobPositionId);
+        if (supervisor?.userId) return supervisor.userId;
+    }
+    return null;
 }
 
 // --- Query helpers: Estatus RH catalog (Administración de Personal, scoped
@@ -4289,7 +4426,7 @@ function getUserOperationalStatus(userId) {
 function getUserById(id, clientId) {
     return db
         .prepare(`
-            SELECT id, username, email, name, role, active, is_client_admin, created_at
+            SELECT id, username, email, name, nickname, role, active, is_client_admin, created_at
             FROM users WHERE id = ? AND client_id = ?
         `)
         .get(id, clientId);
@@ -4503,6 +4640,14 @@ module.exports = {
     listPendingChangesForClient,
     getPendingColumnsByRecord,
     resolvePendingChange,
+    listPendingChangesRequestedBy,
+    markPendingChangesSeenForRequester,
+    createAccessDeniedAlert,
+    listAccessDeniedAlertsForUser,
+    markAccessDeniedAlertsSeen,
+    resolveDirectSupervisorUserId,
+    getOrgChartPositions,
+    setJobPositionReportsTo,
     COST_CENTER_FIELDS,
     JOB_POSITION_FIELDS,
     FUEL_PATCHABLE_FIELDS,

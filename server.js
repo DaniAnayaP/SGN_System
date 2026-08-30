@@ -148,6 +148,14 @@ const {
     listPendingChangesForClient,
     getPendingColumnsByRecord,
     resolvePendingChange,
+    listPendingChangesRequestedBy,
+    markPendingChangesSeenForRequester,
+    createAccessDeniedAlert,
+    listAccessDeniedAlertsForUser,
+    markAccessDeniedAlertsSeen,
+    resolveDirectSupervisorUserId,
+    getOrgChartPositions,
+    setJobPositionReportsTo,
     COST_CENTER_FIELDS,
     JOB_POSITION_FIELDS,
     FUEL_PATCHABLE_FIELDS,
@@ -1716,6 +1724,37 @@ app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmi
     res.json({ grants: setJobPositionGrants(req.params.id, grants) });
 });
 
+// Nuestra Estructura Organizacional's own "bosquejo" edge -- which OTHER
+// Puesto this one reports to (see the reports_to_job_position_id migration
+// in db.js). Kept as its own route rather than folded into the generic
+// PATCH /job-positions above: this is an admin-only structural edit, not a
+// Control-Interno column subject to Ver/Operar/Editar/Autorizar.
+app.put('/api/business/job-positions/:id/reports-to', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getJobPositionById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Job position not found.' });
+    const { reportsToJobPositionId } = req.body || {};
+    if (reportsToJobPositionId != null) {
+        if (Number(reportsToJobPositionId) === existing.id) {
+            return res.status(400).json({ message: 'A job position cannot report to itself.' });
+        }
+        if (!getJobPositionById(reportsToJobPositionId, req.user.clientId)) {
+            return res.status(400).json({ message: 'reportsToJobPositionId does not belong to this client.' });
+        }
+    }
+    const jobPosition = setJobPositionReportsTo(req.params.id, req.user.clientId, reportsToJobPositionId || null);
+    res.json({ jobPosition: mapJobPosition(jobPosition, getClientById(req.user.clientId)?.company_name) });
+});
+
+// Read-only chart data: every active Puesto plus whichever real hr_workers
+// are hired into it right now (see getOrgChartPositions) -- any
+// authenticated user at the client can view it (same "everyone sees the
+// company chart" idea as Datos del Negocio), only PUT reports-to above is
+// admin-gated.
+app.get('/api/business/org-chart', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ positions: getOrgChartPositions(req.user.clientId) });
+});
+
 // --- Column-level permission enforcement (Solo Ver / Ver y Operar / -------
 // --- Editar + Autorizar approval workflow) ----------------------------------
 // The FIRST real server-side grant check in this app (menu/section grants
@@ -1797,6 +1836,19 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
         fieldKey: c.fieldKey, columnKey: c.key, oldValue: c.oldValue, newValue: c.newValue,
         requestedBy: req.user.name, requestedByUserId: req.user.sub,
     }));
+    // Notificaciones' "Alertas" tab: same moment the acting user themselves
+    // sees the "Usted no está habilitado..." toast, their Jefe Directo (see
+    // resolveDirectSupervisorUserId) gets an informational alert -- one per
+    // rejected field, never requiring authorization, just visibility.
+    if (rejected.length) {
+        const screenKey = (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || tableKey;
+        const actingUser = getUserById(req.user.sub, req.user.clientId);
+        const actingUserLabel = `${req.user.username} - ${actingUser?.nickname || req.user.name}`;
+        const recipientUserId = resolveDirectSupervisorUserId(req.user.sub);
+        rejected.forEach((fieldKey) => {
+            createAccessDeniedAlert({ clientId: existing.client_id, actingUserLabel, fieldKey, screenKey, recipientUserId });
+        });
+    }
 
     return { appliedPatch, pendingFields: pending.map((c) => c.fieldKey), rejectedFields: rejected };
 }
@@ -3310,6 +3362,42 @@ app.post('/api/business/pending-changes/:id/reject', requireAuth, (req, res) => 
         }
     }
     resolvePendingChange(pc.id, { status: 'rejected', resolvedBy: req.user.name, resolvedByUserId: req.user.sub });
+    res.json({ ok: true });
+});
+
+// --- Notificaciones: Alertas / Avisos / Solicitudes / Autorizar -------------
+// One combined payload for the bell dropdown's 4 tabs. Autorizar mirrors
+// GET /pending-changes above exactly (things others asked for that I can
+// approve); Solicitudes/Avisos are the same table from the OTHER side
+// (things I myself asked for — still pending, or already resolved and not
+// yet opened); Alertas is access_denied_alerts (see checkAndLogFieldChanges).
+// Opening a tab (the 2 mark-seen routes below) is what clears its
+// contribution to the bell's badge count, not fetching this list.
+app.get('/api/business/notifications', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const allPending = listPendingChangesForClient(req.user.clientId);
+    let autorizar = allPending;
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        autorizar = allPending.filter((c) => canAuthorizeColumn(grants, c.table_key, c.field_key.split('.').pop()));
+    }
+    res.json({
+        alertas: listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub),
+        avisos: listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']),
+        solicitudes: listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']),
+        autorizar,
+    });
+});
+
+app.post('/api/business/notifications/alertas/mark-seen', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    markAccessDeniedAlertsSeen(req.user.clientId, req.user.sub);
+    res.json({ ok: true });
+});
+
+app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    markPendingChangesSeenForRequester(req.user.clientId, req.user.sub);
     res.json({ ok: true });
 });
 
