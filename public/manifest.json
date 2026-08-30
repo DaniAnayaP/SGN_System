@@ -1,7 +1,7 @@
 {
   "name": "SGN by GEIPSA",
   "short_name": "SGN",
-  "start_url": "/",
+  "start_url": "/AppInicio.html",
   "display": "standalone",
   "background_color": "#0b0d14",
   "theme_color": "#3A4BC9",
