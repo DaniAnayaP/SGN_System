@@ -1031,6 +1031,7 @@
     "notificationsTab_avisos": "Avisos",
     "notificationsTab_solicitudes": "Solicitudes",
     "notificationsTab_autorizar": "Autorizar",
+    "notificationsTab_pendientes": "Pendiente x Subir",
     "notificationAttemptedChangePrefix": "intentó hacer un cambio en",
     "notificationAttemptedChangeSuffix": "pero no tiene acceso."
   },
@@ -1070,6 +1071,8 @@
     "cargaAllDone": "Todo listo para guardar",
     "cargaSaveBtn": "Volver a la lista",
     "cargaAutoTag": "auto",
+    "cargaSavedOffline": "Sin internet — guardado en tu celular, se sube solo al reconectar.",
+    "offlineWaitingForSignal": "Esperando señal para subir",
     "cargaPhotoAttached": "Foto adjunta",
     "cargaChangePhoto": "Cambiar foto",
     "cargaTakePhoto": "Tomar foto",

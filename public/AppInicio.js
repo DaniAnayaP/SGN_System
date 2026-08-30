@@ -785,12 +785,18 @@ document.getElementById('home-menu-business-profile').addEventListener('click', 
 // (icons-only tabs from the start, there's never room for the label on a
 // phone) instead of a top-bar dropdown, appended straight to document.body
 // like openSelectSheet's own sheets.
-const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar'];
+// "pendientes" (Pendiente x Subir) is App-only -- not part of the server's
+// combined payload at all, it's whatever's still sitting in THIS device's
+// own offline queue (see AppOfflineSync.js). Fase 1: no conflict detection
+// yet, so this tab is purely informational -- "esto no ha llegado al
+// servidor todavía", nothing to approve/reject here.
+const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar', 'pendientes'];
 const NOTIFICATION_TAB_ICONS = {
     alertas: 'bx-error-circle',
     avisos: 'bx-info-circle',
     solicitudes: 'bx-send',
     autorizar: 'bx-check-shield',
+    pendientes: 'bx-cloud-upload',
 };
 const PENDING_CHANGE_TABLE_LABELS = {
     'registro-combustible': 'menu.opTransVolCombustible',
@@ -798,7 +804,7 @@ const PENDING_CHANGE_TABLE_LABELS = {
     'mi-recurso-humano': 'menu.opRrhhMiRecursoHumano',
 };
 const notificationsBadgeEl = document.getElementById('home-menu-notifications-badge');
-let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [] };
+let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [], pendientes: [] };
 
 function formatNotificationDate(sqliteDatetime) {
     const [y, m, d] = (sqliteDatetime || '').slice(0, 10).split('-');
@@ -830,6 +836,17 @@ function renderNotifRequestItem(change, showOutcome) {
     return el;
 }
 
+function renderNotifPendienteItem(item) {
+    const el = document.createElement('div');
+    el.className = 'notif-item notif-item-alert';
+    el.innerHTML = `
+        <div class="notif-item-meta">${formatNotificationDate(item.queuedAt)}</div>
+        <div class="notif-item-desc">${item.description || '—'}</div>
+        <div class="notif-item-meta">${t('home.offlineWaitingForSignal')}</div>
+    `;
+    return el;
+}
+
 function renderNotifTab(sheet, tabKey) {
     sheet.querySelectorAll('.notif-tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
     sheet.querySelector('.notif-active-label').textContent = t(`main.notificationsTab_${tabKey}`);
@@ -845,6 +862,7 @@ function renderNotifTab(sheet, tabKey) {
         items.forEach((item) => {
             if (tabKey === 'alertas') list.appendChild(renderNotifAlertItem(item));
             else if (tabKey === 'avisos') list.appendChild(renderNotifRequestItem(item, true));
+            else if (tabKey === 'pendientes') list.appendChild(renderNotifPendienteItem(item));
             else list.appendChild(renderNotifRequestItem(item, false));
         });
     }
@@ -857,19 +875,21 @@ function renderNotifTab(sheet, tabKey) {
 }
 
 async function loadNotificationsBadge() {
+    const pendientes = await window.SgnOfflineSync.listOfflineQueue().catch(() => []);
     try {
         const res = await fetch('/api/business/notifications', { credentials: 'include' });
-        if (!res.ok) return;
-        notificationsData = await res.json();
-        const unseenAlertas = notificationsData.alertas.filter((a) => !a.seen_at).length;
-        const unseenAvisos = notificationsData.avisos.filter((a) => !a.seen_at).length;
-        const total = unseenAlertas + unseenAvisos + notificationsData.autorizar.length;
-        notificationsBadgeEl.hidden = total <= 0;
-        notificationsBadgeEl.textContent = total > 99 ? '99+' : String(total);
+        if (res.ok) notificationsData = await res.json();
     } catch {
-        // Badge just stays at whatever it already showed.
+        // Server-side categories just stay at whatever they already showed.
     }
+    notificationsData.pendientes = pendientes;
+    const unseenAlertas = (notificationsData.alertas || []).filter((a) => !a.seen_at).length;
+    const unseenAvisos = (notificationsData.avisos || []).filter((a) => !a.seen_at).length;
+    const total = unseenAlertas + unseenAvisos + (notificationsData.autorizar || []).length + pendientes.length;
+    notificationsBadgeEl.hidden = total <= 0;
+    notificationsBadgeEl.textContent = total > 99 ? '99+' : String(total);
 }
+document.addEventListener('sgn:offline-queue-changed', loadNotificationsBadge);
 
 function openNotificationsSheet() {
     const scrim = document.createElement('div');

@@ -314,16 +314,42 @@ async function createNewCarga() {
     }
 }
 
+// Records with at least one PATCH sitting in the offline queue right now
+// (see AppOfflineSync.js) -- shown as a small cloud badge on the record's
+// own list row (Fase 1 tracks this per RECORD, not per field; a field-level
+// indicator is a reasonable Fase 2 refinement once this is proven out).
+const offlinePendingRecordIds = new Set();
+async function refreshOfflinePendingIds() {
+    const items = await window.SgnOfflineSync.listOfflineQueue();
+    offlinePendingRecordIds.clear();
+    items.forEach((item) => { if (item.recordKey) offlinePendingRecordIds.add(item.recordKey); });
+    render();
+}
+document.addEventListener('sgn:offline-queue-changed', refreshOfflinePendingIds);
+
 async function patchRecord(id, patch) {
+    const recordKey = `carga-combustible:${id}`;
+    const description = `${t('menu.opTransVolCargaCombustible')} · ${recordLabel(currentRecord() || {})}`;
     try {
-        const res = await fetch(`/api/business/fuel-loading-records/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(patch),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) {
+        const result = await window.SgnOfflineSync.offlineAwareFetch(
+            `/api/business/fuel-loading-records/${id}`,
+            { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(patch) },
+            description, recordKey,
+        );
+        if (result.queued) {
+            // Optimistic: apply the patch to the local copy right away so
+            // the field shows filled-in immediately -- same as if the
+            // server had already confirmed it -- and flag the record as
+            // having something still owed to the server.
+            const idx = records.findIndex((r) => r.id === id);
+            if (idx !== -1) records[idx] = { ...records[idx], ...patch };
+            offlinePendingRecordIds.add(recordKey);
+            showToast(t('home.cargaSavedOffline'));
+            render();
+            return;
+        }
+        const body = result.body;
+        if (!result.ok) {
             showToast(body.message || t('admin.saveError'));
             await loadRecords();
             render();
@@ -384,12 +410,17 @@ function renderListView() {
         const done = recordDoneCount(record);
         const total = FIELDS.length;
         const pct = Math.round((done / total) * 100);
+        const isOfflinePending = offlinePendingRecordIds.has(`carga-combustible:${record.id}`);
+        const offlineBadge = isOfflinePending
+            ? `<span class="home-carga-offline-badge" title="${t('home.cargaSavedOffline')}"><i class="bx bx-cloud-upload" aria-hidden="true"></i></span>`
+            : '';
         const row = document.createElement('button');
         row.type = 'button';
         row.className = 'home-carga-active-row';
         row.innerHTML = `
             <span class="home-carga-active-row-icon"><i class="bx bx-gas-pump" aria-hidden="true"></i></span>
             <span class="home-carga-active-row-label"><p>${recordLabel(record)}</p><span>${t('home.cargaFieldsCount', { done, total })}</span></span>
+            ${offlineBadge}
             <span class="home-carga-active-row-progress" style="--pct:${pct}"><span>${pct}%</span></span>
         `;
         row.addEventListener('click', () => { openRecordId = record.id; view = 'record'; render(); });
@@ -683,7 +714,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         }
         await Promise.all([loadCostCenters(), loadGateMap(), loadRecords(), loadFleetFuelSuggestions(), loadBrandingForTheme()]);
         applyStyle(getStoredStyle());
-        render();
+        await refreshOfflinePendingIds();
     } catch (err) {
         console.error('Carga Combustible (App) failed to load:', err);
         showToast(t('admin.loadError'));

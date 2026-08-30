@@ -1031,6 +1031,7 @@
     "notificationsTab_avisos": "Notices",
     "notificationsTab_solicitudes": "Requests",
     "notificationsTab_autorizar": "Authorize",
+    "notificationsTab_pendientes": "Pending Upload",
     "notificationAttemptedChangePrefix": "attempted a change on",
     "notificationAttemptedChangeSuffix": "but doesn't have access."
   },
@@ -1070,6 +1071,8 @@
     "cargaAllDone": "Everything's ready to save",
     "cargaSaveBtn": "Back to list",
     "cargaAutoTag": "auto",
+    "cargaSavedOffline": "No connection — saved on your phone, uploads automatically once you're back online.",
+    "offlineWaitingForSignal": "Waiting for signal to upload",
     "cargaPhotoAttached": "Photo attached",
     "cargaChangePhoto": "Change photo",
     "cargaTakePhoto": "Take photo",

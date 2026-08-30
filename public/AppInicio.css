@@ -1328,6 +1328,21 @@ body{
 .notif-item-meta{ font-size: 0.62rem; color: var(--home-text-muted); }
 .notif-item-desc{ margin: 0.2rem 0 0; font-size: 0.74rem; color: var(--home-text-primary); line-height: 1.45; }
 .notif-empty{ font-size: 0.78rem; color: var(--home-text-secondary); padding: 0.5rem 0; }
+/* Cloud icon on an active Carga record's own row -- flags "this has at
+   least one change still sitting in the offline queue, not on the server
+   yet" (see AppOfflineSync.js + AppCargaCombustible.js's patchRecord). */
+.home-carga-offline-badge{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: color-mix(in srgb, #c9860b 18%, transparent);
+    color: #c9860b;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
 .home-menu-badge{
     margin-left: 0.4rem;
     min-width: 1.05rem;
