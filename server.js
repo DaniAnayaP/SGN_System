@@ -1673,6 +1673,29 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     res.json({ grants: setUserGrants(req.params.id, grants) });
 });
 
+// "Reestablecer Rol" -- wipes this user's Permisos Adicionales entirely, so
+// their effective access goes back to exactly what their Puesto de Trabajo
+// grants (getUserJobPositionGrants), nothing more. There's no separate
+// "removed from role" state to restore here: user_grants is purely
+// additive (see setUserGrants above), so clearing it is already the full
+// reset.
+app.post('/api/business/users/:id/reset-role', requireAuth, requireClientAdmin, (req, res) => {
+    const user = getUserById(req.params.id, req.user.clientId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
+    res.json({ grants: setUserGrants(req.params.id, []) });
+});
+
+// Bulk version of the above -- every user at this client (listBusinessUsers
+// already excludes the client admin) gets their Permisos Adicionales
+// cleared in one pass, so the whole client's access matches its Roles
+// configuration exactly.
+app.post('/api/business/users/reset-all-roles', requireAuth, requireClientAdmin, (req, res) => {
+    const affected = listBusinessUsers(req.user.clientId);
+    affected.forEach((u) => setUserGrants(u.id, []));
+    res.json({ count: affected.length });
+});
+
 // Roles: what a Puesto de Trabajo grants by default to anyone hired into it
 // (see job_position_grants, hr_workers.job_position_id) -- replaces the old
 // freely-named Perfiles entirely; the catalog itself (create/rename/

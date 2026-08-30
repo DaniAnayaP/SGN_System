@@ -161,6 +161,35 @@ async function toggleUserActive(user) {
     }
 }
 
+// --- Reestablecer Rol (individual / masivo) ----------------------------------
+// Wipes Permisos Adicionales (user_grants is purely additive — see
+// setUserGrants in db.js) so effective access goes back to exactly what
+// the user's Puesto de Trabajo (Roles) defines, nothing more.
+async function resetUserRole(user) {
+    if (!(await Dashboard.confirm(Dashboard.t('business.resetRoleConfirm', { name: user.name })))) return;
+    try {
+        const res = await fetch(`/api/business/users/${user.id}/reset-role`, { method: 'POST', credentials: 'include' });
+        if (!res.ok) throw new Error('reset failed');
+        Dashboard.showToast(Dashboard.t('business.resetRoleSuccess'), 'success');
+        await loadUsers();
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
+document.getElementById('reset-all-roles-btn').addEventListener('click', async () => {
+    if (!(await Dashboard.confirm(Dashboard.t('business.resetAllRolesConfirm')))) return;
+    try {
+        const res = await fetch('/api/business/users/reset-all-roles', { method: 'POST', credentials: 'include' });
+        if (!res.ok) throw new Error('reset failed');
+        const { count } = await res.json();
+        Dashboard.showToast(Dashboard.t('business.resetAllRolesSuccess', { count }), 'success');
+        await loadUsers();
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+});
+
 // --- Table --------------------------------------------------------------
 function operationalBadgeClass(status) {
     if (status === 'active') return 'admin-badge-activo';
@@ -256,6 +285,15 @@ function renderUsersTable() {
         grantBtn.innerHTML = '<i class="bx bx-key" aria-hidden="true"></i>';
         grantBtn.addEventListener('click', () => openGrantAccessModal(user));
         tdActions.appendChild(grantBtn);
+
+        const resetRoleBtn = document.createElement('button');
+        resetRoleBtn.type = 'button';
+        resetRoleBtn.className = 'admin-icon-btn';
+        resetRoleBtn.setAttribute('aria-label', Dashboard.t('business.resetRoleBtn'));
+        resetRoleBtn.title = Dashboard.t('business.resetRoleBtn');
+        resetRoleBtn.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
+        resetRoleBtn.addEventListener('click', () => resetUserRole(user));
+        tdActions.appendChild(resetRoleBtn);
 
         tr.append(tdUsername, tdName, tdEmail, tdCreated, tdHrStatus, tdOperationalStatus, tdActivePerms, tdActions);
         tableBody.appendChild(tr);
