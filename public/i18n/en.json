@@ -801,6 +801,7 @@
     "trazSubtitle": "Read-only traceability — everything recorded in Registro Combustible, including calculated columns. Edit from Operaciones instead.",
     "recordSaved": "Record Saved",
     "changeSaved": "Change Saved",
+    "updateDone": "Update complete",
     "colUniqueBigDate": "# Unique Big Date",
     "colRegistro": "# Record",
     "colAnio": "Year",

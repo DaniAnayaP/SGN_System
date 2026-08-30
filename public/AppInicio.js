@@ -1607,7 +1607,10 @@ function updateDatabaseCompanyLabel() {
     const brand = document.querySelector('.home-client-brand');
     if (!brand) return;
     brand.style.cursor = 'pointer';
-    brand.addEventListener('click', () => window.location.reload());
+    brand.addEventListener('click', () => {
+        sessionStorage.setItem('sgnShowUpdateToast', '1');
+        window.location.reload();
+    });
 })();
 
 async function loadClientBranding() {
@@ -1672,6 +1675,10 @@ async function loadClientBranding() {
         loadNotificationsBadge();
         applyUiScaleLevel(await fetchUiScaleLevel());
         applyStyle(getStoredStyle());
+        if (sessionStorage.getItem('sgnShowUpdateToast')) {
+            sessionStorage.removeItem('sgnShowUpdateToast');
+            showToast(t('main.updateDone'));
+        }
     } catch (err) {
         console.error('AppInicio failed to load:', err);
         renderTiles([]);

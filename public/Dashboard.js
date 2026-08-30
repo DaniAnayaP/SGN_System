@@ -1411,7 +1411,10 @@ function closeAllTopBarDropdowns(exceptName) {
 // with nothing per-page to wire up.
 document.querySelectorAll('.brand').forEach((brand) => {
     brand.style.cursor = 'pointer';
-    brand.addEventListener('click', () => window.location.reload());
+    brand.addEventListener('click', () => {
+        sessionStorage.setItem('sgnShowUpdateToast', '1');
+        window.location.reload();
+    });
 });
 
 // --- Top-bar actions collapse (mobile only) ----------------------------------
@@ -5631,6 +5634,14 @@ async function initDashboard({ activePage } = {}) {
     renderDataTableZoomControls();
     renderDataTableColumnControls();
     sizeDataTableWrappers();
+    // Confirms the .brand click actually did something -- a bare
+    // location.reload() wipes all JS state before any toast could render,
+    // so the click sets this flag first (see the .brand handler below) and
+    // this reads it back on the page that comes up after the reload.
+    if (sessionStorage.getItem('sgnShowUpdateToast')) {
+        sessionStorage.removeItem('sgnShowUpdateToast');
+        showToast(t('main.updateDone'), 'success');
+    }
     return role;
 }
 

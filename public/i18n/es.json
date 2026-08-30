@@ -801,6 +801,7 @@
     "trazSubtitle": "Trazabilidad de solo lectura — todo lo registrado en Registro Combustible, incluidas las columnas calculadas. Para editar, ve a Operaciones.",
     "recordSaved": "Registro Guardado",
     "changeSaved": "Cambio realizado",
+    "updateDone": "Actualización realizada",
     "colUniqueBigDate": "# Único Big Date",
     "colRegistro": "# Registro",
     "colAnio": "Año",
