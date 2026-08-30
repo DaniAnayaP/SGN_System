@@ -4739,11 +4739,23 @@ function availableAreasForDepartment(deptKey) {
 // profile configured with a broad "select all" at Área or Departamento
 // level already covers every pantalla under it, no different from how
 // that same grant already works inside the permission tree editor itself.
+// A pantalla like Carga Combustible has no leaf of its own once it has
+// Control Interno columns underneath -- PermissionTree.js's getGrants()
+// only ever saves one row per checked COLUMN leaf (e.g. ".../carga-
+// operador/fecha-registro/solo-ver"), never a bare {sectionId, itemId,
+// submenuId} row for the pantalla itself. Without the g.submenuId.startsWith
+// check below, granting every column of a screen still left the screen
+// itself invisible in the menu -- the columns existed but nothing could
+// ever navigate to them. Any grant nested under this submenuId (a column,
+// or a column inside a classification) now counts as the screen itself
+// being reachable, matching how a worker actually experiences "I was given
+// access to this screen's fields."
 function hasScreenGrant(sectionId, itemId, submenuId) {
     if (isUnrestrictedClientAdmin()) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     return grants.some((g) => (
         (g.sectionId === sectionId && g.itemId === itemId && g.submenuId === submenuId)
+        || (g.sectionId === sectionId && g.itemId === itemId && g.submenuId && g.submenuId.startsWith(`${submenuId}/`))
         || (g.sectionId === sectionId && g.itemId === itemId && !g.submenuId)
         || (g.sectionId === sectionId && !g.itemId && !g.submenuId)
     ));
