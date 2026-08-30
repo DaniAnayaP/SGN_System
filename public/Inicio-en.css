@@ -401,6 +401,12 @@
         .dept-picker-btn i:last-child{
             display: none;
         }
+        .notifications-tabs .notifications-tab .notifications-tab-label{
+            display: none;
+        }
+        .notifications-tabs .notifications-tab .notifications-tab-icon{
+            display: block;
+        }
     }
 
     /* Search */
@@ -1501,13 +1507,23 @@
         padding-bottom: 0.5rem;
         border-bottom: 1px solid var(--color-border);
     }
-    .notifications-tab{
+    /* .notifications-tabs .notifications-tab (2 classes) instead of the
+       plain .notifications-tab -- needed to outrank ".top-bar-actions
+       button" above (class+type), which otherwise forces every button in
+       this bar into its own fixed 2.2rem circular icon size/1.2rem font,
+       squashing these 4 tabs into overlapping unreadable text. Same
+       higher-specificity trick this file already uses elsewhere for the
+       same reason (see the comment on #top-bar-actions-toggle above). */
+    .notifications-tabs .notifications-tab{
         flex: 1;
+        min-width: 0;
+        width: auto;
+        height: auto;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.15rem;
-        padding: 0.35rem 0.2rem;
+        gap: 0.2rem;
+        padding: 0.4rem 0.15rem;
         border: none;
         border-radius: 0.4rem;
         background: none;
@@ -1516,7 +1532,17 @@
         font-weight: 600;
         text-align: center;
     }
-    .notifications-tab.active{
+    .notifications-tabs .notifications-tab .notifications-tab-label{
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    .notifications-tabs .notifications-tab .notifications-tab-icon{
+        display: none;
+        font-size: 1rem;
+    }
+    .notifications-tabs .notifications-tab.active{
         background: var(--color-bg);
         color: var(--color-text-primary);
     }

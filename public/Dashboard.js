@@ -4091,6 +4091,16 @@ const PENDING_CHANGE_TABLE_LABELS = {
     'mi-recurso-humano': 'menu.opRrhhMiRecursoHumano',
 };
 const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar'];
+// Titles collapse to just these icons under the same narrow-screen
+// breakpoint every other top-bar label already uses (see .dept-picker-btn
+// span's own display:none rule) — same "reducción de tamaño" the user
+// asked for, not a separate mobile-only thing.
+const NOTIFICATION_TAB_ICONS = {
+    alertas: 'bx-error-circle',
+    avisos: 'bx-info-circle',
+    solicitudes: 'bx-send',
+    autorizar: 'bx-check-shield',
+};
 let notificationsListEl = null;
 let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [] };
 let activeNotificationTab = 'alertas';
@@ -4254,7 +4264,8 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
         <div class="notifications-tabs" role="tablist">
             ${NOTIFICATION_TABS.map((tabKey) => `
                 <button type="button" class="notifications-tab${tabKey === activeNotificationTab ? ' active' : ''}" data-tab="${tabKey}" role="tab">
-                    <span>${t(`main.notificationsTab_${tabKey}`)}</span>
+                    <i class="bx ${NOTIFICATION_TAB_ICONS[tabKey]} notifications-tab-icon" aria-hidden="true"></i>
+                    <span class="notifications-tab-label">${t(`main.notificationsTab_${tabKey}`)}</span>
                     <span class="notifications-tab-count" data-tab="${tabKey}">0</span>
                 </button>
             `).join('')}
