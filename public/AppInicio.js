@@ -109,18 +109,49 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-transporte-vol-nuestras-unidades': 'nuestras-unidades',
 };
 
+// grantedAppScreens (from GET /api/business/app-screens) is the CLIENT's
+// whole App configuration -- every screen the App has, regardless of
+// which of them THIS user was actually granted. Nothing here ever
+// narrowed it down before, so every App user saw a tile for every screen
+// the client had configured, whether or not their own Puesto/Permisos
+// Adicionales actually gave them "Visión APP" on it -- same gap already
+// fixed on the category-screen picker (see isPantallaAppVisible), just
+// never applied to these home-screen tiles too.
+function isAppScreenGrantedForTile(screen) {
+    if (isUnrestrictedClientAdmin()) return true;
+    if (!screen.sectionId || !screen.itemId) return false;
+    if (!screen.submenuPrefix) {
+        // A general-button "screen" (Mensajes, Notificaciones...) has no
+        // App-vision toggle of its own -- gated the same way its
+        // hamburger-menu/tab-bar counterpart already is.
+        return hasMainButtonPermission(screen.itemId);
+    }
+    // A real catalog screen's App-vision grant may sit on the pantalla
+    // itself OR on any column/classification nested under it (checking
+    // "Ver y Operar" on one column and turning on Visión APP just for that
+    // column is a normal, valid grant shape) -- same "any descendant
+    // counts" rule as Dashboard.js's own hasScreenGrant.
+    return effectiveGrants.some((g) => {
+        if (g.sectionId !== screen.sectionId || g.itemId !== screen.itemId || !g.submenuId) return false;
+        if (!g.submenuId.endsWith('#app')) return false;
+        const base = g.submenuId.slice(0, -'#app'.length);
+        return base === screen.submenuPrefix || base.startsWith(`${screen.submenuPrefix}/`);
+    });
+}
+
 function renderTiles(screens) {
     const tilesEl = document.getElementById('home-tiles');
     const emptyEl = document.getElementById('home-empty');
     tilesEl.innerHTML = '';
-    if (!screens.length) {
+    const visibleScreens = screens.filter(isAppScreenGrantedForTile);
+    if (!visibleScreens.length) {
         tilesEl.hidden = true;
         emptyEl.hidden = false;
         return;
     }
     tilesEl.hidden = false;
     emptyEl.hidden = true;
-    screens.forEach((screen) => {
+    visibleScreens.forEach((screen) => {
         const page = WEB_SCREEN_PAGES[screen.webScreenKey];
         const tile = document.createElement('button');
         tile.type = 'button';
@@ -1542,6 +1573,11 @@ async function initDeptAreaCc() {
         updateTabBarVisibility();
         syncSettingsMenuVisibility();
         syncTopBarMenuVisibility();
+        // effectiveGrants just became real (renderTiles's very first call,
+        // back in init(), ran before this resolved and had nothing to
+        // filter by yet) -- re-render the home tiles now that they can
+        // actually be narrowed down to what this user was granted.
+        renderTiles(grantedAppScreens);
     } catch (err) {
         console.error('AppInicio: failed to load department/area/cost-center data:', err);
     }
