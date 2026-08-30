@@ -1248,6 +1248,90 @@ body{
 }
 .home-carga-photo-btn i{ color: var(--home-accent); font-size: 1rem; }
 
+/* Notificaciones bottom sheet -- unlike .home-select-sheet (a single
+   scrolling column of options), this needs the tab strip pinned at the
+   top with only the list below it scrolling, so a flex column with
+   overflow on just .notif-list instead of the sheet itself. */
+.notif-sheet{
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--home-surface);
+    border-radius: 1rem 1rem 0 0;
+    padding: 0.7rem 0 max(0.6rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 24px var(--home-shadow);
+}
+.notif-title{
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--home-text-primary);
+    padding: 0 1rem 0.6rem;
+}
+.notif-tabs{
+    display: flex;
+    gap: 0.3rem;
+    padding: 0 0.7rem 0.6rem;
+    border-bottom: 1px solid var(--home-divider);
+    flex-shrink: 0;
+}
+.notif-tab{
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.4rem 0.2rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: none;
+    color: var(--home-text-secondary);
+}
+.notif-tab i{ font-size: 1.05rem; }
+.notif-tab.active{ background: var(--home-surface-2); }
+.notif-tab.active i{ color: var(--home-accent); }
+.notif-tab-count{
+    font-size: 0.62rem;
+    font-weight: 700;
+    min-width: 1rem;
+    padding: 0 0.25rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--home-text-muted) 25%, transparent);
+    color: var(--home-text-secondary);
+}
+.notif-tab.active .notif-tab-count{ background: var(--home-accent); color: var(--home-on-accent); }
+.notif-list{
+    padding: 0.6rem 0.9rem 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow-y: auto;
+}
+.notif-item{
+    padding: 0.55rem 0.6rem;
+    border: 1px solid var(--home-border);
+    border-radius: 0.55rem;
+    background: var(--home-bg);
+}
+.notif-item-alert{ border-left: 3px solid var(--home-danger); }
+.notif-item-meta{ font-size: 0.62rem; color: var(--home-text-muted); }
+.notif-item-desc{ margin: 0.2rem 0 0; font-size: 0.74rem; color: var(--home-text-primary); line-height: 1.45; }
+.notif-empty{ font-size: 0.78rem; color: var(--home-text-secondary); padding: 0.5rem 0; }
+.home-menu-badge{
+    margin-left: 0.4rem;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--home-danger);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1.05rem;
+    text-align: center;
+}
+
 .home-carga-done-card{
     margin-top: 0.4rem;
     border-radius: 0.9rem;

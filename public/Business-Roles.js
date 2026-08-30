@@ -11,8 +11,7 @@ const tableBody = document.getElementById('job-positions-table-body');
 const emptyMsg = document.getElementById('job-positions-empty');
 
 const permissionsHeading = document.getElementById('permissions-heading');
-const permissionsHint = document.getElementById('permissions-hint');
-const permissionsPanel = document.getElementById('permissions-panel');
+const permissionsModal = document.getElementById('permissions-modal');
 const treeContainer = document.getElementById('permission-tree-container');
 const permissionsSaveBtn = document.getElementById('permissions-save');
 const permissionsSaveStatus = document.getElementById('permissions-save-status');
@@ -109,21 +108,30 @@ async function selectJobPositionForPermissions(jp) {
     selectedJobPositionId = jp.id;
     permissionsHeading.textContent = `${Dashboard.t('business.permissionsTitle')} — ${jp.name}`;
     permissionsSaveStatus.textContent = '';
+    treeContainer.innerHTML = '';
+    permissionsModal.hidden = false;
     try {
         const res = await fetch(`/api/business/job-positions/${jp.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true });
         await tree.init(data.grants || []);
-        permissionsPanel.hidden = false;
-        permissionsHint.hidden = true;
-        permissionsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch {
-        permissionsHint.textContent = Dashboard.t('admin.loadError');
-        permissionsHint.hidden = false;
-        permissionsPanel.hidden = true;
+        permissionsSaveStatus.textContent = Dashboard.t('admin.loadError');
     }
 }
+
+function closePermissionsModal() {
+    permissionsModal.hidden = true;
+    tree = null;
+    selectedJobPositionId = null;
+}
+
+document.getElementById('permissions-cancel').addEventListener('click', closePermissionsModal);
+permissionsModal.addEventListener('click', (event) => { if (event.target === permissionsModal) closePermissionsModal(); });
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !permissionsModal.hidden) closePermissionsModal();
+});
 
 permissionsSaveBtn.addEventListener('click', async () => {
     if (!selectedJobPositionId || !tree) return;
@@ -137,6 +145,7 @@ permissionsSaveBtn.addEventListener('click', async () => {
         });
         if (!res.ok) throw new Error('save failed');
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+        closePermissionsModal();
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     } finally {

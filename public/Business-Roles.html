@@ -382,18 +382,20 @@
                 </table>
                 <p id="job-positions-empty" class="admin-empty" data-i18n="business.noJobPositionsForRoles" hidden>No job positions yet — create one first in Puestos de Trabajo.</p>
             </div>
-
-            <h3 id="permissions-heading" style="margin-top: 2rem; margin-bottom: 0.5rem; font-size: 0.95rem;" data-i18n="business.permissionsTitle">Access for this job position</h3>
-            <p id="permissions-hint" class="admin-hint" data-i18n="business.selectJobPositionHint">Select a job position above to configure its access.</p>
-            <div id="permissions-panel" hidden>
-                <div id="permission-tree-container"></div>
-                <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                    <button type="button" class="btn" id="permissions-save" data-i18n="admin.save">Save</button>
-                </div>
-                <p id="permissions-save-status" class="admin-save-status"></p>
-            </div>
         </section>
     </main>
+
+    <div class="modal-overlay" id="permissions-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="permissions-heading" style="max-width: 54rem;">
+            <h3 id="permissions-heading" data-i18n="business.permissionsTitle">Access for this job position</h3>
+            <div id="permission-tree-container"></div>
+            <p id="permissions-save-status" class="admin-save-status"></p>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="permissions-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="permissions-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">

@@ -156,7 +156,7 @@ hamburgerBtn.addEventListener('click', (event) => {
     hamburgerBtn.setAttribute('aria-expanded', String(willOpen));
 });
 document.addEventListener('click', closeHamburgerMenu);
-['home-menu-notifications', 'home-menu-bookmarks', 'home-menu-others'].forEach((id) => {
+['home-menu-bookmarks', 'home-menu-others'].forEach((id) => {
     document.getElementById(id).addEventListener('click', () => {
         closeHamburgerMenu();
         showToast(t('home.comingSoon'));
@@ -777,6 +777,130 @@ document.getElementById('home-menu-business-profile').addEventListener('click', 
     } catch {
         showToast(t('admin.loadError'));
     }
+});
+
+// --- Notificaciones (Alertas / Avisos / Solicitudes / Autorizar) -----------
+// Same 4-tab combined payload Dashboard.js's own bell dropdown reads
+// (GET /api/business/notifications) -- here it opens as a bottom sheet
+// (icons-only tabs from the start, there's never room for the label on a
+// phone) instead of a top-bar dropdown, appended straight to document.body
+// like openSelectSheet's own sheets.
+const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar'];
+const NOTIFICATION_TAB_ICONS = {
+    alertas: 'bx-error-circle',
+    avisos: 'bx-info-circle',
+    solicitudes: 'bx-send',
+    autorizar: 'bx-check-shield',
+};
+const PENDING_CHANGE_TABLE_LABELS = {
+    'registro-combustible': 'menu.opTransVolCombustible',
+    'carga-combustible': 'menu.opTransVolCargaCombustible',
+    'mi-recurso-humano': 'menu.opRrhhMiRecursoHumano',
+};
+const notificationsBadgeEl = document.getElementById('home-menu-notifications-badge');
+let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [] };
+
+function formatNotificationDate(sqliteDatetime) {
+    const [y, m, d] = (sqliteDatetime || '').slice(0, 10).split('-');
+    return y && m && d ? `${d}-${m}-${y.slice(2)}` : '';
+}
+
+function renderNotifAlertItem(alert) {
+    const el = document.createElement('div');
+    el.className = 'notif-item notif-item-alert';
+    el.innerHTML = `
+        <div class="notif-item-meta">#${alert.seq} · ${formatNotificationDate(alert.created_at)}</div>
+        <div class="notif-item-desc"><b>${alert.acting_user_label}</b>, ${t('main.notificationAttemptedChangePrefix')} <b>${t(alert.field_key)} / ${t(alert.screen_key)}</b>, ${t('main.notificationAttemptedChangeSuffix')}</div>
+    `;
+    return el;
+}
+
+function renderNotifRequestItem(change, showOutcome) {
+    const el = document.createElement('div');
+    el.className = 'notif-item';
+    const tableLabel = t(PENDING_CHANGE_TABLE_LABELS[change.table_key] || change.table_key);
+    const outcome = showOutcome
+        ? `<div class="notif-item-meta">${t(change.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected')} — ${change.resolved_by || '—'} · ${formatNotificationDate(change.resolved_at)}</div>`
+        : '';
+    el.innerHTML = `
+        <div class="notif-item-meta">${tableLabel} · ${change.record_label || '—'}</div>
+        <div class="notif-item-desc">${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"</div>
+        ${outcome}
+    `;
+    return el;
+}
+
+function renderNotifTab(sheet, tabKey) {
+    sheet.querySelectorAll('.notif-tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
+    const list = sheet.querySelector('.notif-list');
+    list.innerHTML = '';
+    const items = notificationsData[tabKey] || [];
+    if (!items.length) {
+        const empty = document.createElement('p');
+        empty.className = 'notif-empty';
+        empty.textContent = t('main.notificationsEmpty');
+        list.appendChild(empty);
+    } else {
+        items.forEach((item) => {
+            if (tabKey === 'alertas') list.appendChild(renderNotifAlertItem(item));
+            else if (tabKey === 'avisos') list.appendChild(renderNotifRequestItem(item, true));
+            else list.appendChild(renderNotifRequestItem(item, false));
+        });
+    }
+    if (tabKey === 'alertas' && items.some((a) => !a.seen_at)) {
+        fetch('/api/business/notifications/alertas/mark-seen', { method: 'POST', credentials: 'include' }).catch(() => {});
+    }
+    if (tabKey === 'avisos' && items.some((a) => !a.seen_at)) {
+        fetch('/api/business/notifications/avisos/mark-seen', { method: 'POST', credentials: 'include' }).catch(() => {});
+    }
+}
+
+async function loadNotificationsBadge() {
+    try {
+        const res = await fetch('/api/business/notifications', { credentials: 'include' });
+        if (!res.ok) return;
+        notificationsData = await res.json();
+        const unseenAlertas = notificationsData.alertas.filter((a) => !a.seen_at).length;
+        const unseenAvisos = notificationsData.avisos.filter((a) => !a.seen_at).length;
+        const total = unseenAlertas + unseenAvisos + notificationsData.autorizar.length;
+        notificationsBadgeEl.hidden = total <= 0;
+        notificationsBadgeEl.textContent = total > 99 ? '99+' : String(total);
+    } catch {
+        // Badge just stays at whatever it already showed.
+    }
+}
+
+function openNotificationsSheet() {
+    const scrim = document.createElement('div');
+    scrim.className = 'home-select-scrim';
+    const sheet = document.createElement('div');
+    sheet.className = 'notif-sheet';
+    sheet.innerHTML = `
+        <div class="home-select-sheet-handle"></div>
+        <div class="notif-title">${t('main.notificationsTitle')}</div>
+        <div class="notif-tabs">
+            ${NOTIFICATION_TABS.map((tabKey) => `
+                <button type="button" class="notif-tab" data-tab="${tabKey}">
+                    <i class="bx ${NOTIFICATION_TAB_ICONS[tabKey]}" aria-hidden="true"></i>
+                    <span class="notif-tab-count">${(notificationsData[tabKey] || []).length}</span>
+                </button>
+            `).join('')}
+        </div>
+        <div class="notif-list"></div>
+    `;
+    sheet.querySelectorAll('.notif-tab').forEach((btn) => {
+        btn.addEventListener('click', () => renderNotifTab(sheet, btn.dataset.tab));
+    });
+    scrim.addEventListener('click', (event) => { if (event.target === scrim) scrim.remove(); });
+    scrim.appendChild(sheet);
+    document.body.appendChild(scrim);
+    renderNotifTab(sheet, 'alertas');
+}
+
+document.getElementById('home-menu-notifications').addEventListener('click', async () => {
+    closeHamburgerMenu();
+    await loadNotificationsBadge();
+    openNotificationsSheet();
 });
 
 // --- Mensajes (full-screen, honest empty state — no message backend yet) --
@@ -1533,6 +1657,7 @@ async function loadClientBranding() {
         renderTiles(grantedAppScreens);
         loadClientBranding();
         initDeptAreaCc();
+        loadNotificationsBadge();
         applyUiScaleLevel(await fetchUiScaleLevel());
         applyStyle(getStoredStyle());
     } catch (err) {
