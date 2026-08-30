@@ -3,8 +3,6 @@
   "appName": "SGN",
   "webDir": "www",
   "server": {
-    "url": "https://sgnsystem-production.up.railway.app",
-    "cleartext": false,
     "androidScheme": "https"
   },
   "plugins": {

@@ -1,0 +1,2026 @@
+/* SaaS admin panel: shared styles for Clientes Nuevos / Contrataciones */
+
+.admin-panel{
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    background-color: var(--color-surface);
+    box-shadow: 0 0 0 1px var(--color-border);
+}
+.admin-tabs{
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+}
+.admin-tab{
+    padding: 0.7rem 1rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+.admin-tab:hover{
+    color: var(--color-text-primary);
+}
+.admin-tab.active{
+    color: var(--color-text-primary);
+    border-bottom-color: var(--color-text-primary);
+}
+.admin-subtitle{
+    margin-bottom: 1.25rem;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+/* Panel.html — categoría tabs (Catálogos/Operaciones/Admin/Gestión/
+   Reportes/Material Apoyo) + a second row of that categoría's own
+   pantallas right underneath, "pegadita" (same block, no gap). Container
+   query driven (not @media) since what matters is THIS component's own
+   available width, not the viewport — the sidebar being open/closed
+   changes that independent of screen size. Always exactly 6 categoría
+   tabs, so they flex to fill the row evenly; the pantallas row's count
+   varies, so those keep their natural width and the row scrolls instead
+   of ever wrapping. */
+.panel-tabs-frame{
+    container-type: inline-size;
+    container-name: panel-tabs;
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    overflow: hidden;
+}
+.panel-tabs{
+    display: flex;
+    gap: 0.35rem;
+    background: var(--color-surface);
+    padding: 0.4rem 0.4rem 0.3rem;
+}
+.panel-tab{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.55rem 0.4rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.panel-tab i{
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.panel-tab .full,
+.panel-tab .short{
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.panel-tab .short{
+    display: none;
+}
+.panel-tab.active{
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+}
+.panel-tab .badge{
+    font-size: 0.62rem;
+    font-weight: 700;
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+    padding: 0.05rem 0.4rem;
+    border-radius: 1rem;
+}
+.panel-tab.active .badge{
+    background: color-mix(in srgb, var(--color-accent-text) 25%, transparent);
+    color: var(--color-accent-text);
+}
+/* The pantallas row -- fondo de página (más tenue que el de tarjeta de la
+   fila de categorías) + línea punteada arriba reads as "one level below",
+   without a visible gap between them -- same --color-bg/--color-surface
+   contrast this app already uses everywhere a card sits on the page. */
+.panel-subtabs{
+    display: flex;
+    gap: 0.35rem;
+    background: var(--color-bg);
+    border-top: 1px dashed var(--color-border);
+    padding: 0.5rem 0.4rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+}
+.panel-subtabs::-webkit-scrollbar{
+    height: 0.4rem;
+}
+.panel-subtabs::-webkit-scrollbar-thumb{
+    background: var(--color-border);
+    border-radius: 0.3rem;
+}
+.panel-subtab{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    max-width: 14rem;
+    padding: 0.5rem 0.8rem;
+    border: none;
+    border-radius: 0.45rem;
+    background: var(--color-surface);
+    font-family: inherit;
+    font-size: 0.76rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.panel-subtab i{
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+}
+.panel-subtab .full{
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.panel-subtab.active{
+    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+    color: var(--color-accent);
+    font-weight: 600;
+}
+.panel-subtab.active i{
+    color: var(--color-accent);
+}
+.panel-subtabs-empty{
+    background: var(--color-bg);
+    border-top: 1px dashed var(--color-border);
+    padding: 0.9rem 0.9rem;
+    font-size: 0.78rem;
+    font-style: italic;
+    color: var(--color-text-secondary);
+}
+/* Medium width (container, not viewport) -- category AND pantalla labels
+   abbreviate/truncate instead of shrinking indefinitely. */
+@container panel-tabs (max-width: 46rem){
+    .panel-tab .full{ display: none; }
+    .panel-tab .short{ display: inline; }
+    .panel-subtab .full{ max-width: 8rem; }
+}
+/* Narrow (container, e.g. mobile) -- categoría tabs drop to icon-only;
+   pantallas keep their icon+label (already scrolls horizontally if it
+   doesn't fit, per the note above). */
+@container panel-tabs (max-width: 26rem){
+    .panel-tab .short{ display: none; }
+    .panel-tab{ padding: 0.6rem 0.3rem; }
+}
+
+/* Form */
+.admin-form-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.admin-field{
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.admin-field label{
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+.admin-field input,
+.admin-field select{
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.85rem;
+}
+.admin-field input:focus,
+.admin-field select:focus{
+    outline: none;
+    border-color: var(--color-text-primary);
+}
+/* COSTO $ CONTRATADO — read-only, computed live from the selected plan (see
+   admin.js's updateContractedCostPreview), same box as a real input/select
+   so it lines up in the grid without looking clickable. */
+.admin-computed-value{
+    margin: 0;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+.admin-field textarea{
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.85rem;
+    font-family: inherit;
+    resize: vertical;
+}
+.admin-field textarea:focus{
+    outline: none;
+    border-color: var(--color-text-primary);
+}
+.admin-client-profile-fields{
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* Datos de Cliente (read-only client identity view) */
+.admin-readonly-fields{
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+.admin-readonly-field h3{
+    margin-bottom: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+.admin-readonly-field p{
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+.admin-branding-fields{
+    display: grid;
+    grid-template-columns: minmax(14rem, 2fr) 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.admin-branding-fields-logo-only{
+    grid-template-columns: minmax(14rem, 24rem);
+}
+.admin-logo-row{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.admin-logo-preview{
+    width: 2.5rem;
+    height: 2.5rem;
+    object-fit: contain;
+    border-radius: 0.3rem;
+    background-color: var(--color-bg);
+    box-shadow: 0 0 0 1px var(--color-border);
+}
+.admin-logo-clear{
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+}
+.admin-contract-filename{
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Nuestros Clientes table: small logo thumbnail + clickable color swatch,
+   compact enough to sit inline in a table cell instead of the full-size
+   preview/picker used in the edit form. */
+.admin-table-logo{
+    width: 1.8rem;
+    height: 1.8rem;
+    object-fit: contain;
+    border-radius: 0.3rem;
+    background-color: var(--color-bg);
+    box-shadow: 0 0 0 1px var(--color-border);
+    display: block;
+}
+.admin-table-logo-empty{
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 0.3rem;
+    background-color: var(--color-bg);
+    box-shadow: 0 0 0 1px var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    font-size: 1rem;
+}
+.admin-color-swatch{
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    padding: 0;
+}
+.admin-color-swatch-empty{
+    background-color: var(--color-bg);
+    background-image: linear-gradient(45deg, var(--color-border) 25%, transparent 25%, transparent 75%, var(--color-border) 75%),
+        linear-gradient(45deg, var(--color-border) 25%, transparent 25%, transparent 75%, var(--color-border) 75%);
+    background-size: 6px 6px;
+    background-position: 0 0, 3px 3px;
+}
+.admin-field input[type="color"]{
+    padding: 0.2rem;
+    height: 2.4rem;
+    cursor: pointer;
+}
+@media (max-width: 700px){
+    .admin-branding-fields{
+        grid-template-columns: 1fr;
+    }
+}
+
+.admin-error{
+    margin-bottom: 1rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 0.4rem;
+    background-color: #fdecea;
+    color: #b3261e;
+    font-size: 0.8rem;
+}
+body.dark-mode .admin-error{
+    background-color: #3a1f1e;
+    color: #ff8a80;
+}
+.admin-form-actions{
+    display: flex;
+    gap: 0.75rem;
+}
+/* Shared primary/secondary button used everywhere in the app (Guardar/
+   Cancelar, Buscar, "+ Nuevo..."). Never had a real base style of its own
+   before this — every button was just riding on browser default chrome —
+   so this is the first place --color-accent actually gets used, already
+   theme-aware (claro/oscuro/institucional) via Inicio-en.css's :root/
+   body.dark-mode/body.institutional-mode blocks. */
+.btn{
+    padding: 0.6rem 1.4rem;
+    border-radius: 1.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: inherit;
+    border: none;
+    cursor: pointer;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    transition: filter 0.15s ease;
+}
+.btn:hover{
+    filter: brightness(1.08);
+}
+.btn-secondary{
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+}
+.btn-secondary:hover{
+    filter: none;
+    background: var(--color-bg);
+}
+.btn:disabled{
+    opacity: 0.55;
+    cursor: not-allowed;
+    filter: none;
+}
+.btn-danger{
+    background: #c8384a;
+    color: #ffffff;
+}
+.admin-checkbox-field{
+    justify-content: flex-end;
+}
+.admin-checkbox-field label{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--color-text-primary);
+    font-weight: 500;
+}
+.admin-checkbox-field input[type="checkbox"]{
+    width: 1.05rem;
+    height: 1.05rem;
+    cursor: pointer;
+}
+.client-test-badge{
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: #fdf0d5;
+    color: #8a5a00;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    vertical-align: middle;
+}
+
+/* Centro de Costos — cascading País/Estado/Localidad/Calle picker inside
+   the "+ Nuevo Centro Costos" modal (see Business-CentrosCosto.js). Each
+   level is a <select> plus a "+" toggle that reveals a small inline
+   add-new row underneath it. */
+#cc-modal .modal-panel{
+    max-width: 36rem;
+}
+.cc-cascade-grid{
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.cc-select-row{
+    display: flex;
+    gap: 0.4rem;
+}
+.cc-select-row select{
+    flex: 1;
+    min-width: 0;
+}
+.cc-add-new-btn{
+    flex-shrink: 0;
+    width: 2.3rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.cc-add-new-btn:disabled{
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.cc-add-new-row{
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+}
+.cc-add-new-row input{
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.8rem;
+}
+.cc-add-new-row .btn-secondary{
+    padding: 0.5rem 0.8rem;
+    font-size: 0.78rem;
+}
+.cc-code-preview{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 0.9rem;
+    margin-bottom: 1rem;
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+}
+.cc-code-preview strong{
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    color: var(--color-text-primary);
+}
+.cc-code-preview span{
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+
+/* One-time generated credentials banner */
+.admin-generated-credentials{
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.2rem;
+    border-radius: 0.5rem;
+    background-color: #eaf6ec;
+    border: 1px solid #1e7e34;
+}
+body.dark-mode .admin-generated-credentials{
+    background-color: #1c3324;
+    border-color: #2c8f4a;
+}
+.admin-generated-title{
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: 0.3rem;
+}
+.admin-generated-note{
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.6rem;
+}
+.admin-generated-row{
+    font-size: 0.85rem;
+    color: var(--color-text-primary);
+    margin-bottom: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.admin-generated-email-status{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+.admin-generated-email-status-ok{
+    background-color: rgba(30, 126, 52, 0.12);
+    color: #1e7e34;
+}
+body.dark-mode .admin-generated-email-status-ok{
+    background-color: rgba(44, 143, 74, 0.18);
+    color: #7fda9c;
+}
+.admin-generated-email-status-warn{
+    background-color: rgba(201, 134, 11, 0.14);
+    color: #9a6408;
+}
+body.dark-mode .admin-generated-email-status-warn{
+    background-color: rgba(201, 134, 11, 0.2);
+    color: #e0ab4f;
+}
+.admin-generated-reveal-btn{
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-accent, #3f51b5);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+}
+.admin-generated-actions{
+    display: flex;
+    gap: 0.5rem;
+}
+.admin-generated-credentials .btn{
+    width: auto;
+    padding: 0.4rem 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+}
+
+/* Table */
+.admin-table-wrap{
+    margin-top: 1.5rem;
+    overflow-x: auto;
+}
+.admin-table{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.admin-table th{
+    padding: 0.6rem 0.7rem;
+    text-align: left;
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+.admin-table td{
+    padding: 0.6rem 0.7rem;
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border);
+}
+.admin-table-actions{
+    display: flex;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+.admin-icon-btn{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.admin-icon-btn:hover{
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+}
+.admin-icon-btn-danger:hover{
+    color: #b3261e;
+}
+.admin-icon-btn-toggle-on{ color: #1E7B3C; }
+.admin-icon-btn-toggle-on:hover{ color: #1E7B3C; background-color: #E4F5E9; }
+.admin-icon-btn-toggle-off{ color: #c9503f; }
+.admin-icon-btn-toggle-off:hover{ color: #c9503f; background-color: var(--color-bg); }
+.admin-empty{
+    padding: 1.5rem 0;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+/* Transacciones Inteligentes de Negocio — report column list / builders
+   (NegocioInteligente-Transacciones.js). */
+.report-column-list{
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 12rem;
+    overflow-y: auto;
+    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+}
+.report-column-list li{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 0.3rem;
+    background-color: var(--color-bg);
+}
+.report-column-list-empty{
+    color: var(--color-text-secondary);
+    font-style: italic;
+    justify-content: center !important;
+    background-color: transparent !important;
+}
+.report-add-buttons{
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+.report-add-btn{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 1rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.report-add-btn i{
+    font-size: 1.2rem;
+}
+.report-add-btn:hover{
+    border-color: var(--color-text-primary);
+}
+.scheduled-delivery-options{
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0.4rem;
+}
+.scheduled-delivery-option{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.7rem 0.5rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    position: relative;
+}
+.scheduled-delivery-option i{
+    font-size: 1.1rem;
+}
+.scheduled-delivery-option:hover:not(:disabled){
+    border-color: var(--color-text-primary);
+}
+.scheduled-delivery-option-active{
+    border-color: var(--color-accent, #1a73e8);
+    color: var(--color-accent, #1a73e8);
+    font-weight: 600;
+}
+.scheduled-delivery-option-disabled{
+    opacity: 0.55;
+    cursor: default;
+}
+.scheduled-delivery-soon{
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+.report-picker-list{
+    max-height: 22rem;
+    overflow-y: auto;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+}
+.picker-tier1{
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin: 0.75rem 0 0.2rem;
+    padding: 0.3rem 0.4rem;
+    border-radius: 0.3rem;
+    background-color: var(--color-column-system-band-bg, var(--color-bg));
+    color: var(--color-column-system-text, var(--color-text-primary));
+}
+.picker-tier1:first-child{
+    margin-top: 0.25rem;
+}
+.picker-tier2{
+    font-size: 0.72rem;
+    font-style: italic;
+    color: var(--color-text-secondary);
+    margin: 0.2rem 0 0.15rem 0.3rem;
+}
+.picker-row{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.3rem 0.25rem 1rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.report-formula-operands{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.formula-operand-row{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.formula-select,
+.formula-input{
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.82rem;
+}
+.formula-input{
+    width: 6rem;
+}
+.report-add-operand-btn{
+    margin-top: 0.6rem;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* Status badges */
+.admin-badge{
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 1rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+.admin-badge-activo{
+    background-color: #e3f6e8;
+    color: #1e7e34;
+}
+.admin-badge-inactivo{
+    background-color: #f2e9e9;
+    color: #8a4b4b;
+}
+.admin-badge-prospecto{
+    background-color: #eaf1fb;
+    color: #2c5aa0;
+}
+.admin-badge-suspendido{
+    background-color: #fff2d9;
+    color: #9a6b00;
+}
+body.dark-mode .admin-badge-activo{
+    background-color: #1c3324; color: #7fd99a;
+}
+body.dark-mode .admin-badge-inactivo{
+    background-color: #332020; color: #e0a3a3;
+}
+body.dark-mode .admin-badge-prospecto{
+    background-color: #1e2a3a; color: #8fb8ea;
+}
+body.dark-mode .admin-badge-suspendido{
+    background-color: #3a2e10; color: #f0c463;
+}
+
+/* Institutional color palette widget */
+.color-palette-widget{
+    margin-bottom: 1rem;
+}
+.palette-seed-row{
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+.palette-seed-row .admin-field{
+    max-width: 16rem;
+}
+.palette-seed-row .btn{
+    width: auto;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.85rem;
+}
+.palette-hint{
+    max-width: 40rem;
+    margin-bottom: 1rem;
+}
+.palette-table-wrapper{
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    max-height: 20rem;
+    overflow-y: auto;
+}
+.palette-table{
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.palette-table th,
+.palette-table td{
+    padding: 0.55rem 0.9rem;
+    text-align: left;
+    font-size: 0.82rem;
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border);
+}
+/* Header stays put while the body scrolls (color-modal's table can get
+   longer than its available height) — same sticky idea .modal-panel h3
+   already uses. */
+.palette-table thead th{
+    position: sticky;
+    top: 0;
+    background-color: var(--color-bg);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-text-secondary);
+}
+.palette-table tbody tr:last-child td{
+    border-bottom: none;
+}
+/* "Valor" column — a round swatch button (also opens the picker, same as
+   the Editar button in the next column) plus the hex code as text, and the
+   actual native color input hidden but still functionally clickable via
+   .click() from either trigger. */
+.palette-swatch{
+    display: inline-block;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    border: none;
+    box-shadow: 0 0 0 1px var(--color-border);
+    cursor: pointer;
+    vertical-align: middle;
+    margin-right: 0.6rem;
+    padding: 0;
+}
+.palette-hex{
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+    vertical-align: middle;
+}
+.palette-color-input{
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+.palette-preview{
+    max-width: 20rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px var(--color-border);
+}
+.palette-preview-bar{
+    padding: 0.7rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+.palette-preview-bar::before{
+    content: 'SGN';
+}
+.palette-preview-body{
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.palette-preview-item{
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.35rem;
+    font-size: 0.75rem;
+    border: 1px solid transparent;
+}
+.palette-preview-item::before{
+    content: 'Menú';
+}
+.palette-preview-item-active::before{
+    content: 'Menú activo';
+}
+.palette-preview-btn{
+    align-self: flex-start;
+    margin-top: 0.3rem;
+    padding: 0.45rem 1rem;
+    border-radius: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.palette-preview-btn::before{
+    content: 'Botón';
+}
+
+/* Permission tree (módulo / apartado / pantalla) */
+.perm-tree{
+    display: flex;
+    flex-direction: column;
+    max-height: 24rem;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    padding: 0.5rem;
+}
+/* Column titles for the costEdit tree (Costo Accesos-Permisos) — sits just
+   above .perm-tree, not inside it (the tree wipes and rebuilds its own
+   innerHTML on every edit, so a header living inside it would get erased).
+   Spacer/gap widths mirror .perm-tree-row's own toggle+label layout so the
+   "Accesos / Permisos" title lines up with row labels, and the fixed
+   6.5rem cost column matches .perm-tree-cost-input's width exactly. */
+.perm-tree-header{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0 0.9rem 0.4rem 1.9rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-text-secondary);
+}
+.perm-tree-header-label{
+    flex: 1;
+    min-width: 0;
+}
+.perm-tree-header-cost{
+    width: 6.5rem;
+    flex-shrink: 0;
+    text-align: right;
+}
+.perm-tree-row{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.4rem;
+    border-radius: 0.3rem;
+    font-size: 0.82rem;
+    color: var(--color-text-primary);
+}
+.perm-tree-row:hover{
+    background-color: var(--color-bg);
+}
+/* Each nesting level (Departamento/Área/Apartado/Pantalla/Clasificación/
+   Columna) gets its own weight/size/color instead of one shared muted
+   style getting progressively smaller -- the level itself should be
+   readable at a glance, not just inferable from indentation. */
+.perm-tree-depth-0{
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-top: 0.4rem;
+}
+.perm-tree-depth-0:first-child{
+    margin-top: 0;
+}
+.perm-tree-depth-1{
+    padding-left: 1.5rem;
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: #1D3A63;
+}
+.perm-tree-depth-2{
+    padding-left: 3rem;
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #5A4A8A;
+}
+.perm-tree-depth-3{
+    padding-left: 4.5rem;
+    font-weight: 500;
+    font-size: 0.82rem;
+    color: var(--color-accent, #1a73e8);
+}
+.perm-tree-depth-4{
+    padding-left: 6rem;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+.perm-tree-depth-5{
+    padding-left: 7.5rem;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+}
+.perm-tree-depth-6{
+    padding-left: 9rem;
+    font-size: 0.68rem;
+    font-style: italic;
+    color: var(--color-text-secondary);
+}
+body.dark-mode .perm-tree-depth-1{
+    color: #B9D2F2;
+}
+body.dark-mode .perm-tree-depth-2{
+    color: #C7B8F0;
+}
+/* Classification group (Control Interno, etc.) — same tint the columns it
+   groups already wear as their own tenue tint in the real data-table, so
+   the same color reads as "one connected concept" in both places. Applied
+   on top of .perm-tree-depth-5 (renderClassificationGroup in
+   PermissionTree.js adds this class alongside it — a sibling of the
+   table's own plain columns, also depth 5, not the "Tabla <X>" heading
+   above them at depth 4), distinguishing it from the plain "Tabla
+   <X>"/"Iconos Personalización" heading rows. */
+.perm-tree-row-classification{
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--color-column-system-text);
+    background-color: var(--color-column-system-band-bg);
+    border-radius: 0.3rem;
+    margin: 0.15rem 0;
+}
+/* Wraps Control Interno's own 13 columns (depth 6) in the same tint as
+   their group header — without this, once expanded they were plain rows
+   indistinguishable from the table's OTHER columns sitting at the same
+   depth 5 (the exact complaint: "no se distingue qué opciones son de
+   Control Interno y cuáles no"). */
+.perm-tree-classification-children{
+    background-color: var(--color-column-system-band-bg);
+    border-radius: 0.3rem;
+    margin: 0.15rem 0;
+}
+/* "Tabla <X>" heading — no checkbox (a pantalla's table is always exactly
+   one, nothing to select/deselect at that level), collapsible chevron. */
+.perm-tree-row-static{
+    opacity: 0.75;
+}
+.perm-tree-static-label{
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.68rem;
+}
+.perm-tree-toggle-label{
+    color: var(--color-text-primary);
+}
+.perm-tree-row input[type="checkbox"]{
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+/* Expand/collapse chevron — same rotate-on-open idea as the settings
+   dropdown toggles. A disabled, invisible spacer takes its place on rows
+   with no children (leaves), so labels at the same depth still line up. */
+.perm-tree-toggle{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.perm-tree-toggle:hover{
+    color: var(--color-text-primary);
+}
+.perm-tree-toggle i{
+    font-size: 0.9rem;
+    transition: transform 0.15s ease;
+}
+.perm-tree-toggle[aria-expanded="true"] i{
+    transform: rotate(180deg);
+}
+.perm-tree-toggle-spacer{
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    visibility: hidden;
+}
+.perm-tree-check{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+/* Operar/Editar/Autorizar in a Plan's own access tree (grantReadonlyCost
+   mode) are locked until that column's own Ver checkbox is on -- see
+   PermissionCostTree.js's renderColumnRow. */
+.perm-tree-check:has(input:disabled){
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+/* Read-only habilitado/bloqueado status badge (PermissionTree.js create's
+   readOnly option) — replaces the checkbox entirely, so there's nothing to
+   click/toggle/accidentally save. */
+.perm-tree-status{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+.perm-tree-status i{
+    font-size: 0.8rem;
+}
+.perm-tree-status-enabled{
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+}
+.perm-tree-status-blocked{
+    background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
+    color: var(--color-text-secondary);
+}
+/* clientTricolor mode's "amarillo" (vendido como adicional, fuera del
+   plan) — same pattern as -enabled/-blocked above. */
+.perm-tree-status-extra{
+    background-color: color-mix(in srgb, #c9860b 18%, transparent);
+    color: #c9860b;
+}
+/* grantReadonlyCost mode only (Nuestros Planes' shield modal) -- marks a
+   leaf that this Plan's own Sector already grants by default, see
+   PermissionCostTree.js's sectorDefaultSet. */
+.perm-tree-default-tag{
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+    white-space: nowrap;
+}
+.perm-tree-status-label{
+    flex: 1;
+    min-width: 0;
+}
+.perm-tree-row-blocked{
+    opacity: 0.55;
+}
+.perm-tree-row-blocked:hover{
+    opacity: 0.85;
+}
+/* Locked plan's access tree (Mis Planes) — fully interactive markup stays
+   in the DOM (so grantSet's checked state renders correctly, unlike
+   readOnly mode), just non-interactive: browsable, not editable. */
+.perm-tree-view-only{
+    pointer-events: none;
+    opacity: 0.7;
+}
+.perm-tree-legend{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+/* PermissionCostTree.js (Costo Accesos-Permisos / Nuestros Planes' own
+   tree) — plain non-interactive label used in costEdit mode instead of
+   .perm-tree-check's checkbox+label, same flex/spacing so rows still line
+   up with the checkbox-based rows in grantReadonlyCost mode. */
+.perm-tree-label-plain{
+    flex: 1;
+    min-width: 0;
+}
+/* margin-left:auto pushes this to the row's right edge regardless of
+   which label variant (.perm-tree-check/.perm-tree-label-plain/
+   .perm-tree-toggle-label) precedes it — avoids having to add flex:1 to
+   .perm-tree-toggle-label, which PermissionTree.js's OWN Columna rows
+   also use elsewhere and shouldn't be touched. */
+.perm-tree-cost-input{
+    width: 6.5rem;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--color-text-primary);
+    border-radius: 0.3rem;
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    font: inherit;
+    font-size: inherit;
+    text-align: right;
+}
+.perm-tree-cost-readonly{
+    width: 6.5rem;
+    flex-shrink: 0;
+    margin-left: auto;
+    text-align: right;
+    color: var(--color-text-secondary);
+    font-size: 0.85em;
+}
+
+/* "Sistema Web" / "Aplicación Móvil" tab shell — only mounted when
+   PermissionTree.js's init() finds a real App with screens to show (see
+   mountTabs() there); every other consumer keeps rendering straight into
+   its container exactly as before. */
+/* Web/App merged permission rows — every buildRow in PermissionTree.js can
+   carry this paired toggle next to its own Web checkbox (see
+   computeAppToggle/appendAppToggle); .perm-tree-check's flex:1 pushes it to
+   the row's right edge regardless of depth, so it reads as one steady
+   column all the way down the tree. */
+.perm-tree-app-header{
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 0.4rem 0.4rem;
+}
+.perm-tree-app-header-label{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-text-secondary);
+}
+.perm-tree-app-toggle{
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    padding: 0.15rem 0.3rem;
+    border-radius: 0.3rem;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+}
+.perm-tree-app-toggle input[type="checkbox"]{
+    width: 0.9rem;
+    height: 0.9rem;
+}
+.perm-tree-app-toggle i{
+    font-size: 0.85rem;
+}
+.perm-tree-app-toggle:has(input:disabled){
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+/* clientTricolor mode's read-only App-vision badge (PermissionCostTree.js's
+   appendClientAppSlot) -- same bx-mobile-alt icon as the interactive
+   .perm-tree-app-toggle above, just tinted green/amarillo/rojo like the
+   row's own Web status badge instead of a checkbox, so a viewer with no
+   edit rights (Business-MisAccesos.js) can still tell App status apart
+   from Web status at a glance instead of two identical lock icons. */
+.perm-tree-app-status{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+.perm-tree-app-status i{
+    font-size: 0.75rem;
+}
+.perm-tree-app-status-green{
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+}
+.perm-tree-app-status-yellow{
+    background-color: color-mix(in srgb, #c9860b 18%, transparent);
+    color: #c9860b;
+}
+.perm-tree-app-status-red{
+    background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
+    color: var(--color-text-secondary);
+}
+/* App-vision's own price column — costEdit mode (Costos de Módulos) gets a
+   second, independent cost input per row (see PermissionCostTree.js's
+   costEdit branch); grantReadonlyCost/clientTricolor show the same slot
+   read-only, right after the App checkbox/badge (appendAppToggle/
+   appendClientAppSlot). The 6.5rem width matches .perm-tree-cost-input so
+   both cost columns line up as steady rows regardless of depth. */
+.perm-tree-header-app-cost{
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    width: 8.5rem;
+    flex-shrink: 0;
+}
+.perm-tree-app-cost-wrap{
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+}
+.perm-tree-app-cost-wrap i{
+    font-size: 0.8rem;
+}
+
+/* Ver y Operar/Editar/Autorizar as one connected row (buildLevelSequenceRow
+   in PermissionTree.js, its analogue in PermissionCostTree.js) instead of 3
+   stacked plain checkboxes — a chevron between each pair signals "these
+   build on each other", even though they stay independently toggleable. */
+.perm-tree-level-group{
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.15rem 0.5rem;
+}
+.perm-tree-level-item{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.3rem;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.perm-tree-level-item input[type="checkbox"]{
+    width: 0.9rem;
+    height: 0.9rem;
+}
+.perm-tree-level-item i{
+    font-size: 0.85rem;
+}
+.perm-tree-level-item:has(input:disabled){
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+.perm-tree-level-sep{
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+}
+.perm-tree-level-item-readonly{
+    cursor: default;
+}
+.perm-tree-level-item-on{
+    color: var(--color-accent);
+    font-weight: 600;
+}
+/* PermissionCostTree.js's columnLevels option (Business-Usuarios.js's
+   per-user "Otorgar Accesos" only) -- a level already granted by the
+   user's Puesto (green) or already saved as an individual adicional
+   (yellow) shows locked/checked and tinted, same palette as
+   .perm-tree-status-enabled/-extra, instead of the plain grey
+   :has(input:disabled) treatment every other locked level gets. Both
+   modifiers pair with :has(input:disabled) too (these items are always
+   disabled) — needs equal-or-higher specificity than the plain
+   .perm-tree-level-item:has(input:disabled) rule above, or its
+   opacity:0.5 wins regardless of source order (same trap as the App
+   shell's [hidden] rules earlier this session). */
+.perm-tree-level-item.perm-tree-level-item-green:has(input:disabled){
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+    opacity: 1;
+    cursor: default;
+}
+.perm-tree-level-item-green input[type="checkbox"]{
+    accent-color: #2c8f4a;
+}
+.perm-tree-level-item.perm-tree-level-item-yellow:has(input:disabled){
+    background-color: color-mix(in srgb, #c9860b 18%, transparent);
+    color: #c9860b;
+    opacity: 1;
+    cursor: default;
+}
+.perm-tree-level-item-yellow input[type="checkbox"]{
+    accent-color: #c9860b;
+}
+
+/* Nuestra Estructura Organizacional -- the read-only chart below the
+   Reporta-a table (Business-EstructuraOrganizacional.js's buildTreeNode).
+   Root(s) side by side, each with its own children row nested underneath;
+   a vertical stub connects a node to its own children row only (no
+   horizontal rail across siblings — keeps a lopsided chart from needing an
+   SVG connector layer for a first version). */
+.admin-section-title{
+    margin: 1.5rem 0 0.75rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+.org-chart-tree{
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding: 0.5rem 0.25rem 1.5rem;
+}
+.org-tree-node{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+}
+.org-node{
+    background: var(--color-surface);
+    border: 1.5px solid var(--color-border);
+    border-radius: 0.55rem;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    text-align: center;
+    min-width: 9rem;
+    box-shadow: 0 2px 6px var(--shadow-border);
+}
+.org-node-title{
+    display: block;
+}
+.org-node-person{
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--color-accent);
+}
+.org-node-empty{
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-text-secondary);
+}
+.org-tree-branch{
+    width: 1.5px;
+    height: 1.1rem;
+    background: var(--color-border);
+}
+.org-tree-children{
+    display: flex;
+    gap: 1.4rem;
+    align-items: flex-start;
+}
+
+/* Contrataciones */
+.admin-module-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+.admin-module-row{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+}
+.admin-module-name{
+    font-size: 0.85rem;
+    color: var(--color-text-primary);
+    font-weight: 500;
+}
+
+/* Reglas de Orden de Llenado (Dashboard.js: openFieldRulesModal) -- one
+   card per gate column, listing every dependent field it unlocks as a
+   removable chip. */
+.field-rules-panel{
+    max-width: 34rem;
+}
+.field-rules-group{
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.7rem;
+}
+.field-rules-gate{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 0.55rem;
+}
+.field-rules-dot{
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background-color: #2c8f4a;
+    flex-shrink: 0;
+}
+.field-rules-dependents{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding-left: 0.9rem;
+}
+.field-rules-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    padding: 0.25rem 0.4rem 0.25rem 0.7rem;
+}
+.field-rules-chip-remove{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.field-rules-chip-remove:hover{
+    color: #c0392b;
+}
+.field-rules-add-row{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.8rem;
+    margin-top: 0.4rem;
+    border-top: 1px dashed var(--color-border);
+}
+.field-rules-add-row select{
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.8rem;
+}
+.field-rules-arrow{
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+.field-rules-chip-pending{
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #b8860b;
+    font-weight: 700;
+}
+
+/* Reglas de Orden de Llenado (Gestión) -- the create/edit modal's own
+   Campo requisito -> Campo dependiente row, labeled (unlike the per-table
+   🔗 modal's bare add-row, since this screen isn't opened from a live
+   table where the context is already obvious). */
+.fr-field-row{
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+.fr-field-row .admin-field{
+    flex: 1;
+    min-width: 0;
+}
+.fr-field-row .field-rules-arrow{
+    padding-bottom: 0.6rem;
+}
+
+/* A locked dependent cell (see Dashboard.js: applyFieldFillRules) — dimmed
+   and non-interactive until its gate column has a value. The lock guard
+   (attachFieldLockGuard) intercepts the click before any page-specific
+   handler runs, so no per-page styling/wiring is needed beyond this. */
+.data-table-cell-locked{
+    opacity: 0.5;
+    cursor: not-allowed !important;
+}
+.data-table-cell-locked::before{
+    content: "🔒";
+    margin-right: 0.3rem;
+    font-size: 0.75em;
+}
+
+/* Mi Recurso Humano: Departamento(s) Asignado(s) preview in "+ Nuevo
+   Registro" — plain read-only text, always a live reflection of whichever
+   Puesto is picked (see OpRRHHMiRecursoHumano.js's renderDepartmentPreview)
+   rather than something picked by hand. */
+.hr-department-preview{
+    margin-top: 0.4rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--color-text-secondary);
+}
+
+/* Toggle switch */
+.admin-switch{
+    position: relative;
+    display: inline-block;
+    width: 2.6rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+}
+.admin-switch input{
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.admin-switch-track{
+    position: absolute;
+    inset: 0;
+    background-color: var(--color-border);
+    border-radius: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.admin-switch-track::before{
+    content: '';
+    position: absolute;
+    width: 1.1rem;
+    height: 1.1rem;
+    left: 0.2rem;
+    top: 0.2rem;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+}
+.admin-switch input:checked + .admin-switch-track{
+    background-color: #2c8f4a;
+}
+.admin-switch input:checked + .admin-switch-track::before{
+    transform: translateX(1.1rem);
+}
+.admin-switch input:focus-visible + .admin-switch-track{
+    outline: 2px solid var(--color-text-primary);
+    outline-offset: 2px;
+}
+
+.admin-select-row{
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-width: 24rem;
+    margin-bottom: 1rem;
+}
+.admin-select-row label{
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+.admin-select-row select{
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.85rem;
+}
+.admin-hint{
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    padding: 1rem 0;
+}
+.admin-save-status{
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+    color: #1e7e34;
+    min-height: 1.2em;
+}
+body.dark-mode .admin-save-status{
+    color: #7fd99a;
+}
+
+@media (max-width: 700px){
+    .admin-panel{
+        padding: 1rem;
+    }
+    .admin-form-grid{
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Modal (Anexos) */
+.modal-overlay{
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 100;
+}
+/* Without this, [hidden] loses to the class rule above (equal specificity,
+   author CSS beats the UA stylesheet) and the modal stays visible — and
+   since it's position:fixed/inset:0, it blocks the whole page underneath. */
+.modal-overlay[hidden]{
+    display: none;
+}
+.modal-panel{
+    width: 100%;
+    max-width: 30rem;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 1.5rem;
+    border-radius: 0.6rem;
+    background-color: var(--color-surface);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--color-border);
+}
+/* Wider than the default .modal-panel so an uploaded photo (ticket or Trip
+   KM evidence) has room to actually be legible instead of being squeezed
+   into a 30rem form-sized panel. */
+.evidence-preview-panel{
+    max-width: 40rem;
+}
+
+/* Confirm dialog (Dashboard.js: Dashboard.confirm) -- styled replacement for
+   window.confirm, same icon-badge visual language as the toast system
+   (see .toast-icon-badge in Inicio-en.css) but centered as a small modal
+   instead of a corner notification, since callers need a blocking yes/no
+   answer. */
+.confirm-modal-panel{
+    max-width: 24rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.9rem;
+}
+.confirm-modal-icon-badge{
+    flex-shrink: 0;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FFFFFF;
+    font-size: 1.4rem;
+    background-color: #b8860b;
+}
+.confirm-modal-message{
+    font-size: 0.9rem;
+    color: var(--color-text-primary);
+    line-height: 1.5;
+}
+.confirm-modal-actions{
+    justify-content: center;
+    width: 100%;
+}
+.evidence-preview-image{
+    display: block;
+    max-width: 100%;
+    max-height: 70vh;
+    margin: 0 auto;
+    border-radius: 0.4rem;
+    border: 1px solid var(--color-border);
+}
+/* Full-bleed shaded header banner (same --color-bg "recessed" tone already
+   used to distinguish table headers from their rows) instead of the title
+   just sitting on the same --color-surface as the rest of the modal —
+   negative margins cancel .modal-panel's own padding so the shading reaches
+   every edge, then the title gets its own matching padding back. Applies to
+   every "pantalla alterna" (modal dialog) in the app, since they all share
+   this one .modal-panel/h3 structure. */
+.modal-panel h3{
+    position: sticky;
+    /* .modal-panel is the scrolling container (overflow-y:auto) and the
+       negative margin above already pulls the title flush with its top
+       border edge, ahead of the 1.5rem padding — top must cancel that same
+       1.5rem so the sticky trigger point lines up with where the title
+       already sits, instead of "sticking" 1.5rem below the visible top. */
+    top: -1.5rem;
+    z-index: 1;
+    margin: -1.5rem -1.5rem 1rem -1.5rem;
+    padding: 1rem 1.5rem;
+    border-radius: 0.6rem 0.6rem 0 0;
+    background-color: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    font-size: 1rem;
+}
+
+/* Nuestras APPs — catalog grid + per-app detail panel */
+.admin-toolbar{
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+}
+.saas-app-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1rem;
+}
+.saas-app-card{
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.7rem;
+    padding: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.saas-app-card:hover{
+    box-shadow: 0 8px 20px -12px var(--shadow-border);
+    transform: translateY(-2px);
+}
+.saas-app-icon{
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.25rem;
+}
+.saas-app-card h3{
+    font-size: 0.95rem;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+.saas-app-meta{
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+.saas-app-status{
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 1rem;
+    width: fit-content;
+    letter-spacing: 0.02em;
+}
+.saas-app-status.active{ background-color: #E4F5E9; color: #1E7B3C; }
+.saas-app-status.empty{ background-color: var(--color-bg); color: var(--color-text-secondary); }
+.saas-app-status.inactive{ background-color: var(--color-bg); color: var(--color-text-secondary); }
+.saas-app-status.development{ background-color: #FFF3E0; color: #B8860B; }
+.data-table-wrapper[data-table-id="nuestras-apps"] tbody tr{ cursor: pointer; }
+.saas-app-name-cell{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.saas-app-icon-sm{
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+.sector-pill{
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--color-bg);
+    color: var(--color-accent);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 1rem;
+}
+.saas-app-clients{
+    font-size: 0.72rem;
+    color: var(--color-accent);
+    font-weight: 600;
+    margin: 0;
+}
+.saas-app-detail-head{
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin: 1rem 0 1.2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+.saas-app-detail-head h2{
+    font-size: 1.1rem;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+.saas-app-detail-head .admin-subtitle{
+    margin: 0.15rem 0 0;
+}
+.saas-app-detail-head .saas-app-icon{
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.4rem;
+}
+.saas-app-detail-head .admin-icon-btn{ margin-left: auto; }
+.saas-app-screen-wrap{ border-bottom: 1px solid var(--color-border); }
+.saas-app-screen-fields-panel{
+    background-color: var(--color-bg);
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.8rem 0.9rem;
+    margin: 0 0.4rem 0.7rem;
+}
+.saas-app-screen-fields-panel .admin-hint{ margin: 0 0 0.4rem; }
+.saas-app-screen-row{
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.7rem 0.4rem;
+    font-size: 0.85rem;
+}
+.saas-app-screen-num{
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background-color: var(--color-bg);
+    color: var(--color-accent);
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.saas-app-screen-name{
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.saas-app-screen-link{
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+.saas-app-screen-tag{
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+    background-color: var(--color-bg);
+    padding: 0.15rem 0.55rem;
+    border-radius: 1rem;
+}
+.admin-add-row-btn{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    color: var(--color-accent);
+    font-weight: 600;
+    font-size: 0.82rem;
+    padding: 0.8rem 0.4rem 0;
+    cursor: pointer;
+}

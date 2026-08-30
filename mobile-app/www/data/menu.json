@@ -1,0 +1,540 @@
+{
+  "sections": [
+    {
+      "id": "main",
+      "items": [
+        { "id": "home", "labelKey": "menu.home", "icon": "bx-home-alt-2", "href": "#" },
+        { "id": "panel", "labelKey": "menu.panel", "icon": "bx-grid-alt", "href": "Panel.html" },
+        { "id": "dashboard", "labelKey": "menu.dashboard", "icon": "bx-bar-chart-alt-2", "href": "Inicio-en.html" },
+        { "id": "btn-mensajes", "labelKey": "main.messages", "icon": "bx-message", "href": "#", "permissionOnly": true },
+        { "id": "btn-chatbot", "labelKey": "main.chatbot", "icon": "bx-bot", "href": "#", "permissionOnly": true },
+        { "id": "btn-notificaciones", "labelKey": "main.notifications", "icon": "bx-bell", "href": "#", "permissionOnly": true },
+        { "id": "btn-marcadores", "labelKey": "main.bookmarks", "icon": "bx-bookmarks", "href": "#", "permissionOnly": true },
+        {
+          "id": "btn-configuracion", "labelKey": "main.settings", "icon": "bx-cog", "href": "#", "permissionOnly": true,
+          "submenu": [
+            { "id": "btn-idioma", "labelKey": "main.language", "icon": "bx-globe", "href": "#", "permissionOnly": true },
+            { "id": "btn-estilo", "labelKey": "main.style", "icon": "bx-palette", "href": "#", "permissionOnly": true },
+            { "id": "btn-tamano-sistema", "labelKey": "main.uiScale", "icon": "bx-text", "href": "#", "permissionOnly": true },
+            { "id": "btn-admin-negocio", "labelKey": "menu.adminBusiness", "icon": "bx-shopping-bag", "href": "#", "permissionOnly": true },
+            { "id": "btn-config-botones", "labelKey": "main.buttonConfig", "icon": "bx-slider-alt", "href": "#", "permissionOnly": true },
+            {
+              "id": "btn-base-datos", "labelKey": "menu.databaseGroup", "icon": "bx-data", "href": "#", "permissionOnly": true,
+              "submenu": [
+                { "id": "bd-global", "labelKey": "menu.databaseCompany", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "btn-negocio-inteligente", "labelKey": "menu.businessIntelligenceGroup", "icon": "bx-bulb", "href": "#", "permissionOnly": true,
+              "submenu": [
+                {
+                  "id": "nit-transacciones", "labelKey": "menu.smartBusinessTransactions", "permissionOnly": true,
+                  "submenu": [
+                    {
+                      "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+                      "submenu": [
+                        { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                        { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                        { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                        { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                        { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                        { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                        { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                        { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                        { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                        { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                        { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                        { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                        { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+                      ]
+                    },
+                    { "id": "colReportAuthorization", "labelKey": "main.colReportAuthorization", "permissionOnly": true }
+                  ]
+                },
+                {
+                  "id": "nit-reportes-programados", "labelKey": "menu.scheduledReportsScreen", "permissionOnly": true,
+                  "submenu": [
+                    {
+                      "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+                      "submenu": [
+                        { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                        { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                        { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                        { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                        { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                        { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                        { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                        { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                        { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                        { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                        { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                        { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                        { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+                      ]
+                    },
+                    { "id": "colScheduledName", "labelKey": "main.colScheduledName", "permissionOnly": true },
+                    { "id": "colScheduledCreatedBy", "labelKey": "main.colScheduledCreatedBy", "permissionOnly": true },
+                    { "id": "colScheduledAuthorizedBy", "labelKey": "main.colScheduledAuthorizedBy", "permissionOnly": true },
+                    { "id": "colScheduledCreatedAt", "labelKey": "main.colScheduledCreatedAt", "permissionOnly": true },
+                    { "id": "colScheduledEndDate", "labelKey": "main.colScheduledEndDate", "permissionOnly": true },
+                    { "id": "colScheduledDeliveryMethod", "labelKey": "main.colScheduledDeliveryMethod", "permissionOnly": true },
+                    { "id": "colScheduledRecipients", "labelKey": "main.colScheduledRecipients", "permissionOnly": true }
+                  ],
+                  "iconsSubmenu": [
+                    { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+                    { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+                    { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+                    { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+                    { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+                    { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "btn-gestion-reglas-orden", "labelKey": "menu.fieldRulesGroup", "icon": "bx-link", "href": "#", "permissionOnly": true,
+              "submenu": [
+                {
+                  "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+                  "submenu": [
+                    { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                    { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                    { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                    { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                    { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                    { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                    { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                    { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                    { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                    { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                    { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                    { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                    { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+                  ]
+                },
+                { "id": "colFieldRuleAuthorization", "labelKey": "main.colFieldRuleAuthorization", "permissionOnly": true }
+              ]
+            },
+            { "id": "btn-vista-pantallas", "labelKey": "main.screenViewToggle", "icon": "bx-grid-alt", "href": "#", "permissionOnly": true },
+            { "id": "btn-otros", "labelKey": "main.others", "icon": "bx-dots-horizontal-rounded", "href": "#", "permissionOnly": true }
+          ]
+        },
+        { "id": "btn-datos-usuario", "labelKey": "main.userInfo", "icon": "bx-user-circle", "href": "#", "permissionOnly": true },
+        { "id": "btn-datos-usuario-negocio", "labelKey": "main.businessProfile", "icon": "bx-briefcase", "href": "#", "permissionOnly": true },
+        { "id": "btn-salir", "labelKey": "main.exitButton", "icon": "bx-log-out", "href": "#", "permissionOnly": true },
+        { "id": "btn-departamento", "labelKey": "sidebar.department", "icon": "bx-buildings", "href": "#", "permissionOnly": true },
+        { "id": "btn-area", "labelKey": "sidebar.area", "icon": "bx-collection", "href": "#", "permissionOnly": true },
+        { "id": "btn-cc", "labelKey": "sidebar.costCenters", "icon": "bx-purchase-tag-alt", "href": "#", "permissionOnly": true },
+        {
+          "id": "admin-business",
+          "labelKey": "menu.adminBusiness",
+          "icon": "bx-shopping-bag",
+          "submenu": [
+            {
+              "id": "ab-contracted-service", "labelKey": "menu.contractedService", "href": "#", "icon": "bx-purchase-tag-alt",
+              "submenu": [
+                {
+                  "id": "ab-our-cost-centers", "labelKey": "menu.ourCostCenters", "href": "Business-CentrosCosto.html", "icon": "bx-purchase-tag-alt",
+                  "submenu": [
+                    { "id": "ccCode", "labelKey": "business.ccCode", "permissionOnly": true },
+                    { "id": "ccName", "labelKey": "business.ccName", "permissionOnly": true },
+                    { "id": "ccResponsible", "labelKey": "business.ccResponsible", "permissionOnly": true },
+                    { "id": "ccDescription", "labelKey": "business.ccDescription", "permissionOnly": true }
+                  ]
+                },
+                { "id": "ab-my-access", "labelKey": "menu.myContractedAccess", "href": "Business-MisAccesos.html", "icon": "bx-key" }
+              ]
+            },
+            { "id": "ab-expansions", "labelKey": "menu.expansions", "href": "#", "icon": "bx-trending-up" },
+            { "id": "ab-business-config", "labelKey": "menu.businessConfig", "href": "Business-Config.html", "icon": "bx-palette" },
+            { "id": "ab-client-data", "labelKey": "menu.clientData", "href": "Business-DatosCliente.html", "icon": "bx-id-card" },
+            {
+              "id": "ab-roles", "labelKey": "menu.roles", "href": "Business-Roles.html", "icon": "bx-shield",
+              "submenu": [
+                { "id": "roleName", "labelKey": "business.jobPositionName", "permissionOnly": true },
+                { "id": "roleAbbreviation", "labelKey": "business.jobPositionAbbreviation", "permissionOnly": true },
+                { "id": "roleStatus", "labelKey": "business.jobPositionStatus", "permissionOnly": true }
+              ]
+            },
+            { "id": "ab-users", "labelKey": "menu.users", "href": "Business-Usuarios.html", "icon": "bx-group" },
+            { "id": "ab-upcoming-updates", "labelKey": "menu.upcomingUpdates", "href": "#", "icon": "bx-calendar" },
+            { "id": "ab-training-sessions", "labelKey": "menu.trainingSessions", "href": "#", "icon": "bx-chalkboard" }
+          ]
+        }
+      ]
+    },
+    { "id": "steering-committee", "items": [] },
+    { "id": "general-management", "items": [] },
+    { "id": "management-control", "items": [] },
+    { "id": "supply-chain", "items": [] },
+    { "id": "purchasing", "items": [] },
+    { "id": "commercial", "items": [] },
+    { "id": "marketing", "items": [] },
+    { "id": "human-resources", "items": [] },
+    { "id": "accounting", "items": [] },
+    { "id": "finance", "items": [] },
+    { "id": "certifications", "items": [] }
+  ],
+  "areaCategories": [
+    {
+      "id": "cat-catalogos",
+      "labelKey": "menu.catCatalogos",
+      "abbrKey": "menu.catCatalogosAbbr",
+      "icon": "bx-category-alt",
+      "submenu": [
+        { "id": "cat-catalogos-1", "labelKey": "menu.catCatalogosItem1", "icon": "bx-window", "href": "CatCatalogos1.html" },
+        { "id": "cat-catalogos-2", "labelKey": "menu.catCatalogosItem2", "icon": "bx-window", "href": "#" }
+      ]
+    },
+    {
+      "id": "cat-operaciones",
+      "labelKey": "menu.catOperaciones",
+      "abbrKey": "menu.catOperacionesAbbr",
+      "icon": "bx-cog",
+      "submenu": [
+        { "id": "cat-operaciones-1", "labelKey": "menu.catOperacionesItem1", "icon": "bx-window", "href": "#" },
+        { "id": "cat-operaciones-2", "labelKey": "menu.catOperacionesItem2", "icon": "bx-window", "href": "#" }
+      ]
+    },
+    {
+      "id": "cat-admin",
+      "labelKey": "menu.catAdmin",
+      "abbrKey": "menu.catAdmin",
+      "icon": "bx-briefcase-alt-2",
+      "submenu": [
+        { "id": "cat-admin-1", "labelKey": "menu.catAdminItem1", "icon": "bx-window", "href": "#" },
+        { "id": "cat-admin-2", "labelKey": "menu.catAdminItem2", "icon": "bx-window", "href": "#" }
+      ]
+    },
+    {
+      "id": "cat-gestion",
+      "labelKey": "menu.catGestion",
+      "abbrKey": "menu.catGestionAbbr",
+      "icon": "bx-list-check",
+      "submenu": [
+        { "id": "cat-gestion-reglas-orden", "labelKey": "menu.fieldRulesScreen", "icon": "bx-link", "href": "Business-ReglasOrden.html" },
+        { "id": "cat-gestion-2", "labelKey": "menu.catGestionItem2", "icon": "bx-window", "href": "#" }
+      ]
+    },
+    {
+      "id": "cat-reportes",
+      "labelKey": "menu.catReportes",
+      "abbrKey": "menu.catReportesAbbr",
+      "icon": "bx-bar-chart-alt-2",
+      "submenu": [
+        { "id": "reportes-nativos", "labelKey": "menu.reportesNativos", "icon": "bx-window", "submenu": [] },
+        { "id": "reportes-personalizados", "labelKey": "menu.reportesPersonalizados", "icon": "bx-window", "submenu": [] },
+        { "id": "reportes-programados", "labelKey": "menu.scheduledReportsScreen", "icon": "bx-calendar-event", "href": "ReportesProgramados.html" }
+      ]
+    },
+    {
+      "id": "cat-material-apoyo",
+      "labelKey": "menu.catMaterialApoyo",
+      "abbrKey": "menu.catMaterialApoyoAbbr",
+      "icon": "bx-support",
+      "submenu": [
+        { "id": "cat-material-apoyo-1", "labelKey": "menu.catMaterialApoyoItem1", "icon": "bx-window", "href": "#" },
+        { "id": "cat-material-apoyo-2", "labelKey": "menu.catMaterialApoyoItem2", "icon": "bx-window", "href": "#" }
+      ]
+    }
+  ],
+  "areaOverrides": {
+    "supply-chain/sc-area-transport-1": {
+      "cat-catalogos": [
+        { "id": "cat-catalogos-transporte-vol-clientes", "labelKey": "menu.catTransVolClientes", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-sitios-origen", "labelKey": "menu.catTransVolSitiosOrigen", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-sitios-destino", "labelKey": "menu.catTransVolSitiosDestino", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-rutas", "labelKey": "menu.catTransVolRutas", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-servicio", "labelKey": "menu.catTransVolTiposServicio", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-traslado", "labelKey": "menu.catTransVolTiposTraslado", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-contactos", "labelKey": "menu.catTransVolContactos", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-empresas-asociadas", "labelKey": "menu.catTransVolEmpresasAsociadas", "icon": "bx-window", "href": "#" },
+        {
+          "id": "cat-catalogos-transporte-vol-tipos-unidades", "labelKey": "menu.catTransVolTiposUnidades", "icon": "bx-car", "href": "CatTransVolTiposUnidades.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-tipo-unidad", "labelKey": "menu.classTipoUnidad", "isClassification": true,
+              "submenu": [
+                { "id": "colUnitTypeCode", "labelKey": "main.colUnitTypeCode", "permissionOnly": true },
+                { "id": "colUnitTypeName", "labelKey": "main.colUnitTypeName", "permissionOnly": true },
+                { "id": "colFuelType", "labelKey": "main.colFuelType", "permissionOnly": true },
+                { "id": "colUnitTypeStatus", "labelKey": "main.colUnitTypeStatus", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
+          ]
+        },
+        { "id": "cat-catalogos-transporte-vol-tipos-aditamentos", "labelKey": "menu.catTransVolTiposAditamentos", "icon": "bx-window", "href": "#" }
+      ],
+      "cat-operaciones": [
+        {
+          "id": "cat-operaciones-transporte-vol-combustible", "labelKey": "menu.opTransVolCombustible", "icon": "bx-window", "href": "OpTransVolCombustible.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colFuelPlates", "labelKey": "main.colFuelPlates", "permissionOnly": true },
+            { "id": "colFuelTicketEvidence", "labelKey": "main.colFuelTicketEvidence", "permissionOnly": true },
+            { "id": "colFuelTripKmBefore", "labelKey": "main.colFuelTripKmBefore", "permissionOnly": true },
+            { "id": "colFuelTripKmBeforeEvidence", "labelKey": "main.colFuelTripKmBeforeEvidence", "permissionOnly": true },
+            { "id": "colFuelTripKmAfter", "labelKey": "main.colFuelTripKmAfter", "permissionOnly": true },
+            { "id": "colFuelTripKmAfterEvidence", "labelKey": "main.colFuelTripKmAfterEvidence", "permissionOnly": true },
+            { "id": "colFuelType", "labelKey": "main.colFuelType", "permissionOnly": true },
+            { "id": "colFuelLiters", "labelKey": "main.colFuelLiters", "permissionOnly": true },
+            { "id": "colFuelSubtotal", "labelKey": "main.colFuelSubtotal", "permissionOnly": true },
+            { "id": "colFuelVat", "labelKey": "main.colFuelVat", "permissionOnly": true },
+            { "id": "colFuelReason", "labelKey": "main.colFuelReason", "permissionOnly": true },
+            { "id": "colFuelTransferService", "labelKey": "main.colFuelTransferService", "permissionOnly": true },
+            { "id": "colFuelInternalMovement", "labelKey": "main.colFuelInternalMovement", "permissionOnly": true }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-transporte-vol-carga-combustible", "labelKey": "menu.opTransVolCargaCombustible", "icon": "bx-gas-pump", "href": "OpTransVolCargaCombustible.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-carga-operador", "labelKey": "menu.classCargaOperador", "isClassification": true,
+              "submenu": [
+                { "id": "colCargaFechaRegistro", "labelKey": "main.colCargaFechaRegistro", "permissionOnly": true },
+                { "id": "colCargaSitio", "labelKey": "main.colCargaSitio", "permissionOnly": true },
+                { "id": "colCargaOperador", "labelKey": "main.colCargaOperador", "permissionOnly": true },
+                { "id": "colCargaCoordinador", "labelKey": "main.colCargaCoordinador", "permissionOnly": true },
+                { "id": "colCargaEcoUnidad", "labelKey": "main.colCargaEcoUnidad", "permissionOnly": true },
+                { "id": "colFuelType", "labelKey": "main.colFuelType", "permissionOnly": true },
+                { "id": "colCargaTripAntes", "labelKey": "main.colCargaTripAntes", "permissionOnly": true },
+                { "id": "colCargaTripAntesEvidencia", "labelKey": "main.colCargaTripAntesEvidencia", "permissionOnly": true },
+                { "id": "colCargaTripDespues", "labelKey": "main.colCargaTripDespues", "permissionOnly": true },
+                { "id": "colCargaTripDespuesEvidencia", "labelKey": "main.colCargaTripDespuesEvidencia", "permissionOnly": true },
+                { "id": "colCargaCostoTotal", "labelKey": "main.colCargaCostoTotal", "permissionOnly": true },
+                { "id": "colCargaCostoTotalEvidencia", "labelKey": "main.colCargaCostoTotalEvidencia", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-transporte-vol-nuestras-unidades", "labelKey": "menu.opTransVolNuestrasUnidades", "icon": "bx-car", "href": "OpTransVolNuestrasUnidades.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-nuestras-unidades", "labelKey": "menu.classNuestrasUnidades", "isClassification": true,
+              "submenu": [
+                { "id": "colFleetEco", "labelKey": "main.colFleetEco", "permissionOnly": true },
+                { "id": "colFleetUnitType", "labelKey": "main.colFleetUnitType", "permissionOnly": true },
+                { "id": "colFleetPlates", "labelKey": "main.colFleetPlates", "permissionOnly": true },
+                { "id": "colFleetBrandModel", "labelKey": "main.colFleetBrandModel", "permissionOnly": true },
+                { "id": "colFleetYear", "labelKey": "main.colFleetYear", "permissionOnly": true },
+                { "id": "colFleetStatus", "labelKey": "main.colFleetStatus", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
+          ]
+        },
+        { "id": "cat-operaciones-transporte-vol-ingresos", "labelKey": "menu.opTransVolIngresos", "icon": "bx-window", "href": "#" },
+        { "id": "cat-operaciones-transporte-vol-gastos", "labelKey": "menu.opTransVolGastos", "icon": "bx-window", "href": "#" },
+        { "id": "cat-operaciones-transporte-vol-inventario", "labelKey": "menu.opTransVolInventario", "icon": "bx-window", "href": "#" }
+      ],
+      "cat-admin": [
+        { "id": "cat-operaciones-transporte-vol-traslados", "labelKey": "menu.opTransVolTraslados", "icon": "bx-window", "href": "OpTransVolTraslados.html" },
+        { "id": "cat-admin-fuel-traceability", "labelKey": "menu.opTransVolCombustible", "icon": "bx-data", "href": "TrazTransVolCombustible.html" }
+      ]
+    },
+    "supply-chain/sc-area-distribution-center": {
+      "cat-catalogos": [
+        { "id": "cat-catalogos-centro-dist-codigos", "labelKey": "menu.catCentroDistCodigos", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-centro-dist-categorias", "labelKey": "menu.catCentroDistCategorias", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-centro-dist-udm", "labelKey": "menu.catCentroDistUdm", "icon": "bx-window", "href": "#" }
+      ]
+    },
+    "human-resources/hr-area-personnel-admin": {
+      "cat-catalogos": [
+        {
+          "id": "cat-catalogos-puestos-trabajo", "labelKey": "menu.catPuestosTrabajo", "icon": "bx-window", "href": "Business-PuestosTrabajo.html"
+        },
+        {
+          "id": "cat-catalogos-estatus-rh", "labelKey": "menu.catEstatusRH", "icon": "bx-id-card", "href": "Business-EstatusRH.html"
+        },
+        {
+          "id": "cat-catalogos-estructura-organizacional", "labelKey": "menu.catEstructuraOrganizacional", "icon": "bx-sitemap", "href": "Business-EstructuraOrganizacional.html"
+        }
+      ],
+      "cat-operaciones": [
+        {
+          "id": "cat-operaciones-rrhh-mi-recurso-humano", "labelKey": "menu.opRrhhMiRecursoHumano", "icon": "bx-window", "href": "OpRRHHMiRecursoHumano.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colHrFullName", "labelKey": "main.colHrFullName", "permissionOnly": true },
+            { "id": "colHrPosition", "labelKey": "main.colHrPosition", "permissionOnly": true },
+            { "id": "colHrStartDate", "labelKey": "main.colHrStartDate", "permissionOnly": true },
+            { "id": "colHrArea", "labelKey": "main.colHrArea", "permissionOnly": true },
+            { "id": "colHrEmail", "labelKey": "main.colHrEmail", "permissionOnly": true },
+            { "id": "colHrPhone", "labelKey": "main.colHrPhone", "permissionOnly": true },
+            { "id": "colHrStatus", "labelKey": "main.colHrStatus", "permissionOnly": true },
+            { "id": "colHrDepartment", "labelKey": "main.colHrDepartment", "permissionOnly": true },
+            { "id": "colHrCostCenter", "labelKey": "main.colHrCostCenter", "permissionOnly": true },
+            { "id": "colHrUsername", "labelKey": "main.colHrUsername", "permissionOnly": true },
+            { "id": "colHrUserStatus", "labelKey": "main.colHrUserStatus", "permissionOnly": true }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
+          ]
+        }
+      ]
+    }
+  },
+  "areas": {
+    "supply-chain": [
+      { "id": "sc-area-raw-material", "labelKey": "menu.area.rawMaterial" },
+      { "id": "sc-area-production", "labelKey": "menu.area.production" },
+      { "id": "sc-area-transport-1", "labelKey": "menu.area.transportVolume" },
+      { "id": "sc-area-distribution-center", "labelKey": "menu.area.distributionCenter" },
+      { "id": "sc-area-transport-2", "labelKey": "menu.area.transportLastMile" },
+      { "id": "sc-area-point-of-sale", "labelKey": "menu.area.pointOfSale" },
+      { "id": "sc-area-delivery", "labelKey": "menu.area.delivery" },
+      { "id": "sc-area-end-customer", "labelKey": "menu.area.endCustomer" },
+      { "id": "sc-area-customer-complaints", "labelKey": "menu.area.customerComplaints" }
+    ],
+    "human-resources": [
+      { "id": "hr-area-recruitment", "labelKey": "menu.area.recruitment" },
+      { "id": "hr-area-personnel-admin", "labelKey": "menu.area.personnelAdmin" },
+      { "id": "hr-area-training-development", "labelKey": "menu.area.trainingDevelopment" },
+      { "id": "hr-area-compensation-benefits", "labelKey": "menu.area.compensationBenefits" },
+      { "id": "hr-area-organizational-development", "labelKey": "menu.area.organizationalDevelopment" },
+      { "id": "hr-area-occupational-health-safety", "labelKey": "menu.area.occupationalHealthSafety" },
+      { "id": "hr-area-hris", "labelKey": "menu.area.hris" },
+      { "id": "hr-area-hr-analytics", "labelKey": "menu.area.hrAnalytics" }
+    ],
+    "certifications": [
+      { "id": "cert-area-iso-9001", "labelKey": "menu.area.iso9001" }
+    ]
+  },
+  "footer": []
+}

@@ -1,0 +1,1386 @@
+*, *::before, *::after{ box-sizing: border-box; }
+
+/* Theme tokens — 4 "Estilo" options (Claro/Oscuro/Institucional/Futurista),
+   same idea as Inicio-en.css's :root/.dark-mode pair on desktop. :root is
+   "Claro" (the default, no body class — matches STYLE_OPTIONS' 'light' id
+   and getStoredStyle()'s default). --home-on-accent/--home-on-header are
+   the text color for the handful of controls that sit on an always-accent
+   or always-header-gradient background (chat bubbles, badges, the
+   subscreen header title) — kept as separate tokens (not hardcoded white)
+   so Institucional can set them to the client's own accentText/tooltipText
+   when their branding accent is light enough that white would fail
+   contrast (see applyInstitutionalTheme in AppInicio.js). */
+:root{
+    --home-bg: #f3f4fa;
+    --home-bg-grad-1: #e3e7fb;
+    --home-bg-grad-2: #f3f4fa;
+    --home-tabbar-bg: #ffffff;
+    --home-surface: #ffffff;
+    --home-surface-2: #eceefa;
+    --home-neutral-soft: #dfe2f0;
+    --home-border: #e0e3f0;
+    --home-divider: #e6e8f2;
+    --home-text-primary: #1c1f30;
+    --home-text-secondary: #454a68;
+    --home-text-tertiary: #6b7290;
+    --home-text-muted: #8890ac;
+    --home-accent: #1f8fae;
+    --home-accent-strong-1: #6C7CF0;
+    --home-accent-strong-2: #3A4BC9;
+    --home-on-accent: #ffffff;
+    --home-header-grad-1: #4A5AD8;
+    --home-header-grad-2: #2A3166;
+    --home-on-header: #ffffff;
+    --home-danger: #c8384a;
+    --home-shadow: rgba(30, 34, 60, 0.14);
+    --home-overlay-backdrop: rgba(20, 22, 40, 0.35);
+}
+
+/* Oscuro — this is exactly the palette AppInicio used unconditionally
+   before theming existed (its 'dark' swatch, #0b0d14, is this same bg),
+   preserved 1:1 here so picking "Oscuro" looks identical to the old
+   always-on look. */
+body.dark-mode{
+    --home-bg: #0b0d14;
+    --home-bg-grad-1: #2A3166;
+    --home-bg-grad-2: #0b0d14;
+    --home-tabbar-bg: #0d0f1a;
+    --home-surface: #171b2c;
+    --home-surface-2: #232640;
+    --home-neutral-soft: #2c2f4a;
+    --home-border: #232640;
+    --home-divider: #1c1f30;
+    --home-text-primary: #ffffff;
+    --home-text-secondary: #c7cce8;
+    --home-text-tertiary: #9BA3C4;
+    --home-text-muted: #5b6b9e;
+    --home-accent: #7FE1FF;
+    --home-accent-strong-1: #6C7CF0;
+    --home-accent-strong-2: #3A4BC9;
+    --home-on-accent: #ffffff;
+    --home-header-grad-1: #1c1a3a;
+    --home-header-grad-2: #0e0d1a;
+    --home-on-header: #ffffff;
+    --home-danger: #ff8a8a;
+    --home-shadow: rgba(0, 0, 0, 0.4);
+    --home-overlay-backdrop: rgba(5, 6, 12, 0.6);
+}
+
+/* Institucional — static fallback only (matches the option's own preview
+   swatch, a generic navy-blue). The real per-client look is written over
+   these same custom properties at runtime by applyInstitutionalTheme() in
+   AppInicio.js, straight from /api/business/branding's colorPalette — the
+   exact data Dashboard.js's desktop switcher already uses for its own
+   Institutional theme, just mapped onto this page's --home-* names instead
+   of Inicio-en.css's --institutional-* ones. */
+body.institutional-mode{
+    --home-bg: #0e1e33;
+    --home-bg-grad-1: #1c3a5e;
+    --home-bg-grad-2: #0e1e33;
+    --home-tabbar-bg: #0a1626;
+    --home-surface: #16304d;
+    --home-surface-2: #1f3f61;
+    --home-neutral-soft: #234867;
+    --home-border: #2a4d70;
+    --home-divider: #16283d;
+    --home-text-primary: #ffffff;
+    --home-text-secondary: #c9d9e8;
+    --home-text-tertiary: #9fb6cc;
+    --home-text-muted: #6f8ba3;
+    --home-accent: #7fd1ff;
+    --home-accent-strong-1: #2f6fae;
+    --home-accent-strong-2: #16304d;
+    --home-on-accent: #ffffff;
+    --home-header-grad-1: #1c3a5e;
+    --home-header-grad-2: #0a1626;
+    --home-on-header: #ffffff;
+    --home-danger: #ff8a8a;
+    --home-shadow: rgba(0, 0, 0, 0.4);
+    --home-overlay-backdrop: rgba(5, 10, 18, 0.6);
+}
+
+/* Futurista — a distinct violet/magenta variant, not just a recolor of
+   Oscuro's navy/cyan, so all 4 options genuinely look different. */
+body.futuristic-mode{
+    --home-bg: #06040f;
+    --home-bg-grad-1: #3d1a78;
+    --home-bg-grad-2: #06040f;
+    --home-tabbar-bg: #0a0620;
+    --home-surface: #150c2e;
+    --home-surface-2: #2a1656;
+    --home-neutral-soft: #341a68;
+    --home-border: #4a2a8a;
+    --home-divider: #24123f;
+    --home-text-primary: #ffffff;
+    --home-text-secondary: #d9c9ff;
+    --home-text-tertiary: #b39ce8;
+    --home-text-muted: #8467c4;
+    --home-accent: #FF6EF0;
+    --home-accent-strong-1: #8B5CF6;
+    --home-accent-strong-2: #4C1D95;
+    --home-on-accent: #ffffff;
+    --home-header-grad-1: #4c1d95;
+    --home-header-grad-2: #100626;
+    --home-on-header: #ffffff;
+    --home-danger: #ff6b81;
+    --home-shadow: rgba(90, 30, 180, 0.35);
+    --home-overlay-backdrop: rgba(10, 4, 25, 0.7);
+}
+
+body{
+    margin: 0;
+    font-family: 'Poppins', system-ui, sans-serif;
+    background: var(--home-bg);
+    color: var(--home-text-primary);
+    min-height: 100vh;
+}
+
+.sr-only{
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.home-screen{
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(circle at 30% 0%, var(--home-bg-grad-1), var(--home-bg-grad-2) 60%);
+}
+
+.home-header{
+    position: relative;
+    padding: calc(1.1rem + env(safe-area-inset-top, 0px)) 1.4rem 1rem;
+}
+.home-header-collapse-toggle{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    margin: 0.4rem auto 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--home-text-muted);
+    font-size: 1rem;
+    cursor: pointer;
+}
+.home-header.home-header-collapsed{
+    padding-top: calc(0.3rem + env(safe-area-inset-top, 0px));
+    padding-bottom: 0.3rem;
+}
+.home-header.home-header-collapsed .home-header-top,
+.home-header.home-header-collapsed .home-header-greeting,
+.home-header.home-header-collapsed .home-search-bar{
+    display: none;
+}
+.home-header-collapsed .home-header-collapse-toggle{ margin-top: 0; }
+.home-header-top{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+    position: relative;
+}
+.home-header-top-actions{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+.home-client-brand{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex-shrink: 1;
+}
+.home-client-logo{
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 0.4rem;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+.home-client-logo-fallback[hidden]{ display: none; }
+.home-client-logo-fallback{
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    color: var(--home-on-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+}
+.home-client-name{
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--home-text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Same specificity trap as .home-hamburger-menu button/.home-tab -- a bare
+   [hidden] loses to this class's own display:flex, so hiding a picker with
+   nothing to choose (see updatePickerButtonsVisibility in AppInicio.js)
+   needs the extra specificity here too. */
+.home-pill-btn[hidden]{ display: none; }
+.home-pill-btn{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-secondary);
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 600;
+    padding: 0.42rem 0.55rem;
+    border-radius: 1.2rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.home-pill-btn i:first-child{ color: var(--home-accent); font-size: 0.9rem; }
+.home-pill-btn i:last-child{ font-size: 0.85rem; }
+.home-pill-btn-icon-only{ padding: 0.42rem 0.5rem; gap: 0.15rem; }
+.home-picker-wrap{ position: relative; flex-shrink: 0; }
+.home-picker-dropdown{
+    position: absolute;
+    top: 2.6rem;
+    left: 0;
+    min-width: 12.5rem;
+    max-width: 17rem;
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    border-radius: 0.8rem;
+    padding: 0.4rem;
+    z-index: 20;
+    box-shadow: 0 10px 30px var(--home-shadow);
+}
+.home-picker-dropdown[hidden]{ display: none; }
+.home-picker-section-label{
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--home-text-muted);
+    padding: 0.45rem 0.6rem 0.25rem;
+}
+.home-picker-option{
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--home-text-secondary);
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    text-align: left;
+}
+.home-picker-option i{ font-size: 1rem; color: var(--home-accent); flex-shrink: 0; }
+.home-picker-option.active{ background: var(--home-surface-2); color: var(--home-text-primary); }
+.home-picker-option input[type="checkbox"]{ width: 0.9rem; height: 0.9rem; flex-shrink: 0; }
+.home-picker-divider{ border-top: 1px solid var(--home-border); margin: 0.3rem 0; }
+.home-picker-empty{ font-size: 0.74rem; color: var(--home-text-muted); padding: 0.5rem 0.6rem; }
+.home-hamburger-btn{
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-secondary);
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.home-hamburger-menu{
+    position: absolute;
+    top: 2.6rem;
+    right: 0;
+    width: 12rem;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    border-radius: 0.8rem;
+    padding: 0.4rem;
+    z-index: 20;
+    box-shadow: 0 10px 30px var(--home-shadow);
+}
+.home-hamburger-menu[hidden]{ display: none; }
+/* .home-hamburger-menu button below sets display:flex on every item --
+   same specificity as a bare [hidden] selector, so a hidden button (see
+   AppInicio.js's syncTopBarMenuVisibility/syncSettingsMenuVisibility)
+   would otherwise still render at display:flex, hidden attribute or not.
+   The extra class here (same fix .home-tab[hidden] already needed and
+   got, just below) outweighs it regardless of source order. */
+.home-hamburger-menu button[hidden]{ display: none; }
+.home-hamburger-menu button{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--home-text-secondary);
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.55rem 0.6rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    text-align: left;
+}
+.home-hamburger-menu button i{ font-size: 1.05rem; color: var(--home-accent); }
+.home-menu-submenu{ padding-left: 1.1rem; }
+.home-menu-submenu[hidden]{ display: none; }
+#home-menu-settings[aria-expanded="true"] .bx-chevron-down,
+#home-menu-database[aria-expanded="true"] .bx-chevron-down,
+#home-menu-business-intelligence[aria-expanded="true"] .bx-chevron-down{ transform: rotate(180deg); }
+.home-hamburger-menu hr{ border: none; border-top: 1px solid var(--home-border); margin: 0.3rem 0; }
+.home-hamburger-menu .home-menu-logout{ color: var(--home-danger); }
+.home-hamburger-menu .home-menu-logout i{ color: var(--home-danger); }
+.home-search-bar{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    border-radius: 1.2rem;
+    padding: 0.55rem 0.9rem;
+    margin-bottom: 0.9rem;
+    color: var(--home-text-muted);
+}
+.home-search-bar[hidden]{ display: none; }
+.home-search-bar i{ font-size: 1rem; }
+.home-search-bar input{
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--home-text-primary);
+    font-family: inherit;
+    font-size: 0.78rem;
+}
+.home-search-bar input::placeholder{ color: var(--home-text-muted); }
+.home-hello{
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--home-text-tertiary);
+}
+.home-name{
+    margin: 0.15rem 0 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.home-section{
+    padding: 0.6rem 1.4rem;
+}
+.home-section-title{
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--home-text-secondary);
+    margin: 0 0 0.7rem;
+}
+
+.home-tiles{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.7rem;
+}
+.home-tiles[hidden]{ display: none; }
+.home-tile{
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    border-radius: 0.8rem;
+    padding: 0.9rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: inherit;
+    text-decoration: none;
+    font-family: inherit;
+    cursor: pointer;
+}
+.home-tile-icon{
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 0.6rem;
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    color: var(--home-on-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+.home-tile span{
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--home-text-secondary);
+    text-align: center;
+    line-height: 1.25;
+}
+
+/* "Pronto" tiles (menu.json pantallas with no real href yet) — same tile,
+   just dimmed with a corner tag, reused by both Accesos rápidos (never
+   actually needs this today, every curated App screen is real) and the
+   category screen picker below. */
+.home-tile{ position: relative; }
+.home-tile.soon{ opacity: 0.55; }
+.home-tile.soon .home-tile-icon{ background: var(--home-surface-2); color: var(--home-text-muted); }
+.home-tile-soon-tag{
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: var(--home-text-muted);
+    background: var(--home-bg);
+    border: 1px solid var(--home-border);
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.6rem;
+}
+
+/* Category screen picker (Catálogos/Operaciones/Administración/...) — tapping
+   a bottom-tab category shows the real pantallas menu.json grants this
+   user for the selected departamento/área here, in either grid (reuses
+   .home-tile above) or list form, whichever this user last picked (the
+   toggle itself only shows with the btn-vista-pantallas permission grant —
+   see syncSettingsMenuVisibility-style gating in AppInicio.js). */
+.home-category-header{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.7rem; }
+.home-category-header .home-section-title{ margin: 0; }
+.home-category-view-toggle{ display: flex; background: var(--home-surface); border: 1px solid var(--home-border); border-radius: 0.6rem; padding: 0.15rem; gap: 0.15rem; flex-shrink: 0; }
+.home-category-view-toggle[hidden]{ display: none; }
+.home-category-view-btn{ display: flex; align-items: center; justify-content: center; width: 1.8rem; height: 1.6rem; border-radius: 0.4rem; background: none; border: none; color: var(--home-text-muted); font-size: 0.95rem; cursor: pointer; }
+.home-category-view-btn.active{ background: var(--home-accent-strong-1); color: var(--home-on-accent); }
+.home-category-list{ display: flex; flex-direction: column; }
+.home-category-list[hidden]{ display: none; }
+.home-category-list-row{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--home-divider);
+    padding: 0.75rem 0.1rem;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+.home-category-list-row:last-child{ border-bottom: none; }
+.home-category-list-row.soon{ opacity: 0.55; }
+.home-category-list-icon{ width: 2rem; height: 2rem; border-radius: 0.55rem; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); color: var(--home-on-accent); }
+.home-category-list-row.soon .home-category-list-icon{ background: var(--home-surface-2); color: var(--home-text-muted); }
+.home-category-list-label{ flex: 1; min-width: 0; font-size: 0.78rem; font-weight: 600; color: var(--home-text-secondary); }
+.home-category-list-tag{ font-size: 0.6rem; font-weight: 700; color: var(--home-text-muted); background: var(--home-bg); border: 1px solid var(--home-border); padding: 0.1rem 0.45rem; border-radius: 0.6rem; flex-shrink: 0; }
+.home-category-list-chevron{ color: var(--home-text-muted); font-size: 1.1rem; flex-shrink: 0; }
+
+.home-empty{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 2.4rem 1rem;
+    color: var(--home-text-muted);
+}
+.home-empty[hidden]{ display: none; }
+.home-empty i{ font-size: 1.8rem; }
+.home-empty p{
+    margin: 0;
+    font-size: 0.75rem;
+    text-align: center;
+    max-width: 18rem;
+}
+
+.home-tabbar{
+    margin-top: auto;
+    display: flex;
+    justify-content: flex-start;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0.7rem 0.5rem 0.5rem;
+    border-top: 1px solid var(--home-divider);
+    background: var(--home-tabbar-bg);
+}
+.home-tabbar::-webkit-scrollbar{ display: none; }
+.home-tab{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--home-text-muted);
+    font-family: inherit;
+    font-size: 0.6rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.2rem 0.7rem;
+}
+.home-tab[hidden]{ display: none; }
+.home-tab i{ font-size: 1.1rem; transition: transform 0.15s ease; }
+.home-tab.active{ color: var(--home-accent); }
+/* A small lift on the active icon is the only "selected" cue — no
+   background bubble/notch (tried, client asked for something much more
+   subtle: "solo debe subir la curva ... muy ligeramente"). */
+.home-tab.active i{ transform: translateY(-0.3rem); }
+
+.home-breadcrumb{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem calc(0.25rem + env(safe-area-inset-bottom, 0px)) 1.4rem;
+    font-size: 0.64rem;
+    color: var(--home-text-muted);
+    background: var(--home-bg);
+    border-top: 1px solid var(--home-divider);
+}
+.home-breadcrumb-trail{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.home-breadcrumb-trail[hidden]{ display: none; }
+.home-breadcrumb .current{ color: var(--home-text-secondary); font-weight: 700; }
+.home-breadcrumb-trail i{ font-size: 0.68rem; }
+.home-breadcrumb-toggle{
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--home-text-muted);
+    padding: 0.2rem;
+    cursor: pointer;
+}
+.home-breadcrumb-toggle i{ font-size: 0.85rem; }
+
+/* Same structure as Login.css's .login-toast* (icon/message/close/progress),
+   dark palette, pinned to one side (top-right) instead of the old
+   full-width bottom banner. */
+.home-toast-container{
+    position: fixed;
+    top: calc(1.25rem + env(safe-area-inset-top, 0px));
+    right: 1.1rem;
+    left: 1.1rem;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.6rem;
+    pointer-events: none;
+}
+.home-toast{
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    max-width: min(20rem, 100%);
+    padding: 0.7rem 0.9rem 0.8rem;
+    border-radius: 0.6rem;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-primary);
+    box-shadow: 0 8px 20px -10px var(--home-shadow);
+    opacity: 0;
+    transform: translateX(1rem);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: auto;
+}
+.home-toast-visible{
+    opacity: 1;
+    transform: translateX(0);
+}
+.home-toast-icon{
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--home-on-accent);
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    font-size: 0.85rem;
+}
+.home-toast-message{
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    word-break: break-word;
+    margin: 0;
+}
+.home-toast-close{
+    flex-shrink: 0;
+    align-self: flex-start;
+    border: none;
+    background: transparent;
+    color: var(--home-text-muted);
+    cursor: pointer;
+    padding: 0.1rem;
+    display: flex;
+}
+.home-toast-progress{
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 100%;
+    background: var(--home-accent);
+    transition: width linear;
+}
+
+/* Bottom sheet — the mobile-native pattern every hamburger-menu item that
+   needs more than a plain toggle should use (see "Tamaño del sistema" here
+   as the reference implementation); a dim backdrop + a rounded-top card
+   sliding up from the bottom, instead of desktop's own anchored dropdown. */
+.home-sheet-overlay{
+    position: fixed;
+    inset: 0;
+    background: var(--home-overlay-backdrop);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 30;
+}
+.home-sheet-overlay[hidden]{ display: none; }
+.home-sheet{
+    width: 100%;
+    max-width: 30rem;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    border-bottom: none;
+    border-radius: 1.2rem 1.2rem 0 0;
+    padding: 0.5rem 1.2rem calc(1.4rem + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -10px 30px var(--home-shadow);
+}
+.home-sheet-handle{
+    width: 2.2rem;
+    height: 0.25rem;
+    border-radius: 0.2rem;
+    background: var(--home-neutral-soft);
+    margin: 0 auto 1rem;
+}
+.home-sheet-title{
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem;
+}
+.home-sheet-subtitle{
+    font-size: 0.74rem;
+    color: var(--home-text-tertiary);
+    margin: 0 0 1.1rem;
+}
+.home-ui-scale-preview{
+    background: var(--home-bg);
+    border-radius: 0.9rem;
+    padding: 1rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+.home-ui-scale-preview-text{
+    display: inline-block;
+    color: var(--home-text-secondary);
+    font-weight: 700;
+    font-size: 1.4rem;
+    transition: font-size 0.15s ease;
+}
+.home-ui-scale-preview-label{
+    font-size: 0.66rem;
+    color: var(--home-text-muted);
+    margin: 0.4rem 0 0;
+}
+.home-ui-scale-stepper{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+.home-ui-scale-btn{
+    width: 3.2rem;
+    height: 3.2rem;
+    border-radius: 50%;
+    border: none;
+    background: var(--home-surface-2);
+    color: var(--home-text-primary);
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.home-ui-scale-btn:disabled{ opacity: 0.4; cursor: not-allowed; }
+.home-ui-scale-btn-accent{ background: var(--home-accent-strong-1); color: var(--home-on-accent); }
+.home-ui-scale-value{ text-align: center; flex: 1; min-width: 0; }
+.home-ui-scale-label{ font-size: 1rem; font-weight: 700; margin: 0; }
+.home-ui-scale-percent{ font-size: 0.7rem; color: var(--home-text-muted); margin: 0.15rem 0 0; }
+.home-ui-scale-dots{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 1.1rem;
+}
+.home-ui-scale-dot{
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: var(--home-neutral-soft);
+}
+.home-ui-scale-dot.active{
+    width: 0.55rem;
+    height: 0.55rem;
+    background: var(--home-accent);
+}
+
+/* Estilo — same bottom-sheet shell as "Tamaño del sistema", just a plain
+   options list instead of a stepper. All 4 options are real, distinct
+   themes (see the --home-* token blocks at the top of this file); the
+   swatch colors below are representative previews shown before picking,
+   not a constraint on the theme's actual (and for Institucional,
+   per-client) palette. */
+.home-style-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.home-style-option{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0.6rem 0.6rem;
+    border-radius: 0.8rem;
+    cursor: pointer;
+    text-align: left;
+    color: var(--home-text-secondary);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.home-style-option.active{ background: var(--home-surface-2); color: var(--home-text-primary); }
+.home-style-swatch{
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 0.5rem;
+    flex-shrink: 0;
+    border: 2px solid var(--home-border);
+}
+.home-style-option.active .home-style-swatch{ border-color: var(--home-accent-strong-1); }
+.home-style-check{ margin-left: auto; color: var(--home-accent); font-size: 1.1rem; }
+
+/* Configuración de Botones — a sheet of 4 rows (current value + chevron),
+   each opening a second sheet (#home-config-picker-overlay, reusing
+   .home-style-list's option look) with the real choices — same 2-level
+   flow as Sistema Web's own submenu + separate modal for each picker. */
+.home-config-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.home-config-row{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0.7rem 0.4rem;
+    border-radius: 0.6rem;
+    cursor: pointer;
+    text-align: left;
+    color: var(--home-text-secondary);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--home-divider);
+}
+.home-config-row:last-child{ border-bottom: none; }
+.home-config-row > i:first-child{ color: var(--home-accent); font-size: 1.05rem; flex-shrink: 0; }
+.home-config-row-label{ flex-shrink: 0; }
+.home-config-row-value{
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    color: var(--home-text-muted);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.home-config-row > i:last-child{ color: var(--home-text-muted); font-size: 1rem; flex-shrink: 0; }
+.home-config-picker-actions{ margin-top: 1rem; }
+.home-config-picker-save{
+    width: 100%;
+    padding: 0.7rem;
+    border: none;
+    border-radius: 0.8rem;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.home-style-option input[type="checkbox"]{ width: 0.95rem; height: 0.95rem; flex-shrink: 0; }
+
+/* Administración del Negocio — a full-screen nested list mirroring the same
+   admin-business menu.json submenu Sistema Web's top-bar Settings mirrors
+   (buildBusinessAdminSubmenuList): folders (no href of their own, e.g.
+   "Servicio Contratado") toggle their own nested list open/closed, leaves
+   (a real href, e.g. "Nuestros Centros Costos") link straight to that
+   existing desktop admin page — same cookie session, so it just works. */
+.home-admin-list{ display: flex; flex-direction: column; }
+.home-admin-list-nested{ display: flex; flex-direction: column; }
+.home-admin-list-nested[hidden]{ display: none; }
+.home-admin-list-toggle,
+.home-admin-list-link{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--home-divider);
+    padding: 0.8rem 1.2rem;
+    color: var(--home-text-secondary);
+    text-decoration: none;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+.home-admin-list-toggle i:first-child,
+.home-admin-list-link i:first-child{ color: var(--home-accent); font-size: 1.05rem; flex-shrink: 0; }
+.home-admin-list-toggle span,
+.home-admin-list-link span{ flex: 1; min-width: 0; }
+.home-admin-list-toggle i:last-child{ color: var(--home-text-muted); font-size: 1rem; transition: transform 0.15s ease; }
+.home-admin-list-toggle.open i:last-child{ transform: rotate(180deg); }
+
+/* Datos de Usuario / Datos de Usuario del Negocio — a full-screen
+   sub-view instead of a bottom sheet: a longer, plain read-only list
+   doesn't fit a sheet's "quick action" feel, so this slides in over the
+   whole home screen with its own back button instead. */
+.home-subscreen-overlay{
+    position: fixed;
+    inset: 0;
+    background: var(--home-bg);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+}
+.home-subscreen-overlay[hidden]{ display: none; }
+.home-subscreen{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.home-subscreen-header{
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: calc(1rem + env(safe-area-inset-top, 0px)) 1.2rem 1rem;
+    background: linear-gradient(160deg, var(--home-header-grad-1), var(--home-header-grad-2));
+    flex-shrink: 0;
+}
+.home-subscreen-header h2{
+    color: var(--home-on-header);
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+}
+.home-subscreen-back{
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-secondary);
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.home-subscreen-body{
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
+}
+.home-subscreen-row{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid var(--home-divider);
+    font-size: 0.82rem;
+}
+.home-subscreen-row > span:first-child{
+    color: var(--home-text-muted);
+    flex-shrink: 0;
+}
+.home-subscreen-row > span:last-child{
+    color: var(--home-text-primary);
+    text-align: right;
+    font-weight: 600;
+}
+
+/* Chatbot — same UI-shell scope as Dashboard.js's desktop panel (greeting +
+   one canned reply, no real AI backend yet), just a full mobile screen
+   instead of a floating panel. */
+.home-chatbot-messages{
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 1.2rem;
+}
+.home-chatbot-message{
+    max-width: 82%;
+    padding: 0.6rem 0.85rem;
+    border-radius: 1rem;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    overflow-wrap: break-word;
+}
+.home-chatbot-message-bot{
+    align-self: flex-start;
+    background: var(--home-surface);
+    color: var(--home-text-secondary);
+    border: 1px solid var(--home-border);
+    border-bottom-left-radius: 0.3rem;
+}
+.home-chatbot-message-user{
+    align-self: flex-end;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
+    border-bottom-right-radius: 0.3rem;
+}
+.home-chatbot-input-row{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--home-divider);
+    flex-shrink: 0;
+}
+.home-chatbot-input-row input{
+    flex: 1;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--home-border);
+    border-radius: 1.2rem;
+    background: var(--home-surface);
+    color: var(--home-text-primary);
+    font-size: 0.82rem;
+}
+.home-chatbot-input-row input:focus{ outline: none; border-color: var(--home-accent-strong-1); }
+.home-chatbot-send{
+    width: 2.3rem;
+    height: 2.3rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: none;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+/* Carga Combustible (AppCargaCombustible.html) — a practical, one-field-at-
+   a-time form instead of Sistema Web's table. Two screens: the list of
+   active (not-yet-closed) cargas + "+ Nueva Carga", and the field-by-field
+   form for whichever carga is open, grouped Identificación/Operación, each
+   field locked until its own Regla de Orden de Llenado gate (if any) is
+   filled — same enforcement model as the desktop table's own 🔗 icon, just
+   presented as a progressive stepper instead of disabled table cells. */
+.home-carga-header{ display: block; }
+.home-carga-header-top{ display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.6rem; }
+.home-carga-progress-track{ height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
+.home-carga-progress-fill{ height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--home-accent-strong-1), var(--home-accent)); transition: width 0.3s ease; }
+.home-carga-progress-label{ margin: 0.4rem 0 0; font-size: 0.66rem; font-weight: 500; color: var(--home-on-header); opacity: 0.8; }
+
+.home-carga-new-btn{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    color: var(--home-on-accent);
+    border: none;
+    border-radius: 0.9rem;
+    padding: 0.85rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 0.3rem;
+}
+.home-carga-new-btn i{ font-size: 1.1rem; }
+.home-carga-new-btn:active{ transform: scale(0.98); }
+.home-carga-empty-note{ font-size: 0.74rem; color: var(--home-text-muted); text-align: center; padding: 1.2rem 0.5rem; margin: 0; }
+
+.home-carga-active-row{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 0.9rem;
+    border: 1px solid var(--home-border);
+    background: var(--home-surface);
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    margin-bottom: 0.5rem;
+}
+.home-carga-active-row-icon{ width: 2rem; height: 2rem; border-radius: 0.6rem; flex-shrink: 0; background: var(--home-surface-2); color: var(--home-accent); display: flex; align-items: center; justify-content: center; font-size: 1.05rem; }
+.home-carga-active-row-label{ flex: 1; min-width: 0; }
+.home-carga-active-row-label p{ margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--home-text-secondary); }
+.home-carga-active-row-label span{ font-size: 0.68rem; color: var(--home-text-muted); }
+.home-carga-active-row-progress{
+    width: 2.4rem; height: 2.4rem; border-radius: 50%; flex-shrink: 0; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.62rem; font-weight: 700; color: var(--home-accent);
+    background: conic-gradient(var(--home-accent) calc(var(--pct) * 1%), var(--home-surface-2) 0);
+}
+.home-carga-active-row-progress::before{ content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--home-surface); }
+.home-carga-active-row-progress span{ position: relative; }
+
+.home-carga-group-header{ display: flex; align-items: center; gap: 0.5rem; margin: 0.9rem 0 0.1rem; }
+.home-carga-group-header i{ font-size: 0.95rem; color: var(--home-accent); }
+.home-carga-group-header span.home-carga-group-label{ font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--home-text-tertiary); }
+.home-carga-group-tag{ margin-left: auto; font-size: 0.6rem; font-weight: 600; color: var(--home-text-muted); background: var(--home-surface); border: 1px solid var(--home-border); padding: 0.15rem 0.5rem; border-radius: 1rem; }
+
+.home-carga-field{ border-radius: 0.9rem; border: 1px solid var(--home-border); background: var(--home-surface); overflow: hidden; margin-bottom: 0.5rem; transition: opacity 0.2s ease; }
+.home-carga-field-locked{ opacity: 0.55; }
+.home-carga-field-row{ display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 0.85rem; cursor: pointer; width: 100%; text-align: left; background: none; border: none; font-family: inherit; }
+.home-carga-field-locked .home-carga-field-row{ cursor: default; }
+.home-carga-field-icon{ width: 2rem; height: 2rem; border-radius: 0.6rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.05rem; background: var(--home-surface-2); color: var(--home-text-secondary); }
+.home-carga-field-done .home-carga-field-icon{ background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); color: var(--home-on-accent); }
+.home-carga-field-label{ flex: 1; min-width: 0; }
+.home-carga-field-label p{ margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--home-text-secondary); }
+.home-carga-field-label span{ font-size: 0.7rem; color: var(--home-text-muted); }
+.home-carga-field-done .home-carga-field-label span{ color: var(--home-text-tertiary); }
+.home-carga-field-auto-tag{ font-size: 0.58rem; font-weight: 700; color: var(--home-accent-strong-2); background: var(--home-accent); padding: 0.1rem 0.4rem; border-radius: 1rem; margin-left: 0.4rem; vertical-align: 1px; }
+.home-carga-field-trailing{ font-size: 1.1rem; color: var(--home-text-muted); flex-shrink: 0; }
+.home-carga-field-trailing.icon-up{ transform: rotate(180deg); }
+.home-carga-field-body{ padding: 0 0.85rem 0.85rem; display: flex; flex-direction: column; gap: 0.55rem; }
+.home-carga-field-body input,
+.home-carga-field-body select{
+    width: 100%;
+    background: var(--home-bg);
+    border: 1px solid var(--home-border);
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.7rem;
+    color: var(--home-text-primary);
+    font-family: inherit;
+    font-size: 0.82rem;
+}
+.home-carga-field-body input:focus,
+.home-carga-field-body select:focus{ outline: none; border-color: var(--home-accent-strong-1); }
+.home-carga-field-confirm{
+    align-self: flex-end;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
+    border: none;
+    border-radius: 0.6rem;
+    padding: 0.45rem 0.9rem;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.home-carga-field-error{ font-size: 0.7rem; color: var(--home-danger); margin: 0; display: none; }
+.home-carga-field-error.show{ display: block; }
+
+/* Custom select field -- replaces the native <select>/<optgroup> (see
+   buildFieldBody's old 'select' branch), which renders as each OS's own
+   unstyled picker sheet and can't pick up the App's own colors/theme.
+   Tapping an option commits it immediately (no separate Confirmar step),
+   same "one tap, done" pattern the Departamento/Área/Centro de Costos
+   pickers already use. */
+.home-select-trigger{
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    background: var(--home-bg);
+    border: 1px solid var(--home-border);
+    border-radius: 0.6rem;
+    padding: 0.5rem 0.7rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+.home-select-trigger:focus{ outline: none; border-color: var(--home-accent-strong-1); }
+.home-select-trigger-text{ display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.home-select-trigger-label{
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--home-text-muted);
+}
+.home-select-trigger-value{ font-size: 0.82rem; font-weight: 600; color: var(--home-text-primary); }
+.home-select-trigger-value.placeholder{ color: var(--home-text-muted); font-weight: 500; }
+.home-select-trigger i{ color: var(--home-accent); font-size: 0.95rem; margin-top: 0.15rem; flex-shrink: 0; transition: transform 0.15s ease; }
+.home-select-trigger[aria-expanded="true"] i{ transform: rotate(180deg); }
+/* Bottom sheet (appended straight to <body>, see openFloatingOptions in
+   each App file -- escapes .home-carga-field's own overflow:hidden by
+   never being its descendant in the first place) instead of a small
+   anchored dropdown: a full-width panel that rises from the bottom over a
+   dimmed scrim, closer in scale/feel to each OS's own native <select>
+   sheet this replaced, just carrying the App's own colors/theme instead
+   of the system's. Tapping an option (or the scrim itself) closes it. */
+.home-select-scrim{
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 12, 20, 0.42);
+    z-index: 30;
+    display: flex;
+    align-items: flex-end;
+}
+.home-select-scrim[hidden]{ display: none; }
+.home-select-sheet{
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+    background: var(--home-surface);
+    border-radius: 1rem 1rem 0 0;
+    padding: 0.7rem 0 max(0.6rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 24px var(--home-shadow);
+}
+.home-select-sheet-handle{
+    width: 2.2rem;
+    height: 0.22rem;
+    border-radius: 999px;
+    background: var(--home-border);
+    margin: 0 auto 0.5rem;
+}
+.home-select-sheet-title{
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--home-text-muted);
+    padding: 0 1rem 0.4rem;
+}
+.home-select-group-label{
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--home-text-muted);
+    padding: 0.3rem 1rem 0.15rem;
+}
+.home-select-option{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--home-text-secondary);
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    text-align: left;
+}
+.home-select-option.indent{ padding-left: 1.9rem; }
+.home-select-option.active{ background: var(--home-surface-2); color: var(--home-text-primary); }
+.home-select-option i{ color: var(--home-accent); font-size: 1rem; }
+.home-select-divider{ border-top: 1px solid var(--home-divider); margin: 0.2rem 0; }
+.home-carga-photo-row{ display: flex; align-items: center; gap: 0.6rem; }
+.home-carga-photo-btn{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--home-bg);
+    border: 1px dashed var(--home-border);
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.8rem;
+    color: var(--home-text-secondary);
+    font-family: inherit;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+}
+.home-carga-photo-btn i{ color: var(--home-accent); font-size: 1rem; }
+
+/* Notificaciones bottom sheet -- unlike .home-select-sheet (a single
+   scrolling column of options), this needs the tab strip pinned at the
+   top with only the list below it scrolling, so a flex column with
+   overflow on just .notif-list instead of the sheet itself. */
+.notif-sheet{
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--home-surface);
+    border-radius: 1rem 1rem 0 0;
+    padding: 0.7rem 0 max(0.6rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 24px var(--home-shadow);
+}
+.notif-title{
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--home-text-primary);
+    padding: 0 1rem 0.6rem;
+}
+.notif-tabs{
+    display: flex;
+    gap: 0.3rem;
+    padding: 0 0.7rem 0.6rem;
+    border-bottom: 1px solid var(--home-divider);
+    flex-shrink: 0;
+}
+.notif-tab{
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.4rem 0.2rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: none;
+    color: var(--home-text-secondary);
+}
+.notif-tab i{ font-size: 1.05rem; }
+.notif-tab.active{ background: var(--home-surface-2); }
+.notif-tab.active i{ color: var(--home-accent); }
+.notif-tab-count{
+    font-size: 0.62rem;
+    font-weight: 700;
+    min-width: 1rem;
+    padding: 0 0.25rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--home-text-muted) 25%, transparent);
+    color: var(--home-text-secondary);
+}
+.notif-tab.active .notif-tab-count{ background: var(--home-accent); color: var(--home-on-accent); }
+.notif-active-label{
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--home-accent);
+    background: var(--home-surface-2);
+    padding: 0.3rem 0;
+    margin: 0 0.7rem 0.5rem;
+    border-radius: 0.4rem;
+}
+.notif-list{
+    padding: 0.6rem 0.9rem 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow-y: auto;
+}
+.notif-item{
+    padding: 0.55rem 0.6rem;
+    border: 1px solid var(--home-border);
+    border-radius: 0.55rem;
+    background: var(--home-bg);
+}
+.notif-item-alert{ border-left: 3px solid var(--home-danger); }
+.notif-item-meta{ font-size: 0.62rem; color: var(--home-text-muted); }
+.notif-item-desc{ margin: 0.2rem 0 0; font-size: 0.74rem; color: var(--home-text-primary); line-height: 1.45; }
+.notif-empty{ font-size: 0.78rem; color: var(--home-text-secondary); padding: 0.5rem 0; }
+/* Cloud icon on an active Carga record's own row -- flags "this has at
+   least one change still sitting in the offline queue, not on the server
+   yet" (see AppOfflineSync.js + AppCargaCombustible.js's patchRecord). */
+.home-carga-offline-badge{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: color-mix(in srgb, #c9860b 18%, transparent);
+    color: #c9860b;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+.home-menu-badge{
+    margin-left: 0.4rem;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--home-danger);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1.05rem;
+    text-align: center;
+}
+
+.home-carga-done-card{
+    margin-top: 0.4rem;
+    border-radius: 0.9rem;
+    padding: 1.1rem;
+    text-align: center;
+    background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2));
+    color: var(--home-on-accent);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+}
+.home-carga-done-card.show{ display: flex; }
+.home-carga-done-card i{ font-size: 1.8rem; }
+.home-carga-done-card p{ margin: 0; font-size: 0.85rem; font-weight: 600; }
+.home-carga-done-card button{
+    margin-top: 0.3rem;
+    background: var(--home-on-accent);
+    color: var(--home-accent-strong-2);
+    border: none;
+    border-radius: 0.6rem;
+    padding: 0.55rem 1.3rem;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}

@@ -1,0 +1,816 @@
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'poppins', sans-serif;
+}
+body{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(-40deg, #e2e2e2, #829cef, hsla(198, 77%, 55%, 0.674), #e2e2e2);
+    /*background: linear-gradient(-40deg, #e2e2e2, #c9d6ff, #d1c4ff, #e2e2e2);*/
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+}
+@keyframes gradientBG{
+    0%{background-position: 0% 50%;}
+    50%{background-position: 100% 50%;}
+    100%{background-position: 0% 50%;}
+}
+
+.sr-only{
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.lang-toggle{
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 5;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+}
+.lang-toggle:hover{
+    background: #fff;
+}
+.form-error{
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    background: #ffe1e1;
+    color: #a30000;
+    border: 1px solid #f3b3b3;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    max-width: 90%;
+    text-align: center;
+}
+.toggle-password{
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: #888;
+    font-size: 20px;
+    line-height: 1;
+}
+.input-box:has(.toggle-password) input{
+    padding-right: 50px;
+}
+.input-box .field-error{
+    display: block;
+    text-align: left;
+    font-size: 12px;
+    color: #d32f2f;
+    margin-top: 4px;
+}
+
+.container{
+    position: relative;
+    width: 850px;
+    height: 550px;
+    background: #fff;
+    border-radius: 30px;
+    box-shadow: 0 0 30px rgba(0, 0, 0, .2);
+    margin: 20px;
+    overflow: hidden;
+}
+.form-box{
+    position: absolute;
+    right: 0;
+    width: 50%;
+    height: 100%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    color: #333;
+    text-align: center;
+    padding: 40px;
+    z-index: 1;
+    transition: .6s ease-in-out 1.2s, visibility 0s 1s;
+}
+.container.active .form-box{
+    right: 50%;
+}
+.container.active .form-box.register{
+    visibility: visible;
+}
+.form-box.register{
+    visibility: hidden;
+}
+form{
+    width: 100%;
+}
+
+.container h1{
+    font-size: 36px;
+    margin: -10px 0;
+}
+.input-box{
+    position: relative;
+    margin: 30px 0;
+}
+.input-box input{
+    width: 100%;
+    padding: 13px 50px 13px 20px;
+    background: #eee;
+    border-radius: 8px;
+    border: none;
+    outline: none;
+    font-size: 16px;
+    color: #333;
+    font-weight: 500;
+}
+.input-box input::placeholder{
+    color: #888;
+    font-weight: 400;
+}
+.input-box input.invalid{
+    outline: 2px solid #d32f2f;
+}
+.input-box input:focus{
+    outline: 2px solid #7494ec;
+    box-shadow: 0 0 5px rgba(116, 148, 236, 0.5);
+    transition: .1s;
+}
+.input-box i{
+    color: #888;
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+}
+.forgot-link{
+margin: -15px 0 15px;
+}
+
+.forgot-link a{
+    font-size: 14.5px;
+    color: #333;
+    text-decoration: none;
+}
+.btn{
+    width: 100%;
+    height: 48px;
+    background:  rgba(0, 140, 255, 0.789);  /*background: purple;*/
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, .1);
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    color: #fff;
+    font-weight: 600;
+}
+
+
+.container p{
+    font-size: 14.5px;
+    margin: 15px 0;
+}
+.social-icons{
+    display: flex;
+    justify-content: center;
+}
+.social-icons a.google:hover{
+    transform: scale(1.2);
+    background: #db4437 ;
+    color: #fff;
+    border-color: #db4437;
+}
+.social-icons a.facebook:hover{
+    transform: scale(1.2);
+    background: #1877f2;
+    color: #fff;
+    border-color: #1877f2;
+}
+.social-icons a.github:hover{
+    transform: scale(1.2);
+    background: #333;
+    color: #fff;
+    border-color: #333;
+}
+.social-icons a.linkedin:hover{
+    transform: scale(1.2);
+    background: #0a66c2;
+    color: #fff;
+    border-color: #0a66c2;
+}
+
+.social-icons a{
+    display: inline-flex;
+    padding: 10px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    font-size: 24px;
+    color: #333;
+    text-decoration: none;
+    margin: 0 8px;
+    transition: all 0.3s ease;
+}
+
+.social-icons a.sgn-app img{
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: block;
+}
+.social-icons a.sgn-app:hover{
+    transform: scale(1.2);
+    border-color: #3A4BC9;
+    background: #eef1ff;
+}
+
+/* Lightweight version of Dashboard.js's own toast — Login.html doesn't
+   load Dashboard.js, so it can't reuse that one, but matches its look
+   (corner-anchored card, not a full-width banner). */
+.login-toast-container{
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 600;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-width: min(24rem, calc(100vw - 2.5rem));
+}
+.login-toast{
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.7rem 0.9rem 0.8rem;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    color: #1a1d2b;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.22);
+    opacity: 0;
+    transform: translateX(1rem);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.login-toast-visible{
+    opacity: 1;
+    transform: translateX(0);
+}
+.login-toast-icon{
+    flex-shrink: 0;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background-color: #1d6fa5;
+    font-size: 0.9rem;
+}
+.login-toast-message{
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    word-break: break-word;
+}
+.login-toast-close{
+    flex-shrink: 0;
+    align-self: flex-start;
+    border: none;
+    background: transparent;
+    color: #888;
+    cursor: pointer;
+    padding: 0.1rem;
+    display: flex;
+}
+.login-toast-close:hover{
+    color: #1a1d2b;
+}
+.login-toast-progress{
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 100%;
+    background-color: #1d6fa5;
+    transition: width linear;
+}
+
+/* Native-app-only unlock screen (Face ID / password) — see access-screen.js.
+   Covers the whole viewport, sitting over the normal login form. */
+.access-screen{
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: radial-gradient(circle at 30% 20%, #2A3166, #0b0d14 70%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20vh 1.5rem 3rem;
+}
+/* [hidden] and .access-screen{display:flex} are the same specificity —
+   without this, setting screen.hidden = true in JS had no visible effect
+   at all (the flex rule kept winning), so tapping either "Usuario y
+   contraseña" or a failed Face ID attempt looked like "nothing happens". */
+.access-screen[hidden]{
+    display: none;
+}
+.access-lang-toggle{
+    position: absolute;
+    top: calc(1.2rem + env(safe-area-inset-top, 0px));
+    right: 1.2rem;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #c7cce8;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.access-mark{
+    width: 88px;
+    height: 88px;
+    border-radius: 22px;
+    background: radial-gradient(circle at 20% 15%, #6C7CF0, #3A4BC9 55%, #1C1F4A 100%);
+    padding: 20px;
+    margin-bottom: 1.4rem;
+}
+.access-name{
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 1.6rem;
+    letter-spacing: 0.04em;
+    color: #fff;
+}
+.access-tag{
+    font-size: 0.68rem;
+    color: #9BA3C4;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 0.3rem;
+}
+.access-spinner{
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid rgba(255, 255, 255, 0.18);
+    border-top-color: #7FE1FF;
+    border-radius: 50%;
+    margin-top: 1.4rem;
+    animation: access-spin 1s linear infinite;
+}
+.access-spinner.hidden{
+    display: none;
+}
+@keyframes access-spin{
+    to{ transform: rotate(360deg); }
+}
+/* Every .access-* element below sets its own `display`, and [hidden] is
+   the same specificity as a class selector — without this, toggling
+   .hidden = true in JS on any of them (accessBtn re-hides itself once
+   tapped; the others start hidden then may return to it too) would
+   silently do nothing, the exact bug already found on .access-screen
+   itself. One rule here instead of repeating it after each one. */
+.access-btn[hidden],
+.access-peek[hidden],
+.access-sheet[hidden]{
+    display: none;
+}
+.access-btn{
+    margin-top: auto;
+    width: 100%;
+    max-width: 20rem;
+    background: #7FE1FF;
+    color: #0b0d14;
+    border: none;
+    border-radius: 0.9rem;
+    padding: 0.9rem;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+/* Small bouncing "pull up" handle — shown after Acceder, before the actual
+   sign-in options, per request. Tapping it reveals .access-sheet below. */
+.access-peek{
+    margin-top: auto;
+    width: 100%;
+    background: #12141f;
+    border: none;
+    border-radius: 1rem 1rem 0 0;
+    padding: 0.7rem 0 1rem;
+    display: flex;
+    justify-content: center;
+    cursor: pointer;
+}
+/* Same [hidden]-vs-class-display specificity issue fixed on .access-screen
+   itself — anything that sets its own `display` needs this or toggling
+   .hidden in JS silently does nothing. */
+.access-peek[hidden]{
+    display: none;
+}
+.access-peek i{
+    font-size: 1.3rem;
+    color: #7FE1FF;
+    animation: access-peek-bounce 1.4s ease-in-out infinite;
+}
+@keyframes access-peek-bounce{
+    0%, 100%{ transform: translateY(0); }
+    50%{ transform: translateY(-4px); }
+}
+
+.access-sheet{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #12141f;
+    border-radius: 1.4rem 1.4rem 0 0;
+    padding: 1.4rem 1.3rem calc(1.6rem + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.9rem;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
+}
+.access-sheet-title{
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #fff;
+    text-align: center;
+    margin: 0;
+}
+.access-sheet-icons{
+    display: flex;
+    gap: 1.6rem;
+}
+.access-icon-opt{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+}
+.access-icon-circle{
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    background: #171b2c;
+    border: 1px solid #232640;
+    color: #7FE1FF;
+}
+.access-icon-opt.primary .access-icon-circle{
+    background: #7FE1FF;
+    color: #0b0d14;
+    border-color: #7FE1FF;
+}
+.access-icon-caption{
+    font-size: 0.68rem;
+    color: #c7cce8;
+    font-weight: 600;
+}
+
+/* Face ID scanning screen — shown while the native OS prompt runs (see
+   attemptBiometric in access-screen.js). Same [hidden]-vs-class-display
+   specificity fix as every other .access-* panel above. */
+.access-scan-screen{
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 30% 20%, #2A3166, #0b0d14 70%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+.access-scan-screen[hidden]{
+    display: none;
+}
+.access-scan-circle{
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #1c1f30;
+    border: 2px solid #2a3255;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    color: #5b6b9e;
+    margin-bottom: 0.6rem;
+}
+.access-scan-title{
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #fff;
+    margin: 0;
+}
+.access-scan-sub{
+    font-size: 0.72rem;
+    color: #9BA3C4;
+    margin: 0;
+}
+
+/* App-branded login form — reached from "Usuario y contraseña" (or a
+   failed Face ID attempt). Same fields/validation as the web login form
+   below it, just styled to match this dark screen instead of the light
+   split-panel design. */
+.access-password-screen{
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 30% 20%, #2A3166, #0b0d14 70%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4.5rem 1.6rem 2rem;
+}
+.access-password-screen[hidden]{
+    display: none;
+}
+.access-pw-back{
+    position: absolute;
+    top: 1.4rem;
+    left: 1.2rem;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    border: none;
+    background: #171b2c;
+    color: #c7cce8;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.access-pw-mark{
+    width: 64px;
+    height: 64px;
+    margin-bottom: 1.2rem;
+}
+.access-pw-title{
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #fff;
+    margin: 0 0 1.4rem;
+}
+.access-pw-form{
+    width: 100%;
+    max-width: 20rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+.access-pw-field{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: #171b2c;
+    border: 1px solid #232640;
+    border-radius: 0.7rem;
+    padding: 0.7rem 0.9rem;
+}
+.access-pw-field i:first-child{
+    color: #5b6b9e;
+    font-size: 1rem;
+}
+.access-pw-field input{
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.85rem;
+    outline: none;
+}
+.access-pw-field input::placeholder{
+    color: #5b6b9e;
+}
+.access-pw-toggle{
+    background: none;
+    border: none;
+    color: #5b6b9e;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+}
+.access-pw-error{
+    font-size: 0.72rem;
+    color: #ff8a80;
+    margin: -0.2rem 0 0;
+}
+.access-pw-error[hidden]{
+    display: none;
+}
+#access-pw-submit{
+    margin-top: 0.4rem;
+}
+
+.toggle-box{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+.toggle-box::before{
+    content: '';
+    left: -250%;
+    border-radius: 150px;
+    position: absolute;
+    width: 300%;
+    height: 100%;
+    background: rgb(19, 24, 120); /*rgb(33, 93, 213);/*background: purple;*/
+    z-index: 2;
+    transition: 1.8s ease-in-out;
+}
+.container.active .toggle-box::before{
+    left: 50%;
+}
+.toggle-panel{
+    position: absolute;
+    width: 50%;
+    height: 100%;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: .6s ease-in-out;
+}
+.toggle-panel.toggle-left{
+    left: 0;
+    transition-delay: 1.2s;
+}
+.container.active .toggle-panel.toggle-left{
+    left: -50%;
+    transition-delay: .6s;
+}
+.toggle-panel.toggle-right{
+    right: -50%;
+    transition-delay: .6s;
+}
+.container.active .toggle-panel.toggle-right{
+    right: 0;
+    transition-delay: 1.2s;
+}
+.toggle-panel p{
+    margin-bottom: 20px;
+}
+.toggle-panel .btn{
+    width: 160px;
+    height: 46px;
+    background: transparent;
+    border: 2px solid #fff;
+    box-shadow: none;
+}
+
+
+
+@media screen and (max-width: 650px) {
+    .container{
+        height: calc(100vh - 40px);
+    }
+
+    .form-box{
+        bottom: 0;
+        width: 100%;
+        height: 70%;
+    }
+
+    .container.active .form-box {
+        right: 0;
+        bottom: 30%;
+    }
+
+    .toggle-box::before{
+        left: 0;
+        top: -270%;
+        width: 100;
+        height: 300;
+        border-radius: 20vw;
+    }
+
+    .container.active .toggle-box::before{
+        left: 0;
+        top: 70%;
+    }
+
+    .toggle-panel{
+        width: 100%;
+        height: 30%;
+    }
+
+    .toggle-panel.toggle-left{
+        top: 0;
+    }
+
+    .container.active .toggle-panel.toggle-left{
+        left: 0;
+        top: -30%;
+    }
+
+    .toggle-panel.toggle-right{
+        right: 0;
+        bottom: -30%;
+    }
+
+    .container.active .toggle-panel.toggle-right{
+        bottom: 0;  
+    }
+}
+@media screen and (max-width: 650px) {
+        .form-box{
+            padding: 20px;
+        }
+
+        .toggle-panel h1{
+            font-size: 30px;
+        }
+
+    .toggle-box::before{
+        left: 0;
+        top: -270%;
+        width: 100%;
+        height: 300%;
+        border-radius: 20vw;
+    }
+
+    .container.active .toggle-box::before{
+        left: 0;
+        top: 70%;
+    }
+
+    .toggle-panel{
+        width: 100%;
+        height: 30%;
+    }
+
+    .toggle-panel.toggle-left{
+        top: 0;
+    }
+
+    .container.active .toggle-panel.toggle-left{
+        left: 0;
+        top: -30%;
+    }
+
+    .toggle-panel.toggle-right{
+        right: 0;
+        bottom: -30%;
+    }
+
+    .container.active .toggle-panel.toggle-right{
+        bottom: 0;
+    }
+}
+@media screen and (max-width: 650px) {
+    .form-box{
+        padding: 20px;
+    }
+
+    .toggle-panel h1{
+        font-size: 30px;
+    }
+
+
+}

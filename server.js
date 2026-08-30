@@ -257,9 +257,36 @@ if (IS_PROD && JWT_SECRET === 'CHANGE_ME_IN_PRODUCTION') {
     console.warn('[WARNING] JWT_SECRET is not set. Set it as an environment variable before real use.');
 }
 
+// The native Android app (mobile-app/) bundles its own copy of the App*
+// HTML/JS/CSS locally inside the .apk instead of loading it from this
+// server (see mobile-app/capacitor.config.json) -- every request it makes
+// here is therefore cross-origin from the WebView's own local origin,
+// unlike the desktop site and the installed PWA, which are both served BY
+// this backend and stay same-origin as before. Scoped to that one known
+// origin (with credentials) rather than a wildcard, since this also needs
+// to allow the session cookie through.
+const NATIVE_APP_ORIGINS = new Set(['https://localhost', 'capacitor://localhost']);
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && NATIVE_APP_ORIGINS.has(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Vary', 'Origin');
+        if (req.method === 'OPTIONS') {
+            res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            return res.sendStatus(204);
+        }
+    }
+    next();
+});
+
 // helmet's default CSP is strict and will block the boxicons CDN + inline
 // scripts this frontend currently uses. Loosen just enough for that;
 // tighten further once you stop relying on inline <script> blocks.
+// crossOriginResourcePolicy defaults to 'same-origin', which would also
+// block the native app's cross-origin fetches above at the response stage
+// even with the CORS headers in place.
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -269,6 +296,7 @@ app.use(helmet({
             'font-src': ["'self'", 'https://unpkg.com', 'https://fonts.gstatic.com', 'data:'],
         },
     },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 // Default express.json() caps requests at 100kb — too small for a base64
 // logo image or contract PDF (see MAX_LOGO_DATA_URL_LENGTH/
@@ -394,7 +422,15 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     res.cookie('sgn_session', token, {
         httpOnly: true,
         secure: IS_PROD,
-        sameSite: 'lax',
+        // 'none' in production: the native Android app (mobile-app/) bundles
+        // its HTML/JS locally instead of loading it from this server, so its
+        // requests here are cross-origin (see the CORS block below) and a
+        // browser only ever attaches a cookie to a cross-origin request when
+        // it's SameSite=None -- 'lax' silently dropped it, which is what
+        // made the app look logged out / stuck. Requires secure:true, which
+        // IS_PROD already guarantees whenever this branch is taken; dev
+        // (plain http, not IS_PROD) is untouched.
+        sameSite: IS_PROD ? 'none' : 'lax',
         maxAge: 8 * 60 * 60 * 1000,
     });
 

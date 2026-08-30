@@ -1,1 +1,12 @@
-<!DOCTYPE html><html><body>Loading SGN...</body></html>
+<!DOCTYPE html>
+<html>
+<head>
+<!-- Capacitor always loads webDir's index.html first, regardless of which
+     page is the "real" entry point -- Login.html (see sync-web-assets.js)
+     handles the actual native access/login screen. This just hands off to
+     it immediately, so it never shows on screen. -->
+<meta http-equiv="refresh" content="0; url=Login.html">
+<script>location.replace('Login.html');</script>
+</head>
+<body></body>
+</html>
