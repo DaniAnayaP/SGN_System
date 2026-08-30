@@ -1402,6 +1402,18 @@ function closeAllTopBarDropdowns(exceptName) {
     topBarDropdownClosers.forEach(({ closeFn, name }) => { if (!name || name !== exceptName) closeFn(); });
 }
 
+// Clicking the sidebar logo/brand reloads the page instead of doing
+// nothing — a plain full reload (not a client-side "refetch everything"
+// call) so it always picks up a newer deploy too, not just fresher data.
+// .brand is static markup shared by every page that loads this file
+// (every Business-*.html client screen and Admin-SaaS.html alike), so this
+// one binding covers the SaaS panel and every client, present and future,
+// with nothing per-page to wire up.
+document.querySelectorAll('.brand').forEach((brand) => {
+    brand.style.cursor = 'pointer';
+    brand.addEventListener('click', () => window.location.reload());
+});
+
 // --- Top-bar actions collapse (mobile only) ----------------------------------
 // On phones, Messages/Chatbot/Notifications/Bookmarks/Settings/Add-user don't
 // all fit next to the page title, so they collapse behind a single toggle
@@ -4199,6 +4211,9 @@ function renderActiveNotificationTab() {
     document.querySelectorAll('.notifications-tab').forEach((tabBtn) => {
         tabBtn.classList.toggle('active', tabBtn.dataset.tab === activeNotificationTab);
     });
+    document.querySelectorAll('.notifications-active-label').forEach((el) => {
+        el.textContent = t(`main.notificationsTab_${activeNotificationTab}`);
+    });
     document.querySelectorAll('.notifications-tab-count').forEach((el) => {
         el.textContent = String(notificationsData[el.dataset.tab]?.length || 0);
     });
@@ -4270,6 +4285,7 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
                 </button>
             `).join('')}
         </div>
+        <div class="notifications-active-label"></div>
         <div class="notifications-list" data-role="list"></div>
     `;
     wrapper.appendChild(dropdown);

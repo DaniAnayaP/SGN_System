@@ -133,4 +133,12 @@ function renderTree() {
     roots.forEach((root) => container.appendChild(buildTreeNode(root, new Set())));
 }
 
-loadOrgChart();
+(async function init() {
+    try {
+        const role = await Dashboard.initDashboard({ activePage: 'cat-catalogos-estructura-organizacional' });
+        if (!role) return;
+        await loadOrgChart();
+    } catch (err) {
+        console.error('Business (Estructura Organizacional) failed to initialize:', err);
+    }
+})();

@@ -832,6 +832,7 @@ function renderNotifRequestItem(change, showOutcome) {
 
 function renderNotifTab(sheet, tabKey) {
     sheet.querySelectorAll('.notif-tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
+    sheet.querySelector('.notif-active-label').textContent = t(`main.notificationsTab_${tabKey}`);
     const list = sheet.querySelector('.notif-list');
     list.innerHTML = '';
     const items = notificationsData[tabKey] || [];
@@ -886,6 +887,7 @@ function openNotificationsSheet() {
                 </button>
             `).join('')}
         </div>
+        <div class="notif-active-label"></div>
         <div class="notif-list"></div>
     `;
     sheet.querySelectorAll('.notif-tab').forEach((btn) => {
@@ -1597,6 +1599,16 @@ function updateDatabaseCompanyLabel() {
     const base = t('menu.databaseCompany');
     databaseLabel.textContent = clientCompanyAbbreviation ? `${base} ${clientCompanyAbbreviation}` : base;
 }
+
+// Tapping the client logo reloads the App instead of doing nothing -- same
+// "no tener que salir y volver a entrar" fix as the Web sidebar's own
+// .brand click (see Dashboard.js), just against the App's own logo block.
+(() => {
+    const brand = document.querySelector('.home-client-brand');
+    if (!brand) return;
+    brand.style.cursor = 'pointer';
+    brand.addEventListener('click', () => window.location.reload());
+})();
 
 async function loadClientBranding() {
     const logoImg = document.getElementById('home-client-logo');

@@ -1301,6 +1301,16 @@ body{
     color: var(--home-text-secondary);
 }
 .notif-tab.active .notif-tab-count{ background: var(--home-accent); color: var(--home-on-accent); }
+.notif-active-label{
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--home-accent);
+    background: var(--home-surface-2);
+    padding: 0.3rem 0;
+    margin: 0 0.7rem 0.5rem;
+    border-radius: 0.4rem;
+}
 .notif-list{
     padding: 0.6rem 0.9rem 0.4rem;
     display: flex;

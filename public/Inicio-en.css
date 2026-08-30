@@ -1546,6 +1546,16 @@
         background: var(--color-bg);
         color: var(--color-text-primary);
     }
+    .notifications-active-label{
+        text-align: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--color-accent);
+        background: var(--color-bg);
+        padding: 0.3rem 0;
+        margin: 0 0 0.6rem;
+        border-radius: 0.35rem;
+    }
     .notifications-tab-count{
         font-size: 0.62rem;
         font-weight: 700;
