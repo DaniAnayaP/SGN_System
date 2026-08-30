@@ -207,6 +207,17 @@
             if (leafKeys.every((k) => planGrantSet.has(k))) return 'green';
             const clientSet = effectiveClientSet();
             if (leafKeys.every((k) => clientSet.has(k))) return 'yellow';
+            // Every leaf covered, just from a MIX of sources (some by the
+            // Rol/plan, some added individually) -- e.g. a classification
+            // group whose columns were granted piecemeal across two
+            // sessions. Falling through to the "partial" branch below
+            // returns null, and buildRow's tricolor branch has no visual
+            // for null at all (not red-interactive, and `if (colorSlot.color)`
+            // is falsy for null) -- the row silently rendered with NOTHING,
+            // looking identical to "nothing granted" even though every
+            // single leaf underneath was actually covered. Treat full mixed
+            // coverage as yellow (the existing "adicional" tint) instead.
+            if (leafKeys.every((k) => planGrantSet.has(k) || clientSet.has(k))) return 'yellow';
             if (leafKeys.some((k) => planGrantSet.has(k) || clientSet.has(k))) return null;
             return 'red';
         }
