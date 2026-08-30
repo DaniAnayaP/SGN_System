@@ -250,18 +250,28 @@ async function openJobPositionTree(jp) {
     }
 }
 
+// See AppCargaCombustible.js's own patchRecord for the reference write-up
+// of the offline-queue pattern (AppOfflineSync.js). No per-field records to
+// optimistically merge here -- the tree widget already holds its own
+// edited state independent of server confirmation, so a queued save just
+// needs to say so instead of erroring out.
 async function saveJobPositionGrants(saveBtn) {
     if (!selectedJobPositionId || !tree) return;
     saveBtn.disabled = true;
+    const jp = jobPositions.find((p) => p.id === selectedJobPositionId);
     try {
-        const res = await fetch(`/api/business/job-positions/${selectedJobPositionId}/grants`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ grants: tree.getGrants() }),
-        });
-        if (!res.ok) throw new Error('save failed');
-        showToast(t('main.changeSaved'));
+        const result = await window.SgnOfflineSync.offlineAwareFetch(
+            `/api/business/job-positions/${selectedJobPositionId}/grants`,
+            { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ grants: tree.getGrants() }) },
+            `${t('menu.roles')} · ${jp?.name || ''}`, `roles:${selectedJobPositionId}`,
+        );
+        if (result.queued) {
+            showToast(t('home.cargaSavedOffline'));
+        } else if (!result.ok) {
+            showToast(t('admin.saveError'));
+        } else {
+            showToast(t('main.changeSaved'));
+        }
     } catch {
         showToast(t('admin.saveError'));
     } finally {

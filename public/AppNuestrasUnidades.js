@@ -211,16 +211,36 @@ function createNewFleetUnit() {
     render();
 }
 
+// See AppCargaCombustible.js's own patchRecord for the reference write-up
+// of this pattern (AppOfflineSync.js) -- kept identical here.
+const offlinePendingRecordIds = new Set();
+async function refreshOfflinePendingIds() {
+    const items = await window.SgnOfflineSync.listOfflineQueue();
+    offlinePendingRecordIds.clear();
+    items.forEach((item) => { if (item.recordKey) offlinePendingRecordIds.add(item.recordKey); });
+    render();
+}
+document.addEventListener('sgn:offline-queue-changed', refreshOfflinePendingIds);
+
 async function patchRecord(id, patch) {
+    const recordKey = `nuestras-unidades:${id}`;
+    const description = `${t('menu.opTransVolNuestrasUnidades')} · ${recordLabel(currentRecord() || {})}`;
     try {
-        const res = await fetch(`/api/business/fleet-units/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(patch),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) {
+        const result = await window.SgnOfflineSync.offlineAwareFetch(
+            `/api/business/fleet-units/${id}`,
+            { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(patch) },
+            description, recordKey,
+        );
+        if (result.queued) {
+            const idx = records.findIndex((r) => r.id === id);
+            if (idx !== -1) records[idx] = { ...records[idx], ...patch };
+            offlinePendingRecordIds.add(recordKey);
+            showToast(t('home.cargaSavedOffline'));
+            render();
+            return;
+        }
+        const body = result.body;
+        if (!result.ok) {
             showToast(body.message === 'That Económico is already registered to another unit.' ? t('main.fleetEcoDuplicate') : (body.message || t('admin.saveError')));
             await loadRecords();
             render();
@@ -287,12 +307,16 @@ function renderListView() {
         const done = recordDoneCount(record);
         const total = FIELDS.length;
         const pct = Math.round((done / total) * 100);
+        const offlineBadge = offlinePendingRecordIds.has(`nuestras-unidades:${record.id}`)
+            ? `<span class="home-carga-offline-badge" title="${t('home.cargaSavedOffline')}"><i class="bx bx-cloud-upload" aria-hidden="true"></i></span>`
+            : '';
         const row = document.createElement('button');
         row.type = 'button';
         row.className = 'home-carga-active-row';
         row.innerHTML = `
             <span class="home-carga-active-row-icon"><i class="bx bx-car" aria-hidden="true"></i></span>
             <span class="home-carga-active-row-label"><p>${recordLabel(record)}</p><span>${record.unitTypeName || t('home.cargaFieldsCount', { done, total })}</span></span>
+            ${offlineBadge}
             <span class="home-carga-active-row-progress" style="--pct:${pct}"><span>${pct}%</span></span>
         `;
         row.addEventListener('click', () => { openRecordId = record.id; view = 'record'; render(); });
@@ -517,7 +541,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         }
         await Promise.all([loadRecords(), loadUnitTypesCache(), loadBrandingForTheme()]);
         applyStyle(getStoredStyle());
-        render();
+        await refreshOfflinePendingIds();
     } catch (err) {
         console.error('Nuestras Unidades (App) failed to load:', err);
         showToast(t('admin.loadError'));
