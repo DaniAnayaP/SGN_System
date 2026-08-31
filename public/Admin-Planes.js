@@ -82,6 +82,7 @@ const treeLockedNote = document.getElementById('plan-tree-locked-note');
 const treeError = document.getElementById('plan-tree-error');
 const treeSaveBtn = document.getElementById('plan-tree-save');
 const treeCloseBtn = document.getElementById('plan-tree-close');
+const treeEqualizeBtn = document.getElementById('plan-tree-equalize-app');
 const treeSaveStatus = document.getElementById('plan-tree-save-status');
 
 let plans = [];
@@ -544,6 +545,7 @@ async function selectPlanForTree(plan) {
         // see PermissionCostTree.js's sectorDefaultSet.
         await tree.init(grantsData.grants || [], costsData.costs || [], null, grantsData.sectorGrants || []);
         treeContainer.classList.toggle('perm-tree-view-only', locked);
+        treeEqualizeBtn.disabled = locked;
         treeModal.hidden = false;
     } catch {
         Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
@@ -555,6 +557,7 @@ function closeTreeModal() {
 }
 treeCloseBtn.addEventListener('click', closeTreeModal);
 treeModal.addEventListener('click', (event) => { if (event.target === treeModal) closeTreeModal(); });
+treeEqualizeBtn.addEventListener('click', () => tree?.equalizeAllAppToWeb());
 
 treeSaveBtn.addEventListener('click', async () => {
     if (!selectedPlanId || !tree) return;

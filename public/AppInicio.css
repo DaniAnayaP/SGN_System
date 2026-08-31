@@ -1055,6 +1055,29 @@ body{
 }
 .home-carga-new-btn i{ font-size: 1.1rem; }
 .home-carga-new-btn:active{ transform: scale(0.98); }
+/* Lighter sibling action next to .home-carga-new-btn (e.g. AppRoles.js's
+   "Igualar Visión APP con Web") -- same shape/sizing so the two line up,
+   but outlined instead of filled so the accent-gradient save button stays
+   the one clearly primary action on the screen. */
+.home-carga-secondary-btn{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: transparent;
+    color: var(--home-text-secondary);
+    border: 1px solid var(--home-border);
+    border-radius: 0.9rem;
+    padding: 0.85rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 0.3rem;
+}
+.home-carga-secondary-btn i{ font-size: 1.1rem; }
+.home-carga-secondary-btn:active{ transform: scale(0.98); }
 .home-carga-empty-note{ font-size: 0.74rem; color: var(--home-text-muted); text-align: center; padding: 1.2rem 0.5rem; margin: 0; }
 
 .home-carga-active-row{

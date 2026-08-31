@@ -1315,6 +1315,32 @@ body.dark-mode .perm-tree-depth-2{
     cursor: not-allowed;
     opacity: 0.4;
 }
+/* Per-row/group "Igualar con Web" button next to .perm-tree-app-toggle
+   (PermissionTree.js/PermissionCostTree.js's appendAppToggle) -- only
+   rendered at all once that row has something to equalize, so no
+   disabled state to style here (see appToggle.equalize). */
+.perm-tree-app-equalize-btn{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    margin-left: 0.15rem;
+    border: none;
+    border-radius: 0.3rem;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.perm-tree-app-equalize-btn i{
+    font-size: 0.8rem;
+}
+.perm-tree-app-equalize-btn:hover{
+    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+    color: var(--color-accent);
+}
 /* clientTricolor mode's read-only App-vision badge (PermissionCostTree.js's
    appendClientAppSlot) -- same bx-mobile-alt icon as the interactive
    .perm-tree-app-toggle above, just tinted green/amarillo/rojo like the

@@ -15,6 +15,8 @@ const permissionsModal = document.getElementById('permissions-modal');
 const treeContainer = document.getElementById('permission-tree-container');
 const permissionsSaveBtn = document.getElementById('permissions-save');
 const permissionsSaveStatus = document.getElementById('permissions-save-status');
+const permissionsEqualizeBtn = document.getElementById('permissions-equalize-app');
+permissionsEqualizeBtn.addEventListener('click', () => tree?.equalizeAllAppToWeb());
 
 let jobPositions = [];
 let selectedJobPositionId = null;

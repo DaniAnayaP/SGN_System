@@ -441,6 +441,48 @@
             });
         }
 
+        // "Igualar con Web" (per-row button next to the toggle, and the
+        // modal-wide button hosts can wire to equalizeAllAppToWeb below):
+        // makes App match Web exactly for these leaves, in BOTH directions
+        // -- on where Web is on, off where it isn't. Deliberately not the
+        // same as computeAppToggle's own onChange just below, which only
+        // ever touches leaves where Web is already ON (that's correct for
+        // a manual checkbox click, which can only mean "turn App on/off for
+        // what's granted") -- a leaf whose Web grant was removed earlier
+        // while its App flag happened to already be on would sail through
+        // that path untouched. setKeys already keeps this from happening
+        // through the tree's own UI (unchecking Web clears App with it),
+        // but data seeded another way (sectorDefaultSet, a server import)
+        // isn't guaranteed that invariant, so a button whose whole point is
+        // "make App equal to Web" should actually leave it equal.
+        function equalizeAppToWeb(leafKeys) {
+            leafKeys.forEach((k) => {
+                if (grantSet.has(k)) grantSet.add(k + APP_SUFFIX);
+                else grantSet.delete(k + APP_SUFFIX);
+            });
+            render();
+        }
+
+        // The modal-wide "Igualar todo" button's handler (exposed publicly
+        // as equalizeAllAppToWeb below). Walking grantSet itself instead of
+        // re-deriving "every leaf key in the tree" from sectionsData: every
+        // Web grant already IN grantSet needs its App sibling turned on,
+        // and every #app-suffixed key already in grantSet whose own Web key
+        // ISN'T there needs clearing -- between those two passes that's the
+        // entire universe of keys equalizeAllAppToWeb could possibly need
+        // to touch, with no tree walk required.
+        function equalizeAllAppToWeb() {
+            if (mode !== 'grantReadonlyCost') return;
+            Array.from(grantSet).forEach((k) => {
+                if (k.endsWith(APP_SUFFIX)) {
+                    if (!grantSet.has(k.slice(0, -APP_SUFFIX.length))) grantSet.delete(k);
+                } else {
+                    grantSet.add(k + APP_SUFFIX);
+                }
+            });
+            render();
+        }
+
         // grantReadonlyCost only — App is a plain paired toggle per node,
         // no eligibility filter (a Plan isn't tied to a client/sector the
         // way PermissionTree.js's client tree is), just "locked until this
@@ -454,6 +496,7 @@
                 checked: grantedLeaves.length > 0 && appOnCount === grantedLeaves.length,
                 indeterminate: appOnCount > 0 && appOnCount < grantedLeaves.length,
                 disabled: grantedLeaves.length === 0,
+                equalize: grantedLeaves.length > 0 ? () => equalizeAppToWeb(leafKeys) : null,
                 onChange: (checked) => {
                     grantedLeaves.forEach((k) => (checked ? grantSet.add(k + APP_SUFFIX) : grantSet.delete(k + APP_SUFFIX)));
                     render();
@@ -484,6 +527,21 @@
             icon.setAttribute('aria-hidden', 'true');
             label.append(input, icon);
             row.appendChild(label);
+            // "Igualar con Web" for just this row/group -- same operation
+            // the modal-wide button (see equalizeAllAppToWeb) runs over
+            // the whole tree, scoped to this one node's own leaves instead.
+            // Only shown where there's something to equalize (equalize is
+            // null once this node has no Web-granted leaves at all).
+            if (appToggle.equalize) {
+                const eqBtn = document.createElement('button');
+                eqBtn.type = 'button';
+                eqBtn.className = 'perm-tree-app-equalize-btn';
+                eqBtn.title = t('main.appEqualizeRow');
+                eqBtn.setAttribute('aria-label', t('main.appEqualizeRow'));
+                eqBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+                eqBtn.addEventListener('click', appToggle.equalize);
+                row.appendChild(eqBtn);
+            }
             if (costKey != null) row.appendChild(buildCostSlot(costKey + APP_SUFFIX));
         }
 
@@ -1072,6 +1130,9 @@
                 expandedItems = new Set();
                 render();
             },
+            // Modal-wide "Igualar Visión APP con Web" button (grantReadonlyCost
+            // only) -- a no-op call in any other mode.
+            equalizeAllAppToWeb,
             getGrants() {
                 return Array.from(grantSet).map((k) => {
                     const [sectionId, itemId, submenuId] = k.split('::');

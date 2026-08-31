@@ -1018,6 +1018,8 @@
     "permEditar": "Editar",
     "permAutorizar": "Autorizar",
     "appVisionColumn": "Visión APP",
+    "appEqualizeRow": "Igualar Visión APP con Web para esta fila",
+    "appEqualizeAll": "Igualar Visión APP con Web",
     "changePending": "Pendiente de autorización",
     "changeHistoryRequestedBy": "Solicitó",
     "changeHistoryAuthorizedBy": "Autorizó",
