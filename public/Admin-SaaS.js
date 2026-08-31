@@ -307,7 +307,11 @@ function iconButton(iconClass, label, onClick, { disabled = false, title = '', d
     btn.setAttribute('aria-label', label);
     btn.innerHTML = `<i class="bx ${iconClass}" aria-hidden="true"></i>`;
     btn.disabled = disabled;
-    if (title) btn.title = title;
+    // Falls back to the same text already used for aria-label -- without
+    // this, only whichever call site happened to pass its own `title` (a
+    // disabled-reason hint, usually) ever showed a hover tooltip at all;
+    // every other icon-only button in the row stayed silent on hover.
+    btn.title = title || label;
     btn.addEventListener('click', onClick);
     return btn;
 }
