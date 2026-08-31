@@ -102,12 +102,21 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
     // flag right then locked the user out exactly like the no-network case
     // this was built to fix. Logging out (AppInicio.js) is the only place
     // that should ever clear it.
-    let hasSession;
-    if (sessionResult.status === 'fulfilled') {
-        hasSession = sessionResult.value.ok;
-        if (hasSession) localStorage.setItem(HAD_SESSION_KEY, '1');
-    } else {
-        hasSession = localStorage.getItem(HAD_SESSION_KEY) === '1';
+    // A fulfilled-but-not-ok response is normally a trustworthy "really not
+    // logged in" -- except confirmed live on this exact kind of spotty
+    // connection (the OS reporting "offline" while WiFi is still half-
+    // attached) that a single request can round-trip a real 401 instead of
+    // rejecting, moments after a fully valid login. Falling straight to
+    // "no session" right then re-creates the original lock-out, just
+    // dressed as a 401 instead of a network error -- so a remembered
+    // session still counts here too, and only an explicit logout
+    // (AppInicio.js) removes it. The real authorization boundary hasn't
+    // moved: AppInicio.js's own fresh /api/me check still bounces back to
+    // Login.html the moment the server gives a genuine, reliable 401.
+    let hasSession = localStorage.getItem(HAD_SESSION_KEY) === '1';
+    if (sessionResult.status === 'fulfilled' && sessionResult.value.ok) {
+        hasSession = true;
+        localStorage.setItem(HAD_SESSION_KEY, '1');
     }
     const biometry = biometryResult.status === 'fulfilled' ? biometryResult.value : null;
     const BiometricAuth = Capacitor.Plugins?.BiometricAuthNative;
