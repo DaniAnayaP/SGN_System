@@ -1018,6 +1018,8 @@
     "permEditar": "Edit",
     "permAutorizar": "Authorize",
     "appVisionColumn": "APP visibility",
+    "appEqualizeRow": "Match APP visibility to Web for this row",
+    "appEqualizeAll": "Match APP visibility to Web",
     "changePending": "Pending authorization",
     "changeHistoryRequestedBy": "Requested by",
     "changeHistoryAuthorizedBy": "Authorized by",

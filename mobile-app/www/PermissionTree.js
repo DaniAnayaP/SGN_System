@@ -241,11 +241,46 @@
                 checked: actionable.length > 0 && appOnCount === actionable.length,
                 indeterminate: appOnCount > 0 && appOnCount < actionable.length,
                 disabled: readOnly || actionable.length === 0,
+                // "Igualar con Web" for this row/group -- see
+                // equalizeAllAppToWeb below for why this is a separate
+                // operation from onChange right above (which only ever
+                // touches leaves already actionable, so a leaf that lost
+                // its Web grant or its App eligibility while its App flag
+                // stayed on from before would never get cleared by it).
+                equalize: !readOnly && leafKeys.some((k) => grantSet.has(k) || grantSet.has(k + APP_SUFFIX))
+                    ? () => {
+                        leafKeys.forEach((k) => {
+                            if (grantSet.has(k) && isAppEligibleKey(k)) grantSet.add(k + APP_SUFFIX);
+                            else grantSet.delete(k + APP_SUFFIX);
+                        });
+                        render();
+                    }
+                    : null,
                 onChange: (checked) => {
                     actionable.forEach((k) => (checked ? grantSet.add(k + APP_SUFFIX) : grantSet.delete(k + APP_SUFFIX)));
                     render();
                 },
             };
+        }
+
+        // Modal-wide "Igualar todo" button (exposed publicly below). Walks
+        // grantSet itself rather than re-deriving every leaf key from
+        // sectionsData: every Web grant already in grantSet that's also
+        // App-eligible needs its App sibling turned on, and every
+        // #app-suffixed key already there whose own Web key either isn't
+        // granted or isn't App-eligible needs clearing -- together that's
+        // the entire universe equalizeAllAppToWeb could need to touch.
+        function equalizeAllAppToWeb() {
+            if (!appColumnEnabled || readOnly) return;
+            Array.from(grantSet).forEach((k) => {
+                if (k.endsWith(APP_SUFFIX)) {
+                    const base = k.slice(0, -APP_SUFFIX.length);
+                    if (!(grantSet.has(base) && isAppEligibleKey(base))) grantSet.delete(k);
+                } else if (isAppEligibleKey(k)) {
+                    grantSet.add(k + APP_SUFFIX);
+                }
+            });
+            render();
         }
 
         function expand(grants) {
@@ -285,6 +320,16 @@
             icon.setAttribute('aria-hidden', 'true');
             label.append(input, icon);
             row.appendChild(label);
+            if (appToggle.equalize) {
+                const eqBtn = document.createElement('button');
+                eqBtn.type = 'button';
+                eqBtn.className = 'perm-tree-app-equalize-btn';
+                eqBtn.title = t('main.appEqualizeRow');
+                eqBtn.setAttribute('aria-label', t('main.appEqualizeRow'));
+                eqBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+                eqBtn.addEventListener('click', appToggle.equalize);
+                row.appendChild(eqBtn);
+            }
         }
 
         // toggle is null for leaf rows (no children to expand) — they get an
@@ -1103,6 +1148,9 @@
                 }
                 render();
             },
+            // Modal-wide "Igualar Visión APP con Web" button -- a no-op
+            // call when there's no App column at all, or in read-only mode.
+            equalizeAllAppToWeb,
             getGrants() {
                 return Array.from(grantSet).map((k) => {
                     const [sectionId, itemId, submenuId] = k.split('::');

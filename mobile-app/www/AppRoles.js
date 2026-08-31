@@ -234,10 +234,17 @@ async function openJobPositionTree(jp) {
         tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true });
         await tree.init(data.grants || []);
 
+        const equalizeBtn = document.createElement('button');
+        equalizeBtn.type = 'button';
+        equalizeBtn.className = 'home-carga-secondary-btn';
+        equalizeBtn.style.marginTop = '1rem';
+        equalizeBtn.innerHTML = `<i class="bx bx-copy" aria-hidden="true"></i><span>${t('main.appEqualizeAll')}</span>`;
+        equalizeBtn.addEventListener('click', () => tree?.equalizeAllAppToWeb());
+        bodyEl.appendChild(equalizeBtn);
+
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
         saveBtn.className = 'home-carga-new-btn';
-        saveBtn.style.marginTop = '1rem';
         saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
         saveBtn.addEventListener('click', () => saveJobPositionGrants(saveBtn));
         bodyEl.appendChild(saveBtn);
