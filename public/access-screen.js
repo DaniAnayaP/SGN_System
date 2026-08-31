@@ -119,7 +119,6 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
         localStorage.setItem(HAD_SESSION_KEY, '1');
     }
     const biometry = biometryResult.status === 'fulfilled' ? biometryResult.value : null;
-    const BiometricAuth = Capacitor.Plugins?.BiometricAuthNative;
 
     // Face ID needs BOTH device support AND a session to resume — offering
     // it with neither would just be a dead end that always falls back.
@@ -179,7 +178,18 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
         sheet.hidden = true;
         scanScreen.hidden = false;
         try {
-            await BiometricAuth.authenticate({
+            // Same staleness bug as the availability check just above, one
+            // line further down: this used to call the OUTER `BiometricAuth`
+            // captured once at page load (a few lines above initAccessScreen
+            // in the old version of this file) instead of the plugin
+            // reference confirmed available a moment ago. Confirmed live:
+            // when that outer reference happened to be undefined, calling
+            // .authenticate() on it threw immediately -- no native
+            // fingerprint prompt ever appeared, straight to "No se pudo
+            // verificar tu identidad" -- which looks identical to a real
+            // failed scan but isn't one. Re-resolving it fresh here removes
+            // the same class of bug from this second call site too.
+            await Capacitor.Plugins.BiometricAuthNative.authenticate({
                 reason: t('login.accessBiometricReason', 'Access SGN'),
                 allowDeviceCredential: true,
                 cancelTitle: t('login.accessWithPassword', 'Username and password'),
