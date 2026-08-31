@@ -155,7 +155,23 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
     }
 
     async function attemptBiometric() {
-        if (!hasBiometry) {
+        // Re-checked fresh right here instead of trusting hasBiometry from
+        // page load -- confirmed live that tapping this button could still
+        // fall through to "sign in with password" even with a valid
+        // remembered session and working fingerprint hardware, because
+        // hasSession/hasBiometry are computed ONCE, early in
+        // initAccessScreen, and never revisited. Whatever caused that one
+        // early check to land on false (a slow/flaky first read) stuck for
+        // the rest of the screen's life; checking again at the actual
+        // moment of the tap is what makes this reliable regardless of why
+        // the first pass got it wrong.
+        const currentHasSession = localStorage.getItem(HAD_SESSION_KEY) === '1';
+        let currentBiometry = null;
+        try {
+            currentBiometry = await Capacitor.Plugins?.BiometricAuthNative?.checkBiometry?.();
+        } catch { /* treated as unavailable below */ }
+        const currentHasBiometry = !!currentBiometry?.isAvailable && currentHasSession;
+        if (!currentHasBiometry) {
             showToast(t('login.accessNoSessionForBiometric', "Sign in with your username and password first. Next time you'll be able to use Face ID."));
             showPasswordScreen();
             return;
