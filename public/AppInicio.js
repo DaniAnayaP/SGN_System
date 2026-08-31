@@ -1094,6 +1094,31 @@ let availableDepartments = DEPARTMENTS;
 let selectedDepartment = localStorage.getItem('department') || null;
 let selectedArea = localStorage.getItem('area') || null;
 let sidebarCostCenters = [];
+
+// Every piece of this screen's own data (grants, branding, departments,
+// cost centers, tiles) comes from a handful of fetches that only ever run
+// once, on page load -- with no offline fallback, losing signal mid-load
+// left DIFFERENT parts of the screen in DIFFERENT wrong states: tiles and
+// the department picker went empty (nothing to show), while the hamburger
+// menu items -- hidden only by JS that never got a chance to run --
+// stayed at their un-gated markup default and showed EVERYTHING instead.
+// Neither is what a user who was already using the app normally, then
+// lost signal, actually wants: they want what they had a moment ago.
+// This is a plain read-modify-write cache of exactly the fields each load
+// function already computes for itself; each one saves into it on success
+// and reads back out of it when its own fetch fails to reach the network
+// (a real, reachable error response is never treated as "restore the
+// cache" -- only a genuine network failure is).
+const APP_DATA_CACHE_KEY = 'sgnAppDataCache';
+function saveAppDataCache(patch) {
+    let cache = {};
+    try { cache = JSON.parse(localStorage.getItem(APP_DATA_CACHE_KEY) || '{}') || {}; } catch { cache = {}; }
+    Object.assign(cache, patch);
+    try { localStorage.setItem(APP_DATA_CACHE_KEY, JSON.stringify(cache)); } catch { /* storage full/unavailable -- next online load just saves again */ }
+}
+function loadAppDataCache() {
+    try { return JSON.parse(localStorage.getItem(APP_DATA_CACHE_KEY) || '{}') || {}; } catch { return {}; }
+}
 // From GET /api/business/app-screens — the client's assigned App template
 // (Nuestras APPs' own screen catalog, sector-wide). Only used to build the
 // "Accesos rápidos" tiles below; NOT what decides whether the category
@@ -1525,6 +1550,75 @@ function updateTabBarVisibility() {
     } else if (activeCategoryId) renderCategoryScreens(activeCategoryId);
 }
 
+// Everything past the fetches: narrows departments/cost centers to what
+// this account was actually granted, then renders every piece of UI that
+// depends on it (the dept/área/cost-center pickers, the tab bar, the
+// hamburger menu's own item-level gating, and a re-filter of the home
+// tiles now that effectiveGrants is real). Pulled out of initDeptAreaCc so
+// the offline path below can run the exact same logic against cached
+// values instead of re-deriving a second, easily-drifting copy of it.
+function applyDeptAreaCcData(rawMenuData, rawContractedModuleKeys, rawEffectiveGrants, rawCostCenters) {
+    menuData = rawMenuData;
+    contractedModuleKeys = rawContractedModuleKeys || [];
+    effectiveGrants = rawEffectiveGrants || [];
+    availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
+    // Narrow further to departments THIS user actually has any grant in
+    // (Puesto de Trabajo defaults + Permisos Adicionales) -- same fix
+    // Dashboard.js's own department picker already got; this page had
+    // its own separate copy of the logic that was never updated to
+    // match, which is why it kept showing every contracted department
+    // regardless of what was actually granted. Skipped for an
+    // unrestricted client admin (isUnrestrictedClientAdmin -- zero
+    // grant rows by design means "sees everything", not "sees nothing").
+    if (!isUnrestrictedClientAdmin()) {
+        const grantedSectionIds = new Set(effectiveGrants.map((g) => g.sectionId));
+        availableDepartments = availableDepartments.filter((d) => grantedSectionIds.has(d.key));
+    }
+    sidebarCostCenters = (rawCostCenters || []).filter((cc) => hasCostCenterPermission(cc.id));
+
+    // Drop a stored selection that no longer applies (department/área
+    // removed from this client's contract, or this user's own grants
+    // narrowed since the last visit).
+    if (selectedDepartment && !availableDepartments.some((d) => d.key === selectedDepartment)) {
+        selectedDepartment = null;
+        selectedArea = null;
+    }
+    if (selectedArea && !availableAreasForDepartment(selectedDepartment).some((a) => a.key === selectedArea)) {
+        selectedArea = null;
+    }
+    // Nothing to actually choose between — auto-pick, same as the
+    // desktop pickers do.
+    if (availableDepartments.length === 1 && !selectedDepartment) {
+        selectedDepartment = availableDepartments[0].key;
+        localStorage.setItem('department', selectedDepartment);
+    }
+    const areasForDept = availableAreasForDepartment(selectedDepartment);
+    if (areasForDept.length === 1 && !selectedArea) {
+        selectedArea = areasForDept[0].key;
+        localStorage.setItem('area', selectedArea);
+    }
+    if (sidebarCostCenters.length === 1) {
+        selectedCostCenterIds = new Set([sidebarCostCenters[0].id]);
+        persistCostCenterSelection();
+    } else if (selectedCostCenterIds !== 'all') {
+        const validIds = new Set(sidebarCostCenters.map((cc) => cc.id));
+        selectedCostCenterIds = new Set(Array.from(selectedCostCenterIds).filter((id) => validIds.has(id)));
+    }
+
+    renderDeptAreaDropdown();
+    updateDeptAreaLabel();
+    renderCcDropdown();
+    updateCcLabel();
+    updateTabBarVisibility();
+    syncSettingsMenuVisibility();
+    syncTopBarMenuVisibility();
+    // effectiveGrants just became real (renderTiles's very first call,
+    // back in init(), ran before this resolved and had nothing to
+    // filter by yet) -- re-render the home tiles now that they can
+    // actually be narrowed down to what this user was granted.
+    renderTiles(grantedAppScreens);
+}
+
 async function initDeptAreaCc() {
     try {
         const [menuRes, modulesRes, profileRes, ccRes] = await Promise.all([
@@ -1533,70 +1627,29 @@ async function initDeptAreaCc() {
             fetch(apiUrl('/api/me/business-profile'), { credentials: 'include' }),
             fetch(apiUrl('/api/business/cost-centers'), { credentials: 'include' }),
         ]);
-        menuData = menuRes.ok ? await menuRes.json() : null;
+        const rawMenuData = menuRes.ok ? await menuRes.json() : null;
         const modules = modulesRes.ok ? await modulesRes.json() : { moduleKeys: [] };
-        contractedModuleKeys = modules.moduleKeys || [];
-        availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
         const profileData = profileRes.ok ? await profileRes.json() : {};
-        effectiveGrants = profileData.profile?.effectiveGrants || [];
-        // Narrow further to departments THIS user actually has any grant in
-        // (Puesto de Trabajo defaults + Permisos Adicionales) -- same fix
-        // Dashboard.js's own department picker already got; this page had
-        // its own separate copy of the logic that was never updated to
-        // match, which is why it kept showing every contracted department
-        // regardless of what was actually granted. Skipped for an
-        // unrestricted client admin (isUnrestrictedClientAdmin -- zero
-        // grant rows by design means "sees everything", not "sees nothing").
-        if (!isUnrestrictedClientAdmin()) {
-            const grantedSectionIds = new Set(effectiveGrants.map((g) => g.sectionId));
-            availableDepartments = availableDepartments.filter((d) => grantedSectionIds.has(d.key));
-        }
+        const rawEffectiveGrants = profileData.profile?.effectiveGrants || [];
         const ccData = ccRes.ok ? await ccRes.json() : { costCenters: [] };
-        sidebarCostCenters = (ccData.costCenters || []).filter((cc) => hasCostCenterPermission(cc.id));
-
-        // Drop a stored selection that no longer applies (department/área
-        // removed from this client's contract, or this user's own grants
-        // narrowed since the last visit).
-        if (selectedDepartment && !availableDepartments.some((d) => d.key === selectedDepartment)) {
-            selectedDepartment = null;
-            selectedArea = null;
-        }
-        if (selectedArea && !availableAreasForDepartment(selectedDepartment).some((a) => a.key === selectedArea)) {
-            selectedArea = null;
-        }
-        // Nothing to actually choose between — auto-pick, same as the
-        // desktop pickers do.
-        if (availableDepartments.length === 1 && !selectedDepartment) {
-            selectedDepartment = availableDepartments[0].key;
-            localStorage.setItem('department', selectedDepartment);
-        }
-        const areasForDept = availableAreasForDepartment(selectedDepartment);
-        if (areasForDept.length === 1 && !selectedArea) {
-            selectedArea = areasForDept[0].key;
-            localStorage.setItem('area', selectedArea);
-        }
-        if (sidebarCostCenters.length === 1) {
-            selectedCostCenterIds = new Set([sidebarCostCenters[0].id]);
-            persistCostCenterSelection();
-        } else if (selectedCostCenterIds !== 'all') {
-            const validIds = new Set(sidebarCostCenters.map((cc) => cc.id));
-            selectedCostCenterIds = new Set(Array.from(selectedCostCenterIds).filter((id) => validIds.has(id)));
-        }
-
-        renderDeptAreaDropdown();
-        updateDeptAreaLabel();
-        renderCcDropdown();
-        updateCcLabel();
-        updateTabBarVisibility();
-        syncSettingsMenuVisibility();
-        syncTopBarMenuVisibility();
-        // effectiveGrants just became real (renderTiles's very first call,
-        // back in init(), ran before this resolved and had nothing to
-        // filter by yet) -- re-render the home tiles now that they can
-        // actually be narrowed down to what this user was granted.
-        renderTiles(grantedAppScreens);
+        applyDeptAreaCcData(rawMenuData, modules.moduleKeys, rawEffectiveGrants, ccData.costCenters);
+        saveAppDataCache({
+            deptAreaCc: { menuData: rawMenuData, contractedModuleKeys: modules.moduleKeys, effectiveGrants: rawEffectiveGrants, costCenters: ccData.costCenters },
+        });
     } catch (err) {
         console.error('AppInicio: failed to load department/area/cost-center data:', err);
+        // Network never reached the server -- without this, the tab bar,
+        // hamburger menu, and dept/área/cost-center pickers all skipped
+        // their own gating entirely (this function never got to run it),
+        // which is what left the hamburger menu showing every item
+        // instead of just the ones this account actually has, confirmed
+        // live. Re-apply the last real grants/departments/cost centers
+        // this account saw online instead of leaving everything at its
+        // un-gated markup default.
+        const cached = loadAppDataCache().deptAreaCc;
+        if (cached) {
+            applyDeptAreaCcData(cached.menuData, cached.contractedModuleKeys, cached.effectiveGrants, cached.costCenters);
+        }
     }
 }
 
@@ -1686,31 +1739,40 @@ function updateDatabaseCompanyLabel() {
     });
 })();
 
-async function loadClientBranding() {
+function applyClientBranding(branding) {
     const logoImg = document.getElementById('home-client-logo');
     const logoFallback = document.getElementById('home-client-logo-fallback');
     const nameEl = document.getElementById('home-client-name');
+    nameEl.textContent = branding.companyAbbreviation || branding.companyName || '';
+    if (isClientAdmin) {
+        const greetingEl = document.getElementById('home-user-name');
+        greetingEl.textContent = branding.companyNickname || branding.companyAbbreviation || branding.companyName || greetingEl.textContent;
+    }
+    if (branding.logoDataUrl) {
+        logoImg.src = branding.logoDataUrl;
+        logoImg.hidden = false;
+        logoFallback.hidden = true;
+    }
+    clientColorPalette = branding.colorPalette || null;
+    clientPrimaryColor = branding.primaryColor || null;
+    if (getStoredStyle() === 'institutional') applyInstitutionalTheme();
+    clientCompanyAbbreviation = branding.companyAbbreviation || null;
+    updateDatabaseCompanyLabel();
+}
+
+async function loadClientBranding() {
     try {
         const res = await fetch(apiUrl('/api/business/branding'), { credentials: 'include' });
         if (!res.ok) return;
         const { branding } = await res.json();
-        nameEl.textContent = branding.companyAbbreviation || branding.companyName || '';
-        if (isClientAdmin) {
-            const greetingEl = document.getElementById('home-user-name');
-            greetingEl.textContent = branding.companyNickname || branding.companyAbbreviation || branding.companyName || greetingEl.textContent;
-        }
-        if (branding.logoDataUrl) {
-            logoImg.src = branding.logoDataUrl;
-            logoImg.hidden = false;
-            logoFallback.hidden = true;
-        }
-        clientColorPalette = branding.colorPalette || null;
-        clientPrimaryColor = branding.primaryColor || null;
-        if (getStoredStyle() === 'institutional') applyInstitutionalTheme();
-        clientCompanyAbbreviation = branding.companyAbbreviation || null;
-        updateDatabaseCompanyLabel();
+        applyClientBranding(branding);
+        saveAppDataCache({ branding });
     } catch {
-        // Fallback icon + blank name already in the markup — nothing to do.
+        // Network never reached the server (offline) -- show whatever
+        // branding was last confirmed online instead of the blank
+        // fallback icon/name the static markup starts with.
+        const cached = loadAppDataCache();
+        if (cached.branding) applyClientBranding(cached.branding);
     }
 }
 
@@ -1743,6 +1805,7 @@ async function loadClientBranding() {
         const screensData = screensRes.ok ? await screensRes.json() : { app: null, screens: [] };
         grantedAppScreens = screensData.screens || [];
         renderTiles(grantedAppScreens);
+        saveAppDataCache({ user, profile, screensData });
         loadClientBranding();
         initDeptAreaCc();
         loadNotificationsBadge();
@@ -1754,6 +1817,28 @@ async function loadClientBranding() {
         }
     } catch (err) {
         console.error('AppInicio failed to load:', err);
-        renderTiles([]);
+        // Network never reached the server at all -- confirmed live that
+        // this used to just show an empty "no accesos" home screen even
+        // for someone who was using the app normally moments ago. Restore
+        // whatever this same account last saw online instead: same
+        // greeting, same tiles, then the same downstream loaders (branding,
+        // department/área/centros de costo, hamburger menu items) run
+        // exactly as they would online -- each one now has its own offline
+        // cache fallback (see loadClientBranding, initDeptAreaCc) so this
+        // isn't a special case, just a normal load with cached inputs.
+        const cached = loadAppDataCache();
+        if (cached.user) {
+            isClientAdmin = !!cached.user?.isClientAdmin;
+            document.getElementById('home-user-name').textContent = isClientAdmin
+                ? (cached.user?.name || '')
+                : (cached.profile?.nickname?.trim() || cached.user?.name || '');
+            grantedAppScreens = cached.screensData?.screens || [];
+            renderTiles(grantedAppScreens);
+            loadClientBranding();
+            initDeptAreaCc();
+            loadNotificationsBadge();
+        } else {
+            renderTiles([]);
+        }
     }
 })();
