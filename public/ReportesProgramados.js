@@ -79,7 +79,9 @@ function closeScheduledModal() {
     modal.hidden = true;
 }
 
-document.getElementById('scheduled-new-btn').addEventListener('click', () => openScheduledModal(null));
+const newScheduledBtn = document.getElementById('scheduled-new-btn');
+newScheduledBtn.hidden = !Dashboard.canEditField('reportes-programados', 'colScheduledAuthorizedBy', '');
+newScheduledBtn.addEventListener('click', () => openScheduledModal(null));
 document.getElementById('scheduled-cancel-btn').addEventListener('click', closeScheduledModal);
 modal.addEventListener('click', (event) => { if (event.target === modal) closeScheduledModal(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) closeScheduledModal(); });
@@ -118,7 +120,12 @@ document.getElementById('scheduled-save-btn').addEventListener('click', async ()
             credentials: 'include',
             body: JSON.stringify(body),
         });
-        if (!res.ok) throw new Error('save failed');
+        if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            modalError.textContent = errBody.message || Dashboard.t('admin.saveError');
+            modalError.hidden = false;
+            return;
+        }
         const wasEditing = !!editingScheduledId;
         closeScheduledModal();
         await loadScheduledReports();
@@ -176,13 +183,15 @@ function renderScheduledReports() {
             authorizeBtn.addEventListener('click', () => authorizeScheduled(scheduled));
             tdActions.appendChild(authorizeBtn);
         }
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'admin-icon-btn';
-        editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
-        editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
-        editBtn.addEventListener('click', () => openScheduledModal(scheduled));
-        tdActions.appendChild(editBtn);
+        if (Dashboard.hasColumnEditGrant('reportes-programados', 'colScheduledAuthorizedBy')) {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'admin-icon-btn';
+            editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
+            editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+            editBtn.addEventListener('click', () => openScheduledModal(scheduled));
+            tdActions.appendChild(editBtn);
+        }
         if (Dashboard.hasColumnDeleteGrant('reportes-programados', 'colScheduledAuthorizedBy')) {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';

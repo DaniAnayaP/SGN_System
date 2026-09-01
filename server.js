@@ -2645,6 +2645,13 @@ app.post('/api/business/export/pdf', requireAuth, (req, res) => {
 
 app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        const level = getColumnGrantLevel(grants, 'transacciones-inteligentes', 'colReportAuthorization');
+        if (level !== 'ver-y-operar' && level !== 'editar') {
+            return res.status(403).json({ message: 'No tienes permiso para crear reportes.' });
+        }
+    }
     const { name, columns } = req.body || {};
     if (!name?.trim()) return res.status(400).json({ message: 'name is required.' });
     const columnsError = validateReportColumns(columns || []);
@@ -2663,6 +2670,12 @@ app.patch('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getIntelligentReportById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Report not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (getColumnGrantLevel(grants, 'transacciones-inteligentes', 'colReportAuthorization') !== 'editar') {
+            return res.status(403).json({ message: 'No tienes permiso para editar reportes.' });
+        }
+    }
     const { name, columns } = req.body || {};
     if (!name?.trim()) return res.status(400).json({ message: 'name is required.' });
     const columnsError = validateReportColumns(columns || []);
@@ -2763,6 +2776,13 @@ app.get('/api/business/scheduled-reports', requireAuth, (req, res) => {
 
 app.post('/api/business/scheduled-reports', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        const level = getColumnGrantLevel(grants, 'reportes-programados', 'colScheduledAuthorizedBy');
+        if (level !== 'ver-y-operar' && level !== 'editar') {
+            return res.status(403).json({ message: 'No tienes permiso para crear envíos programados.' });
+        }
+    }
     const payload = validateScheduledReportPayload(req, res);
     if (!payload) return;
     const scheduledReport = createScheduledReport({ clientId: req.user.clientId, createdBy: req.user.name, ...payload });
@@ -2777,6 +2797,12 @@ app.patch('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getScheduledReportById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Scheduled report not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (getColumnGrantLevel(grants, 'reportes-programados', 'colScheduledAuthorizedBy') !== 'editar') {
+            return res.status(403).json({ message: 'No tienes permiso para editar envíos programados.' });
+        }
+    }
     const payload = validateScheduledReportPayload(req, res);
     if (!payload) return;
     const scheduledReport = updateScheduledReport(req.params.id, req.user.clientId, payload);

@@ -322,7 +322,9 @@ document.getElementById('report-calc-add-btn').addEventListener('click', () => {
 });
 
 // --- Save / list / delete / authorize ---------------------------------------
-document.getElementById('report-new-btn').addEventListener('click', () => openReportModal(null));
+const newReportBtn = document.getElementById('report-new-btn');
+newReportBtn.hidden = !Dashboard.canEditField('transacciones-inteligentes', 'colReportAuthorization', '');
+newReportBtn.addEventListener('click', () => openReportModal(null));
 document.getElementById('report-cancel-btn').addEventListener('click', closeReportModal);
 modal.addEventListener('click', (event) => { if (event.target === modal) closeReportModal(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) closeReportModal(); });
@@ -349,7 +351,12 @@ document.getElementById('report-save-btn').addEventListener('click', async () =>
             credentials: 'include',
             body: JSON.stringify(body),
         });
-        if (!res.ok) throw new Error('save failed');
+        if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            modalError.textContent = errBody.message || Dashboard.t('admin.saveError');
+            modalError.hidden = false;
+            return;
+        }
         const wasEditing = !!editingReportId;
         closeReportModal();
         await loadReports();
@@ -412,13 +419,15 @@ function renderReports() {
             authorizeBtn.addEventListener('click', () => authorizeReport(report));
             tdActions.appendChild(authorizeBtn);
         }
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'admin-icon-btn';
-        editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
-        editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
-        editBtn.addEventListener('click', () => openReportModal(report));
-        tdActions.appendChild(editBtn);
+        if (Dashboard.hasColumnEditGrant('transacciones-inteligentes', 'colReportAuthorization')) {
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'admin-icon-btn';
+            editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
+            editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+            editBtn.addEventListener('click', () => openReportModal(report));
+            tdActions.appendChild(editBtn);
+        }
         if (Dashboard.hasColumnDeleteGrant('transacciones-inteligentes', 'colReportAuthorization')) {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
