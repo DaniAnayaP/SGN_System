@@ -2063,6 +2063,14 @@
         border-radius: 0.6rem;
         background-color: var(--color-surface);
         overflow: auto;
+        /* The pinned column (below) is opaque and sits on top of whatever
+           scrolls under it — correct once a column has fully passed behind
+           it, but mid-drag the very next column is only half-covered,
+           showing its label cut off with no way to tell it's just scrolled,
+           not broken. Snapping the resting scroll position to a column edge
+           (scroll-snap-align on tbody td further down) means that
+           half-covered frame can never be where scrolling actually stops. */
+        scroll-snap-type: x mandatory;
     }
     /* Mixed into --color-surface (opaque), not transparent — a pinned
        column's td needs a solid background to hide content scrolling
@@ -2248,6 +2256,17 @@
     .data-table th:last-child,
     .data-table td:last-child{
         border-right: none;
+    }
+    /* Scoped to tbody td only, not th — a header cell is ALSO sticky on the
+       vertical axis (top:0, right below), and letting the same cell be a
+       horizontal snap target too made Chrome settle scroll at odd
+       in-between offsets instead of a real column boundary (confirmed live:
+       the header-only version intermittently rested mid-column). Body cells
+       carry no such sticky/snap conflict and share the same column
+       boundaries the header would have anyway, so snapping off them alone
+       is enough to keep any resting scroll position on a clean edge. */
+    .data-table tbody td{
+        scroll-snap-align: start;
     }
     /* A different background than the body rows (--color-bg, the page's own
        "recessed" tone, instead of --color-surface which the rows and the

@@ -2099,6 +2099,16 @@ function applyDataTableColumnLayout(tableId) {
         cumulative += config.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
     });
     state.pinnedLeft = pinnedLeft;
+    // scroll-snap-align on tbody td (see Inicio-en.css) stops the resting
+    // scroll position from ever landing mid-column, but by default it aligns
+    // a column's start against the scrollport's own left edge (x=0) — which
+    // is exactly where the pinned columns' opaque sticky box already sits,
+    // so the column that lands there is the one currently hidden BEHIND that
+    // box, not the one immediately following it. scroll-padding-left shifts
+    // what "the left edge" means for snapping purposes to right after the
+    // pinned zone, so the column that snaps there ends up flush against the
+    // pinned box instead of half-swallowed by it.
+    state.wrapper.style.scrollPaddingLeft = `${cumulative}px`;
 
     Array.from(headerRow.cells).forEach((th) => {
         applyPinStyle(th, th.dataset.col, state);
