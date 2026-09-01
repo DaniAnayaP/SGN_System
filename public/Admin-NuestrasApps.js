@@ -96,50 +96,79 @@ async function populateWebScreenSelect() {
     }
 }
 
+// Same 13 columns, same order, as every other Control Interno-bearing table
+// (see Business-CentrosCosto.js's identical CONTROL_INTERNO_COLS) — kept as
+// its own copy rather than a shared export since each screen's row object
+// key names line up with these one-for-one already.
+const CONTROL_INTERNO_COLS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+
 function renderApps() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = apps.length > 0;
     apps.forEach((app) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>
-                <div class="saas-app-name-cell">
-                    <span class="saas-app-icon saas-app-icon-sm" style="background:linear-gradient(135deg, ${app.colorFrom}, ${app.colorTo})">
-                        <i class="bx ${app.icon}" aria-hidden="true"></i>
-                    </span>
-                    <b>${app.name}</b>
-                </div>
-            </td>
-            <td>${app.sector ? `<span class="sector-pill">${app.sector}</span>` : '—'}</td>
-            <td>${app.screenCount > 0 ? Dashboard.t('menu.appScreenCount', { n: app.screenCount }) : Dashboard.t('menu.appNoScreens')}</td>
-            <td><span class="saas-app-status ${app.status}">${Dashboard.t(STATUS_LABEL_KEY[app.status] || STATUS_LABEL_KEY.active)}</span></td>
-            <td>${app.createdAt ? app.createdAt.slice(0, 10) : '—'}</td>
-            <td>${app.createdBy || '—'}</td>
-            <td class="col-system">${app.colSysEmpresa || '—'}</td>
-            <td class="col-system">${app.colSysArea || '—'}</td>
-            <td class="col-system">${app.colSysModulo || '—'}</td>
-            <td class="col-system">${app.colSysPantalla || '—'}</td>
-            <td class="col-system">${app.colSysCentroCostos || '—'}</td>
-            <td class="col-system">${app.colSysFecha || '—'}</td>
-            <td class="col-system">${app.colSysDiaNum || '—'}</td>
-            <td class="col-system">${app.colSysDiaTexto || '—'}</td>
-            <td class="col-system">${app.colSysMesNum || '—'}</td>
-            <td class="col-system">${app.colSysMesTexto || '—'}</td>
-            <td class="col-system">${app.colSysAnio || '—'}</td>
-            <td class="col-system">${app.colSysSemana || '—'}</td>
-            <td class="col-system">${app.colSysHora || '—'}</td>
-            <td class="actions">
-                <button type="button" class="admin-icon-btn" aria-label="Edit" data-action="edit">
-                    <i class="bx bx-edit" aria-hidden="true"></i>
-                </button>
-            </td>
+        const tr = document.createElement('tr');
+
+        const tdName = document.createElement('td');
+        tdName.dataset.col = 'name';
+        tdName.innerHTML = `
+            <div class="saas-app-name-cell">
+                <span class="saas-app-icon saas-app-icon-sm" style="background:linear-gradient(135deg, ${app.colorFrom}, ${app.colorTo})">
+                    <i class="bx ${app.icon}" aria-hidden="true"></i>
+                </span>
+                <b>${app.name}</b>
+            </div>
         `;
-        row.querySelector('[data-action="edit"]').addEventListener('click', (event) => {
+
+        const tdSector = document.createElement('td');
+        tdSector.dataset.col = 'sector';
+        tdSector.innerHTML = app.sector ? `<span class="sector-pill">${app.sector}</span>` : '—';
+
+        const tdScreens = document.createElement('td');
+        tdScreens.dataset.col = 'screens';
+        tdScreens.textContent = app.screenCount > 0 ? Dashboard.t('menu.appScreenCount', { n: app.screenCount }) : Dashboard.t('menu.appNoScreens');
+
+        const tdStatus = document.createElement('td');
+        tdStatus.dataset.col = 'status';
+        tdStatus.innerHTML = `<span class="saas-app-status ${app.status}">${Dashboard.t(STATUS_LABEL_KEY[app.status] || STATUS_LABEL_KEY.active)}</span>`;
+
+        const tdCreatedAt = document.createElement('td');
+        tdCreatedAt.dataset.col = 'createdAt';
+        tdCreatedAt.textContent = app.createdAt ? app.createdAt.slice(0, 10) : '—';
+
+        const tdCreatedBy = document.createElement('td');
+        tdCreatedBy.dataset.col = 'createdBy';
+        tdCreatedBy.textContent = app.createdBy || '—';
+
+        tr.append(tdName, tdSector, tdScreens, tdStatus, tdCreatedAt, tdCreatedBy);
+
+        CONTROL_INTERNO_COLS.forEach((col) => {
+            const td = document.createElement('td');
+            td.dataset.col = col;
+            td.className = 'col-system';
+            td.textContent = app[col] || '—';
+            tr.appendChild(td);
+        });
+
+        const tdActions = document.createElement('td');
+        tdActions.dataset.col = 'actions';
+        tdActions.className = 'actions';
+        tdActions.innerHTML = `
+            <button type="button" class="admin-icon-btn" aria-label="Edit" data-action="edit">
+                <i class="bx bx-edit" aria-hidden="true"></i>
+            </button>
+        `;
+        tdActions.querySelector('[data-action="edit"]').addEventListener('click', (event) => {
             event.stopPropagation();
             openEditModal(app);
         });
-        row.addEventListener('click', () => openDetail(app.id));
-        tableBody.appendChild(row);
+        tr.appendChild(tdActions);
+
+        tr.addEventListener('click', () => openDetail(app.id));
+        tableBody.appendChild(tr);
     });
 }
 
