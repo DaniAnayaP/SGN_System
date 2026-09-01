@@ -463,6 +463,17 @@
             render();
         }
 
+        // Additive-only sibling of equalizeAppToWeb above -- turns App on
+        // wherever Web is already granted and App isn't yet, never turns
+        // anything off. Lets someone fill gaps left by manually-added
+        // App-only grants without equalize wiping those out.
+        function fillMissingAppToWeb(leafKeys) {
+            leafKeys.forEach((k) => {
+                if (grantSet.has(k)) grantSet.add(k + APP_SUFFIX);
+            });
+            render();
+        }
+
         // The modal-wide "Igualar todo" button's handler (exposed publicly
         // as equalizeAllAppToWeb below). Walking grantSet itself instead of
         // re-deriving "every leaf key in the tree" from sectionsData: every
@@ -483,6 +494,16 @@
             render();
         }
 
+        // Modal-wide sibling of fillMissingAppToWeb above -- same
+        // additive-only rule, whole tree at once.
+        function fillAllMissingAppToWeb() {
+            if (mode !== 'grantReadonlyCost') return;
+            Array.from(grantSet).forEach((k) => {
+                if (!k.endsWith(APP_SUFFIX)) grantSet.add(k + APP_SUFFIX);
+            });
+            render();
+        }
+
         // grantReadonlyCost only — App is a plain paired toggle per node,
         // no eligibility filter (a Plan isn't tied to a client/sector the
         // way PermissionTree.js's client tree is), just "locked until this
@@ -497,6 +518,7 @@
                 indeterminate: appOnCount > 0 && appOnCount < grantedLeaves.length,
                 disabled: grantedLeaves.length === 0,
                 equalize: grantedLeaves.length > 0 ? () => equalizeAppToWeb(leafKeys) : null,
+                fillMissing: grantedLeaves.some((k) => !grantSet.has(k + APP_SUFFIX)) ? () => fillMissingAppToWeb(leafKeys) : null,
                 onChange: (checked) => {
                     grantedLeaves.forEach((k) => (checked ? grantSet.add(k + APP_SUFFIX) : grantSet.delete(k + APP_SUFFIX)));
                     render();
@@ -541,6 +563,16 @@
                 eqBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
                 eqBtn.addEventListener('click', appToggle.equalize);
                 row.appendChild(eqBtn);
+            }
+            if (appToggle.fillMissing) {
+                const fillBtn = document.createElement('button');
+                fillBtn.type = 'button';
+                fillBtn.className = 'perm-tree-app-equalize-btn';
+                fillBtn.title = t('main.appFillMissingRow');
+                fillBtn.setAttribute('aria-label', t('main.appFillMissingRow'));
+                fillBtn.innerHTML = '<i class="bx bx-list-plus" aria-hidden="true"></i>';
+                fillBtn.addEventListener('click', appToggle.fillMissing);
+                row.appendChild(fillBtn);
             }
             if (costKey != null) row.appendChild(buildCostSlot(costKey + APP_SUFFIX));
         }
@@ -1133,6 +1165,9 @@
             // Modal-wide "Igualar Visión APP con Web" button (grantReadonlyCost
             // only) -- a no-op call in any other mode.
             equalizeAllAppToWeb,
+            // Modal-wide "Agregar Visión APP faltante" button -- same
+            // grantReadonlyCost-only guard, additive-only.
+            fillAllMissingAppToWeb,
             getGrants() {
                 return Array.from(grantSet).map((k) => {
                     const [sectionId, itemId, submenuId] = k.split('::');

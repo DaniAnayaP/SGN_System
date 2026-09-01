@@ -83,6 +83,7 @@ const treeError = document.getElementById('plan-tree-error');
 const treeSaveBtn = document.getElementById('plan-tree-save');
 const treeCloseBtn = document.getElementById('plan-tree-close');
 const treeEqualizeBtn = document.getElementById('plan-tree-equalize-app');
+const treeFillMissingBtn = document.getElementById('plan-tree-fill-missing-app');
 const treeSaveStatus = document.getElementById('plan-tree-save-status');
 
 let plans = [];
@@ -558,6 +559,7 @@ function closeTreeModal() {
 treeCloseBtn.addEventListener('click', closeTreeModal);
 treeModal.addEventListener('click', (event) => { if (event.target === treeModal) closeTreeModal(); });
 treeEqualizeBtn.addEventListener('click', () => tree?.equalizeAllAppToWeb());
+treeFillMissingBtn.addEventListener('click', () => tree?.fillAllMissingAppToWeb());
 
 treeSaveBtn.addEventListener('click', async () => {
     if (!selectedPlanId || !tree) return;

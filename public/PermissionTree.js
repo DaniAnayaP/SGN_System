@@ -256,6 +256,21 @@
                         render();
                     }
                     : null,
+                // Additive-only sibling of equalize above -- turns on App
+                // wherever Web is granted and eligible but App isn't yet,
+                // and never touches anything else. For a tree where someone
+                // already hand-picked extra App-only grants on top of Web
+                // (equalize would wipe those), this fills the gaps without
+                // undoing that manual work. Only shown when there's
+                // actually a gap to fill.
+                fillMissing: !readOnly && leafKeys.some((k) => grantSet.has(k) && isAppEligibleKey(k) && !grantSet.has(k + APP_SUFFIX))
+                    ? () => {
+                        leafKeys.forEach((k) => {
+                            if (grantSet.has(k) && isAppEligibleKey(k)) grantSet.add(k + APP_SUFFIX);
+                        });
+                        render();
+                    }
+                    : null,
                 onChange: (checked) => {
                     actionable.forEach((k) => (checked ? grantSet.add(k + APP_SUFFIX) : grantSet.delete(k + APP_SUFFIX)));
                     render();
@@ -279,6 +294,17 @@
                 } else if (isAppEligibleKey(k)) {
                     grantSet.add(k + APP_SUFFIX);
                 }
+            });
+            render();
+        }
+
+        // Modal-wide sibling of the "fillMissing" per-row handler above --
+        // same additive-only rule, whole tree at once. Never clears an
+        // App-suffixed key, unlike equalizeAllAppToWeb.
+        function fillAllMissingAppToWeb() {
+            if (!appColumnEnabled || readOnly) return;
+            Array.from(grantSet).forEach((k) => {
+                if (!k.endsWith(APP_SUFFIX) && isAppEligibleKey(k)) grantSet.add(k + APP_SUFFIX);
             });
             render();
         }
@@ -329,6 +355,16 @@
                 eqBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
                 eqBtn.addEventListener('click', appToggle.equalize);
                 row.appendChild(eqBtn);
+            }
+            if (appToggle.fillMissing) {
+                const fillBtn = document.createElement('button');
+                fillBtn.type = 'button';
+                fillBtn.className = 'perm-tree-app-equalize-btn';
+                fillBtn.title = t('main.appFillMissingRow');
+                fillBtn.setAttribute('aria-label', t('main.appFillMissingRow'));
+                fillBtn.innerHTML = '<i class="bx bx-list-plus" aria-hidden="true"></i>';
+                fillBtn.addEventListener('click', appToggle.fillMissing);
+                row.appendChild(fillBtn);
             }
         }
 
@@ -1151,6 +1187,9 @@
             // Modal-wide "Igualar Visión APP con Web" button -- a no-op
             // call when there's no App column at all, or in read-only mode.
             equalizeAllAppToWeb,
+            // Modal-wide "Agregar Visión APP faltante" button -- same no-op
+            // guard, additive-only (see fillAllMissingAppToWeb above).
+            fillAllMissingAppToWeb,
             getGrants() {
                 return Array.from(grantSet).map((k) => {
                     const [sectionId, itemId, submenuId] = k.split('::');

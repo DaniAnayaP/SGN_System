@@ -17,6 +17,8 @@ const permissionsSaveBtn = document.getElementById('permissions-save');
 const permissionsSaveStatus = document.getElementById('permissions-save-status');
 const permissionsEqualizeBtn = document.getElementById('permissions-equalize-app');
 permissionsEqualizeBtn.addEventListener('click', () => tree?.equalizeAllAppToWeb());
+const permissionsFillMissingBtn = document.getElementById('permissions-fill-missing-app');
+permissionsFillMissingBtn.addEventListener('click', () => tree?.fillAllMissingAppToWeb());
 
 let jobPositions = [];
 let selectedJobPositionId = null;

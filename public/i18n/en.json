@@ -1020,6 +1020,8 @@
     "appVisionColumn": "APP visibility",
     "appEqualizeRow": "Match APP visibility to Web for this row",
     "appEqualizeAll": "Match APP visibility to Web",
+    "appFillMissingRow": "Add missing APP visibility for this row",
+    "appFillMissingAll": "Add missing APP visibility",
     "changePending": "Pending authorization",
     "changeHistoryRequestedBy": "Requested by",
     "changeHistoryAuthorizedBy": "Authorized by",

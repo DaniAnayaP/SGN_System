@@ -242,6 +242,14 @@ async function openJobPositionTree(jp) {
         equalizeBtn.addEventListener('click', () => tree?.equalizeAllAppToWeb());
         bodyEl.appendChild(equalizeBtn);
 
+        const fillMissingBtn = document.createElement('button');
+        fillMissingBtn.type = 'button';
+        fillMissingBtn.className = 'home-carga-secondary-btn';
+        fillMissingBtn.style.marginTop = '1rem';
+        fillMissingBtn.innerHTML = `<i class="bx bx-list-plus" aria-hidden="true"></i><span>${t('main.appFillMissingAll')}</span>`;
+        fillMissingBtn.addEventListener('click', () => tree?.fillAllMissingAppToWeb());
+        bodyEl.appendChild(fillMissingBtn);
+
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
         saveBtn.className = 'home-carga-new-btn';

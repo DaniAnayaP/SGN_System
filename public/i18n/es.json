@@ -1020,6 +1020,8 @@
     "appVisionColumn": "Visión APP",
     "appEqualizeRow": "Igualar Visión APP con Web para esta fila",
     "appEqualizeAll": "Igualar Visión APP con Web",
+    "appFillMissingRow": "Agregar Visión APP faltante para esta fila",
+    "appFillMissingAll": "Agregar Visión APP faltante",
     "changePending": "Pendiente de autorización",
     "changeHistoryRequestedBy": "Solicitó",
     "changeHistoryAuthorizedBy": "Autorizó",

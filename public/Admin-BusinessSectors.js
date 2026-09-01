@@ -190,6 +190,8 @@ const sectorTreeSaveBtn = document.getElementById('sector-tree-save');
 const sectorTreeCloseBtn = document.getElementById('sector-tree-close');
 const sectorTreeEqualizeBtn = document.getElementById('sector-tree-equalize-app');
 sectorTreeEqualizeBtn.addEventListener('click', () => sectorTree?.equalizeAllAppToWeb());
+const sectorTreeFillMissingBtn = document.getElementById('sector-tree-fill-missing-app');
+sectorTreeFillMissingBtn.addEventListener('click', () => sectorTree?.fillAllMissingAppToWeb());
 
 let sectorTree = null;
 let selectedSectorId = null;
