@@ -278,7 +278,8 @@
                 { "id": "colFuelType", "labelKey": "main.colFuelType", "permissionOnly": true },
                 { "id": "colUnitTypeStatus", "labelKey": "main.colUnitTypeStatus", "permissionOnly": true }
               ]
-            }
+            },
+            { "id": "colUnitTypeDeleteAuth", "labelKey": "main.colUnitTypeDeleteAuth", "permissionOnly": true }
           ],
           "iconsSubmenu": [
             { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
@@ -327,7 +328,8 @@
             { "id": "colFuelVat", "labelKey": "main.colFuelVat", "permissionOnly": true },
             { "id": "colFuelReason", "labelKey": "main.colFuelReason", "permissionOnly": true },
             { "id": "colFuelTransferService", "labelKey": "main.colFuelTransferService", "permissionOnly": true },
-            { "id": "colFuelInternalMovement", "labelKey": "main.colFuelInternalMovement", "permissionOnly": true }
+            { "id": "colFuelInternalMovement", "labelKey": "main.colFuelInternalMovement", "permissionOnly": true },
+            { "id": "colFuelDeleteAuth", "labelKey": "main.colFuelDeleteAuth", "permissionOnly": true }
           ],
           "iconsSubmenu": [
             { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
@@ -377,7 +379,8 @@
                 { "id": "colCargaCostoTotal", "labelKey": "main.colCargaCostoTotal", "permissionOnly": true },
                 { "id": "colCargaCostoTotalEvidencia", "labelKey": "main.colCargaCostoTotalEvidencia", "permissionOnly": true }
               ]
-            }
+            },
+            { "id": "colCargaDeleteAuth", "labelKey": "main.colCargaDeleteAuth", "permissionOnly": true }
           ],
           "iconsSubmenu": [
             { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
@@ -421,7 +424,8 @@
                 { "id": "colFleetYear", "labelKey": "main.colFleetYear", "permissionOnly": true },
                 { "id": "colFleetStatus", "labelKey": "main.colFleetStatus", "permissionOnly": true }
               ]
-            }
+            },
+            { "id": "colFleetDeleteAuth", "labelKey": "main.colFleetDeleteAuth", "permissionOnly": true }
           ],
           "iconsSubmenu": [
             { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },

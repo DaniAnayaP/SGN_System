@@ -1995,6 +1995,19 @@ function canAuthorizeColumn(grants, tableKey, colKey) {
     return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/autorizar`);
 }
 
+// Same shape as canAuthorizeColumn above, checking the independent
+// "Eliminar" leaf instead of "autorizar" -- see the matching
+// colFieldRuleAuthorization/colReportAuthorization/colScheduledAuthorizedBy/
+// col*DeleteAuth convention: one dedicated permission-only column per
+// table that has nothing to do with a real data field, just carries this
+// (and the Autorizar) grant for the whole screen's delete action.
+function canDeleteColumn(grants, tableKey, colKey) {
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return false;
+    const base = columnSubmenuBase(path, colKey);
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
+}
+
 // --- Pending changes (real approval workflow for "Editar" on an ---------
 // --- already-saved value — see checkAndLogFieldChanges in server.js) -----
 function createPendingChange({ clientId, tableKey, recordId, recordLabel, fieldKey, columnKey, oldValue, newValue, requestedBy, requestedByUserId, escalatedToUserId }) {
@@ -4665,6 +4678,7 @@ module.exports = {
     logTableChange,
     getColumnGrantLevel,
     canAuthorizeColumn,
+    canDeleteColumn,
     createPendingChange,
     getPendingChangeById,
     hasPendingChangeForField,

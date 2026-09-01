@@ -5764,6 +5764,18 @@ function getColumnGrantLevel(tableKey, colKey) {
 function hasColumnEditGrant(tableKey, colKey) {
     return getColumnGrantLevel(tableKey, colKey) === 'editar';
 }
+// Independent 5th grant, same shape as Autorizar -- mirrors
+// canDeleteColumn in db.js exactly (kept in sync by hand, same as
+// TABLE_GRANT_PATHS itself). Used to hide a screen's Eliminar button
+// client-side instead of just letting the click land on a 403.
+function hasColumnDeleteGrant(tableKey, colKey) {
+    if (!!currentUser?.isClientAdmin) return true;
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return false;
+    const base = columnSubmenuBase(path, colKey);
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
+}
 
 // Toolbar icons (Fijar/Visibilidad/Historial/Leyenda/Filtro/Limpiar/Zoom) —
 // a simple yes/no leaf under "Iconos Personalización" in the tree (see
@@ -5997,6 +6009,7 @@ window.Dashboard = {
     svgifyLogo,
     attachInlineEdit,
     hasColumnEditGrant,
+    hasColumnDeleteGrant,
     canEditField,
     openChangeHistory,
     hasSaasScreenGrant,

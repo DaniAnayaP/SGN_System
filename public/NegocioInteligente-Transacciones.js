@@ -418,13 +418,16 @@ function renderReports() {
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editBtn.addEventListener('click', () => openReportModal(report));
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => deleteReport(report));
-        tdActions.append(editBtn, deleteBtn);
+        tdActions.appendChild(editBtn);
+        if (Dashboard.hasColumnDeleteGrant('transacciones-inteligentes', 'colReportAuthorization')) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+            deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+            deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+            deleteBtn.addEventListener('click', () => deleteReport(report));
+            tdActions.appendChild(deleteBtn);
+        }
 
         tr.appendChild(tdActions);
         tbody.appendChild(tr);
@@ -449,7 +452,10 @@ async function deleteReport(report) {
     if (!(await Dashboard.confirm(Dashboard.t('main.reportDeleteConfirm')))) return;
     try {
         const res = await fetch(`/api/business/intelligent-reports/${report.id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) throw new Error('delete failed');
+        if (!res.ok) {
+            if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
+            throw new Error('delete failed');
+        }
         reports = reports.filter((r) => r.id !== report.id);
         renderReports();
     } catch {

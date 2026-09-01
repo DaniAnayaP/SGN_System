@@ -142,6 +142,7 @@ const {
     logTableChange,
     getColumnGrantLevel,
     canAuthorizeColumn,
+    canDeleteColumn,
     createPendingChange,
     getPendingChangeById,
     hasPendingChangeForField,
@@ -2229,7 +2230,14 @@ app.post('/api/business/field-fill-rules/:id/authorize', requireAuth, (req, res)
     const rule = authorizeFieldFillRule(req.params.id, req.user.clientId, req.user.name);
     res.json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
 });
-app.delete('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
+app.delete('/api/business/field-fill-rules/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'reglas-orden-llenado', 'colFieldRuleAuthorization')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar reglas.' });
+        }
+    }
     deleteFieldFillRule(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -2671,6 +2679,12 @@ app.delete('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getIntelligentReportById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Report not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'transacciones-inteligentes', 'colReportAuthorization')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar reportes.' });
+        }
+    }
     logTableChange({
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: existing.id,
         recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
@@ -2777,6 +2791,12 @@ app.delete('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getScheduledReportById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Scheduled report not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'reportes-programados', 'colScheduledAuthorizedBy')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar envíos programados.' });
+        }
+    }
     deleteScheduledReport(req.params.id, req.user.clientId);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: existing.id,
@@ -2916,6 +2936,12 @@ app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getFuelRecordById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fuel record not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'registro-combustible', 'colFuelDeleteAuth')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar registros.' });
+        }
+    }
     logTableChange({
         clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: existing.id,
         recordLabel: existing.eco_unit, action: 'delete', changedBy: changedByLabel(req),
@@ -3001,6 +3027,12 @@ app.delete('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => 
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getFuelLoadingRecordById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fuel loading record not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'carga-combustible', 'colCargaDeleteAuth')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar registros.' });
+        }
+    }
     logTableChange({
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: existing.id,
         recordLabel: existing.eco_unit || existing.db_id, action: 'delete', changedBy: changedByLabel(req),
@@ -3072,6 +3104,12 @@ app.delete('/api/business/unit-types/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getUnitTypeById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Unit type not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'tipos-unidad', 'colUnitTypeDeleteAuth')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar tipos de unidad.' });
+        }
+    }
     logTableChange({
         clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: existing.id,
         recordLabel: existing.code, action: 'delete', changedBy: changedByLabel(req),
@@ -3156,6 +3194,12 @@ app.delete('/api/business/fleet-units/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getFleetUnitById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Fleet unit not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'nuestras-unidades', 'colFleetDeleteAuth')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar unidades.' });
+        }
+    }
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: existing.id,
         recordLabel: existing.eco_id || `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),

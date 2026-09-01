@@ -623,7 +623,10 @@
             { id: 'editar', labelKey: 'main.permEditar' },
         ];
         const COLUMN_AUTHORIZE = { id: 'autorizar', labelKey: 'main.permAutorizar' };
-        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check' };
+        // Same independent-5th-toggle treatment as Autorizar -- see
+        // canDeleteColumn in db.js for what actually reads this leaf.
+        const COLUMN_ELIMINAR = { id: 'eliminar', labelKey: 'main.permEliminar' };
+        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash' };
 
         // Ver y Operar/Editar/Autorizar as one connected row instead of 3
         // stacked plain checkboxes — same fix as PermissionTree.js's own
@@ -693,7 +696,7 @@
             if (mode === 'clientTricolor' && columnLevels) {
                 const soloVerKeyTri = keyOf(section.id, item.id, `${base}/solo-ver`);
                 const subLevelKeys = COLUMN_LEVELS.filter((l) => l.id !== 'solo-ver')
-                    .concat(COLUMN_AUTHORIZE)
+                    .concat(COLUMN_AUTHORIZE, COLUMN_ELIMINAR)
                     .map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
                 const soloVerColor = columnColorFor([soloVerKeyTri]);
                 const colTreeKey = `col::${section.id}::${item.id}::${base}`;
@@ -719,7 +722,7 @@
                 if (!colExpanded) return;
 
                 const verGranted = soloVerColor !== 'red';
-                const items = COLUMN_LEVELS.filter((l) => l.id !== 'solo-ver').concat(COLUMN_AUTHORIZE).map((level) => {
+                const items = COLUMN_LEVELS.filter((l) => l.id !== 'solo-ver').concat(COLUMN_AUTHORIZE, COLUMN_ELIMINAR).map((level) => {
                     const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
                     const levelColor = columnColorFor([levelKey]);
                     const locked = levelColor !== 'red';
@@ -737,7 +740,7 @@
             }
 
             if (mode === 'clientTricolor') {
-                const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
+                const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE, COLUMN_ELIMINAR].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
                 const color = columnColorFor(levelKeys);
                 const colorSlot = {
                     color,
@@ -760,9 +763,9 @@
             colInput.checked = grantSet.has(soloVerKey);
             colInput.addEventListener('change', () => {
                 setKeys([soloVerKey], colInput.checked);
-                // Operar/Editar/Autorizar can't stay granted without Ver.
+                // Operar/Editar/Autorizar/Eliminar can't stay granted without Ver.
                 if (!colInput.checked) {
-                    [...COLUMN_LEVELS, COLUMN_AUTHORIZE].forEach((level) => {
+                    [...COLUMN_LEVELS, COLUMN_AUTHORIZE, COLUMN_ELIMINAR].forEach((level) => {
                         if (level.id === 'solo-ver') return;
                         grantSet.delete(keyOf(section.id, item.id, `${base}/${level.id}`));
                     });
@@ -774,6 +777,7 @@
 
             const verGranted = grantSet.has(soloVerKey);
             const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
+            const deleteKey = keyOf(section.id, item.id, `${base}/${COLUMN_ELIMINAR.id}`);
             const items = [
                 ...COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').map((level) => {
                     const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
@@ -791,6 +795,13 @@
                     checked: grantSet.has(authKey),
                     disabled: !verGranted,
                     onChange: (checked) => { setKeys([authKey], checked); render(); },
+                },
+                {
+                    icon: COLUMN_LEVEL_ICONS.eliminar,
+                    label: t(COLUMN_ELIMINAR.labelKey),
+                    checked: grantSet.has(deleteKey),
+                    disabled: !verGranted,
+                    onChange: (checked) => { setKeys([deleteKey], checked); render(); },
                 },
             ];
             container.appendChild(buildLevelSequenceRow(depth + 1, items));

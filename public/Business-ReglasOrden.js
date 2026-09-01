@@ -124,13 +124,16 @@ function renderRules() {
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editBtn.addEventListener('click', () => openRuleModal(rule));
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => removeRule(rule));
-        tdActions.append(editBtn, deleteBtn);
+        tdActions.appendChild(editBtn);
+        if (Dashboard.hasColumnDeleteGrant('reglas-orden-llenado', 'colFieldRuleAuthorization')) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+            deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+            deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+            deleteBtn.addEventListener('click', () => removeRule(rule));
+            tdActions.appendChild(deleteBtn);
+        }
 
         tr.append(...systemCells, tdScreen, tdRule, tdCreatedBy, tdCreatedAt, tdAuthorizedBy, tdStatus, tdActions);
         tableBody.appendChild(tr);
@@ -168,7 +171,11 @@ async function removeRule(rule) {
     if (!(await Dashboard.confirm(Dashboard.t('main.fieldRuleDeleteConfirmGlobal')))) return;
     try {
         const res = await fetch(`/api/business/field-fill-rules/${rule.id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) throw new Error('delete failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'error');
+            return;
+        }
         rules = rules.filter((r) => r.id !== rule.id);
         renderRules();
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');

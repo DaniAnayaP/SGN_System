@@ -182,13 +182,16 @@ function renderScheduledReports() {
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editBtn.addEventListener('click', () => openScheduledModal(scheduled));
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => deleteScheduled(scheduled));
-        tdActions.append(editBtn, deleteBtn);
+        tdActions.appendChild(editBtn);
+        if (Dashboard.hasColumnDeleteGrant('reportes-programados', 'colScheduledAuthorizedBy')) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+            deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+            deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+            deleteBtn.addEventListener('click', () => deleteScheduled(scheduled));
+            tdActions.appendChild(deleteBtn);
+        }
 
         tr.appendChild(tdActions);
         tbody.appendChild(tr);
@@ -213,7 +216,10 @@ async function deleteScheduled(scheduled) {
     if (!(await Dashboard.confirm(Dashboard.t('main.scheduledDeleteConfirm')))) return;
     try {
         const res = await fetch(`/api/business/scheduled-reports/${scheduled.id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) throw new Error('delete failed');
+        if (!res.ok) {
+            if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
+            throw new Error('delete failed');
+        }
         scheduledReports = scheduledReports.filter((s) => s.id !== scheduled.id);
         renderScheduledReports();
     } catch {

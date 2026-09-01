@@ -155,17 +155,22 @@ function buildActionsCell(record, tr) {
         historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
         td.appendChild(historyBtn);
     }
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-    deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-    deleteBtn.title = Dashboard.t('admin.delete');
-    deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-    deleteBtn.addEventListener('click', () => {
-        if (!record.id) { tr.remove(); ensureEmptyState(); return; }
-        deleteUnitType(record.id, tr);
-    });
-    td.appendChild(deleteBtn);
+    // A draft row has no server-side grant to check yet -- discarding it is
+    // always allowed (see the click handler above), so the button skips the
+    // Eliminar grant check while record.id is still null.
+    if (!record.id || Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colUnitTypeDeleteAuth')) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+        deleteBtn.title = Dashboard.t('admin.delete');
+        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+        deleteBtn.addEventListener('click', () => {
+            if (!record.id) { tr.remove(); ensureEmptyState(); return; }
+            deleteUnitType(record.id, tr);
+        });
+        td.appendChild(deleteBtn);
+    }
     return td;
 }
 
@@ -173,7 +178,10 @@ async function deleteUnitType(id, tr) {
     if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;
     try {
         const res = await fetch(`/api/business/unit-types/${id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) throw new Error('delete failed');
+        if (!res.ok) {
+            if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
+            throw new Error('delete failed');
+        }
         tr.remove();
         ensureEmptyState();
     } catch (err) {

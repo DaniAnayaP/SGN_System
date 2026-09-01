@@ -116,7 +116,10 @@ async function deleteFuelLoadingRecord(id, tr) {
     if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;
     try {
         const res = await fetch(`/api/business/fuel-loading-records/${id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) throw new Error('delete failed');
+        if (!res.ok) {
+            if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
+            throw new Error('delete failed');
+        }
         tr.remove();
         ensureEmptyState();
     } catch (err) {
@@ -137,14 +140,16 @@ function buildActionsCell(record, tr) {
     historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
     td.appendChild(historyBtn);
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-    deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-    deleteBtn.title = Dashboard.t('admin.delete');
-    deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-    deleteBtn.addEventListener('click', () => deleteFuelLoadingRecord(record.id, tr));
-    td.appendChild(deleteBtn);
+    if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colCargaDeleteAuth')) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+        deleteBtn.title = Dashboard.t('admin.delete');
+        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+        deleteBtn.addEventListener('click', () => deleteFuelLoadingRecord(record.id, tr));
+        td.appendChild(deleteBtn);
+    }
     return td;
 }
 

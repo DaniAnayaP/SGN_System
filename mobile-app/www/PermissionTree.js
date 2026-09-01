@@ -452,7 +452,10 @@
             { id: 'editar', labelKey: 'main.permEditar' },
         ];
         const COLUMN_AUTHORIZE = { id: 'autorizar', labelKey: 'main.permAutorizar' };
-        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check' };
+        // Same independent-5th-toggle treatment as Autorizar -- see
+        // canDeleteColumn in db.js for what actually reads this leaf.
+        const COLUMN_ELIMINAR = { id: 'eliminar', labelKey: 'main.permEliminar' };
+        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash' };
 
         // Ver y Operar/Editar/Autorizar as one connected row instead of 3
         // stacked plain checkboxes — the user's own complaint looking at
@@ -551,6 +554,7 @@
             if (!colExpanded) return;
 
             const authKey = keyOf(section.id, item.id, `${base}/${COLUMN_AUTHORIZE.id}`);
+            const deleteKey = keyOf(section.id, item.id, `${base}/${COLUMN_ELIMINAR.id}`);
             const items = [
                 ...COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').map((level) => {
                     const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
@@ -586,6 +590,13 @@
                     checked: grantSet.has(authKey),
                     disabled: subBlocked,
                     onChange: (checked) => { setKeys([authKey], checked); render(); },
+                },
+                {
+                    icon: COLUMN_LEVEL_ICONS.eliminar,
+                    label: t(COLUMN_ELIMINAR.labelKey),
+                    checked: grantSet.has(deleteKey),
+                    disabled: subBlocked,
+                    onChange: (checked) => { setKeys([deleteKey], checked); render(); },
                 },
             ];
             container.appendChild(buildLevelSequenceRow(depth + 1, items));
