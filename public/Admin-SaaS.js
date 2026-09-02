@@ -1068,6 +1068,7 @@ const permisosAdicionalesError = document.getElementById('permisos-adicionales-e
 const permisosAdicionalesTotal = document.getElementById('permisos-adicionales-total');
 const permisosAdicionalesSaveBtn = document.getElementById('permisos-adicionales-save');
 const permisosAdicionalesCloseBtn = document.getElementById('permisos-adicionales-close');
+const permisosAdicionalesFillMissingBtn = document.getElementById('permisos-adicionales-fill-missing-app');
 
 let adicionalesTree = null;
 let adicionalesClientId = null;
@@ -1120,6 +1121,11 @@ async function openPermisosAdicionalesModal(client) {
         showError(Dashboard.t('admin.loadError'));
     }
 }
+
+permisosAdicionalesFillMissingBtn.addEventListener('click', () => {
+    adicionalesTree?.fillAllMissingAppToWeb();
+    updateAdicionalesTotal();
+});
 
 permisosAdicionalesSaveBtn.addEventListener('click', async () => {
     if (!adicionalesClientId || !adicionalesTree) return;

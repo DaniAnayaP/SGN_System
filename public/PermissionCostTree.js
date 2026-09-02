@@ -263,9 +263,11 @@
         function buildStatusBadge(color) {
             const statusClass = color === 'green' ? 'perm-tree-status-enabled'
                 : color === 'yellow' ? 'perm-tree-status-extra'
+                : color === 'mixed' ? 'perm-tree-status-mixed'
                 : 'perm-tree-status-blocked';
             const iconClass = color === 'green' ? 'bx-check'
                 : color === 'yellow' ? 'bx-plus-circle'
+                : color === 'mixed' ? 'bx-minus'
                 : 'bx-lock-alt';
             const status = document.createElement('span');
             status.className = `perm-tree-status ${statusClass}`;
@@ -334,7 +336,11 @@
                     labelEl.append(input, span);
                     row.appendChild(labelEl);
                 } else {
-                    if (colorSlot && colorSlot.color) row.appendChild(buildStatusBadge(colorSlot.color));
+                    // Same "mixed" case as appendClientAppSlot -- a container
+                    // covered by a genuine blend of sources used to render no
+                    // badge at all here too, just less often noticed since
+                    // Web coverage is rarely as fragmented as App's.
+                    if (colorSlot) row.appendChild(buildStatusBadge(colorSlot.color || 'mixed'));
                     const label = document.createElement('span');
                     label.className = 'perm-tree-status-label';
                     label.textContent = labelText;
@@ -497,11 +503,60 @@
         // Modal-wide sibling of fillMissingAppToWeb above -- same
         // additive-only rule, whole tree at once.
         function fillAllMissingAppToWeb() {
-            if (mode !== 'grantReadonlyCost') return;
-            Array.from(grantSet).forEach((k) => {
-                if (!k.endsWith(APP_SUFFIX)) grantSet.add(k + APP_SUFFIX);
-            });
-            render();
+            if (mode === 'grantReadonlyCost') {
+                Array.from(grantSet).forEach((k) => {
+                    if (!k.endsWith(APP_SUFFIX)) grantSet.add(k + APP_SUFFIX);
+                });
+                render();
+                return;
+            }
+            if (mode === 'clientTricolor' && interactive) {
+                // "Igualar" doesn't have a sensible action in this screen —
+                // nothing sold here can be un-sold by a bulk button, only
+                // added (see appColumnExtraSlot/appExtraSlotArgs: the
+                // checkbox only ever exists on a red/not-yet-sold row) — so
+                // this mode only ever gets the additive half of the pair.
+                // Same walk computeAdditionalCostTotal below uses to find
+                // every screen and column in the tree, staging the #app
+                // sibling wherever the Web side is already covered (by plan
+                // or by this client's own extras) and the App side isn't
+                // green/yellow/pending yet. Container levels (Departamento/
+                // Área/Categoría) need nothing of their own here — their
+                // color is entirely DERIVED from their leaves (colorFor),
+                // same as computeAdditionalCostTotal's own rollup pricing —
+                // so filling every screen and column leaf is already complete.
+                const set = effectiveClientSet();
+                const maybeStage = (webCovered, appKey) => {
+                    if (webCovered && !planGrantSet.has(appKey) && !set.has(appKey)) pendingAdditions.add(appKey);
+                };
+                sectionsData.forEach((section) => {
+                    section.items.forEach((item) => {
+                        if (!(item.submenu && item.submenu.length)) return;
+                        item.submenu.forEach((sm) => {
+                            if (!(sm.submenu && sm.submenu.length)) {
+                                const smKey = keyOf(section.id, item.id, sm.id);
+                                maybeStage(planGrantSet.has(smKey) || set.has(smKey), smKey + APP_SUFFIX);
+                                return;
+                            }
+                            sm.submenu.forEach((subSm) => {
+                                const subSmItemId = subSm.standalone ? subSm.id : item.id;
+                                const subSmSubmenuId = subSm.standalone ? null : `${sm.id}/${subSm.id}`;
+                                const subSmKey = keyOf(section.id, subSmItemId, subSmSubmenuId);
+                                maybeStage(planGrantSet.has(subSmKey) || set.has(subSmKey), subSmKey + APP_SUFFIX);
+                                if (!(subSm.submenu && subSm.submenu.length)) return;
+                                subSm.submenu.forEach((col) => {
+                                    const base = `${sm.id}/${subSm.id}/${col.id}`;
+                                    const soloVerKeyCol = keyOf(section.id, item.id, `${base}/solo-ver`);
+                                    const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE, COLUMN_ELIMINAR].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
+                                    const webCovered = levelKeys.some((k) => planGrantSet.has(k) || set.has(k));
+                                    maybeStage(webCovered, soloVerKeyCol + APP_SUFFIX);
+                                });
+                            });
+                        });
+                    });
+                });
+                render();
+            }
         }
 
         // grantReadonlyCost only — App is a plain paired toggle per node,
@@ -604,9 +659,18 @@
                 icon.setAttribute('aria-hidden', 'true');
                 label.append(input, icon);
                 row.appendChild(label);
-            } else if (appColorSlot.color) {
+            } else {
+                // color is null for a container whose children are covered by
+                // a MIX of sources (colorFor's "partial" branch) -- rendering
+                // nothing here read as "nothing enabled" even when most of
+                // the group actually was, which is exactly why this looked
+                // broken/blank. 'mixed' gets its own badge instead of being
+                // silently skipped (see perm-tree-app-status-mixed in
+                // Admin.css) -- confirmed live: App coverage hits this far
+                // more than Web does, since it isn't automatically kept in
+                // sync with Web (that's what Igualar/Agregar faltante are for).
                 const badge = document.createElement('span');
-                badge.className = `perm-tree-app-status perm-tree-app-status-${appColorSlot.color}`;
+                badge.className = `perm-tree-app-status perm-tree-app-status-${appColorSlot.color || 'mixed'}`;
                 badge.title = t('main.appVisionColumn');
                 const icon = document.createElement('i');
                 icon.className = 'bx bx-mobile-alt';
@@ -1078,7 +1142,7 @@
                             subSm.submenu.forEach((col) => {
                                 const base = `${sm.id}/${subSm.id}/${col.id}`;
                                 const colKey = keyOf(section.id, item.id, base);
-                                const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
+                                const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE, COLUMN_ELIMINAR].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
                                 if (levelKeys.some((k) => set.has(k))) total += costOf(colKey);
                                 // App-vision for a column is its own single
                                 // "solo-ver" toggle (see appColumnExtraSlot),

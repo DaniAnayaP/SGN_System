@@ -1197,6 +1197,19 @@ body.dark-mode .perm-tree-depth-2{
     background-color: color-mix(in srgb, #c9860b 18%, transparent);
     color: #c9860b;
 }
+/* colorFor's "partial" case — a container whose children are covered by a
+   genuine MIX of green/yellow/red, not all one color (see PermissionCostTree
+   .js's own comment on colorFor). Used to render no badge at all, which read
+   as "nothing granted here" even when most of the group actually was —
+   confirmed live on Mis Accesos y Permisos, where App coverage hits this
+   far more than Web (App isn't kept in sync with Web automatically). Reuses
+   --color-accent instead of a new hardcoded hue since this is informational
+   ("expand to see the real mix"), not a 4th semantic tier alongside
+   green/yellow/red. */
+.perm-tree-status-mixed{
+    background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    color: var(--color-accent);
+}
 /* grantReadonlyCost mode only (Nuestros Planes' shield modal) -- marks a
    leaf that this Plan's own Sector already grants by default, see
    PermissionCostTree.js's sectorDefaultSet. */
@@ -1370,6 +1383,11 @@ body.dark-mode .perm-tree-depth-2{
 .perm-tree-app-status-red{
     background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
     color: var(--color-text-secondary);
+}
+/* Same "mixed" case as .perm-tree-status-mixed above, App-vision side. */
+.perm-tree-app-status-mixed{
+    background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    color: var(--color-accent);
 }
 /* App-vision's own price column — costEdit mode (Costos de Módulos) gets a
    second, independent cost input per row (see PermissionCostTree.js's
