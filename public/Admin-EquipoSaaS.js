@@ -95,6 +95,17 @@ const SAAS_PERMISSION_CATALOG = [
             { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
         ],
     },
+    {
+        // Ver = puede entrar a la pantalla y ver la lista de archivos;
+        // Descargar es su propio leaf, separado, igual que "reset" en
+        // saas-clients -- ver QUÉ evidencia existe es mucho menos sensible
+        // que poder abrir la foto/documento real.
+        itemId: 'saas-backups', labelKey: 'menu.ourBackups',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'descargar', labelKey: 'admin.saasActionDownload' },
+        ],
+    },
 ];
 
 function showError(el, message) {

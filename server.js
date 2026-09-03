@@ -222,7 +222,13 @@ const {
     setJobPositionGrants,
     getUserGrants,
     setUserGrants,
+    listClientEvidenceFiles,
+    getEvidenceRawValue,
+    setEvidenceValue,
+    getEvidencePermColKey,
 } = require('./db');
+const { getUploadUrl, getDownloadUrl } = require('./r2');
+const { buildEvidenceStorageKey, buildEvidenceDisplayName, extFromContentType } = require('./evidenceNaming');
 
 // Change-history "Usuario" column shows whoever made the change -- for the
 // auto-provisioned client-admin account, req.user.name is still frozen as
@@ -1054,6 +1060,48 @@ app.get('/api/admin/clients/:id/anexo-changes', requireAuth, requireAdmin, (req,
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     res.json({ changes: getAnexoChanges(req.params.id) });
+});
+
+// --- SaaS admin: Nuestros Respaldos (any client's evidence files) ----------
+// GEIPSA-side counterpart of /api/business/base-datos-respaldos -- same
+// listClientEvidenceFiles, just by :id instead of the caller's own
+// clientId, and gated by the saas-backups grant (Equipo SaaS) instead of
+// the per-client permission tree. Ver and Descargar are separate leaves on
+// purpose (see Admin-EquipoSaaS.js's SAAS_PERMISSION_CATALOG) -- some staff
+// should be able to see WHAT exists without being able to open the actual
+// photos.
+app.get('/api/admin/clients/:id/backups', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-backups')) {
+        return res.status(403).json({ message: 'No tienes permiso para ver Nuestros Respaldos.' });
+    }
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    res.json({ files: listClientEvidenceFiles(req.params.id) });
+});
+
+app.get('/api/admin/clients/:id/backups/download-url', requireAuth, requireAdmin, async (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-backups', 'descargar')) {
+        return res.status(403).json({ message: 'No tienes permiso para descargar evidencias.' });
+    }
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    const { tableKey, recordId, fieldKey } = req.query;
+    const evidence = getEvidenceRawValue(req.params.id, tableKey, Number(recordId), fieldKey);
+    if (!evidence) return res.status(404).json({ message: 'Evidence not found.' });
+    if (!evidence.migrated) return res.json({ url: evidence.value });
+    try {
+        const companyNickname = client.company_nickname || client.company_name || '';
+        const ext = evidence.value.split('.').pop() || 'jpg';
+        const displayName = buildEvidenceDisplayName({
+            companyNickname, tableKey, fieldKey, recordDate: evidence.recordDate,
+            folio: evidence.recordNumber, ext,
+        });
+        const url = await getDownloadUrl(evidence.value, displayName);
+        res.json({ url });
+    } catch (err) {
+        console.error('admin backups download-url failed:', err.message);
+        res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
+    }
 });
 
 // --- SaaS admin: costo por módulo (Costos de Módulos) ------------------------
@@ -3250,6 +3298,85 @@ app.get('/api/business/base-datos-global', requireAuth, (req, res) => {
         sourceTable: 'registro-combustible',
     }));
     res.json({ records });
+});
+
+// --- Nuestros Respaldos (Base de Datos > Nuestros Respaldos) ----------------
+// Client-scoped file browser over every evidence photo/document in the
+// system — see evidenceNaming.js/r2.js for the storage design. The list
+// itself is open to any authenticated user at the client (same convention
+// every other screen in this app already uses, e.g. Reglas de Orden's own
+// list route -- the sidebar's own grant-based filtering is what actually
+// decides who navigates here at all); the real gate lives on the download
+// route below, since THAT'S the sensitive action.
+app.get('/api/business/base-datos-respaldos', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ files: listClientEvidenceFiles(req.user.clientId) });
+});
+
+// getColumnGrantLevel's own floor is 'solo-ver' even with zero grants (see
+// its comment in db.js) -- only 'ver-y-operar'/'editar' actually require an
+// explicit grant, so those two (not 'solo-ver') are what gates the download,
+// same pattern already used to gate Crear on Transacciones Inteligentes.
+function canDownloadBackups(req) {
+    if (req.user.isClientAdmin) return true;
+    const grants = getUserEffectiveGrants(req.user.sub);
+    const level = getColumnGrantLevel(grants, 'respaldos', 'colBackupsAccess');
+    return level === 'ver-y-operar' || level === 'editar';
+}
+
+// Handles both a migrated file (returns a short-lived signed R2 URL) and a
+// not-yet-migrated one (returns a data: URL built fresh from the still-raw
+// base64 column) with the exact same response shape, so the client never
+// needs to know or care which case it's in -- see listClientEvidenceFiles'
+// own "migrated" flag comment for why both can coexist.
+app.get('/api/business/evidence-download-url', requireAuth, async (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canDownloadBackups(req)) return res.status(403).json({ message: 'No tienes permiso para descargar evidencias.' });
+    const { tableKey, recordId, fieldKey } = req.query;
+    const evidence = getEvidenceRawValue(req.user.clientId, tableKey, Number(recordId), fieldKey);
+    if (!evidence) return res.status(404).json({ message: 'Evidence not found.' });
+    if (!evidence.migrated) return res.json({ url: evidence.value });
+    try {
+        const client = getClientById(req.user.clientId);
+        const companyNickname = client?.company_nickname || client?.company_name || '';
+        const ext = evidence.value.split('.').pop() || 'jpg';
+        const displayName = buildEvidenceDisplayName({
+            companyNickname, tableKey, fieldKey, recordDate: evidence.recordDate,
+            folio: evidence.recordNumber, ext,
+        });
+        const url = await getDownloadUrl(evidence.value, displayName);
+        res.json({ url });
+    } catch (err) {
+        console.error('evidence-download-url failed:', err.message);
+        res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
+    }
+});
+
+// Issues a presigned PUT URL for a NEW evidence upload -- the browser PUTs
+// the file bytes directly to R2 (never through this server), then PATCHes
+// the record with the returned `key` the same way it already PATCHes any
+// other field (see OpTransVolCombustible.js's attachEvidenceControl).
+app.post('/api/business/evidence-upload-url', requireAuth, async (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { tableKey, recordId, fieldKey, contentType } = req.body || {};
+    const permColKey = getEvidencePermColKey(tableKey, fieldKey);
+    if (!permColKey) return res.status(400).json({ message: 'Unknown evidence field.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        const level = getColumnGrantLevel(grants, tableKey, permColKey);
+        if (level !== 'ver-y-operar' && level !== 'editar') {
+            return res.status(403).json({ message: 'No tienes permiso para subir esta evidencia.' });
+        }
+    }
+    try {
+        const ext = extFromContentType(contentType);
+        const key = buildEvidenceStorageKey({ clientId: req.user.clientId, tableKey, recordId, fieldKey, ext });
+        const uploadUrl = await getUploadUrl(key, contentType);
+        res.json({ uploadUrl, key });
+    } catch (err) {
+        console.error('evidence-upload-url failed:', err.message);
+        res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
+    }
 });
 
 // --- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de --

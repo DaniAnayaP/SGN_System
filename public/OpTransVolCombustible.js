@@ -284,9 +284,12 @@ document.addEventListener('keydown', (event) => {
 // Shared icon-button control for every photo-evidence cell on this page:
 // always clickable (unlike a disabled placeholder icon) — with no photo
 // yet, it opens the file picker; once one is attached, it opens the shared
-// preview modal instead. Persisted as a data: URL via PATCH the moment a
-// photo is picked.
-function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKey, onCommit }) {
+// preview modal instead. Uploads go straight to R2 via Dashboard.uploadEvidenceFile
+// (compressed client-side, never through this Node server) and the record is
+// PATCHed with the short storage key it returns, not the file itself. `value`
+// may still be a legacy base64 data: URL for a record not yet migrated (see
+// db.js's own migrated/not-migrated comment) — handled either way.
+function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKey, tableKey, recordId, fieldKey, onCommit }) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'admin-icon-btn';
@@ -295,33 +298,48 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
     fileInput.accept = 'image/*';
     fileInput.hidden = true;
 
-    let dataUrl = value || null;
+    let stored = value || null;
+    let busy = false;
     function render() {
-        btn.innerHTML = `<i class="bx ${pending ? 'bx-time-five' : (dataUrl ? 'bx-receipt' : 'bx-image-add')}" aria-hidden="true"></i>`;
-        const label = pending ? 'main.changePending' : (dataUrl ? viewLabelKey : uploadLabelKey);
+        const icon = busy ? 'bx-loader-alt bx-spin' : (pending ? 'bx-time-five' : (stored ? 'bx-receipt' : 'bx-image-add'));
+        btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+        const label = pending ? 'main.changePending' : (stored ? viewLabelKey : uploadLabelKey);
         btn.setAttribute('aria-label', Dashboard.t(label));
         btn.title = Dashboard.t(label);
         // Icon-only cell -- textContent alone can't tell empty from filled
         // (see Reglas de Orden de Llenado's applyFieldFillRules), so this
         // marks it explicitly, same convention as Dashboard.attachInlineEdit.
-        td.dataset.dtEmpty = dataUrl ? '' : '1';
+        td.dataset.dtEmpty = stored ? '' : '1';
     }
-    btn.addEventListener('click', () => {
-        if (pending) return;
-        if (dataUrl) openEvidencePreview(dataUrl);
-        else fileInput.click();
+    btn.addEventListener('click', async () => {
+        if (pending || busy) return;
+        if (stored) {
+            try {
+                const url = stored.startsWith('data:') ? stored : await Dashboard.getEvidenceDownloadUrl({ tableKey, recordId, fieldKey });
+                openEvidencePreview(url);
+            } catch (err) {
+                console.error('evidence preview failed', err);
+                Dashboard.showToast(Dashboard.t('main.backupDownloadError'), 'error');
+            }
+        } else fileInput.click();
     });
-    fileInput.addEventListener('change', () => {
+    fileInput.addEventListener('change', async () => {
         const file = fileInput.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            dataUrl = reader.result;
-            render();
-            onCommit(dataUrl);
+        busy = true;
+        render();
+        try {
+            const key = await Dashboard.uploadEvidenceFile(file, { tableKey, recordId, fieldKey });
+            stored = key;
+            onCommit(key);
             applyFieldFillRules(TABLE_KEY);
-        };
-        reader.readAsDataURL(file);
+        } catch (err) {
+            console.error('evidence upload failed', err);
+            Dashboard.showToast(Dashboard.t(err.status === 403 ? 'main.fieldLocked' : 'admin.saveError'), err.status === 403 ? 'warning' : 'error');
+        } finally {
+            busy = false;
+            render();
+        }
     });
     render();
     td.append(btn, fileInput);
@@ -336,7 +354,10 @@ function buildTicketCell(record) {
         pending: isPending(record, 'ticketEvidence'),
         uploadLabelKey: 'main.fuelUploadTicket',
         viewLabelKey: 'main.colFuelTicketEvidence',
-        onCommit: (dataUrl) => patchFuelRecord(record.id, { ticketEvidence: dataUrl }),
+        tableKey: TABLE_KEY,
+        recordId: record.id,
+        fieldKey: 'ticketEvidence',
+        onCommit: (key) => patchFuelRecord(record.id, { ticketEvidence: key }),
     });
     return td;
 }
@@ -353,7 +374,10 @@ function buildTripKmEvidenceCell(record, col, apiField, uploadLabelKey, viewLabe
         pending: isPending(record, apiField),
         uploadLabelKey,
         viewLabelKey,
-        onCommit: (dataUrl) => patchFuelRecord(record.id, { [apiField]: dataUrl }),
+        tableKey: TABLE_KEY,
+        recordId: record.id,
+        fieldKey: apiField,
+        onCommit: (key) => patchFuelRecord(record.id, { [apiField]: key }),
     });
     return td;
 }

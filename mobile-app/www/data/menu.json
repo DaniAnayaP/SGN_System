@@ -21,7 +21,12 @@
             {
               "id": "btn-base-datos", "labelKey": "menu.databaseGroup", "icon": "bx-data", "href": "#", "permissionOnly": true,
               "submenu": [
-                { "id": "bd-global", "labelKey": "menu.databaseCompany", "permissionOnly": true }
+                { "id": "bd-global", "labelKey": "menu.databaseCompany", "permissionOnly": true },
+                { "id": "bd-respaldos", "labelKey": "menu.databaseBackups", "permissionOnly": true,
+                  "submenu": [
+                    { "id": "colBackupsAccess", "labelKey": "main.colBackupsAccess", "permissionOnly": true }
+                  ]
+                }
               ]
             },
             {

@@ -19,6 +19,7 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 const { hashPassword, hashPasswordSync } = require('./password');
+const { buildEvidenceDisplayName, buildEvidenceStorageKey, extFromDataUrl } = require('./evidenceNaming');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'storage', 'sgn.sqlite');
 const DATA_DIR = path.dirname(DB_PATH);
@@ -1955,6 +1956,7 @@ const TABLE_GRANT_PATHS = {
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
     'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
     'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
+    'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -2798,6 +2800,103 @@ function listFuelLoadingRecords(clientId, forTestAccount = false) {
 
 function getFuelLoadingRecordById(id, clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM fuel_loading_records WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+
+// --- Nuestros Respaldos (evidence file browser, client- and SaaS-side) -----
+// Every evidence-bearing column across the whole app, in one place — add a
+// row here and it automatically shows up in Nuestros Respaldos AND is
+// covered by the migration script (scripts/migrate-evidence-to-r2.js), no
+// second list to keep in sync. `column` still holds the raw stored value
+// (either a legacy base64 data: URL, or an R2 storage key once migrated —
+// see evidenceNaming.js's header comment for why the two never mix).
+// permColKey is the SAME id already used by FUEL_PATCHABLE_FIELDS/
+// FUEL_LOADING_PATCHABLE_FIELDS' own fieldKey (main.col... tail) and by
+// menu.json's column node for this exact field — reused here so the upload
+// route's permission check (getColumnGrantLevel) reads the very same grant
+// PermissionTree.js already renders a checkbox for, no second permission
+// concept invented for evidence specifically.
+const EVIDENCE_FIELD_SOURCES = [
+    {
+        tableKey: 'registro-combustible', table: 'fuel_records',
+        fields: [
+            { fieldKey: 'ticketEvidence', column: 'ticket_evidence', permColKey: 'colFuelTicketEvidence' },
+            { fieldKey: 'tripKmBeforeEvidence', column: 'trip_km_before_evidence', permColKey: 'colFuelTripKmBeforeEvidence' },
+            { fieldKey: 'tripKmAfterEvidence', column: 'trip_km_after_evidence', permColKey: 'colFuelTripKmAfterEvidence' },
+        ],
+    },
+    {
+        tableKey: 'carga-combustible', table: 'fuel_loading_records',
+        fields: [
+            { fieldKey: 'tripBeforeEvidence', column: 'trip_before_evidence', permColKey: 'colCargaTripAntesEvidencia' },
+            { fieldKey: 'tripAfterEvidence', column: 'trip_after_evidence', permColKey: 'colCargaTripDespuesEvidencia' },
+            { fieldKey: 'totalCostEvidence', column: 'total_cost_evidence', permColKey: 'colCargaCostoTotalEvidencia' },
+        ],
+    },
+];
+
+// One row per FILE (not per record) — a fuel_records row alone can carry up
+// to 3 of these. `migrated: false` rows haven't been through the R2 script
+// yet (still raw base64 in the column); the download route below handles
+// both cases so this screen works correctly before AND after Fase 3 runs.
+function listClientEvidenceFiles(clientId) {
+    const client = getClientById(clientId);
+    const companyNickname = (client && (client.company_nickname || client.company_name)) || '';
+    const files = [];
+    EVIDENCE_FIELD_SOURCES.forEach(({ tableKey, table, fields }) => {
+        const cols = fields.map((f) => f.column).join(', ');
+        const rows = db.prepare(`SELECT id, record_number, record_date, ${cols} FROM ${table} WHERE client_id = ? AND is_test_data = 0`).all(clientId);
+        rows.forEach((row) => {
+            fields.forEach(({ fieldKey, column, permColKey }) => {
+                const value = row[column];
+                if (!value) return;
+                const migrated = !value.startsWith('data:');
+                const ext = migrated ? (value.split('.').pop() || 'jpg') : extFromDataUrl(value);
+                const folio = row.record_number || row.id;
+                files.push({
+                    tableKey, recordId: row.id, fieldKey,
+                    displayName: buildEvidenceDisplayName({ companyNickname, tableKey, fieldKey, recordDate: row.record_date, folio, ext }),
+                    screenLabelKey: tableKey === 'registro-combustible' ? 'menu.opTransVolCombustible' : 'menu.opTransVolCargaCombustible',
+                    typeLabelKey: `main.${permColKey}`,
+                    recordDate: row.record_date,
+                    migrated,
+                });
+            });
+        });
+    });
+    return files;
+}
+
+// The permission column id a given evidence field's grant lives under (see
+// EVIDENCE_FIELD_SOURCES' own comment) -- used by the upload-url route to
+// gate who can request a NEW upload slot the same way canEditField already
+// gates that field everywhere else in the app.
+function getEvidencePermColKey(tableKey, fieldKey) {
+    const source = EVIDENCE_FIELD_SOURCES.find((s) => s.tableKey === tableKey);
+    const field = source && source.fields.find((f) => f.fieldKey === fieldKey);
+    return field ? field.permColKey : null;
+}
+
+// Re-fetches ONE evidence value fresh at download time (never trusts a value
+// the client might have cached from an earlier list call) — returns null if
+// the tableKey/fieldKey pair isn't a real evidence field, or the record
+// isn't this client's own, so the download route can 404/403 accordingly.
+function getEvidenceRawValue(clientId, tableKey, recordId, fieldKey) {
+    const source = EVIDENCE_FIELD_SOURCES.find((s) => s.tableKey === tableKey);
+    const field = source && source.fields.find((f) => f.fieldKey === fieldKey);
+    if (!field) return null;
+    const row = db.prepare(`SELECT ${field.column} AS value, record_number, record_date FROM ${source.table} WHERE id = ? AND client_id = ?`).get(recordId, clientId);
+    if (!row || !row.value) return null;
+    return { value: row.value, migrated: !row.value.startsWith('data:'), recordNumber: row.record_number, recordDate: row.record_date };
+}
+
+// Overwrites one evidence column with its new R2 storage key — used by both
+// the upload-url route (once the browser confirms the PUT succeeded) and the
+// one-time migration script.
+function setEvidenceValue(clientId, tableKey, recordId, fieldKey, newValue) {
+    const source = EVIDENCE_FIELD_SOURCES.find((s) => s.tableKey === tableKey);
+    const field = source && source.fields.find((f) => f.fieldKey === fieldKey);
+    if (!field) throw new Error(`Unknown evidence field: ${tableKey}/${fieldKey}`);
+    db.prepare(`UPDATE ${source.table} SET ${field.column} = ? WHERE id = ? AND client_id = ?`).run(newValue, recordId, clientId);
 }
 
 // Created blank — every field (including the identifying ones) is filled in
@@ -4679,6 +4778,11 @@ module.exports = {
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,
+    listClientEvidenceFiles,
+    getEvidenceRawValue,
+    setEvidenceValue,
+    getEvidencePermColKey,
+    EVIDENCE_FIELD_SOURCES,
     createPendingChange,
     getPendingChangeById,
     hasPendingChangeForField,

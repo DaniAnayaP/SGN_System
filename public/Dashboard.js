@@ -634,6 +634,7 @@ function buildSidebarData(data, role, activePage) {
         { id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html' },
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', saasItemId: 'saas-module-costs' },
         { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html' },
+        { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', saasItemId: 'saas-backups' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const adminItem = { id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings', submenu: adminSubmenu };
     if (role !== 'admin') return data;
@@ -5808,6 +5809,69 @@ function canEditField(tableKey, colKey, currentValue, pending = false) {
     return level === 'editar';
 }
 
+// --- Evidence upload/download (shared by Registro Combustible and Carga ----
+// --- Combustible's photo-evidence cells) — see the "Nuestros Respaldos" ----
+// --- plan. Files never pass through this Node server: the browser PUTs ----
+// --- straight to R2 via a short-lived presigned URL. ------------------------
+// Downscales to at most `maxDim` on the longest side and re-encodes as JPEG
+// at `quality` — a phone photo from these screens' <input accept="image/*">
+// is routinely 3-5 MB; this keeps evidence uploads small without a visible
+// quality loss at the size they're ever viewed at. Non-image files (there
+// are none today, accept is always 'image/*' on these controls) pass through
+// untouched rather than failing.
+async function compressImageToBlob(file, maxDim = 1280, quality = 0.7) {
+    if (!file.type || !file.type.startsWith('image/')) return file;
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    return blob || file;
+}
+
+// Compresses, asks the server for a presigned PUT URL (server checks the
+// caller can actually edit this field), then PUTs directly to R2. Returns
+// the short storage key to PATCH onto the record — never the file itself.
+async function uploadEvidenceFile(file, { tableKey, recordId, fieldKey }) {
+    const blob = await compressImageToBlob(file);
+    const contentType = blob.type || file.type || 'application/octet-stream';
+    const res = await fetch('/api/business/evidence-upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ tableKey, recordId, fieldKey, contentType }),
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err = new Error(body.message || 'evidence-upload-url failed');
+        err.status = res.status;
+        throw err;
+    }
+    const { uploadUrl, key } = await res.json();
+    const putRes = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+    if (!putRes.ok) throw new Error('R2 upload failed');
+    return key;
+}
+
+// Resolves a stored evidence value (either a migrated R2 key or a legacy
+// data: URL, see db.js's own migration-safe comment) to a URL an <img> can
+// load — a data: URL is already directly usable, a key needs a fresh
+// presigned GET first.
+async function getEvidenceDownloadUrl({ tableKey, recordId, fieldKey }) {
+    const params = new URLSearchParams({ tableKey, recordId, fieldKey });
+    const res = await fetch(`/api/business/evidence-download-url?${params}`, { credentials: 'include' });
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || 'evidence-download-url failed');
+    }
+    const { url } = await res.json();
+    return url;
+}
+
 // --- Inline cell editing (shared by Registro Combustible, Mi Recurso -------
 // --- Humano, and any future .data-table with click-to-edit cells) ----------
 // Click a cell to turn it into an <input>; Enter or blur commits back to
@@ -6008,6 +6072,8 @@ window.Dashboard = {
     t,
     svgifyLogo,
     attachInlineEdit,
+    uploadEvidenceFile,
+    getEvidenceDownloadUrl,
     hasColumnEditGrant,
     hasColumnDeleteGrant,
     canEditField,
@@ -6033,6 +6099,12 @@ window.Dashboard = {
         return cc ? `${cc.code} - ${cc.name}` : '';
     },
     get companyName() { return clientBranding?.companyName || ''; },
+    // "Apodo Empresa" — falls back to companyName since not every client
+    // bothers setting a nickname. Same fallback order already repeated by
+    // hand at the personalized-reports/logout-greeting/database-menu-label
+    // call sites (loadPersonalizedReports, displayName, updateDatabaseMenuLabel)
+    // -- exposed here so a new page doesn't need its own copy of it.
+    get companyNickname() { return clientBranding?.companyNickname || clientBranding?.companyName || ''; },
     // For pages whose table columns aren't known until an async fetch
     // resolves (e.g. a report's results, one column per report column) --
     // the automatic ResizeObserver-based lazy-init (renderDataTableColumnControls)
