@@ -28,6 +28,12 @@ function getClient() {
         region: 'auto',
         endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
         credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+        // Recent SDK versions add an x-amz-checksum-* param to every
+        // presigned URL by default -- R2 doesn't handle that flow and
+        // fails the browser's CORS preflight with a 503 before the PUT
+        // ever runs. Not needed here anyway (R2 does its own integrity
+        // check on write); this is the documented fix.
+        requestChecksumCalculation: 'WHEN_REQUIRED',
     });
     return client;
 }
