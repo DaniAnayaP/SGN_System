@@ -148,6 +148,8 @@ async function loadBrandingForTheme() {
     }
 }
 
+const TABLE_KEY = 'carga-combustible';
+
 // --- Field catalog -----------------------------------------------------
 // Every field's apiKey matches a real FUEL_LOADING_PATCHABLE_FIELDS key in
 // db.js — including the identifying ones and centroCostos, all uniformly
@@ -652,14 +654,53 @@ function buildFieldBody(field, record) {
         fileInput.accept = 'image/*';
         fileInput.hidden = true;
         const hasPhoto = isFieldFilled(fieldValueFromRecord(field, record));
-        btn.innerHTML = `<i class="bx bx-camera" aria-hidden="true"></i><span>${hasPhoto ? t('home.cargaChangePhoto') : t('home.cargaTakePhoto')}</span>`;
+        function renderPhotoBtn(busy) {
+            const icon = busy ? 'bx-loader-alt bx-spin' : 'bx-camera';
+            const label = hasPhoto ? t('home.cargaChangePhoto') : t('home.cargaTakePhoto');
+            btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i><span>${label}</span>`;
+        }
+        renderPhotoBtn(false);
         btn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', () => {
+        // Compressed client-side, then uploaded straight to R2 via a
+        // presigned URL -- the photo bytes never pass through this Node
+        // server and never get stored as base64 in SQLite (see the
+        // "Nuestros Respaldos" plan). If that can't complete right now (no
+        // signal, or the request itself drops mid-upload), the already-
+        // compressed photo is queued in this device's own IndexedDB and
+        // uploads on its own once connectivity returns -- same "en tu
+        // celular" treatment every other offline field edit already gets,
+        // see AppOfflineSync.js's flushOfflineQueue.
+        fileInput.addEventListener('change', async () => {
             const file = fileInput.files?.[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => commitFieldValue(field, reader.result);
-            reader.readAsDataURL(file);
+            const recordId = record.id;
+            const recordKey = `carga-combustible:${recordId}`;
+            const description = `${t('menu.opTransVolCargaCombustible')} · ${recordLabel(record)}`;
+            btn.disabled = true;
+            renderPhotoBtn(true);
+            try {
+                const blob = await window.SgnOfflineSync.compressImageToBlob(file);
+                const contentType = blob.type || file.type || 'application/octet-stream';
+                try {
+                    const key = await window.SgnOfflineSync.uploadEvidenceNow(
+                        { tableKey: TABLE_KEY, recordId, fieldKey: field.apiKey }, blob, contentType,
+                    );
+                    commitFieldValue(field, key);
+                } catch {
+                    await window.SgnOfflineSync.queueOfflineEvidence({
+                        tableKey: TABLE_KEY, recordId, fieldKey: field.apiKey, blob, contentType,
+                        patchUrl: `/api/business/fuel-loading-records/${recordId}`,
+                        description, recordKey,
+                    });
+                    const idx = records.findIndex((r) => r.id === recordId);
+                    if (idx !== -1) records[idx] = { ...records[idx], [field.apiKey]: 'pending-upload' };
+                    offlinePendingRecordIds.add(recordKey);
+                    showToast(t('home.cargaSavedOffline'));
+                    render();
+                }
+            } finally {
+                btn.disabled = false;
+            }
         });
         row.append(btn, fileInput);
         bodyWrap.appendChild(row);

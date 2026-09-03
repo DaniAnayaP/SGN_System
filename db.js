@@ -2838,13 +2838,26 @@ const EVIDENCE_FIELD_SOURCES = [
 // to 3 of these. `migrated: false` rows haven't been through the R2 script
 // yet (still raw base64 in the column); the download route below handles
 // both cases so this screen works correctly before AND after Fase 3 runs.
+// Same Área/Módulo/Pantalla literals server.js's own mapFuelRecord/
+// mapFuelLoadingRecord pass to getSystemColumnsForRecord for these two
+// tables -- duplicated here (not imported: db.js and server.js don't share
+// constants, same convention deserializePlan already follows above) so
+// every evidence file carries the exact same 13 Control Interno columns its
+// parent record shows on its own screen, needed to relate a file back to
+// every other table by Empresa/Área/Módulo/Pantalla/Centro Costos/Fecha.
+const EVIDENCE_SCREEN_SYSTEM_META = {
+    'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
+    'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
+};
+
 function listClientEvidenceFiles(clientId) {
     const client = getClientById(clientId);
+    const companyName = (client && client.company_name) || '';
     const companyNickname = (client && (client.company_nickname || client.company_name)) || '';
     const files = [];
     EVIDENCE_FIELD_SOURCES.forEach(({ tableKey, table, fields }) => {
         const cols = fields.map((f) => f.column).join(', ');
-        const rows = db.prepare(`SELECT id, record_number, record_date, ${cols} FROM ${table} WHERE client_id = ? AND is_test_data = 0`).all(clientId);
+        const rows = db.prepare(`SELECT id, record_number, record_date, centro_costos, created_at, ${cols} FROM ${table} WHERE client_id = ? AND is_test_data = 0`).all(clientId);
         rows.forEach((row) => {
             fields.forEach(({ fieldKey, column, permColKey }) => {
                 const value = row[column];
@@ -2859,6 +2872,12 @@ function listClientEvidenceFiles(clientId) {
                     typeLabelKey: `main.${permColKey}`,
                     recordDate: row.record_date,
                     migrated,
+                    ...getSystemColumnsForRecord({
+                        companyName,
+                        ...EVIDENCE_SCREEN_SYSTEM_META[tableKey],
+                        centroCostos: row.centro_costos,
+                        createdAt: row.created_at,
+                    }),
                 });
             });
         });

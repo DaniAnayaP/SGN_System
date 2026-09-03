@@ -33,14 +33,94 @@ function openOfflineDb() {
     });
 }
 
-function queueOfflineRequest({ url, method, body, description, recordKey, baseline }) {
+// The native Android app (mobile-app/) opens this HTML/JS from a bundled
+// local origin, not from the real server -- a bare relative '/api/...' URL
+// resolves against THAT local origin instead (see AppConfig.js's own header
+// comment). Every call site below passes a plain relative path, same as
+// every other App*.js file's own offlineAwareFetch calls -- this wraps it
+// once, here, so the fix covers all of them instead of needing the same
+// window.apiUrl() call repeated at every existing (and future) call site.
+// Idempotent: safe to call again on a URL some already-queued item stored
+// before this fix existed (or one that's already absolute for any reason).
+function resolveApiUrl(url) {
+    if (!url || /^https?:\/\//i.test(url)) return url;
+    return window.apiUrl ? window.apiUrl(url) : url;
+}
+
+// `evidence`, when present, marks this entry as a two-phase evidence upload
+// (compress -> presigned URL -> PUT to R2 -> PATCH the key) instead of a
+// plain single fetch -- see queueOfflineEvidence and flushOfflineQueue below.
+function queueOfflineRequest({ url, method, body, description, recordKey, baseline, evidence }) {
     return openOfflineDb().then((db) => new Promise((resolve, reject) => {
         const store = db.transaction(OFFLINE_STORE_NAME, 'readwrite').objectStore(OFFLINE_STORE_NAME);
-        const entry = { url, method, body, description, recordKey: recordKey || null, baseline: baseline || null, queuedAt: new Date().toISOString() };
+        const entry = {
+            url: url ? resolveApiUrl(url) : null, method: method || null, body: body || null,
+            description, recordKey: recordKey || null, baseline: baseline || null,
+            evidence: evidence || null, queuedAt: new Date().toISOString(),
+        };
         const addReq = store.add(entry);
         addReq.onsuccess = () => resolve({ ...entry, id: addReq.result });
         addReq.onerror = () => reject(addReq.error);
     }));
+}
+
+// Downscales to at most `maxDim` on the longest side and re-encodes as JPEG
+// at `quality` -- a phone photo straight from the camera is routinely 3-5
+// MB; this is what actually solves the storage problem (GEIPSA alone
+// captures up to 110 evidence photos per trip), on top of moving off base64
+// entirely. Duplicated from Dashboard.js's own compressImageToBlob rather
+// than shared: the App bundles its own separate, smaller set of files (see
+// mobile-app/sync-web-assets.js) and never loads Dashboard.js at all.
+async function compressImageToBlob(file, maxDim = 1280, quality = 0.7) {
+    if (!file.type || !file.type.startsWith('image/')) return file;
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    return blob || file;
+}
+
+// Asks the server for a presigned PUT URL (server checks the caller can
+// actually edit this field, same canEditField-equivalent gate as every
+// other PATCH), then PUTs directly to R2 -- the file bytes never pass
+// through this Node server. Returns the short storage key to PATCH onto the
+// record. Throws on ANY failure (no network, 403 not authorized, 503 R2 not
+// configured yet) -- the caller decides whether that means "queue it for
+// later" (see queueOfflineEvidence) or "show a real error".
+async function uploadEvidenceNow({ tableKey, recordId, fieldKey }, blob, contentType) {
+    const res = await fetch(resolveApiUrl('/api/business/evidence-upload-url'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ tableKey, recordId, fieldKey, contentType }),
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err = new Error(body.message || 'evidence-upload-url failed');
+        err.status = res.status;
+        throw err;
+    }
+    const { uploadUrl, key } = await res.json();
+    const putRes = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+    if (!putRes.ok) throw new Error('R2 upload failed');
+    return key;
+}
+
+// The offline-fallback counterpart of uploadEvidenceNow above: stores the
+// already-compressed Blob itself in IndexedDB (structured clone handles
+// Blob natively, no base64 round-trip needed) instead of the request body,
+// so a signal-dead capture in the field still ends up in R2 once the queue
+// flushes -- never persisted as base64 in SQLite, online or offline.
+function queueOfflineEvidence({ tableKey, recordId, fieldKey, blob, contentType, patchUrl, description, recordKey }) {
+    return queueOfflineRequest({
+        description, recordKey,
+        evidence: { tableKey, recordId, fieldKey, blob, contentType, patchUrl: resolveApiUrl(patchUrl) },
+    });
 }
 
 function listOfflineQueue() {
@@ -75,11 +155,12 @@ function countOfflineQueueForRecord(recordKey) {
 // connectivity problem, and queueing it would just hide the real error
 // until it fails again on replay.
 async function offlineAwareFetch(url, options, description, recordKey, baseline) {
+    const resolvedUrl = resolveApiUrl(url);
     try {
-        const res = await fetch(url, options);
+        const res = await fetch(resolvedUrl, options);
         return { ok: res.ok, status: res.status, body: await res.json().catch(() => ({})), queued: false };
     } catch {
-        await queueOfflineRequest({ url, method: options.method || 'GET', body: options.body || null, description, recordKey, baseline });
+        await queueOfflineRequest({ url: resolvedUrl, method: options.method || 'GET', body: options.body || null, description, recordKey, baseline });
         document.dispatchEvent(new CustomEvent('sgn:offline-queue-changed'));
         return { ok: true, status: 0, body: {}, queued: true };
     }
@@ -115,9 +196,28 @@ async function flushOfflineQueue() {
         const items = await listOfflineQueue();
         for (const item of items) {
             try {
+                if (item.evidence) {
+                    // Two-phase: upload the already-compressed blob to R2
+                    // first, then PATCH the record with the key it gets
+                    // back. Re-running the upload on a retry (the PATCH
+                    // below failed last time but the upload itself already
+                    // succeeded) just overwrites the same deterministic R2
+                    // key with identical bytes -- harmless, not a duplicate.
+                    const { tableKey, recordId, fieldKey, blob, contentType, patchUrl } = item.evidence;
+                    const key = await uploadEvidenceNow({ tableKey, recordId, fieldKey }, blob, contentType);
+                    const patchRes = await fetch(resolveApiUrl(patchUrl), {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ [fieldKey]: key }),
+                    });
+                    if (!patchRes.ok) break; // real rejection or still flaky -- keep queue order, retry next time
+                    await removeOfflineRequest(item.id);
+                    continue;
+                }
                 const bodyObj = item.body ? JSON.parse(item.body) : {};
                 if (item.baseline) bodyObj.baseline = item.baseline;
-                const res = await fetch(item.url, {
+                const res = await fetch(resolveApiUrl(item.url), {
                     method: item.method,
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
@@ -148,7 +248,7 @@ async function flushOfflineQueue() {
                         // confirmed.
                         const overridePatch = {};
                         overrideKeys.forEach((k) => { overridePatch[k] = bodyObj[k]; });
-                        const overrideRes = await fetch(item.url, {
+                        const overrideRes = await fetch(resolveApiUrl(item.url), {
                             method: item.method,
                             headers: { 'Content-Type': 'application/json' },
                             credentials: 'include',
@@ -177,4 +277,7 @@ window.SgnOfflineSync = {
     listOfflineQueue,
     countOfflineQueueForRecord,
     flushOfflineQueue,
+    compressImageToBlob,
+    uploadEvidenceNow,
+    queueOfflineEvidence,
 };

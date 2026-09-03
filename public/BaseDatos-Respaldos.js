@@ -15,6 +15,24 @@ function textCell(value) {
     return td;
 }
 
+// Same 13 Control Interno columns every other table carries (see
+// getSystemColumnsForRecord in db.js) -- these are what let a future
+// Reportes screen relate a backed-up file to every other table by Empresa/
+// Área/Módulo/Pantalla/Centro Costos/Fecha, so they stay even on a
+// file-listing view that otherwise has nothing else in common with them.
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+function buildSystemCells(file) {
+    return SYSTEM_COLUMN_KEYS.map((key) => {
+        const td = textCell(file[key]);
+        td.classList.add('col-system');
+        return td;
+    });
+}
+
 function buildDownloadCell(file) {
     const td = document.createElement('td');
     td.className = 'admin-table-actions';
@@ -55,6 +73,7 @@ async function downloadFile(file, btn) {
 function buildRow(file) {
     const tr = document.createElement('tr');
     tr.append(
+        ...buildSystemCells(file),
         textCell(file.displayName),
         textCell(Dashboard.t(file.screenLabelKey)),
         textCell(Dashboard.t(file.typeLabelKey)),
@@ -72,7 +91,7 @@ function ensureEmptyState() {
     const tbody = getTbody();
     if (!tbody || tbody.querySelector('tr')) return;
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td class="data-table-empty-cell" colspan="5"><div class="data-table-empty-inner" data-i18n="main.emptyStateText">${Dashboard.t('main.emptyStateText')}</div></td>`;
+    tr.innerHTML = `<td class="data-table-empty-cell" colspan="18"><div class="data-table-empty-inner" data-i18n="main.emptyStateText">${Dashboard.t('main.emptyStateText')}</div></td>`;
     tbody.appendChild(tr);
 }
 
