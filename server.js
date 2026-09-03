@@ -294,6 +294,11 @@ app.use((req, res, next) => {
 // crossOriginResourcePolicy defaults to 'same-origin', which would also
 // block the native app's cross-origin fetches above at the response stage
 // even with the CORS headers in place.
+// connect-src defaults to 'self' only -- without R2's own origin listed
+// here, the browser blocks every evidence upload/download fetch to R2
+// before the request ever leaves the machine (no network attempt at all,
+// not even a failed one -- this is CSP, not the bucket's own CORS policy,
+// which is a separate, also-required setting made directly in R2).
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -301,6 +306,7 @@ app.use(helmet({
             'script-src': ["'self'", "'unsafe-inline'"],
             'style-src': ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://fonts.googleapis.com'],
             'font-src': ["'self'", 'https://unpkg.com', 'https://fonts.gstatic.com', 'data:'],
+            'connect-src': ["'self'", 'https://*.r2.cloudflarestorage.com'],
         },
     },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
