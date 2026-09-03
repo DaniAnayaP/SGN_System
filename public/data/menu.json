@@ -26,6 +26,11 @@
                   "submenu": [
                     { "id": "colBackupsAccess", "labelKey": "main.colBackupsAccess", "permissionOnly": true }
                   ]
+                },
+                { "id": "bd-cambios", "labelKey": "menu.databaseChanges", "permissionOnly": true,
+                  "submenu": [
+                    { "id": "colChangesAccess", "labelKey": "main.colChangesAccess", "permissionOnly": true }
+                  ]
                 }
               ]
             },

@@ -1901,6 +1901,49 @@ function getTableChanges(clientId, tableKey, recordId) {
         .all(clientId, tableKey);
 }
 
+// Same Área/Módulo/Pantalla literals each table's own server.js constants
+// already use for Control Interno (FUEL_RECORD_AREA_LABEL and friends) --
+// duplicated here (see EVIDENCE_SCREEN_SYSTEM_META's own comment on why)
+// so a change-log row carries the same 13 columns every other table
+// shows, letting it be related back to the rest by Empresa/Área/Módulo/
+// Pantalla/Fecha. Centro Costos is deliberately left blank: unlike every
+// other table here, data_table_changes never records which cost center
+// the changed record belonged to, so there's nothing real to put there.
+const TABLE_CHANGES_SYSTEM_META = {
+    'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
+    'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
+    'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
+    'tipos-unidad': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Tipos de Unidad' },
+    'nuestras-unidades': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Nuestras Unidades' },
+    'mi-recurso-humano': { area: 'Administración de Personal', modulo: 'Recursos Humanos', pantalla: 'Mi Recurso Humano' },
+    'transacciones-inteligentes': { area: 'Negocio Inteligente', modulo: 'Configuración', pantalla: 'Transacciones Inteligentes de Negocio' },
+    'reportes-programados': { area: 'Negocio Inteligente', modulo: 'Configuración', pantalla: 'Reportes Programados' },
+    'reglas-orden-llenado': { area: '', modulo: 'Configuración', pantalla: 'Reglas de Orden de Llenado' },
+    'roles': { area: '', modulo: 'Administración del Negocio', pantalla: 'Roles' },
+};
+
+// "Nuestros Cambios" — every row any pantalla has ever logged via
+// logTableChange, across every table_key at once, newest first. Nothing
+// new to wire per screen: the moment a table calls checkAndLogFieldChanges
+// (see server.js) its rows already land in data_table_changes and show up
+// here automatically, existing tables and any future one alike.
+function getAllTableChanges(clientId) {
+    const client = getClientById(clientId);
+    const companyName = (client && client.company_name) || '';
+    const rows = db
+        .prepare('SELECT * FROM data_table_changes WHERE client_id = ? ORDER BY changed_at DESC, id DESC')
+        .all(clientId);
+    return rows.map((row) => ({
+        ...row,
+        ...getSystemColumnsForRecord({
+            companyName,
+            ...(TABLE_CHANGES_SYSTEM_META[row.table_key] || { area: '', modulo: '', pantalla: row.table_key }),
+            centroCostos: '',
+            createdAt: row.changed_at,
+        }),
+    }));
+}
+
 function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy, requestedBy, authorizedBy }) {
     db.prepare(`
         INSERT INTO data_table_changes (client_id, table_key, record_id, record_label, action, field_key, old_value, new_value, changed_by, requested_by, authorized_by)
@@ -1957,6 +2000,7 @@ const TABLE_GRANT_PATHS = {
     'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
     'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
+    'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -4793,6 +4837,7 @@ module.exports = {
     getAnexoChanges,
     recordAnexoChange,
     getTableChanges,
+    getAllTableChanges,
     logTableChange,
     getColumnGrantLevel,
     canAuthorizeColumn,

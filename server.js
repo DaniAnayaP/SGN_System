@@ -139,6 +139,7 @@ const {
     activateHrWorkerUser,
     updateHrWorker,
     getTableChanges,
+    getAllTableChanges,
     logTableChange,
     getColumnGrantLevel,
     canAuthorizeColumn,
@@ -3563,6 +3564,23 @@ app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const recordId = req.query.recordId ? Number(req.query.recordId) : undefined;
     res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey, recordId) });
+});
+
+// --- Base de Datos de Nuestros Cambios ---------------------------------------
+// Every row any pantalla has ever logged via logTableChange, across every
+// table at once -- same list open at requireAuth as every other screen
+// under Base de Datos (see base-datos-respaldos' own comment: the real
+// gate is menu.json's own tree-based visibility filter, not a second check
+// here). WEB_SCREEN_CATALOG resolves table_key -> a real pantalla name for
+// display, same catalog Apps mirroring already uses, so a future table
+// only needs adding there to show up here too.
+app.get('/api/business/table-changes', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const changes = getAllTableChanges(req.user.clientId).map((c) => ({
+        ...c,
+        screenLabelKey: (WEB_SCREEN_CATALOG.find((s) => s.key === c.table_key) || {}).labelKey || c.table_key,
+    }));
+    res.json({ changes });
 });
 
 // --- Pending changes (Autorizar approval workflow) --------------------------

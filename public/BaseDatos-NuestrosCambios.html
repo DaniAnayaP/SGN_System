@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.opTransVolNuestrasUnidades">Our Units</title>
+    <title data-i18n="menu.databaseChanges">Database of Our Changes</title>
     <link rel="icon" href="icons/icon-512.png">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
 </head>
-<body data-active-page="cat-operaciones-transporte-vol-nuestras-unidades">
+<body data-active-page="btn-base-datos">
     <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
         <div class="header">
             <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="main.welcome">Welcome</p>
+                <p class="welcome-text" data-i18n="menu.databaseChanges">Database of Our Changes</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -359,50 +359,35 @@
         </div>
 
         <div class="page-content">
-            <div class="filter-bar" id="filter-bar">
-                <div class="filter-bar-panel">
-                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
-                    <div class="filter-bar-fields">
-                        <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterFleetSearchHint">Eco unit, plates, brand/model...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterFleetSearchHint" placeholder="Eco unit, plates, brand/model...">
-                        </div>
-                    </div>
-                    <div class="filter-bar-actions">
-                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="data-table-wrapper" data-table-id="nuestras-unidades">
+            <p class="admin-subtitle" data-i18n="admin.changesSubtitle">Every change logged across every screen, concentrated in one place.</p>
+            <div class="data-table-wrapper" data-table-id="base-datos-cambios">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group="menu.classControlInterno" class="col-system">Company</th>
-                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group="menu.classControlInterno" class="col-system">Area</th>
-                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group="menu.classControlInterno" class="col-system">Module</th>
-                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group="menu.classControlInterno" class="col-system">Screen</th>
-                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group="menu.classControlInterno" class="col-system">Cost Center</th>
-                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
-                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group="menu.classControlInterno" class="col-system">Day (dd)</th>
-                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group="menu.classControlInterno" class="col-system">Day (ddd)</th>
-                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group="menu.classControlInterno" class="col-system">Month (mm)</th>
-                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group="menu.classControlInterno" class="col-system">Month (mmm)</th>
-                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group="menu.classControlInterno" class="col-system">Year (yyyy)</th>
-                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
-                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
-                            <th data-i18n="main.colFleetEco" data-col="colFleetEco" data-group="menu.classNuestrasUnidades">Eco Unit</th>
-                            <th data-i18n="main.colFleetUnitType" data-col="colFleetUnitType" data-group="menu.classNuestrasUnidades">Unit Type</th>
-                            <th data-i18n="main.colFleetPlates" data-col="colFleetPlates" data-group="menu.classNuestrasUnidades">Plates</th>
-                            <th data-i18n="main.colFleetBrandModel" data-col="colFleetBrandModel" data-group="menu.classNuestrasUnidades">Brand / Model</th>
-                            <th data-i18n="main.colFleetYear" data-col="colFleetYear" data-group="menu.classNuestrasUnidades">Year</th>
-                            <th data-i18n="main.colFleetStatus" data-col="colFleetStatus" data-group="menu.classNuestrasUnidades">Status</th>
-                            <th data-i18n="main.colActions" data-col="actions">Actions</th>
+                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group-table="menu.classControlInterno" class="col-system">Company</th>
+                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group-table="menu.classControlInterno" class="col-system">Area</th>
+                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group-table="menu.classControlInterno" class="col-system">Module</th>
+                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group-table="menu.classControlInterno" class="col-system">Screen</th>
+                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group-table="menu.classControlInterno" class="col-system">Cost Center</th>
+                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group-table="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
+                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group-table="menu.classControlInterno" class="col-system">Day (dd)</th>
+                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group-table="menu.classControlInterno" class="col-system">Day (ddd)</th>
+                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group-table="menu.classControlInterno" class="col-system">Month (mm)</th>
+                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group-table="menu.classControlInterno" class="col-system">Month (mmm)</th>
+                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group-table="menu.classControlInterno" class="col-system">Year (yyyy)</th>
+                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group-table="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
+                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group-table="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
+                            <th data-i18n="main.colChangesScreen" data-col="colChangesScreen">Screen</th>
+                            <th data-i18n="main.changeHistoryRecord" data-col="colChangesRecord">Record</th>
+                            <th data-i18n="main.changeHistoryChange" data-col="colChangesChange">Change</th>
+                            <th data-i18n="main.changeHistoryUser" data-col="colChangesUser">User</th>
+                            <th data-i18n="main.changeHistoryRequestedBy" data-col="colChangesRequestedBy">Requested By</th>
+                            <th data-i18n="main.changeHistoryAuthorizedBy" data-col="colChangesAuthorizedBy">Authorized By</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="changes-table-body">
                         <tr>
-                            <td class="data-table-empty-cell" colspan="20">
+                            <td class="data-table-empty-cell" colspan="19">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -467,6 +452,6 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="OpTransVolNuestrasUnidades.js"></script>
+    <script src="BaseDatos-NuestrosCambios.js"></script>
 </body>
 </html>
