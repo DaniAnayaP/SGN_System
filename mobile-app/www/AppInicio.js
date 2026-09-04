@@ -96,6 +96,7 @@ const WEB_SCREEN_PAGES = {
     'transacciones-inteligentes': { href: 'NegocioInteligente-Transacciones.html', icon: 'bx-line-chart' },
     'reglas-orden-llenado': { href: 'Business-ReglasOrden.html', icon: 'bx-link' },
     'roles': { href: 'AppRoles.html', icon: 'bx-shield' },
+    'nuestros-articulos': { href: 'AppNuestrosArticulos.html', icon: 'bx-package' },
 };
 
 // menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
@@ -107,6 +108,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-transporte-vol-carga-combustible': 'carga-combustible',
     'cat-catalogos-transporte-vol-tipos-unidades': 'tipos-unidad',
     'cat-operaciones-transporte-vol-nuestras-unidades': 'nuestras-unidades',
+    'cat-operaciones-centro-dist-alta-articulos': 'nuestros-articulos',
 };
 
 // grantedAppScreens (from GET /api/business/app-screens) is the CLIENT's

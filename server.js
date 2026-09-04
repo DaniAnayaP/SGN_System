@@ -132,6 +132,12 @@ const {
     updateFleetUnit,
     deleteFleetUnit,
     suggestFuelTypeForEcoUnit,
+    listSkuItems,
+    getSkuItemById,
+    createSkuItem,
+    SKU_ITEM_PATCHABLE_FIELDS,
+    updateSkuItem,
+    deleteSkuItem,
     getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,
@@ -3374,6 +3380,99 @@ app.delete('/api/business/fleet-units/:id', requireAuth, (req, res) => {
         recordLabel: existing.eco_id || `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
     });
     deleteFleetUnit(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
+// --- Alta Nuestros Artículos (Sku) (Operaciones > Cadena de Suministro > ---
+// --- C. Distribución) -- Operación only: data only capturable with the ----
+// physical product in hand. Categorías/Estatus (Catálogos), Punto de
+// Reorden (Gestión) and Activar/Inactivar (Administración) are deliberately
+// NOT here -- confirmed with the client. SKU shown to the user is just
+// record_number zero-padded (see sku_items' own DDL comment in db.js) --
+// never its own column, so it can't drift from the counter that makes it.
+const SKU_ITEM_AREA_LABEL = 'C. Distribución';
+const SKU_ITEM_MODULE_LABEL = 'Cadena de Suministro';
+const SKU_ITEM_SCREEN_LABEL = 'Alta Nuestros Artículos';
+
+function mapSkuItemRecord(row, pendingByRecord, companyName) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        registroUnico: row.db_id,
+        sku: String(row.record_number).padStart(6, '0'),
+        upc: row.upc,
+        uniqueDescription: row.unique_description,
+        knownDescription: row.known_description,
+        customDescription: row.custom_description,
+        mainUom: row.main_uom,
+        articleType: row.article_type,
+        height: row.height,
+        length: row.length,
+        width: row.width,
+        articleWeight: row.article_weight,
+        packageWeight: row.package_weight,
+        evidenceFront: row.evidence_front,
+        evidenceBack: row.evidence_back,
+        evidenceLeft: row.evidence_left,
+        evidenceRight: row.evidence_right,
+        evidenceTop: row.evidence_top,
+        evidenceBottom: row.evidence_bottom,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: SKU_ITEM_AREA_LABEL,
+            modulo: SKU_ITEM_MODULE_LABEL,
+            pantalla: SKU_ITEM_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
+app.get('/api/business/sku-items', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'nuestros-articulos');
+    const client = getClientById(req.user.clientId);
+    res.json({ skuItems: listSkuItems(req.user.clientId, req.user.isTestAccount).map((r) => mapSkuItemRecord(r, pendingByRecord, client?.company_name)) });
+});
+
+app.post('/api/business/sku-items', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const skuItem = createSkuItem({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: skuItem.id,
+        recordLabel: `#${skuItem.id}`, action: 'create', changedBy: changedByLabel(req),
+    });
+    const client = getClientById(req.user.clientId);
+    res.status(201).json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
+});
+
+app.patch('/api/business/sku-items/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
+    const { baseline, overrideConflicts, ...patch } = req.body || {};
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, SKU_ITEM_PATCHABLE_FIELDS, 'nuestros-articulos', `#${existing.id}`, {}, { baseline, overrideConflicts });
+    const skuItem = updateSkuItem(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
+    const client = getClientById(req.user.clientId);
+    res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
+});
+
+app.delete('/api/business/sku-items/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'nuestros-articulos', 'colArticuloDeleteAuth')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar artículos.' });
+        }
+    }
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: existing.id,
+        recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
+    });
+    deleteSkuItem(req.params.id, req.user.clientId);
     res.status(204).end();
 });
 

@@ -34,6 +34,7 @@ function normalizeForFilename(text) {
 const SCREEN_LABELS = {
     'registro-combustible': 'RegistroCombustible',
     'carga-combustible': 'CargaCombustible',
+    'nuestros-articulos': 'AltaNuestrosArticulos',
 };
 const FIELD_LABELS = {
     ticketEvidence: 'TicketEvidencia',
@@ -42,6 +43,12 @@ const FIELD_LABELS = {
     tripBeforeEvidence: 'TripAntesEvidencia',
     tripAfterEvidence: 'TripDespuesEvidencia',
     totalCostEvidence: 'CostoTotalEvidencia',
+    evidenceFront: 'Enfrente',
+    evidenceBack: 'Atras',
+    evidenceLeft: 'Izquierda',
+    evidenceRight: 'Derecha',
+    evidenceTop: 'Arriba',
+    evidenceBottom: 'Abajo',
 };
 
 // evidence/{clientId}/{tableKey}/{recordId}-{fieldKey}.{ext} -- deterministic

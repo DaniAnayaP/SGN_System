@@ -1193,6 +1193,42 @@ db.exec(`
         uploaded_by_source  TEXT NOT NULL,
         created_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Alta Nuestros Artículos (Sku) — Cadena de Suministro > C. Distribución
+    -- > Operaciones. Only Operación fields live here (data only capturable
+    -- with the physical product in hand) -- Categorías/Estatus (Catálogos),
+    -- Punto de Reorden (Gestión) and Activar/Inactivar (Administración) are
+    -- deliberately NOT columns on this table, confirmed with the client.
+    -- db_id/record_number follow the exact same convention as fuel_records/
+    -- fuel_loading_records/hr_workers ("Registro Único" = db_id via
+    -- generateBigDateId(); the 6-digit SKU shown to the user is just
+    -- record_number, zero-padded on read -- never its own stored column, so
+    -- it can never drift out of sync with the counter that produces it).
+    CREATE TABLE IF NOT EXISTS sku_items (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id           INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id               TEXT NOT NULL,
+        record_number       INTEGER NOT NULL,
+        upc                 TEXT NOT NULL DEFAULT '',
+        unique_description  TEXT NOT NULL DEFAULT '',
+        known_description   TEXT NOT NULL DEFAULT '',
+        custom_description  TEXT NOT NULL DEFAULT '',
+        main_uom            TEXT NOT NULL DEFAULT '',
+        article_type        TEXT NOT NULL DEFAULT '',
+        height              REAL NOT NULL DEFAULT 0,
+        length              REAL NOT NULL DEFAULT 0,
+        width               REAL NOT NULL DEFAULT 0,
+        article_weight      REAL NOT NULL DEFAULT 0,
+        package_weight      REAL NOT NULL DEFAULT 0,
+        evidence_front      TEXT NOT NULL DEFAULT '',
+        evidence_back       TEXT NOT NULL DEFAULT '',
+        evidence_left       TEXT NOT NULL DEFAULT '',
+        evidence_right      TEXT NOT NULL DEFAULT '',
+        evidence_top        TEXT NOT NULL DEFAULT '',
+        evidence_bottom     TEXT NOT NULL DEFAULT '',
+        is_test_data        INTEGER NOT NULL DEFAULT 0,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 `);
 
 // profiles.client_id was added after profiles already shipped once — add it
@@ -2028,6 +2064,7 @@ const TABLE_GRANT_PATHS = {
     'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
+    'nuestros-articulos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-articulos' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -2899,7 +2936,8 @@ function getFuelLoadingRecordById(id, clientId, forTestAccount = false) {
 // concept invented for evidence specifically.
 const EVIDENCE_FIELD_SOURCES = [
     {
-        tableKey: 'registro-combustible', table: 'fuel_records',
+        tableKey: 'registro-combustible', table: 'fuel_records', screenLabelKey: 'menu.opTransVolCombustible',
+        dateColumn: 'record_date', costCenterColumn: 'centro_costos',
         fields: [
             { fieldKey: 'ticketEvidence', column: 'ticket_evidence', permColKey: 'colFuelTicketEvidence' },
             { fieldKey: 'tripKmBeforeEvidence', column: 'trip_km_before_evidence', permColKey: 'colFuelTripKmBeforeEvidence' },
@@ -2907,11 +2945,27 @@ const EVIDENCE_FIELD_SOURCES = [
         ],
     },
     {
-        tableKey: 'carga-combustible', table: 'fuel_loading_records',
+        tableKey: 'carga-combustible', table: 'fuel_loading_records', screenLabelKey: 'menu.opTransVolCargaCombustible',
+        dateColumn: 'record_date', costCenterColumn: 'centro_costos',
         fields: [
             { fieldKey: 'tripBeforeEvidence', column: 'trip_before_evidence', permColKey: 'colCargaTripAntesEvidencia' },
             { fieldKey: 'tripAfterEvidence', column: 'trip_after_evidence', permColKey: 'colCargaTripDespuesEvidencia' },
             { fieldKey: 'totalCostEvidence', column: 'total_cost_evidence', permColKey: 'colCargaCostoTotalEvidencia' },
+        ],
+    },
+    {
+        // Alta Nuestros Artículos has no record_date/centro_costos of its
+        // own (it's a physical-product registration, not a cost-tracked
+        // operational log) -- omitting dateColumn/costCenterColumn falls
+        // back to created_at / '' in listClientEvidenceFiles below.
+        tableKey: 'nuestros-articulos', table: 'sku_items', screenLabelKey: 'menu.opCentroDistAltaArticulos',
+        fields: [
+            { fieldKey: 'evidenceFront', column: 'evidence_front', permColKey: 'colArticuloEvidenceFront' },
+            { fieldKey: 'evidenceBack', column: 'evidence_back', permColKey: 'colArticuloEvidenceBack' },
+            { fieldKey: 'evidenceLeft', column: 'evidence_left', permColKey: 'colArticuloEvidenceLeft' },
+            { fieldKey: 'evidenceRight', column: 'evidence_right', permColKey: 'colArticuloEvidenceRight' },
+            { fieldKey: 'evidenceTop', column: 'evidence_top', permColKey: 'colArticuloEvidenceTop' },
+            { fieldKey: 'evidenceBottom', column: 'evidence_bottom', permColKey: 'colArticuloEvidenceBottom' },
         ],
     },
 ];
@@ -2930,6 +2984,7 @@ const EVIDENCE_FIELD_SOURCES = [
 const EVIDENCE_SCREEN_SYSTEM_META = {
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
+    'nuestros-articulos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Nuestros Artículos' },
 };
 
 function listClientEvidenceFiles(clientId) {
@@ -2937,9 +2992,11 @@ function listClientEvidenceFiles(clientId) {
     const companyName = (client && client.company_name) || '';
     const companyNickname = (client && (client.company_nickname || client.company_name)) || '';
     const files = [];
-    EVIDENCE_FIELD_SOURCES.forEach(({ tableKey, table, fields }) => {
+    EVIDENCE_FIELD_SOURCES.forEach(({ tableKey, table, fields, screenLabelKey, dateColumn, costCenterColumn }) => {
         const cols = fields.map((f) => f.column).join(', ');
-        const rows = db.prepare(`SELECT id, record_number, record_date, centro_costos, created_at, ${cols} FROM ${table} WHERE client_id = ? AND is_test_data = 0`).all(clientId);
+        const dateExpr = dateColumn ? `${dateColumn} AS record_date` : `created_at AS record_date`;
+        const ccExpr = costCenterColumn ? `${costCenterColumn} AS centro_costos` : `'' AS centro_costos`;
+        const rows = db.prepare(`SELECT id, record_number, ${dateExpr}, ${ccExpr}, created_at, ${cols} FROM ${table} WHERE client_id = ? AND is_test_data = 0`).all(clientId);
         rows.forEach((row) => {
             fields.forEach(({ fieldKey, column, permColKey }) => {
                 const value = row[column];
@@ -2950,7 +3007,7 @@ function listClientEvidenceFiles(clientId) {
                 files.push({
                     tableKey, recordId: row.id, fieldKey,
                     displayName: buildEvidenceDisplayName({ companyNickname, tableKey, fieldKey, recordDate: row.record_date, folio, ext }),
-                    screenLabelKey: tableKey === 'registro-combustible' ? 'menu.opTransVolCombustible' : 'menu.opTransVolCargaCombustible',
+                    screenLabelKey,
                     typeLabelKey: `main.${permColKey}`,
                     recordDate: row.record_date,
                     migrated,
@@ -3217,6 +3274,61 @@ function updateFleetUnit(id, clientId, patch, forTestAccount = false) {
 
 function deleteFleetUnit(id, clientId) {
     db.prepare('DELETE FROM fleet_units WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// --- Alta Nuestros Artículos (Sku) — Cadena de Suministro > C. Distribución -
+// --- > Operaciones. Same "create blank, fill in one field at a time" shape
+// as fleet_units above; db_id/record_number follow fuel_records' own
+// convention (see the table's own DDL comment for why SKU has no column).
+function listSkuItems(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM sku_items WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC').all(clientId, forTestAccount ? 1 : 0);
+}
+
+function getSkuItemById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM sku_items WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+
+function createSkuItem({ clientId, isTestData = false }) {
+    const recordNumber = db
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_items WHERE client_id = ? AND is_test_data = ?')
+        .get(clientId, isTestData ? 1 : 0).n;
+    const result = db
+        .prepare('INSERT INTO sku_items (client_id, db_id, record_number, is_test_data) VALUES (@clientId, @dbId, @recordNumber, @isTestData)')
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0 });
+    return getSkuItemById(result.lastInsertRowid, clientId, isTestData);
+}
+
+const SKU_ITEM_PATCHABLE_FIELDS = {
+    upc: { column: 'upc', fieldKey: 'main.colArticuloUpc' },
+    uniqueDescription: { column: 'unique_description', fieldKey: 'main.colArticuloDescUnica' },
+    knownDescription: { column: 'known_description', fieldKey: 'main.colArticuloDescConocida' },
+    customDescription: { column: 'custom_description', fieldKey: 'main.colArticuloDescPersonalizada' },
+    mainUom: { column: 'main_uom', fieldKey: 'main.colArticuloUdm' },
+    articleType: { column: 'article_type', fieldKey: 'main.colArticuloTipo' },
+    height: { column: 'height', fieldKey: 'main.colArticuloAlto' },
+    length: { column: 'length', fieldKey: 'main.colArticuloLargo' },
+    width: { column: 'width', fieldKey: 'main.colArticuloAncho' },
+    articleWeight: { column: 'article_weight', fieldKey: 'main.colArticuloPesoArticulo' },
+    packageWeight: { column: 'package_weight', fieldKey: 'main.colArticuloPesoEmpaque' },
+};
+
+function updateSkuItem(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(SKU_ITEM_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE sku_items SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getSkuItemById(id, clientId, forTestAccount);
+}
+
+function deleteSkuItem(id, clientId) {
+    db.prepare('DELETE FROM sku_items WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
 // Carga Combustible's own suggestion hook: given the Económico the user just
@@ -4027,6 +4139,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'reportes-programados', labelKey: 'menu.scheduledReportsScreen' },
     { key: 'reglas-orden-llenado', labelKey: 'menu.fieldRulesGroup' },
     { key: 'roles', labelKey: 'menu.roles' },
+    { key: 'nuestros-articulos', labelKey: 'menu.opCentroDistAltaArticulos' },
 ];
 
 function deserializeSaasApp(row) {
@@ -4944,6 +5057,12 @@ module.exports = {
     getSupportMaterialById,
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
+    listSkuItems,
+    getSkuItemById,
+    createSkuItem,
+    updateSkuItem,
+    deleteSkuItem,
+    SKU_ITEM_PATCHABLE_FIELDS,
     createPendingChange,
     getPendingChangeById,
     hasPendingChangeForField,

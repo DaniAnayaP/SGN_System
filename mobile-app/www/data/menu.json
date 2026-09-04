@@ -457,6 +457,49 @@
         { "id": "cat-catalogos-centro-dist-codigos", "labelKey": "menu.catCentroDistCodigos", "icon": "bx-window", "href": "#" },
         { "id": "cat-catalogos-centro-dist-categorias", "labelKey": "menu.catCentroDistCategorias", "icon": "bx-window", "href": "#" },
         { "id": "cat-catalogos-centro-dist-udm", "labelKey": "menu.catCentroDistUdm", "icon": "bx-window", "href": "#" }
+      ],
+      "cat-operaciones": [
+        {
+          "id": "cat-operaciones-centro-dist-alta-articulos", "labelKey": "menu.opCentroDistAltaArticulos", "icon": "bx-package", "href": "OpCentroDistAltaArticulos.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colArticuloUpc", "labelKey": "main.colArticuloUpc", "permissionOnly": true },
+            { "id": "colArticuloDescUnica", "labelKey": "main.colArticuloDescUnica", "permissionOnly": true },
+            { "id": "colArticuloDescConocida", "labelKey": "main.colArticuloDescConocida", "permissionOnly": true },
+            { "id": "colArticuloDescPersonalizada", "labelKey": "main.colArticuloDescPersonalizada", "permissionOnly": true },
+            { "id": "colArticuloUdm", "labelKey": "main.colArticuloUdm", "permissionOnly": true },
+            { "id": "colArticuloTipo", "labelKey": "main.colArticuloTipo", "permissionOnly": true },
+            { "id": "colArticuloAlto", "labelKey": "main.colArticuloAlto", "permissionOnly": true },
+            { "id": "colArticuloLargo", "labelKey": "main.colArticuloLargo", "permissionOnly": true },
+            { "id": "colArticuloAncho", "labelKey": "main.colArticuloAncho", "permissionOnly": true },
+            { "id": "colArticuloPesoArticulo", "labelKey": "main.colArticuloPesoArticulo", "permissionOnly": true },
+            { "id": "colArticuloPesoEmpaque", "labelKey": "main.colArticuloPesoEmpaque", "permissionOnly": true },
+            { "id": "colArticuloEvidenceFront", "labelKey": "main.colArticuloEvidenceFront", "permissionOnly": true },
+            { "id": "colArticuloEvidenceBack", "labelKey": "main.colArticuloEvidenceBack", "permissionOnly": true },
+            { "id": "colArticuloEvidenceLeft", "labelKey": "main.colArticuloEvidenceLeft", "permissionOnly": true },
+            { "id": "colArticuloEvidenceRight", "labelKey": "main.colArticuloEvidenceRight", "permissionOnly": true },
+            { "id": "colArticuloEvidenceTop", "labelKey": "main.colArticuloEvidenceTop", "permissionOnly": true },
+            { "id": "colArticuloEvidenceBottom", "labelKey": "main.colArticuloEvidenceBottom", "permissionOnly": true },
+            { "id": "colArticuloDeleteAuth", "labelKey": "main.colArticuloDeleteAuth", "permissionOnly": true }
+          ]
+        }
       ]
     },
     "human-resources/hr-area-personnel-admin": {
