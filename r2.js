@@ -34,6 +34,13 @@ function getClient() {
         // ever runs. Not needed here anyway (R2 does its own integrity
         // check on write); this is the documented fix.
         requestChecksumCalculation: 'WHEN_REQUIRED',
+        // Same issue, other direction: GetObjectCommand's presigned URL
+        // gets its own default checksum param (x-amz-checksum-mode=ENABLED)
+        // that R2 also 503s on -- caught live testing Material Apoyo's
+        // download button (the exact request failed with a real signed
+        // R2 GET returning 503). Nuestros Respaldos' download shares this
+        // same client, so it was silently broken too until this fix.
+        responseChecksumValidation: 'WHEN_REQUIRED',
     });
     return client;
 }
