@@ -1,6 +1,8 @@
 // ---------------------------------------------------------------------------
 // Shared controller for the category placeholder screens (Cat 1/2, Ope 1/2,
-// Adm 1/2, Gest 1/2, Report 1/2, M. Apoyo 1/2) — all shell logic (sidebar,
+// Adm 1/2, Gest 1/2, Report 1/2) — Material Apoyo's 3 items have their own
+// real screens now (see MaterialApoyo-*.js), not this generic placeholder
+// — all shell logic (sidebar,
 // i18n, settings, logout, auth guard, filter bar) lives in Dashboard.js,
 // loaded before this file. Each page just needs its own activePage id, read
 // from <body data-active-page="...">.

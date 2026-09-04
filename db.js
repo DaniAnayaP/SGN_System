@@ -1166,6 +1166,33 @@ db.exec(`
         item_id     TEXT,
         submenu_id  TEXT
     );
+
+    -- Material Apoyo (Funcionalidad Pantallas / Flujo Sistema / Nuestros
+    -- Procesos) -- a document library per client, scoped by Departamento/
+    -- Área/categoría, uploaded by either the client or GEIPSA. Unlike
+    -- fuel_records' evidence columns, there's no pre-existing "record" a
+    -- file belongs to -- each row IS the record. department_label/
+    -- area_label are denormalized from the client's own already-resolved
+    -- i18n labels (see MaterialApoyo-*.js) instead of duplicating the
+    -- full department/area taxonomy here just to render the Control
+    -- Interno "Área"/"Módulo" columns.
+    CREATE TABLE IF NOT EXISTS support_materials (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id           INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        department          TEXT NOT NULL,
+        area                TEXT NOT NULL,
+        department_label    TEXT NOT NULL,
+        area_label          TEXT NOT NULL,
+        category            TEXT NOT NULL,
+        title               TEXT NOT NULL DEFAULT '',
+        original_filename   TEXT NOT NULL,
+        storage_key         TEXT NOT NULL,
+        content_type        TEXT NOT NULL DEFAULT '',
+        file_size           INTEGER NOT NULL DEFAULT 0,
+        uploaded_by_name    TEXT NOT NULL DEFAULT '',
+        uploaded_by_source  TEXT NOT NULL,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 `);
 
 // profiles.client_id was added after profiles already shipped once — add it
@@ -2024,8 +2051,19 @@ function columnSubmenuBase(path, colKey) {
 // PermissionTree.js enforces that in its own checkbox-group handler — so
 // 'editar' takes priority here only as defensive ordering in case a grant
 // row was ever written any other way (direct API, old data, etc.).
-function getColumnGrantLevel(grants, tableKey, colKey) {
-    const path = TABLE_GRANT_PATHS[tableKey];
+//
+// pathOverride (optional): bypasses TABLE_GRANT_PATHS[tableKey] entirely —
+// needed for a pantalla that's instantiated once per Departamento/Área via
+// areaCategories (e.g. Material Apoyo) instead of living at one fixed spot
+// in the tree like every table above. TABLE_GRANT_PATHS can only ever hold
+// ONE {sectionId, itemId} pair per tableKey, so a template screen's caller
+// builds its own {sectionId: department, itemId: area, submenuPrefix} per
+// request instead — otherwise a grant checked in one Departamento/Área
+// would incorrectly also pass in every other one, even though
+// PermissionTree.js already renders each combination as its own separate
+// checkbox.
+function getColumnGrantLevel(grants, tableKey, colKey, pathOverride) {
+    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
     if (!path) return 'solo-ver';
     const base = columnSubmenuBase(path, colKey);
     const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
@@ -2034,8 +2072,8 @@ function getColumnGrantLevel(grants, tableKey, colKey) {
     return 'solo-ver';
 }
 
-function canAuthorizeColumn(grants, tableKey, colKey) {
-    const path = TABLE_GRANT_PATHS[tableKey];
+function canAuthorizeColumn(grants, tableKey, colKey, pathOverride) {
+    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
     if (!path) return false;
     const base = columnSubmenuBase(path, colKey);
     return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/autorizar`);
@@ -2047,8 +2085,8 @@ function canAuthorizeColumn(grants, tableKey, colKey) {
 // col*DeleteAuth convention: one dedicated permission-only column per
 // table that has nothing to do with a real data field, just carries this
 // (and the Autorizar) grant for the whole screen's delete action.
-function canDeleteColumn(grants, tableKey, colKey) {
-    const path = TABLE_GRANT_PATHS[tableKey];
+function canDeleteColumn(grants, tableKey, colKey, pathOverride) {
+    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
     if (!path) return false;
     const base = columnSubmenuBase(path, colKey);
     return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
@@ -2960,6 +2998,60 @@ function setEvidenceValue(clientId, tableKey, recordId, fieldKey, newValue) {
     const field = source && source.fields.find((f) => f.fieldKey === fieldKey);
     if (!field) throw new Error(`Unknown evidence field: ${tableKey}/${fieldKey}`);
     db.prepare(`UPDATE ${source.table} SET ${field.column} = ? WHERE id = ? AND client_id = ?`).run(newValue, recordId, clientId);
+}
+
+// --- Material Apoyo (Funcionalidad Pantallas / Flujo Sistema / Nuestros ---
+// --- Procesos) — document library per Departamento/Área/categoría --------
+// Fixed source of truth for the 3 valid categories, so both the client- and
+// SaaS-side routes validate against the same list (see server.js).
+const SUPPORT_MATERIAL_CATEGORIES = ['funcionalidad-pantallas', 'flujo-sistema', 'nuestros-procesos'];
+const SUPPORT_MATERIAL_CATEGORY_LABELS = {
+    'funcionalidad-pantallas': 'Funcionalidad Pantallas',
+    'flujo-sistema': 'Flujo Sistema',
+    'nuestros-procesos': 'Nuestros Procesos',
+};
+
+function listSupportMaterials(clientId, department, area, category) {
+    const client = getClientById(clientId);
+    const companyName = (client && client.company_name) || '';
+    const rows = db.prepare(
+        'SELECT * FROM support_materials WHERE client_id = ? AND department = ? AND area = ? AND category = ? ORDER BY created_at DESC'
+    ).all(clientId, department, area, category);
+    return rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        originalFilename: row.original_filename,
+        contentType: row.content_type,
+        fileSize: row.file_size,
+        uploadedByName: row.uploaded_by_name,
+        uploadedBySource: row.uploaded_by_source,
+        createdAt: row.created_at,
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: row.department_label,
+            modulo: row.area_label,
+            pantalla: SUPPORT_MATERIAL_CATEGORY_LABELS[row.category] || row.category,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    }));
+}
+
+function createSupportMaterial({ clientId, department, area, departmentLabel, areaLabel, category, title, originalFilename, storageKey, contentType, fileSize, uploadedByName, uploadedBySource }) {
+    const info = db.prepare(`
+        INSERT INTO support_materials
+            (client_id, department, area, department_label, area_label, category, title, original_filename, storage_key, content_type, file_size, uploaded_by_name, uploaded_by_source)
+        VALUES (@clientId, @department, @area, @departmentLabel, @areaLabel, @category, @title, @originalFilename, @storageKey, @contentType, @fileSize, @uploadedByName, @uploadedBySource)
+    `).run({ clientId, department, area, departmentLabel, areaLabel, category, title: title || '', originalFilename, storageKey, contentType: contentType || '', fileSize: fileSize || 0, uploadedByName: uploadedByName || '', uploadedBySource });
+    return listSupportMaterials(clientId, department, area, category).find((m) => m.id === info.lastInsertRowid);
+}
+
+function getSupportMaterialById(id, clientId) {
+    return db.prepare('SELECT * FROM support_materials WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function deleteSupportMaterial(id, clientId) {
+    return db.prepare('DELETE FROM support_materials WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
 }
 
 // Created blank — every field (including the identifying ones) is filled in
@@ -4847,6 +4939,11 @@ module.exports = {
     setEvidenceValue,
     getEvidencePermColKey,
     EVIDENCE_FIELD_SOURCES,
+    listSupportMaterials,
+    createSupportMaterial,
+    getSupportMaterialById,
+    deleteSupportMaterial,
+    SUPPORT_MATERIAL_CATEGORIES,
     createPendingChange,
     getPendingChangeById,
     hasPendingChangeForField,

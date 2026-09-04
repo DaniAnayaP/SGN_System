@@ -12,7 +12,7 @@
 // even before those variables are set — only evidence upload/download fail,
 // with a clear error, until Paso 0 is done.
 // ---------------------------------------------------------------------------
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const SIGNED_URL_TTL_SECONDS = 300;
@@ -71,4 +71,12 @@ async function putObject(key, body, contentType) {
     await getClient().send(command);
 }
 
-module.exports = { getUploadUrl, getDownloadUrl, putObject };
+// Used by Material Apoyo's Eliminar action — best-effort by design (the
+// caller deletes the DB row regardless of whether the R2 object was still
+// there to remove).
+async function deleteObject(key) {
+    const command = new DeleteObjectCommand({ Bucket: bucketName(), Key: key });
+    await getClient().send(command);
+}
+
+module.exports = { getUploadUrl, getDownloadUrl, putObject, deleteObject };

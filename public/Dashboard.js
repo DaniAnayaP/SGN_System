@@ -635,6 +635,7 @@ function buildSidebarData(data, role, activePage) {
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', saasItemId: 'saas-module-costs' },
         { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html' },
         { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', saasItemId: 'saas-backups' },
+        { id: 'admin-material-apoyo', labelKey: 'menu.ourSupportMaterial', href: 'Admin-MaterialApoyo.html', saasItemId: 'saas-material-apoyo' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const adminItem = { id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings', submenu: adminSubmenu };
     if (role !== 'admin') return data;
@@ -6074,6 +6075,13 @@ window.Dashboard = {
     attachInlineEdit,
     uploadEvidenceFile,
     getEvidenceDownloadUrl,
+    compressImageToBlob,
+    // Raw (unfiltered) department/área catalog -- Admin-MaterialApoyo.js
+    // uses these directly since a GEIPSA/SaaS account has no client grants
+    // to filter by (unlike availableAreasForDepartment above, which is
+    // client-side-user-scoped on purpose).
+    DEPARTMENTS,
+    AREAS_BY_DEPARTMENT,
     hasColumnEditGrant,
     hasColumnDeleteGrant,
     canEditField,
@@ -6105,6 +6113,21 @@ window.Dashboard = {
     // call sites (loadPersonalizedReports, displayName, updateDatabaseMenuLabel)
     // -- exposed here so a new page doesn't need its own copy of it.
     get companyNickname() { return clientBranding?.companyNickname || clientBranding?.companyName || ''; },
+    // Raw keys + already-translated labels for whichever Departamento/Área
+    // the top-bar pickers currently have selected -- same lookup
+    // findAreaCategoryTrail already does for breadcrumbs, exposed here so a
+    // areaCategories-template screen (e.g. Material Apoyo) can scope its own
+    // fetches without duplicating the DEPARTMENTS/AREAS_BY_DEPARTMENT lookup.
+    currentDepartmentArea() {
+        const deptDef = DEPARTMENTS.find((d) => d.key === selectedDepartment);
+        const areaDef = availableAreasForDepartment(selectedDepartment).find((a) => a.key === selectedArea);
+        return {
+            department: selectedDepartment || '',
+            area: selectedArea || '',
+            departmentLabel: deptDef ? t(deptDef.labelKey) : '',
+            areaLabel: areaDef ? t(areaDef.labelKey, areaDef.labelParams || {}) : '',
+        };
+    },
     // For pages whose table columns aren't known until an async fetch
     // resolves (e.g. a report's results, one column per report column) --
     // the automatic ResizeObserver-based lazy-init (renderDataTableColumnControls)

@@ -106,6 +106,18 @@ const SAAS_PERMISSION_CATALOG = [
             { subItemId: 'descargar', labelKey: 'admin.saasActionDownload' },
         ],
     },
+    {
+        // Ver = puede ver el listado de material de apoyo de cualquier
+        // cliente y descargarlo (leer un manual no es sensible); Subir es
+        // su propio leaf, ya que ese sí modifica el material real que ve
+        // el cliente -- misma separación que saas-backups arriba usa entre
+        // Ver y Descargar.
+        itemId: 'saas-material-apoyo', labelKey: 'menu.ourSupportMaterial',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'subir', labelKey: 'admin.saasActionUpload' },
+        ],
+    },
 ];
 
 function showError(el, message) {

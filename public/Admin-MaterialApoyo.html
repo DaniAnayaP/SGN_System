@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="menu.ourSupportMaterial">Our Support Material</title>
+    <link rel="icon" href="icons/icon-512.png">
+    <link rel="stylesheet" href="Inicio-en.css">
+    <link rel="stylesheet" href="Admin.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+</head>
+<body>
+    <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
+        <div class="header">
+            <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
+                 aria-label="Collapse sidebar" aria-expanded="true">
+                <i class="bx bx-chevron-left" aria-hidden="true"></i>
+            </div>
+            <div class="brand">
+                <img class="brand-light" src="Imagenes/LogoSGN_F_Blanco.jfif" alt="SGN logo">
+                <img class="brand-dark" src="Imagenes/LogoSGN.jfif" alt="SGN logo">
+                <span data-i18n="sidebar.brand">SGN</span>
+            </div>
+        </div>
+
+        <div class="menu-container">
+            <div class="search">
+                <i class="bx bx-search" aria-hidden="true"></i>
+                <label for="sidebar-search" class="sr-only" data-i18n="sidebar.searchPlaceholder">Search</label>
+                <input id="sidebar-search" type="search" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search" autocomplete="off">
+            </div>
+
+            <div id="menu-mount" aria-live="polite">
+                <!-- Sidebar sections are rendered here at runtime from data/menu.json -->
+            </div>
+        </div>
+
+        <div class="footer">
+            <ul class="menu" id="footer-menu-mount">
+                <!-- Rendered at runtime from data/menu.json -->
+            </ul>
+            <div class="user">
+                <a href="Login.html" class="menu-link" id="logout-link" data-i18n-aria="sidebar.logout" aria-label="Log out">
+                    <i class="bx bx-log-out-circle" aria-hidden="true"></i>
+                    <span data-i18n="sidebar.logout">Log out</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <div class="top-bar barra-arriba">
+            <div class="top-bar-title">
+                <div class="dept-picker" id="dept-picker">
+                    <button type="button" class="dept-picker-btn" id="dept-picker-btn"
+                            aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-buildings" aria-hidden="true"></i>
+                        <span id="dept-picker-label" data-i18n="sidebar.department">Department</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <ul class="dept-picker-dropdown" id="dept-picker-dropdown" role="menu">
+                        <!-- Department options are rendered at runtime -->
+                    </ul>
+                </div>
+
+                <div class="dept-picker" id="area-picker">
+                    <button type="button" class="dept-picker-btn" id="area-picker-btn"
+                            aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-collection" aria-hidden="true"></i>
+                        <span id="area-picker-label" data-i18n="sidebar.area">Area</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <ul class="dept-picker-dropdown" id="area-picker-dropdown" role="menu">
+                        <!-- Area options are rendered at runtime -->
+                    </ul>
+                </div>
+
+                <div class="cc-picker" id="cc-picker">
+                    <button type="button" class="cc-picker-btn" id="cc-picker-btn"
+                            aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
+                        <span id="cc-picker-label" data-i18n="sidebar.costCenters">Cost Centers</span>
+                        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <ul class="cc-picker-dropdown" id="cc-picker-dropdown" role="menu">
+                        <!-- Cost center options are rendered at runtime -->
+                    </ul>
+                </div>
+                <p class="welcome-text" data-i18n="menu.ourSupportMaterial">Our Support Material</p>
+            </div>
+            <div class="top-bar-actions" id="top-bar-actions">
+                <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
+                        aria-label="More" aria-haspopup="true" aria-expanded="false">
+                    <i class="bx bx-dots-vertical-rounded" aria-hidden="true"></i>
+                </button>
+                <div class="sidebars-btn" id="sidebars-btn" role="button" tabindex="0"
+                     aria-label="Toggle sidebar" aria-expanded="false">
+                    <i class="bx bx-menu" aria-hidden="true"></i>
+                    <i class="bx bx-x" aria-hidden="true"></i>
+                </div>
+                <div class="top-bar-actions-list" id="top-bar-actions-list">
+                    <button type="button" data-i18n-aria="main.messages" aria-label="Messages" id="messages-btn">
+                        <i class="bx bx-message" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" data-i18n-aria="main.notifications" aria-label="Notifications" id="notifications-btn">
+                        <i class="bx bx-bell" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" data-i18n-aria="main.bookmarks" aria-label="Bookmarks" id="bookmarks-btn">
+                        <i class="bx bx-bookmarks" aria-hidden="true"></i>
+                    </button>
+                    <div class="settings-menu" id="settings-menu">
+                        <button type="button" data-i18n-aria="main.settings" aria-label="Settings" id="settings-btn"
+                                aria-haspopup="true" aria-expanded="false">
+                            <i class="bx bx-cog" aria-hidden="true"></i>
+                        </button>
+                        <ul class="settings-dropdown" id="settings-dropdown" role="menu">
+                            <li role="none" class="settings-dropdown-group" id="language-group">
+                                <button type="button" class="settings-dropdown-toggle" id="language-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-globe" aria-hidden="true"></i>
+                                    <span data-i18n="main.language">Language</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="language-submenu" role="menu">
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="lang-option active" data-lang="en">
+                                            <i class="bx bx-globe" aria-hidden="true"></i>
+                                            <span data-i18n="main.languageEnglish">English</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="lang-option" data-lang="es">
+                                            <i class="bx bx-globe" aria-hidden="true"></i>
+                                            <span data-i18n="main.languageSpanish">Spanish</span>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li role="none" class="settings-dropdown-group" id="style-group">
+                                <button type="button" class="settings-dropdown-toggle" id="style-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-palette" aria-hidden="true"></i>
+                                    <span data-i18n="main.style">Style</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="style-submenu" role="menu">
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="style-option active" data-style="light">
+                                            <i class="bx bx-sun" aria-hidden="true"></i>
+                                            <span data-i18n="main.styleLight">Light</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="style-option" data-style="dark">
+                                            <i class="bx bx-moon" aria-hidden="true"></i>
+                                            <span data-i18n="main.styleDark">Dark</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="style-option" data-style="institutional">
+                                            <i class="bx bx-buildings" aria-hidden="true"></i>
+                                            <span data-i18n="main.styleInstitutional">Institutional</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" class="style-option" data-style="futuristic">
+                                            <i class="bx bx-planet" aria-hidden="true"></i>
+                                            <span data-i18n="main.styleFuturistic">Futuristic</span>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li role="none" class="settings-dropdown-group" id="business-admin-group" hidden>
+                                <button type="button" class="settings-dropdown-toggle" id="business-admin-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-shopping-bag" aria-hidden="true"></i>
+                                    <span data-i18n="menu.adminBusiness">Admin Business</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="business-admin-submenu" role="menu">
+                                    <!-- Administración del Negocio items rendered at runtime -->
+                                </ul>
+                            </li>
+                            <li role="none" class="settings-dropdown-group" id="button-config-group">
+                                <button type="button" class="settings-dropdown-toggle" id="button-config-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-slider-alt" aria-hidden="true"></i>
+                                    <span data-i18n="main.buttonConfig">Button Settings</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="button-config-submenu" role="menu">
+                                    <li role="none">
+                                        <button type="button" role="menuitem" id="logout-mode-menu-btn">
+                                            <i class="bx bx-log-out" aria-hidden="true"></i>
+                                            <span data-i18n="main.exitButton">Exit Button</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" id="button-config-dept-btn">
+                                            <i class="bx bx-buildings" aria-hidden="true"></i>
+                                            <span data-i18n="sidebar.department">Department</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" id="button-config-area-btn">
+                                            <i class="bx bx-collection" aria-hidden="true"></i>
+                                            <span data-i18n="sidebar.area">Area</span>
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button type="button" role="menuitem" id="button-config-cc-btn">
+                                            <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
+                                            <span data-i18n="sidebar.costCenters">Cost Centers</span>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li role="none" class="settings-dropdown-group" id="database-group">
+                                <button type="button" class="settings-dropdown-toggle" id="database-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-data" aria-hidden="true"></i>
+                                    <span data-i18n="menu.databaseGroup">Database</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="database-submenu" role="menu">
+                                    <li role="none">
+                                        <a href="BaseDatos-Empresa.html" role="menuitem">
+                                            <i class="bx bx-data" aria-hidden="true"></i>
+                                            <span id="database-company-label" data-i18n="menu.databaseCompany">Database</span>
+                                        </a>
+                                    </li>
+                                    <li role="none">
+                                        <a href="BaseDatos-Respaldos.html" role="menuitem">
+                                            <i class="bx bx-cloud-upload" aria-hidden="true"></i>
+                                            <span data-i18n="menu.databaseBackups">Our Backups</span>
+                                        </a>
+                                    </li>
+                                    <li role="none">
+                                        <a href="BaseDatos-NuestrosCambios.html" role="menuitem">
+                                            <i class="bx bx-history" aria-hidden="true"></i>
+                                            <span data-i18n="menu.databaseChanges">Database of Our Changes</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li role="none" class="settings-dropdown-group" id="business-intelligence-group">
+                                <button type="button" class="settings-dropdown-toggle" id="business-intelligence-toggle-btn"
+                                        aria-haspopup="true" aria-expanded="false">
+                                    <i class="bx bx-bulb" aria-hidden="true"></i>
+                                    <span data-i18n="menu.businessIntelligenceGroup">Business Intelligence</span>
+                                    <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                                </button>
+                                <ul class="settings-submenu" id="business-intelligence-submenu" role="menu">
+                                    <li role="none">
+                                        <a href="NegocioInteligente-Transacciones.html" role="menuitem">
+                                            <i class="bx bx-line-chart" aria-hidden="true"></i>
+                                            <span data-i18n="menu.smartBusinessTransactions">Smart Business Transactions</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li role="none" id="settings-others-group">
+                                <button type="button" role="menuitem" id="settings-others">
+                                    <i class="bx bx-dots-horizontal-rounded" aria-hidden="true"></i>
+                                    <span data-i18n="main.others">Others</span>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="user-info-menu" id="user-info-menu">
+                        <button type="button" data-i18n-aria="main.userInfo" aria-label="User Data" id="user-info-btn"
+                                aria-haspopup="true" aria-expanded="false">
+                            <i class="bx bx-user-circle" aria-hidden="true"></i>
+                        </button>
+                        <div class="user-info-dropdown" id="user-info-dropdown" role="menu">
+                            <div class="user-info-group">
+                                <h4 data-i18n="main.userInfo">User Data</h4>
+                                <dl class="user-info-fields">
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.nickname">Nickname</dt>
+                                        <dd id="user-info-nickname">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.businessEmail">Business Email</dt>
+                                        <dd id="user-info-business-email">—</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                            <div class="user-info-group">
+                                <h4 data-i18n="main.personalDataTitle">Personal Data</h4>
+                                <dl class="user-info-fields">
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.fullName">Full Name</dt>
+                                        <dd id="user-info-name">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.phone">Phone</dt>
+                                        <dd id="user-info-phone">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.address">Address</dt>
+                                        <dd id="user-info-address">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.birthDate">Date of Birth</dt>
+                                        <dd id="user-info-birth-date">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.idNumber">ID Number</dt>
+                                        <dd id="user-info-id-number">—</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="user-info-menu" id="business-profile-menu">
+                        <button type="button" data-i18n-aria="main.businessProfile" aria-label="Business User Data" id="business-profile-btn"
+                                aria-haspopup="true" aria-expanded="false">
+                            <i class="bx bx-briefcase" aria-hidden="true"></i>
+                        </button>
+                        <div class="user-info-dropdown" id="business-profile-dropdown" role="menu">
+                            <div class="user-info-group">
+                                <h4 data-i18n="main.businessProfile">Business User Data</h4>
+                                <dl class="user-info-fields">
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.position">Position</dt>
+                                        <dd id="business-profile-position">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.role">Role</dt>
+                                        <dd id="business-profile-role">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.businessEmail">Business Email</dt>
+                                        <dd id="business-profile-business-email">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.phone">Phone</dt>
+                                        <dd id="business-profile-phone">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.hireDate">Hire Date</dt>
+                                        <dd id="business-profile-hire-date">—</dd>
+                                    </div>
+                                    <div class="user-info-field">
+                                        <dt data-i18n="main.reportsTo">Reports To</dt>
+                                        <dd id="business-profile-reports-to">—</dd>
+                                    </div>
+                                </dl>
+                                <button type="button" class="user-info-summary-btn" id="business-profile-summary-btn">
+                                    <span id="business-profile-summary">—</span>
+                                    <i class="bx bx-chevron-right" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <section class="admin-panel">
+            <p class="admin-subtitle" data-i18n="admin.materialApoyoSubtitle">Screen manuals, system flow diagrams, and each client's own processes — organized by Department/Area, uploadable by GEIPSA or the client.</p>
+
+            <div class="admin-field" id="material-client-field" style="max-width: 22rem;">
+                <label for="material-client-select" data-i18n="admin.backupsClientLabel">Client</label>
+                <select id="material-client-select">
+                    <option value="" data-i18n="main.backupsClientSelectPlaceholder">Select a client...</option>
+                </select>
+            </div>
+
+            <div class="admin-field" id="material-department-field" style="max-width: 22rem;">
+                <label for="material-department-select" data-i18n="sidebar.department">Department</label>
+                <select id="material-department-select" disabled>
+                    <option value="" data-i18n="main.materialApoyoSelectDepartment">Select a department...</option>
+                </select>
+            </div>
+
+            <div class="admin-field" id="material-area-field" style="max-width: 22rem;">
+                <label for="material-area-select" data-i18n="sidebar.area">Area</label>
+                <select id="material-area-select" disabled>
+                    <option value="" data-i18n="main.materialApoyoSelectArea">Select an area...</option>
+                </select>
+            </div>
+
+            <div class="admin-field" id="material-category-field" style="max-width: 22rem;">
+                <label for="material-category-select" data-i18n="main.materialApoyoCategoryLabel">Category</label>
+                <select id="material-category-select" disabled>
+                    <option value="funcionalidad-pantallas" data-i18n="menu.catMaterialApoyoFuncionalidad">Screen Functionality</option>
+                    <option value="flujo-sistema" data-i18n="menu.catMaterialApoyoFlujo">System Flow</option>
+                    <option value="nuestros-procesos" data-i18n="menu.catMaterialApoyoProcesos">Our Processes</option>
+                </select>
+            </div>
+
+            <div class="admin-form-actions" style="margin: 1rem 0; align-items: center; gap: 0.75rem;">
+                <input type="text" id="material-title-input" data-i18n-placeholder="main.materialApoyoTitlePlaceholder" placeholder="File title (optional)" style="max-width: 22rem;">
+                <button type="button" class="btn" id="material-upload-btn" disabled>
+                    <i class="bx bx-upload" aria-hidden="true"></i>
+                    <span data-i18n="main.materialApoyoUploadBtn">+ Upload File</span>
+                </button>
+                <input type="file" id="material-file-input" hidden>
+            </div>
+
+            <div class="data-table-wrapper" data-table-id="admin-material-apoyo">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group-table="menu.classControlInterno" class="col-system">Company</th>
+                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group-table="menu.classControlInterno" class="col-system">Area</th>
+                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group-table="menu.classControlInterno" class="col-system">Module</th>
+                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group-table="menu.classControlInterno" class="col-system">Screen</th>
+                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group-table="menu.classControlInterno" class="col-system">Cost Center</th>
+                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group-table="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
+                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group-table="menu.classControlInterno" class="col-system">Day (dd)</th>
+                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group-table="menu.classControlInterno" class="col-system">Day (ddd)</th>
+                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group-table="menu.classControlInterno" class="col-system">Month (mm)</th>
+                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group-table="menu.classControlInterno" class="col-system">Month (mmm)</th>
+                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group-table="menu.classControlInterno" class="col-system">Year (yyyy)</th>
+                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group-table="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
+                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group-table="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
+                            <th data-i18n="main.materialApoyoTitleCol" data-col="materialTitle">Title</th>
+                            <th data-i18n="main.materialApoyoFileNameCol" data-col="materialFileName">File Name</th>
+                            <th data-i18n="main.materialApoyoUploadedByCol" data-col="materialUploadedBy">Uploaded By</th>
+                            <th data-i18n="main.materialApoyoUploadDateCol" data-col="materialUploadDate">Upload Date</th>
+                            <th data-i18n="main.colActions" data-col="actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="material-table-body">
+                        <tr>
+                            <td class="data-table-empty-cell" colspan="17">
+                                <div class="data-table-empty-inner" data-i18n="main.backupsClientSelectPlaceholder">Select a client...</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div class="modal-overlay" id="business-summary-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
+            <h3 id="business-summary-modal-title" data-i18n="main.businessProfile">Business User Data</h3>
+            <div class="business-summary-section">
+                <h4 data-i18n="main.assignedDepartments">Assigned Departments</h4>
+                <ul class="business-summary-list" id="business-summary-departments"></ul>
+            </div>
+            <div class="business-summary-section">
+                <h4 data-i18n="main.assignedAreas">Assigned Areas</h4>
+                <ul class="business-summary-list" id="business-summary-areas"></ul>
+            </div>
+            <div class="business-summary-section">
+                <h4 data-i18n="main.assignedCostCenter">Assigned Cost Center</h4>
+                <ul class="business-summary-list" id="business-summary-cost-centers"></ul>
+            </div>
+            <div class="business-summary-section">
+                <h4 data-i18n="main.permissions">Permissions</h4>
+                <ul class="business-summary-list" id="business-summary-permissions"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="default-picker-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="default-picker-modal-title">
+            <h3 id="default-picker-modal-title">—</h3>
+            <p id="default-picker-modal-hint" class="admin-hint"></p>
+            <ul class="logout-mode-list" id="default-picker-list"></ul>
+            <div class="admin-form-actions" id="default-picker-cc-actions" style="margin-top: 1.25rem;" hidden>
+                <button type="button" class="btn" id="default-picker-cc-save" data-i18n="admin.save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="logout-mode-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="logout-mode-modal-title">
+            <h3 id="logout-mode-modal-title" data-i18n="main.exitMenu">Exit Menu</h3>
+            <ul class="logout-mode-list">
+                <li>
+                    <button type="button" role="menuitemradio" aria-checked="true" class="logout-mode-option active" data-logout-mode="confirm">
+                        <i class="bx bx-message-alt-question" aria-hidden="true"></i>
+                        <span data-i18n="main.logoutModeConfirm">Ask before exiting</span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" role="menuitemradio" aria-checked="false" class="logout-mode-option" data-logout-mode="direct">
+                        <i class="bx bx-log-out" aria-hidden="true"></i>
+                        <span data-i18n="main.logoutModeDirect">Exit without asking</span>
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="Dashboard.js"></script>
+    <script src="ColorPalette.js"></script>
+    <script src="Admin-MaterialApoyo.js"></script>
+</body>
+</html>

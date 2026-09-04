@@ -243,8 +243,15 @@
       "abbrKey": "menu.catMaterialApoyoAbbr",
       "icon": "bx-support",
       "submenu": [
-        { "id": "cat-material-apoyo-1", "labelKey": "menu.catMaterialApoyoItem1", "icon": "bx-window", "href": "#" },
-        { "id": "cat-material-apoyo-2", "labelKey": "menu.catMaterialApoyoItem2", "icon": "bx-window", "href": "#" }
+        { "id": "cat-material-apoyo-funcionalidad", "labelKey": "menu.catMaterialApoyoFuncionalidad", "icon": "bx-window-alt", "href": "MaterialApoyo-Funcionalidad.html",
+          "submenu": [ { "id": "colMaterialApoyoFuncionalidad", "labelKey": "main.colMaterialApoyoFuncionalidad", "permissionOnly": true } ]
+        },
+        { "id": "cat-material-apoyo-flujo", "labelKey": "menu.catMaterialApoyoFlujo", "icon": "bx-git-branch", "href": "MaterialApoyo-Flujo.html",
+          "submenu": [ { "id": "colMaterialApoyoFlujo", "labelKey": "main.colMaterialApoyoFlujo", "permissionOnly": true } ]
+        },
+        { "id": "cat-material-apoyo-procesos", "labelKey": "menu.catMaterialApoyoProcesos", "icon": "bx-sitemap", "href": "MaterialApoyo-Procesos.html",
+          "submenu": [ { "id": "colMaterialApoyoProcesos", "labelKey": "main.colMaterialApoyoProcesos", "permissionOnly": true } ]
+        }
       ]
     }
   ],

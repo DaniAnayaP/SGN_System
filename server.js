@@ -227,9 +227,15 @@ const {
     getEvidenceRawValue,
     setEvidenceValue,
     getEvidencePermColKey,
+    listSupportMaterials,
+    createSupportMaterial,
+    getSupportMaterialById,
+    deleteSupportMaterial,
+    SUPPORT_MATERIAL_CATEGORIES,
 } = require('./db');
-const { getUploadUrl, getDownloadUrl } = require('./r2');
+const { getUploadUrl, getDownloadUrl, deleteObject } = require('./r2');
 const { buildEvidenceStorageKey, buildEvidenceDisplayName, extFromContentType } = require('./evidenceNaming');
+const { buildSupportMaterialStorageKey } = require('./supportMaterialNaming');
 
 // Change-history "Usuario" column shows whoever made the change -- for the
 // auto-provisioned client-admin account, req.user.name is still frozen as
@@ -1109,6 +1115,88 @@ app.get('/api/admin/clients/:id/backups/download-url', requireAuth, requireAdmin
         console.error('admin backups download-url failed:', err.message);
         res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
     }
+});
+
+// --- SaaS admin: Material Apoyo (any client's document library) -----------
+// GEIPSA-side counterpart of /api/business/material-apoyo -- same
+// listSupportMaterials, just by :id instead of the caller's own clientId,
+// gated by the saas-material-apoyo grant (Equipo SaaS) instead of the
+// per-client permission tree. Ver alone is enough to see AND download here
+// (matches the client-side gate); Subir is the separate leaf that unlocks
+// uploading/replacing/deleting.
+app.get('/api/admin/clients/:id/material-apoyo', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo')) {
+        return res.status(403).json({ message: 'No tienes permiso para ver Material Apoyo.' });
+    }
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    if (!validMaterialApoyoScope(req.query)) return res.status(400).json({ message: 'department, area y category (válida) son requeridos.' });
+    const { department, area, category } = req.query;
+    res.json({ files: listSupportMaterials(req.params.id, department, area, category) });
+});
+
+app.get('/api/admin/clients/:id/material-apoyo/download-url', requireAuth, requireAdmin, async (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo')) {
+        return res.status(403).json({ message: 'No tienes permiso para ver Material Apoyo.' });
+    }
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    const material = getSupportMaterialById(Number(req.query.id), req.params.id);
+    if (!material) return res.status(404).json({ message: 'Material not found.' });
+    try {
+        const url = await getDownloadUrl(material.storage_key, material.title || material.original_filename);
+        res.json({ url });
+    } catch (err) {
+        console.error('admin material-apoyo download-url failed:', err.message);
+        res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
+    }
+});
+
+app.post('/api/admin/clients/:id/material-apoyo/upload-url', requireAuth, requireAdmin, async (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir')) {
+        return res.status(403).json({ message: 'No tienes permiso para subir Material Apoyo.' });
+    }
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    const { department, area, category, contentType } = req.body || {};
+    if (!validMaterialApoyoScope({ department, area, category })) return res.status(400).json({ message: 'department, area y category (válida) son requeridos.' });
+    try {
+        const key = buildSupportMaterialStorageKey({ clientId: req.params.id, department, area, category, contentType });
+        const uploadUrl = await getUploadUrl(key, contentType);
+        res.json({ uploadUrl, key });
+    } catch (err) {
+        console.error('admin material-apoyo upload-url failed:', err.message);
+        res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
+    }
+});
+
+app.post('/api/admin/clients/:id/material-apoyo', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir')) {
+        return res.status(403).json({ message: 'No tienes permiso para subir Material Apoyo.' });
+    }
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    const { department, area, departmentLabel, areaLabel, category, key, title, originalFilename, contentType, fileSize } = req.body || {};
+    if (!validMaterialApoyoScope({ department, area, category })) return res.status(400).json({ message: 'department, area y category (válida) son requeridos.' });
+    if (!key || !originalFilename) return res.status(400).json({ message: 'key y originalFilename son requeridos.' });
+    const material = createSupportMaterial({
+        clientId: req.params.id, department, area,
+        departmentLabel: departmentLabel || department, areaLabel: areaLabel || area,
+        category, title, originalFilename, storageKey: key, contentType, fileSize,
+        uploadedByName: req.user.name, uploadedBySource: 'geipsa',
+    });
+    res.status(201).json({ material });
+});
+
+app.delete('/api/admin/clients/:id/material-apoyo/:materialId', requireAuth, requireAdmin, async (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir')) {
+        return res.status(403).json({ message: 'No tienes permiso para eliminar Material Apoyo.' });
+    }
+    const material = getSupportMaterialById(Number(req.params.materialId), req.params.id);
+    if (!material) return res.status(404).json({ message: 'Material not found.' });
+    deleteSupportMaterial(material.id, req.params.id);
+    try { await deleteObject(material.storage_key); } catch (err) { console.error('admin material-apoyo R2 delete failed (ignored):', err.message); }
+    res.json({ ok: true });
 });
 
 // --- SaaS admin: costo por módulo (Costos de Módulos) ------------------------
@@ -3384,6 +3472,106 @@ app.post('/api/business/evidence-upload-url', requireAuth, async (req, res) => {
         console.error('evidence-upload-url failed:', err.message);
         res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
     }
+});
+
+// --- Material Apoyo (Funcionalidad Pantallas / Flujo Sistema / Nuestros ---
+// --- Procesos) — document library per client, scoped by Departamento/    --
+// --- Área/categoría, reusing R2 the same way evidence above does. This
+// pantalla lives once per Departamento×Área (areaCategories template), not
+// at one fixed spot like every table in TABLE_GRANT_PATHS -- see db.js's
+// pathOverride comment on getColumnGrantLevel for why a per-request path is
+// built here instead of a static entry there.
+const MATERIAL_APOYO_COL_KEYS = {
+    'funcionalidad-pantallas': 'colMaterialApoyoFuncionalidad',
+    'flujo-sistema': 'colMaterialApoyoFlujo',
+    'nuestros-procesos': 'colMaterialApoyoProcesos',
+};
+const MATERIAL_APOYO_SUBMENU_SLUGS = {
+    'funcionalidad-pantallas': 'cat-material-apoyo-funcionalidad',
+    'flujo-sistema': 'cat-material-apoyo-flujo',
+    'nuestros-procesos': 'cat-material-apoyo-procesos',
+};
+function materialApoyoPathOverride(department, area, category) {
+    return { sectionId: department, itemId: area, submenuPrefix: `cat-material-apoyo/${MATERIAL_APOYO_SUBMENU_SLUGS[category]}` };
+}
+// Ver y Operar/Editar unlocks subir/eliminar; Solo Ver (the always-true
+// floor) is enough to see the list and download -- unlike Nuestros
+// Respaldos, this material is meant to be read broadly by anyone with the
+// pantalla, not gated like sensitive trip evidence.
+function canOperateMaterialApoyo(req, department, area, category) {
+    if (req.user.isClientAdmin) return true;
+    const grants = getUserEffectiveGrants(req.user.sub);
+    const level = getColumnGrantLevel(grants, 'material-apoyo', MATERIAL_APOYO_COL_KEYS[category], materialApoyoPathOverride(department, area, category));
+    return level === 'ver-y-operar' || level === 'editar';
+}
+function validMaterialApoyoScope({ department, area, category }) {
+    return !!department && !!area && SUPPORT_MATERIAL_CATEGORIES.includes(category);
+}
+
+app.get('/api/business/material-apoyo', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!validMaterialApoyoScope(req.query)) return res.status(400).json({ message: 'department, area y category (válida) son requeridos.' });
+    const { department, area, category } = req.query;
+    res.json({ files: listSupportMaterials(req.user.clientId, department, area, category) });
+});
+
+app.post('/api/business/material-apoyo/upload-url', requireAuth, async (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { department, area, category, contentType } = req.body || {};
+    if (!validMaterialApoyoScope({ department, area, category })) return res.status(400).json({ message: 'department, area y category (válida) son requeridos.' });
+    if (!canOperateMaterialApoyo(req, department, area, category)) {
+        return res.status(403).json({ message: 'No tienes permiso para subir material de apoyo aquí.' });
+    }
+    try {
+        const key = buildSupportMaterialStorageKey({ clientId: req.user.clientId, department, area, category, contentType });
+        const uploadUrl = await getUploadUrl(key, contentType);
+        res.json({ uploadUrl, key });
+    } catch (err) {
+        console.error('material-apoyo upload-url failed:', err.message);
+        res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
+    }
+});
+
+app.post('/api/business/material-apoyo', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { department, area, departmentLabel, areaLabel, category, key, title, originalFilename, contentType, fileSize } = req.body || {};
+    if (!validMaterialApoyoScope({ department, area, category })) return res.status(400).json({ message: 'department, area y category (válida) son requeridos.' });
+    if (!key || !originalFilename) return res.status(400).json({ message: 'key y originalFilename son requeridos.' });
+    if (!canOperateMaterialApoyo(req, department, area, category)) {
+        return res.status(403).json({ message: 'No tienes permiso para subir material de apoyo aquí.' });
+    }
+    const material = createSupportMaterial({
+        clientId: req.user.clientId, department, area,
+        departmentLabel: departmentLabel || department, areaLabel: areaLabel || area,
+        category, title, originalFilename, storageKey: key, contentType, fileSize,
+        uploadedByName: req.user.name, uploadedBySource: 'client',
+    });
+    res.status(201).json({ material });
+});
+
+app.get('/api/business/material-apoyo/download-url', requireAuth, async (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const material = getSupportMaterialById(Number(req.query.id), req.user.clientId);
+    if (!material) return res.status(404).json({ message: 'Material not found.' });
+    try {
+        const url = await getDownloadUrl(material.storage_key, material.title || material.original_filename);
+        res.json({ url });
+    } catch (err) {
+        console.error('material-apoyo download-url failed:', err.message);
+        res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
+    }
+});
+
+app.delete('/api/business/material-apoyo/:id', requireAuth, async (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const material = getSupportMaterialById(Number(req.params.id), req.user.clientId);
+    if (!material) return res.status(404).json({ message: 'Material not found.' });
+    if (!canOperateMaterialApoyo(req, material.department, material.area, material.category)) {
+        return res.status(403).json({ message: 'No tienes permiso para eliminar material de apoyo aquí.' });
+    }
+    deleteSupportMaterial(material.id, req.user.clientId);
+    try { await deleteObject(material.storage_key); } catch (err) { console.error('material-apoyo R2 delete failed (ignored):', err.message); }
+    res.json({ ok: true });
 });
 
 // --- Mi Recurso Humano (Operaciones > Recursos Humanos > Administración de --
