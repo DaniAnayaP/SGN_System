@@ -425,6 +425,75 @@
         </div>
     </main>
 
+    <div class="modal-overlay" id="new-sku-modal" hidden>
+        <div class="modal-panel" style="max-width: 42rem;" role="dialog" aria-modal="true" aria-labelledby="new-sku-modal-title">
+            <h3 id="new-sku-modal-title" data-i18n="main.newSkuItem">New Article</h3>
+            <form id="new-sku-form" class="admin-form" novalidate>
+                <h4 data-i18n="menu.classArticuloDatosGenerales">General Data</h4>
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="new-sku-upc" data-i18n="main.colArticuloUpc">UPC</label>
+                        <input id="new-sku-upc" name="upc" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-desc-unica" data-i18n="main.colArticuloDescUnica">Unique Description</label>
+                        <input id="new-sku-desc-unica" name="uniqueDescription" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-desc-conocida" data-i18n="main.colArticuloDescConocida">Common Description</label>
+                        <input id="new-sku-desc-conocida" name="knownDescription" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-desc-personalizada" data-i18n="main.colArticuloDescPersonalizada">Custom Description</label>
+                        <input id="new-sku-desc-personalizada" name="customDescription" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-udm" data-i18n="main.colArticuloUdm">Primary UOM</label>
+                        <input id="new-sku-udm" name="mainUom" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-tipo" data-i18n="main.colArticuloTipo">Article Type</label>
+                        <select id="new-sku-tipo" name="articleType">
+                            <option value="" data-i18n="main.articleTypeSelect">Select...</option>
+                            <option value="articulo-terminado" data-i18n="main.articleTypeFinished">Finished Article</option>
+                            <option value="materia-prima" data-i18n="main.articleTypeRawMaterial">Raw Material</option>
+                        </select>
+                    </div>
+                </div>
+                <h4 data-i18n="menu.classArticuloDimensiones">Main Article Dimensions</h4>
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="new-sku-alto" data-i18n="main.colArticuloAlto">Height</label>
+                        <input id="new-sku-alto" name="height" type="number" step="any">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-largo" data-i18n="main.colArticuloLargo">Length</label>
+                        <input id="new-sku-largo" name="length" type="number" step="any">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-ancho" data-i18n="main.colArticuloAncho">Width</label>
+                        <input id="new-sku-ancho" name="width" type="number" step="any">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-peso-articulo" data-i18n="main.colArticuloPesoArticulo">Article Weight</label>
+                        <input id="new-sku-peso-articulo" name="articleWeight" type="number" step="any">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-peso-empaque" data-i18n="main.colArticuloPesoEmpaque">Package Weight</label>
+                        <input id="new-sku-peso-empaque" name="packageWeight" type="number" step="any">
+                    </div>
+                </div>
+                <h4 data-i18n="menu.classArticuloEvidencias">Evidence</h4>
+                <div class="admin-form-grid" id="new-sku-evidence-grid"></div>
+                <div id="new-sku-form-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn" id="new-sku-save" data-i18n="admin.save">Save</button>
+                    <button type="button" class="btn btn-secondary" id="new-sku-cancel" data-i18n="admin.cancel">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
             <h3 id="business-summary-modal-title" data-i18n="main.businessProfile">Business User Data</h3>

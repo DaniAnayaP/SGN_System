@@ -5,11 +5,16 @@
 // (Gestión) and Activar/Inactivar (Administración) are deliberately NOT
 // columns here — confirmed with the client.
 //
-// "+ Nuevo Artículo" creates a blank row — every field is filled in later
-// by clicking directly on the cell, same convention as Nuestras Unidades/
-// Carga Combustible. Registro Único and SKU are never edited: both are
-// server-generated at creation (db_id / record_number, see db.js), shown
-// read-only. Persisted via /api/business/sku-items.
+// "+ Nuevo Artículo" opens a form (see the "+ Nuevo Artículo" modal section
+// below) that captures all 17 fields at once, unlike Nuestras Unidades/
+// Carga Combustible's click-per-cell pattern -- confirmed with the client
+// given how many more fields this screen has. Nothing reaches the server
+// until "Guardar" is pressed, so closing the form without saving never
+// leaves an orphan artículo behind. Once created, a row's fields are still
+// edited the normal click-the-cell way, same as every other table. Registro
+// Único and SKU are never edited: both are server-generated at creation
+// (db_id / record_number, see db.js), shown read-only. Persisted via
+// /api/business/sku-items.
 // ---------------------------------------------------------------------------
 
 (async function init() {
@@ -51,24 +56,12 @@ function isPending(record, key) {
     return (record.pendingFields || []).includes(key);
 }
 
-// A draft row (record.id === null, never persisted -- see createNewSkuItem)
-// only actually gets created on the server once its FIRST field commits, so
-// "+ Nuevo Artículo" followed by leaving the row untouched never leaves a
-// blank artículo behind.
-async function ensureCreatedThenPatch(record, patch) {
-    if (record.id) return patchSkuItem(record.id, patch);
-    try {
-        const res = await fetch('/api/business/sku-items', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('create failed');
-        const { skuItem } = await res.json();
-        record.id = skuItem.id;
-        record.registroUnico = skuItem.registroUnico;
-        record.sku = skuItem.sku;
-        await patchSkuItem(skuItem.id, patch);
-    } catch (err) {
-        console.error('Alta Nuestros Artículos: failed to create record', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-    }
+// Every row rendered by refreshTable() already exists on the server (see
+// the "+ Nuevo Artículo" modal below for how a NEW artículo gets created),
+// so a cell edit is always a plain patch -- kept as its own name/signature
+// so buildRow's onCommit callbacks read the same as every other screen's.
+function ensureCreatedThenPatch(record, patch) {
+    return patchSkuItem(record.id, patch);
 }
 
 async function patchSkuItem(id, patch) {
@@ -221,27 +214,22 @@ function buildActionsCell(record, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
-    if (record.id) {
-        const historyBtn = document.createElement('button');
-        historyBtn.type = 'button';
-        historyBtn.className = 'admin-icon-btn';
-        historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
-        historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
-        historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-        historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
-        td.appendChild(historyBtn);
-    }
-    if (!record.id || Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth')) {
+    const historyBtn = document.createElement('button');
+    historyBtn.type = 'button';
+    historyBtn.className = 'admin-icon-btn';
+    historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+    historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+    historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+    historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
+    td.appendChild(historyBtn);
+    if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth')) {
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
         deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.title = Dashboard.t('admin.delete');
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => {
-            if (!record.id) { tr.remove(); ensureEmptyState(); return; }
-            deleteSkuItem(record.id, tr);
-        });
+        deleteBtn.addEventListener('click', () => deleteSkuItem(record.id, tr));
         td.appendChild(deleteBtn);
     }
     return td;
@@ -383,23 +371,6 @@ function applySkuItemFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applySkuItemFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applySkuItemFilters);
 
-// Only adds a local, in-memory draft row (record.id === null) -- nothing is
-// persisted server-side until its first field actually commits (see
-// ensureCreatedThenPatch), so clicking this and never touching the row never
-// leaves a blank artículo behind.
-function createNewSkuItem() {
-    const draft = {
-        id: null, registroUnico: '', sku: '', upc: '', uniqueDescription: '', knownDescription: '', customDescription: '',
-        mainUom: '', articleType: '', height: '', length: '', width: '', articleWeight: '', packageWeight: '',
-        evidenceFront: '', evidenceBack: '', evidenceLeft: '', evidenceRight: '', evidenceTop: '', evidenceBottom: '',
-        pendingFields: [],
-    };
-    const tbody = getTbody();
-    const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
-    if (emptyRow) emptyRow.remove();
-    tbody.appendChild(buildRow(draft));
-}
-
 function renderNewRecordButton() {
     const wrapper = document.querySelector('[data-table-id="nuestros-articulos"]');
     const toolbar = wrapper?.previousElementSibling;
@@ -409,6 +380,153 @@ function renderNewRecordButton() {
     btn.type = 'button';
     btn.className = 'data-table-new-record-btn';
     btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="main.newSkuItem">${Dashboard.t('main.newSkuItem')}</span>`;
-    btn.addEventListener('click', createNewSkuItem);
+    btn.addEventListener('click', openCreateModal);
     toolbar.prepend(btn);
 }
+
+// --- "+ Nuevo Artículo" modal ------------------------------------------------
+// Unlike Nuestras Unidades/Carga Combustible's click-per-cell pattern, this
+// screen captures all 17 fields in one form on creation (confirmed with the
+// client, given how many more fields this screen has). The record is only
+// ever created on the server once "Guardar" succeeds -- closing/cancelling
+// the form beforehand makes zero API calls, so it never leaves an orphan
+// artículo behind. Field-level permission still applies: a field the current
+// user can't edit renders disabled here too, same as the table's own cells.
+const TEXT_FIELDS = [
+    ['colArticuloUpc', 'upc', 'main.colArticuloUpc'],
+    ['colArticuloDescUnica', 'uniqueDescription', 'main.colArticuloDescUnica'],
+    ['colArticuloDescConocida', 'knownDescription', 'main.colArticuloDescConocida'],
+    ['colArticuloDescPersonalizada', 'customDescription', 'main.colArticuloDescPersonalizada'],
+    ['colArticuloUdm', 'mainUom', 'main.colArticuloUdm'],
+];
+const NUMBER_FIELDS = [
+    ['colArticuloAlto', 'height', 'main.colArticuloAlto'],
+    ['colArticuloLargo', 'length', 'main.colArticuloLargo'],
+    ['colArticuloAncho', 'width', 'main.colArticuloAncho'],
+    ['colArticuloPesoArticulo', 'articleWeight', 'main.colArticuloPesoArticulo'],
+    ['colArticuloPesoEmpaque', 'packageWeight', 'main.colArticuloPesoEmpaque'],
+];
+const EVIDENCE_FIELDS = [
+    ['colArticuloEvidenceFront', 'evidenceFront', 'main.colArticuloEvidenceFront'],
+    ['colArticuloEvidenceBack', 'evidenceBack', 'main.colArticuloEvidenceBack'],
+    ['colArticuloEvidenceLeft', 'evidenceLeft', 'main.colArticuloEvidenceLeft'],
+    ['colArticuloEvidenceRight', 'evidenceRight', 'main.colArticuloEvidenceRight'],
+    ['colArticuloEvidenceTop', 'evidenceTop', 'main.colArticuloEvidenceTop'],
+    ['colArticuloEvidenceBottom', 'evidenceBottom', 'main.colArticuloEvidenceBottom'],
+];
+
+const createModal = document.getElementById('new-sku-modal');
+const createForm = document.getElementById('new-sku-form');
+const createFormError = document.getElementById('new-sku-form-error');
+const createEvidenceGrid = document.getElementById('new-sku-evidence-grid');
+const createEvidenceFiles = new Map(); // fieldKey -> File, cleared on every open/close
+
+function buildEvidencePickerFields() {
+    createEvidenceGrid.innerHTML = '';
+    EVIDENCE_FIELDS.forEach(([colId, key, labelKey]) => {
+        const field = document.createElement('div');
+        field.className = 'admin-field';
+        const editable = Dashboard.canEditField(TABLE_KEY, colId, '');
+        field.innerHTML = `
+            <label>${Dashboard.t(labelKey)}</label>
+            <button type="button" class="btn btn-secondary new-sku-evidence-btn" data-key="${key}" ${editable ? '' : 'disabled'}>
+                <i class="bx bx-camera" aria-hidden="true"></i> <span>${Dashboard.t('home.cargaTakePhoto')}</span>
+            </button>
+            <input type="file" accept="image/*" data-key="${key}" hidden>
+        `;
+        const btn = field.querySelector('.new-sku-evidence-btn');
+        const input = field.querySelector('input[type="file"]');
+        btn.addEventListener('click', () => input.click());
+        input.addEventListener('change', () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            createEvidenceFiles.set(key, file);
+            btn.innerHTML = `<i class="bx bx-check-circle" aria-hidden="true"></i> <span>${Dashboard.t('home.cargaChangePhoto')}</span>`;
+        });
+        createEvidenceGrid.appendChild(field);
+    });
+}
+
+function applyCreateFormFieldPermissions() {
+    TEXT_FIELDS.forEach(([colId, key]) => {
+        const input = createForm.elements.namedItem(key);
+        if (input) input.disabled = !Dashboard.canEditField(TABLE_KEY, colId, '');
+    });
+    NUMBER_FIELDS.forEach(([colId, key]) => {
+        const input = createForm.elements.namedItem(key);
+        if (input) input.disabled = !Dashboard.canEditField(TABLE_KEY, colId, '');
+    });
+    const typeInput = createForm.elements.namedItem('articleType');
+    if (typeInput) typeInput.disabled = !Dashboard.canEditField(TABLE_KEY, 'colArticuloTipo', '');
+}
+
+function openCreateModal() {
+    createForm.reset();
+    createFormError.hidden = true;
+    createEvidenceFiles.clear();
+    applyCreateFormFieldPermissions();
+    buildEvidencePickerFields();
+    createModal.hidden = false;
+}
+
+function closeCreateModal() {
+    createModal.hidden = true;
+}
+
+document.getElementById('new-sku-cancel')?.addEventListener('click', closeCreateModal);
+createModal?.addEventListener('click', (event) => { if (event.target === createModal) closeCreateModal(); });
+
+createForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    createFormError.hidden = true;
+    const saveBtn = document.getElementById('new-sku-save');
+    saveBtn.disabled = true;
+    try {
+        const res = await fetch('/api/business/sku-items', { method: 'POST', credentials: 'include' });
+        if (!res.ok) throw new Error('create failed');
+        const { skuItem } = await res.json();
+
+        const patch = {};
+        TEXT_FIELDS.forEach(([, key]) => {
+            const input = createForm.elements.namedItem(key);
+            if (input && !input.disabled) patch[key] = input.value.trim();
+        });
+        NUMBER_FIELDS.forEach(([, key]) => {
+            const input = createForm.elements.namedItem(key);
+            if (input && !input.disabled) patch[key] = input.value === '' ? 0 : parseFloat(input.value) || 0;
+        });
+        const typeInput = createForm.elements.namedItem('articleType');
+        if (typeInput && !typeInput.disabled) patch.articleType = typeInput.value;
+        await fetch(`/api/business/sku-items/${skuItem.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(patch),
+        });
+
+        for (const [, key] of EVIDENCE_FIELDS) {
+            const file = createEvidenceFiles.get(key);
+            if (!file) continue;
+            try {
+                const evidenceKey = await Dashboard.uploadEvidenceFile(file, { tableKey: TABLE_KEY, recordId: skuItem.id, fieldKey: key });
+                await fetch(`/api/business/sku-items/${skuItem.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ [key]: evidenceKey }),
+                });
+            } catch (err) {
+                console.error(`Alta Nuestros Artículos: evidence upload failed for ${key}`, err);
+            }
+        }
+
+        closeCreateModal();
+        await refreshTable();
+    } catch (err) {
+        console.error('Alta Nuestros Artículos: failed to save new record', err);
+        createFormError.textContent = Dashboard.t('admin.saveError');
+        createFormError.hidden = false;
+    } finally {
+        saveBtn.disabled = false;
+    }
+});

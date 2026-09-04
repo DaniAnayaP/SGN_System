@@ -3310,6 +3310,17 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     width: { column: 'width', fieldKey: 'main.colArticuloAncho' },
     articleWeight: { column: 'article_weight', fieldKey: 'main.colArticuloPesoArticulo' },
     packageWeight: { column: 'package_weight', fieldKey: 'main.colArticuloPesoEmpaque' },
+    // Evidence keys must ALSO be here (not just in EVIDENCE_FIELD_SOURCES) --
+    // same convention as FUEL_LOADING_PATCHABLE_FIELDS' own tripBeforeEvidence
+    // etc. Without an entry here, checkAndLogFieldChanges only iterates
+    // fieldsMap's own keys, so a PATCH carrying evidenceFront would upload
+    // fine to R2 but its key would never actually reach the sku_items row.
+    evidenceFront: { column: 'evidence_front', fieldKey: 'main.colArticuloEvidenceFront' },
+    evidenceBack: { column: 'evidence_back', fieldKey: 'main.colArticuloEvidenceBack' },
+    evidenceLeft: { column: 'evidence_left', fieldKey: 'main.colArticuloEvidenceLeft' },
+    evidenceRight: { column: 'evidence_right', fieldKey: 'main.colArticuloEvidenceRight' },
+    evidenceTop: { column: 'evidence_top', fieldKey: 'main.colArticuloEvidenceTop' },
+    evidenceBottom: { column: 'evidence_bottom', fieldKey: 'main.colArticuloEvidenceBottom' },
 };
 
 function updateSkuItem(id, clientId, patch, forTestAccount = false) {
