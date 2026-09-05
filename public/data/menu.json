@@ -467,7 +467,195 @@
     "supply-chain/sc-area-distribution-center": {
       "cat-catalogos": [
         { "id": "cat-catalogos-centro-dist-codigos", "labelKey": "menu.catCentroDistCodigos", "icon": "bx-window", "href": "#" },
-        { "id": "cat-catalogos-centro-dist-categorias", "labelKey": "menu.catCentroDistCategorias", "icon": "bx-window", "href": "#" },
+        {
+          "id": "cat-catalogos-centro-dist-categorias-inventario", "labelKey": "menu.catCentroDistCategoriasInventario", "icon": "bx-package", "href": "CatCentroDistCategoriasInventario.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
+            { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
+            { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-catalogos-centro-dist-categorias-compra", "labelKey": "menu.catCentroDistCategoriasCompra", "icon": "bx-cart-alt", "href": "CatCentroDistCategoriasCompra.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
+            { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
+            { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-catalogos-centro-dist-categorias-almacenamiento", "labelKey": "menu.catCentroDistCategoriasAlmacenamiento", "icon": "bx-buildings", "href": "CatCentroDistCategoriasAlmacenamiento.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
+            { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
+            { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-catalogos-centro-dist-categorias-rotacion", "labelKey": "menu.catCentroDistCategoriasRotacion", "icon": "bx-refresh", "href": "CatCentroDistCategoriasRotacion.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
+            { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
+            { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-catalogos-centro-dist-categorias-manejo", "labelKey": "menu.catCentroDistCategoriasManejo", "icon": "bx-move", "href": "CatCentroDistCategoriasManejoEspecial.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
+            { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
+            { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-catalogos-centro-dist-categorias-riesgo", "labelKey": "menu.catCentroDistCategoriasRiesgo", "icon": "bx-error", "href": "CatCentroDistCategoriasRiesgo.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
+            { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
+            { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-catalogos-centro-dist-categorias-vidautil", "labelKey": "menu.catCentroDistCategoriasVidautil", "icon": "bx-time-five", "href": "CatCentroDistCategoriasVidaUtil.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
+            { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
+            { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+          ]
+        },
         { "id": "cat-catalogos-centro-dist-udm", "labelKey": "menu.catCentroDistUdm", "icon": "bx-window", "href": "#" }
       ],
       "cat-operaciones": [
@@ -509,6 +697,13 @@
             { "id": "colArticuloEvidenceRight", "labelKey": "main.colArticuloEvidenceRight", "permissionOnly": true },
             { "id": "colArticuloEvidenceTop", "labelKey": "main.colArticuloEvidenceTop", "permissionOnly": true },
             { "id": "colArticuloEvidenceBottom", "labelKey": "main.colArticuloEvidenceBottom", "permissionOnly": true },
+            { "id": "colArticuloCategoriaInventario", "labelKey": "main.colArticuloCategoriaInventario", "permissionOnly": true },
+            { "id": "colArticuloCategoriaCompra", "labelKey": "main.colArticuloCategoriaCompra", "permissionOnly": true },
+            { "id": "colArticuloCategoriaAlmacenamiento", "labelKey": "main.colArticuloCategoriaAlmacenamiento", "permissionOnly": true },
+            { "id": "colArticuloCategoriaRotacion", "labelKey": "main.colArticuloCategoriaRotacion", "permissionOnly": true },
+            { "id": "colArticuloCategoriaManejo", "labelKey": "main.colArticuloCategoriaManejo", "permissionOnly": true },
+            { "id": "colArticuloCategoriaRiesgo", "labelKey": "main.colArticuloCategoriaRiesgo", "permissionOnly": true },
+            { "id": "colArticuloCategoriaVidautil", "labelKey": "main.colArticuloCategoriaVidautil", "permissionOnly": true },
             { "id": "colArticuloDeleteAuth", "labelKey": "main.colArticuloDeleteAuth", "permissionOnly": true }
           ]
         }

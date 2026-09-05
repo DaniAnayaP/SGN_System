@@ -7,13 +7,14 @@
 // field-by-field form for whichever artículo is open.
 //
 // "+ Nuevo Artículo" creates a real, blank record immediately — every one
-// of its 17 capturable fields is then filled in one at a time via PATCH,
-// each going through the exact same column-level permission/pending-
-// approval workflow as every other table (checkAndLogFieldChanges).
+// of its 24 capturable fields (17 own + 7 "Categoría X" selects sourced from
+// the 7 "Nuestras Categorías..." catalogs) is then filled in one at a time
+// via PATCH, each going through the exact same column-level permission/
+// pending-approval workflow as every other table (checkAndLogFieldChanges).
 // Registro Único and SKU are never fields here -- both are server-generated
 // at creation (db_id/record_number) and simply displayed once the record
 // exists. A record is "complete" (drops off "Artículos en captura") once
-// every one of the 17 fields has a value -- confirmed with the client this
+// every one of the 24 fields has a value -- confirmed with the client this
 // mirrors Carga Combustible exactly: a completed artículo is then only
 // consulted in Administración (not built in this pass), never edited here
 // again.
@@ -172,15 +173,56 @@ const FIELDS = [
     { id: 'evidenceRight', group: 'evi', apiKey: 'evidenceRight', labelKey: 'main.colArticuloEvidenceRight', hintKey: 'home.articuloHintEvidencia', type: 'photo', icon: 'bx-camera', colId: 'colArticuloEvidenceRight' },
     { id: 'evidenceTop', group: 'evi', apiKey: 'evidenceTop', labelKey: 'main.colArticuloEvidenceTop', hintKey: 'home.articuloHintEvidencia', type: 'photo', icon: 'bx-camera', colId: 'colArticuloEvidenceTop' },
     { id: 'evidenceBottom', group: 'evi', apiKey: 'evidenceBottom', labelKey: 'main.colArticuloEvidenceBottom', hintKey: 'home.articuloHintEvidencia', type: 'photo', icon: 'bx-camera', colId: 'colArticuloEvidenceBottom' },
+    // optionGroups start empty and get filled in by loadCategoryOptions()
+    // once the 7 "Nuestras Categorías..." catalogs' Active values are
+    // fetched -- see that function for why (options are per-client/dynamic,
+    // unlike articleType's fixed list above).
+    { id: 'categoryInventario', group: 'categorias', apiKey: 'categoryInventario', labelKey: 'main.colArticuloCategoriaInventario', hintKey: 'home.articuloHintCategoria', type: 'select', icon: 'bx-package', colId: 'colArticuloCategoriaInventario', categoryType: 'inventario', optionGroups: [{ options: [] }] },
+    { id: 'categoryCompra', group: 'categorias', apiKey: 'categoryCompra', labelKey: 'main.colArticuloCategoriaCompra', hintKey: 'home.articuloHintCategoria', type: 'select', icon: 'bx-cart-alt', colId: 'colArticuloCategoriaCompra', categoryType: 'compra', optionGroups: [{ options: [] }] },
+    { id: 'categoryAlmacenamiento', group: 'categorias', apiKey: 'categoryAlmacenamiento', labelKey: 'main.colArticuloCategoriaAlmacenamiento', hintKey: 'home.articuloHintCategoria', type: 'select', icon: 'bx-buildings', colId: 'colArticuloCategoriaAlmacenamiento', categoryType: 'almacenamiento', optionGroups: [{ options: [] }] },
+    { id: 'categoryRotacion', group: 'categorias', apiKey: 'categoryRotacion', labelKey: 'main.colArticuloCategoriaRotacion', hintKey: 'home.articuloHintCategoria', type: 'select', icon: 'bx-refresh', colId: 'colArticuloCategoriaRotacion', categoryType: 'rotacion', optionGroups: [{ options: [] }] },
+    { id: 'categoryManejo', group: 'categorias', apiKey: 'categoryManejo', labelKey: 'main.colArticuloCategoriaManejo', hintKey: 'home.articuloHintCategoria', type: 'select', icon: 'bx-move', colId: 'colArticuloCategoriaManejo', categoryType: 'manejo', optionGroups: [{ options: [] }] },
+    { id: 'categoryRiesgo', group: 'categorias', apiKey: 'categoryRiesgo', labelKey: 'main.colArticuloCategoriaRiesgo', hintKey: 'home.articuloHintCategoria', type: 'select', icon: 'bx-error', colId: 'colArticuloCategoriaRiesgo', categoryType: 'riesgo', optionGroups: [{ options: [] }] },
+    { id: 'categoryVidautil', group: 'categorias', apiKey: 'categoryVidautil', labelKey: 'main.colArticuloCategoriaVidautil', hintKey: 'home.articuloHintCategoria', type: 'select', icon: 'bx-time-five', colId: 'colArticuloCategoriaVidautil', categoryType: 'vidautil', optionGroups: [{ options: [] }] },
 ];
 const GENERAL_FIELDS = FIELDS.filter((f) => f.group === 'general');
 const DIM_FIELDS = FIELDS.filter((f) => f.group === 'dim');
 const EVI_FIELDS = FIELDS.filter((f) => f.group === 'evi');
+const CATEGORIA_FIELDS = FIELDS.filter((f) => f.group === 'categorias');
 const GROUPS = [
     { key: 'general', icon: 'bx-id-card', labelKey: 'home.articuloGroupGeneral', fields: GENERAL_FIELDS },
     { key: 'dim', icon: 'bx-ruler', labelKey: 'home.articuloGroupDim', fields: DIM_FIELDS },
     { key: 'evi', icon: 'bx-camera', labelKey: 'home.articuloGroupEvi', fields: EVI_FIELDS },
+    { key: 'categorias', icon: 'bx-purchase-tag', labelKey: 'home.articuloGroupCategorias', fields: CATEGORIA_FIELDS },
 ];
+
+// Options come from each catalog's own Active values (see
+// listActiveArticleCategoryNames in db.js), fetched once at load. Computed
+// fresh per record (see categoryOptionGroupsFor below) rather than baked
+// into FIELDS once -- an artículo that already has a since-deactivated
+// value must keep showing it, and which record that applies to isn't known
+// until its form is actually open.
+let activeCategoryOptions = {};
+async function loadCategoryOptions() {
+    try {
+        const res = await fetch(apiUrl('/api/business/article-categories-active'), { credentials: 'include' });
+        if (!res.ok) return;
+        const { options } = await res.json();
+        activeCategoryOptions = options || {};
+    } catch (err) {
+        console.error('Alta Nuestros Artículos: failed to load category options', err);
+        activeCategoryOptions = {};
+    }
+}
+// A name is shown as both value and label (opt.label, not opt.labelKey) --
+// these are free text a client admin typed into a catalog, not a fixed
+// translated list like articleType's own optionGroups above.
+function categoryOptionGroupsFor(field, record) {
+    const active = activeCategoryOptions[field.categoryType] || [];
+    const current = fieldValueFromRecord(field, record) || '';
+    const names = current && !active.includes(current) ? [current, ...active] : active;
+    return [{ options: names.map((name) => ({ value: name, label: name })) }];
+}
 
 // --- App state -----------------------------------------------------------
 let currentUser = null;
@@ -222,7 +264,7 @@ function isFieldUnlocked(field, record) {
 }
 
 // A record is "complete" (drops off "Artículos en captura") once every one
-// of the 17 capturable fields has a value. Registro Único/SKU don't count
+// of the 24 capturable fields has a value. Registro Único/SKU don't count
 // -- they're never empty, they're just never fields either.
 function isRecordComplete(record) {
     return FIELDS.every((f) => isFieldFilled(fieldValueFromRecord(f, record)));
@@ -424,9 +466,10 @@ function fieldPreviewText(field, record) {
     const value = fieldValueFromRecord(field, record);
     if (field.type === 'photo') return t('home.cargaPhotoAttached');
     if (field.type === 'select') {
-        for (const grp of field.optionGroups) {
+        const groups = field.categoryType ? categoryOptionGroupsFor(field, record) : field.optionGroups;
+        for (const grp of groups) {
             const opt = grp.options.find((o) => o.value === value);
-            if (opt) return t(opt.labelKey);
+            if (opt) return opt.labelKey ? t(opt.labelKey) : opt.label;
         }
     }
     return String(value);
@@ -437,7 +480,8 @@ const SHEET_FIELD_TYPES = ['select'];
 
 function openSheetForField(field, record) {
     const currentValue = fieldValueFromRecord(field, record) || '';
-    openSelectSheet(t(field.labelKey), field.optionGroups, currentValue, (value) => commitFieldValue(field, value));
+    const optionGroups = field.categoryType ? categoryOptionGroupsFor(field, record) : field.optionGroups;
+    openSelectSheet(t(field.labelKey), optionGroups, currentValue, (value) => commitFieldValue(field, value));
 }
 
 function buildFieldEl(field, record) {
@@ -630,7 +674,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         if (!meRes.ok) { window.location.replace('Login.html'); return; }
         const { user } = await meRes.json();
         currentUser = user;
-        await Promise.all([loadGateMap(), loadRecords(), loadBrandingForTheme()]);
+        await Promise.all([loadGateMap(), loadRecords(), loadBrandingForTheme(), loadCategoryOptions()]);
         applyStyle(getStoredStyle());
         await refreshOfflinePendingIds();
     } catch (err) {

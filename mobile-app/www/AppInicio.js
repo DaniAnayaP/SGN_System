@@ -97,6 +97,13 @@ const WEB_SCREEN_PAGES = {
     'reglas-orden-llenado': { href: 'Business-ReglasOrden.html', icon: 'bx-link' },
     'roles': { href: 'AppRoles.html', icon: 'bx-shield' },
     'nuestros-articulos': { href: 'AppNuestrosArticulos.html', icon: 'bx-package' },
+    'categorias-inventario': { href: 'AppCategoriasInventario.html', icon: 'bx-package' },
+    'categorias-compra': { href: 'AppCategoriasCompra.html', icon: 'bx-cart-alt' },
+    'categorias-almacenamiento': { href: 'AppCategoriasAlmacenamiento.html', icon: 'bx-buildings' },
+    'categorias-rotacion': { href: 'AppCategoriasRotacion.html', icon: 'bx-refresh' },
+    'categorias-manejo': { href: 'AppCategoriasManejoEspecial.html', icon: 'bx-move' },
+    'categorias-riesgo': { href: 'AppCategoriasRiesgo.html', icon: 'bx-error' },
+    'categorias-vidautil': { href: 'AppCategoriasVidaUtil.html', icon: 'bx-time-five' },
 };
 
 // menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
@@ -109,6 +116,13 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-catalogos-transporte-vol-tipos-unidades': 'tipos-unidad',
     'cat-operaciones-transporte-vol-nuestras-unidades': 'nuestras-unidades',
     'cat-operaciones-centro-dist-alta-articulos': 'nuestros-articulos',
+    'cat-catalogos-centro-dist-categorias-inventario': 'categorias-inventario',
+    'cat-catalogos-centro-dist-categorias-compra': 'categorias-compra',
+    'cat-catalogos-centro-dist-categorias-almacenamiento': 'categorias-almacenamiento',
+    'cat-catalogos-centro-dist-categorias-rotacion': 'categorias-rotacion',
+    'cat-catalogos-centro-dist-categorias-manejo': 'categorias-manejo',
+    'cat-catalogos-centro-dist-categorias-riesgo': 'categorias-riesgo',
+    'cat-catalogos-centro-dist-categorias-vidautil': 'categorias-vidautil',
 };
 
 // grantedAppScreens (from GET /api/business/app-screens) is the CLIENT's

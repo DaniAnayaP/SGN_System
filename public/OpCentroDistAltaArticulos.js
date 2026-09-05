@@ -1,12 +1,15 @@
 // ---------------------------------------------------------------------------
 // Alta Nuestros Artículos (Sku) — Operaciones > Cadena de Suministro > C.
 // Distribución. Operación only: data only capturable with the physical
-// product in hand. Categorías/Estatus (Catálogos), Punto de Reorden
-// (Gestión) and Activar/Inactivar (Administración) are deliberately NOT
-// columns here — confirmed with the client.
+// product in hand, plus its 7 "Categoría X" selections -- Punto de Reorden
+// (Gestión) and Activar/Inactivar (Administración) are still deliberately
+// NOT columns here. The 7 categories themselves are Catálogos, defined in
+// their own 7 "Nuestras Categorías..." screens (see
+// CatCentroDistCategoriaArticulo.js) -- this screen only SELECTS from them,
+// never defines new values.
 //
 // "+ Nuevo Artículo" opens a form (see the "+ Nuevo Artículo" modal section
-// below) that captures all 17 fields at once, unlike Nuestras Unidades/
+// below) that captures all 24 fields at once, unlike Nuestras Unidades/
 // Carga Combustible's click-per-cell pattern -- confirmed with the client
 // given how many more fields this screen has. Nothing reaches the server
 // until "Guardar" is pressed, so closing the form without saving never
@@ -21,6 +24,7 @@
     try {
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-centro-dist-alta-articulos' });
         if (!role) return;
+        await loadCategoryOptions();
         renderNewRecordButton();
         await refreshTable();
     } catch (err) {
@@ -29,6 +33,66 @@
 })();
 
 const TABLE_KEY = 'nuestros-articulos';
+
+// --- Categorías Artículo (7 selects, sourced from the 7 "Nuestras -----------
+// Categorías..." catalogs) -- categoryOptions is fetched once at load via
+// the shared active-only endpoint (see server.js's own comment on why one
+// request beats 7). [colId, apiKey, categoryType] triples drive both the
+// table cells and the "+ Nuevo Artículo" modal's own selects below.
+const CATEGORY_SELECT_FIELDS = [
+    ['colArticuloCategoriaInventario', 'categoryInventario', 'inventario'],
+    ['colArticuloCategoriaCompra', 'categoryCompra', 'compra'],
+    ['colArticuloCategoriaAlmacenamiento', 'categoryAlmacenamiento', 'almacenamiento'],
+    ['colArticuloCategoriaRotacion', 'categoryRotacion', 'rotacion'],
+    ['colArticuloCategoriaManejo', 'categoryManejo', 'manejo'],
+    ['colArticuloCategoriaRiesgo', 'categoryRiesgo', 'riesgo'],
+    ['colArticuloCategoriaVidautil', 'categoryVidautil', 'vidautil'],
+];
+let categoryOptions = {};
+async function loadCategoryOptions() {
+    try {
+        const res = await fetch('/api/business/article-categories-active', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { options } = await res.json();
+        categoryOptions = options || {};
+    } catch (err) {
+        console.error('Alta Nuestros Artículos: failed to load category options', err);
+        categoryOptions = {};
+    }
+}
+
+// A category select always shows the record's CURRENT value even if it's no
+// longer Active (an artículo keeps what it already has -- see
+// listActiveArticleCategoryNames' own comment in db.js), plus every
+// currently-Active option for picking something new.
+function buildCategorySelectCell(record, colId, apiKey, categoryType) {
+    const td = document.createElement('td');
+    td.dataset.col = colId;
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    const currentValue = record[apiKey] || '';
+    const active = categoryOptions[categoryType] || [];
+    const names = currentValue && !active.includes(currentValue) ? [currentValue, ...active] : active;
+    const blankOption = document.createElement('option');
+    blankOption.value = '';
+    blankOption.textContent = Dashboard.t('main.articleTypeSelect');
+    select.appendChild(blankOption);
+    // Category names are free text a client admin typed into a catalog --
+    // built as real <option> nodes (never innerHTML) so a name containing
+    // HTML-special characters can't inject markup into this page.
+    names.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
+    select.value = currentValue;
+    select.disabled = isPending(record, apiKey) || !Dashboard.canEditField(TABLE_KEY, colId, currentValue);
+    if (select.disabled) select.title = Dashboard.t(isPending(record, apiKey) ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => ensureCreatedThenPatch(record, { [apiKey]: select.value }));
+    td.appendChild(select);
+    return td;
+}
 
 function textCell(key, value) {
     const td = document.createElement('td');
@@ -316,6 +380,7 @@ function buildRow(record) {
         buildEvidenceCell(record, 'evidenceRight', 'colArticuloEvidenceRight'),
         buildEvidenceCell(record, 'evidenceTop', 'colArticuloEvidenceTop'),
         buildEvidenceCell(record, 'evidenceBottom', 'colArticuloEvidenceBottom'),
+        ...CATEGORY_SELECT_FIELDS.map(([colId, apiKey, categoryType]) => buildCategorySelectCell(record, colId, apiKey, categoryType)),
         buildActionsCell(record, tr),
     );
     tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell'));
@@ -419,7 +484,37 @@ const createModal = document.getElementById('new-sku-modal');
 const createForm = document.getElementById('new-sku-form');
 const createFormError = document.getElementById('new-sku-form-error');
 const createEvidenceGrid = document.getElementById('new-sku-evidence-grid');
+const createCategoryGrid = document.getElementById('new-sku-category-grid');
 const createEvidenceFiles = new Map(); // fieldKey -> File, cleared on every open/close
+
+// Selects are rebuilt (not just reset) on every open so a category someone
+// just added in another tab shows up without a full page reload.
+function buildCategoryPickerFields() {
+    createCategoryGrid.innerHTML = '';
+    CATEGORY_SELECT_FIELDS.forEach(([colId, apiKey, categoryType]) => {
+        const field = document.createElement('div');
+        field.className = 'admin-field';
+        const label = document.createElement('label');
+        label.setAttribute('for', `new-sku-${apiKey}`);
+        label.textContent = Dashboard.t(`main.${colId}`);
+        const select = document.createElement('select');
+        select.id = `new-sku-${apiKey}`;
+        select.name = apiKey;
+        select.disabled = !Dashboard.canEditField(TABLE_KEY, colId, '');
+        const blankOption = document.createElement('option');
+        blankOption.value = '';
+        blankOption.textContent = Dashboard.t('main.articleTypeSelect');
+        select.appendChild(blankOption);
+        (categoryOptions[categoryType] || []).forEach((name) => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+        field.append(label, select);
+        createCategoryGrid.appendChild(field);
+    });
+}
 
 function buildEvidencePickerFields() {
     createEvidenceGrid.innerHTML = '';
@@ -460,12 +555,14 @@ function applyCreateFormFieldPermissions() {
     if (typeInput) typeInput.disabled = !Dashboard.canEditField(TABLE_KEY, 'colArticuloTipo', '');
 }
 
-function openCreateModal() {
+async function openCreateModal() {
     createForm.reset();
     createFormError.hidden = true;
     createEvidenceFiles.clear();
+    await loadCategoryOptions();
     applyCreateFormFieldPermissions();
     buildEvidencePickerFields();
+    buildCategoryPickerFields();
     createModal.hidden = false;
 }
 
@@ -497,6 +594,10 @@ createForm?.addEventListener('submit', async (event) => {
         });
         const typeInput = createForm.elements.namedItem('articleType');
         if (typeInput && !typeInput.disabled) patch.articleType = typeInput.value;
+        CATEGORY_SELECT_FIELDS.forEach(([, apiKey]) => {
+            const input = createForm.elements.namedItem(apiKey);
+            if (input && !input.disabled) patch[apiKey] = input.value;
+        });
         await fetch(`/api/business/sku-items/${skuItem.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title data-i18n="menu.catCentroDistCategoriasInventario">Article Categories</title>
+    <link rel="icon" href="icons/icon-512.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-512.png">
+    <meta name="theme-color" content="#0b0d14">
+    <link rel="stylesheet" href="AppInicio.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
+</head>
+<body data-category-type="inventario">
+    <!-- Native App screen for one of the 7 "Nuestras Categorías" catalogs
+         (see AppCategoriaArticulo.js) -- same shell as Tipos de Unidad's own
+         AppTiposUnidad.html, reused as-is: identical architecture (flat
+         list that never filters + "+ Nueva Categoría" + field-by-field
+         form), only which category this page manages differs. -->
+    <div class="home-screen">
+        <div class="home-subscreen">
+            <div class="home-subscreen-header home-carga-header">
+                <div class="home-carga-header-top">
+                    <button type="button" class="home-subscreen-back" id="carga-back" data-i18n-aria="admin.back" aria-label="Back">
+                        <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                    </button>
+                    <h2 data-i18n="menu.catCentroDistCategoriasInventario" id="carga-title">Article Categories</h2>
+                </div>
+                <div class="home-carga-progress-track" id="carga-progress-track" hidden>
+                    <div class="home-carga-progress-fill" id="carga-progress-fill"></div>
+                </div>
+                <p class="home-carga-progress-label" id="carga-progress-label" hidden></p>
+            </div>
+            <div class="home-subscreen-body" id="carga-body"></div>
+        </div>
+    </div>
+
+    <div class="home-toast-container" id="home-toast-container"></div>
+
+    <script src="AppConfig.js"></script>
+    <script src="ColorPalette.js"></script>
+    <script src="AppOfflineSync.js"></script>
+    <script src="AppCategoriaArticulo.js" defer></script>
+</body>
+</html>

@@ -1229,6 +1229,31 @@ db.exec(`
         is_test_data        INTEGER NOT NULL DEFAULT 0,
         created_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C.
+    -- Distribución) — Inventarios/Compras/Almacenamiento/Rotación/Manejo
+    -- Especial/Riesgo/Vida Útil: 7 option lists the client fills in here,
+    -- then picks FROM in Alta Nuestros Artículos' own "Categorías Artículo"
+    -- selects. One shared table with a category_type discriminator instead
+    -- of 7 near-identical tables — confirmed with the client that all 7 are
+    -- the exact same shape (Nombre/Descripción/Estatus), so this isn't
+    -- speculative unification, it's the real, present duplication.
+    -- db_id/record_number follow sku_items' own convention: "Registro Único"
+    -- = db_id, and the per-type "Código" shown to the user (e.g. ROT-001) is
+    -- just record_number prefixed + zero-padded on read, scoped to
+    -- (client_id, category_type) — never its own stored column.
+    CREATE TABLE IF NOT EXISTS article_categories (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id           TEXT NOT NULL,
+        record_number   INTEGER NOT NULL,
+        category_type   TEXT NOT NULL,
+        name            TEXT NOT NULL DEFAULT '',
+        description     TEXT NOT NULL DEFAULT '',
+        status          TEXT NOT NULL DEFAULT 'active',
+        is_test_data    INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 `);
 
 // profiles.client_id was added after profiles already shipped once — add it
@@ -1501,6 +1526,19 @@ if (!dataTableChangesColumns.some((c) => c.name === 'authorized_by')) {
 const fuelLoadingColumns = db.prepare('PRAGMA table_info(fuel_loading_records)').all();
 if (!fuelLoadingColumns.some((c) => c.name === 'fuel_type')) {
     db.exec("ALTER TABLE fuel_loading_records ADD COLUMN fuel_type TEXT NOT NULL DEFAULT ''");
+}
+
+// Categorías Artículo on sku_items — added after sku_items already shipped
+// once. Each stores the CATEGORY'S NAME (plain text, same free-value
+// convention as main_uom/article_type above), never a foreign key to
+// article_categories — so renaming or deactivating a category later never
+// changes what an already-tagged artículo displays (see article_categories'
+// own status column for why "deactivate, don't delete" matters here).
+const skuItemColumns = db.prepare('PRAGMA table_info(sku_items)').all();
+for (const col of ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil']) {
+    if (!skuItemColumns.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE sku_items ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+    }
 }
 
 // --- Indexes -------------------------------------------------------------
@@ -2065,6 +2103,13 @@ const TABLE_GRANT_PATHS = {
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
     'nuestros-articulos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-articulos' },
+    'categorias-inventario': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-inventario' },
+    'categorias-compra': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-compra' },
+    'categorias-almacenamiento': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-almacenamiento' },
+    'categorias-rotacion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-rotacion' },
+    'categorias-manejo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-manejo' },
+    'categorias-riesgo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-riesgo' },
+    'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -3321,6 +3366,17 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     evidenceRight: { column: 'evidence_right', fieldKey: 'main.colArticuloEvidenceRight' },
     evidenceTop: { column: 'evidence_top', fieldKey: 'main.colArticuloEvidenceTop' },
     evidenceBottom: { column: 'evidence_bottom', fieldKey: 'main.colArticuloEvidenceBottom' },
+    // Categorías Artículo — each stores the selected article_categories row's
+    // NAME as plain text (see sku_items' own migration comment for why: never
+    // a foreign key, so a later rename/deactivation there can't retroactively
+    // change what an already-tagged artículo shows).
+    categoryInventario: { column: 'category_inventario', fieldKey: 'main.colArticuloCategoriaInventario' },
+    categoryCompra: { column: 'category_compra', fieldKey: 'main.colArticuloCategoriaCompra' },
+    categoryAlmacenamiento: { column: 'category_almacenamiento', fieldKey: 'main.colArticuloCategoriaAlmacenamiento' },
+    categoryRotacion: { column: 'category_rotacion', fieldKey: 'main.colArticuloCategoriaRotacion' },
+    categoryManejo: { column: 'category_manejo', fieldKey: 'main.colArticuloCategoriaManejo' },
+    categoryRiesgo: { column: 'category_riesgo', fieldKey: 'main.colArticuloCategoriaRiesgo' },
+    categoryVidautil: { column: 'category_vidautil', fieldKey: 'main.colArticuloCategoriaVidautil' },
 };
 
 function updateSkuItem(id, clientId, patch, forTestAccount = false) {
@@ -3340,6 +3396,76 @@ function updateSkuItem(id, clientId, patch, forTestAccount = false) {
 
 function deleteSkuItem(id, clientId) {
     db.prepare('DELETE FROM sku_items WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----
+// --- Distribución) -- 7 near-identical catalogs sharing one table (see -----
+// article_categories' own DDL comment). ARTICLE_CATEGORY_TYPES is the single
+// source of truth for which category_type values exist, their per-type
+// "Código" prefix, and the tableKey each one's own screen/permissions use --
+// server.js validates every :categoryType route param against this map.
+const ARTICLE_CATEGORY_TYPES = {
+    inventario: { prefix: 'INV', tableKey: 'categorias-inventario', pantalla: 'Nuestras Categorías Inventarios' },
+    compra: { prefix: 'COM', tableKey: 'categorias-compra', pantalla: 'Nuestras Categorías Compras' },
+    almacenamiento: { prefix: 'ALM', tableKey: 'categorias-almacenamiento', pantalla: 'Nuestras Categorías Almacenamiento' },
+    rotacion: { prefix: 'ROT', tableKey: 'categorias-rotacion', pantalla: 'Nuestras Categorías Rotación' },
+    manejo: { prefix: 'MAN', tableKey: 'categorias-manejo', pantalla: 'Nuestras Categorías Manejo Especial' },
+    riesgo: { prefix: 'RIE', tableKey: 'categorias-riesgo', pantalla: 'Nuestras Categorías Riesgo' },
+    vidautil: { prefix: 'VID', tableKey: 'categorias-vidautil', pantalla: 'Nuestras Categorías Vida Útil' },
+};
+
+function listArticleCategories(clientId, categoryType, forTestAccount = false) {
+    return db.prepare('SELECT * FROM article_categories WHERE client_id = ? AND category_type = ? AND is_test_data = ? ORDER BY record_number ASC')
+        .all(clientId, categoryType, forTestAccount ? 1 : 0);
+}
+
+function getArticleCategoryById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM article_categories WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+
+// Options a "Categoría X" select on Alta Nuestros Artículos may offer for
+// NEW selections -- Inactivo values are excluded here but never removed from
+// an artículo that already carries one (that's just the plain text value
+// stored on sku_items, untouched by this filter).
+function listActiveArticleCategoryNames(clientId, categoryType, forTestAccount = false) {
+    return db.prepare("SELECT name FROM article_categories WHERE client_id = ? AND category_type = ? AND is_test_data = ? AND status = 'active' AND name != '' ORDER BY name ASC")
+        .all(clientId, categoryType, forTestAccount ? 1 : 0)
+        .map((r) => r.name);
+}
+
+function createArticleCategory({ clientId, categoryType, isTestData = false }) {
+    const recordNumber = db
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM article_categories WHERE client_id = ? AND category_type = ? AND is_test_data = ?')
+        .get(clientId, categoryType, isTestData ? 1 : 0).n;
+    const result = db
+        .prepare('INSERT INTO article_categories (client_id, db_id, record_number, category_type, is_test_data) VALUES (@clientId, @dbId, @recordNumber, @categoryType, @isTestData)')
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, categoryType, isTestData: isTestData ? 1 : 0 });
+    return getArticleCategoryById(result.lastInsertRowid, clientId, isTestData);
+}
+
+const ARTICLE_CATEGORY_PATCHABLE_FIELDS = {
+    name: { column: 'name', fieldKey: 'main.colCatName' },
+    description: { column: 'description', fieldKey: 'main.colCatDescription' },
+    status: { column: 'status', fieldKey: 'main.colCatStatus' },
+};
+
+function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(ARTICLE_CATEGORY_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE article_categories SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getArticleCategoryById(id, clientId, forTestAccount);
+}
+
+function deleteArticleCategory(id, clientId) {
+    db.prepare('DELETE FROM article_categories WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
 // Carga Combustible's own suggestion hook: given the Económico the user just
@@ -4151,6 +4277,13 @@ const WEB_SCREEN_CATALOG = [
     { key: 'reglas-orden-llenado', labelKey: 'menu.fieldRulesGroup' },
     { key: 'roles', labelKey: 'menu.roles' },
     { key: 'nuestros-articulos', labelKey: 'menu.opCentroDistAltaArticulos' },
+    { key: 'categorias-inventario', labelKey: 'menu.catCentroDistCategoriasInventario' },
+    { key: 'categorias-compra', labelKey: 'menu.catCentroDistCategoriasCompra' },
+    { key: 'categorias-almacenamiento', labelKey: 'menu.catCentroDistCategoriasAlmacenamiento' },
+    { key: 'categorias-rotacion', labelKey: 'menu.catCentroDistCategoriasRotacion' },
+    { key: 'categorias-manejo', labelKey: 'menu.catCentroDistCategoriasManejo' },
+    { key: 'categorias-riesgo', labelKey: 'menu.catCentroDistCategoriasRiesgo' },
+    { key: 'categorias-vidautil', labelKey: 'menu.catCentroDistCategoriasVidautil' },
 ];
 
 function deserializeSaasApp(row) {
@@ -5074,6 +5207,14 @@ module.exports = {
     updateSkuItem,
     deleteSkuItem,
     SKU_ITEM_PATCHABLE_FIELDS,
+    ARTICLE_CATEGORY_TYPES,
+    listArticleCategories,
+    getArticleCategoryById,
+    listActiveArticleCategoryNames,
+    createArticleCategory,
+    ARTICLE_CATEGORY_PATCHABLE_FIELDS,
+    updateArticleCategory,
+    deleteArticleCategory,
     createPendingChange,
     getPendingChangeById,
     hasPendingChangeForField,

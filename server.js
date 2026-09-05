@@ -138,6 +138,14 @@ const {
     SKU_ITEM_PATCHABLE_FIELDS,
     updateSkuItem,
     deleteSkuItem,
+    ARTICLE_CATEGORY_TYPES,
+    listArticleCategories,
+    getArticleCategoryById,
+    listActiveArticleCategoryNames,
+    createArticleCategory,
+    ARTICLE_CATEGORY_PATCHABLE_FIELDS,
+    updateArticleCategory,
+    deleteArticleCategory,
     getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,
@@ -3417,6 +3425,13 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         evidenceRight: row.evidence_right,
         evidenceTop: row.evidence_top,
         evidenceBottom: row.evidence_bottom,
+        categoryInventario: row.category_inventario,
+        categoryCompra: row.category_compra,
+        categoryAlmacenamiento: row.category_almacenamiento,
+        categoryRotacion: row.category_rotacion,
+        categoryManejo: row.category_manejo,
+        categoryRiesgo: row.category_riesgo,
+        categoryVidautil: row.category_vidautil,
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
             companyName,
@@ -3474,6 +3489,112 @@ app.delete('/api/business/sku-items/:id', requireAuth, (req, res) => {
     });
     deleteSkuItem(req.params.id, req.user.clientId);
     res.status(204).end();
+});
+
+// --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----
+// --- Distribución) -- 7 near-identical catalogs sharing one generic route --
+// set, :categoryType validated against ARTICLE_CATEGORY_TYPES (db.js) on
+// every request. Each type maps to its own tableKey for permission grants
+// (see TABLE_GRANT_PATHS), so a role granted "Nuestras Categorías Rotación"
+// doesn't thereby see/edit any of the other 6.
+const ARTICLE_CATEGORY_AREA_LABEL = 'C. Distribución';
+const ARTICLE_CATEGORY_MODULE_LABEL = 'Cadena de Suministro';
+
+function articleCategoryTypeConfig(categoryType) {
+    return ARTICLE_CATEGORY_TYPES[categoryType] || null;
+}
+
+function mapArticleCategoryRecord(row, pendingByRecord, companyName) {
+    if (!row) return row;
+    const config = articleCategoryTypeConfig(row.category_type);
+    return {
+        id: row.id,
+        registroUnico: row.db_id,
+        code: `${config?.prefix || 'CAT'}-${String(row.record_number).padStart(3, '0')}`,
+        name: row.name,
+        description: row.description,
+        status: row.status,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: ARTICLE_CATEGORY_AREA_LABEL,
+            modulo: ARTICLE_CATEGORY_MODULE_LABEL,
+            pantalla: config?.pantalla || 'Nuestras Categorías',
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
+app.get('/api/business/article-categories/:categoryType', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const config = articleCategoryTypeConfig(req.params.categoryType);
+    if (!config) return res.status(404).json({ message: 'Unknown category type.' });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, config.tableKey);
+    const client = getClientById(req.user.clientId);
+    res.json({
+        categories: listArticleCategories(req.user.clientId, req.params.categoryType, req.user.isTestAccount)
+            .map((r) => mapArticleCategoryRecord(r, pendingByRecord, client?.company_name)),
+    });
+});
+
+app.post('/api/business/article-categories/:categoryType', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const config = articleCategoryTypeConfig(req.params.categoryType);
+    if (!config) return res.status(404).json({ message: 'Unknown category type.' });
+    const category = createArticleCategory({ clientId: req.user.clientId, categoryType: req.params.categoryType, isTestData: req.user.isTestAccount });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: config.tableKey, recordId: category.id,
+        recordLabel: `#${category.id}`, action: 'create', changedBy: changedByLabel(req),
+    });
+    const client = getClientById(req.user.clientId);
+    res.status(201).json({ category: mapArticleCategoryRecord(category, null, client?.company_name) });
+});
+
+app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const config = articleCategoryTypeConfig(req.params.categoryType);
+    if (!config) return res.status(404).json({ message: 'Unknown category type.' });
+    const existing = getArticleCategoryById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing || existing.category_type !== req.params.categoryType) return res.status(404).json({ message: 'Category not found.' });
+    const { baseline, overrideConflicts, ...patch } = req.body || {};
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, ARTICLE_CATEGORY_PATCHABLE_FIELDS, config.tableKey, `#${existing.id}`, {}, { baseline, overrideConflicts });
+    const category = updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
+    const client = getClientById(req.user.clientId);
+    res.json({ category: mapArticleCategoryRecord(category, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
+});
+
+app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const config = articleCategoryTypeConfig(req.params.categoryType);
+    if (!config) return res.status(404).json({ message: 'Unknown category type.' });
+    const existing = getArticleCategoryById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing || existing.category_type !== req.params.categoryType) return res.status(404).json({ message: 'Category not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, config.tableKey, 'colCatDeleteAuth')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar categorías.' });
+        }
+    }
+    logTableChange({
+        clientId: req.user.clientId, tableKey: config.tableKey, recordId: existing.id,
+        recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
+    });
+    deleteArticleCategory(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
+// Alta Nuestros Artículos' own 7 "Categoría X" selects fetch every catalog's
+// ACTIVE names in one request instead of 7 separate ones -- see
+// listActiveArticleCategoryNames (db.js) for why Inactivo values are
+// excluded here without affecting an artículo that already has one.
+app.get('/api/business/article-categories-active', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const options = {};
+    Object.keys(ARTICLE_CATEGORY_TYPES).forEach((categoryType) => {
+        options[categoryType] = listActiveArticleCategoryNames(req.user.clientId, categoryType, req.user.isTestAccount);
+    });
+    res.json({ options });
 });
 
 // --- Base de Datos Global (Configuración > Base de Datos) -------------------
