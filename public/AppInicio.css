@@ -1271,6 +1271,138 @@ body{
 }
 .home-carga-photo-btn i{ color: var(--home-accent); font-size: 1rem; }
 
+/* Barcode scanner overlay (see AppNuestrosArticulos.js's openBarcodeScanner)
+   -- fixed over the whole viewport rather than nested under .home-screen, so
+   it works the same regardless of which subscreen opened it. Camera video
+   fills .scan-camera; .scan-frame/.scan-corner/.scan-line are a purely
+   decorative aiming guide -- BarcodeDetector reads the whole video frame,
+   not just this box, same as any phone camera app's own guide overlay. */
+.scan-btn-row{ display: flex; flex-direction: column; gap: 0.55rem; }
+.scan-btn{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: var(--home-bg);
+    border: 1.5px dashed var(--home-accent-strong-1);
+    border-radius: 0.6rem;
+    padding: 0.7rem;
+    color: var(--home-accent-strong-1);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.scan-divider{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--home-text-muted);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0.1rem 0;
+}
+.scan-divider::before, .scan-divider::after{ content: ''; flex: 1; height: 1px; background: var(--home-border); }
+.scan-overlay{
+    position: fixed;
+    inset: 0;
+    background: #05060a;
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+}
+.scan-topbar{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(1rem + env(safe-area-inset-top, 0px)) 1rem 0.6rem;
+    flex: none;
+}
+.scan-close{
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: none;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+.scan-title{ color: #fff; font-size: 0.82rem; font-weight: 700; }
+.scan-camera{ flex: 1; position: relative; overflow: hidden; background: #05060a; }
+.scan-camera video{ width: 100%; height: 100%; object-fit: cover; }
+.scan-frame{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 78%;
+    height: 120px;
+    pointer-events: none;
+}
+.scan-corner{ position: absolute; width: 26px; height: 26px; border-color: #7FE0C9; border-style: solid; border-width: 0; }
+.scan-corner.tl{ top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-top-left-radius: 10px; }
+.scan-corner.tr{ top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-top-right-radius: 10px; }
+.scan-corner.bl{ bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-bottom-left-radius: 10px; }
+.scan-corner.br{ bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: 10px; }
+.scan-hint{
+    position: absolute;
+    bottom: env(safe-area-inset-bottom, 14px);
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.75);
+    font-size: 0.75rem;
+}
+.scan-bottombar{
+    flex: none;
+    padding: 1rem 1.2rem calc(1.4rem + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.scan-manual{
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.85);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    font-family: inherit;
+}
+.scan-detected{
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.85rem;
+    background: rgba(5,6,10,0.92);
+}
+.scan-check{
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+    background: var(--home-accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+}
+.scan-value{ color: #fff; font-family: ui-monospace, monospace; font-size: 1.1rem; letter-spacing: 0.03em; }
+.scan-caption{ color: rgba(255,255,255,0.7); font-size: 0.78rem; }
+
 /* Notificaciones bottom sheet -- unlike .home-select-sheet (a single
    scrolling column of options), this needs the tab strip pinned at the
    top with only the list below it scrolling, so a flex column with

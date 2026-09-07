@@ -150,7 +150,7 @@ const TABLE_KEY = 'nuestros-articulos';
 // db.js. Registro Único/SKU are NOT here -- both are server-generated,
 // shown read-only in the form header area instead (see renderFormView).
 const FIELDS = [
-    { id: 'upc', group: 'general', apiKey: 'upc', labelKey: 'main.colArticuloUpc', hintKey: 'home.articuloHintUpc', type: 'text', icon: 'bx-barcode', colId: 'colArticuloUpc' },
+    { id: 'upc', group: 'general', apiKey: 'upc', labelKey: 'main.colArticuloUpc', hintKey: 'home.articuloHintUpc', type: 'text', icon: 'bx-barcode', colId: 'colArticuloUpc', scannable: true },
     { id: 'uniqueDescription', group: 'general', apiKey: 'uniqueDescription', labelKey: 'main.colArticuloDescUnica', hintKey: 'home.articuloHintDescUnica', type: 'text', icon: 'bx-text', colId: 'colArticuloDescUnica' },
     { id: 'knownDescription', group: 'general', apiKey: 'knownDescription', labelKey: 'main.colArticuloDescConocida', hintKey: 'home.articuloHintDescConocida', type: 'text', icon: 'bx-text', colId: 'colArticuloDescConocida' },
     { id: 'customDescription', group: 'general', apiKey: 'customDescription', labelKey: 'main.colArticuloDescPersonalizada', hintKey: 'home.articuloHintDescPersonalizada', type: 'text', icon: 'bx-text', colId: 'colArticuloDescPersonalizada' },
@@ -633,6 +633,18 @@ function buildFieldBody(field, record) {
         return bodyWrap;
     }
 
+    if (field.scannable && barcodeDetectionSupported()) {
+        const scanBtn = document.createElement('button');
+        scanBtn.type = 'button';
+        scanBtn.className = 'scan-btn';
+        scanBtn.innerHTML = `<i class="bx bx-barcode-reader" aria-hidden="true"></i><span>${t('home.articuloScanButton')}</span>`;
+        scanBtn.addEventListener('click', () => openBarcodeScanner(field));
+        const divider = document.createElement('div');
+        divider.className = 'scan-divider';
+        divider.textContent = t('home.articuloScanOr');
+        bodyWrap.append(scanBtn, divider);
+    }
+
     const input = document.createElement('input');
     input.type = field.type;
     input.value = fieldValueFromRecord(field, record) || '';
@@ -653,6 +665,102 @@ function buildFieldBody(field, record) {
     });
     bodyWrap.append(input, error, confirmBtn);
     return bodyWrap;
+}
+
+// --- Barcode scanner (UPC) --------------------------------------------------
+// BarcodeDetector is a browser-native API (Chrome/Android WebView, which is
+// exactly what a Capacitor Android app's own WebView is built on -- same
+// code path works in the plain browser App preview and the compiled app).
+// Not supported in every browser (notably iOS Safari without a polyfill) --
+// barcodeDetectionSupported() gates the whole button so unsupported browsers
+// just see the manual input, never a button that would fail on tap.
+function barcodeDetectionSupported() {
+    return 'BarcodeDetector' in window && !!navigator.mediaDevices?.getUserMedia;
+}
+
+async function openBarcodeScanner(field) {
+    const overlay = document.createElement('div');
+    overlay.className = 'scan-overlay';
+    overlay.innerHTML = `
+        <div class="scan-topbar">
+            <button type="button" class="scan-close" aria-label="${t('admin.cancel')}"><i class="bx bx-x" aria-hidden="true"></i></button>
+            <span class="scan-title">${t('home.articuloScanTitle')}</span>
+            <span style="width:2.2rem"></span>
+        </div>
+        <div class="scan-camera">
+            <video autoplay playsinline muted></video>
+            <div class="scan-frame">
+                <span class="scan-corner tl"></span><span class="scan-corner tr"></span>
+                <span class="scan-corner bl"></span><span class="scan-corner br"></span>
+            </div>
+            <p class="scan-hint">${t('home.articuloScanHint')}</p>
+        </div>
+        <div class="scan-bottombar">
+            <button type="button" class="scan-manual">${t('home.articuloScanManual')}</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const video = overlay.querySelector('video');
+    let stream = null;
+    let rafId = null;
+    let stopped = false;
+
+    function stopAndClose() {
+        stopped = true;
+        if (rafId) cancelAnimationFrame(rafId);
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        overlay.remove();
+    }
+    overlay.querySelector('.scan-close').addEventListener('click', stopAndClose);
+    overlay.querySelector('.scan-manual').addEventListener('click', stopAndClose);
+
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (stopped) { stream.getTracks().forEach((track) => track.stop()); return; }
+        video.srcObject = stream;
+        await video.play();
+    } catch (err) {
+        console.error('Barcode scanner: camera access failed', err);
+        showToast(t('home.articuloScanCameraError'));
+        stopAndClose();
+        return;
+    }
+
+    const detector = new window.BarcodeDetector({
+        formats: ['upc_a', 'upc_e', 'ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code'],
+    });
+
+    async function tick() {
+        if (stopped) return;
+        try {
+            const codes = await detector.detect(video);
+            if (codes.length) {
+                const value = codes[0].rawValue;
+                stopped = true;
+                if (rafId) cancelAnimationFrame(rafId);
+                stream.getTracks().forEach((track) => track.stop());
+                const detectedEl = document.createElement('div');
+                detectedEl.className = 'scan-detected';
+                detectedEl.innerHTML = `
+                    <div class="scan-check"><i class="bx bx-check" aria-hidden="true"></i></div>
+                    <div class="scan-value"></div>
+                    <p class="scan-caption">${t('home.articuloScanDetected')}</p>
+                `;
+                detectedEl.querySelector('.scan-value').textContent = value;
+                overlay.appendChild(detectedEl);
+                setTimeout(() => {
+                    overlay.remove();
+                    commitFieldValue(field, value);
+                }, 700);
+                return;
+            }
+        } catch (err) {
+            console.error('Barcode scanner: detect failed', err);
+        }
+        rafId = requestAnimationFrame(tick);
+    }
+    rafId = requestAnimationFrame(tick);
 }
 
 document.getElementById('carga-back').addEventListener('click', () => {
