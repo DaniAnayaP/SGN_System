@@ -2834,6 +2834,22 @@ function setJobPositionReportsTo(id, clientId, reportsToJobPositionId) {
     return getJobPositionById(id, clientId);
 }
 
+// Walks the "reports to" chain upward starting at candidateId -- returns
+// true if it ever reaches positionId, meaning setting positionId's
+// reports-to to candidateId would close a cycle (Business-EstructuraOrganizacional's
+// renderTree() has no root left to start from once every Puesto in a loop
+// has a "valid" supervisor, so the whole chart silently renders blank).
+// Hop cap mirrors resolveDirectSupervisorUserId's own guard above.
+function wouldCreateReportsToCycle(clientId, positionId, candidateId) {
+    let currentId = candidateId;
+    for (let hop = 0; currentId && hop < 100; hop += 1) {
+        if (currentId === positionId) return true;
+        const current = getJobPositionById(currentId, clientId);
+        currentId = current?.reports_to_job_position_id || null;
+    }
+    return false;
+}
+
 // Walks the org chart upward from a user's own Puesto until it finds
 // another Puesto with at least one real hr_worker (with a login) assigned
 // to it -- that person is the "Jefe Directo" for access-denied alerts (see
@@ -5675,6 +5691,7 @@ module.exports = {
     resolveDirectSupervisorUserId,
     getOrgChartPositions,
     setJobPositionReportsTo,
+    wouldCreateReportsToCycle,
     COST_CENTER_FIELDS,
     JOB_POSITION_FIELDS,
     FUEL_PATCHABLE_FIELDS,

@@ -129,7 +129,19 @@ function renderTree() {
     container.innerHTML = '';
     const validIds = new Set(positions.map((p) => p.id));
     const roots = positions.filter((p) => !p.reportsToJobPositionId || !validIds.has(p.reportsToJobPositionId));
-    if (!roots.length) return;
+    if (!roots.length) {
+        // The PUT route now rejects any change that would close a reports-to
+        // cycle, so this should never trigger from here on -- kept as a
+        // defensive message (instead of a silent blank box) for data saved
+        // before that check existed.
+        if (positions.length) {
+            const warning = document.createElement('p');
+            warning.className = 'org-tree-broken';
+            warning.textContent = Dashboard.t('business.orgChartBrokenChain');
+            container.appendChild(warning);
+        }
+        return;
+    }
     roots.forEach((root) => container.appendChild(buildTreeNode(root, new Set())));
 }
 

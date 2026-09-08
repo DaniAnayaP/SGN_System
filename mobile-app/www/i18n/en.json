@@ -605,6 +605,7 @@
     "orgChartTreeTitle": "Chart",
     "orgChartNoSupervisor": "— None (top level) —",
     "orgChartVacant": "Vacant",
+    "orgChartBrokenChain": "Couldn't build the org chart — check that no Job Position points to another in a circle.",
     "jobPositionName": "Position Name",
     "jobPositionAbbreviation": "Position Abbreviation",
     "jobPositionEditTitle": "Edit Job Position",

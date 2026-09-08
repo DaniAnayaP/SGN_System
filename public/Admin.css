@@ -1555,6 +1555,20 @@ body.dark-mode .perm-tree-depth-2{
     gap: 1.4rem;
     align-items: flex-start;
 }
+/* Shown instead of a blank .org-chart-tree when every Puesto with a
+   reports-to ended up in a cycle (should not happen now that the PUT
+   route rejects a cyclic assignment up front -- kept as a defensive
+   fallback for data saved before that check existed). */
+.org-tree-broken{
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #b8860b;
+    background: rgba(184, 134, 11, 0.1);
+    border: 1px solid rgba(184, 134, 11, 0.35);
+    border-radius: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    margin: 0.5rem 0.25rem 1.5rem;
+}
 
 /* Contrataciones */
 .admin-module-list{

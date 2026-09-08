@@ -605,6 +605,7 @@
     "orgChartTreeTitle": "Organigrama",
     "orgChartNoSupervisor": "— Nadie (nivel superior) —",
     "orgChartVacant": "Vacante",
+    "orgChartBrokenChain": "No se pudo armar el organigrama — revisa que ningún Puesto se apunte en círculo con otro.",
     "jobPositionName": "Nombre del Puesto",
     "jobPositionAbbreviation": "Abrev Puesto",
     "jobPositionEditTitle": "Editar Puesto de Trabajo",

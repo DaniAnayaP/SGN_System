@@ -200,6 +200,7 @@ const {
     resolveDirectSupervisorUserId,
     getOrgChartPositions,
     setJobPositionReportsTo,
+    wouldCreateReportsToCycle,
     COST_CENTER_FIELDS,
     JOB_POSITION_FIELDS,
     FUEL_PATCHABLE_FIELDS,
@@ -1959,8 +1960,14 @@ app.put('/api/business/job-positions/:id/reports-to', requireAuth, requireClient
         if (Number(reportsToJobPositionId) === existing.id) {
             return res.status(400).json({ message: 'A job position cannot report to itself.' });
         }
-        if (!getJobPositionById(reportsToJobPositionId, req.user.clientId)) {
+        const candidate = getJobPositionById(reportsToJobPositionId, req.user.clientId);
+        if (!candidate) {
             return res.status(400).json({ message: 'reportsToJobPositionId does not belong to this client.' });
+        }
+        if (wouldCreateReportsToCycle(req.user.clientId, existing.id, candidate.id)) {
+            return res.status(400).json({
+                message: `Esto crearía un ciclo: "${existing.name}" ya está debajo de "${candidate.name}" en la cadena de mando.`,
+            });
         }
     }
     const jobPosition = setJobPositionReportsTo(req.params.id, req.user.clientId, reportsToJobPositionId || null);
