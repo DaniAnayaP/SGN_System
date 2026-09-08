@@ -1278,6 +1278,17 @@ function wireMenuInteractions() {
         menuItem.addEventListener('mouseenter', () => showSidebarTooltip(menuItem, Sidebar));
         menuItem.addEventListener('mouseleave', hideSidebarTooltip);
     });
+
+    // Expanded-sidebar sub-menu tooltip: a long label (e.g. one of the 7
+    // "Nuestras Categorías..." catalogs) now ellipsizes instead of
+    // hard-clipping (see .sub-menu .sub-menu-link span in Inicio-en.css) --
+    // this shows the FULL label on hover, same tooltip element/positioning
+    // as showSidebarTooltip's minimized-sidebar case above, just gated on
+    // the label actually being truncated rather than on sidebar state.
+    document.querySelectorAll('.sub-menu-link').forEach((link) => {
+        link.addEventListener('mouseenter', () => showSubmenuTooltip(link));
+        link.addEventListener('mouseleave', hideSidebarTooltip);
+    });
 }
 
 function getSidebarTooltip() {
@@ -1298,6 +1309,20 @@ function showSidebarTooltip(menuItem, Sidebar) {
     const tooltip = getSidebarTooltip();
     tooltip.textContent = label;
     const rect = menuItem.getBoundingClientRect();
+    tooltip.style.top = `${rect.top + rect.height / 2}px`;
+    tooltip.style.left = `${rect.right + 8}px`;
+    tooltip.classList.add('visible');
+}
+
+// Only for a label CSS actually ellipsized (scrollWidth > clientWidth) --
+// "Ingresos"/"Gastos" and every other short sub-menu label never triggers
+// this, so nothing changes for them.
+function showSubmenuTooltip(link) {
+    const span = link.querySelector('span');
+    if (!span || span.scrollWidth <= span.clientWidth) return;
+    const tooltip = getSidebarTooltip();
+    tooltip.textContent = span.textContent;
+    const rect = link.getBoundingClientRect();
     tooltip.style.top = `${rect.top + rect.height / 2}px`;
     tooltip.style.left = `${rect.right + 8}px`;
     tooltip.classList.add('visible');

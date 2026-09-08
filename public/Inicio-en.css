@@ -642,6 +642,18 @@
         flex-shrink: 0;
         font-size: 0.9rem;
     }
+    /* A long label (e.g. "Nuestras Categorías Inventarios") now ellipsizes
+       instead of hard-clipping mid-word -- min-width:0 is what actually lets
+       a flex child shrink below its own content width, without it
+       text-overflow never gets the chance to kick in. showSubmenuTooltip
+       (Dashboard.js) shows the full label on hover, gated on this span's
+       scrollWidth actually exceeding its clientWidth. */
+    .sub-menu .sub-menu-link span{
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     /* A sub-menu item that's itself a dropdown (e.g. Reportes >
        Personalizados > each saved report) — mirrors .menu-link's own
        chevron rotation/collapse rules, scoped to .sub-menu-link since
