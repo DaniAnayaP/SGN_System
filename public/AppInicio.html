@@ -48,6 +48,14 @@
                     <button type="button" class="home-hamburger-btn" id="home-search-btn" data-i18n-aria="sidebar.searchPlaceholder" aria-label="Search">
                         <i class="bx bx-search" aria-hidden="true"></i>
                     </button>
+                    <!-- Connectivity indicator -- icon only, no label. State
+                         (online/syncing/offline) and the badge count come
+                         from AppInicio.js's updateConnIndicator(); tapping it
+                         opens home-conn-overlay below with the real detail. -->
+                    <button type="button" class="conn-btn" id="home-conn-btn" data-state="online" aria-haspopup="true" aria-expanded="false" data-i18n-aria="home.connButtonLabel" aria-label="Connection status">
+                        <svg id="home-conn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+                        <span class="conn-badge" id="home-conn-badge" hidden>0</span>
+                    </button>
                     <button type="button" class="home-hamburger-btn" id="home-hamburger-btn" aria-haspopup="true" aria-expanded="false">
                         <i class="bx bx-menu" aria-hidden="true"></i>
                     </button>
@@ -242,6 +250,20 @@
                 </button>
             </div>
             <div class="home-ui-scale-dots" id="home-ui-scale-dots"></div>
+        </div>
+    </div>
+
+    <div class="home-sheet-overlay" id="home-conn-overlay" hidden>
+        <div class="home-sheet" role="dialog" aria-modal="true" aria-labelledby="home-conn-title">
+            <div class="home-sheet-handle"></div>
+            <div class="home-conn-head">
+                <span class="home-conn-head-icon" id="home-conn-head-icon"></span>
+                <div class="home-conn-head-text">
+                    <h3 class="home-sheet-title" id="home-conn-title">—</h3>
+                    <p class="home-sheet-subtitle" id="home-conn-subtitle">—</p>
+                </div>
+            </div>
+            <div id="home-conn-body"></div>
         </div>
     </div>
 

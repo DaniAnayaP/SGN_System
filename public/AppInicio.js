@@ -368,6 +368,184 @@ document.getElementById('home-menu-logout').addEventListener('click', async () =
     }
 });
 
+// --- Connectivity indicator --------------------------------------------
+// Icon only (no label) next to the hamburger button -- quiet/neutral when
+// online with nothing queued, amber + spinning while AppOfflineSync.js's
+// flushOfflineQueue is working through the queue, red with a count badge
+// when offline. Tapping it opens a sheet with the real detail: what's
+// uploading right now, what's still waiting, or what's saved on this
+// device and hasn't gone up yet -- reads the exact same IndexedDB queue
+// Carga Combustible/Nuestros Traslados/etc. already write to via
+// offlineAwareFetch, nothing new for those screens to wire up.
+const CONN_ICON_WIFI = 'M2 8.82a15 15 0 0 1 20 0M5 12.86a10 10 0 0 1 14 0M8.5 16.9a5 5 0 0 1 7 0M12 20h.01';
+const CONN_ICON_WIFI_OFF = 'M2 2l20 20 M8.5 16.5a5 5 0 0 1 7 0 M5 12.9a10 10 0 0 1 3.3-2.2 M12.6 7.05A10 10 0 0 1 19 9.5 M2.3 6.8A15 15 0 0 1 6.8 4 M22 9.5a15 15 0 0 0-4-2.7 M12 20h.01';
+const CONN_ICON_SYNC = 'M21 12a9 9 0 1 1-3-6.7 M21 3v6h-6';
+const CONN_ICON_CHECK = 'M20 6 9 17l-5-5';
+const CONN_ICON_UPLOAD = 'M12 3v12 M7 8l5-5 5 5 M5 21h14';
+const CONN_ICON_CLOCK = 'M12 8v4l3 3 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z';
+
+function connPathsToSvg(d) {
+    return d.split(' M').map((seg, i) => (i === 0 ? seg : `M${seg}`)).map((seg) => `<path d="${seg.trim()}"/>`).join('');
+}
+function connSvg(d) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${connPathsToSvg(d)}</svg>`;
+}
+function connRelativeTime(isoString) {
+    const minutes = Math.floor((Date.now() - new Date(isoString).getTime()) / 60000);
+    if (minutes < 1) return t('home.connJustNow');
+    if (minutes < 60) return t('home.connMinutesAgo', { n: minutes });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t('home.connHoursAgo', { n: hours });
+    return t('home.connDaysAgo', { n: Math.floor(hours / 24) });
+}
+
+const connBtn = document.getElementById('home-conn-btn');
+const connIconEl = document.getElementById('home-conn-icon');
+const connBadge = document.getElementById('home-conn-badge');
+const connOverlay = document.getElementById('home-conn-overlay');
+const connHeadIcon = document.getElementById('home-conn-head-icon');
+const connTitleEl = document.getElementById('home-conn-title');
+const connSubtitleEl = document.getElementById('home-conn-subtitle');
+const connBodyEl = document.getElementById('home-conn-body');
+
+// item.description (set by whichever screen queued it, e.g. "Nuestros
+// Traslados · Constructora del Valle") can contain a free-text value a user
+// typed into a record -- built via textContent here, never innerHTML, same
+// XSS-safety convention as every other screen rendering client-entered text.
+function connItemRow(icon, cls, title, meta) {
+    const row = document.createElement('div');
+    row.className = 'home-conn-item';
+    const iconEl = document.createElement('span');
+    iconEl.className = `home-conn-item-icon ${cls || ''}`;
+    iconEl.innerHTML = connSvg(icon);
+    const textWrap = document.createElement('span');
+    textWrap.className = 'home-conn-item-text';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'home-conn-item-title';
+    titleEl.textContent = title;
+    const metaEl = document.createElement('div');
+    metaEl.className = 'home-conn-item-meta';
+    metaEl.textContent = meta;
+    textWrap.append(titleEl, metaEl);
+    row.append(iconEl, textWrap);
+    return row;
+}
+
+function renderConnSheet(online, queue) {
+    connBodyEl.innerHTML = '';
+    if (online && !queue.length) {
+        connHeadIcon.className = 'home-conn-head-icon';
+        connHeadIcon.innerHTML = connSvg(CONN_ICON_CHECK);
+        connTitleEl.textContent = t('home.connOnlineTitle');
+        connSubtitleEl.textContent = t('home.connOnlineSubtitle');
+        const empty = document.createElement('div');
+        empty.className = 'home-conn-empty';
+        empty.innerHTML = connSvg(CONN_ICON_WIFI);
+        const p = document.createElement('p');
+        p.textContent = t('home.connOnlineEmptyTitle');
+        const span = document.createElement('span');
+        span.textContent = t('home.connOnlineEmptySubtitle');
+        empty.append(p, span);
+        connBodyEl.appendChild(empty);
+        return;
+    }
+    if (online) {
+        connHeadIcon.className = 'home-conn-head-icon syncing';
+        connHeadIcon.innerHTML = connSvg(CONN_ICON_SYNC);
+        connTitleEl.textContent = t('home.connSyncingTitle');
+        connSubtitleEl.textContent = t('home.connSyncingSubtitle');
+        const uploadingSection = document.createElement('div');
+        uploadingSection.className = 'home-conn-section';
+        const uploadingLabel = document.createElement('div');
+        uploadingLabel.className = 'home-conn-section-label';
+        uploadingLabel.textContent = t('home.connUploadingNow');
+        uploadingSection.appendChild(uploadingLabel);
+        uploadingSection.appendChild(connItemRow(CONN_ICON_UPLOAD, 'uploading', queue[0].description || t('home.connFallbackItem'), t('home.connUploadingLabel')));
+        connBodyEl.appendChild(uploadingSection);
+        if (queue.length > 1) {
+            const waitingSection = document.createElement('div');
+            waitingSection.className = 'home-conn-section';
+            const waitingLabel = document.createElement('div');
+            waitingLabel.className = 'home-conn-section-label';
+            waitingLabel.textContent = t('home.connWaiting', { count: queue.length - 1 });
+            waitingSection.appendChild(waitingLabel);
+            queue.slice(1).forEach((item) => {
+                waitingSection.appendChild(connItemRow(CONN_ICON_CLOCK, 'waiting', item.description || t('home.connFallbackItem'), t('home.connWaitingTurn')));
+            });
+            connBodyEl.appendChild(waitingSection);
+        }
+        const footnote = document.createElement('p');
+        footnote.className = 'home-conn-footnote';
+        footnote.textContent = t('home.connSyncingFootnote');
+        connBodyEl.appendChild(footnote);
+        return;
+    }
+    connHeadIcon.className = 'home-conn-head-icon offline';
+    connHeadIcon.innerHTML = connSvg(CONN_ICON_WIFI_OFF);
+    connTitleEl.textContent = t('home.connOfflineTitle');
+    connSubtitleEl.textContent = t('home.connOfflineSubtitle');
+    if (queue.length) {
+        const section = document.createElement('div');
+        section.className = 'home-conn-section';
+        const label = document.createElement('div');
+        label.className = 'home-conn-section-label';
+        label.textContent = t('home.connPendingCount', { count: queue.length });
+        section.appendChild(label);
+        queue.forEach((item) => {
+            section.appendChild(connItemRow(CONN_ICON_CLOCK, 'waiting', item.description || t('home.connFallbackItem'), t('home.connSavedAgo', { when: connRelativeTime(item.queuedAt) })));
+        });
+        connBodyEl.appendChild(section);
+    } else {
+        const empty = document.createElement('div');
+        empty.className = 'home-conn-empty';
+        empty.innerHTML = connSvg(CONN_ICON_WIFI_OFF);
+        const p = document.createElement('p');
+        p.textContent = t('home.connOfflineEmptyTitle');
+        const span = document.createElement('span');
+        span.textContent = t('home.connOfflineEmptySubtitle');
+        empty.append(p, span);
+        connBodyEl.appendChild(empty);
+    }
+    const footnote = document.createElement('p');
+    footnote.className = 'home-conn-footnote';
+    footnote.textContent = t('home.connOfflineFootnote');
+    connBodyEl.appendChild(footnote);
+}
+
+// Polled every 5s in addition to the online/offline/queue-changed events --
+// same "'online' isn't reliable on every mobile browser" distrust
+// AppOfflineSync.js's own 30s flush fallback already documents. Cheap: just
+// navigator.onLine + one IndexedDB read, no network call.
+async function updateConnIndicator() {
+    const online = navigator.onLine;
+    let queue = [];
+    try {
+        queue = await window.SgnOfflineSync.listOfflineQueue();
+    } catch {
+        queue = [];
+    }
+    const state = !online ? 'offline' : (queue.length ? 'syncing' : 'online');
+    connBtn.dataset.state = state;
+    connIconEl.innerHTML = connPathsToSvg(state === 'offline' ? CONN_ICON_WIFI_OFF : (state === 'syncing' ? CONN_ICON_SYNC : CONN_ICON_WIFI));
+    connBadge.hidden = !(state === 'offline' && queue.length);
+    if (state === 'offline' && queue.length) connBadge.textContent = String(queue.length);
+    if (!connOverlay.hidden) renderConnSheet(online, queue);
+    return { online, queue };
+}
+
+connBtn.addEventListener('click', async () => {
+    closeHamburgerMenu();
+    const { online, queue } = await updateConnIndicator();
+    renderConnSheet(online, queue);
+    connOverlay.hidden = false;
+});
+connOverlay.addEventListener('click', (event) => { if (event.target === connOverlay) connOverlay.hidden = true; });
+
+window.addEventListener('online', updateConnIndicator);
+window.addEventListener('offline', updateConnIndicator);
+document.addEventListener('sgn:offline-queue-changed', updateConnIndicator);
+setInterval(updateConnIndicator, 5000);
+
 // --- "Tamaño del sistema" bottom sheet -----------------------------------
 // Same 8 levels/70-140%/PUT /api/me/ui-scale as Dashboard.js's own "System
 // size" dropdown (per-account, so a change here also applies next time this
@@ -1800,6 +1978,7 @@ async function loadClientBranding() {
 
 (async function init() {
     await loadLanguage();
+    updateConnIndicator();
     try {
         const [meRes, screensRes, profileRes] = await Promise.all([
             fetch(apiUrl('/api/me'), { credentials: 'include' }),
