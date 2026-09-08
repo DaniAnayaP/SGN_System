@@ -250,12 +250,12 @@ const TEXT_CELL_FIELDS_DESTINO = [
 ];
 const ALL_TEXT_CELL_FIELDS = [...TEXT_CELL_FIELDS, ...TEXT_CELL_FIELDS_REQUISITOS, ...TEXT_CELL_FIELDS_ORIGEN, ...TEXT_CELL_FIELDS_DESTINO];
 
-function buildInlineTextCell(record, colId, apiKey) {
+function buildInlineTextCell(record, colId, apiKey, inputType = 'text') {
     const td = document.createElement('td');
     td.dataset.col = colId;
     Dashboard.attachInlineEdit(td, {
         value: record[apiKey] || '',
-        inputType: 'text',
+        inputType,
         tableKey: TABLE_KEY,
         colKey: colId,
         pending: isPending(record, apiKey),
@@ -270,7 +270,7 @@ function buildRow(record) {
     tr.append(
         ...buildSystemCells(record),
         textCellSystem('colTrasladoRegistroUnico', record.registroUnico),
-        buildInlineTextCell(record, 'colTrasladoFechaSolicitud', 'requestDate'),
+        buildInlineTextCell(record, 'colTrasladoFechaSolicitud', 'requestDate', 'datetime-local'),
         buildInlineTextCell(record, 'colTrasladoQuienSolicita', 'requestedBy'),
         buildInlineTextCell(record, 'colTrasladoTipoCliente', 'clientType'),
         buildInlineTextCell(record, 'colTrasladoContactoSolicita', 'requestContact'),

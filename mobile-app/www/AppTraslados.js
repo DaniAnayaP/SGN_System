@@ -144,7 +144,7 @@ const TABLE_KEY = 'nuestros-traslados';
 // both plain TEXT values on the record, not foreign keys, same "conserva su
 // valor" convention as every other screen's own catalog selects.
 const FIELDS = [
-    { id: 'requestDate', group: 'solicitud', apiKey: 'requestDate', labelKey: 'main.colTrasladoFechaSolicitud', hintKey: 'home.trasladoHintFechaSolicitud', type: 'text', icon: 'bx-calendar' },
+    { id: 'requestDate', group: 'solicitud', apiKey: 'requestDate', labelKey: 'main.colTrasladoFechaSolicitud', hintKey: 'home.trasladoHintFechaSolicitud', type: 'datetime-local', icon: 'bx-calendar' },
     { id: 'requestedBy', group: 'solicitud', apiKey: 'requestedBy', labelKey: 'main.colTrasladoQuienSolicita', hintKey: 'home.trasladoHintQuienSolicita', type: 'text', icon: 'bx-user' },
     { id: 'clientType', group: 'solicitud', apiKey: 'clientType', labelKey: 'main.colTrasladoTipoCliente', hintKey: 'home.trasladoHintTipoCliente', type: 'text', icon: 'bx-id-card' },
     { id: 'requestContact', group: 'solicitud', apiKey: 'requestContact', labelKey: 'main.colTrasladoContactoSolicita', hintKey: 'home.trasladoHintContactoSolicita', type: 'text', icon: 'bx-phone' },
