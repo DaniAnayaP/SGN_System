@@ -270,6 +270,12 @@ body{
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    /* A flex item's min-width defaults to auto (its own content width), which
+       silently blocks both the ellipsis above AND updateHeaderOverflowLayout's
+       own scrollWidth-vs-clientWidth check from ever seeing real truncation --
+       same fix the sidebar's own submenu tooltip already needed for this exact
+       reason. */
+    min-width: 0;
 }
 /* Same specificity trap as .home-hamburger-menu button/.home-tab -- a bare
    [hidden] loses to this class's own display:flex, so hiding a picker with

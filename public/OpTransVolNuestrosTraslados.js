@@ -274,7 +274,7 @@ function buildRow(record) {
         buildInlineTextCell(record, 'colTrasladoQuienSolicita', 'requestedBy'),
         buildInlineTextCell(record, 'colTrasladoTipoCliente', 'clientType'),
         buildInlineTextCell(record, 'colTrasladoContactoSolicita', 'requestContact'),
-        buildInlineTextCell(record, 'colTrasladoFechaRequerida', 'neededDate'),
+        buildInlineTextCell(record, 'colTrasladoFechaRequerida', 'neededDate', 'datetime-local'),
         buildInlineTextCell(record, 'colTrasladoHoraRequerida', 'neededTime'),
         buildInlineTextCell(record, 'colTrasladoClienteServicio', 'serviceClient'),
         buildInlineTextCell(record, 'colTrasladoTipoServicio', 'serviceType'),

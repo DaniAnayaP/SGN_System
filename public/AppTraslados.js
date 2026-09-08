@@ -148,7 +148,7 @@ const FIELDS = [
     { id: 'requestedBy', group: 'solicitud', apiKey: 'requestedBy', labelKey: 'main.colTrasladoQuienSolicita', hintKey: 'home.trasladoHintQuienSolicita', type: 'text', icon: 'bx-user' },
     { id: 'clientType', group: 'solicitud', apiKey: 'clientType', labelKey: 'main.colTrasladoTipoCliente', hintKey: 'home.trasladoHintTipoCliente', type: 'text', icon: 'bx-id-card' },
     { id: 'requestContact', group: 'solicitud', apiKey: 'requestContact', labelKey: 'main.colTrasladoContactoSolicita', hintKey: 'home.trasladoHintContactoSolicita', type: 'text', icon: 'bx-phone' },
-    { id: 'neededDate', group: 'solicitud', apiKey: 'neededDate', labelKey: 'main.colTrasladoFechaRequerida', hintKey: 'home.trasladoHintFechaRequerida', type: 'text', icon: 'bx-calendar-check' },
+    { id: 'neededDate', group: 'solicitud', apiKey: 'neededDate', labelKey: 'main.colTrasladoFechaRequerida', hintKey: 'home.trasladoHintFechaRequerida', type: 'datetime-local', icon: 'bx-calendar-check' },
     { id: 'neededTime', group: 'solicitud', apiKey: 'neededTime', labelKey: 'main.colTrasladoHoraRequerida', hintKey: 'home.trasladoHintHoraRequerida', type: 'text', icon: 'bx-time' },
     { id: 'serviceClient', group: 'solicitud', apiKey: 'serviceClient', labelKey: 'main.colTrasladoClienteServicio', hintKey: 'home.trasladoHintClienteServicio', type: 'text', icon: 'bx-buildings' },
     { id: 'serviceType', group: 'solicitud', apiKey: 'serviceType', labelKey: 'main.colTrasladoTipoServicio', hintKey: 'home.trasladoHintTipoServicio', type: 'text', icon: 'bx-category' },

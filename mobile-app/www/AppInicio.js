@@ -1885,9 +1885,14 @@ searchBtn.addEventListener('click', (event) => {
 // client's apodo (unchanged, that's .home-header-actions-inline's own
 // original spot). They only get MOVED (not duplicated -- same DOM nodes,
 // same event listeners, appendChild just relocates them) into this "⋯"
-// panel when BOTH optional pickers are visible at once, since that's the
-// actual case that crowds the apodo out -- either one alone still leaves
-// enough room. Each picker's own "nothing to choose, hide me" rule
+// panel when they'd actually crowd the apodo out -- confirmed with the
+// client this has to be a real measurement of THIS apodo against however
+// many icons happen to be showing, not just "2 or more pickers visible"
+// (a short apodo like "GEIPSA" never needs to collapse, no matter how many
+// icons sit next to it). Detected the same way the sidebar's own submenu
+// tooltip already detects genuine truncation: scrollWidth > clientWidth on
+// the name span once it's laid out inline against every currently-visible
+// icon. Each picker's own "nothing to choose, hide me" rule
 // (updateDeptAreaButtonVisibility / renderCcDropdown's ccBtn.hidden) is
 // untouched; this only decides WHERE to put whichever of them are already
 // showing.
@@ -1896,6 +1901,7 @@ const overflowMenu = document.getElementById('home-header-overflow');
 const inlineActionsWrap = document.getElementById('home-header-actions-inline');
 const deptAreaWrap = deptAreaBtn.closest('.home-picker-wrap');
 const ccWrap = ccBtn.closest('.home-picker-wrap');
+const clientNameEl = document.getElementById('home-client-name');
 
 function closeOverflowMenu() {
     overflowMenu.hidden = true;
@@ -1903,15 +1909,18 @@ function closeOverflowMenu() {
 }
 
 function updateHeaderOverflowLayout() {
-    const visibleOptionalCount = (deptAreaBtn.hidden ? 0 : 1) + (ccBtn.hidden ? 0 : 1);
-    const shouldCollapse = visibleOptionalCount >= 2;
-    overflowBtn.hidden = !shouldCollapse;
-    if (shouldCollapse) {
-        overflowMenu.append(deptAreaWrap, ccWrap, searchBtn);
-    } else {
-        closeOverflowMenu();
-        inlineActionsWrap.append(deptAreaWrap, ccWrap, searchBtn);
-    }
+    // Put everything inline first (undoing any previous collapse) so the
+    // measurement below reflects reality, not a stale collapsed state.
+    overflowBtn.hidden = true;
+    inlineActionsWrap.hidden = false;
+    inlineActionsWrap.append(deptAreaWrap, ccWrap, searchBtn);
+    closeOverflowMenu();
+
+    const isOverlapping = clientNameEl.scrollWidth > clientNameEl.clientWidth;
+    if (!isOverlapping) return;
+
+    overflowBtn.hidden = false;
+    overflowMenu.append(deptAreaWrap, ccWrap, searchBtn);
 }
 
 overflowBtn.addEventListener('click', (event) => {
@@ -1922,6 +1931,7 @@ overflowBtn.addEventListener('click', (event) => {
     overflowBtn.setAttribute('aria-expanded', String(willOpen));
 });
 document.addEventListener('click', closeOverflowMenu);
+window.addEventListener('resize', updateHeaderOverflowLayout);
 
 // --- Breadcrumb collapse/expand — same idea as Dashboard.js's own
 // breadcrumb-toggle (bx-map-alt + chevron), just simpler: no persisted
@@ -2003,6 +2013,7 @@ function applyClientBranding(branding) {
     if (getStoredStyle() === 'institutional') applyInstitutionalTheme();
     clientCompanyAbbreviation = branding.companyAbbreviation || null;
     updateDatabaseCompanyLabel();
+    updateHeaderOverflowLayout();
 }
 
 async function loadClientBranding() {
