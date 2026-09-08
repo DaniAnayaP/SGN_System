@@ -645,10 +645,17 @@ body{
     max-width: 18rem;
 }
 
+/* space-between rather than flex-start: on a wide viewport (tablet, or
+   this App's own browser preview) the tabs spread evenly across the full
+   width instead of bunching at the left with empty space after Material
+   Apoyo. No breakpoint needed -- once the tabs' own natural width (each
+   flex-shrink: 0) exceeds the bar's width, space-between has no extra room
+   to distribute, so they fall back to sitting packed left and scrolling
+   (overflow-x: auto below), exactly like a real phone already did. */
 .home-tabbar{
     margin-top: auto;
     display: flex;
-    justify-content: flex-start;
+    justify-content: space-between;
     gap: 0;
     overflow-x: auto;
     scrollbar-width: none;
