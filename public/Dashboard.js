@@ -929,6 +929,18 @@ function updateDeptPickerLabel() {
     });
 }
 
+// A submenu only counts as real, clickable navigation if at least one entry
+// is an actual destination -- neither a classification band (isClassification,
+// e.g. "Control Interno") nor a permission-only leaf (a column/button that
+// exists solely to be granted in Accesos y Permisos, see PermissionTree.js).
+// A pantalla like Carga Combustible/Nuestros Traslados always HAS a submenu
+// (its own column list, for permission granularity), but that submenu is
+// 100% classification/permission metadata -- it must render as a plain link
+// to its own href, not an expandable dropdown with nothing real inside.
+function hasNavigableChildren(submenu) {
+    return (submenu || []).some((s) => !s.isClassification && !s.permissionOnly);
+}
+
 function buildSubmenu(items) {
     const ul = document.createElement('ul');
     ul.className = 'sub-menu';
@@ -959,7 +971,7 @@ function buildSubmenu(items) {
         // just one level deeper. menu-item-dropdown reuses the existing
         // click-to-toggle wiring in wireMenuInteractions() as-is, which
         // already supports arbitrary nesting depth via :scope > .sub-menu.
-        if (item.submenu) {
+        if (hasNavigableChildren(item.submenu)) {
             li.classList.add('menu-item-dropdown', 'sub-menu-item-dropdown');
             const chevron = document.createElement('i');
             chevron.className = 'bx bx-chevron-down';
@@ -974,7 +986,8 @@ function buildSubmenu(items) {
 
 function buildMenuItem(item) {
     const li = document.createElement('li');
-    li.className = 'menu-item' + (item.submenu ? ' menu-item-dropdown' : ' menu-item-static');
+    const navigable = hasNavigableChildren(item.submenu);
+    li.className = 'menu-item' + (navigable ? ' menu-item-dropdown' : ' menu-item-static');
     if (item.active) li.classList.add('active');
 
     const a = document.createElement('a');
@@ -993,7 +1006,7 @@ function buildMenuItem(item) {
     span.textContent = item.label || t(item.labelKey, item.labelParams || {});
     a.appendChild(span);
 
-    if (item.submenu) {
+    if (navigable) {
         const chevron = document.createElement('i');
         chevron.className = 'bx bx-chevron-down';
         chevron.setAttribute('aria-hidden', 'true');
@@ -1001,7 +1014,7 @@ function buildMenuItem(item) {
     }
 
     li.appendChild(a);
-    if (item.submenu) {
+    if (navigable) {
         li.appendChild(buildSubmenu(item.submenu.filter((sm) => !sm.permissionOnly)));
     }
     return li;
