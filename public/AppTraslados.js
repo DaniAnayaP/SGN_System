@@ -208,6 +208,17 @@ let currentUser = null;
 let records = []; // real, persisted transfers from the server
 let openRecordId = null;
 let view = 'list'; // 'list' | 'record'
+// "+ Nuevo Traslado" only opens this in-memory draft (no id yet) -- the
+// record is only actually created on the server once its FIRST field is
+// confirmed (see commitFieldValue), same as Tipos de Unidad/Nuestras
+// Cotizaciones' own draft pattern. Tapping "+ Nuevo Traslado" and backing
+// out without typing anything never leaves a blank traslado behind.
+let draftRecord = null;
+function blankDraftRecord() {
+    const blank = { id: null, pendingFields: [] };
+    FIELDS.forEach((f) => { blank[f.apiKey] = ''; });
+    return blank;
+}
 
 function isFieldFilled(value) {
     return value !== null && value !== undefined && value !== '';
@@ -227,6 +238,7 @@ function activeRecords() {
 }
 function recordLabel(record) {
     if (record.serviceClient) return record.serviceClient;
+    if (!record.id) return t('home.trasladoNewButton');
     return `${t('home.trasladoFallbackLabel')} #${record.id}`;
 }
 function recordDoneCount(record) {
@@ -246,18 +258,11 @@ async function loadRecords() {
 }
 
 // --- Create + patch ---------------------------------------------------------
-async function createNewTransfer() {
-    try {
-        const res = await fetch(apiUrl('/api/business/transfers'), { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('create failed');
-        const { transfer } = await res.json();
-        records.push(transfer);
-        openRecordId = transfer.id;
-        view = 'record';
-        render();
-    } catch {
-        showToast(t('admin.saveError'));
-    }
+function createNewTransfer() {
+    draftRecord = blankDraftRecord();
+    openRecordId = null;
+    view = 'record';
+    render();
 }
 
 const offlinePendingRecordIds = new Set();
@@ -369,6 +374,7 @@ function renderListView() {
 }
 
 function currentRecord() {
+    if (draftRecord) return draftRecord;
     return records.find((r) => r.id === openRecordId);
 }
 
@@ -453,8 +459,28 @@ function buildFieldEl(field, record) {
     return wrap;
 }
 
-function commitFieldValue(field, value) {
+// The FIRST confirm on a draft is what actually creates the record on the
+// server, then immediately applies this same field -- every confirm after
+// that is a normal patch.
+async function commitFieldValue(field, value) {
     expandedFieldIds.delete(field.id);
+    if (draftRecord) {
+        try {
+            const res = await fetch(apiUrl('/api/business/transfers'), { method: 'POST', credentials: 'include' });
+            if (!res.ok) throw new Error('create failed');
+            const { transfer } = await res.json();
+            records.push(transfer);
+            openRecordId = transfer.id;
+            draftRecord = null;
+            await patchRecord(transfer.id, { [field.apiKey]: value });
+        } catch {
+            showToast(t('admin.saveError'));
+            draftRecord = null;
+            view = 'list';
+            render();
+        }
+        return;
+    }
     patchRecord(openRecordId, { [field.apiKey]: value });
 }
 
@@ -526,6 +552,9 @@ document.getElementById('carga-back').addEventListener('click', () => {
         window.location.href = 'AppInicio.html';
         return;
     }
+    // Backing out of a still-blank draft discards it -- nothing was ever
+    // persisted, so there's nothing to keep.
+    draftRecord = null;
     view = 'list';
     render();
 });

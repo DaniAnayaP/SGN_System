@@ -5,16 +5,20 @@
 // backend). Two screens: the list of active (not-yet-complete) cargas + "+
 // Nueva Carga", and the field-by-field form for whichever carga is open.
 //
-// "+ Nueva Carga" creates a real, blank record immediately (a real id from
-// the very first tap) — every one of its 12 fields, identifying ones
-// included, is then filled in one at a time via PATCH, each going through
-// the exact same column-level permission/pending-approval workflow as every
-// other table in this app (checkAndLogFieldChanges): confirming a field you
-// have ver-y-operar/editar on saves it right away and locks it; touching an
-// already-saved field again only works with editar, and goes to whoever
-// holds Autorizar on that column instead of applying immediately. Nothing
-// is ever held only in memory — leaving mid-way keeps everything already
-// confirmed, exactly as-is, ready to resume from "Cargas activas". Each
+// "+ Nueva Carga" only opens an in-memory draft (no id yet) -- the record is
+// only actually created on the server once its FIRST field is confirmed
+// (see commitFieldValue), same draft pattern as Tipos de Unidad/Nuestras
+// Cotizaciones/etc. Tapping "+ Nueva Carga" and backing out without typing
+// anything never leaves a blank carga behind. From that first confirm
+// onward, every one of its 12 fields, identifying ones included, is filled
+// in one at a time via PATCH, each going through the exact same column-level
+// permission/pending-approval workflow as every other table in this app
+// (checkAndLogFieldChanges): confirming a field you have ver-y-operar/editar
+// on saves it right away and locks it; touching an already-saved field again
+// only works with editar, and goes to whoever holds Autorizar on that column
+// instead of applying immediately. Once a field is confirmed for real it's
+// on the server — leaving mid-way keeps it, ready to resume from "Cargas
+// activas". Each
 // field also locks until its own Regla de Orden de Llenado gate (if any) is
 // filled — same enforcement model as the desktop table's own 🔗 icon
 // (applyFieldFillRules), just read directly here instead of through a
@@ -190,6 +194,14 @@ let gateMap = {}; // dependentColId -> gateColId, authorized rules only
 let records = []; // real, persisted fuel-loading-records from the server
 let openRecordId = null; // id of the record currently open, or null
 let view = 'list'; // 'list' | 'record'
+// "+ Nueva Carga" only opens this in-memory draft (no id yet) -- see
+// commitFieldValue for where it actually becomes a real record.
+let draftRecord = null;
+function blankDraftRecord() {
+    const blank = { id: null, colSysCentroCostos: '', pendingFields: [] };
+    FIELDS.forEach((f) => { blank[f.apiKey] = f.type === 'number' ? 0 : ''; });
+    return blank;
+}
 
 function isFieldFilled(value) {
     return value !== null && value !== undefined && value !== '' && value !== 0;
@@ -251,6 +263,7 @@ function activeRecords() {
 function recordLabel(record) {
     if (record.loadSite && record.ecoUnit) return `${record.loadSite} · ${record.ecoUnit}`;
     if (record.loadSite) return record.loadSite;
+    if (!record.id) return t('home.cargaNewButton');
     return `${t('home.cargaFallbackLabel')} #${record.recordNumber}`;
 }
 function recordDoneCount(record) {
@@ -280,40 +293,15 @@ async function loadCostCenters() {
 }
 
 // --- Create + patch ---------------------------------------------------------
-// "+ Nueva Carga" creates the real record right away (see db.js's own note
-// on createFuelLoadingRecord) — Operador (and Centro de Costos, when this
-// user only has one) are then auto-patched immediately after, same
-// "por default debe aparecer" convenience as before, just genuinely
-// persisted now instead of held locally until some later batch save.
-async function createNewCarga() {
+function createNewCarga() {
     if (!costCenters.length) {
         showToast(t('home.cargaNoCostCenter'));
         return;
     }
-    try {
-        const res = await fetch(apiUrl('/api/business/fuel-loading-records'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({}),
-        });
-        if (!res.ok) throw new Error('create failed');
-        const { record } = await res.json();
-        records.push(record);
-        openRecordId = record.id;
-        view = 'record';
-        render();
-        const autoPatch = {
-            operator: currentNickname ? `${currentUser.name} (${currentNickname})` : (currentUser?.name || ''),
-        };
-        if (costCenters.length === 1) {
-            const cc = costCenters[0];
-            autoPatch.centroCostos = `${cc.code} - ${cc.name}`;
-        }
-        await patchRecord(record.id, autoPatch);
-    } catch {
-        showToast(t('admin.saveError'));
-    }
+    draftRecord = blankDraftRecord();
+    openRecordId = null;
+    view = 'record';
+    render();
 }
 
 // Records with at least one PATCH sitting in the offline queue right now
@@ -439,6 +427,7 @@ function renderListView() {
 }
 
 function currentRecord() {
+    if (draftRecord) return draftRecord;
     return records.find((r) => r.id === openRecordId);
 }
 
@@ -585,7 +574,13 @@ async function loadFleetFuelSuggestions() {
 // when Nuestras Unidades has a match and the field is still empty — still
 // goes through the normal empty->filled permission check, just like any
 // other confirm; never overwrites a value already set.
-function commitFieldValue(field, value) {
+// The FIRST confirm on a draft is what actually creates the record on the
+// server -- Operador (and Centro de Costos, when this user only has one)
+// are bundled into that same first PATCH as convenience defaults, same
+// "por default debe aparecer" behavior as before, just applied once there's
+// a real record to patch instead of right after creation. Every confirm
+// after that is a normal patch.
+async function commitFieldValue(field, value) {
     expandedFieldIds.delete(field.id);
     const patch = { [field.apiKey]: value };
     if (field.id === 'ecoUnit') {
@@ -594,6 +589,35 @@ function commitFieldValue(field, value) {
         if (suggestion && !fieldValueFromRecord(FIELDS.find((f) => f.id === 'fuelType'), record)) {
             patch.fuelType = suggestion;
         }
+    }
+    if (draftRecord) {
+        try {
+            const res = await fetch(apiUrl('/api/business/fuel-loading-records'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({}),
+            });
+            if (!res.ok) throw new Error('create failed');
+            const { record } = await res.json();
+            records.push(record);
+            openRecordId = record.id;
+            draftRecord = null;
+            const autoPatch = {
+                operator: currentNickname ? `${currentUser.name} (${currentNickname})` : (currentUser?.name || ''),
+            };
+            if (costCenters.length === 1) {
+                const cc = costCenters[0];
+                autoPatch.centroCostos = `${cc.code} - ${cc.name}`;
+            }
+            await patchRecord(record.id, { ...autoPatch, ...patch });
+        } catch {
+            showToast(t('admin.saveError'));
+            draftRecord = null;
+            view = 'list';
+            render();
+        }
+        return;
     }
     patchRecord(openRecordId, patch);
 }
@@ -734,9 +758,10 @@ document.getElementById('carga-back').addEventListener('click', () => {
         window.location.href = 'AppInicio.html';
         return;
     }
-    // Nothing is ever held only in memory anymore — every confirmed field
-    // is already saved, so leaving mid-way loses nothing and needs no
-    // discard prompt.
+    // Backing out of a still-blank draft discards it -- nothing was ever
+    // persisted, so there's nothing to keep. Once at least one field is
+    // confirmed for real, it's already saved server-side either way.
+    draftRecord = null;
     view = 'list';
     render();
 });

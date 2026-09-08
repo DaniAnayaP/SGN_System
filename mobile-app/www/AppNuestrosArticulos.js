@@ -6,14 +6,19 @@
 // of active (not-yet-complete) artículos + "+ Nuevo Artículo", and the
 // field-by-field form for whichever artículo is open.
 //
-// "+ Nuevo Artículo" creates a real, blank record immediately — every one
-// of its 24 capturable fields (17 own + 7 "Categoría X" selects sourced from
-// the 7 "Nuestras Categorías..." catalogs) is then filled in one at a time
-// via PATCH, each going through the exact same column-level permission/
-// pending-approval workflow as every other table (checkAndLogFieldChanges).
-// Registro Único and SKU are never fields here -- both are server-generated
-// at creation (db_id/record_number) and simply displayed once the record
-// exists. A record is "complete" (drops off "Artículos en captura") once
+// "+ Nuevo Artículo" only opens an in-memory draft (no id yet) -- the record
+// is only actually created on the server once its FIRST field (a photo
+// included, see ensureRealRecord) is confirmed, same draft pattern as Tipos
+// de Unidad/Nuestras Cotizaciones/etc. Tapping "+ Nuevo Artículo" and
+// backing out without touching anything never leaves a blank artículo
+// behind. From that first confirm onward, every one of its 24 capturable
+// fields (17 own + 7 "Categoría X" selects sourced from the 7 "Nuestras
+// Categorías..." catalogs) is filled in one at a time via PATCH, each going
+// through the exact same column-level permission/pending-approval workflow
+// as every other table (checkAndLogFieldChanges). Registro Único and SKU
+// are never fields here -- both are server-generated at creation
+// (db_id/record_number) and simply displayed once the record exists. A
+// record is "complete" (drops off "Artículos en captura") once
 // every one of the 24 fields has a value -- confirmed with the client this
 // mirrors Carga Combustible exactly: a completed artículo is then only
 // consulted in Administración (not built in this pass), never edited here
@@ -234,6 +239,17 @@ let gateMap = {}; // dependentColId -> gateColId, authorized rules only
 let records = []; // real, persisted sku-items from the server
 let openRecordId = null; // id of the record currently open, or null
 let view = 'list'; // 'list' | 'record'
+// "+ Nuevo Artículo" only opens this in-memory draft (no id yet) -- the
+// record is only actually created on the server once its FIRST field is
+// confirmed (see commitFieldValue), same draft pattern as Tipos de Unidad/
+// Nuestras Cotizaciones/etc. Tapping "+ Nuevo Artículo" and backing out
+// without typing anything never leaves a blank artículo behind.
+let draftRecord = null;
+function blankDraftRecord() {
+    const blank = { id: null, pendingFields: [] };
+    FIELDS.forEach((f) => { blank[f.apiKey] = f.type === 'number' ? 0 : ''; });
+    return blank;
+}
 
 function isFieldFilled(value) {
     return value !== null && value !== undefined && value !== '' && value !== 0;
@@ -279,6 +295,7 @@ function activeRecords() {
 function recordLabel(record) {
     if (record.uniqueDescription) return record.uniqueDescription;
     if (record.sku) return `SKU ${record.sku}`;
+    if (!record.id) return t('home.articuloNewButton');
     return `${t('home.articuloFallbackLabel')} #${record.recordNumber || record.id}`;
 }
 function recordDoneCount(record) {
@@ -298,23 +315,11 @@ async function loadRecords() {
 }
 
 // --- Create + patch ---------------------------------------------------------
-async function createNewSkuItem() {
-    try {
-        const res = await fetch(apiUrl('/api/business/sku-items'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({}),
-        });
-        if (!res.ok) throw new Error('create failed');
-        const { skuItem } = await res.json();
-        records.push(skuItem);
-        openRecordId = skuItem.id;
-        view = 'record';
-        render();
-    } catch {
-        showToast(t('admin.saveError'));
-    }
+function createNewSkuItem() {
+    draftRecord = blankDraftRecord();
+    openRecordId = null;
+    view = 'record';
+    render();
 }
 
 // Records with at least one PATCH sitting in the offline queue right now
@@ -431,6 +436,7 @@ function renderListView() {
 }
 
 function currentRecord() {
+    if (draftRecord) return draftRecord;
     return records.find((r) => r.id === openRecordId);
 }
 
@@ -528,9 +534,39 @@ function buildFieldEl(field, record) {
     return wrap;
 }
 
-function commitFieldValue(field, value) {
+// The FIRST confirm on a draft (any field, including a photo -- see its own
+// call site in buildFieldBody below) is what actually creates the record on
+// the server; idempotent, so calling it again once the draft is already
+// real just returns the existing record.
+async function ensureRealRecord() {
+    if (!draftRecord) return currentRecord();
+    const res = await fetch(apiUrl('/api/business/sku-items'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error('create failed');
+    const { skuItem } = await res.json();
+    records.push(skuItem);
+    openRecordId = skuItem.id;
+    draftRecord = null;
+    return skuItem;
+}
+
+async function commitFieldValue(field, value) {
     expandedFieldIds.delete(field.id);
-    patchRecord(openRecordId, { [field.apiKey]: value });
+    const wasDraft = !!draftRecord;
+    try {
+        const record = await ensureRealRecord();
+        await patchRecord(record.id, { [field.apiKey]: value });
+    } catch {
+        showToast(t('admin.saveError'));
+        // Only a still-blank draft that never made it to the server needs
+        // discarding here -- an existing record's own patch failure is
+        // already handled (and already re-rendered) inside patchRecord.
+        if (wasDraft) { draftRecord = null; view = 'list'; render(); }
+    }
 }
 
 // Bottom sheet for a 'select' field's options -- appended straight to
@@ -603,11 +639,23 @@ function buildFieldBody(field, record) {
         fileInput.addEventListener('change', async () => {
             const file = fileInput.files?.[0];
             if (!file) return;
-            const recordId = record.id;
-            const recordKey = `${TABLE_KEY}:${recordId}`;
-            const description = `${t('menu.opCentroDistAltaArticulos')} · ${recordLabel(record)}`;
             btn.disabled = true;
             renderPhotoBtn(true);
+            // A photo can legitimately be the very FIRST field someone
+            // fills on a brand new artículo -- ensureRealRecord() creates it
+            // on the server right here if it's still just a draft, same as
+            // commitFieldValue does for every other field type.
+            let recordId;
+            try {
+                recordId = (await ensureRealRecord()).id;
+            } catch {
+                showToast(t('admin.saveError'));
+                btn.disabled = false;
+                renderPhotoBtn(false);
+                return;
+            }
+            const recordKey = `${TABLE_KEY}:${recordId}`;
+            const description = `${t('menu.opCentroDistAltaArticulos')} · ${recordLabel(record)}`;
             try {
                 const blob = await window.SgnOfflineSync.compressImageToBlob(file);
                 const contentType = blob.type || file.type || 'application/octet-stream';
@@ -772,9 +820,10 @@ document.getElementById('carga-back').addEventListener('click', () => {
         window.location.href = 'AppInicio.html';
         return;
     }
-    // Nothing is ever held only in memory -- every confirmed field is
-    // already saved, so leaving mid-way loses nothing and needs no
-    // discard prompt.
+    // Backing out of a still-blank draft discards it -- nothing was ever
+    // persisted, so there's nothing to keep. Once at least one field is
+    // confirmed for real, it's already saved server-side either way.
+    draftRecord = null;
     view = 'list';
     render();
 });
