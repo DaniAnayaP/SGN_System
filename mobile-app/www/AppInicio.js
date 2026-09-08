@@ -1084,6 +1084,132 @@ function renderNotifRequestItem(change, showOutcome) {
     return el;
 }
 
+// Catalog-value requests ("+ Solicitar nuevo X") -- merged server-side into
+// these same solicitudes/avisos/autorizar arrays (kind: 'catalog-request',
+// see /api/business/notifications in server.js), rendered with their own
+// item (Autorizar/Rechazar/Reenviar) instead of the plain field-change one
+// every other item in these tabs gets. Same mechanism Dashboard.js's own
+// bell dropdown uses on Web -- this is its App equivalent.
+function renderNotifCatalogRequestItem(item, showOutcome) {
+    const el = document.createElement('div');
+    el.className = 'notif-item';
+    const desc = document.createElement('div');
+    desc.className = 'notif-item-desc';
+    desc.textContent = t('main.notificationCatalogRequestDesc', { name: item.requestedName, catalog: item.categoryLabel });
+    const meta = document.createElement('div');
+    meta.className = 'notif-item-meta';
+    meta.textContent = `${item.categoryLabel} · ${formatNotificationDate(item.createdAt)}`;
+    el.append(meta, desc);
+    if (showOutcome) {
+        const outcome = document.createElement('div');
+        outcome.className = 'notif-item-meta';
+        outcome.textContent = t(item.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected');
+        el.appendChild(outcome);
+        return el;
+    }
+    if (item.canAuthorize === undefined) return el; // "mis solicitudes" -- read-only, still pending
+    const actions = document.createElement('div');
+    actions.className = 'notif-item-actions';
+    if (item.canAuthorize) {
+        const rejectBtn = document.createElement('button');
+        rejectBtn.type = 'button';
+        rejectBtn.className = 'notif-item-btn';
+        rejectBtn.textContent = t('main.notificationReject');
+        rejectBtn.addEventListener('click', () => resolveCatalogRequestAction(item.id, 'reject', el));
+        const approveBtn = document.createElement('button');
+        approveBtn.type = 'button';
+        approveBtn.className = 'notif-item-btn primary';
+        approveBtn.textContent = t('main.notificationApprove');
+        approveBtn.addEventListener('click', () => openCatalogRequestFulfillSheet(item, () => { el.remove(); loadNotificationsBadge(); }));
+        actions.append(rejectBtn, approveBtn);
+    } else {
+        const note = document.createElement('p');
+        note.className = 'notif-item-meta';
+        note.textContent = t('main.notificationCatalogNoAuth');
+        el.appendChild(note);
+        const forwardBtn = document.createElement('button');
+        forwardBtn.type = 'button';
+        forwardBtn.className = 'notif-item-btn primary';
+        forwardBtn.textContent = t('main.notificationCatalogForward');
+        forwardBtn.addEventListener('click', () => resolveCatalogRequestAction(item.id, 'forward', el));
+        actions.appendChild(forwardBtn);
+    }
+    el.appendChild(actions);
+    return el;
+}
+
+async function resolveCatalogRequestAction(id, action, el) {
+    try {
+        const res = await fetch(apiUrl(`/api/business/catalog-requests/${id}/${action}`), { method: 'POST', credentials: 'include' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) { showToast(body.message || t('admin.saveError')); return; }
+        el.remove();
+        showToast(action === 'forward' ? t('main.notificationCatalogForwarded') : t('main.notificationRejected'));
+        loadNotificationsBadge();
+    } catch {
+        showToast(t('admin.saveError'));
+    }
+}
+
+// "Pantalla alterna" -- opens when Autorizar is pressed. Same catálogo
+// shape every "Nuestras Categorías..." screen edits (Nombre/Descripción),
+// prefilled from the request but still editable.
+function openCatalogRequestFulfillSheet(item, onResolved) {
+    const scrim = document.createElement('div');
+    scrim.className = 'home-select-scrim';
+    const sheet = document.createElement('div');
+    sheet.className = 'home-select-sheet';
+    sheet.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-sheet-handle' }));
+    const title = document.createElement('div');
+    title.className = 'home-select-sheet-title';
+    title.textContent = t('main.catalogRequestFulfillTitle');
+    sheet.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'home-carga-field-body';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = item.requestedName || '';
+    const descInput = document.createElement('input');
+    descInput.type = 'text';
+    descInput.placeholder = t('main.colCatDescription');
+    descInput.value = item.note || '';
+    const error = document.createElement('p');
+    error.className = 'home-carga-field-error';
+    error.textContent = t('login.fieldRequired');
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'home-carga-field-confirm';
+    confirmBtn.textContent = t('main.catalogRequestFulfillSubmit');
+    confirmBtn.addEventListener('click', async () => {
+        if (!nameInput.value.trim()) { error.classList.add('show'); return; }
+        confirmBtn.disabled = true;
+        try {
+            const res = await fetch(apiUrl(`/api/business/catalog-requests/${item.id}/approve`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ description: descInput.value.trim() }),
+            });
+            const responseBody = await res.json().catch(() => ({}));
+            if (!res.ok) { showToast(responseBody.message || t('admin.saveError')); return; }
+            scrim.remove();
+            showToast(t('main.notificationApproved'));
+            if (onResolved) onResolved();
+        } catch {
+            showToast(t('admin.saveError'));
+        } finally {
+            confirmBtn.disabled = false;
+        }
+    });
+    body.append(nameInput, descInput, error, confirmBtn);
+    sheet.appendChild(body);
+
+    scrim.addEventListener('click', (event) => { if (event.target === scrim) scrim.remove(); });
+    scrim.appendChild(sheet);
+    document.body.appendChild(scrim);
+}
+
 function renderNotifPendienteItem(item) {
     const el = document.createElement('div');
     el.className = 'notif-item notif-item-alert';
@@ -1108,7 +1234,8 @@ function renderNotifTab(sheet, tabKey) {
         list.appendChild(empty);
     } else {
         items.forEach((item) => {
-            if (tabKey === 'alertas') list.appendChild(renderNotifAlertItem(item));
+            if (item.kind === 'catalog-request') list.appendChild(renderNotifCatalogRequestItem(item, tabKey === 'avisos'));
+            else if (tabKey === 'alertas') list.appendChild(renderNotifAlertItem(item));
             else if (tabKey === 'avisos') list.appendChild(renderNotifRequestItem(item, true));
             else if (tabKey === 'pendientes') list.appendChild(renderNotifPendienteItem(item));
             else list.appendChild(renderNotifRequestItem(item, false));

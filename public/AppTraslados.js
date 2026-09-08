@@ -146,7 +146,7 @@ const TABLE_KEY = 'nuestros-traslados';
 const FIELDS = [
     { id: 'requestDate', group: 'solicitud', apiKey: 'requestDate', labelKey: 'main.colTrasladoFechaSolicitud', hintKey: 'home.trasladoHintFechaSolicitud', type: 'datetime-local', icon: 'bx-calendar' },
     { id: 'requestedBy', group: 'solicitud', apiKey: 'requestedBy', labelKey: 'main.colTrasladoQuienSolicita', hintKey: 'home.trasladoHintQuienSolicita', type: 'text', icon: 'bx-user' },
-    { id: 'clientType', group: 'solicitud', apiKey: 'clientType', labelKey: 'main.colTrasladoTipoCliente', hintKey: 'home.trasladoHintTipoCliente', type: 'text', icon: 'bx-id-card' },
+    { id: 'clientType', group: 'solicitud', apiKey: 'clientType', labelKey: 'main.colTrasladoTipoCliente', hintKey: 'home.trasladoHintTipoCliente', type: 'select', icon: 'bx-id-card', optionGroups: [{ options: [] }] },
     { id: 'requestContact', group: 'solicitud', apiKey: 'requestContact', labelKey: 'main.colTrasladoContactoSolicita', hintKey: 'home.trasladoHintContactoSolicita', type: 'text', icon: 'bx-phone' },
     { id: 'neededDate', group: 'solicitud', apiKey: 'neededDate', labelKey: 'main.colTrasladoFechaRequerida', hintKey: 'home.trasladoHintFechaRequerida', type: 'datetime-local', icon: 'bx-calendar-check' },
     { id: 'neededTime', group: 'solicitud', apiKey: 'neededTime', labelKey: 'main.colTrasladoHoraRequerida', hintKey: 'home.trasladoHintHoraRequerida', type: 'text', icon: 'bx-time' },
@@ -200,6 +200,29 @@ async function loadQuoteOptions() {
         field.optionGroups = [{ options: (options || []).map((q) => ({ value: q.folio, label: q.label })) }];
     } catch (err) {
         console.error('Nuestros Traslados: failed to load quote options', err);
+    }
+}
+
+// Tipo Cliente -- "Nuestros Tipos Cliente" catalog (Directo/Terceros/
+// Adicional...), same active-only reuse as Tipo Unidad above, plus a
+// "+ Solicitar nuevo" option (own group, no label, so it reads as a
+// separate action below the real values) that opens openCatalogRequestSheet
+// instead of committing a value -- see REQUEST_NEW_CLIENT_TYPE's own check
+// in commitFieldValue.
+const REQUEST_NEW_CLIENT_TYPE = '__request_new_tipo_cliente__';
+async function loadTiposClienteOptions() {
+    try {
+        const res = await fetch(apiUrl('/api/business/article-categories-active'), { credentials: 'include' });
+        if (!res.ok) return;
+        const { options } = await res.json();
+        const active = options['tipos-cliente'] || [];
+        const field = FIELDS.find((f) => f.id === 'clientType');
+        field.optionGroups = [
+            { options: active.map((name) => ({ value: name, label: name })) },
+            { options: [{ value: REQUEST_NEW_CLIENT_TYPE, label: t('main.requestCatalogAdd', { label: t('menu.catTransVolTiposCliente') }) }] },
+        ];
+    } catch (err) {
+        console.error('Nuestros Traslados: failed to load Tipos Cliente options', err);
     }
 }
 
@@ -464,6 +487,7 @@ function buildFieldEl(field, record) {
 // that is a normal patch.
 async function commitFieldValue(field, value) {
     expandedFieldIds.delete(field.id);
+    const isRequestNew = field.id === 'clientType' && value === REQUEST_NEW_CLIENT_TYPE;
     if (draftRecord) {
         try {
             const res = await fetch(apiUrl('/api/business/transfers'), { method: 'POST', credentials: 'include' });
@@ -472,6 +496,11 @@ async function commitFieldValue(field, value) {
             records.push(transfer);
             openRecordId = transfer.id;
             draftRecord = null;
+            // A brand new draft's very first tap could be "+ Solicitar nuevo
+            // Tipo Cliente" -- the record above still had to be created for
+            // real first (same as any other first field), so the request
+            // has a real sourceRecordId to attach to.
+            if (isRequestNew) { openCatalogRequestSheet(transfer); render(); return; }
             await patchRecord(transfer.id, { [field.apiKey]: value });
         } catch {
             showToast(t('admin.saveError'));
@@ -481,7 +510,71 @@ async function commitFieldValue(field, value) {
         }
         return;
     }
+    if (isRequestNew) { openCatalogRequestSheet(currentRecord()); return; }
     patchRecord(openRecordId, { [field.apiKey]: value });
+}
+
+// "+ Solicitar nuevo Tipo Cliente" -- a small sheet (same visual language as
+// openSelectSheet) asking just for the new value's name; POSTs to the same
+// generic /api/business/catalog-requests every "+ Solicitar nuevo X" button
+// uses (see Dashboard.js's own openCatalogRequestModal for the Web
+// equivalent), routed to the requester's own Jefe Directo server-side.
+function openCatalogRequestSheet(record) {
+    const scrim = document.createElement('div');
+    scrim.className = 'home-select-scrim';
+    const sheet = document.createElement('div');
+    sheet.className = 'home-select-sheet';
+    sheet.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-sheet-handle' }));
+    const title = document.createElement('div');
+    title.className = 'home-select-sheet-title';
+    title.textContent = t('main.requestCatalogAdd', { label: t('menu.catTransVolTiposCliente') });
+    sheet.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'home-carga-field-body';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = t('main.requestCatalogNameLabel');
+    const error = document.createElement('p');
+    error.className = 'home-carga-field-error';
+    error.textContent = t('login.fieldRequired');
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-field-error'; // reused purely for its small/muted styling, never toggled .show
+    hint.style.color = 'var(--home-text-muted)';
+    hint.textContent = t('main.requestCatalogHint');
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'home-carga-field-confirm';
+    confirmBtn.textContent = t('main.requestCatalogSubmit');
+    confirmBtn.addEventListener('click', async () => {
+        const requestedName = input.value.trim();
+        if (!requestedName) { error.classList.add('show'); return; }
+        confirmBtn.disabled = true;
+        try {
+            const res = await fetch(apiUrl('/api/business/catalog-requests'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    categoryType: 'tipos-cliente', requestedName,
+                    sourceTableKey: TABLE_KEY, sourceRecordId: record.id, sourceFieldKey: 'clientType',
+                }),
+            });
+            if (!res.ok) throw new Error('request failed');
+            scrim.remove();
+            showToast(t('main.requestCatalogSent'));
+        } catch {
+            showToast(t('admin.saveError'));
+        } finally {
+            confirmBtn.disabled = false;
+        }
+    });
+    body.append(input, error, hint, confirmBtn);
+    sheet.appendChild(body);
+
+    scrim.addEventListener('click', (event) => { if (event.target === scrim) scrim.remove(); });
+    scrim.appendChild(sheet);
+    document.body.appendChild(scrim);
 }
 
 function openSelectSheet(titleText, optionGroups, currentValue, onPick) {
@@ -566,7 +659,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         if (!meRes.ok) { window.location.replace('Login.html'); return; }
         const { user } = await meRes.json();
         currentUser = user;
-        await Promise.all([loadRecords(), loadBrandingForTheme(), loadUnitTypeOptions(), loadQuoteOptions()]);
+        await Promise.all([loadRecords(), loadBrandingForTheme(), loadUnitTypeOptions(), loadQuoteOptions(), loadTiposClienteOptions()]);
         applyStyle(getStoredStyle());
         await refreshOfflinePendingIds();
     } catch (err) {

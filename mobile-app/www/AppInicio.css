@@ -1617,6 +1617,25 @@ body{
 .notif-item-alert{ border-left: 3px solid var(--home-danger); }
 .notif-item-meta{ font-size: 0.62rem; color: var(--home-text-muted); }
 .notif-item-desc{ margin: 0.2rem 0 0; font-size: 0.74rem; color: var(--home-text-primary); line-height: 1.45; }
+/* Catalog-request items (Autorizar/Rechazar/Reenviar) -- compact inline
+   buttons, unlike .home-carga-new-btn's own full-width call-to-action size. */
+.notif-item-actions{ display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.notif-item-btn{
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.6rem;
+    border: none;
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    background: var(--home-surface-2);
+    color: var(--home-text-secondary);
+}
+.notif-item-btn.primary{ background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); color: var(--home-on-accent); }
 .notif-empty{ font-size: 0.78rem; color: var(--home-text-secondary); padding: 0.5rem 0; }
 /* Cloud icon on an active Carga record's own row -- flags "this has at
    least one change still sitting in the offline queue, not on the server
