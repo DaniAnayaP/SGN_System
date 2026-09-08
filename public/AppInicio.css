@@ -347,6 +347,11 @@ body{
 .home-picker-option input[type="checkbox"]{ width: 0.9rem; height: 0.9rem; flex-shrink: 0; }
 .home-picker-divider{ border-top: 1px solid var(--home-border); margin: 0.3rem 0; }
 .home-picker-empty{ font-size: 0.74rem; color: var(--home-text-muted); padding: 0.5rem 0.6rem; }
+/* Same specificity trap as .home-pill-btn[hidden]/.home-header-actions-inline[hidden]
+   above -- a bare [hidden] loses to this class's own display:flex, so
+   #home-overflow-btn's own hidden toggle (updateHeaderOverflowLayout) was
+   silently never actually hiding it. */
+.home-hamburger-btn[hidden]{ display: none; }
 .home-hamburger-btn{
     width: 2.1rem;
     height: 2.1rem;
