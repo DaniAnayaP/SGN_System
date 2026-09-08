@@ -4346,7 +4346,7 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
             ${NOTIFICATION_TABS.map((tabKey) => `
                 <button type="button" class="notifications-tab${tabKey === activeNotificationTab ? ' active' : ''}" data-tab="${tabKey}" role="tab">
                     <i class="bx ${NOTIFICATION_TAB_ICONS[tabKey]} notifications-tab-icon" aria-hidden="true"></i>
-                    <span class="notifications-tab-label">${t(`main.notificationsTab_${tabKey}`)}</span>
+                    <span class="notifications-tab-label" data-i18n="main.notificationsTab_${tabKey}">${t(`main.notificationsTab_${tabKey}`)}</span>
                     <span class="notifications-tab-count" data-tab="${tabKey}">0</span>
                 </button>
             `).join('')}
