@@ -1256,6 +1256,57 @@ db.exec(`
         created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- "+ Solicitar nuevo X" -- a generic escalating approval chain for
+    -- requesting a brand-new value on any article_categories-backed catalog
+    -- (Tipos Cliente today, any future one tomorrow -- see category_type,
+    -- same discriminator ARTICLE_CATEGORY_TYPES already uses). Deliberately
+    -- NOT the same table as pending_changes: that one patches a value that
+    -- already exists on a record; this one doesn't have a record to patch
+    -- yet -- the catalog VALUE itself doesn't exist. current_holder_user_id
+    -- is who needs to act right now (starts at the requester's own Jefe
+    -- Directo, see resolveEscalationHolder) -- whoever holds it either
+    -- Autoriza (creates the real catalog row, see approveCatalogValueRequest)
+    -- or, if they don't hold Autorizar on this catalog's own Nombre column,
+    -- forwards it one hop further up their own chain (forwardCatalogValueRequest)
+    -- -- never automatic, a person always makes that call. source_* is only
+    -- used once, on approval, to auto-fill the field that triggered the
+    -- request in the first place (see CATALOG_REQUEST_SOURCE_APPLIERS in
+    -- server.js) -- left blank for a request made straight from the catalog
+    -- screen itself with nothing waiting to be filled in.
+    CREATE TABLE IF NOT EXISTS catalog_value_requests (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id               INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        category_type           TEXT NOT NULL,
+        requested_name          TEXT NOT NULL,
+        note                    TEXT NOT NULL DEFAULT '',
+        requested_by_user_id    INTEGER NOT NULL REFERENCES users(id),
+        requested_by_label      TEXT NOT NULL DEFAULT '',
+        current_holder_user_id  INTEGER REFERENCES users(id),
+        status                  TEXT NOT NULL DEFAULT 'pending',
+        resulting_category_id   INTEGER REFERENCES article_categories(id),
+        source_table_key        TEXT NOT NULL DEFAULT '',
+        source_record_id        INTEGER,
+        source_field_key        TEXT NOT NULL DEFAULT '',
+        is_test_data            INTEGER NOT NULL DEFAULT 0,
+        created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+        resolved_at             TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_catalog_value_requests_holder ON catalog_value_requests(current_holder_user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_catalog_value_requests_requester ON catalog_value_requests(requested_by_user_id, status);
+
+    -- One row per hop (requested / forwarded / approved / rejected) -- the
+    -- audit trail a request's own detail view (and Rosa's "reenviado por
+    -- Luis M." label) reads from.
+    CREATE TABLE IF NOT EXISTS catalog_value_request_hops (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id    INTEGER NOT NULL REFERENCES catalog_value_requests(id) ON DELETE CASCADE,
+        from_label    TEXT NOT NULL DEFAULT '',
+        to_label      TEXT NOT NULL DEFAULT '',
+        action        TEXT NOT NULL,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_catalog_value_request_hops_request ON catalog_value_request_hops(request_id);
+
     -- Nuestras Cotizaciones (Operaciones > Cadena de Suministro > Transporte
     -- Volumen) — a REUSABLE freight rate, not a one-off quote document: give
     -- it a Costo por KM + Distancia Estimada once, it stays Activa, and any
@@ -2194,6 +2245,7 @@ const TABLE_GRANT_PATHS = {
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
+    'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -2359,6 +2411,13 @@ function listAccessDeniedAlertsForUser(clientId, userId) {
         ORDER BY seq DESC
         LIMIT 50
     `).all(clientId, userId);
+}
+
+// Every alert for the client, any recipient -- Base de Datos de Solicitudes'
+// own read-only archive, same "unscoped by recipient" role
+// listAllCatalogValueRequests plays for requests.
+function listAllAccessDeniedAlerts(clientId) {
+    return db.prepare('SELECT * FROM access_denied_alerts WHERE client_id = ? ORDER BY seq DESC LIMIT 200').all(clientId);
 }
 
 function markAccessDeniedAlertsSeen(clientId, userId) {
@@ -3521,6 +3580,11 @@ const ARTICLE_CATEGORY_TYPES = {
     // Artículos) -- reuses this same table/routes/screen instead of a
     // near-duplicate units_of_measure setup, same reasoning as the 7 above.
     udm: { prefix: 'UDM', tableKey: 'unidad-medida', pantalla: 'Nuestras Unidad Medida' },
+    // Lives under Transporte Volumen (like Tipos de Unidad), not Centro de
+    // Distribución like the 8 above -- `area` overrides
+    // ARTICLE_CATEGORY_AREA_LABEL's own default for this one (see
+    // mapArticleCategoryRecord in server.js).
+    'tipos-cliente': { prefix: 'TCL', tableKey: 'tipos-cliente', pantalla: 'Nuestros Tipos Cliente', area: 'Transporte Volumen' },
 };
 
 function listArticleCategories(clientId, categoryType, forTestAccount = false) {
@@ -3575,6 +3639,119 @@ function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
 
 function deleteArticleCategory(id, clientId) {
     db.prepare('DELETE FROM article_categories WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// --- "+ Solicitar nuevo X" -- generic catalog-value request/escalation -----
+// See catalog_value_requests' own DDL comment for the overall shape. One
+// hop at a time, always a person's own choice (see forwardCatalogValueRequest)
+// -- never an automatic multi-level walk.
+
+// The next person a request (or a forward) should land on: this user's own
+// Jefe Directo (resolveDirectSupervisorUserId, a single hop up the org
+// chart), falling back to the client's own admin when there's no supervisor
+// to resolve (no Puesto, or already at the top of the org chart) -- the
+// admin can always act on anything, so a request never gets stuck with
+// nowhere to go. Returns null only when `fromUserId` IS that admin already
+// (truly nowhere higher left), so the UI knows not to offer "reenviar" then.
+function resolveEscalationHolder(clientId, fromUserId) {
+    const client = getClientById(clientId);
+    const adminUserId = client?.admin_user_id || null;
+    if (adminUserId && Number(fromUserId) === Number(adminUserId)) return null;
+    const supervisorId = resolveDirectSupervisorUserId(fromUserId);
+    if (supervisorId) return supervisorId;
+    if (adminUserId && Number(adminUserId) !== Number(fromUserId)) return adminUserId;
+    return null;
+}
+
+function getCatalogValueRequestById(id, clientId) {
+    return db.prepare('SELECT * FROM catalog_value_requests WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+
+function listCatalogValueRequestsForHolder(clientId, holderUserId) {
+    return db.prepare("SELECT * FROM catalog_value_requests WHERE client_id = ? AND current_holder_user_id = ? AND status = 'pending' ORDER BY created_at DESC")
+        .all(clientId, holderUserId);
+}
+
+function listCatalogValueRequestsBySubmitter(clientId, requestedByUserId, statuses) {
+    const placeholders = statuses.map(() => '?').join(',');
+    return db.prepare(`SELECT * FROM catalog_value_requests WHERE client_id = ? AND requested_by_user_id = ? AND status IN (${placeholders}) ORDER BY created_at DESC`)
+        .all(clientId, requestedByUserId, ...statuses);
+}
+
+// Full history, any status/holder -- Base de Datos de Solicitudes' own data
+// source, same "read-only archive of everything" role Nuestros Cambios
+// already plays for field edits.
+function listAllCatalogValueRequests(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM catalog_value_requests WHERE client_id = ? AND is_test_data = ? ORDER BY created_at DESC')
+        .all(clientId, forTestAccount ? 1 : 0);
+}
+
+function listCatalogValueRequestHops(requestId) {
+    return db.prepare('SELECT * FROM catalog_value_request_hops WHERE request_id = ? ORDER BY created_at ASC').all(requestId);
+}
+
+function logCatalogValueRequestHop(requestId, { fromLabel, toLabel, action }) {
+    db.prepare('INSERT INTO catalog_value_request_hops (request_id, from_label, to_label, action) VALUES (@requestId, @fromLabel, @toLabel, @action)')
+        .run({ requestId, fromLabel: fromLabel || '', toLabel: toLabel || '', action });
+}
+
+function createCatalogValueRequest({
+    clientId, categoryType, requestedName, note, requestedByUserId, requestedByLabel,
+    sourceTableKey, sourceRecordId, sourceFieldKey, isTestData = false,
+}) {
+    const holderUserId = resolveEscalationHolder(clientId, requestedByUserId);
+    const result = db.prepare(`
+        INSERT INTO catalog_value_requests (
+            client_id, category_type, requested_name, note, requested_by_user_id, requested_by_label,
+            current_holder_user_id, source_table_key, source_record_id, source_field_key, is_test_data
+        ) VALUES (
+            @clientId, @categoryType, @requestedName, @note, @requestedByUserId, @requestedByLabel,
+            @holderUserId, @sourceTableKey, @sourceRecordId, @sourceFieldKey, @isTestData
+        )
+    `).run({
+        clientId, categoryType, requestedName, note: note || '', requestedByUserId, requestedByLabel,
+        holderUserId, sourceTableKey: sourceTableKey || '', sourceRecordId: sourceRecordId || null,
+        sourceFieldKey: sourceFieldKey || '', isTestData: isTestData ? 1 : 0,
+    });
+    const holderLabel = holderUserId ? (db.prepare('SELECT name FROM users WHERE id = ?').get(holderUserId)?.name || '') : '';
+    logCatalogValueRequestHop(result.lastInsertRowid, { fromLabel: requestedByLabel, toLabel: holderLabel, action: 'requested' });
+    return getCatalogValueRequestById(result.lastInsertRowid, clientId);
+}
+
+// The person currently holding it doesn't have Autorizar on this catálogo --
+// their own single hop up, same resolveEscalationHolder every request
+// starts with. Returns null (caller should reject the action) if there's
+// nowhere higher to send it (fromUserId is already the client admin).
+function forwardCatalogValueRequest(id, clientId, fromUserId, fromLabel) {
+    const nextHolderId = resolveEscalationHolder(clientId, fromUserId);
+    if (!nextHolderId) return null;
+    const nextHolderLabel = db.prepare('SELECT name FROM users WHERE id = ?').get(nextHolderId)?.name || '';
+    db.prepare("UPDATE catalog_value_requests SET current_holder_user_id = ? WHERE id = ? AND client_id = ?").run(nextHolderId, id, clientId);
+    logCatalogValueRequestHop(id, { fromLabel, toLabel: nextHolderLabel, action: 'forwarded' });
+    return getCatalogValueRequestById(id, clientId);
+}
+
+// Creates the real catalog row (same createArticleCategory/updateArticleCategory
+// every "Nuestras Categorías..." screen already uses) and resolves the
+// request. Applying the new value back onto whatever record/field asked for
+// it in the first place is the CALLER's job (server.js's own
+// CATALOG_REQUEST_SOURCE_APPLIERS) -- this function only owns the catálogo
+// and the request row.
+function approveCatalogValueRequest(id, clientId, approverUserId, approverLabel, { description } = {}) {
+    const request = getCatalogValueRequestById(id, clientId);
+    if (!request) return null;
+    const category = createArticleCategory({ clientId, categoryType: request.category_type, isTestData: !!request.is_test_data });
+    updateArticleCategory(category.id, clientId, { name: request.requested_name, description: description || '', status: 'active' }, !!request.is_test_data);
+    db.prepare("UPDATE catalog_value_requests SET status = 'approved', resulting_category_id = ?, resolved_at = datetime('now') WHERE id = ? AND client_id = ?")
+        .run(category.id, id, clientId);
+    logCatalogValueRequestHop(id, { fromLabel: approverLabel, toLabel: '', action: 'approved' });
+    return { request: getCatalogValueRequestById(id, clientId), category: getArticleCategoryById(category.id, clientId, !!request.is_test_data) };
+}
+
+function rejectCatalogValueRequest(id, clientId, approverLabel) {
+    db.prepare("UPDATE catalog_value_requests SET status = 'rejected', resolved_at = datetime('now') WHERE id = ? AND client_id = ?").run(id, clientId);
+    logCatalogValueRequestHop(id, { fromLabel: approverLabel, toLabel: '', action: 'rejected' });
+    return getCatalogValueRequestById(id, clientId);
 }
 
 // --- Nuestras Cotizaciones (Operaciones > Cadena de Suministro > Transporte
@@ -4524,6 +4701,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
     { key: 'nuestras-cotizaciones', labelKey: 'menu.opTransVolCotizaciones' },
     { key: 'nuestros-traslados', labelKey: 'menu.opTransVolNuestrosTraslados' },
+    { key: 'tipos-cliente', labelKey: 'menu.catTransVolTiposCliente' },
 ];
 
 function deserializeSaasApp(row) {
@@ -5458,6 +5636,16 @@ module.exports = {
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     updateArticleCategory,
     deleteArticleCategory,
+    resolveEscalationHolder,
+    getCatalogValueRequestById,
+    listCatalogValueRequestsForHolder,
+    listCatalogValueRequestsBySubmitter,
+    listAllCatalogValueRequests,
+    listCatalogValueRequestHops,
+    createCatalogValueRequest,
+    forwardCatalogValueRequest,
+    approveCatalogValueRequest,
+    rejectCatalogValueRequest,
     listFreightQuotes,
     getFreightQuoteById,
     listActiveFreightQuoteOptions,
@@ -5482,6 +5670,7 @@ module.exports = {
     markPendingChangesSeenForRequester,
     createAccessDeniedAlert,
     listAccessDeniedAlertsForUser,
+    listAllAccessDeniedAlerts,
     markAccessDeniedAlertsSeen,
     resolveDirectSupervisorUserId,
     getOrgChartPositions,

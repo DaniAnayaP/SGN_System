@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.opTransVolNuestrosTraslados">Our Transfers</title>
+    <title data-i18n="menu.databaseRequests">Requests Database</title>
     <link rel="icon" href="icons/icon-512.png">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
     <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
 </head>
-<body data-active-page="cat-operaciones-transporte-vol-nuestros-traslados">
+<body data-active-page="btn-base-datos">
     <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
         <div class="header">
             <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="main.welcome">Welcome</p>
+                <p class="welcome-text" data-i18n="menu.databaseRequests">Requests Database</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -365,68 +365,24 @@
         </div>
 
         <div class="page-content">
-            <div class="filter-bar" id="filter-bar">
-                <div class="filter-bar-panel">
-                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
-                    <div class="filter-bar-fields">
-                        <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterTrasladosSearchHint">Code, name, description...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterTrasladosSearchHint" placeholder="Code, name, description...">
-                        </div>
-                    </div>
-                    <div class="filter-bar-actions">
-                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="data-table-wrapper" data-table-id="nuestros-traslados">
+            <p class="admin-subtitle" data-i18n="main.databaseRequestsSubtitle">History of catalog requests, authorizations, rejections, and no-permission alerts.</p>
+            <div class="data-table-wrapper" data-table-id="base-datos-solicitudes">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group="menu.classControlInterno" class="col-system">Company</th>
-                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group="menu.classControlInterno" class="col-system">Area</th>
-                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group="menu.classControlInterno" class="col-system">Module</th>
-                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group="menu.classControlInterno" class="col-system">Screen</th>
-                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group="menu.classControlInterno" class="col-system">Cost Center</th>
-                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
-                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group="menu.classControlInterno" class="col-system">Day (dd)</th>
-                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group="menu.classControlInterno" class="col-system">Day (ddd)</th>
-                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group="menu.classControlInterno" class="col-system">Month (mm)</th>
-                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group="menu.classControlInterno" class="col-system">Month (mmm)</th>
-                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group="menu.classControlInterno" class="col-system">Year (yyyy)</th>
-                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
-                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
-                            <th data-i18n="main.colTrasladoRegistroUnico" data-col="colTrasladoRegistroUnico" data-group="menu.classControlInterno" class="col-system">Unique Registration</th>
-                            <th data-i18n="main.colTrasladoFechaSolicitud" data-col="colTrasladoFechaSolicitud" data-group="menu.classTrasladoSolicitud">Request Date</th>
-                            <th data-i18n="main.colTrasladoQuienSolicita" data-col="colTrasladoQuienSolicita" data-group="menu.classTrasladoSolicitud">Requested By</th>
-                            <th data-i18n="main.colTrasladoTipoCliente" data-col="colTrasladoTipoCliente" data-group="menu.classTrasladoSolicitud">Client Type</th>
-                            <th data-i18n="main.colTrasladoContactoSolicita" data-col="colTrasladoContactoSolicita" data-group="menu.classTrasladoSolicitud">Requesting Contact</th>
-                            <th data-i18n="main.colTrasladoFechaRequerida" data-col="colTrasladoFechaRequerida" data-group="menu.classTrasladoSolicitud">Needed Date</th>
-                            <th data-i18n="main.colTrasladoHoraRequerida" data-col="colTrasladoHoraRequerida" data-group="menu.classTrasladoSolicitud">Needed Time</th>
-                            <th data-i18n="main.colTrasladoClienteServicio" data-col="colTrasladoClienteServicio" data-group="menu.classTrasladoSolicitud">Service Client</th>
-                            <th data-i18n="main.colTrasladoTipoServicio" data-col="colTrasladoTipoServicio" data-group="menu.classTrasladoSolicitud">Service Type</th>
-                            <th data-i18n="main.colTrasladoTipoUnidadSolicitada" data-col="colTrasladoTipoUnidadSolicitada" data-group="menu.classTrasladoSolicitud">Requested Unit Type</th>
-                            <th data-i18n="main.colTrasladoCotizacion" data-col="colTrasladoCotizacion" data-group="menu.classTrasladoSolicitud">Quote</th>
-                            <th data-i18n="main.colTrasladoReqServicio" data-col="colTrasladoReqServicio" data-group="menu.classTrasladoRequisitos">Service Requirements</th>
-                            <th data-i18n="main.colTrasladoReqSeguridad" data-col="colTrasladoReqSeguridad" data-group="menu.classTrasladoRequisitos">Security Requirements</th>
-                            <th data-i18n="main.colTrasladoReqCobro" data-col="colTrasladoReqCobro" data-group="menu.classTrasladoRequisitos">Billing Requirements</th>
-                            <th data-i18n="main.colTrasladoClienteOrigen" data-col="colTrasladoClienteOrigen" data-group="menu.classTrasladoOrigen">Origin Client</th>
-                            <th data-i18n="main.colTrasladoContactoOrigen" data-col="colTrasladoContactoOrigen" data-group="menu.classTrasladoOrigen">Origin Contact</th>
-                            <th data-i18n="main.colTrasladoSitioOrigen" data-col="colTrasladoSitioOrigen" data-group="menu.classTrasladoOrigen">Origin Site</th>
-                            <th data-i18n="main.colTrasladoUrlOrigen" data-col="colTrasladoUrlOrigen" data-group="menu.classTrasladoOrigen">Origin URL</th>
-                            <th data-i18n="main.colTrasladoApodoOrigen" data-col="colTrasladoApodoOrigen" data-group="menu.classTrasladoOrigen">Origin Nickname</th>
-                            <th data-i18n="main.colTrasladoClienteDestino" data-col="colTrasladoClienteDestino" data-group="menu.classTrasladoDestino">Destination Client</th>
-                            <th data-i18n="main.colTrasladoContactoDestino" data-col="colTrasladoContactoDestino" data-group="menu.classTrasladoDestino">Destination Contact</th>
-                            <th data-i18n="main.colTrasladoSitioDestino" data-col="colTrasladoSitioDestino" data-group="menu.classTrasladoDestino">Destination Site</th>
-                            <th data-i18n="main.colTrasladoUrlDestino" data-col="colTrasladoUrlDestino" data-group="menu.classTrasladoDestino">Destination URL</th>
-                            <th data-i18n="main.colTrasladoApodoDestino" data-col="colTrasladoApodoDestino" data-group="menu.classTrasladoDestino">Destination Nickname</th>
-                            <th data-i18n="main.colActions" data-col="actions">Actions</th>
+                            <th data-i18n="main.colReqDate" data-col="colReqDate">Date</th>
+                            <th data-i18n="main.colReqType" data-col="colReqType">Type</th>
+                            <th data-i18n="main.colReqCatalog" data-col="colReqCatalog">Catalog</th>
+                            <th data-i18n="main.colReqValue" data-col="colReqValue">Requested Value</th>
+                            <th data-i18n="main.colReqBy" data-col="colReqBy">Requested By</th>
+                            <th data-i18n="main.colReqSource" data-col="colReqSource">Source Screen</th>
+                            <th data-i18n="main.colReqChain" data-col="colReqChain">Trail</th>
+                            <th data-i18n="main.colReqStatus" data-col="colReqStatus">Status</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="requests-table-body">
                         <tr>
-                            <td class="data-table-empty-cell" colspan="38">
+                            <td class="data-table-empty-cell" colspan="8">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -435,123 +391,6 @@
             </div>
         </div>
     </main>
-
-    <div class="modal-overlay" id="new-transfer-modal" hidden>
-        <div class="modal-panel" style="max-width: 46rem;" role="dialog" aria-modal="true" aria-labelledby="new-transfer-modal-title">
-            <h3 id="new-transfer-modal-title" data-i18n="main.newTransfer">New Transfer</h3>
-            <form id="new-transfer-form" class="admin-form" novalidate>
-                <h4 data-i18n="menu.classTrasladoSolicitud">Service Request Data</h4>
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="new-transfer-fecha-solicitud" data-i18n="main.colTrasladoFechaSolicitud">Request Date</label>
-                        <input id="new-transfer-fecha-solicitud" name="requestDate" type="datetime-local">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-quien-solicita" data-i18n="main.colTrasladoQuienSolicita">Requested By</label>
-                        <input id="new-transfer-quien-solicita" name="requestedBy" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-tipo-cliente" data-i18n="main.colTrasladoTipoCliente">Client Type</label>
-                        <select id="new-transfer-tipo-cliente" name="clientType"></select>
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-contacto-solicita" data-i18n="main.colTrasladoContactoSolicita">Requesting Contact</label>
-                        <input id="new-transfer-contacto-solicita" name="requestContact" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-fecha-requerida" data-i18n="main.colTrasladoFechaRequerida">Needed Date</label>
-                        <input id="new-transfer-fecha-requerida" name="neededDate" type="datetime-local">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-hora-requerida" data-i18n="main.colTrasladoHoraRequerida">Needed Time</label>
-                        <input id="new-transfer-hora-requerida" name="neededTime" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-cliente-servicio" data-i18n="main.colTrasladoClienteServicio">Service Client</label>
-                        <input id="new-transfer-cliente-servicio" name="serviceClient" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-tipo-servicio" data-i18n="main.colTrasladoTipoServicio">Service Type</label>
-                        <input id="new-transfer-tipo-servicio" name="serviceType" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-tipo-unidad" data-i18n="main.colTrasladoTipoUnidadSolicitada">Requested Unit Type</label>
-                        <select id="new-transfer-tipo-unidad" name="requestedUnitType"></select>
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-cotizacion" data-i18n="main.colTrasladoCotizacion">Quote</label>
-                        <select id="new-transfer-cotizacion" name="quoteFolio"></select>
-                    </div>
-                </div>
-                <h4 data-i18n="menu.classTrasladoRequisitos">Requirements</h4>
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="new-transfer-req-servicio" data-i18n="main.colTrasladoReqServicio">Service Requirements</label>
-                        <input id="new-transfer-req-servicio" name="serviceRequirements" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-req-seguridad" data-i18n="main.colTrasladoReqSeguridad">Security Requirements</label>
-                        <input id="new-transfer-req-seguridad" name="securityRequirements" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-req-cobro" data-i18n="main.colTrasladoReqCobro">Billing Requirements</label>
-                        <input id="new-transfer-req-cobro" name="billingRequirements" type="text">
-                    </div>
-                </div>
-                <h4 data-i18n="menu.classTrasladoOrigen">Origin</h4>
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="new-transfer-cliente-origen" data-i18n="main.colTrasladoClienteOrigen">Origin Client</label>
-                        <input id="new-transfer-cliente-origen" name="originClient" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-contacto-origen" data-i18n="main.colTrasladoContactoOrigen">Origin Contact</label>
-                        <input id="new-transfer-contacto-origen" name="originContact" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-sitio-origen" data-i18n="main.colTrasladoSitioOrigen">Origin Site</label>
-                        <input id="new-transfer-sitio-origen" name="originSite" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-url-origen" data-i18n="main.colTrasladoUrlOrigen">Origin URL</label>
-                        <input id="new-transfer-url-origen" name="originUrl" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-apodo-origen" data-i18n="main.colTrasladoApodoOrigen">Origin Nickname</label>
-                        <input id="new-transfer-apodo-origen" name="originNickname" type="text">
-                    </div>
-                </div>
-                <h4 data-i18n="menu.classTrasladoDestino">Destination</h4>
-                <div class="admin-form-grid">
-                    <div class="admin-field">
-                        <label for="new-transfer-cliente-destino" data-i18n="main.colTrasladoClienteDestino">Destination Client</label>
-                        <input id="new-transfer-cliente-destino" name="destClient" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-contacto-destino" data-i18n="main.colTrasladoContactoDestino">Destination Contact</label>
-                        <input id="new-transfer-contacto-destino" name="destContact" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-sitio-destino" data-i18n="main.colTrasladoSitioDestino">Destination Site</label>
-                        <input id="new-transfer-sitio-destino" name="destSite" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-url-destino" data-i18n="main.colTrasladoUrlDestino">Destination URL</label>
-                        <input id="new-transfer-url-destino" name="destUrl" type="text">
-                    </div>
-                    <div class="admin-field">
-                        <label for="new-transfer-apodo-destino" data-i18n="main.colTrasladoApodoDestino">Destination Nickname</label>
-                        <input id="new-transfer-apodo-destino" name="destNickname" type="text">
-                    </div>
-                </div>
-                <div id="new-transfer-form-error" class="admin-error" role="alert" hidden></div>
-                <div class="admin-form-actions">
-                    <button type="submit" class="btn" id="new-transfer-save" data-i18n="admin.save">Save</button>
-                    <button type="button" class="btn btn-secondary" id="new-transfer-cancel" data-i18n="admin.cancel">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -608,6 +447,6 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="OpTransVolNuestrosTraslados.js"></script>
+    <script src="BaseDatos-Solicitudes.js"></script>
 </body>
 </html>

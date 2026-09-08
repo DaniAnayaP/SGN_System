@@ -149,6 +149,16 @@ const {
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     updateArticleCategory,
     deleteArticleCategory,
+    resolveEscalationHolder,
+    getCatalogValueRequestById,
+    listCatalogValueRequestsForHolder,
+    listCatalogValueRequestsBySubmitter,
+    listAllCatalogValueRequests,
+    listCatalogValueRequestHops,
+    createCatalogValueRequest,
+    forwardCatalogValueRequest,
+    approveCatalogValueRequest,
+    rejectCatalogValueRequest,
     listFreightQuotes,
     getFreightQuoteById,
     listActiveFreightQuoteOptions,
@@ -185,6 +195,7 @@ const {
     markPendingChangesSeenForRequester,
     createAccessDeniedAlert,
     listAccessDeniedAlertsForUser,
+    listAllAccessDeniedAlerts,
     markAccessDeniedAlertsSeen,
     resolveDirectSupervisorUserId,
     getOrgChartPositions,
@@ -3591,7 +3602,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName) {
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
             companyName,
-            area: ARTICLE_CATEGORY_AREA_LABEL,
+            area: config?.area || ARTICLE_CATEGORY_AREA_LABEL,
             modulo: ARTICLE_CATEGORY_MODULE_LABEL,
             pantalla: config?.pantalla || 'Nuestras Categorías',
             centroCostos: '',
@@ -3669,6 +3680,158 @@ app.get('/api/business/article-categories-active', requireAuth, (req, res) => {
         options[categoryType] = listActiveArticleCategoryNames(req.user.clientId, categoryType, req.user.isTestAccount);
     });
     res.json({ options });
+});
+
+// --- "+ Solicitar nuevo X" -- catalog-value requests, generic across every
+// ARTICLE_CATEGORY_TYPES catalog (Tipos Cliente today, any future one
+// tomorrow). See catalog_value_requests' own DDL comment in db.js for the
+// full shape/rationale.
+function mapCatalogValueRequestRecord(row) {
+    if (!row) return row;
+    const config = articleCategoryTypeConfig(row.category_type);
+    return {
+        id: row.id,
+        categoryType: row.category_type,
+        categoryLabel: config?.pantalla || row.category_type,
+        requestedName: row.requested_name,
+        note: row.note,
+        requestedByLabel: row.requested_by_label,
+        currentHolderUserId: row.current_holder_user_id,
+        status: row.status,
+        sourceTableKey: row.source_table_key,
+        sourceRecordId: row.source_record_id,
+        sourceFieldKey: row.source_field_key,
+        createdAt: row.created_at,
+        resolvedAt: row.resolved_at,
+    };
+}
+
+function catalogValueRequestCanAuthorize(req, categoryType) {
+    if (req.user.isClientAdmin) return true;
+    const config = articleCategoryTypeConfig(categoryType);
+    if (!config) return false;
+    const grants = getUserEffectiveGrants(req.user.sub);
+    return canAuthorizeColumn(grants, config.tableKey, 'colCatName');
+}
+
+// Applies the newly-approved value back onto whichever record/field asked
+// for it in the first place -- one entry per screen that's wired a
+// "+ Solicitar nuevo" button, added here as each one gets built (same small,
+// explicit per-table registry shape as PENDING_CHANGE_APPLIERS above).
+const CATALOG_REQUEST_SOURCE_APPLIERS = {
+    'nuestros-traslados': (recordId, clientId, fieldKey, value, forTestAccount) => updateTransfer(recordId, clientId, { [fieldKey]: value }, forTestAccount),
+};
+
+app.post('/api/business/catalog-requests', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { categoryType, requestedName, note, sourceTableKey, sourceRecordId, sourceFieldKey } = req.body || {};
+    const config = articleCategoryTypeConfig(categoryType);
+    if (!config) return res.status(400).json({ message: 'Catálogo desconocido.' });
+    if (!requestedName || !requestedName.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
+    const request = createCatalogValueRequest({
+        clientId: req.user.clientId, categoryType, requestedName: requestedName.trim(), note,
+        requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req),
+        sourceTableKey, sourceRecordId, sourceFieldKey, isTestData: req.user.isTestAccount,
+    });
+    res.status(201).json({ request: mapCatalogValueRequestRecord(request) });
+});
+
+// Everything currently sitting with me, whether I can Autorizar it or only
+// Reenviar it -- the UI decides which buttons to show per row using its own
+// canAuthorize flag (computed per request, since two requests here can be
+// for different catálogos with different Autorizar grants).
+app.get('/api/business/catalog-requests/to-act', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const requests = listCatalogValueRequestsForHolder(req.user.clientId, req.user.sub);
+    res.json({
+        requests: requests.map((r) => ({ ...mapCatalogValueRequestRecord(r), canAuthorize: catalogValueRequestCanAuthorize(req, r.category_type) })),
+    });
+});
+
+app.get('/api/business/catalog-requests/mine', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const statuses = req.query.status === 'resolved' ? ['approved', 'rejected'] : ['pending'];
+    const requests = listCatalogValueRequestsBySubmitter(req.user.clientId, req.user.sub, statuses);
+    res.json({ requests: requests.map(mapCatalogValueRequestRecord) });
+});
+
+app.get('/api/business/catalog-requests/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const request = getCatalogValueRequestById(req.params.id, req.user.clientId);
+    if (!request) return res.status(404).json({ message: 'Request not found.' });
+    res.json({
+        request: { ...mapCatalogValueRequestRecord(request), canAuthorize: catalogValueRequestCanAuthorize(req, request.category_type) },
+        hops: listCatalogValueRequestHops(request.id),
+    });
+});
+
+app.post('/api/business/catalog-requests/:id/forward', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const request = getCatalogValueRequestById(req.params.id, req.user.clientId);
+    if (!request) return res.status(404).json({ message: 'Request not found.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya fue resuelta.' });
+    if (!req.user.isClientAdmin && Number(request.current_holder_user_id) !== Number(req.user.sub)) {
+        return res.status(403).json({ message: 'Esta solicitud no está contigo.' });
+    }
+    const updated = forwardCatalogValueRequest(req.params.id, req.user.clientId, req.user.sub, changedByLabel(req));
+    if (!updated) return res.status(409).json({ message: 'No hay a quién reenviarla -- ya eres el nivel más alto.' });
+    res.json({ request: mapCatalogValueRequestRecord(updated) });
+});
+
+app.post('/api/business/catalog-requests/:id/approve', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const request = getCatalogValueRequestById(req.params.id, req.user.clientId);
+    if (!request) return res.status(404).json({ message: 'Request not found.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya fue resuelta.' });
+    if (!req.user.isClientAdmin && Number(request.current_holder_user_id) !== Number(req.user.sub)) {
+        return res.status(403).json({ message: 'Esta solicitud no está contigo.' });
+    }
+    if (!catalogValueRequestCanAuthorize(req, request.category_type)) {
+        return res.status(403).json({ message: 'No tienes permiso para autorizar este catálogo.' });
+    }
+    const { description } = req.body || {};
+    const { request: resolved, category } = approveCatalogValueRequest(req.params.id, req.user.clientId, req.user.sub, changedByLabel(req), { description });
+    if (request.source_table_key && request.source_record_id && request.source_field_key) {
+        const applier = CATALOG_REQUEST_SOURCE_APPLIERS[request.source_table_key];
+        if (applier) applier(request.source_record_id, req.user.clientId, request.source_field_key, category.name, req.user.isTestAccount);
+    }
+    logTableChange({
+        clientId: req.user.clientId, tableKey: articleCategoryTypeConfig(request.category_type).tableKey, recordId: category.id,
+        recordLabel: `#${category.id}`, action: 'create', changedBy: changedByLabel(req),
+        requestedBy: request.requested_by_label, authorizedBy: changedByLabel(req),
+    });
+    res.json({ request: mapCatalogValueRequestRecord(resolved), category });
+});
+
+app.post('/api/business/catalog-requests/:id/reject', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const request = getCatalogValueRequestById(req.params.id, req.user.clientId);
+    if (!request) return res.status(404).json({ message: 'Request not found.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya fue resuelta.' });
+    if (!req.user.isClientAdmin && Number(request.current_holder_user_id) !== Number(req.user.sub)) {
+        return res.status(403).json({ message: 'Esta solicitud no está contigo.' });
+    }
+    if (!catalogValueRequestCanAuthorize(req, request.category_type)) {
+        return res.status(403).json({ message: 'No tienes permiso para rechazar este catálogo.' });
+    }
+    const updated = rejectCatalogValueRequest(req.params.id, req.user.clientId, changedByLabel(req));
+    res.json({ request: mapCatalogValueRequestRecord(updated) });
+});
+
+// Base de Datos de Solicitudes' own data source -- read-only archive of
+// every request (any status) plus every access-denied alert, same
+// "everything, unscoped by recipient" role Nuestros Cambios plays for field
+// edits. Gate is menu.json's own permissionOnly leaf (bd-solicitudes), same
+// convention Nuestros Cambios itself already uses -- not a grant check here.
+app.get('/api/business/catalog-requests-log', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({
+        requests: listAllCatalogValueRequests(req.user.clientId, req.user.isTestAccount).map((r) => ({
+            ...mapCatalogValueRequestRecord(r),
+            hops: listCatalogValueRequestHops(r.id),
+        })),
+        alertas: listAllAccessDeniedAlerts(req.user.clientId),
+    });
 });
 
 // --- Nuestras Cotizaciones (Operaciones > Cadena de Suministro > Transporte
@@ -4353,11 +4516,24 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
             c.escalated_to_user_id === req.user.sub || canAuthorizeColumn(grants, c.table_key, c.field_key.split('.').pop())
         ));
     }
+    // Catalog-value requests (see catalog_value_requests' own comment in
+    // db.js) slot into these SAME 4 buckets from the requester's/holder's own
+    // side, tagged kind: 'catalog-request' so the bell dropdown renders them
+    // with their own row (Autorizar/Rechazar/Reenviar) instead of the plain
+    // field-change one. A request "para actuar" always lands in Autorizar
+    // even when I can only Reenviar it (canAuthorize decides which buttons
+    // that row gets), so nothing needing action ever hides from this tab.
+    const catalogToAct = listCatalogValueRequestsForHolder(req.user.clientId, req.user.sub)
+        .map((r) => ({ ...mapCatalogValueRequestRecord(r), kind: 'catalog-request', canAuthorize: catalogValueRequestCanAuthorize(req, r.category_type) }));
+    const catalogMineResolved = listCatalogValueRequestsBySubmitter(req.user.clientId, req.user.sub, ['approved', 'rejected'])
+        .map((r) => ({ ...mapCatalogValueRequestRecord(r), kind: 'catalog-request' }));
+    const catalogMinePending = listCatalogValueRequestsBySubmitter(req.user.clientId, req.user.sub, ['pending'])
+        .map((r) => ({ ...mapCatalogValueRequestRecord(r), kind: 'catalog-request' }));
     res.json({
         alertas: listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub),
-        avisos: listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']),
-        solicitudes: listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']),
-        autorizar,
+        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved],
+        solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending],
+        autorizar: [...autorizar, ...catalogToAct],
     });
 });
 

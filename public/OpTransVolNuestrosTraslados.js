@@ -23,7 +23,7 @@
     try {
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-transporte-vol-nuestros-traslados' });
         if (!role) return;
-        await Promise.all([loadUnitTypeOptions(), loadQuoteOptions()]);
+        await Promise.all([loadUnitTypeOptions(), loadQuoteOptions(), loadTiposClienteOptions()]);
         renderNewRecordButton();
         await refreshTable();
     } catch (err) {
@@ -43,6 +43,26 @@ async function loadUnitTypeOptions() {
     } catch (err) {
         console.error('Nuestros Traslados: failed to load unit type options', err);
         unitTypeOptions = [];
+    }
+}
+
+// Tipo Cliente -- "Nuestros Tipos Cliente" catalog (Directo/Terceros/
+// Adicional...), same active-only reuse as Tipo Unidad above. Unlike that
+// one, this select also offers "+ Solicitar nuevo Tipo Cliente" (see
+// buildClientTypeCell) -- someone without Editar on the catálogo itself can
+// still ask for a value that doesn't exist yet, routed to their Jefe
+// Directo (see Dashboard.openCatalogRequestModal / catalog_value_requests
+// in db.js).
+let tiposClienteOptions = [];
+async function loadTiposClienteOptions() {
+    try {
+        const res = await fetch('/api/business/article-categories-active', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { options } = await res.json();
+        tiposClienteOptions = options['tipos-cliente'] || [];
+    } catch (err) {
+        console.error('Nuestros Traslados: failed to load Tipos Cliente options', err);
+        tiposClienteOptions = [];
     }
 }
 
@@ -176,6 +196,56 @@ function buildQuoteCell(record) {
     return td;
 }
 
+// "+ Solicitar nuevo Tipo Cliente" -- a special option at the bottom of the
+// select, not a real catálogo value. Picking it reverts the select back to
+// its current value (nothing changes here) and opens the shared request
+// modal instead; the field itself updates once someone up the chain
+// actually Autoriza it (see CATALOG_REQUEST_SOURCE_APPLIERS in server.js).
+const REQUEST_NEW_CLIENT_TYPE = '__request_new_tipo_cliente__';
+function buildClientTypeCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colTrasladoTipoCliente';
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    const current = record.clientType || '';
+    const names = current && !tiposClienteOptions.includes(current) ? [current, ...tiposClienteOptions] : tiposClienteOptions;
+    const blankOption = document.createElement('option');
+    blankOption.value = '';
+    blankOption.textContent = Dashboard.t('main.articleTypeSelect');
+    select.appendChild(blankOption);
+    names.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
+    const requestOpt = document.createElement('option');
+    requestOpt.value = REQUEST_NEW_CLIENT_TYPE;
+    requestOpt.textContent = Dashboard.t('main.requestCatalogAdd', { label: Dashboard.t('menu.catTransVolTiposCliente') });
+    select.appendChild(requestOpt);
+    select.value = current;
+    const isDisabled = isPending(record, 'clientType') || !Dashboard.canEditField(TABLE_KEY, 'colTrasladoTipoCliente', current);
+    select.disabled = isDisabled;
+    if (isDisabled) select.title = Dashboard.t(isPending(record, 'clientType') ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => {
+        if (select.value === REQUEST_NEW_CLIENT_TYPE) {
+            select.value = current;
+            Dashboard.openCatalogRequestModal({
+                categoryType: 'tipos-cliente',
+                categoryLabel: Dashboard.t('menu.catTransVolTiposCliente'),
+                sourceTableKey: TABLE_KEY,
+                sourceRecordId: record.id,
+                sourceFieldKey: 'clientType',
+                onSubmitted: () => refreshTable(),
+            });
+            return;
+        }
+        ensureCreatedThenPatch(record, { clientType: select.value });
+    });
+    td.appendChild(select);
+    return td;
+}
+
 function buildActionsCell(record, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
@@ -222,7 +292,6 @@ async function deleteTransfer(id, tr) {
 const TEXT_CELL_FIELDS = [
     ['colTrasladoFechaSolicitud', 'requestDate'],
     ['colTrasladoQuienSolicita', 'requestedBy'],
-    ['colTrasladoTipoCliente', 'clientType'],
     ['colTrasladoContactoSolicita', 'requestContact'],
     ['colTrasladoFechaRequerida', 'neededDate'],
     ['colTrasladoHoraRequerida', 'neededTime'],
@@ -272,7 +341,7 @@ function buildRow(record) {
         textCellSystem('colTrasladoRegistroUnico', record.registroUnico),
         buildInlineTextCell(record, 'colTrasladoFechaSolicitud', 'requestDate', 'datetime-local'),
         buildInlineTextCell(record, 'colTrasladoQuienSolicita', 'requestedBy'),
-        buildInlineTextCell(record, 'colTrasladoTipoCliente', 'clientType'),
+        buildClientTypeCell(record),
         buildInlineTextCell(record, 'colTrasladoContactoSolicita', 'requestContact'),
         buildInlineTextCell(record, 'colTrasladoFechaRequerida', 'neededDate', 'datetime-local'),
         buildInlineTextCell(record, 'colTrasladoHoraRequerida', 'neededTime'),
@@ -378,6 +447,8 @@ function applyCreateFormFieldPermissions() {
     if (unitInput) unitInput.disabled = !Dashboard.canEditField(TABLE_KEY, 'colTrasladoTipoUnidadSolicitada', '');
     const quoteInput = createForm.elements.namedItem('quoteFolio');
     if (quoteInput) quoteInput.disabled = !Dashboard.canEditField(TABLE_KEY, 'colTrasladoCotizacion', '');
+    const clientTypeInput = createForm.elements.namedItem('clientType');
+    if (clientTypeInput) clientTypeInput.disabled = !Dashboard.canEditField(TABLE_KEY, 'colTrasladoTipoCliente', '');
 }
 
 function populateCreateSelects() {
@@ -409,12 +480,30 @@ function populateCreateSelects() {
             quoteSelect.appendChild(opt);
         });
     }
+    // No "+ Solicitar nuevo" here -- that flow needs a real record to attach
+    // the request to (see buildClientTypeCell), which doesn't exist yet at
+    // creation time. Someone who needs a brand new Tipo Cliente just leaves
+    // this blank here and requests it once the traslado is saved.
+    const clientTypeSelect = createForm.elements.namedItem('clientType');
+    if (clientTypeSelect) {
+        clientTypeSelect.innerHTML = '';
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = Dashboard.t('main.articleTypeSelect');
+        clientTypeSelect.appendChild(blank);
+        tiposClienteOptions.forEach((name) => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            clientTypeSelect.appendChild(opt);
+        });
+    }
 }
 
 async function openCreateModal() {
     createForm.reset();
     createFormError.hidden = true;
-    await Promise.all([loadUnitTypeOptions(), loadQuoteOptions()]);
+    await Promise.all([loadUnitTypeOptions(), loadQuoteOptions(), loadTiposClienteOptions()]);
     applyCreateFormFieldPermissions();
     populateCreateSelects();
     createModal.hidden = false;
@@ -446,6 +535,8 @@ createForm?.addEventListener('submit', async (event) => {
         if (unitInput && !unitInput.disabled) patch.requestedUnitType = unitInput.value;
         const quoteInput = createForm.elements.namedItem('quoteFolio');
         if (quoteInput && !quoteInput.disabled) patch.quoteFolio = quoteInput.value;
+        const clientTypeInput = createForm.elements.namedItem('clientType');
+        if (clientTypeInput && !clientTypeInput.disabled) patch.clientType = clientTypeInput.value;
 
         await fetch(`/api/business/transfers/${transfer.id}`, {
             method: 'PATCH',

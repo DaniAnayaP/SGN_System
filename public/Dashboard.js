@@ -4269,6 +4269,221 @@ async function resolvePendingNotification(id, action, row) {
     }
 }
 
+// --- Catalog-value requests ("+ Solicitar nuevo X") ------------------------
+// Merged into the same 4 notification buckets from the server (kind:
+// 'catalog-request', see /api/business/notifications) -- rendered with
+// their own row (Autorizar/Rechazar/Reenviar) instead of the plain
+// field-change one every other item in these tabs gets.
+function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
+    const row = document.createElement('div');
+    row.className = 'notifications-item';
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${item.categoryLabel} · ${formatNotificationDate(item.createdAt)}`;
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = t('main.notificationCatalogRequestDesc', { name: item.requestedName, catalog: item.categoryLabel });
+    row.append(meta, desc);
+    if (showOutcome) {
+        const outcome = document.createElement('div');
+        outcome.className = 'notifications-item-meta';
+        outcome.textContent = t(item.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected');
+        row.appendChild(outcome);
+        return row;
+    }
+    if (item.canAuthorize === undefined) return row; // "mis solicitudes" (solicitudes tab) -- read-only, still pending
+    const actions = document.createElement('div');
+    actions.className = 'notifications-item-actions';
+    if (item.canAuthorize) {
+        const rejectBtn = document.createElement('button');
+        rejectBtn.type = 'button';
+        rejectBtn.className = 'btn btn-secondary';
+        rejectBtn.textContent = t('main.notificationReject');
+        rejectBtn.addEventListener('click', () => resolveCatalogRequestAction(item.id, 'reject', row));
+        const approveBtn = document.createElement('button');
+        approveBtn.type = 'button';
+        approveBtn.className = 'btn';
+        approveBtn.textContent = t('main.notificationApprove');
+        approveBtn.addEventListener('click', () => openCatalogRequestFulfillModal(item, () => { row.remove(); loadNotifications(); }));
+        actions.append(rejectBtn, approveBtn);
+    } else {
+        const note = document.createElement('p');
+        note.className = 'admin-hint';
+        note.textContent = t('main.notificationCatalogNoAuth');
+        row.appendChild(note);
+        const forwardBtn = document.createElement('button');
+        forwardBtn.type = 'button';
+        forwardBtn.className = 'btn';
+        forwardBtn.textContent = t('main.notificationCatalogForward');
+        forwardBtn.addEventListener('click', () => resolveCatalogRequestAction(item.id, 'forward', row));
+        actions.appendChild(forwardBtn);
+    }
+    row.appendChild(actions);
+    return row;
+}
+
+async function resolveCatalogRequestAction(id, action, row) {
+    try {
+        const res = await fetch(`/api/business/catalog-requests/${id}/${action}`, { method: 'POST', credentials: 'include' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            showToast(body.message || t('admin.saveError'), 'error');
+            return;
+        }
+        row.remove();
+        showToast(action === 'forward' ? t('main.notificationCatalogForwarded') : t('main.notificationRejected'), 'success');
+        loadNotifications();
+    } catch {
+        showToast(t('admin.saveError'), 'error');
+    }
+}
+
+// "Pantalla alterna" -- opens when Autorizar is pressed on a catalog
+// request. Same catálogo shape every "Nuestras Categorías..." screen
+// already edits (Nombre/Descripción), prefilled from the request but still
+// editable (catches typos before they become the real catalog value).
+function openCatalogRequestFulfillModal(request, onResolved) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const panel = document.createElement('div');
+    panel.className = 'modal-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.innerHTML = `
+        <h3>${t('main.catalogRequestFulfillTitle')}</h3>
+        <p class="admin-hint">${t('main.catalogRequestFulfillSubtitle')}</p>
+        <form class="admin-form" novalidate>
+            <div class="admin-field">
+                <label>${t('main.colCatName')}</label>
+                <input type="text" name="name" required>
+            </div>
+            <div class="admin-field">
+                <label>${t('main.colCatDescription')}</label>
+                <textarea name="description" rows="2"></textarea>
+            </div>
+            <div class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions">
+                <button type="submit" class="btn">${t('main.catalogRequestFulfillSubmit')}</button>
+                <button type="button" class="btn btn-secondary" data-action="cancel">${t('admin.cancel')}</button>
+            </div>
+        </form>
+    `;
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    const form = panel.querySelector('form');
+    // Set via the DOM property, never interpolated into the innerHTML above
+    // -- request.requestedName/note are free text someone else typed.
+    form.elements.name.value = request.requestedName || '';
+    form.elements.description.value = request.note || '';
+    const errorEl = panel.querySelector('.admin-error');
+    function close() { overlay.remove(); }
+    panel.querySelector('[data-action="cancel"]').addEventListener('click', close);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorEl.hidden = true;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+            const res = await fetch(`/api/business/catalog-requests/${request.id}/approve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ description: form.elements.description.value.trim() }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                errorEl.textContent = body.message || t('admin.saveError');
+                errorEl.hidden = false;
+                return;
+            }
+            close();
+            showToast(t('main.notificationApproved'), 'success');
+            if (onResolved) onResolved(body);
+        } catch {
+            errorEl.textContent = t('admin.saveError');
+            errorEl.hidden = false;
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+}
+
+// "+ Solicitar nuevo X" -- any screen with a catálogo-select field calls
+// this to offer requesting a value that doesn't exist yet, instead of
+// needing Editar on the catálogo itself. Builds its own modal on demand
+// (not static per-page HTML, so it works from any screen without editing
+// every page's own markup) and hands the created request back via
+// onSubmitted so the caller can show its own "Pendiente de autorización"
+// state on whatever field triggered it.
+function openCatalogRequestModal({ categoryType, categoryLabel, sourceTableKey, sourceRecordId, sourceFieldKey, onSubmitted }) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const panel = document.createElement('div');
+    panel.className = 'modal-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.innerHTML = `
+        <h3>${t('main.requestCatalogModalTitle')} — ${categoryLabel}</h3>
+        <form class="admin-form" novalidate>
+            <div class="admin-field">
+                <label>${t('main.requestCatalogNameLabel')}</label>
+                <input type="text" name="requestedName" required>
+            </div>
+            <div class="admin-field">
+                <label>${t('main.requestCatalogNoteLabel')}</label>
+                <textarea name="note" rows="2"></textarea>
+            </div>
+            <p class="admin-hint">${t('main.requestCatalogHint')}</p>
+            <div class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions">
+                <button type="submit" class="btn">${t('main.requestCatalogSubmit')}</button>
+                <button type="button" class="btn btn-secondary" data-action="cancel">${t('main.requestCatalogCancel')}</button>
+            </div>
+        </form>
+    `;
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    const form = panel.querySelector('form');
+    const errorEl = panel.querySelector('.admin-error');
+    function close() { overlay.remove(); }
+    panel.querySelector('[data-action="cancel"]').addEventListener('click', close);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorEl.hidden = true;
+        const requestedName = form.elements.requestedName.value.trim();
+        if (!requestedName) return;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+            const res = await fetch('/api/business/catalog-requests', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    categoryType, requestedName, note: form.elements.note.value.trim(),
+                    sourceTableKey, sourceRecordId, sourceFieldKey,
+                }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                errorEl.textContent = body.message || t('admin.saveError');
+                errorEl.hidden = false;
+                return;
+            }
+            close();
+            showToast(t('main.requestCatalogSent'), 'success');
+            if (onSubmitted) onSubmitted(body.request);
+        } catch {
+            errorEl.textContent = t('admin.saveError');
+            errorEl.hidden = false;
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+}
+
 // Switching tabs never re-fetches — notificationsData is already the full
 // combined payload from loadNotifications(); opening Alertas/Avisos marks
 // that tab's unseen rows seen (fire-and-forget, badge already reflected
@@ -4294,7 +4509,8 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (activeNotificationTab === 'alertas') row = renderAlertRow(item);
+            if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
+            else if (activeNotificationTab === 'alertas') row = renderAlertRow(item);
             else if (activeNotificationTab === 'avisos') row = renderRequestRow(item, { showOutcome: true });
             else if (activeNotificationTab === 'solicitudes') row = renderRequestRow(item);
             else row = renderNotificationRow(item);
@@ -6177,4 +6393,5 @@ window.Dashboard = {
     getVisibleTableSnapshot,
     showToast,
     confirm: confirmDialog,
+    openCatalogRequestModal,
 };
