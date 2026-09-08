@@ -2374,6 +2374,14 @@
     .data-table thead th.col-system{
         background-color: var(--color-column-system-bg);
     }
+    /* A value the server derives from other columns (e.g. Nuestras
+       Cotizaciones' own Costo Total = Costo por KM × Distancia) -- never
+       directly editable, so it's styled distinctly from an editable cell
+       rather than left looking like plain static text. */
+    .data-table td.computed-value-cell{
+        font-weight: 600;
+        color: var(--color-text-secondary);
+    }
     /* Registro Combustible's own columns, as shown grouped inside Base de
        Datos Global — same "tenue tint marks this column's origin" idea as
        col-system above, in the table band's own blue instead of purple. */

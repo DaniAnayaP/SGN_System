@@ -455,6 +455,109 @@
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true }
           ]
         },
+        {
+          "id": "cat-operaciones-transporte-vol-nuestros-traslados", "labelKey": "menu.opTransVolNuestrosTraslados", "icon": "bx-transfer-alt", "href": "OpTransVolNuestrosTraslados.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-traslado-solicitud", "labelKey": "menu.classTrasladoSolicitud", "isClassification": true,
+              "submenu": [
+                { "id": "colTrasladoFechaSolicitud", "labelKey": "main.colTrasladoFechaSolicitud", "permissionOnly": true },
+                { "id": "colTrasladoQuienSolicita", "labelKey": "main.colTrasladoQuienSolicita", "permissionOnly": true },
+                { "id": "colTrasladoTipoCliente", "labelKey": "main.colTrasladoTipoCliente", "permissionOnly": true },
+                { "id": "colTrasladoContactoSolicita", "labelKey": "main.colTrasladoContactoSolicita", "permissionOnly": true },
+                { "id": "colTrasladoFechaRequerida", "labelKey": "main.colTrasladoFechaRequerida", "permissionOnly": true },
+                { "id": "colTrasladoHoraRequerida", "labelKey": "main.colTrasladoHoraRequerida", "permissionOnly": true },
+                { "id": "colTrasladoClienteServicio", "labelKey": "main.colTrasladoClienteServicio", "permissionOnly": true },
+                { "id": "colTrasladoTipoServicio", "labelKey": "main.colTrasladoTipoServicio", "permissionOnly": true },
+                { "id": "colTrasladoTipoUnidadSolicitada", "labelKey": "main.colTrasladoTipoUnidadSolicitada", "permissionOnly": true },
+                { "id": "colTrasladoCotizacion", "labelKey": "main.colTrasladoCotizacion", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-traslado-requisitos", "labelKey": "menu.classTrasladoRequisitos", "isClassification": true,
+              "submenu": [
+                { "id": "colTrasladoReqServicio", "labelKey": "main.colTrasladoReqServicio", "permissionOnly": true },
+                { "id": "colTrasladoReqSeguridad", "labelKey": "main.colTrasladoReqSeguridad", "permissionOnly": true },
+                { "id": "colTrasladoReqCobro", "labelKey": "main.colTrasladoReqCobro", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-traslado-origen", "labelKey": "menu.classTrasladoOrigen", "isClassification": true,
+              "submenu": [
+                { "id": "colTrasladoClienteOrigen", "labelKey": "main.colTrasladoClienteOrigen", "permissionOnly": true },
+                { "id": "colTrasladoContactoOrigen", "labelKey": "main.colTrasladoContactoOrigen", "permissionOnly": true },
+                { "id": "colTrasladoSitioOrigen", "labelKey": "main.colTrasladoSitioOrigen", "permissionOnly": true },
+                { "id": "colTrasladoUrlOrigen", "labelKey": "main.colTrasladoUrlOrigen", "permissionOnly": true },
+                { "id": "colTrasladoApodoOrigen", "labelKey": "main.colTrasladoApodoOrigen", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-traslado-destino", "labelKey": "menu.classTrasladoDestino", "isClassification": true,
+              "submenu": [
+                { "id": "colTrasladoClienteDestino", "labelKey": "main.colTrasladoClienteDestino", "permissionOnly": true },
+                { "id": "colTrasladoContactoDestino", "labelKey": "main.colTrasladoContactoDestino", "permissionOnly": true },
+                { "id": "colTrasladoSitioDestino", "labelKey": "main.colTrasladoSitioDestino", "permissionOnly": true },
+                { "id": "colTrasladoUrlDestino", "labelKey": "main.colTrasladoUrlDestino", "permissionOnly": true },
+                { "id": "colTrasladoApodoDestino", "labelKey": "main.colTrasladoApodoDestino", "permissionOnly": true }
+              ]
+            },
+            { "id": "colTrasladoDeleteAuth", "labelKey": "main.colTrasladoDeleteAuth", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-transporte-vol-cotizaciones", "labelKey": "menu.opTransVolCotizaciones", "icon": "bx-receipt", "href": "OpTransVolCotizaciones.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-cotizaciones", "labelKey": "menu.classCotizaciones", "isClassification": true,
+              "submenu": [
+                { "id": "colCotRuta", "labelKey": "main.colCotRuta", "permissionOnly": true },
+                { "id": "colCotTipoUnidad", "labelKey": "main.colCotTipoUnidad", "permissionOnly": true },
+                { "id": "colCotCostoKm", "labelKey": "main.colCotCostoKm", "permissionOnly": true },
+                { "id": "colCotDistanciaKm", "labelKey": "main.colCotDistanciaKm", "permissionOnly": true },
+                { "id": "colCotVigencia", "labelKey": "main.colCotVigencia", "permissionOnly": true },
+                { "id": "colCotCliente", "labelKey": "main.colCotCliente", "permissionOnly": true },
+                { "id": "colCotEstatus", "labelKey": "main.colCotEstatus", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCotDeleteAuth", "labelKey": "main.colCotDeleteAuth", "permissionOnly": true }
+          ]
+        },
         { "id": "cat-operaciones-transporte-vol-ingresos", "labelKey": "menu.opTransVolIngresos", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-gastos", "labelKey": "menu.opTransVolGastos", "icon": "bx-window", "href": "#" },
         { "id": "cat-operaciones-transporte-vol-inventario", "labelKey": "menu.opTransVolInventario", "icon": "bx-window", "href": "#" }

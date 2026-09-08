@@ -105,6 +105,8 @@ const WEB_SCREEN_PAGES = {
     'categorias-riesgo': { href: 'AppCategoriasRiesgo.html', icon: 'bx-error' },
     'categorias-vidautil': { href: 'AppCategoriasVidaUtil.html', icon: 'bx-time-five' },
     'unidad-medida': { href: 'AppUnidadMedida.html', icon: 'bx-ruler' },
+    'nuestras-cotizaciones': { href: 'AppCotizaciones.html', icon: 'bx-receipt' },
+    'nuestros-traslados': { href: 'AppTraslados.html', icon: 'bx-transfer-alt' },
 };
 
 // menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
@@ -125,6 +127,8 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-catalogos-centro-dist-categorias-riesgo': 'categorias-riesgo',
     'cat-catalogos-centro-dist-categorias-vidautil': 'categorias-vidautil',
     'cat-catalogos-centro-dist-unidad-medida': 'unidad-medida',
+    'cat-operaciones-transporte-vol-cotizaciones': 'nuestras-cotizaciones',
+    'cat-operaciones-transporte-vol-nuestros-traslados': 'nuestros-traslados',
 };
 
 // grantedAppScreens (from GET /api/business/app-screens) is the CLIENT's

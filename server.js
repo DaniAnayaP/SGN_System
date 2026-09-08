@@ -149,6 +149,19 @@ const {
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     updateArticleCategory,
     deleteArticleCategory,
+    listFreightQuotes,
+    getFreightQuoteById,
+    listActiveFreightQuoteOptions,
+    createFreightQuote,
+    FREIGHT_QUOTE_PATCHABLE_FIELDS,
+    updateFreightQuote,
+    deleteFreightQuote,
+    listTransfers,
+    getTransferById,
+    createTransfer,
+    TRANSFER_PATCHABLE_FIELDS,
+    updateTransfer,
+    deleteTransfer,
     getSystemColumnsForRecord,
     listHrWorkers,
     getHrWorkerById,
@@ -3656,6 +3669,187 @@ app.get('/api/business/article-categories-active', requireAuth, (req, res) => {
         options[categoryType] = listActiveArticleCategoryNames(req.user.clientId, categoryType, req.user.isTestAccount);
     });
     res.json({ options });
+});
+
+// --- Nuestras Cotizaciones (Operaciones > Cadena de Suministro > Transporte
+// --- Volumen) -- a reusable freight rate (see freight_quotes' own comment
+// in db.js), not a one-off quote document.
+const FREIGHT_QUOTE_AREA_LABEL = 'Transporte Volumen';
+const FREIGHT_QUOTE_MODULE_LABEL = 'Cadena de Suministro';
+const FREIGHT_QUOTE_SCREEN_LABEL = 'Nuestras Cotizaciones';
+
+function mapFreightQuoteRecord(row, pendingByRecord, companyName) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        registroUnico: row.db_id,
+        folio: `COT-${String(row.record_number).padStart(4, '0')}`,
+        routeName: row.route_name,
+        unitTypeName: row.unit_type_name,
+        costPerKm: row.cost_per_km,
+        distanceKm: row.distance_km,
+        totalCost: row.cost_per_km * row.distance_km,
+        validityDate: row.validity_date,
+        customerName: row.customer_name,
+        status: row.status,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: FREIGHT_QUOTE_AREA_LABEL,
+            modulo: FREIGHT_QUOTE_MODULE_LABEL,
+            pantalla: FREIGHT_QUOTE_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
+app.get('/api/business/freight-quotes', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'nuestras-cotizaciones');
+    const client = getClientById(req.user.clientId);
+    res.json({ freightQuotes: listFreightQuotes(req.user.clientId, req.user.isTestAccount).map((r) => mapFreightQuoteRecord(r, pendingByRecord, client?.company_name)) });
+});
+
+// Nuestros Traslados' own "Cotización" select -- only Activa rates, each
+// shown as "Folio — Ruta ($Costo Total)" (see listActiveFreightQuoteOptions
+// in db.js).
+app.get('/api/business/freight-quotes-active', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ options: listActiveFreightQuoteOptions(req.user.clientId, req.user.isTestAccount) });
+});
+
+app.post('/api/business/freight-quotes', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const freightQuote = createFreightQuote({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestras-cotizaciones', recordId: freightQuote.id,
+        recordLabel: `#${freightQuote.id}`, action: 'create', changedBy: changedByLabel(req),
+    });
+    const client = getClientById(req.user.clientId);
+    res.status(201).json({ freightQuote: mapFreightQuoteRecord(freightQuote, null, client?.company_name) });
+});
+
+app.patch('/api/business/freight-quotes/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFreightQuoteById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Freight quote not found.' });
+    const { baseline, overrideConflicts, ...patch } = req.body || {};
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, FREIGHT_QUOTE_PATCHABLE_FIELDS, 'nuestras-cotizaciones', `#${existing.id}`, {}, { baseline, overrideConflicts });
+    const freightQuote = updateFreightQuote(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
+    const client = getClientById(req.user.clientId);
+    res.json({ freightQuote: mapFreightQuoteRecord(freightQuote, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
+});
+
+app.delete('/api/business/freight-quotes/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getFreightQuoteById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Freight quote not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'nuestras-cotizaciones', 'colCotDeleteAuth')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar cotizaciones.' });
+        }
+    }
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestras-cotizaciones', recordId: existing.id,
+        recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
+    });
+    deleteFreightQuote(req.params.id, req.user.clientId);
+    res.status(204).end();
+});
+
+// --- Nuestros Traslados (Operaciones > Cadena de Suministro > Transporte --
+// --- Volumen) -- see transfers' own DDL comment in db.js for scope notes.
+const TRANSFER_AREA_LABEL = 'Transporte Volumen';
+const TRANSFER_MODULE_LABEL = 'Cadena de Suministro';
+const TRANSFER_SCREEN_LABEL = 'Nuestros Traslados';
+
+function mapTransferRecord(row, pendingByRecord, companyName) {
+    if (!row) return row;
+    return {
+        id: row.id,
+        registroUnico: row.db_id,
+        requestDate: row.request_date,
+        requestedBy: row.requested_by,
+        clientType: row.client_type,
+        requestContact: row.request_contact,
+        neededDate: row.needed_date,
+        neededTime: row.needed_time,
+        serviceClient: row.service_client,
+        serviceType: row.service_type,
+        requestedUnitType: row.requested_unit_type,
+        quoteFolio: row.quote_folio,
+        serviceRequirements: row.service_requirements,
+        securityRequirements: row.security_requirements,
+        billingRequirements: row.billing_requirements,
+        originClient: row.origin_client,
+        originContact: row.origin_contact,
+        originSite: row.origin_site,
+        originUrl: row.origin_url,
+        originNickname: row.origin_nickname,
+        destClient: row.dest_client,
+        destContact: row.dest_contact,
+        destSite: row.dest_site,
+        destUrl: row.dest_url,
+        destNickname: row.dest_nickname,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName,
+            area: TRANSFER_AREA_LABEL,
+            modulo: TRANSFER_MODULE_LABEL,
+            pantalla: TRANSFER_SCREEN_LABEL,
+            centroCostos: '',
+            createdAt: row.created_at,
+        }),
+    };
+}
+
+app.get('/api/business/transfers', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'nuestros-traslados');
+    const client = getClientById(req.user.clientId);
+    res.json({ transfers: listTransfers(req.user.clientId, req.user.isTestAccount).map((r) => mapTransferRecord(r, pendingByRecord, client?.company_name)) });
+});
+
+app.post('/api/business/transfers', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const transfer = createTransfer({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestros-traslados', recordId: transfer.id,
+        recordLabel: `#${transfer.id}`, action: 'create', changedBy: changedByLabel(req),
+    });
+    const client = getClientById(req.user.clientId);
+    res.status(201).json({ transfer: mapTransferRecord(transfer, null, client?.company_name) });
+});
+
+app.patch('/api/business/transfers/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getTransferById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Transfer not found.' });
+    const { baseline, overrideConflicts, ...patch } = req.body || {};
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, TRANSFER_PATCHABLE_FIELDS, 'nuestros-traslados', `#${existing.id}`, {}, { baseline, overrideConflicts });
+    const transfer = updateTransfer(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
+    const client = getClientById(req.user.clientId);
+    res.json({ transfer: mapTransferRecord(transfer, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
+});
+
+app.delete('/api/business/transfers/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getTransferById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Transfer not found.' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (!canDeleteColumn(grants, 'nuestros-traslados', 'colTrasladoDeleteAuth')) {
+            return res.status(403).json({ message: 'No tienes permiso para eliminar traslados.' });
+        }
+    }
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestros-traslados', recordId: existing.id,
+        recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
+    });
+    deleteTransfer(req.params.id, req.user.clientId);
+    res.status(204).end();
 });
 
 // --- Base de Datos Global (Configuración > Base de Datos) -------------------

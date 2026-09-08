@@ -1255,6 +1255,74 @@ db.exec(`
         is_test_data    INTEGER NOT NULL DEFAULT 0,
         created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Nuestras Cotizaciones (Operaciones > Cadena de Suministro > Transporte
+    -- Volumen) — a REUSABLE freight rate, not a one-off quote document: give
+    -- it a Costo por KM + Distancia Estimada once, it stays Activa, and any
+    -- number of Nuestros Traslados records can pick it (by folio) afterward.
+    -- Deactivating (never deleting) is what keeps a Traslado that already
+    -- picked one from losing its own history. unit_type_name is plain text
+    -- (not a FK to unit_types) for the exact same reason sku_items' own
+    -- category_* columns are plain text -- see that table's own comment.
+    -- Folio (COT-0001...) and Costo Total (cost_per_km × distance_km) are
+    -- both DERIVED on read, never stored -- same "never its own column"
+    -- convention as sku_items' SKU.
+    CREATE TABLE IF NOT EXISTS freight_quotes (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id           TEXT NOT NULL,
+        record_number   INTEGER NOT NULL,
+        route_name      TEXT NOT NULL DEFAULT '',
+        unit_type_name  TEXT NOT NULL DEFAULT '',
+        cost_per_km     REAL NOT NULL DEFAULT 0,
+        distance_km     REAL NOT NULL DEFAULT 0,
+        validity_date   TEXT NOT NULL DEFAULT '',
+        customer_name   TEXT NOT NULL DEFAULT '',
+        status          TEXT NOT NULL DEFAULT 'active',
+        is_test_data    INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Nuestros Traslados (Operaciones > Cadena de Suministro > Transporte
+    -- Volumen) — manual capture of a service request, physical or office,
+    -- confirmed with the client: whatever must ALWAYS be entered by hand
+    -- (never auto-filled) for a traslado, start to finish. A DIFFERENT,
+    -- older "Registro de traslados" already exists under Administración
+    -- (cat-admin) with its own stale column set from an earlier design pass
+    -- -- left untouched on purpose (the client wants to review it before
+    -- deciding what becomes the real Administración version), so this is a
+    -- deliberately separate table/screen, not a replacement.
+    CREATE TABLE IF NOT EXISTS transfers (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id               INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id                   TEXT NOT NULL,
+        record_number           INTEGER NOT NULL,
+        request_date            TEXT NOT NULL DEFAULT '',
+        requested_by            TEXT NOT NULL DEFAULT '',
+        client_type             TEXT NOT NULL DEFAULT '',
+        request_contact         TEXT NOT NULL DEFAULT '',
+        needed_date             TEXT NOT NULL DEFAULT '',
+        needed_time             TEXT NOT NULL DEFAULT '',
+        service_client          TEXT NOT NULL DEFAULT '',
+        service_type            TEXT NOT NULL DEFAULT '',
+        requested_unit_type     TEXT NOT NULL DEFAULT '',
+        quote_folio             TEXT NOT NULL DEFAULT '',
+        service_requirements    TEXT NOT NULL DEFAULT '',
+        security_requirements   TEXT NOT NULL DEFAULT '',
+        billing_requirements    TEXT NOT NULL DEFAULT '',
+        origin_client           TEXT NOT NULL DEFAULT '',
+        origin_contact          TEXT NOT NULL DEFAULT '',
+        origin_site             TEXT NOT NULL DEFAULT '',
+        origin_url              TEXT NOT NULL DEFAULT '',
+        origin_nickname         TEXT NOT NULL DEFAULT '',
+        dest_client             TEXT NOT NULL DEFAULT '',
+        dest_contact            TEXT NOT NULL DEFAULT '',
+        dest_site               TEXT NOT NULL DEFAULT '',
+        dest_url                TEXT NOT NULL DEFAULT '',
+        dest_nickname           TEXT NOT NULL DEFAULT '',
+        is_test_data            INTEGER NOT NULL DEFAULT 0,
+        created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 `);
 
 // profiles.client_id was added after profiles already shipped once — add it
@@ -2124,6 +2192,8 @@ const TABLE_GRANT_PATHS = {
     'categorias-riesgo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-riesgo' },
     'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
+    'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
+    'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -3507,6 +3577,134 @@ function deleteArticleCategory(id, clientId) {
     db.prepare('DELETE FROM article_categories WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
+// --- Nuestras Cotizaciones (Operaciones > Cadena de Suministro > Transporte
+// --- Volumen) -- see freight_quotes' own DDL comment for why this is a
+// reusable rate, not a one-off document.
+function listFreightQuotes(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM freight_quotes WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC').all(clientId, forTestAccount ? 1 : 0);
+}
+
+function getFreightQuoteById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM freight_quotes WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+
+// Options for Nuestros Traslados' own "Cotización" select -- folio and
+// Costo Total are both DERIVED here (never stored), same convention as
+// mapFreightQuoteRecord in server.js uses for a single record's own view.
+function listActiveFreightQuoteOptions(clientId, forTestAccount = false) {
+    const rows = db.prepare("SELECT record_number, route_name, cost_per_km, distance_km FROM freight_quotes WHERE client_id = ? AND is_test_data = ? AND status = 'active' ORDER BY record_number ASC")
+        .all(clientId, forTestAccount ? 1 : 0);
+    return rows.map((r) => {
+        const folio = `COT-${String(r.record_number).padStart(4, '0')}`;
+        const costoTotal = r.cost_per_km * r.distance_km;
+        return { folio, label: `${folio} — ${r.route_name || '(sin ruta)'} ($${costoTotal.toFixed(2)})` };
+    });
+}
+
+function createFreightQuote({ clientId, isTestData = false }) {
+    const recordNumber = db
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM freight_quotes WHERE client_id = ? AND is_test_data = ?')
+        .get(clientId, isTestData ? 1 : 0).n;
+    const result = db
+        .prepare('INSERT INTO freight_quotes (client_id, db_id, record_number, is_test_data) VALUES (@clientId, @dbId, @recordNumber, @isTestData)')
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0 });
+    return getFreightQuoteById(result.lastInsertRowid, clientId, isTestData);
+}
+
+const FREIGHT_QUOTE_PATCHABLE_FIELDS = {
+    routeName: { column: 'route_name', fieldKey: 'main.colCotRuta' },
+    unitTypeName: { column: 'unit_type_name', fieldKey: 'main.colCotTipoUnidad' },
+    costPerKm: { column: 'cost_per_km', fieldKey: 'main.colCotCostoKm' },
+    distanceKm: { column: 'distance_km', fieldKey: 'main.colCotDistanciaKm' },
+    validityDate: { column: 'validity_date', fieldKey: 'main.colCotVigencia' },
+    customerName: { column: 'customer_name', fieldKey: 'main.colCotCliente' },
+    status: { column: 'status', fieldKey: 'main.colCotEstatus' },
+};
+
+function updateFreightQuote(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(FREIGHT_QUOTE_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE freight_quotes SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getFreightQuoteById(id, clientId, forTestAccount);
+}
+
+function deleteFreightQuote(id, clientId) {
+    db.prepare('DELETE FROM freight_quotes WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// --- Nuestros Traslados (Operaciones > Cadena de Suministro > Transporte --
+// --- Volumen) -- see transfers' own DDL comment for scope/naming notes.
+function listTransfers(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM transfers WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC').all(clientId, forTestAccount ? 1 : 0);
+}
+
+function getTransferById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM transfers WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+
+function createTransfer({ clientId, isTestData = false }) {
+    const recordNumber = db
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM transfers WHERE client_id = ? AND is_test_data = ?')
+        .get(clientId, isTestData ? 1 : 0).n;
+    const result = db
+        .prepare('INSERT INTO transfers (client_id, db_id, record_number, is_test_data) VALUES (@clientId, @dbId, @recordNumber, @isTestData)')
+        .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0 });
+    return getTransferById(result.lastInsertRowid, clientId, isTestData);
+}
+
+const TRANSFER_PATCHABLE_FIELDS = {
+    requestDate: { column: 'request_date', fieldKey: 'main.colTrasladoFechaSolicitud' },
+    requestedBy: { column: 'requested_by', fieldKey: 'main.colTrasladoQuienSolicita' },
+    clientType: { column: 'client_type', fieldKey: 'main.colTrasladoTipoCliente' },
+    requestContact: { column: 'request_contact', fieldKey: 'main.colTrasladoContactoSolicita' },
+    neededDate: { column: 'needed_date', fieldKey: 'main.colTrasladoFechaRequerida' },
+    neededTime: { column: 'needed_time', fieldKey: 'main.colTrasladoHoraRequerida' },
+    serviceClient: { column: 'service_client', fieldKey: 'main.colTrasladoClienteServicio' },
+    serviceType: { column: 'service_type', fieldKey: 'main.colTrasladoTipoServicio' },
+    requestedUnitType: { column: 'requested_unit_type', fieldKey: 'main.colTrasladoTipoUnidadSolicitada' },
+    quoteFolio: { column: 'quote_folio', fieldKey: 'main.colTrasladoCotizacion' },
+    serviceRequirements: { column: 'service_requirements', fieldKey: 'main.colTrasladoReqServicio' },
+    securityRequirements: { column: 'security_requirements', fieldKey: 'main.colTrasladoReqSeguridad' },
+    billingRequirements: { column: 'billing_requirements', fieldKey: 'main.colTrasladoReqCobro' },
+    originClient: { column: 'origin_client', fieldKey: 'main.colTrasladoClienteOrigen' },
+    originContact: { column: 'origin_contact', fieldKey: 'main.colTrasladoContactoOrigen' },
+    originSite: { column: 'origin_site', fieldKey: 'main.colTrasladoSitioOrigen' },
+    originUrl: { column: 'origin_url', fieldKey: 'main.colTrasladoUrlOrigen' },
+    originNickname: { column: 'origin_nickname', fieldKey: 'main.colTrasladoApodoOrigen' },
+    destClient: { column: 'dest_client', fieldKey: 'main.colTrasladoClienteDestino' },
+    destContact: { column: 'dest_contact', fieldKey: 'main.colTrasladoContactoDestino' },
+    destSite: { column: 'dest_site', fieldKey: 'main.colTrasladoSitioDestino' },
+    destUrl: { column: 'dest_url', fieldKey: 'main.colTrasladoUrlDestino' },
+    destNickname: { column: 'dest_nickname', fieldKey: 'main.colTrasladoApodoDestino' },
+};
+
+function updateTransfer(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(TRANSFER_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) {
+        db.prepare(`UPDATE transfers SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    }
+    return getTransferById(id, clientId, forTestAccount);
+}
+
+function deleteTransfer(id, clientId) {
+    db.prepare('DELETE FROM transfers WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
 // Carga Combustible's own suggestion hook: given the Económico the user just
 // confirmed, look it up in Nuestras Unidades and return the Tipo Combustible
 // its registered Tipo de Unidad carries -- '' (no suggestion) when the
@@ -4324,6 +4522,8 @@ const WEB_SCREEN_CATALOG = [
     { key: 'categorias-riesgo', labelKey: 'menu.catCentroDistCategoriasRiesgo' },
     { key: 'categorias-vidautil', labelKey: 'menu.catCentroDistCategoriasVidautil' },
     { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
+    { key: 'nuestras-cotizaciones', labelKey: 'menu.opTransVolCotizaciones' },
+    { key: 'nuestros-traslados', labelKey: 'menu.opTransVolNuestrosTraslados' },
 ];
 
 function deserializeSaasApp(row) {
@@ -5258,6 +5458,19 @@ module.exports = {
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     updateArticleCategory,
     deleteArticleCategory,
+    listFreightQuotes,
+    getFreightQuoteById,
+    listActiveFreightQuoteOptions,
+    createFreightQuote,
+    FREIGHT_QUOTE_PATCHABLE_FIELDS,
+    updateFreightQuote,
+    deleteFreightQuote,
+    listTransfers,
+    getTransferById,
+    createTransfer,
+    TRANSFER_PATCHABLE_FIELDS,
+    updateTransfer,
+    deleteTransfer,
     createPendingChange,
     getPendingChangeById,
     hasPendingChangeForField,
