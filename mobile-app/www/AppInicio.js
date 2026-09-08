@@ -1436,6 +1436,7 @@ function updateDeptAreaButtonVisibility() {
 
 function renderDeptAreaDropdown() {
     updateDeptAreaButtonVisibility();
+    updateHeaderOverflowLayout();
     deptAreaDropdown.innerHTML = '';
     if (!availableDepartments.length) {
         const empty = document.createElement('div');
@@ -1523,6 +1524,7 @@ function renderCcDropdown() {
     // once (or "Todos"), so the threshold is still just "more than one
     // available to pick from", same as everywhere else.
     ccBtn.hidden = sidebarCostCenters.length <= 1;
+    updateHeaderOverflowLayout();
     ccDropdown.innerHTML = '';
     if (!sidebarCostCenters.length) {
         const empty = document.createElement('div');
@@ -1877,6 +1879,49 @@ searchBtn.addEventListener('click', (event) => {
     searchBar.hidden = !searchBar.hidden;
     if (!searchBar.hidden) searchInput.focus();
 });
+
+// --- Header "more options" overflow -----------------------------------
+// Depto/Área, Centros de Costo, and Buscar normally sit inline next to the
+// client's apodo (unchanged, that's .home-header-actions-inline's own
+// original spot). They only get MOVED (not duplicated -- same DOM nodes,
+// same event listeners, appendChild just relocates them) into this "⋯"
+// panel when BOTH optional pickers are visible at once, since that's the
+// actual case that crowds the apodo out -- either one alone still leaves
+// enough room. Each picker's own "nothing to choose, hide me" rule
+// (updateDeptAreaButtonVisibility / renderCcDropdown's ccBtn.hidden) is
+// untouched; this only decides WHERE to put whichever of them are already
+// showing.
+const overflowBtn = document.getElementById('home-overflow-btn');
+const overflowMenu = document.getElementById('home-header-overflow');
+const inlineActionsWrap = document.getElementById('home-header-actions-inline');
+const deptAreaWrap = deptAreaBtn.closest('.home-picker-wrap');
+const ccWrap = ccBtn.closest('.home-picker-wrap');
+
+function closeOverflowMenu() {
+    overflowMenu.hidden = true;
+    overflowBtn.setAttribute('aria-expanded', 'false');
+}
+
+function updateHeaderOverflowLayout() {
+    const visibleOptionalCount = (deptAreaBtn.hidden ? 0 : 1) + (ccBtn.hidden ? 0 : 1);
+    const shouldCollapse = visibleOptionalCount >= 2;
+    overflowBtn.hidden = !shouldCollapse;
+    if (shouldCollapse) {
+        overflowMenu.append(deptAreaWrap, ccWrap, searchBtn);
+    } else {
+        closeOverflowMenu();
+        inlineActionsWrap.append(deptAreaWrap, ccWrap, searchBtn);
+    }
+}
+
+overflowBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const willOpen = overflowMenu.hidden;
+    closeAllPickerDropdowns();
+    overflowMenu.hidden = !willOpen;
+    overflowBtn.setAttribute('aria-expanded', String(willOpen));
+});
+document.addEventListener('click', closeOverflowMenu);
 
 // --- Breadcrumb collapse/expand — same idea as Dashboard.js's own
 // breadcrumb-toggle (bx-map-alt + chevron), just simpler: no persisted

@@ -193,6 +193,53 @@ body{
     gap: 0.4rem;
     flex-shrink: 0;
 }
+/* Same specificity trap noted below for .home-pill-btn[hidden] -- a bare
+   [hidden] loses to this class's own display:flex. */
+.home-header-actions-inline[hidden]{ display: none; }
+.home-header-actions-inline{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+/* "⋯" panel Depto/Área, Centros de Costo and Buscar get MOVED into (not
+   duplicated into) when updateHeaderOverflowLayout() collapses them --
+   positioned the same way .home-picker-dropdown already is, just anchored
+   to .home-header-top itself (position: relative, see above) since there's
+   no single wrapping button of its own to anchor to like a normal picker. */
+.home-header-overflow[hidden]{ display: none; }
+.home-header-overflow{
+    position: absolute;
+    top: 2.6rem;
+    right: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3rem;
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    border-radius: 0.8rem;
+    padding: 0.4rem;
+    z-index: 20;
+    box-shadow: 0 10px 30px var(--home-shadow);
+}
+/* Every control's own visible label is hidden while it sits inline (icon-
+   only pill/circle, unchanged from before this section existed) -- shown
+   only for the copy of it living inside .home-header-overflow right now. */
+.home-header-overflow-label{ display: none; }
+.home-header-overflow .home-picker-wrap{ width: 100%; }
+.home-header-overflow .home-pill-btn,
+.home-header-overflow .home-hamburger-btn{
+    width: 100%;
+    height: auto;
+    border-radius: 0.6rem;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    padding: 0.55rem 0.6rem;
+    font-size: 0.66rem;
+}
+.home-header-overflow .home-hamburger-btn{ font-weight: 600; }
+.home-header-overflow .home-header-overflow-label{ display: inline; flex: 1; text-align: left; }
+.home-header-overflow .home-pill-btn i:last-child{ margin-left: auto; }
 .home-client-brand{
     display: flex;
     align-items: center;

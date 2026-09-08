@@ -30,24 +30,50 @@
                     <span class="home-client-name" id="home-client-name">—</span>
                 </div>
                 <div class="home-header-top-actions">
-                    <div class="home-picker-wrap">
-                        <button type="button" class="home-pill-btn home-pill-btn-icon-only" id="home-dept-area-btn" aria-haspopup="true" aria-expanded="false" data-i18n-aria="home.deptAreaButton" aria-label="Depto/Área">
-                            <i class="bx bx-buildings" aria-hidden="true"></i>
-                            <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                        </button>
-                        <div class="home-picker-dropdown" id="home-dept-area-dropdown" role="menu" hidden></div>
-                    </div>
-                    <div class="home-picker-wrap">
-                        <button type="button" class="home-pill-btn" id="home-cost-centers-btn" aria-haspopup="true" aria-expanded="false">
-                            <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
-                            <span id="home-cost-centers-label" data-i18n="home.costCentersButton">C. Cost</span>
-                            <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                        </button>
-                        <div class="home-picker-dropdown" id="home-cc-dropdown" role="menu" hidden></div>
-                    </div>
-                    <button type="button" class="home-hamburger-btn" id="home-search-btn" data-i18n-aria="sidebar.searchPlaceholder" aria-label="Search">
-                        <i class="bx bx-search" aria-hidden="true"></i>
+                    <!-- "More options" -- shown ONLY when Depto/Área and
+                         Centros de Costo are BOTH visible at once (see
+                         AppInicio.js's updateHeaderOverflowLayout): that's
+                         the actual crowding case that squeezes the client's
+                         apodo out. With zero or one of them visible (each
+                         still auto-hides on its own "nothing to choose"
+                         rule, untouched), everything just shows inline as
+                         before, no overflow needed. -->
+                    <button type="button" class="home-hamburger-btn" id="home-overflow-btn" hidden aria-haspopup="true" aria-expanded="false" data-i18n-aria="home.moreOptions" aria-label="More options">
+                        <i class="bx bx-dots-vertical-rounded" aria-hidden="true"></i>
                     </button>
+                    <div class="home-header-actions-inline" id="home-header-actions-inline">
+                        <div class="home-picker-wrap">
+                            <button type="button" class="home-pill-btn home-pill-btn-icon-only" id="home-dept-area-btn" aria-haspopup="true" aria-expanded="false" data-i18n-aria="home.deptAreaButton" aria-label="Depto/Área">
+                                <i class="bx bx-buildings" aria-hidden="true"></i>
+                                <!-- Hidden while icon-only (unchanged); shown
+                                     only once moved into .home-header-overflow. -->
+                                <span class="home-header-overflow-label" data-i18n="home.deptAreaButton">Depto/Área</span>
+                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <div class="home-picker-dropdown" id="home-dept-area-dropdown" role="menu" hidden></div>
+                        </div>
+                        <div class="home-picker-wrap">
+                            <button type="button" class="home-pill-btn" id="home-cost-centers-btn" aria-haspopup="true" aria-expanded="false">
+                                <i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>
+                                <span id="home-cost-centers-label" data-i18n="home.costCentersButton">C. Cost</span>
+                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <div class="home-picker-dropdown" id="home-cc-dropdown" role="menu" hidden></div>
+                        </div>
+                        <button type="button" class="home-hamburger-btn" id="home-search-btn" data-i18n-aria="sidebar.searchPlaceholder" aria-label="Search">
+                            <i class="bx bx-search" aria-hidden="true"></i>
+                            <!-- Hidden while this button sits inline (icon-only
+                                 circle, unchanged); shown only once
+                                 updateHeaderOverflowLayout() moves it into
+                                 .home-header-overflow, see AppInicio.css. -->
+                            <span class="home-header-overflow-label" data-i18n="sidebar.searchPlaceholder">Search</span>
+                        </button>
+                    </div>
+                    <!-- Same 3 controls above get MOVED in here (not
+                         duplicated) by updateHeaderOverflowLayout() when
+                         collapsed -- their dropdowns/handlers keep working
+                         unchanged, only their DOM position moves. -->
+                    <div class="home-header-overflow" id="home-header-overflow" hidden></div>
                     <!-- Connectivity indicator -- icon only, no label. State
                          (online/syncing/offline) and the badge count come
                          from AppInicio.js's updateConnIndicator(); tapping it
