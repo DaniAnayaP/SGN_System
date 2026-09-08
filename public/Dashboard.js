@@ -4315,16 +4315,21 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
         forwardBtn.type = 'button';
         forwardBtn.className = 'btn';
         forwardBtn.textContent = t('main.notificationCatalogForward');
-        forwardBtn.addEventListener('click', () => resolveCatalogRequestAction(item.id, 'forward', row));
+        forwardBtn.addEventListener('click', () => openCatalogRequestForwardModal(item, row));
         actions.appendChild(forwardBtn);
     }
     row.appendChild(actions);
     return row;
 }
 
-async function resolveCatalogRequestAction(id, action, row) {
+async function resolveCatalogRequestAction(id, action, row, payload) {
     try {
-        const res = await fetch(`/api/business/catalog-requests/${id}/${action}`, { method: 'POST', credentials: 'include' });
+        const res = await fetch(`/api/business/catalog-requests/${id}/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload || {}),
+        });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
             showToast(body.message || t('admin.saveError'), 'error');
@@ -4336,6 +4341,130 @@ async function resolveCatalogRequestAction(id, action, row) {
     } catch {
         showToast(t('admin.saveError'), 'error');
     }
+}
+
+// "Reenviar" -- confirmed with the user this is a deliberate choice, not
+// another automatic single hop: fetches who's eligible (own jefe directo,
+// homólogos, jefes alternos -- see GET .../forward-options) and lets the
+// holder pick one. An empty answer (nobody in any of the 3 groups) means
+// there's nothing to choose between, so it falls straight back to the old
+// one-click behavior -- the server resolves that case to the client admin
+// on its own (see the POST .../forward route).
+async function openCatalogRequestForwardModal(item, row) {
+    let candidates = { jefeDirecto: null, homologos: [], alternos: [] };
+    try {
+        const res = await fetch(`/api/business/catalog-requests/${item.id}/forward-options`, { credentials: 'include' });
+        if (res.ok) candidates = await res.json();
+    } catch {
+        // fall through with the empty default -- same "nothing to pick" path
+    }
+    const groups = [
+        { labelKey: 'main.forwardGroupJefeDirecto', items: candidates.jefeDirecto ? [candidates.jefeDirecto] : [] },
+        { labelKey: 'main.forwardGroupAlternos', items: candidates.alternos || [] },
+        { labelKey: 'main.forwardGroupHomologos', items: candidates.homologos || [] },
+    ].filter((group) => group.items.length);
+
+    if (!groups.length) {
+        resolveCatalogRequestAction(item.id, 'forward', row);
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const panel = document.createElement('div');
+    panel.className = 'modal-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.innerHTML = `
+        <h3>${t('main.forwardPickerTitle')}</h3>
+        <p class="admin-hint"></p>
+        <form class="admin-form" novalidate>
+            <div class="forward-picker-groups"></div>
+            <div class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions">
+                <button type="submit" class="btn" disabled>${t('main.forwardPickerSubmit')}</button>
+                <button type="button" class="btn btn-secondary" data-action="cancel">${t('admin.cancel')}</button>
+            </div>
+        </form>
+    `;
+    // item.requestedName/categoryLabel are free text -- set via textContent
+    // after the fact, never interpolated into the innerHTML template above.
+    panel.querySelector('.admin-hint').textContent = t('main.notificationCatalogRequestDesc', { name: item.requestedName, catalog: item.categoryLabel });
+    const groupsWrap = panel.querySelector('.forward-picker-groups');
+    const submitBtn = panel.querySelector('button[type="submit"]');
+    let selectedUserId = null;
+    groups.forEach((group, groupIndex) => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'forward-picker-group';
+        const labelEl = document.createElement('div');
+        labelEl.className = 'forward-picker-group-label';
+        labelEl.textContent = t(group.labelKey);
+        groupEl.appendChild(labelEl);
+        group.items.forEach((candidate, itemIndex) => {
+            const optionLabel = document.createElement('label');
+            optionLabel.className = 'forward-picker-option';
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'forward-target';
+            input.value = String(candidate.userId);
+            if (groupIndex === 0 && itemIndex === 0) {
+                input.checked = true;
+                selectedUserId = candidate.userId;
+                optionLabel.classList.add('selected');
+                submitBtn.disabled = false;
+            }
+            const textEl = document.createElement('span');
+            // candidate.name/positionName are free text (a worker's own
+            // name, a Puesto's own name) -- set via textContent, never
+            // interpolated into innerHTML.
+            textEl.textContent = candidate.positionName ? `${candidate.name} — ${candidate.positionName}` : candidate.name;
+            input.addEventListener('change', () => {
+                panel.querySelectorAll('.forward-picker-option').forEach((el) => el.classList.remove('selected'));
+                optionLabel.classList.add('selected');
+                selectedUserId = candidate.userId;
+                submitBtn.disabled = false;
+            });
+            optionLabel.append(input, textEl);
+            groupEl.appendChild(optionLabel);
+        });
+        groupsWrap.appendChild(groupEl);
+    });
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    const form = panel.querySelector('form');
+    const errorEl = panel.querySelector('.admin-error');
+    function close() { overlay.remove(); }
+    panel.querySelector('[data-action="cancel"]').addEventListener('click', close);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!selectedUserId) return;
+        errorEl.hidden = true;
+        submitBtn.disabled = true;
+        try {
+            const res = await fetch(`/api/business/catalog-requests/${item.id}/forward`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ targetUserId: selectedUserId }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                errorEl.textContent = body.message || t('admin.saveError');
+                errorEl.hidden = false;
+                submitBtn.disabled = false;
+                return;
+            }
+            close();
+            row.remove();
+            showToast(t('main.notificationCatalogForwarded'), 'success');
+            loadNotifications();
+        } catch {
+            errorEl.textContent = t('admin.saveError');
+            errorEl.hidden = false;
+            submitBtn.disabled = false;
+        }
+    });
 }
 
 // "Pantalla alterna" -- opens when Autorizar is pressed on a catalog

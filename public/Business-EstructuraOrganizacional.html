@@ -373,6 +373,7 @@
                         <tr>
                             <th data-i18n="business.jobPositionName" data-col="ocPosition">Position</th>
                             <th data-i18n="business.orgChartReportsTo" data-col="ocReportsTo">Reports To</th>
+                            <th data-i18n="business.orgChartAltSupervisors" data-col="ocAltSupervisors">Alternate Supervisors</th>
                             <th data-i18n="business.orgChartOccupiedBy" data-col="ocOccupiedBy">Occupied By</th>
                         </tr>
                     </thead>
@@ -383,9 +384,29 @@
                 <p id="org-chart-empty" class="admin-empty" data-i18n="business.orgChartEmpty" hidden>No active job positions yet — add one in Puestos de Trabajo first.</p>
             </div>
 
-            <h3 class="admin-section-title" data-i18n="business.orgChartTreeTitle">Chart</h3>
-            <div id="org-chart-tree" class="org-chart-tree"></div>
+            <h3 class="admin-section-title" data-i18n="business.orgChartGlobalTitle">Global View</h3>
+            <p class="admin-hint" data-i18n="business.orgChartGlobalSubtitle">Which Cost Center controls which, built automatically from Reporta A and Centros de Costo Habilitados.</p>
+            <div id="org-chart-global-map" class="org-chart-tree"></div>
+
+            <h3 class="admin-section-title" data-i18n="business.orgChartDetailTitle">Detailed View</h3>
+            <p class="admin-hint" data-i18n="business.orgChartDetailSubtitle">One section per Cost Center, each with only the Job Positions enabled there.</p>
+            <div id="org-chart-detail"></div>
         </section>
+
+        <div class="modal-overlay" id="alt-supervisors-modal" hidden>
+            <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="alt-supervisors-modal-title">
+                <h3 id="alt-supervisors-modal-title" data-i18n="business.jobPositionAltSupervisors">Alternate Supervisors</h3>
+                <p class="admin-hint" data-i18n="business.jobPositionAltSupervisorsHint">Extra Job Positions with direct authority over this one, without changing who it reports to.</p>
+                <div class="job-position-checklist" id="alt-supervisors-modal-list">
+                    <!-- rendered at runtime -->
+                </div>
+                <div id="alt-supervisors-modal-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn" id="alt-supervisors-modal-save" data-i18n="admin.save">Save</button>
+                    <button type="button" class="btn btn-secondary" id="alt-supervisors-modal-cancel" data-i18n="admin.cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script src="Dashboard.js"></script>

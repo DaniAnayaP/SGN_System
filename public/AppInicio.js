@@ -1131,16 +1131,21 @@ function renderNotifCatalogRequestItem(item, showOutcome) {
         forwardBtn.type = 'button';
         forwardBtn.className = 'notif-item-btn primary';
         forwardBtn.textContent = t('main.notificationCatalogForward');
-        forwardBtn.addEventListener('click', () => resolveCatalogRequestAction(item.id, 'forward', el));
+        forwardBtn.addEventListener('click', () => openCatalogRequestForwardSheet(item, el));
         actions.appendChild(forwardBtn);
     }
     el.appendChild(actions);
     return el;
 }
 
-async function resolveCatalogRequestAction(id, action, el) {
+async function resolveCatalogRequestAction(id, action, el, payload) {
     try {
-        const res = await fetch(apiUrl(`/api/business/catalog-requests/${id}/${action}`), { method: 'POST', credentials: 'include' });
+        const res = await fetch(apiUrl(`/api/business/catalog-requests/${id}/${action}`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload || {}),
+        });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) { showToast(body.message || t('admin.saveError')); return; }
         el.remove();
@@ -1149,6 +1154,104 @@ async function resolveCatalogRequestAction(id, action, el) {
     } catch {
         showToast(t('admin.saveError'));
     }
+}
+
+// "Reenviar" -- same deliberate-choice picker as Dashboard.js's own Web
+// equivalent (openCatalogRequestForwardModal): jefe directo, homólogos and
+// jefes alternos, fetched from GET .../forward-options. Empty answer means
+// nothing to choose between, so it falls back to the old one-click POST
+// (the server resolves that case to the client admin on its own).
+async function openCatalogRequestForwardSheet(item, el) {
+    let candidates = { jefeDirecto: null, homologos: [], alternos: [] };
+    try {
+        const res = await fetch(apiUrl(`/api/business/catalog-requests/${item.id}/forward-options`), { credentials: 'include' });
+        if (res.ok) candidates = await res.json();
+    } catch {
+        // fall through with the empty default
+    }
+    const groups = [
+        { labelKey: 'main.forwardGroupJefeDirecto', items: candidates.jefeDirecto ? [candidates.jefeDirecto] : [] },
+        { labelKey: 'main.forwardGroupAlternos', items: candidates.alternos || [] },
+        { labelKey: 'main.forwardGroupHomologos', items: candidates.homologos || [] },
+    ].filter((group) => group.items.length);
+
+    if (!groups.length) {
+        resolveCatalogRequestAction(item.id, 'forward', el);
+        return;
+    }
+
+    const scrim = document.createElement('div');
+    scrim.className = 'home-select-scrim';
+    const sheet = document.createElement('div');
+    sheet.className = 'home-select-sheet';
+    sheet.appendChild(Object.assign(document.createElement('div'), { className: 'home-select-sheet-handle' }));
+    const title = document.createElement('div');
+    title.className = 'home-select-sheet-title';
+    title.textContent = t('main.forwardPickerTitle');
+    sheet.appendChild(title);
+
+    const body = document.createElement('div');
+    let selectedUserId = null;
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'home-carga-field-confirm forward-picker-submit';
+    confirmBtn.textContent = t('main.forwardPickerSubmit');
+    confirmBtn.disabled = true;
+
+    groups.forEach((group, groupIndex) => {
+        const labelEl = document.createElement('div');
+        labelEl.className = 'home-select-group-label';
+        labelEl.textContent = t(group.labelKey);
+        body.appendChild(labelEl);
+        group.items.forEach((candidate, itemIndex) => {
+            const optionBtn = document.createElement('button');
+            optionBtn.type = 'button';
+            optionBtn.className = 'home-select-option';
+            // candidate.name/positionName are free text -- textContent only,
+            // never interpolated into innerHTML.
+            optionBtn.textContent = candidate.positionName ? `${candidate.name} — ${candidate.positionName}` : candidate.name;
+            if (groupIndex === 0 && itemIndex === 0) {
+                optionBtn.classList.add('active');
+                selectedUserId = candidate.userId;
+                confirmBtn.disabled = false;
+            }
+            optionBtn.addEventListener('click', () => {
+                body.querySelectorAll('.home-select-option').forEach((opt) => opt.classList.remove('active'));
+                optionBtn.classList.add('active');
+                selectedUserId = candidate.userId;
+                confirmBtn.disabled = false;
+            });
+            body.appendChild(optionBtn);
+        });
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+        if (!selectedUserId) return;
+        confirmBtn.disabled = true;
+        try {
+            const res = await fetch(apiUrl(`/api/business/catalog-requests/${item.id}/forward`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ targetUserId: selectedUserId }),
+            });
+            const responseBody = await res.json().catch(() => ({}));
+            if (!res.ok) { showToast(responseBody.message || t('admin.saveError')); confirmBtn.disabled = false; return; }
+            scrim.remove();
+            el.remove();
+            showToast(t('main.notificationCatalogForwarded'));
+            loadNotificationsBadge();
+        } catch {
+            showToast(t('admin.saveError'));
+            confirmBtn.disabled = false;
+        }
+    });
+
+    body.appendChild(confirmBtn);
+    sheet.appendChild(body);
+    scrim.addEventListener('click', (event) => { if (event.target === scrim) scrim.remove(); });
+    scrim.appendChild(sheet);
+    document.body.appendChild(scrim);
 }
 
 // "Pantalla alterna" -- opens when Autorizar is pressed. Same catálogo

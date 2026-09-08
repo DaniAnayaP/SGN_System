@@ -1388,6 +1388,9 @@ body{
 .home-select-option.active{ background: var(--home-surface-2); color: var(--home-text-primary); }
 .home-select-option i{ color: var(--home-accent); font-size: 1rem; }
 .home-select-divider{ border-top: 1px solid var(--home-divider); margin: 0.2rem 0; }
+/* "Reenviar" solicitud sheet -- confirm button sits below the
+   .home-select-option list built by openCatalogRequestForwardSheet. */
+.forward-picker-submit{ margin: 0.7rem 1rem 0.3rem; }
 .home-carga-photo-row{ display: flex; align-items: center; gap: 0.6rem; }
 .home-carga-photo-btn{
     display: flex;

@@ -157,6 +157,7 @@ const {
     listCatalogValueRequestHops,
     createCatalogValueRequest,
     forwardCatalogValueRequest,
+    resolveForwardCandidates,
     approveCatalogValueRequest,
     rejectCatalogValueRequest,
     listFreightQuotes,
@@ -201,6 +202,8 @@ const {
     getOrgChartPositions,
     setJobPositionReportsTo,
     wouldCreateReportsToCycle,
+    getAltSupervisorIds,
+    setJobPositionAltSupervisors,
     COST_CENTER_FIELDS,
     JOB_POSITION_FIELDS,
     FUEL_PATCHABLE_FIELDS,
@@ -1972,6 +1975,23 @@ app.put('/api/business/job-positions/:id/reports-to', requireAuth, requireClient
     }
     const jobPosition = setJobPositionReportsTo(req.params.id, req.user.clientId, reportsToJobPositionId || null);
     res.json({ jobPosition: mapJobPosition(jobPosition, getClientById(req.user.clientId)?.company_name) });
+});
+
+// Jefes Alternos -- confirmed with the user: unlike Reporta A, this never
+// draws the tree, so no cycle guard, just "belongs to this client" and
+// "not itself" on each id in the list (a self-alternate would be a no-op
+// authority claim, and Number-cast dedupe avoids saving the same id twice).
+app.put('/api/business/job-positions/:id/alt-supervisors', requireAuth, requireClientAdmin, (req, res) => {
+    const existing = getJobPositionById(req.params.id, req.user.clientId);
+    if (!existing) return res.status(404).json({ message: 'Job position not found.' });
+    const { altSupervisorIds } = req.body || {};
+    if (!Array.isArray(altSupervisorIds)) return res.status(400).json({ message: 'altSupervisorIds must be an array.' });
+    const uniqueIds = Array.from(new Set(altSupervisorIds.map(Number)));
+    for (const altId of uniqueIds) {
+        if (altId === existing.id) return res.status(400).json({ message: 'A job position cannot be its own alternate supervisor.' });
+        if (!getJobPositionById(altId, req.user.clientId)) return res.status(400).json({ message: 'altSupervisorIds must belong to this client.' });
+    }
+    res.json({ altSupervisorIds: setJobPositionAltSupervisors(existing.id, uniqueIds) });
 });
 
 // Read-only chart data: every active Puesto plus whichever real hr_workers
@@ -3772,6 +3792,22 @@ app.get('/api/business/catalog-requests/:id', requireAuth, (req, res) => {
     });
 });
 
+// Who "Reenviar" could offer the current holder -- their jefe directo,
+// homólogos and jefes alternos (see resolveForwardCandidates in db.js).
+// An empty answer just means the client shows a plain Reenviar button with
+// no picker (the POST below then falls back to the client admin on its
+// own), same as every list here being non-empty means the client shows the
+// picker instead.
+app.get('/api/business/catalog-requests/:id/forward-options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const request = getCatalogValueRequestById(req.params.id, req.user.clientId);
+    if (!request) return res.status(404).json({ message: 'Request not found.' });
+    if (!req.user.isClientAdmin && Number(request.current_holder_user_id) !== Number(req.user.sub)) {
+        return res.status(403).json({ message: 'Esta solicitud no está contigo.' });
+    }
+    res.json(resolveForwardCandidates(req.user.clientId, req.user.sub));
+});
+
 app.post('/api/business/catalog-requests/:id/forward', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const request = getCatalogValueRequestById(req.params.id, req.user.clientId);
@@ -3780,8 +3816,28 @@ app.post('/api/business/catalog-requests/:id/forward', requireAuth, (req, res) =
     if (!req.user.isClientAdmin && Number(request.current_holder_user_id) !== Number(req.user.sub)) {
         return res.status(403).json({ message: 'Esta solicitud no está contigo.' });
     }
-    const updated = forwardCatalogValueRequest(req.params.id, req.user.clientId, req.user.sub, changedByLabel(req));
-    if (!updated) return res.status(409).json({ message: 'No hay a quién reenviarla -- ya eres el nivel más alto.' });
+    const candidates = resolveForwardCandidates(req.user.clientId, req.user.sub);
+    const allowed = [candidates.jefeDirecto, ...candidates.homologos, ...candidates.alternos].filter(Boolean);
+    const { targetUserId } = req.body || {};
+    let toUserId = null;
+    if (targetUserId != null) {
+        if (!allowed.some((c) => Number(c.userId) === Number(targetUserId))) {
+            return res.status(400).json({ message: 'Elige a quién reenviarla de la lista.' });
+        }
+        toUserId = Number(targetUserId);
+    } else if (!allowed.length) {
+        // Nothing to choose from -- same "always reachable" admin fallback
+        // resolveEscalationHolder itself relies on, so a request can never
+        // get permanently stuck.
+        const adminUserId = getClientById(req.user.clientId)?.admin_user_id || null;
+        if (!adminUserId || Number(adminUserId) === Number(req.user.sub)) {
+            return res.status(409).json({ message: 'No hay a quién reenviarla -- ya eres el nivel más alto.' });
+        }
+        toUserId = adminUserId;
+    } else {
+        return res.status(400).json({ message: 'Elige a quién reenviarla.' });
+    }
+    const updated = forwardCatalogValueRequest(req.params.id, req.user.clientId, changedByLabel(req), toUserId);
     res.json({ request: mapCatalogValueRequestRecord(updated) });
 });
 

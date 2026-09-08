@@ -177,6 +177,21 @@ db.exec(`
         submenu_id       TEXT
     );
 
+    -- Jefes Alternos -- confirmed with the user: a Puesto can have extra
+    -- Puestos with direct authority over it (e.g. the Director can instruct
+    -- a Conductor directly, same as the Conductor's own Coordinador),
+    -- without changing who it reports to in the org chart
+    -- (job_positions.reports_to_job_position_id stays the one and only
+    -- "jefe directo" that draws Nuestra Estructura Organizacional's tree).
+    -- Many-to-many, zero or several per Puesto. No cycle guard -- confirmed
+    -- with the user this never drives the tree, so it can't break it.
+    CREATE TABLE IF NOT EXISTS job_position_alt_supervisors (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_position_id     INTEGER NOT NULL REFERENCES job_positions(id) ON DELETE CASCADE,
+        alt_job_position_id INTEGER NOT NULL REFERENCES job_positions(id) ON DELETE CASCADE,
+        UNIQUE(job_position_id, alt_job_position_id)
+    );
+
     -- Transacciones Inteligentes de Negocio: a client-defined report is just
     -- a name + an ordered list of columns, each either pulled straight from
     -- Base de Datos Global (type 'base') or computed from other columns
@@ -1603,8 +1618,10 @@ if (!jobPositionColumns.some((c) => c.name === 'cost_center_scope')) {
 // this one reports to. Self-referencing, nullable (top of the chart), one
 // per Puesto (not per hr_worker): whoever is hired into a Puesto inherits
 // its place in the chart automatically, same as job_position_grants already
-// works for permissions. No cycle detection — trusted admin input, same as
-// every other free-form relationship in this file.
+// works for permissions. Cycle detection lives at write time in server.js's
+// PUT .../reports-to route (see wouldCreateReportsToCycle below) -- a
+// mutual or longer loop here left the tree with no root to start from,
+// rendering a silently blank chart.
 if (!jobPositionColumns.some((c) => c.name === 'reports_to_job_position_id')) {
     db.exec('ALTER TABLE job_positions ADD COLUMN reports_to_job_position_id INTEGER REFERENCES job_positions(id)');
 }
@@ -2813,7 +2830,7 @@ function setJobPositionGrants(jobPositionId, grants) {
 // without a separate assignment step.
 function getOrgChartPositions(clientId) {
     const positions = db.prepare(`
-        SELECT id, name, reports_to_job_position_id AS reportsToJobPositionId
+        SELECT id, name, reports_to_job_position_id AS reportsToJobPositionId, cost_center_scope AS costCenterScope
         FROM job_positions WHERE client_id = ? AND status = 'active'
         ORDER BY name ASC
     `).all(clientId);
@@ -2825,13 +2842,41 @@ function getOrgChartPositions(clientId) {
         if (!workersByPosition.has(w.jobPositionId)) workersByPosition.set(w.jobPositionId, []);
         workersByPosition.get(w.jobPositionId).push({ id: w.id, fullName: w.fullName, userId: w.userId });
     });
-    return positions.map((p) => ({ ...p, workers: workersByPosition.get(p.id) || [] }));
+    const altByPosition = new Map();
+    db.prepare(`
+        SELECT a.job_position_id AS jobPositionId, a.alt_job_position_id AS altId
+        FROM job_position_alt_supervisors a
+        JOIN job_positions p ON p.id = a.job_position_id
+        WHERE p.client_id = ?
+    `).all(clientId).forEach((r) => {
+        if (!altByPosition.has(r.jobPositionId)) altByPosition.set(r.jobPositionId, []);
+        altByPosition.get(r.jobPositionId).push(r.altId);
+    });
+    return positions.map((p) => ({
+        ...p,
+        workers: workersByPosition.get(p.id) || [],
+        altSupervisorJobPositionIds: altByPosition.get(p.id) || [],
+    }));
 }
 
 function setJobPositionReportsTo(id, clientId, reportsToJobPositionId) {
     db.prepare('UPDATE job_positions SET reports_to_job_position_id = ? WHERE id = ? AND client_id = ?')
         .run(reportsToJobPositionId || null, id, clientId);
     return getJobPositionById(id, clientId);
+}
+
+// Jefes Alternos -- replace-all (like cost_center_scope's own checklist):
+// the caller (server.js) already validated every id belongs to this client
+// and none is the Puesto itself, so this just swaps the full set.
+function getAltSupervisorIds(jobPositionId) {
+    return db.prepare('SELECT alt_job_position_id AS id FROM job_position_alt_supervisors WHERE job_position_id = ?')
+        .all(jobPositionId).map((r) => r.id);
+}
+function setJobPositionAltSupervisors(jobPositionId, altJobPositionIds) {
+    db.prepare('DELETE FROM job_position_alt_supervisors WHERE job_position_id = ?').run(jobPositionId);
+    const insert = db.prepare('INSERT INTO job_position_alt_supervisors (job_position_id, alt_job_position_id) VALUES (?, ?)');
+    (altJobPositionIds || []).forEach((altId) => insert.run(jobPositionId, altId));
+    return getAltSupervisorIds(jobPositionId);
 }
 
 // Walks the "reports to" chain upward starting at candidateId -- returns
@@ -3734,15 +3779,61 @@ function createCatalogValueRequest({
     return getCatalogValueRequestById(result.lastInsertRowid, clientId);
 }
 
+// Who the person currently holding a request COULD hand it to next, when
+// they themselves can't Autorizar it -- confirmed with the user this is a
+// deliberate human choice, not another automatic single hop: their own
+// jefe directo, their homólogos (other Puestos with that exact same jefe
+// directo -- "same level as me"), and their jefes alternos (see
+// job_position_alt_supervisors). Each candidate is resolved down to a real
+// occupant (a vacant seat can't receive anything); a Puesto with nobody
+// hired into it is simply left out of every list. server.js validates the
+// caller's actual choice against this same list before forwarding.
+function resolveForwardCandidates(clientId, fromUserId) {
+    const empty = { jefeDirecto: null, homologos: [], alternos: [] };
+    const worker = db.prepare('SELECT job_position_id AS jobPositionId FROM hr_workers WHERE user_id = ? AND client_id = ?').get(fromUserId, clientId);
+    if (!worker?.jobPositionId) return empty;
+    const position = getJobPositionById(worker.jobPositionId, clientId);
+    if (!position) return empty;
+
+    const occupantOf = (jobPositionId) => db.prepare(
+        'SELECT user_id AS userId, full_name AS name FROM hr_workers WHERE job_position_id = ? AND user_id IS NOT NULL AND user_id != ? LIMIT 1'
+    ).get(jobPositionId, fromUserId);
+    const toCandidate = (jobPosition) => {
+        const occupant = occupantOf(jobPosition.id);
+        return occupant ? { userId: occupant.userId, name: occupant.name, positionId: jobPosition.id, positionName: jobPosition.name } : null;
+    };
+
+    let jefeDirecto = null;
+    if (position.reports_to_job_position_id) {
+        const boss = getJobPositionById(position.reports_to_job_position_id, clientId);
+        jefeDirecto = boss ? toCandidate(boss) : null;
+    }
+
+    let homologos = [];
+    if (position.reports_to_job_position_id) {
+        homologos = db.prepare("SELECT * FROM job_positions WHERE client_id = ? AND status = 'active' AND reports_to_job_position_id = ? AND id != ?")
+            .all(clientId, position.reports_to_job_position_id, position.id)
+            .map(toCandidate)
+            .filter(Boolean);
+    }
+
+    const alternos = getAltSupervisorIds(position.id)
+        .map((altId) => getJobPositionById(altId, clientId))
+        .filter(Boolean)
+        .map(toCandidate)
+        .filter(Boolean);
+
+    return { jefeDirecto, homologos, alternos };
+}
+
 // The person currently holding it doesn't have Autorizar on this catálogo --
-// their own single hop up, same resolveEscalationHolder every request
-// starts with. Returns null (caller should reject the action) if there's
-// nowhere higher to send it (fromUserId is already the client admin).
-function forwardCatalogValueRequest(id, clientId, fromUserId, fromLabel) {
-    const nextHolderId = resolveEscalationHolder(clientId, fromUserId);
-    if (!nextHolderId) return null;
-    const nextHolderLabel = db.prepare('SELECT name FROM users WHERE id = ?').get(nextHolderId)?.name || '';
-    db.prepare("UPDATE catalog_value_requests SET current_holder_user_id = ? WHERE id = ? AND client_id = ?").run(nextHolderId, id, clientId);
+// toUserId is their deliberate choice from resolveForwardCandidates above
+// (server.js validates it belongs there), except the "nothing to choose
+// from" edge case, which server.js resolves straight to the client admin,
+// same last-resort resolveEscalationHolder already falls back to.
+function forwardCatalogValueRequest(id, clientId, fromLabel, toUserId) {
+    const nextHolderLabel = db.prepare('SELECT name FROM users WHERE id = ?').get(toUserId)?.name || '';
+    db.prepare("UPDATE catalog_value_requests SET current_holder_user_id = ? WHERE id = ? AND client_id = ?").run(toUserId, id, clientId);
     logCatalogValueRequestHop(id, { fromLabel, toLabel: nextHolderLabel, action: 'forwarded' });
     return getCatalogValueRequestById(id, clientId);
 }
@@ -5660,6 +5751,7 @@ module.exports = {
     listCatalogValueRequestHops,
     createCatalogValueRequest,
     forwardCatalogValueRequest,
+    resolveForwardCandidates,
     approveCatalogValueRequest,
     rejectCatalogValueRequest,
     listFreightQuotes,
@@ -5692,6 +5784,8 @@ module.exports = {
     getOrgChartPositions,
     setJobPositionReportsTo,
     wouldCreateReportsToCycle,
+    getAltSupervisorIds,
+    setJobPositionAltSupervisors,
     COST_CENTER_FIELDS,
     JOB_POSITION_FIELDS,
     FUEL_PATCHABLE_FIELDS,
