@@ -104,6 +104,7 @@ const WEB_SCREEN_PAGES = {
     'categorias-manejo': { href: 'AppCategoriasManejoEspecial.html', icon: 'bx-move' },
     'categorias-riesgo': { href: 'AppCategoriasRiesgo.html', icon: 'bx-error' },
     'categorias-vidautil': { href: 'AppCategoriasVidaUtil.html', icon: 'bx-time-five' },
+    'unidad-medida': { href: 'AppUnidadMedida.html', icon: 'bx-ruler' },
 };
 
 // menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
@@ -123,6 +124,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-catalogos-centro-dist-categorias-manejo': 'categorias-manejo',
     'cat-catalogos-centro-dist-categorias-riesgo': 'categorias-riesgo',
     'cat-catalogos-centro-dist-categorias-vidautil': 'categorias-vidautil',
+    'cat-catalogos-centro-dist-unidad-medida': 'unidad-medida',
 };
 
 // grantedAppScreens (from GET /api/business/app-screens) is the CLIENT's

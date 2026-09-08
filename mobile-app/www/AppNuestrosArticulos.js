@@ -154,7 +154,11 @@ const FIELDS = [
     { id: 'uniqueDescription', group: 'general', apiKey: 'uniqueDescription', labelKey: 'main.colArticuloDescUnica', hintKey: 'home.articuloHintDescUnica', type: 'text', icon: 'bx-text', colId: 'colArticuloDescUnica' },
     { id: 'knownDescription', group: 'general', apiKey: 'knownDescription', labelKey: 'main.colArticuloDescConocida', hintKey: 'home.articuloHintDescConocida', type: 'text', icon: 'bx-text', colId: 'colArticuloDescConocida' },
     { id: 'customDescription', group: 'general', apiKey: 'customDescription', labelKey: 'main.colArticuloDescPersonalizada', hintKey: 'home.articuloHintDescPersonalizada', type: 'text', icon: 'bx-text', colId: 'colArticuloDescPersonalizada' },
-    { id: 'mainUom', group: 'general', apiKey: 'mainUom', labelKey: 'main.colArticuloUdm', hintKey: 'home.articuloHintUdm', type: 'text', icon: 'bx-ruler', colId: 'colArticuloUdm' },
+    // Catalog-driven select (see loadCategoryOptions/categoryOptionGroupsFor
+    // below) -- sourced from the "Nuestras Unidad Medida" catalog, same
+    // mechanism as the 7 "Categoría X" fields further down, just living in
+    // the general group since UDM isn't one of those 7 classifications.
+    { id: 'mainUom', group: 'general', apiKey: 'mainUom', labelKey: 'main.colArticuloUdm', hintKey: 'home.articuloHintCategoria', type: 'select', icon: 'bx-ruler', colId: 'colArticuloUdm', categoryType: 'udm', optionGroups: [{ options: [] }] },
     {
         id: 'articleType', group: 'general', apiKey: 'articleType', labelKey: 'main.colArticuloTipo', hintKey: 'home.articuloHintTipo', type: 'select', icon: 'bx-package', colId: 'colArticuloTipo',
         optionGroups: [{ options: [

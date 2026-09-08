@@ -138,6 +138,9 @@ const {
     SKU_ITEM_PATCHABLE_FIELDS,
     updateSkuItem,
     deleteSkuItem,
+    generatePublicToken,
+    getSkuItemByPublicToken,
+    setSkuItemPublicToken,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,
@@ -3432,6 +3435,7 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         categoryManejo: row.category_manejo,
         categoryRiesgo: row.category_riesgo,
         categoryVidautil: row.category_vidautil,
+        publicToken: row.public_token,
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
             companyName,
@@ -3462,13 +3466,31 @@ app.post('/api/business/sku-items', requireAuth, (req, res) => {
     res.status(201).json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
 });
 
+// Código QR / Ficha pública -- issued the instant an artículo's own 24
+// fields (SKU_ITEM_PATCHABLE_FIELDS' full set: 11 own + 6 evidence + 7
+// categoría) are ALL filled, never by an explicit "generate" action. Number
+// fields treat 0 as unfilled, matching the App's own isFieldFilled -- an
+// artículo can't be "complete" with a 0cm dimension it never actually got.
+function isSkuFieldFilled(value) {
+    return value !== null && value !== undefined && value !== '' && value !== 0;
+}
+function isSkuItemComplete(row) {
+    return Object.values(SKU_ITEM_PATCHABLE_FIELDS).every(({ column }) => isSkuFieldFilled(row[column]));
+}
+function maybeIssueSkuPublicToken(skuItem, clientId, forTestAccount) {
+    if (!skuItem || skuItem.public_token || !isSkuItemComplete(skuItem)) return skuItem;
+    setSkuItemPublicToken(skuItem.id, clientId, generatePublicToken());
+    return getSkuItemById(skuItem.id, clientId, forTestAccount);
+}
+
 app.patch('/api/business/sku-items/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
     const { baseline, overrideConflicts, ...patch } = req.body || {};
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, SKU_ITEM_PATCHABLE_FIELDS, 'nuestros-articulos', `#${existing.id}`, {}, { baseline, overrideConflicts });
-    const skuItem = updateSkuItem(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
+    let skuItem = updateSkuItem(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
+    skuItem = maybeIssueSkuPublicToken(skuItem, req.user.clientId, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
     res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
 });
@@ -3489,6 +3511,45 @@ app.delete('/api/business/sku-items/:id', requireAuth, (req, res) => {
     });
     deleteSkuItem(req.params.id, req.user.clientId);
     res.status(204).end();
+});
+
+// --- Ficha pública (no login) -----------------------------------------------
+// What a "Código QR" scan opens (see Ficha.html/.js) -- deliberately NOT
+// behind requireAuth, and deliberately the ONLY route that looks a sku_item
+// up by anything other than id+client_id: getSkuItemByPublicToken never
+// takes a clientId, by design, since the visitor has no session to scope
+// one from. Only customer-facing fields are returned -- no Control Interno,
+// no Categorías Artículo (internal classification, not a selling point).
+app.get('/api/public/ficha/:token', (req, res) => {
+    const skuItem = getSkuItemByPublicToken(req.params.token);
+    if (!skuItem) return res.status(404).json({ message: 'Ficha not found.' });
+    const client = getClientById(skuItem.client_id);
+    const photoFields = [
+        ['front', skuItem.evidence_front], ['back', skuItem.evidence_back],
+        ['left', skuItem.evidence_left], ['right', skuItem.evidence_right],
+        ['top', skuItem.evidence_top], ['bottom', skuItem.evidence_bottom],
+    ].filter(([, key]) => key);
+    Promise.all(photoFields.map(([label, key]) => getDownloadUrl(key, `${label}.jpg`).then((url) => ({ label, url }))))
+        .then((photos) => {
+            res.json({
+                companyName: client?.company_name || '',
+                uniqueDescription: skuItem.unique_description,
+                knownDescription: skuItem.known_description,
+                customDescription: skuItem.custom_description,
+                mainUom: skuItem.main_uom,
+                articleType: skuItem.article_type,
+                height: skuItem.height,
+                length: skuItem.length,
+                width: skuItem.width,
+                articleWeight: skuItem.article_weight,
+                packageWeight: skuItem.package_weight,
+                photos,
+            });
+        })
+        .catch((err) => {
+            console.error('Ficha pública: failed to build photo URLs', err);
+            res.status(500).json({ message: 'Failed to load ficha.' });
+        });
 });
 
 // --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----

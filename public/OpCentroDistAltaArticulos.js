@@ -94,6 +94,62 @@ function buildCategorySelectCell(record, colId, apiKey, categoryType) {
     return td;
 }
 
+// --- Código QR / Ficha pública -----------------------------------------------
+// Every apiKey SKU_ITEM_PATCHABLE_FIELDS covers server-side (db.js) --
+// mirrored here just to show "X de 24" before the QR exists; the server is
+// the one that actually decides completeness and issues publicToken (see
+// maybeIssueSkuPublicToken in server.js), never this client-side count.
+const SKU_REQUIRED_FIELDS = [
+    'upc', 'uniqueDescription', 'knownDescription', 'customDescription', 'mainUom', 'articleType',
+    'height', 'length', 'width', 'articleWeight', 'packageWeight',
+    'evidenceFront', 'evidenceBack', 'evidenceLeft', 'evidenceRight', 'evidenceTop', 'evidenceBottom',
+    'categoryInventario', 'categoryCompra', 'categoryAlmacenamiento', 'categoryRotacion', 'categoryManejo', 'categoryRiesgo', 'categoryVidautil',
+];
+function isSkuFieldFilled(value) {
+    return value !== null && value !== undefined && value !== '' && value !== 0;
+}
+function skuDoneCount(record) {
+    return SKU_REQUIRED_FIELDS.filter((key) => isSkuFieldFilled(record[key])).length;
+}
+
+// QRCode.toDataURL (loaded via CDN, see OpCentroDistAltaArticulos.html) is
+// async, so the swatch starts blank and fills in a moment later -- never
+// blocks building the rest of the row/table.
+function buildQrCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colArticuloQr';
+    if (!record.publicToken) {
+        const chip = document.createElement('span');
+        chip.className = 'admin-badge admin-badge-suspendido';
+        chip.textContent = `${Dashboard.t('main.qrPending')} · ${skuDoneCount(record)}/${SKU_REQUIRED_FIELDS.length}`;
+        td.appendChild(chip);
+        return td;
+    }
+    const fichaUrl = `${window.location.origin}/Ficha.html?token=${encodeURIComponent(record.publicToken)}`;
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.alignItems = 'center';
+    wrap.style.gap = '8px';
+    const img = document.createElement('img');
+    img.width = 34;
+    img.height = 34;
+    img.alt = Dashboard.t('main.colArticuloQr');
+    img.style.borderRadius = '4px';
+    if (window.QRCode?.toDataURL) {
+        window.QRCode.toDataURL(fichaUrl, { width: 68, margin: 1 })
+            .then((dataUrl) => { img.src = dataUrl; })
+            .catch((err) => console.error('QR generation failed', err));
+    }
+    const link = document.createElement('a');
+    link.href = fichaUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = Dashboard.t('main.qrViewFicha');
+    wrap.append(img, link);
+    td.appendChild(wrap);
+    return td;
+}
+
 function textCell(key, value) {
     const td = document.createElement('td');
     td.dataset.col = key;
@@ -322,7 +378,6 @@ function buildRow(record) {
         ['colArticuloDescUnica', 'uniqueDescription'],
         ['colArticuloDescConocida', 'knownDescription'],
         ['colArticuloDescPersonalizada', 'customDescription'],
-        ['colArticuloUdm', 'mainUom'],
     ].forEach(([colId, key]) => {
         const td = document.createElement('td');
         td.dataset.col = colId;
@@ -367,7 +422,7 @@ function buildRow(record) {
         cells.colArticuloDescUnica,
         cells.colArticuloDescConocida,
         cells.colArticuloDescPersonalizada,
-        cells.colArticuloUdm,
+        buildCategorySelectCell(record, 'colArticuloUdm', 'mainUom', 'udm'),
         buildArticleTypeCell(record),
         cells.colArticuloAlto,
         cells.colArticuloLargo,
@@ -381,6 +436,7 @@ function buildRow(record) {
         buildEvidenceCell(record, 'evidenceTop', 'colArticuloEvidenceTop'),
         buildEvidenceCell(record, 'evidenceBottom', 'colArticuloEvidenceBottom'),
         ...CATEGORY_SELECT_FIELDS.map(([colId, apiKey, categoryType]) => buildCategorySelectCell(record, colId, apiKey, categoryType)),
+        buildQrCell(record),
         buildActionsCell(record, tr),
     );
     tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell'));
@@ -397,7 +453,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 33;
+    td.colSpan = 41;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
@@ -462,7 +518,6 @@ const TEXT_FIELDS = [
     ['colArticuloDescUnica', 'uniqueDescription', 'main.colArticuloDescUnica'],
     ['colArticuloDescConocida', 'knownDescription', 'main.colArticuloDescConocida'],
     ['colArticuloDescPersonalizada', 'customDescription', 'main.colArticuloDescPersonalizada'],
-    ['colArticuloUdm', 'mainUom', 'main.colArticuloUdm'],
 ];
 const NUMBER_FIELDS = [
     ['colArticuloAlto', 'height', 'main.colArticuloAlto'],
@@ -555,12 +610,33 @@ function applyCreateFormFieldPermissions() {
     if (typeInput) typeInput.disabled = !Dashboard.canEditField(TABLE_KEY, 'colArticuloTipo', '');
 }
 
+// UDM Principal -- same catalog-driven select as the 7 Categorías (sourced
+// from categoryOptions.udm), but kept out of CATEGORY_SELECT_FIELDS since it
+// lives in the Datos Generales section, not the Categorías Artículo one.
+function populateMainUomSelect() {
+    const select = createForm.elements.namedItem('mainUom');
+    if (!select) return;
+    select.innerHTML = '';
+    select.disabled = !Dashboard.canEditField(TABLE_KEY, 'colArticuloUdm', '');
+    const blankOption = document.createElement('option');
+    blankOption.value = '';
+    blankOption.textContent = Dashboard.t('main.articleTypeSelect');
+    select.appendChild(blankOption);
+    (categoryOptions.udm || []).forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
+}
+
 async function openCreateModal() {
     createForm.reset();
     createFormError.hidden = true;
     createEvidenceFiles.clear();
     await loadCategoryOptions();
     applyCreateFormFieldPermissions();
+    populateMainUomSelect();
     buildEvidencePickerFields();
     buildCategoryPickerFields();
     createModal.hidden = false;
@@ -594,6 +670,8 @@ createForm?.addEventListener('submit', async (event) => {
         });
         const typeInput = createForm.elements.namedItem('articleType');
         if (typeInput && !typeInput.disabled) patch.articleType = typeInput.value;
+        const udmInput = createForm.elements.namedItem('mainUom');
+        if (udmInput && !udmInput.disabled) patch.mainUom = udmInput.value;
         CATEGORY_SELECT_FIELDS.forEach(([, apiKey]) => {
             const input = createForm.elements.namedItem(apiKey);
             if (input && !input.disabled) patch[apiKey] = input.value;

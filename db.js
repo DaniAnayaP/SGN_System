@@ -17,6 +17,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { hashPassword, hashPasswordSync } = require('./password');
 const { buildEvidenceDisplayName, buildEvidenceStorageKey, extFromDataUrl } = require('./evidenceNaming');
@@ -1541,6 +1542,17 @@ for (const col of ['category_inventario', 'category_compra', 'category_almacenam
     }
 }
 
+// public_token: set once (see maybeIssuePublicToken in server.js) the
+// instant an artículo's own 24 fields are all filled in -- the opaque id a
+// QR code encodes to reach its public, no-login ficha (Ficha.html). Random,
+// NOT db_id -- db_id's timestamp-based shape would make consecutive
+// artículos' tokens guessable, which matters here since this ID is exposed
+// on a printed catalog for anyone to see, unlike every other id in this
+// app (always behind requireAuth).
+if (!skuItemColumns.some((c) => c.name === 'public_token')) {
+    db.exec("ALTER TABLE sku_items ADD COLUMN public_token TEXT NOT NULL DEFAULT ''");
+}
+
 // --- Indexes -------------------------------------------------------------
 // Only for FK/lookup columns that actually appear in a WHERE clause below
 // and aren't already covered by a UNIQUE constraint's implicit index (e.g.
@@ -1554,6 +1566,7 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_profile_grants_profile_id ON profile_grants(profile_id);
     CREATE INDEX IF NOT EXISTS idx_user_grants_user_id ON user_grants(user_id);
     CREATE INDEX IF NOT EXISTS idx_pending_changes_client_status ON pending_changes(client_id, status);
+    CREATE INDEX IF NOT EXISTS idx_sku_items_public_token ON sku_items(public_token);
 `);
 
 // --- One-time seed: create the demo admin/admin user if the table is empty.
@@ -2110,6 +2123,7 @@ const TABLE_GRANT_PATHS = {
     'categorias-manejo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-manejo' },
     'categorias-riesgo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-riesgo' },
     'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
+    'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
 };
 
 // The 13 "Control Interno" system columns (see getSystemColumnsForRecord
@@ -3398,6 +3412,26 @@ function deleteSkuItem(id, clientId) {
     db.prepare('DELETE FROM sku_items WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
+// --- Código QR / Ficha pública ----------------------------------------------
+// See public_token's own migration comment for why this is a fresh random
+// value, not db_id. Issued once (server.js's maybeIssuePublicToken) the
+// moment an artículo's 24 fields are all filled -- getSkuItemByPublicToken
+// is the ONLY lookup the public, no-auth ficha route is allowed to use
+// (never by id/client_id, which would let a visitor enumerate other
+// clients' artículos).
+function generatePublicToken() {
+    return crypto.randomBytes(16).toString('hex');
+}
+
+function getSkuItemByPublicToken(token) {
+    if (!token) return null;
+    return db.prepare('SELECT * FROM sku_items WHERE public_token = ?').get(token);
+}
+
+function setSkuItemPublicToken(id, clientId, token) {
+    db.prepare('UPDATE sku_items SET public_token = ? WHERE id = ? AND client_id = ?').run(token, id, clientId);
+}
+
 // --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----
 // --- Distribución) -- 7 near-identical catalogs sharing one table (see -----
 // article_categories' own DDL comment). ARTICLE_CATEGORY_TYPES is the single
@@ -3412,6 +3446,11 @@ const ARTICLE_CATEGORY_TYPES = {
     manejo: { prefix: 'MAN', tableKey: 'categorias-manejo', pantalla: 'Nuestras Categorías Manejo Especial' },
     riesgo: { prefix: 'RIE', tableKey: 'categorias-riesgo', pantalla: 'Nuestras Categorías Riesgo' },
     vidautil: { prefix: 'VID', tableKey: 'categorias-vidautil', pantalla: 'Nuestras Categorías Vida Útil' },
+    // Not a "categoría" semantically, but the exact same shape (Código/
+    // Nombre/Descripción/Estatus feeding a select on Alta Nuestros
+    // Artículos) -- reuses this same table/routes/screen instead of a
+    // near-duplicate units_of_measure setup, same reasoning as the 7 above.
+    udm: { prefix: 'UDM', tableKey: 'unidad-medida', pantalla: 'Nuestras Unidad Medida' },
 };
 
 function listArticleCategories(clientId, categoryType, forTestAccount = false) {
@@ -4284,6 +4323,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'categorias-manejo', labelKey: 'menu.catCentroDistCategoriasManejo' },
     { key: 'categorias-riesgo', labelKey: 'menu.catCentroDistCategoriasRiesgo' },
     { key: 'categorias-vidautil', labelKey: 'menu.catCentroDistCategoriasVidautil' },
+    { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
 ];
 
 function deserializeSaasApp(row) {
@@ -5207,6 +5247,9 @@ module.exports = {
     updateSkuItem,
     deleteSkuItem,
     SKU_ITEM_PATCHABLE_FIELDS,
+    generatePublicToken,
+    getSkuItemByPublicToken,
+    setSkuItemPublicToken,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,
