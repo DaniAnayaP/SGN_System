@@ -1149,28 +1149,58 @@
             statusMeasureCtx.font = font;
             return statusMeasureCtx.measureText(text).width;
         }
+        // Estatus used to step down once the SELECT's own box got too
+        // small -- but that box is now a fixed alignment column (matching
+        // the header's Estatus column), so it never shrinks with the
+        // window on its own anymore, and the ladder never had a reason to
+        // engage: scroll ended up being the only thing that ever
+        // happened. Measures the tree's actual REMAINING room instead --
+        // total width minus the leading chevron/rollup allowance, the
+        // label column (already sized to its own longest word), the
+        // Web·App column, and gaps -- and steps every select down
+        // together (they must all agree on one step, since they all share
+        // one column width) until the widest CURRENTLY SELECTED status
+        // text fits that remaining room, or there's no shorter step left
+        // (icon-only) -- at which point whatever's still too wide is
+        // exactly what .perm-tree's own overflow-x:auto is for.
         function applyStatusAbbreviations() {
+            const selects = Array.from(treeRoot.querySelectorAll('select.perm-tree-mstatus-select'));
+            if (!selects.length) return;
+            const font = getComputedStyle(selects[0]).font;
             const ladders = STATUS_OPTIONS.map((opt) => STATUS_LADDER_KEYS[opt.value]);
-            treeRoot.querySelectorAll('select.perm-tree-mstatus-select').forEach((select) => {
-                const cs = getComputedStyle(select);
-                // clientWidth minus its own padding minus a fixed allowance
-                // for the native dropdown arrow (not part of clientWidth's
-                // content box consistently across browsers) -- a budget in
-                // real CSS pixels the canvas measurement can compare against.
-                const budget = select.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 20;
-                const font = cs.font;
-                let step = 0;
-                for (;;) {
+            const maxSteps = Math.max(...ladders.map((ladder) => ladder.length));
+
+            const rootFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            const labelColWidth = parseFloat(getComputedStyle(treeRoot).getPropertyValue('--perm-tree-label-col-width')) || 0;
+            // 4.3rem leading allowance (matches the header's own spacer) +
+            // the label column + the fixed 13rem Web·App column + ~3rem of
+            // slack for gaps/padding/the select's own native dropdown
+            // arrow -- everything Estatus always shares its line with.
+            const fixedNeighbors = (4.3 * rootFontPx) + labelColWidth + (13 * rootFontPx) + (3 * rootFontPx);
+            const available = Math.max(treeRoot.clientWidth - fixedNeighbors, 0);
+
+            let step = 0;
+            let widestAtStep = 0;
+            for (;;) {
+                widestAtStep = 0;
+                selects.forEach((select) => {
                     Array.from(select.options).forEach((optionEl, i) => {
                         const ladder = ladders[i];
                         optionEl.textContent = t(ladder[Math.min(step, ladder.length - 1)]);
                     });
                     const selectedText = select.options[select.selectedIndex].textContent;
-                    if (measureTextWidth(selectedText, font) <= budget) return;
-                    if (!ladders.some((ladder) => step + 1 < ladder.length)) return;
-                    step += 1;
-                }
-            });
+                    const width = measureTextWidth(selectedText, font);
+                    if (width > widestAtStep) widestAtStep = width;
+                });
+                if (widestAtStep <= available) break;
+                if (step + 1 >= maxSteps) break;
+                step += 1;
+            }
+            // Shared column width -- the select's own CSS width just
+            // follows whatever this step actually needs (plus its own
+            // padding/arrow), instead of a fixed 9.5rem disconnected from
+            // what's actually showing.
+            treeRoot.style.setProperty('--perm-tree-status-col-width', `${Math.ceil(widestAtStep) + 38}px`);
         }
 
         // Sets --perm-tree-label-col-width (read by .perm-tree-mstatus-
@@ -1437,7 +1467,16 @@
             const platforms = document.createElement('span');
             platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
             platforms.textContent = t('admin.masterTreeColPlatforms');
-            header.append(spacer, label, status, platforms);
+            // Wrapped together with margin-left:auto -- same trailing group
+            // a row's own .perm-tree-mstatus-controls is (see statusRow),
+            // so both end up flush against the SAME right edge regardless
+            // of what precedes them, instead of a big empty gap after a
+            // sequence of fixed columns that no longer fill the row's full
+            // (often much wider) available width on their own.
+            const controls = document.createElement('div');
+            controls.className = 'perm-tree-mstatus-header-controls';
+            controls.append(status, platforms);
+            header.append(spacer, label, controls);
             return header;
         }
 

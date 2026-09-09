@@ -1318,15 +1318,23 @@ body.dark-mode .perm-tree-depth-2{
     display: flex;
     align-items: center;
     gap: 0.7rem;
+    /* Pushed flush against the row's own right edge -- same trailing
+       group .perm-tree-mstatus-header-controls is on the header, so both
+       land at the SAME right edge regardless of what precedes them
+       (chevron+rollup here vs. the header's plain spacer), instead of
+       depending on matching leading widths exactly. Without this, fixed-
+       width columns just sat wherever the label ended, leaving a large
+       empty gap on a card wider than the row actually needs. */
+    margin-left: auto;
 }
-/* Fixed column, matching perm-tree-mstatus-header-status's own width
-   exactly -- the select inside stays a snug pill (max-width just caps
-   it), centered in a column that's always this wide so its left edge
-   lines up under "ESTATUS" regardless of how short the current ladder
-   step's text is. */
+/* Width set by applyStatusAbbreviations (PermissionTree.js) to whatever
+   the CURRENT ladder step actually needs -- matches
+   perm-tree-mstatus-header-status exactly since both read the same CSS
+   variable, so this stays aligned under "ESTATUS" no matter which step
+   is showing. The select inside stays a snug pill, centered in this. */
 .perm-tree-mstatus-status-cell{
     flex-shrink: 0;
-    width: 9.5rem;
+    width: var(--perm-tree-status-col-width, 9.5rem);
     display: flex;
     justify-content: center;
 }
@@ -1464,7 +1472,7 @@ body.dark-mode .perm-tree-mstatus-rollup-partial{
    reads as the same green as an "Activo" badge elsewhere in this app. */
 .perm-tree-mstatus-select{
     flex-shrink: 0;
-    max-width: 9.5rem;
+    max-width: var(--perm-tree-status-col-width, 9.5rem);
     padding: 0.2rem 0.55rem;
     border: 1px solid transparent;
     border-radius: 1rem;
@@ -1542,8 +1550,18 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
    actually start on each row (see alignLabelColumnWidth). */
 .perm-tree-mstatus-header-label{ flex: 0 0 auto; width: var(--perm-tree-label-col-width, 5rem); }
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
-.perm-tree-mstatus-header-status{ width: 9.5rem; }
+.perm-tree-mstatus-header-status{ width: var(--perm-tree-status-col-width, 9.5rem); }
 .perm-tree-mstatus-header-platforms{ width: 13rem; }
+/* Wraps the Estatus + Web·App header columns together, flush against the
+   header's own right edge -- see perm-tree-mstatus-controls (the row's
+   equivalent) for why margin-left:auto here instead of just trusting a
+   sequence of fixed widths to line up with a much wider row. */
+.perm-tree-mstatus-header-controls{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-left: auto;
+}
 body.dark-mode .perm-tree-mstatus-header{ background-color: #1f2030; }
 
 /* Web/App checkbox + its "apply to nested" button, grouped so they line
