@@ -40,6 +40,16 @@ body.futuristic-mode{
    switch to here. */
 #admin-role-pill{ cursor: default; }
 
+/* AppInicio.css's ".conn-btn svg{ color: var(--home-text-muted) }" only
+   targets an <svg> child -- this page's connectivity icon is a boxicon
+   <i> instead (see AppAdminInicio.js), which that rule never matches, so
+   it fell back to an inherited color with no reliable contrast against
+   the header's own background. Confirmed live: invisible in dark and
+   futuristic mode specifically, where that inherited color happened to be
+   close to the header background. */
+.conn-btn i{ font-size: 1.05rem; color: var(--home-text-muted); }
+.conn-btn[data-state="offline"] i{ color: var(--home-danger); }
+
 /* Wraps the tree in the Árbol tab -- same "row's own non-shrinking content
    can overflow its box invisibly" fix Admin.css already applies scoped to
    .master-tree-panel on the Web table; this page never uses that class (its

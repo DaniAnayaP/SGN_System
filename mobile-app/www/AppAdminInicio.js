@@ -144,7 +144,18 @@ document.getElementById('home-menu-language').addEventListener('click', async ()
     localStorage.setItem('lang', next);
     closeHamburgerMenu();
     await loadLanguage();
-    updateBreadcrumb();
+    // loadLanguage() only re-applies [data-i18n] on STATIC markup (the top
+    // bar, tab labels, hamburger menu...). The tree's own row labels,
+    // Estatus dropdown text and the Guardar button are built by
+    // PermissionTree.js/loadMasterTree() from the dict at render time and
+    // don't update on their own -- confirmed live: toggling language left
+    // the whole tree (the majority of the screen) still in the old
+    // language, which read as "language switch does nothing". Re-render
+    // the active tab so it picks up the new dict too. This does mean any
+    // unsaved tree edits are lost on a language switch, same as a page
+    // refresh would -- acceptable here since Guardar already requires a
+    // deliberate confirm step before anything is ever written.
+    renderSection(activeSection);
 });
 document.getElementById('home-menu-logout').addEventListener('click', async () => {
     closeHamburgerMenu();
