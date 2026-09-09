@@ -1048,19 +1048,23 @@ db.exec(`
     -- this client/plan/sector have access to it" (that's still what
     -- sector_grants/plan_grants/profile_grants/user_grants answer). Global
     -- -- no business_sector_id/plan_id/client_id column, there's exactly
-    -- one of these trees for the whole system. No row for a node means it
-    -- defaults to 'habilitado' -- only exceptions get stored (see
-    -- setMasterPermissionStatuses), same "skip the default" trick used
-    -- throughout this file to keep an override table small.
+    -- one of these trees for the whole system. Sistema Web and App Móvil
+    -- get their own independent status (platform), confirmed with the
+    -- user: a node can be ready on Web and not yet on App. No row for a
+    -- node+platform means it defaults to 'habilitado' -- only exceptions
+    -- get stored (see setMasterPermissionStatuses), same "skip the
+    -- default" trick used throughout this file to keep an override table
+    -- small.
     CREATE TABLE IF NOT EXISTS master_permission_status (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
         section_id   TEXT NOT NULL,
         item_id      TEXT,
         submenu_id   TEXT,
+        platform     TEXT NOT NULL DEFAULT 'web' CHECK (platform IN ('web','app')),
         status       TEXT NOT NULL DEFAULT 'habilitado' CHECK (status IN ('habilitado','inhabilitado','construccion','mejoras')),
         updated_by   TEXT,
         updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
-        UNIQUE(section_id, item_id, submenu_id)
+        UNIQUE(section_id, item_id, submenu_id, platform)
     );
 
     CREATE TABLE IF NOT EXISTS plan_changes (
@@ -1613,6 +1617,33 @@ if (!hrWorkerColumns.some((c) => c.name === 'hr_status_id')) {
         if (activeId) setWorkerHrStatus.run(activeId, clientId, 'active');
         if (rescindedId) setWorkerHrStatus.run(rescindedId, clientId, 'inactive');
     });
+}
+
+// platform added after master_permission_status already shipped once
+// (Sistema Web / App Móvil didn't have independent statuses yet, just one
+// combined status) -- SQLite can't widen a table-level UNIQUE constraint in
+// place, so this rebuilds the table; every pre-existing row keeps its
+// original meaning as platform='web' (the table was single-platform, and
+// implicitly Web-only, before this).
+const masterPermissionStatusColumns = db.prepare('PRAGMA table_info(master_permission_status)').all();
+if (masterPermissionStatusColumns.length && !masterPermissionStatusColumns.some((c) => c.name === 'platform')) {
+    db.exec(`
+        ALTER TABLE master_permission_status RENAME TO master_permission_status_old;
+        CREATE TABLE master_permission_status (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            section_id   TEXT NOT NULL,
+            item_id      TEXT,
+            submenu_id   TEXT,
+            platform     TEXT NOT NULL DEFAULT 'web' CHECK (platform IN ('web','app')),
+            status       TEXT NOT NULL DEFAULT 'habilitado' CHECK (status IN ('habilitado','inhabilitado','construccion','mejoras')),
+            updated_by   TEXT,
+            updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(section_id, item_id, submenu_id, platform)
+        );
+        INSERT INTO master_permission_status (section_id, item_id, submenu_id, platform, status, updated_by, updated_at)
+            SELECT section_id, item_id, submenu_id, 'web', status, updated_by, updated_at FROM master_permission_status_old;
+        DROP TABLE master_permission_status_old;
+    `);
 }
 
 // abbreviation added after job_positions already shipped once.
@@ -5093,21 +5124,24 @@ function setSectorGrants(sectorId, grants) {
 // replaces the WHOLE table, not one owner's slice of it.
 function getMasterPermissionStatuses() {
     return db
-        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId, status FROM master_permission_status')
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId, platform, status FROM master_permission_status')
         .all();
 }
 function setMasterPermissionStatuses(rows, updatedBy) {
     const replace = db.transaction((list) => {
         db.prepare('DELETE FROM master_permission_status').run();
         const insert = db.prepare(`
-            INSERT INTO master_permission_status (section_id, item_id, submenu_id, status, updated_by)
-            VALUES (@sectionId, @itemId, @submenuId, @status, @updatedBy)
+            INSERT INTO master_permission_status (section_id, item_id, submenu_id, platform, status, updated_by)
+            VALUES (@sectionId, @itemId, @submenuId, @platform, @status, @updatedBy)
         `);
         for (const r of list) {
             // Default status needs no row -- keeps the table down to just
             // the exceptions, same reasoning as the DDL comment above.
             if (!r || r.status === 'habilitado') continue;
-            insert.run({ sectionId: r.sectionId, itemId: r.itemId || null, submenuId: r.submenuId || null, status: r.status, updatedBy: updatedBy || '' });
+            insert.run({
+                sectionId: r.sectionId, itemId: r.itemId || null, submenuId: r.submenuId || null,
+                platform: r.platform === 'app' ? 'app' : 'web', status: r.status, updatedBy: updatedBy || '',
+            });
         }
     });
     replace(rows || []);

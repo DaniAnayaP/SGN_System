@@ -924,26 +924,59 @@
             label.textContent = labelText;
             row.appendChild(label);
             if (key) {
-                const select = document.createElement('select');
-                select.className = 'perm-tree-mstatus-select';
-                select.disabled = readOnly;
-                STATUS_OPTIONS.forEach((opt) => {
-                    const optionEl = document.createElement('option');
-                    optionEl.value = opt.value;
-                    optionEl.textContent = t(opt.labelKey);
-                    select.appendChild(optionEl);
-                });
-                select.value = statusMap.get(key) || DEFAULT_STATUS;
-                select.addEventListener('change', () => {
-                    // Default status needs no entry -- keeps getStatuses()
-                    // down to just the exceptions, mirroring how
-                    // setMasterPermissionStatuses stores them server-side.
-                    if (select.value === DEFAULT_STATUS) statusMap.delete(key);
-                    else statusMap.set(key, select.value);
-                });
-                row.appendChild(select);
+                const badges = document.createElement('div');
+                badges.className = 'perm-tree-mstatus-badges';
+                // Sistema Web is the primary control; App Móvil is the
+                // secondary one, keyed with the same APP_SUFFIX convention
+                // the checkbox tree already uses for its own Web/App split
+                // (see computeAppToggle above) -- same reasoning: reuse one
+                // vocabulary instead of inventing a second one.
+                badges.appendChild(buildStatusBadgeSelect(key, 'web', null));
+                badges.appendChild(buildStatusBadgeSelect(key + APP_SUFFIX, 'app', key));
+                row.appendChild(badges);
             }
             return row;
+        }
+
+        // One colored "badge select" -- still a real, keyboard-operable
+        // <select>, just re-skinned per its own current value (see the
+        // perm-tree-mstatus-select-<status> CSS classes) instead of the
+        // browser's bare default look. webKeyForApp is only passed for the
+        // App control: when the paired Web status is 'inhabilitado', App
+        // has nothing to be ready for, so it's locked there too -- same
+        // "App can't outrun Web" rule computeAppToggle's own actionable
+        // filter already enforces in the checkbox tree.
+        function buildStatusBadgeSelect(mapKey, platform, webKeyForApp) {
+            const wrap = document.createElement('span');
+            wrap.className = `perm-tree-mstatus-badge perm-tree-mstatus-badge-${platform}`;
+            const platformTag = document.createElement('span');
+            platformTag.className = 'perm-tree-mstatus-platform';
+            platformTag.textContent = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
+            const select = document.createElement('select');
+            const webLocked = !!webKeyForApp && (statusMap.get(webKeyForApp) || DEFAULT_STATUS) === 'inhabilitado';
+            select.disabled = readOnly || webLocked;
+            STATUS_OPTIONS.forEach((opt) => {
+                const optionEl = document.createElement('option');
+                optionEl.value = opt.value;
+                optionEl.textContent = t(opt.labelKey);
+                select.appendChild(optionEl);
+            });
+            const current = webLocked ? 'inhabilitado' : (statusMap.get(mapKey) || DEFAULT_STATUS);
+            select.value = current;
+            select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${current}`;
+            select.addEventListener('change', () => {
+                select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${select.value}`;
+                // Default status needs no entry -- keeps getStatuses() down
+                // to just the exceptions, mirroring how
+                // setMasterPermissionStatuses stores them server-side.
+                if (select.value === DEFAULT_STATUS) statusMap.delete(mapKey);
+                else statusMap.set(mapKey, select.value);
+                // A Web change can just have locked/unlocked this row's own
+                // App control -- re-render to reflect that immediately.
+                if (platform === 'web') renderStatusTree();
+            });
+            wrap.append(platformTag, select);
+            return wrap;
         }
 
         function renderStatusColumn(container, section, item, base, col, depth) {
@@ -1400,18 +1433,21 @@
                     return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };
                 });
                 // statusMode never builds a grantSet at all -- initialGrants
-                // here is really a [{sectionId,itemId,submenuId,status}]
+                // here is really a [{sectionId,itemId,submenuId,platform,status}]
                 // list (see getMasterPermissionStatuses in db.js); a node
                 // missing from it, or explicitly at DEFAULT_STATUS, needs no
                 // entry in statusMap (same "only exceptions get stored"
-                // convention the server side already uses). Returns before
-                // any of the grant-only setup below (expand(), showAppTab's
+                // convention the server side already uses). platform 'app'
+                // keys into the exact same APP_SUFFIX-suffixed slot
+                // buildStatusBadgeSelect reads/writes. Returns before any of
+                // the grant-only setup below (expand(), showAppTab's
                 // app-screens fetch) ever runs.
                 if (statusMode) {
                     statusMap = new Map();
                     (initialGrants || []).forEach((s) => {
                         if (!s || !s.status || s.status === DEFAULT_STATUS) return;
-                        statusMap.set(keyOf(s.sectionId, s.itemId, s.submenuId), s.status);
+                        const base = keyOf(s.sectionId, s.itemId, s.submenuId);
+                        statusMap.set(s.platform === 'app' ? base + APP_SUFFIX : base, s.status);
                     });
                     expandedSections = new Set();
                     expandedItems = new Set();
@@ -1460,15 +1496,20 @@
                 });
             },
             // statusMode's parallel of getGrants() above -- one row per
-            // node whose status was changed away from DEFAULT_STATUS in
-            // this editing session (statusMap never holds default-status
-            // entries to begin with, see the select's onChange in
-            // statusRow). Empty array for every other caller, since
+            // node/platform combination whose status was changed away from
+            // DEFAULT_STATUS in this editing session (statusMap never holds
+            // default-status entries to begin with, see
+            // buildStatusBadgeSelect's onChange). Strip APP_SUFFIX off the
+            // END of the whole key (not a per-segment split) since it was
+            // appended there regardless of which segment it visually lands
+            // in once split. Empty array for every other caller, since
             // statusMap is only ever populated in statusMode.
             getStatuses() {
                 return Array.from(statusMap.entries()).map(([k, status]) => {
-                    const [sectionId, itemId, submenuId] = k.split('::');
-                    return { sectionId, itemId: itemId || null, submenuId: submenuId || null, status };
+                    const isApp = k.endsWith(APP_SUFFIX);
+                    const baseKey = isApp ? k.slice(0, -APP_SUFFIX.length) : k;
+                    const [sectionId, itemId, submenuId] = baseKey.split('::');
+                    return { sectionId, itemId: itemId || null, submenuId: submenuId || null, platform: isApp ? 'app' : 'web', status };
                 });
             },
         };

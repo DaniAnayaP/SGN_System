@@ -1746,6 +1746,9 @@ app.put('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, 
         if (!s || typeof s.sectionId !== 'string' || !s.sectionId) {
             return res.status(400).json({ message: 'each status needs a sectionId.' });
         }
+        if (s.platform && s.platform !== 'web' && s.platform !== 'app') {
+            return res.status(400).json({ message: "platform must be 'web' or 'app'." });
+        }
         if (!MASTER_PERMISSION_STATUS_VALUES.includes(s.status)) {
             return res.status(400).json({ message: `status must be one of ${MASTER_PERMISSION_STATUS_VALUES.join(', ')}.` });
         }

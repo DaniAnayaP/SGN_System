@@ -519,7 +519,9 @@
     "masterTreeStatusHabilitado": "Enabled for service",
     "masterTreeStatusInhabilitado": "Disabled",
     "masterTreeStatusConstruccion": "Under construction",
-    "masterTreeStatusMejoras": "Being improved"
+    "masterTreeStatusMejoras": "Being improved",
+    "masterTreePlatformWeb": "Web",
+    "masterTreePlatformApp": "App"
   },
   "business": {
     "usersTitle": "Users",
