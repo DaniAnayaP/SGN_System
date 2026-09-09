@@ -199,6 +199,13 @@
         // stored" convention as master_permission_status itself (see
         // db.js) -- never populated/read outside statusMode.
         let statusMap = new Map();
+        // Snapshot of statusMap as of the last load/save -- lets each
+        // checkbox tell "changed since last save" (see buildPlatformCheckbox's
+        // pending-added/pending-removed classes) apart from "already saved
+        // this way". Same shape/convention as statusMap, refreshed via
+        // setBaseline() below (called from init() and again by
+        // Admin-ArbolMaestro.js right after a successful PUT).
+        let baselineMap = new Map();
         // key -> the human label shown on that row, filled in as
         // statusRow renders each one -- lets a caller (Admin-ArbolMaestro.js's
         // confirm-changes screen) turn a bare {sectionId,itemId,submenuId}
@@ -987,6 +994,26 @@
         function nodeWebOff(key) {
             return !getNodeState(key).webEnabled;
         }
+        function getBaselineState(key) {
+            return baselineMap.get(key) || { status: DEFAULT_STATUS, webEnabled: true, appEnabled: false };
+        }
+        // Rebuilds baselineMap from a rows list in the exact same shape/
+        // filtering as the statusMap population in init() below -- called
+        // there for the initial load, and again by Admin-ArbolMaestro.js
+        // right after a successful save (with the server's fresh rows) so
+        // pending-added/pending-removed highlights clear the moment
+        // there's nothing left unsaved.
+        function applyBaseline(rows) {
+            baselineMap = new Map();
+            (rows || []).forEach((s) => {
+                if (!s) return;
+                const status = s.status || DEFAULT_STATUS;
+                const webEnabled = s.webEnabled !== false;
+                const appEnabled = s.appEnabled === true;
+                if (status === DEFAULT_STATUS && webEnabled && !appEnabled) return;
+                baselineMap.set(keyOf(s.sectionId, s.itemId, s.submenuId), { status, webEnabled, appEnabled });
+            });
+        }
 
         // The one colored "badge select" per row -- still a real,
         // keyboard-operable <select>, just re-skinned per its own current
@@ -1067,9 +1094,22 @@
             if (ancestorLocked) wrap.title = t('admin.masterTreeLockedByAncestor');
             const device = document.createElement('span');
             device.className = 'perm-tree-mstatus-device';
+            // Pending-added (yellow) / pending-removed (gray) -- compares
+            // against baselineMap (the last load/save), not against the
+            // default state, so a checkbox that's always been on doesn't
+            // light up just because it's checked. Purely visual, cleared
+            // the moment setBaseline() runs again after a real save (see
+            // applyBaseline above); never affects what actually gets sent
+            // to the server.
+            const checked = platform === 'web' ? state.webEnabled : state.appEnabled;
+            const baseline = getBaselineState(key);
+            const baselineChecked = platform === 'web' ? baseline.webEnabled : baseline.appEnabled;
+            if (checked !== baselineChecked) {
+                device.classList.add(`perm-tree-mstatus-device-pending-${checked ? 'added' : 'removed'}`);
+            }
             const input = document.createElement('input');
             input.type = 'checkbox';
-            input.checked = platform === 'web' ? state.webEnabled : state.appEnabled;
+            input.checked = checked;
             input.disabled = readOnly || locked;
             input.addEventListener('change', () => {
                 const next = { ...getNodeState(key) };
@@ -1670,6 +1710,10 @@
                         if (status === DEFAULT_STATUS && webEnabled && !appEnabled) return;
                         statusMap.set(keyOf(s.sectionId, s.itemId, s.submenuId), { status, webEnabled, appEnabled });
                     });
+                    // Baseline starts identical to what was just loaded --
+                    // nothing is "pending" right after opening the screen,
+                    // only once you start actually changing something.
+                    applyBaseline(initialGrants);
                     expandedSections = new Set();
                     expandedItems = new Set();
                     render();
@@ -1738,6 +1782,16 @@
             // stale reference to a since-removed menu.json entry).
             getStatusLabel(sectionId, itemId, submenuId) {
                 return statusLabelMap.get(keyOf(sectionId, itemId, submenuId)) || '';
+            },
+            // statusMode only -- Admin-ArbolMaestro.js calls this right
+            // after a successful save with the server's fresh rows, so
+            // every pending-added/pending-removed highlight clears the
+            // instant there's nothing left unsaved. A no-op re-render for
+            // every other caller (baselineMap only ever means anything in
+            // statusMode).
+            setBaseline(rows) {
+                applyBaseline(rows);
+                if (statusMode) renderStatusTree();
             },
         };
     }

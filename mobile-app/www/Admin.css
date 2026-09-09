@@ -1362,6 +1362,23 @@ body.dark-mode .perm-tree-depth-2{
     outline: 2px solid var(--color-accent);
     outline-offset: 1px;
 }
+/* Changed-since-last-save highlight (see buildPlatformCheckbox's pending
+   computation against baselineMap) -- yellow for something you just
+   turned on, gray for something you just turned off, neither one the
+   normal accent-blue/neutral look. Placed after the :has(input:checked)
+   rule above so it wins the tie on source order (same specificity), and
+   reverts to that rule automatically the instant setBaseline() catches
+   up (nothing left "pending" once it matches the new baseline). */
+.perm-tree-mstatus-device-pending-added .perm-tree-mstatus-device-box{
+    background-color: #c9860b;
+    border-color: #c9860b;
+    color: #fff;
+}
+.perm-tree-mstatus-device-pending-removed .perm-tree-mstatus-device-box{
+    background-color: var(--color-surface-alt, #f2f2f5);
+    border-color: var(--color-text-secondary);
+    color: var(--color-text-secondary);
+}
 /* Read-only summary of a group's own descendants -- same monitor/phone
    silhouette as the checkbox above, colored green once every one of its
    leaves has that platform on, gray for only some, neutral for none.
@@ -1481,6 +1498,50 @@ body.dark-mode .perm-tree-mstatus-header{ background-color: #1f2030; }
 }
 .perm-tree-mstatus-nest-btn i{ font-size: 0.75rem; }
 body.dark-mode .perm-tree-mstatus-nest-btn{ background-color: #23242b; }
+
+/* Admin-ArbolMaestro.html only -- scoped off .master-tree-panel's own
+   presence via :has() so no other screen sharing .admin-panel/.perm-tree
+   (Business-Roles, Business-Accesos/AppRoles, Admin-SaaS, Admin-
+   BusinessSectors) is affected. Turns <main> into a full-height flex
+   column so the tree fills whatever room is left below the sticky top
+   bar and grows/shrinks with the window, instead of floating in a fixed
+   24rem box with empty space above/below it -- confirmed with the user.
+   <main> itself scrolls nowhere (overflow:hidden); the tree keeps
+   scrolling internally exactly as it already did via .perm-tree's own
+   overflow-y:auto. */
+body:has(.master-tree-panel) main{
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+.master-tree-panel{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 0.6rem;
+    padding: 0.75rem;
+    gap: 0.5rem;
+}
+.master-tree-panel .perm-tree{
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    padding: 0.35rem;
+}
+.master-tree-panel .perm-tree-mstatus-header{
+    top: -0.35rem;
+    margin: -0.35rem -0.35rem 0.4rem;
+}
+.master-tree-panel .admin-form-actions{
+    flex-shrink: 0;
+    margin: 0;
+}
+.master-tree-panel .admin-subtitle{
+    flex-shrink: 0;
+    margin: 0;
+}
 
 /* Árbol de Permisos Maestro's own confirm-before-saving screen (see
    openConfirmModal in Admin-ArbolMaestro.js) -- one row per changed node,

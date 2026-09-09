@@ -151,6 +151,11 @@ async function saveMasterTree() {
         if (!res.ok) throw new Error('save failed');
         const data = await res.json();
         originalStatuses = data.statuses || [];
+        // Resets the tree's own pending-added/pending-removed highlight
+        // baseline to what just got saved -- otherwise a checkbox you
+        // changed and saved would keep showing yellow/gray forever,
+        // compared against the now-stale pre-save snapshot.
+        masterTree.setBaseline(originalStatuses);
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
