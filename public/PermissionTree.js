@@ -1162,6 +1162,31 @@
             });
         }
 
+        // Sets --perm-tree-label-col-width (read by .perm-tree-mstatus-
+        // label and .perm-tree-mstatus-header-label) to the widest
+        // CURRENTLY VISIBLE row label's own natural width, measured on the
+        // same canvas as the Estatus ladder above rather than by reading
+        // DOM layout (avoids a measure-during-layout thrash across
+        // potentially 40+ rows). Confirmed with the user: the label
+        // column's floor is set by its own longest word, never an
+        // arbitrary rem guess, and it shrinks back down the moment a
+        // longer node collapses out of view. Re-run at the end of every
+        // renderStatusTree() -- expand/collapse is the only thing that
+        // changes which labels are "currently visible" to measure.
+        function alignLabelColumnWidth() {
+            const labels = treeRoot.querySelectorAll('.perm-tree-mstatus-label');
+            if (!labels.length) return;
+            const font = getComputedStyle(labels[0]).font;
+            let maxWidth = 0;
+            labels.forEach((label) => {
+                const width = measureTextWidth(label.textContent, font);
+                if (width > maxWidth) maxWidth = width;
+            });
+            // Small buffer so the longest label itself doesn't sit flush
+            // against the next column's edge.
+            treeRoot.style.setProperty('--perm-tree-label-col-width', `${Math.ceil(maxWidth) + 8}px`);
+        }
+
         // Small monitor (Web) / phone (App) silhouette -- shared by the
         // platform checkbox and its read-only rollup summary below, so the
         // shape itself says which platform this is, not just position or
@@ -1491,6 +1516,7 @@
                     });
                 });
             });
+            alignLabelColumnWidth();
             applyStatusAbbreviations();
             // Defensive reset -- seen live scrolled to a non-zero position
             // on load in Chrome's device-toolbar responsive mode (label

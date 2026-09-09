@@ -1292,19 +1292,23 @@ body.dark-mode .perm-tree-depth-2{
    .perm-tree-label-plain above; the trailing controls sit in their own
    margin-left:auto group. */
 .perm-tree-mstatus-label{
-    flex: 1;
-    /* A floor, not 0 -- min-width:0 let this shrink all the way down to
-       4-5 characters ("Gene...") before the row ever overflowed, since it
-       was the only flexible piece competing against Estatus/Web/App's
-       flex-shrink:0 controls. Past this width the row overflows on
-       purpose, which is exactly what hands off to .perm-tree's own
-       overflow-x:auto -- scroll picks up the slack instead of the label
-       shrinking to the point of being unreadable. */
-    min-width: 5rem;
-    /* No more wrapping into 2-3 lines on a narrow tree (Comité Directivo,
-       Control de Gestión, ...) -- clips with an ellipsis instead, same as
-       every sidebar label; the hover tooltip (showSubmenuTooltip, wired in
-       PermissionTree.js) still reveals the real full name. */
+    /* Fixed at the widest currently-visible label's own natural width
+       (see alignLabelColumnWidth in PermissionTree.js, which measures
+       every rendered label on a canvas and sets this custom property on
+       treeRoot) -- confirmed with the user: the label column's minimum
+       is set by its own longest word, not an arbitrary rem guess, and a
+       row never shrinks it further. flex:0 0 auto (not 1) on purpose --
+       this must NOT grow or shrink with available space; once it plus
+       Estatus/Web·App no longer fit, the row overflows on purpose, which
+       is exactly what hands off to .perm-tree's own overflow-x:auto.
+       The 5rem fallback only matters for the one frame before JS first
+       measures anything. */
+    flex: 0 0 auto;
+    width: var(--perm-tree-label-col-width, 5rem);
+    /* Backstop only -- with the column sized to the longest visible
+       label, no row should ever actually need this, but it's a much
+       safer failure mode than an unbounded label pushing the row even
+       wider than the (already content-driven) column calls for. */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1523,7 +1527,10 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
    side ~= 4.3rem. Without this, the header's Estatus/Web·App columns
    start noticeably left of where a row's own controls actually render. */
 .perm-tree-mstatus-header-spacer{ flex-shrink: 0; width: 4.3rem; }
-.perm-tree-mstatus-header-label{ flex: 1; min-width: 5rem; }
+/* Same --perm-tree-label-col-width as a row's own label -- must match
+   exactly for the header to stay aligned with wherever Estatus/Web·App
+   actually start on each row (see alignLabelColumnWidth). */
+.perm-tree-mstatus-header-label{ flex: 0 0 auto; width: var(--perm-tree-label-col-width, 5rem); }
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
 .perm-tree-mstatus-header-status{ width: 9.5rem; }
 .perm-tree-mstatus-header-platforms{ width: 13rem; }
