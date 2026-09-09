@@ -1600,13 +1600,12 @@ body.dark-mode .perm-tree-mstatus-nest-btn{ background-color: #23242b; }
    .perm-tree is affected even without a .master-tree-panel prefix here.
    "WEB"/"APP" goes first -- the monitor/phone silhouette already says
    which platform it is, the word is reinforcement, not the only cue.
-   The "aplicar a anidados" copy icon goes next, once things are tighter
-   still -- a bulk convenience, not needed to use the checkbox itself. */
+   The "aplicar a anidados" copy icon (perm-tree-mstatus-nest-btn) is
+   deliberately NOT hidden at any width -- confirmed with the user: it's
+   the one control that must always stay visible/reachable, even on the
+   narrowest phone. */
 @media (max-width: 560px){
     .perm-tree-mstatus-platform{ display: none; }
-}
-@media (max-width: 420px){
-    .perm-tree-mstatus-nest-btn{ display: none; }
 }
 
 /* Admin-ArbolMaestro.html only -- scoped off .master-tree-panel's own
