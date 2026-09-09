@@ -1332,7 +1332,8 @@ body.dark-mode .perm-tree-depth-2{
     display: flex;
     align-items: center;
     gap: 0.3rem;
-    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+    flex-shrink: 0;
 }
 .perm-tree-mstatus-rollup-icon{
     width: 1.05rem;
@@ -1391,6 +1392,61 @@ body.dark-mode .perm-tree-mstatus-select-habilitado{ background-color: #1c3324; 
 body.dark-mode .perm-tree-mstatus-select-inhabilitado{ background-color: #332020; color: #e0a3a3; }
 body.dark-mode .perm-tree-mstatus-select-construccion{ background-color: #3a2e10; color: #f0c463; }
 body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; color: #8fb8ea; }
+
+/* Persistent column header for statusMode (see buildStatusTreeHeader) --
+   sticks to the top of .perm-tree's own scroll container (overflow-y:auto
+   set there) so the tree reads as a real table even mid-scroll. Bleeds
+   into .perm-tree's own padding via negative margin so it reaches the
+   container's edges instead of floating with a gap around it. */
+.perm-tree-mstatus-header{
+    position: sticky;
+    top: -0.5rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: -0.5rem -0.5rem 0.4rem;
+    padding: 0.55rem 0.9rem;
+    background-color: var(--color-surface-alt, #f2f2f5);
+    border-bottom: 2px solid var(--color-border);
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+}
+.perm-tree-mstatus-header-label{ flex: 1; min-width: 0; }
+.perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
+.perm-tree-mstatus-header-status{ width: 9.5rem; }
+.perm-tree-mstatus-header-platforms{ width: 13rem; }
+body.dark-mode .perm-tree-mstatus-header{ background-color: #1f2030; }
+
+/* Web/App checkbox + its "apply to nested" button, grouped so they line
+   up under the header's single Web·App column (see buildPlatformGroup). */
+.perm-tree-mstatus-platform-group{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.perm-tree-mstatus-nest-btn{
+    width: 1.4rem;
+    height: 1.4rem;
+    flex-shrink: 0;
+    border-radius: 0.35rem;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface-alt, #f2f2f5);
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.perm-tree-mstatus-nest-btn:hover{
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+.perm-tree-mstatus-nest-btn i{ font-size: 0.75rem; }
+body.dark-mode .perm-tree-mstatus-nest-btn{ background-color: #23242b; }
 
 /* Árbol de Permisos Maestro's own confirm-before-saving screen (see
    openConfirmModal in Admin-ArbolMaestro.js) -- one row per changed node,

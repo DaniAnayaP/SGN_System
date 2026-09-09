@@ -904,7 +904,7 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle, rollup) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             if (toggle) {
@@ -926,21 +926,23 @@
                 spacer.className = 'perm-tree-toggle-spacer';
                 row.appendChild(spacer);
             }
-            const label = document.createElement('span');
-            label.className = 'perm-tree-mstatus-label';
-            label.textContent = labelText;
-            row.appendChild(label);
             // Group rollup -- ✓ green once every descendant leaf has this
             // platform on, a gray dash for only some of them, nothing at
             // all once none do. Purely a read-only summary of the leaves
             // underneath (see computeRollup below); only group rows
-            // (Departamento/Área, the ones with a toggle) get one.
+            // (Departamento/Área, the ones with a toggle) get one. Sits
+            // right before the label (not its own column) -- the same
+            // spot a row's own checkbox would sit in an ordinary tree.
             if (rollup) {
                 const rollupEl = document.createElement('span');
                 rollupEl.className = 'perm-tree-mstatus-rollup';
                 rollupEl.append(buildRollupIcon('web', rollup.web), buildRollupIcon('app', rollup.app));
                 row.appendChild(rollupEl);
             }
+            const label = document.createElement('span');
+            label.className = 'perm-tree-mstatus-label';
+            label.textContent = labelText;
+            row.appendChild(label);
             if (key) {
                 // Stashed so a caller (Admin-ArbolMaestro.js's confirm-
                 // changes screen) can turn a bare key back into the same
@@ -949,8 +951,8 @@
                 const controls = document.createElement('div');
                 controls.className = 'perm-tree-mstatus-controls';
                 controls.appendChild(buildStatusBadgeSelect(key));
-                controls.appendChild(buildPlatformCheckbox(key, 'web'));
-                controls.appendChild(buildPlatformCheckbox(key, 'app'));
+                controls.appendChild(buildPlatformGroup(key, 'web', leafKeys));
+                controls.appendChild(buildPlatformGroup(key, 'app', leafKeys));
                 row.appendChild(controls);
             }
             return row;
@@ -987,14 +989,12 @@
             select.value = state.status;
             select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${state.status}`;
             select.addEventListener('change', () => {
+                // Estatus is informational only for now -- confirmed with
+                // the user: there's no real test/staging environment yet,
+                // so nothing here forces Web/App off just because the
+                // status isn't Habilitado (see buildPlatformCheckbox, which
+                // no longer locks either checkbox off of this value).
                 const next = { ...getNodeState(key), status: select.value };
-                // Turning the badge off (Inhabilitado) blocks both
-                // platforms outright; anything short of full Habilitado
-                // still blocks App specifically (see buildPlatformCheckbox)
-                // -- neither is meaningful to leave checked underneath a
-                // status that no longer allows it.
-                if (select.value === 'inhabilitado') { next.webEnabled = false; next.appEnabled = false; }
-                else if (select.value !== 'habilitado') next.appEnabled = false;
                 setNodeState(key, next);
                 select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${select.value}`;
                 renderStatusTree();
@@ -1003,11 +1003,11 @@
         }
 
         // Sistema Web / App Móvil -- simple availability checkboxes, not
-        // their own status. App is only actionable when the badge is fully
-        // Habilitado AND Web is checked (same "App can't outrun Web" rule
-        // computeAppToggle's own actionable filter enforces in the
-        // checkbox tree above); Web itself is only actionable once the
-        // badge isn't Inhabilitado.
+        // their own status. Estatus is informational only for now (no
+        // dedicated test/staging environment to justify locking Web off
+        // for anything short of Habilitado -- confirmed with the user);
+        // the one dependency that stays is App can't outrun Web, same rule
+        // the checkbox/grant tree above enforces via computeAppToggle.
         function buildPlatformCheckbox(key, platform) {
             const wrap = document.createElement('label');
             wrap.className = `perm-tree-mstatus-badge perm-tree-mstatus-badge-${platform}`;
@@ -1017,7 +1017,7 @@
             const input = document.createElement('input');
             input.type = 'checkbox';
             const state = getNodeState(key);
-            const locked = platform === 'web' ? state.status === 'inhabilitado' : (state.status !== 'habilitado' || !state.webEnabled);
+            const locked = platform === 'app' && !state.webEnabled;
             input.checked = platform === 'web' ? state.webEnabled : state.appEnabled;
             input.disabled = readOnly || locked;
             input.addEventListener('change', () => {
@@ -1033,6 +1033,52 @@
             });
             wrap.append(platformTag, input);
             return wrap;
+        }
+
+        // Copies THIS node's own current Web/App value onto every leaf
+        // nested under it, one platform at a time -- same icon+function as
+        // Nuestros Planes' cost tree (perm-tree-app-equalize-btn/bx-copy),
+        // just split so Web and App can be pushed down independently since
+        // they don't have to match. Deliberately one-directional: this is
+        // the only thing that ever writes downward. A leaf checked by hand
+        // never pushes back up -- computeRollup only ever *reads* the
+        // leaves to summarize a group's state, it never sets anything.
+        function applyNestedPlatform(leafKeys, key, platform) {
+            const source = getNodeState(key);
+            const value = platform === 'web' ? source.webEnabled : source.appEnabled;
+            leafKeys.forEach((leafKey) => {
+                const next = { ...getNodeState(leafKey) };
+                if (platform === 'web') {
+                    next.webEnabled = value;
+                    if (!value) next.appEnabled = false;
+                } else {
+                    next.appEnabled = value;
+                }
+                setNodeState(leafKey, next);
+            });
+            renderStatusTree();
+        }
+
+        // Checkbox + its "apply to nested" button, side by side -- the
+        // button only renders on group rows that actually have leaves
+        // underneath (leafKeys is only passed for Departamento/Área rows,
+        // see renderStatusTree); a leaf row like "Inicio" gets just the
+        // checkbox, nothing to apply anything to.
+        function buildPlatformGroup(key, platform, leafKeys) {
+            const group = document.createElement('div');
+            group.className = 'perm-tree-mstatus-platform-group';
+            group.appendChild(buildPlatformCheckbox(key, platform));
+            if (!readOnly && leafKeys && leafKeys.length) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'perm-tree-mstatus-nest-btn';
+                btn.title = t(platform === 'web' ? 'admin.masterTreeApplyNestedWeb' : 'admin.masterTreeApplyNestedApp');
+                btn.setAttribute('aria-label', btn.title);
+                btn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+                btn.addEventListener('click', () => applyNestedPlatform(leafKeys, key, platform));
+                group.appendChild(btn);
+            }
+            return group;
         }
 
         // 'full' (every leaf key has this platform on) / 'partial' (some
@@ -1119,8 +1165,30 @@
             });
         }
 
+        // Persistent column header (Pantalla/Función | Estatus | Web · App)
+        // -- sticks to the top of the tree's own scroll container so this
+        // reads as an actual table even once you've scrolled past the
+        // first few rows. statusMode-only, built fresh each render since
+        // it's static content with no state of its own.
+        function buildStatusTreeHeader() {
+            const header = document.createElement('div');
+            header.className = 'perm-tree-mstatus-header';
+            const label = document.createElement('span');
+            label.className = 'perm-tree-mstatus-header-label';
+            label.textContent = t('admin.masterTreeColScreen');
+            const status = document.createElement('span');
+            status.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status';
+            status.textContent = t('admin.masterTreeColStatus');
+            const platforms = document.createElement('span');
+            platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
+            platforms.textContent = t('admin.masterTreeColPlatforms');
+            header.append(label, status, platforms);
+            return header;
+        }
+
         function renderStatusTree() {
             treeRoot.innerHTML = '';
+            treeRoot.appendChild(buildStatusTreeHeader());
             sectionsData.forEach((section) => {
                 const sectionExpanded = expandedSections.has(section.id);
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
@@ -1130,7 +1198,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys));
                 if (!sectionExpanded) return;
 
                 section.items.forEach((item) => {
@@ -1144,7 +1212,7 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys));
                     if (!hasSubmenu || !itemExpanded) return;
 
                     item.submenu.forEach((sm) => {

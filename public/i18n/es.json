@@ -525,6 +525,11 @@
     "masterTreeOn": "Activado",
     "masterTreeOff": "Desactivado",
     "masterTreeChangeStatus": "Estatus",
+    "masterTreeColScreen": "Pantalla / Función",
+    "masterTreeColStatus": "Estatus",
+    "masterTreeColPlatforms": "Web · App",
+    "masterTreeApplyNestedWeb": "Aplicar Web a todo lo anidado debajo",
+    "masterTreeApplyNestedApp": "Aplicar App a todo lo anidado debajo",
     "masterTreeConfirmTitle": "Confirmar cambios al Árbol Maestro",
     "masterTreeConfirmHint": "Esto afecta a todos los Giros de Negocio, Planes y clientes que dependan de estas ramas. Revisa antes de guardar.",
     "masterTreeNoChanges": "No hay cambios que guardar."
