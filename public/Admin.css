@@ -1305,17 +1305,8 @@ body.dark-mode .perm-tree-depth-2{
 .perm-tree-mstatus-badge{
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.35rem;
     cursor: pointer;
-}
-.perm-tree-mstatus-badge input[type="checkbox"]{
-    width: 1.05rem;
-    height: 1.05rem;
-    accent-color: var(--color-accent);
-}
-.perm-tree-mstatus-badge input[type="checkbox"]:disabled{
-    cursor: not-allowed;
-    opacity: 0.4;
 }
 .perm-tree-mstatus-platform{
     font-size: 0.62rem;
@@ -1324,10 +1315,58 @@ body.dark-mode .perm-tree-depth-2{
     letter-spacing: 0.03em;
     color: var(--color-text-secondary);
 }
-/* Read-only summary of a group's own descendants -- ✓ green once every
-   one of them has that platform on, a gray dash for only some, nothing at
-   all for none. Never itself clickable; only the leaf checkboxes actually
-   change anything. */
+/* Web/App checkbox re-skinned as a small monitor/phone silhouette instead
+   of a plain square -- confirmed with the user so the shape itself says
+   which platform this is, same idea as the rollup icons below. The real
+   <input type="checkbox"> stays functional (click, keyboard, disabled)
+   underneath, just visually replaced by device-box's SVG via :has(). */
+.perm-tree-mstatus-device{
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+}
+.perm-tree-mstatus-device input[type="checkbox"]{
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+.perm-tree-mstatus-device input[type="checkbox"]:disabled{
+    cursor: not-allowed;
+}
+.perm-tree-mstatus-device-box{
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.4rem;
+    border: 1.5px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-border);
+    background-color: transparent;
+}
+.perm-tree-mstatus-device-box svg{
+    width: 1.1rem;
+    height: 1.1rem;
+}
+.perm-tree-mstatus-device:has(input:checked) .perm-tree-mstatus-device-box{
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+}
+.perm-tree-mstatus-device:has(input:disabled) .perm-tree-mstatus-device-box{
+    opacity: 0.4;
+}
+.perm-tree-mstatus-device:has(input:focus-visible) .perm-tree-mstatus-device-box{
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+}
+/* Read-only summary of a group's own descendants -- same monitor/phone
+   silhouette as the checkbox above, colored green once every one of its
+   leaves has that platform on, gray for only some, neutral for none.
+   Never itself clickable; only the leaf checkboxes actually change
+   anything (see computeRollup/buildRollupIcon). */
 .perm-tree-mstatus-rollup{
     display: flex;
     align-items: center;
@@ -1336,34 +1375,29 @@ body.dark-mode .perm-tree-depth-2{
     flex-shrink: 0;
 }
 .perm-tree-mstatus-rollup-icon{
-    width: 1.05rem;
-    height: 1.05rem;
-    border-radius: 0.25rem;
-    border: 1.5px solid var(--color-border);
+    width: 1.15rem;
+    height: 1.15rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    color: var(--color-border);
     flex-shrink: 0;
 }
-.perm-tree-mstatus-rollup-icon i{
-    font-size: 0.85rem;
+.perm-tree-mstatus-rollup-icon svg{
+    width: 100%;
+    height: 100%;
 }
 .perm-tree-mstatus-rollup-full{
-    background-color: #e3f6e8;
-    border-color: #1e7e34;
     color: #1e7e34;
 }
 .perm-tree-mstatus-rollup-partial{
-    background-color: var(--color-surface-alt, #f2f2f5);
-    border-color: var(--color-text-secondary);
     color: var(--color-text-secondary);
 }
 body.dark-mode .perm-tree-mstatus-rollup-full{
-    background-color: #1c3324; border-color: #7fd99a; color: #7fd99a;
+    color: #7fd99a;
 }
 body.dark-mode .perm-tree-mstatus-rollup-partial{
-    background-color: #23242b; border-color: var(--color-text-secondary); color: var(--color-text-secondary);
+    color: var(--color-text-secondary);
 }
 /* Re-skinned per its own current value (see the
    perm-tree-mstatus-select-<status> modifier classes below) instead of the

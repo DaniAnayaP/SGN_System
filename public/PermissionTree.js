@@ -1002,6 +1002,27 @@
             return select;
         }
 
+        // Small monitor (Web) / phone (App) silhouette -- shared by the
+        // platform checkbox and its read-only rollup summary below, so the
+        // shape itself says which platform this is, not just position or
+        // color. `mark` draws a checkmark/dash inside for the rollup only;
+        // the checkbox itself carries no inner mark, its filled/outline
+        // state already says checked/unchecked (see perm-tree-mstatus-
+        // device-box:has(input:checked) in Admin.css).
+        function devicePathFor(platform) {
+            return platform === 'web'
+                ? '<rect x="2" y="4" width="20" height="13" rx="1.5"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="17" x2="12" y2="20"/>'
+                : '<rect x="6" y="2" width="12" height="20" rx="2.5"/>';
+        }
+        function deviceMarkFor(platform, state) {
+            if (state === 'full') return platform === 'web' ? '<path d="M6 10l3 3 6-6"/>' : '<path d="M9 12.5l2 2 4-5"/>';
+            if (state === 'partial') return platform === 'web' ? '<line x1="7" y1="10.5" x2="15" y2="10.5"/>' : '<line x1="8" y1="12" x2="16" y2="12"/>';
+            return '';
+        }
+        function deviceIconSvg(platform, mark) {
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${devicePathFor(platform)}${mark || ''}</svg>`;
+        }
+
         // Sistema Web / App Móvil -- simple availability checkboxes, not
         // their own status. Estatus is informational only for now (no
         // dedicated test/staging environment to justify locking Web off
@@ -1014,10 +1035,12 @@
             const platformTag = document.createElement('span');
             platformTag.className = 'perm-tree-mstatus-platform';
             platformTag.textContent = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
-            const input = document.createElement('input');
-            input.type = 'checkbox';
             const state = getNodeState(key);
             const locked = platform === 'app' && !state.webEnabled;
+            const device = document.createElement('span');
+            device.className = 'perm-tree-mstatus-device';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
             input.checked = platform === 'web' ? state.webEnabled : state.appEnabled;
             input.disabled = readOnly || locked;
             input.addEventListener('change', () => {
@@ -1031,7 +1054,11 @@
                 setNodeState(key, next);
                 renderStatusTree();
             });
-            wrap.append(platformTag, input);
+            const box = document.createElement('span');
+            box.className = 'perm-tree-mstatus-device-box';
+            box.innerHTML = deviceIconSvg(platform, '');
+            device.append(input, box);
+            wrap.append(platformTag, device);
             return wrap;
         }
 
@@ -1102,8 +1129,7 @@
             const el = document.createElement('span');
             el.className = `perm-tree-mstatus-rollup-icon perm-tree-mstatus-rollup-${state}`;
             el.title = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
-            if (state === 'full') el.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
-            else if (state === 'partial') el.innerHTML = '<i class="bx bx-minus" aria-hidden="true"></i>';
+            el.innerHTML = deviceIconSvg(platform, deviceMarkFor(platform, state));
             return el;
         }
 
