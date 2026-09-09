@@ -1487,7 +1487,14 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
     letter-spacing: 0.04em;
     color: var(--color-text-secondary);
 }
-.perm-tree-mstatus-header-label{ flex: 1; min-width: 0; }
+/* Must match .perm-tree-mstatus-label's own min-width exactly -- these
+   two are laid out independently (fixed-width header columns vs. an
+   auto-margin-pushed controls group on each row) and only stay visually
+   column-aligned when both labels hit the same floor at the same width.
+   A mismatch here is exactly what let "ESTATUS" end up sitting over a
+   row's own (wider) label once the row's floor was added without also
+   updating the header's. */
+.perm-tree-mstatus-header-label{ flex: 1; min-width: 5rem; }
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
 .perm-tree-mstatus-header-status{ width: 9.5rem; }
 .perm-tree-mstatus-header-platforms{ width: 13rem; }
