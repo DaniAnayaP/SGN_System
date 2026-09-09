@@ -1477,6 +1477,15 @@
                 });
             });
             applyStatusAbbreviations();
+            // Defensive reset -- seen live scrolled to a non-zero position
+            // on load in Chrome's device-toolbar responsive mode (label
+            // start hidden, Estatus/Web·App fully visible instead), not
+            // reproducible with a plain resized browser window locally.
+            // Whatever the exact cause, showing the start of every row by
+            // default is the only sane behavior for a freshly rendered
+            // tree, so pin it explicitly rather than trust the browser's
+            // own post-layout scroll position.
+            treeRoot.scrollLeft = 0;
         }
 
         function render() {
