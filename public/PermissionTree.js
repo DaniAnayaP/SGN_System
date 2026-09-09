@@ -904,7 +904,7 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle, rollup, leafKeys) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             if (toggle) {
@@ -951,8 +951,8 @@
                 const controls = document.createElement('div');
                 controls.className = 'perm-tree-mstatus-controls';
                 controls.appendChild(buildStatusBadgeSelect(key));
-                controls.appendChild(buildPlatformGroup(key, 'web', leafKeys));
-                controls.appendChild(buildPlatformGroup(key, 'app', leafKeys));
+                controls.appendChild(buildPlatformGroup(key, 'web', leafKeys, ancestorLocked));
+                controls.appendChild(buildPlatformGroup(key, 'app', leafKeys, ancestorLocked));
                 row.appendChild(controls);
             }
             return row;
@@ -967,6 +967,9 @@
         function setNodeState(key, next) {
             if (next.status === DEFAULT_STATUS && next.webEnabled && !next.appEnabled) statusMap.delete(key);
             else statusMap.set(key, next);
+        }
+        function nodeWebOff(key) {
+            return !getNodeState(key).webEnabled;
         }
 
         // The one colored "badge select" per row -- still a real,
@@ -1027,16 +1030,25 @@
         // their own status. Estatus is informational only for now (no
         // dedicated test/staging environment to justify locking Web off
         // for anything short of Habilitado -- confirmed with the user);
-        // the one dependency that stays is App can't outrun Web, same rule
-        // the checkbox/grant tree above enforces via computeAppToggle.
-        function buildPlatformCheckbox(key, platform) {
+        // the dependencies that stay are App can't outrun Web (same rule
+        // the checkbox/grant tree above enforces via computeAppToggle) and,
+        // new here, a node can't outrun its own ancestors: once any
+        // Departamento/Área/Apartado above this one has Web off,
+        // everything nested under it locks too (see ancestorLocked,
+        // threaded down through renderStatusTree). Locking never erases
+        // the stored value -- input.checked always reflects it as-is, so
+        // turning the ancestor back on brings every locked descendant back
+        // exactly as it was left (confirmed with the user: block, don't
+        // wipe).
+        function buildPlatformCheckbox(key, platform, ancestorLocked) {
             const wrap = document.createElement('label');
             wrap.className = `perm-tree-mstatus-badge perm-tree-mstatus-badge-${platform}`;
             const platformTag = document.createElement('span');
             platformTag.className = 'perm-tree-mstatus-platform';
             platformTag.textContent = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
             const state = getNodeState(key);
-            const locked = platform === 'app' && !state.webEnabled;
+            const locked = ancestorLocked || (platform === 'app' && !state.webEnabled);
+            if (ancestorLocked) wrap.title = t('admin.masterTreeLockedByAncestor');
             const device = document.createElement('span');
             device.className = 'perm-tree-mstatus-device';
             const input = document.createElement('input');
@@ -1091,10 +1103,10 @@
         // underneath (leafKeys is only passed for Departamento/Área rows,
         // see renderStatusTree); a leaf row like "Inicio" gets just the
         // checkbox, nothing to apply anything to.
-        function buildPlatformGroup(key, platform, leafKeys) {
+        function buildPlatformGroup(key, platform, leafKeys, ancestorLocked) {
             const group = document.createElement('div');
             group.className = 'perm-tree-mstatus-platform-group';
-            group.appendChild(buildPlatformCheckbox(key, platform));
+            group.appendChild(buildPlatformCheckbox(key, platform, ancestorLocked));
             if (!readOnly && leafKeys && leafKeys.length) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -1133,11 +1145,11 @@
             return el;
         }
 
-        function renderStatusColumn(container, section, item, base, col, depth) {
-            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null));
+        function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked) {
+            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked));
         }
 
-        function renderStatusClassification(container, section, item, sm, subSm, cls) {
+        function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked) {
             const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
@@ -1150,11 +1162,11 @@
             }));
             if (!classExpanded) return;
             cls.submenu.forEach((col) => {
-                renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6);
+                renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked);
             });
         }
 
-        function renderStatusTableColumns(container, section, item, sm, subSm) {
+        function renderStatusTableColumns(container, section, item, sm, subSm, ancestorLocked) {
             const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const tableExpanded = expandedItems.has(tableTreeKey);
             container.appendChild(statusRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, null, {
@@ -1167,14 +1179,14 @@
             if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
-                    renderStatusClassification(container, section, item, sm, subSm, entry);
+                    renderStatusClassification(container, section, item, sm, subSm, entry, ancestorLocked);
                     return;
                 }
-                renderStatusColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5);
+                renderStatusColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5, ancestorLocked);
             });
         }
 
-        function renderStatusIcons(container, section, item, sm, subSm) {
+        function renderStatusIcons(container, section, item, sm, subSm, ancestorLocked) {
             const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const iconsExpanded = expandedItems.has(iconsTreeKey);
             container.appendChild(statusRow(t('menu.iconsPersonalization'), 4, null, {
@@ -1187,7 +1199,7 @@
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
-                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null));
+                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, null, null, ancestorLocked));
             });
         }
 
@@ -1212,52 +1224,63 @@
             return header;
         }
 
+        // ancestorLocked cascades one level at a time: each node's own
+        // Web/App checkbox is locked once anything ABOVE it (or it itself,
+        // for its own children) has Web off -- computed here as we walk
+        // down, never mutated, so re-enabling an ancestor's Web instantly
+        // un-locks everything under it back to whatever was already there.
         function renderStatusTree() {
             treeRoot.innerHTML = '';
             treeRoot.appendChild(buildStatusTreeHeader());
             sectionsData.forEach((section) => {
                 const sectionExpanded = expandedSections.has(section.id);
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
-                treeRoot.appendChild(statusRow(t(sectionLabelKey(section)), 0, keyOf(section.id, null, null), section.items.length ? {
+                const sectionStateKey = keyOf(section.id, null, null);
+                treeRoot.appendChild(statusRow(t(sectionLabelKey(section)), 0, sectionStateKey, section.items.length ? {
                     expanded: sectionExpanded,
                     onToggle: () => {
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false));
                 if (!sectionExpanded) return;
+                const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
                 section.items.forEach((item) => {
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
                     const itemKey = `${section.id}::${item.id}`;
                     const itemExpanded = expandedItems.has(itemKey);
                     const itemLeafKeys = hasSubmenu ? leafKeysUnder(section, item) : [];
-                    treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), 1, keyOf(section.id, item.id, null), hasSubmenu ? {
+                    const itemStateKey = keyOf(section.id, item.id, null);
+                    treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), 1, itemStateKey, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => {
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked));
                     if (!hasSubmenu || !itemExpanded) return;
+                    const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
 
                     item.submenu.forEach((sm) => {
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
+                        const smStateKey = keyOf(section.id, item.id, sm.id);
                         if (!hasSubSubmenu) {
-                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, keyOf(section.id, item.id, sm.id), null));
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked));
                             return;
                         }
 
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
                         const smExpandedNow = expandedItems.has(smKey);
-                        treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, keyOf(section.id, item.id, sm.id), {
+                        treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, {
                             expanded: smExpandedNow,
                             onToggle: () => {
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }));
+                        }, null, null, smAncestorLocked));
                         if (!smExpandedNow) return;
+                        const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
 
                         sm.submenu.forEach((subSm) => {
                             const key = subSm.standalone
@@ -1272,13 +1295,14 @@
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null));
+                            } : null, null, null, subSmAncestorLocked));
                             if (subHasDetail && subDetailExpanded) {
+                                const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
                                 if (subSm.submenu && subSm.submenu.length) {
-                                    renderStatusTableColumns(treeRoot, section, item, sm, subSm);
+                                    renderStatusTableColumns(treeRoot, section, item, sm, subSm, detailAncestorLocked);
                                 }
                                 if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
-                                    renderStatusIcons(treeRoot, section, item, sm, subSm);
+                                    renderStatusIcons(treeRoot, section, item, sm, subSm, detailAncestorLocked);
                                 }
                             }
                         });

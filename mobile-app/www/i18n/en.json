@@ -530,6 +530,7 @@
     "masterTreeColPlatforms": "Web · App",
     "masterTreeApplyNestedWeb": "Apply Web to everything nested below",
     "masterTreeApplyNestedApp": "Apply App to everything nested below",
+    "masterTreeLockedByAncestor": "Locked: a level above has this platform off",
     "masterTreeConfirmTitle": "Confirm changes to the Master Tree",
     "masterTreeConfirmHint": "This affects every Business Type, Plan, and client that depends on these branches. Review before saving.",
     "masterTreeNoChanges": "Nothing to save."
