@@ -636,7 +636,14 @@ function buildSidebarData(data, role, activePage) {
         // marked 'habilitado' here (deferred, not built yet), so it's
         // listed right before it.
         { id: 'admin-master-permissions', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html' },
-        { id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html' },
+        {
+            id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html',
+            // Longest label in this dropdown -- steps down this ladder (in
+            // order) until one fits the sidebar's fixed expanded width
+            // instead of ellipsizing straight to "..." (see
+            // applySubmenuAbbreviations below).
+            abbrKeys: ['menu.businessSectorsAbbr1', 'menu.businessSectorsAbbr2', 'menu.businessSectorsAbbr3', 'menu.businessSectorsAbbr4'],
+        },
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', saasItemId: 'saas-module-costs' },
         { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html' },
         { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', saasItemId: 'saas-backups' },
@@ -967,7 +974,17 @@ function buildSubmenu(items) {
         // labelKey at all (e.g. a saved report) would throw here (t() calls
         // .split on its key argument, which crashes on undefined) instead
         // of just rendering blank.
-        span.textContent = item.label || t(item.labelKey, item.labelParams || {});
+        const fullLabel = item.label || t(item.labelKey, item.labelParams || {});
+        span.textContent = fullLabel;
+        // abbrKeys (see buildSidebarData's admin-business-sectors entry for
+        // the first real user) — a ladder of progressively shorter labels,
+        // longest first. Stashed as data instead of resolved once here
+        // because applySubmenuAbbreviations (below) re-measures on every
+        // resize, and the sidebar's language can change without a full
+        // menu rebuild (see dashboard:language-changed).
+        if (item.abbrKeys?.length) {
+            span.dataset.abbrLadder = JSON.stringify([fullLabel, ...item.abbrKeys.map((k) => t(k))]);
+        }
         a.appendChild(span);
         li.appendChild(a);
         // A sub-menu item can itself hold its own nested submenu (e.g.
@@ -1180,7 +1197,29 @@ function renderMenu(data) {
     });
 
     wireMenuInteractions();
+    applySubmenuAbbreviations();
 }
+
+// A label with its own abbrLadder (see buildSubmenu) steps down through
+// progressively shorter versions of itself -- longest that still fits the
+// sidebar's own fixed expanded width wins -- instead of jumping straight
+// to CSS ellipsis. Re-run on resize/collapse-toggle since the sidebar's
+// available width isn't otherwise re-checked once rendered; harmless to
+// call for a menu with no abbreviated items (the selector just matches
+// nothing).
+function applySubmenuAbbreviations() {
+    document.querySelectorAll('.sub-menu-link span[data-abbr-ladder]').forEach((span) => {
+        const ladder = JSON.parse(span.dataset.abbrLadder);
+        for (const text of ladder) {
+            span.textContent = text;
+            if (span.scrollWidth <= span.clientWidth) return;
+        }
+        // Nothing in the ladder fit -- left on the shortest step, which
+        // still ellipsizes via the same CSS every other sub-menu label
+        // already relies on.
+    });
+}
+window.addEventListener('resize', applySubmenuAbbreviations);
 
 // --- Menu interactions (dropdowns, minimize, mobile) ------------------------
 function wireMenuInteractions() {
@@ -1211,6 +1250,7 @@ function wireMenuInteractions() {
             const isMinimized = Sidebar.classList.toggle('minimize');
             menuBtn.setAttribute('aria-expanded', String(!isMinimized));
             hideSidebarTooltip();
+            applySubmenuAbbreviations();
         });
     }
 
@@ -1332,14 +1372,21 @@ function showSidebarTooltip(menuItem, Sidebar) {
     tooltip.classList.add('visible');
 }
 
-// Only for a label CSS actually ellipsized (scrollWidth > clientWidth) --
+// For a label CSS actually ellipsized (scrollWidth > clientWidth) --
 // "Ingresos"/"Gastos" and every other short sub-menu label never triggers
-// this, so nothing changes for them.
+// this, so nothing changes for them. A label with its own abbrLadder (see
+// buildSubmenu/applySubmenuAbbreviations) always shows its tooltip instead,
+// even once shortened enough to fit with no overflow -- the point of the
+// tooltip there isn't "this got cut off", it's "here's the real full name".
 function showSubmenuTooltip(link) {
     const span = link.querySelector('span');
-    if (!span || span.scrollWidth <= span.clientWidth) return;
+    if (!span) return;
+    const ladder = span.dataset.abbrLadder ? JSON.parse(span.dataset.abbrLadder) : null;
+    const fullLabel = ladder ? ladder[0] : span.textContent;
+    const isAbbreviated = ladder && span.textContent !== fullLabel;
+    if (!isAbbreviated && span.scrollWidth <= span.clientWidth) return;
     const tooltip = getSidebarTooltip();
-    tooltip.textContent = span.textContent;
+    tooltip.textContent = fullLabel;
     const rect = link.getBoundingClientRect();
     tooltip.style.top = `${rect.top + rect.height / 2}px`;
     tooltip.style.left = `${rect.right + 8}px`;
