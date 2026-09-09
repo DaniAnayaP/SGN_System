@@ -210,6 +210,7 @@ breadcrumbToggle.addEventListener('click', () => {
 // AppAdminInicio.html) and by the Inicio tab's own shortcut tiles below --
 // kept in one place so the two never drift apart.
 const HOME_SHORTCUTS = [
+    { id: 'board', icon: 'bx-bar-chart-alt-2', breadcrumbKey: 'home.tabBoard' },
     { id: 'tree', icon: 'bx-sitemap', breadcrumbKey: 'menu.masterPermissionsTree' },
     { id: 'sectors', icon: 'bx-briefcase-alt-2', breadcrumbKey: 'menu.businessSectorsAbbr1' },
     { id: 'plans', icon: 'bx-package', breadcrumbKey: 'menu.plansRegistered' },
