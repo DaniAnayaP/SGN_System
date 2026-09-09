@@ -226,7 +226,13 @@ loginForm?.addEventListener('submit', async (event) => {
         // account's saved default Departamento/Área/Centro de Costos instead
         // of whatever's left over in localStorage from a previous session.
         sessionStorage.setItem('applyLoginDefaults', '1');
-        window.location.href = 'Inicio-en.html';
+        // Absolute, not relative -- this same login.js is also served under
+        // /mobile/Login.html (see server.js) for browser-testing the App
+        // without an Android build, and a relative redirect there resolved
+        // to /mobile/Inicio-en.html, which doesn't exist (confirmed live:
+        // 404). The dashboard only ever lives at the site root regardless
+        // of which prefix served the login page itself.
+        window.location.href = '/Inicio-en.html';
     } catch (err) {
         console.error(err);
         showError(t('login.genericError'));
