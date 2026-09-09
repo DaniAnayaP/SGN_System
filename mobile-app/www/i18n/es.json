@@ -514,7 +514,12 @@
     "additionalsPermissionsLabel": "PERMISOS ADICIONALES",
     "additionalsPermissionsPreview": "Total de permisos adicionales: {amount}",
     "additionalsConfirmMessage": "¿Está seguro que desea agregar estos permisos y accesos? El costo es de: {amount}",
-    "paletteShowPreview": "Ver vista previa actual"
+    "paletteShowPreview": "Ver vista previa actual",
+    "masterTreeSubtitle": "Define aquí el estatus de cada nodo del sistema (Departamento, Área, Apartado, Pantalla y Columna) — independiente de cualquier Giro de Negocio, Plan o cliente.",
+    "masterTreeStatusHabilitado": "Habilitado para servicio",
+    "masterTreeStatusInhabilitado": "Inhabilitado",
+    "masterTreeStatusConstruccion": "En construcción",
+    "masterTreeStatusMejoras": "En mejoras"
   },
   "business": {
     "usersTitle": "Usuarios",
@@ -642,12 +647,7 @@
     "addHrStatus": "Agregar Estatus RH",
     "hrStatusNoneYet": "Aún no hay estatus. Agrega el primero arriba.",
     "hrStatusNameExists": "Ya existe un Estatus RH con ese nombre.",
-    "hrStatusDeleteConfirm": "¿Eliminar este Estatus RH?",
-    "masterTreeSubtitle": "Define aquí el estatus de cada nodo del sistema (Departamento, Área, Apartado, Pantalla y Columna) — independiente de cualquier Giro de Negocio, Plan o cliente.",
-    "masterTreeStatusHabilitado": "Habilitado para servicio",
-    "masterTreeStatusInhabilitado": "Inhabilitado",
-    "masterTreeStatusConstruccion": "En construcción",
-    "masterTreeStatusMejoras": "En mejoras"
+    "hrStatusDeleteConfirm": "¿Eliminar este Estatus RH?"
   },
   "main": {
     "welcome": "Bienvenido",

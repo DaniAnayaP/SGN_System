@@ -514,7 +514,12 @@
     "additionalsPermissionsLabel": "ADDITIONAL PERMISSIONS",
     "additionalsPermissionsPreview": "Additional permissions total: {amount}",
     "additionalsConfirmMessage": "Are you sure you want to add these permissions and access? The cost is: {amount}",
-    "paletteShowPreview": "Show current preview"
+    "paletteShowPreview": "Show current preview",
+    "masterTreeSubtitle": "Set the status of every node in the system (Department, Area, Section, Screen and Column) here — independent of any Business Type, Plan or client.",
+    "masterTreeStatusHabilitado": "Enabled for service",
+    "masterTreeStatusInhabilitado": "Disabled",
+    "masterTreeStatusConstruccion": "Under construction",
+    "masterTreeStatusMejoras": "Being improved"
   },
   "business": {
     "usersTitle": "Users",
@@ -642,12 +647,7 @@
     "addHrStatus": "Add HR status",
     "hrStatusNoneYet": "No HR statuses yet. Add the first one above.",
     "hrStatusNameExists": "An HR status with that name already exists.",
-    "hrStatusDeleteConfirm": "Delete this HR status?",
-    "masterTreeSubtitle": "Set the status of every node in the system (Department, Area, Section, Screen and Column) here — independent of any Business Type, Plan or client.",
-    "masterTreeStatusHabilitado": "Enabled for service",
-    "masterTreeStatusInhabilitado": "Disabled",
-    "masterTreeStatusConstruccion": "Under construction",
-    "masterTreeStatusMejoras": "Being improved"
+    "hrStatusDeleteConfirm": "Delete this HR status?"
   },
   "main": {
     "welcome": "Welcome",
