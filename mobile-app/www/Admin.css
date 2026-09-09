@@ -1293,7 +1293,14 @@ body.dark-mode .perm-tree-depth-2{
    margin-left:auto group. */
 .perm-tree-mstatus-label{
     flex: 1;
-    min-width: 0;
+    /* A floor, not 0 -- min-width:0 let this shrink all the way down to
+       4-5 characters ("Gene...") before the row ever overflowed, since it
+       was the only flexible piece competing against Estatus/Web/App's
+       flex-shrink:0 controls. Past this width the row overflows on
+       purpose, which is exactly what hands off to .perm-tree's own
+       overflow-x:auto -- scroll picks up the slack instead of the label
+       shrinking to the point of being unreadable. */
+    min-width: 5rem;
     /* No more wrapping into 2-3 lines on a narrow tree (Comité Directivo,
        Control de Gestión, ...) -- clips with an ellipsis instead, same as
        every sidebar label; the hover tooltip (showSubmenuTooltip, wired in
