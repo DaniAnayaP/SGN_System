@@ -177,11 +177,18 @@
         let sectionsData = [];
         let grantSet = new Set();
         // statusMode's own state -- a Map from the same keyOf(...) key
-        // vocabulary above to one of STATUS_OPTIONS' values. A key absent
-        // from this map simply means DEFAULT_STATUS, same "only exceptions
-        // get stored" convention as master_permission_status itself (see
+        // vocabulary above to a {status, webEnabled, appEnabled} object. A
+        // key absent from this map simply means every column is at its
+        // default (see getNodeState below), same "only exceptions get
+        // stored" convention as master_permission_status itself (see
         // db.js) -- never populated/read outside statusMode.
         let statusMap = new Map();
+        // key -> the human label shown on that row, filled in as
+        // statusRow renders each one -- lets a caller (Admin-ArbolMaestro.js's
+        // confirm-changes screen) turn a bare {sectionId,itemId,submenuId}
+        // back into the same name the admin actually saw, via getStatusLabel
+        // below, without re-walking the tree itself.
+        let statusLabelMap = new Map();
         // Which depth-0 sections and depth-1 items are expanded — set once
         // in init() (anything already granted starts open so it's not
         // hidden; everything else starts collapsed), then toggled freely by
@@ -897,7 +904,7 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle) {
+        function statusRow(labelText, depth, key, toggle, rollup) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             if (toggle) {
@@ -923,60 +930,135 @@
             label.className = 'perm-tree-mstatus-label';
             label.textContent = labelText;
             row.appendChild(label);
+            // Group rollup -- ✓ green once every descendant leaf has this
+            // platform on, a gray dash for only some of them, nothing at
+            // all once none do. Purely a read-only summary of the leaves
+            // underneath (see computeRollup below); only group rows
+            // (Departamento/Área, the ones with a toggle) get one.
+            if (rollup) {
+                const rollupEl = document.createElement('span');
+                rollupEl.className = 'perm-tree-mstatus-rollup';
+                rollupEl.append(buildRollupIcon('web', rollup.web), buildRollupIcon('app', rollup.app));
+                row.appendChild(rollupEl);
+            }
             if (key) {
-                const badges = document.createElement('div');
-                badges.className = 'perm-tree-mstatus-badges';
-                // Sistema Web is the primary control; App Móvil is the
-                // secondary one, keyed with the same APP_SUFFIX convention
-                // the checkbox tree already uses for its own Web/App split
-                // (see computeAppToggle above) -- same reasoning: reuse one
-                // vocabulary instead of inventing a second one.
-                badges.appendChild(buildStatusBadgeSelect(key, 'web', null));
-                badges.appendChild(buildStatusBadgeSelect(key + APP_SUFFIX, 'app', key));
-                row.appendChild(badges);
+                // Stashed so a caller (Admin-ArbolMaestro.js's confirm-
+                // changes screen) can turn a bare key back into the same
+                // human name shown here, without re-walking the tree itself.
+                statusLabelMap.set(key, labelText);
+                const controls = document.createElement('div');
+                controls.className = 'perm-tree-mstatus-controls';
+                controls.appendChild(buildStatusBadgeSelect(key));
+                controls.appendChild(buildPlatformCheckbox(key, 'web'));
+                controls.appendChild(buildPlatformCheckbox(key, 'app'));
+                row.appendChild(controls);
             }
             return row;
         }
 
-        // One colored "badge select" -- still a real, keyboard-operable
-        // <select>, just re-skinned per its own current value (see the
-        // perm-tree-mstatus-select-<status> CSS classes) instead of the
-        // browser's bare default look. webKeyForApp is only passed for the
-        // App control: when the paired Web status is 'inhabilitado', App
-        // has nothing to be ready for, so it's locked there too -- same
-        // "App can't outrun Web" rule computeAppToggle's own actionable
-        // filter already enforces in the checkbox tree.
-        function buildStatusBadgeSelect(mapKey, platform, webKeyForApp) {
-            const wrap = document.createElement('span');
-            wrap.className = `perm-tree-mstatus-badge perm-tree-mstatus-badge-${platform}`;
-            const platformTag = document.createElement('span');
-            platformTag.className = 'perm-tree-mstatus-platform';
-            platformTag.textContent = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
+        // Default node state -- confirmed with the user: Sistema Web
+        // defaults ON (checking the branch turns Web on by itself), App
+        // Móvil defaults OFF (always a deliberate manual opt-in).
+        function getNodeState(key) {
+            return statusMap.get(key) || { status: DEFAULT_STATUS, webEnabled: true, appEnabled: false };
+        }
+        function setNodeState(key, next) {
+            if (next.status === DEFAULT_STATUS && next.webEnabled && !next.appEnabled) statusMap.delete(key);
+            else statusMap.set(key, next);
+        }
+
+        // The one colored "badge select" per row -- still a real,
+        // keyboard-operable <select>, just re-skinned per its own current
+        // value (see the perm-tree-mstatus-select-<status> CSS classes,
+        // applied to each <option> too so the OPEN native dropdown list
+        // shows each choice in its own color, not just the closed box)
+        // instead of the browser's bare default look.
+        function buildStatusBadgeSelect(key) {
             const select = document.createElement('select');
-            const webLocked = !!webKeyForApp && (statusMap.get(webKeyForApp) || DEFAULT_STATUS) === 'inhabilitado';
-            select.disabled = readOnly || webLocked;
+            select.disabled = readOnly;
             STATUS_OPTIONS.forEach((opt) => {
                 const optionEl = document.createElement('option');
                 optionEl.value = opt.value;
                 optionEl.textContent = t(opt.labelKey);
+                optionEl.className = `perm-tree-mstatus-select-${opt.value}`;
                 select.appendChild(optionEl);
             });
-            const current = webLocked ? 'inhabilitado' : (statusMap.get(mapKey) || DEFAULT_STATUS);
-            select.value = current;
-            select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${current}`;
+            const state = getNodeState(key);
+            select.value = state.status;
+            select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${state.status}`;
             select.addEventListener('change', () => {
+                const next = { ...getNodeState(key), status: select.value };
+                // Turning the badge off (Inhabilitado) blocks both
+                // platforms outright; anything short of full Habilitado
+                // still blocks App specifically (see buildPlatformCheckbox)
+                // -- neither is meaningful to leave checked underneath a
+                // status that no longer allows it.
+                if (select.value === 'inhabilitado') { next.webEnabled = false; next.appEnabled = false; }
+                else if (select.value !== 'habilitado') next.appEnabled = false;
+                setNodeState(key, next);
                 select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${select.value}`;
-                // Default status needs no entry -- keeps getStatuses() down
-                // to just the exceptions, mirroring how
-                // setMasterPermissionStatuses stores them server-side.
-                if (select.value === DEFAULT_STATUS) statusMap.delete(mapKey);
-                else statusMap.set(mapKey, select.value);
-                // A Web change can just have locked/unlocked this row's own
-                // App control -- re-render to reflect that immediately.
-                if (platform === 'web') renderStatusTree();
+                renderStatusTree();
             });
-            wrap.append(platformTag, select);
+            return select;
+        }
+
+        // Sistema Web / App Móvil -- simple availability checkboxes, not
+        // their own status. App is only actionable when the badge is fully
+        // Habilitado AND Web is checked (same "App can't outrun Web" rule
+        // computeAppToggle's own actionable filter enforces in the
+        // checkbox tree above); Web itself is only actionable once the
+        // badge isn't Inhabilitado.
+        function buildPlatformCheckbox(key, platform) {
+            const wrap = document.createElement('label');
+            wrap.className = `perm-tree-mstatus-badge perm-tree-mstatus-badge-${platform}`;
+            const platformTag = document.createElement('span');
+            platformTag.className = 'perm-tree-mstatus-platform';
+            platformTag.textContent = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            const state = getNodeState(key);
+            const locked = platform === 'web' ? state.status === 'inhabilitado' : (state.status !== 'habilitado' || !state.webEnabled);
+            input.checked = platform === 'web' ? state.webEnabled : state.appEnabled;
+            input.disabled = readOnly || locked;
+            input.addEventListener('change', () => {
+                const next = { ...getNodeState(key) };
+                if (platform === 'web') {
+                    next.webEnabled = input.checked;
+                    if (!input.checked) next.appEnabled = false; // App can't stay on once Web turns off
+                } else {
+                    next.appEnabled = input.checked;
+                }
+                setNodeState(key, next);
+                renderStatusTree();
+            });
+            wrap.append(platformTag, input);
             return wrap;
+        }
+
+        // 'full' (every leaf key has this platform on) / 'partial' (some
+        // do) / 'empty' (none do) -- leafKeysUnder already gives the exact
+        // same leaf granularity the checkbox tree rolls grants up over
+        // (one key per pantalla, a whole Tabla counted as its pantalla's
+        // single key even though statusMode still lets you open it and set
+        // each column separately -- same simplification leafKeysUnder's
+        // own comment already documents for the grant tree).
+        function computeRollup(leafKeys, platform) {
+            if (!leafKeys.length) return 'empty';
+            const onCount = leafKeys.filter((k) => {
+                const state = getNodeState(k);
+                return platform === 'web' ? state.webEnabled : state.appEnabled;
+            }).length;
+            if (onCount === 0) return 'empty';
+            return onCount === leafKeys.length ? 'full' : 'partial';
+        }
+
+        function buildRollupIcon(platform, state) {
+            const el = document.createElement('span');
+            el.className = `perm-tree-mstatus-rollup-icon perm-tree-mstatus-rollup-${state}`;
+            el.title = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
+            if (state === 'full') el.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+            else if (state === 'partial') el.innerHTML = '<i class="bx bx-minus" aria-hidden="true"></i>';
+            return el;
         }
 
         function renderStatusColumn(container, section, item, base, col, depth) {
@@ -1041,26 +1123,28 @@
             treeRoot.innerHTML = '';
             sectionsData.forEach((section) => {
                 const sectionExpanded = expandedSections.has(section.id);
+                const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
                 treeRoot.appendChild(statusRow(t(sectionLabelKey(section)), 0, keyOf(section.id, null, null), section.items.length ? {
                     expanded: sectionExpanded,
                     onToggle: () => {
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null));
                 if (!sectionExpanded) return;
 
                 section.items.forEach((item) => {
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
                     const itemKey = `${section.id}::${item.id}`;
                     const itemExpanded = expandedItems.has(itemKey);
+                    const itemLeafKeys = hasSubmenu ? leafKeysUnder(section, item) : [];
                     treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), 1, keyOf(section.id, item.id, null), hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => {
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null));
                     if (!hasSubmenu || !itemExpanded) return;
 
                     item.submenu.forEach((sm) => {
@@ -1433,21 +1517,23 @@
                     return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };
                 });
                 // statusMode never builds a grantSet at all -- initialGrants
-                // here is really a [{sectionId,itemId,submenuId,platform,status}]
-                // list (see getMasterPermissionStatuses in db.js); a node
-                // missing from it, or explicitly at DEFAULT_STATUS, needs no
-                // entry in statusMap (same "only exceptions get stored"
-                // convention the server side already uses). platform 'app'
-                // keys into the exact same APP_SUFFIX-suffixed slot
-                // buildStatusBadgeSelect reads/writes. Returns before any of
-                // the grant-only setup below (expand(), showAppTab's
-                // app-screens fetch) ever runs.
+                // here is really a [{sectionId,itemId,submenuId,status,
+                // webEnabled,appEnabled}] list (see getMasterPermissionStatuses
+                // in db.js); a node missing from it, or explicitly at every
+                // default value, needs no entry in statusMap (same "only
+                // exceptions get stored" convention the server side already
+                // uses). Returns before any of the grant-only setup below
+                // (expand(), showAppTab's app-screens fetch) ever runs.
                 if (statusMode) {
                     statusMap = new Map();
+                    statusLabelMap = new Map();
                     (initialGrants || []).forEach((s) => {
-                        if (!s || !s.status || s.status === DEFAULT_STATUS) return;
-                        const base = keyOf(s.sectionId, s.itemId, s.submenuId);
-                        statusMap.set(s.platform === 'app' ? base + APP_SUFFIX : base, s.status);
+                        if (!s) return;
+                        const status = s.status || DEFAULT_STATUS;
+                        const webEnabled = s.webEnabled !== false;
+                        const appEnabled = s.appEnabled === true;
+                        if (status === DEFAULT_STATUS && webEnabled && !appEnabled) return;
+                        statusMap.set(keyOf(s.sectionId, s.itemId, s.submenuId), { status, webEnabled, appEnabled });
                     });
                     expandedSections = new Set();
                     expandedItems = new Set();
@@ -1505,12 +1591,18 @@
             // in once split. Empty array for every other caller, since
             // statusMap is only ever populated in statusMode.
             getStatuses() {
-                return Array.from(statusMap.entries()).map(([k, status]) => {
-                    const isApp = k.endsWith(APP_SUFFIX);
-                    const baseKey = isApp ? k.slice(0, -APP_SUFFIX.length) : k;
-                    const [sectionId, itemId, submenuId] = baseKey.split('::');
-                    return { sectionId, itemId: itemId || null, submenuId: submenuId || null, platform: isApp ? 'app' : 'web', status };
+                return Array.from(statusMap.entries()).map(([k, state]) => {
+                    const [sectionId, itemId, submenuId] = k.split('::');
+                    return { sectionId, itemId: itemId || null, submenuId: submenuId || null, ...state };
                 });
+            },
+            // Turns a {sectionId,itemId,submenuId} back into the same human
+            // name shown on its row (see statusRow) -- lets a caller build a
+            // "here's what's about to change" summary without re-walking
+            // the tree itself. '' if that node was never rendered (e.g. a
+            // stale reference to a since-removed menu.json entry).
+            getStatusLabel(sectionId, itemId, submenuId) {
+                return statusLabelMap.get(keyOf(sectionId, itemId, submenuId)) || '';
             },
         };
     }

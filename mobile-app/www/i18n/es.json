@@ -521,7 +521,13 @@
     "masterTreeStatusConstruccion": "En construcción",
     "masterTreeStatusMejoras": "En mejoras",
     "masterTreePlatformWeb": "Web",
-    "masterTreePlatformApp": "App"
+    "masterTreePlatformApp": "App",
+    "masterTreeOn": "Activado",
+    "masterTreeOff": "Desactivado",
+    "masterTreeChangeStatus": "Estatus",
+    "masterTreeConfirmTitle": "Confirmar cambios al Árbol Maestro",
+    "masterTreeConfirmHint": "Esto afecta a todos los Giros de Negocio, Planes y clientes que dependan de estas ramas. Revisa antes de guardar.",
+    "masterTreeNoChanges": "No hay cambios que guardar."
   },
   "business": {
     "usersTitle": "Usuarios",

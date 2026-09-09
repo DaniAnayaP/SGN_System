@@ -521,7 +521,13 @@
     "masterTreeStatusConstruccion": "Under construction",
     "masterTreeStatusMejoras": "Being improved",
     "masterTreePlatformWeb": "Web",
-    "masterTreePlatformApp": "App"
+    "masterTreePlatformApp": "App",
+    "masterTreeOn": "On",
+    "masterTreeOff": "Off",
+    "masterTreeChangeStatus": "Status",
+    "masterTreeConfirmTitle": "Confirm changes to the Master Tree",
+    "masterTreeConfirmHint": "This affects every Business Type, Plan, and client that depends on these branches. Review before saving.",
+    "masterTreeNoChanges": "Nothing to save."
   },
   "business": {
     "usersTitle": "Users",
