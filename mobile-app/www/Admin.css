@@ -1283,6 +1283,32 @@ body.dark-mode .perm-tree-depth-2{
     font-size: 0.85em;
 }
 
+/* Árbol de Permisos Maestro (PermissionTree.js create's statusMode option)
+   -- every row gets a fully independent 4-option status <select>, no
+   checkbox/cost input alongside it (no rollup, nothing to check/uncheck).
+   Same flex:1 label + margin-left:auto trailing-control layout as
+   .perm-tree-label-plain/.perm-tree-cost-input above, just its own pair
+   since neither of those carries a real <select>'s own border/background. */
+.perm-tree-mstatus-label{
+    flex: 1;
+    min-width: 0;
+}
+.perm-tree-mstatus-select{
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--color-text-primary);
+    border-radius: 0.3rem;
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    font: inherit;
+    font-size: inherit;
+}
+.perm-tree-mstatus-select:disabled{
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
 /* "Sistema Web" / "Aplicación Móvil" tab shell — only mounted when
    PermissionTree.js's init() finds a real App with screens to show (see
    mountTabs() there); every other consumer keeps rendering straight into

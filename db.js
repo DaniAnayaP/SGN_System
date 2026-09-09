@@ -1040,6 +1040,29 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_sector_grants_sector_id ON sector_grants(business_sector_id);
 
+    -- master_permission_status: GEIPSA-wide readiness status per tree node
+    -- (Departamento/Área/Apartado/Pantalla/Columna), same {sectionId,
+    -- itemId, submenuId} triple as sector_grants/plan_grants above -- but a
+    -- completely separate concept: this answers "does this feature exist /
+    -- is it ready to sell" (Árbol de Permisos Maestro screen), never "does
+    -- this client/plan/sector have access to it" (that's still what
+    -- sector_grants/plan_grants/profile_grants/user_grants answer). Global
+    -- -- no business_sector_id/plan_id/client_id column, there's exactly
+    -- one of these trees for the whole system. No row for a node means it
+    -- defaults to 'habilitado' -- only exceptions get stored (see
+    -- setMasterPermissionStatuses), same "skip the default" trick used
+    -- throughout this file to keep an override table small.
+    CREATE TABLE IF NOT EXISTS master_permission_status (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        section_id   TEXT NOT NULL,
+        item_id      TEXT,
+        submenu_id   TEXT,
+        status       TEXT NOT NULL DEFAULT 'habilitado' CHECK (status IN ('habilitado','inhabilitado','construccion','mejoras')),
+        updated_by   TEXT,
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(section_id, item_id, submenu_id)
+    );
+
     CREATE TABLE IF NOT EXISTS plan_changes (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         plan_id       INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
@@ -5063,6 +5086,34 @@ function setSectorGrants(sectorId, grants) {
     return getSectorGrants(sectorId);
 }
 
+// Árbol de Permisos Maestro -- GEIPSA-wide readiness status per tree node
+// (see master_permission_status above). No sectorId/planId/clientId
+// scoping -- there's exactly one of these trees for the whole system, so
+// unlike every other get/setXxxGrants pair in this file this reads and
+// replaces the WHOLE table, not one owner's slice of it.
+function getMasterPermissionStatuses() {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId, status FROM master_permission_status')
+        .all();
+}
+function setMasterPermissionStatuses(rows, updatedBy) {
+    const replace = db.transaction((list) => {
+        db.prepare('DELETE FROM master_permission_status').run();
+        const insert = db.prepare(`
+            INSERT INTO master_permission_status (section_id, item_id, submenu_id, status, updated_by)
+            VALUES (@sectionId, @itemId, @submenuId, @status, @updatedBy)
+        `);
+        for (const r of list) {
+            // Default status needs no row -- keeps the table down to just
+            // the exceptions, same reasoning as the DDL comment above.
+            if (!r || r.status === 'habilitado') continue;
+            insert.run({ sectionId: r.sectionId, itemId: r.itemId || null, submenuId: r.submenuId || null, status: r.status, updatedBy: updatedBy || '' });
+        }
+    });
+    replace(rows || []);
+    return getMasterPermissionStatuses();
+}
+
 function getPlanGrants(planId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM plan_grants WHERE plan_id = ?')
@@ -5903,6 +5954,8 @@ module.exports = {
     getBusinessSectorById,
     getSectorGrants,
     setSectorGrants,
+    getMasterPermissionStatuses,
+    setMasterPermissionStatuses,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
     setPlanGrants,

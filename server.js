@@ -231,6 +231,8 @@ const {
     getBusinessSectorById,
     getSectorGrants,
     setSectorGrants,
+    getMasterPermissionStatuses,
+    setMasterPermissionStatuses,
     getClientAppScreens,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
@@ -1726,6 +1728,29 @@ app.put('/api/admin/business-sectors/:id/grants', requireAuth, requireAdmin, (re
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
     res.json({ grants: setSectorGrants(req.params.id, grants) });
+});
+
+// --- Árbol de Permisos Maestro (GEIPSA-wide node readiness -- does a ---------
+// feature exist / is it ready to sell -- independent of any one Sector,
+// Plan or client; see master_permission_status in db.js). Global, so
+// unlike the Sector routes above there's no :id -- exactly one tree.
+const MASTER_PERMISSION_STATUS_VALUES = ['habilitado', 'inhabilitado', 'construccion', 'mejoras'];
+app.get('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, res) => {
+    res.json({ statuses: getMasterPermissionStatuses() });
+});
+
+app.put('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, res) => {
+    const { statuses } = req.body || {};
+    if (!Array.isArray(statuses)) return res.status(400).json({ message: 'statuses must be an array.' });
+    for (const s of statuses) {
+        if (!s || typeof s.sectionId !== 'string' || !s.sectionId) {
+            return res.status(400).json({ message: 'each status needs a sectionId.' });
+        }
+        if (!MASTER_PERMISSION_STATUS_VALUES.includes(s.status)) {
+            return res.status(400).json({ message: `status must be one of ${MASTER_PERMISSION_STATUS_VALUES.join(', ')}.` });
+        }
+    }
+    res.json({ statuses: setMasterPermissionStatuses(statuses, changedByLabel(req)) });
 });
 
 // --- Equipo SaaS (GEIPSA's own staff — role='admin' accounts) ---------------

@@ -154,6 +154,7 @@
     "addPlanNew": "Add New Plan",
     "ourApps": "Our APPs",
     "addAppNew": "Create New App",
+    "masterPermissionsTree": "Master Permissions Tree",
     "businessSectors": "Our Business Types",
     "addBusinessSectorNew": "Create New Business Type",
     "appNoScreens": "Not built yet",
@@ -637,7 +638,12 @@
     "addHrStatus": "Add HR status",
     "hrStatusNoneYet": "No HR statuses yet. Add the first one above.",
     "hrStatusNameExists": "An HR status with that name already exists.",
-    "hrStatusDeleteConfirm": "Delete this HR status?"
+    "hrStatusDeleteConfirm": "Delete this HR status?",
+    "masterTreeSubtitle": "Set the status of every node in the system (Department, Area, Section, Screen and Column) here — independent of any Business Type, Plan or client.",
+    "masterTreeStatusHabilitado": "Enabled for service",
+    "masterTreeStatusInhabilitado": "Disabled",
+    "masterTreeStatusConstruccion": "Under construction",
+    "masterTreeStatusMejoras": "Being improved"
   },
   "main": {
     "welcome": "Welcome",

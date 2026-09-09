@@ -154,6 +154,7 @@
     "addPlanNew": "Agregar Plan Nuevo",
     "ourApps": "Nuestras APPs",
     "addAppNew": "Crear Nueva App",
+    "masterPermissionsTree": "Árbol de Permisos Maestro",
     "businessSectors": "Nuestros Giros de Negocio",
     "addBusinessSectorNew": "Crear Nuevo Giro",
     "appNoScreens": "Sin construir",
@@ -637,7 +638,12 @@
     "addHrStatus": "Agregar Estatus RH",
     "hrStatusNoneYet": "Aún no hay estatus. Agrega el primero arriba.",
     "hrStatusNameExists": "Ya existe un Estatus RH con ese nombre.",
-    "hrStatusDeleteConfirm": "¿Eliminar este Estatus RH?"
+    "hrStatusDeleteConfirm": "¿Eliminar este Estatus RH?",
+    "masterTreeSubtitle": "Define aquí el estatus de cada nodo del sistema (Departamento, Área, Apartado, Pantalla y Columna) — independiente de cualquier Giro de Negocio, Plan o cliente.",
+    "masterTreeStatusHabilitado": "Habilitado para servicio",
+    "masterTreeStatusInhabilitado": "Inhabilitado",
+    "masterTreeStatusConstruccion": "En construcción",
+    "masterTreeStatusMejoras": "En mejoras"
   },
   "main": {
     "welcome": "Bienvenido",

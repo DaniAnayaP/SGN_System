@@ -53,6 +53,19 @@
         return SECTION_LABEL_KEYS[section.id] || section.id;
     }
 
+    // Árbol de Permisos Maestro's 4 possible statuses (see the statusMode
+    // option on create() below). Deliberately a separate vocabulary from
+    // the grant/checkbox system above: a status answers "does this feature
+    // exist / is it ready to sell", never "does this client/plan/sector
+    // have access to it" -- that's still what grantSet/getGrants() answer.
+    const DEFAULT_STATUS = 'habilitado';
+    const STATUS_OPTIONS = [
+        { value: 'habilitado', labelKey: 'admin.masterTreeStatusHabilitado' },
+        { value: 'inhabilitado', labelKey: 'admin.masterTreeStatusInhabilitado' },
+        { value: 'construccion', labelKey: 'admin.masterTreeStatusConstruccion' },
+        { value: 'mejoras', labelKey: 'admin.masterTreeStatusMejoras' },
+    ];
+
     async function loadMenuData() {
         const res = await fetch('data/menu.json');
         if (!res.ok) throw new Error('failed to load menu.json');
@@ -146,9 +159,29 @@
     // CLIENT's grants look like, so it doesn't make sense for Admin-Planes'
     // plan-grants tree (a Plan isn't tied to any one client/sector anymore,
     // see the Nuestras APPs redesign — plans.app_id is dead).
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false } = {}) {
+        // statusMode (Árbol de Permisos Maestro) is a completely separate,
+        // much simpler mode: no grants, no rollup/indeterminate math, no
+        // App-visibility column, no cost-center/module filtering -- GEIPSA
+        // needs to see and set a status on literally every node in the
+        // system regardless of any one client's contract. Forcing those
+        // other options off up front makes the shared tree-building code in
+        // init() below (which normally reacts to them) behave exactly as if
+        // the caller had simply never passed them.
+        if (statusMode) {
+            allowedSectionIds = null;
+            costCenters = [];
+            enabledModuleKeys = null;
+            showAppTab = false;
+        }
         let sectionsData = [];
         let grantSet = new Set();
+        // statusMode's own state -- a Map from the same keyOf(...) key
+        // vocabulary above to one of STATUS_OPTIONS' values. A key absent
+        // from this map simply means DEFAULT_STATUS, same "only exceptions
+        // get stored" convention as master_permission_status itself (see
+        // db.js) -- never populated/read outside statusMode.
+        let statusMap = new Map();
         // Which depth-0 sections and depth-1 items are expanded — set once
         // in init() (anything already granted starts open so it's not
         // hidden; everything else starts collapsed), then toggled freely by
@@ -851,7 +884,207 @@
             return header;
         }
 
+        // -------------------------------------------------------------
+        // statusMode rendering (Árbol de Permisos Maestro) -- an entirely
+        // separate, parallel walk of the SAME sectionsData tree built by
+        // init() below. Deliberately never touches grantSet, computeAppToggle,
+        // buildRow, or any of the rollup/indeterminate math above -- every
+        // row (Departamento down to Columna/Ícono) gets exactly one
+        // independent status <select>, full stop. "Tabla <X>" and "Iconos
+        // Personalización" stay plain expand/collapse group headers with no
+        // status of their own (same as in the checkbox tree, neither is a
+        // real grantable/menu node -- see leafKeysUnder's comment above for
+        // why a pantalla's own Tabla was never a grant leaf either); their
+        // columns/icons underneath each still get their own row.
+        // -------------------------------------------------------------
+        function statusRow(labelText, depth, key, toggle) {
+            const row = document.createElement('div');
+            row.className = `perm-tree-row perm-tree-depth-${depth}`;
+            if (toggle) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'perm-tree-toggle';
+                btn.setAttribute('aria-expanded', String(toggle.expanded));
+                const icon = document.createElement('i');
+                icon.className = 'bx bx-chevron-down';
+                icon.setAttribute('aria-hidden', 'true');
+                btn.appendChild(icon);
+                btn.addEventListener('click', () => {
+                    toggle.onToggle();
+                    renderStatusTree();
+                });
+                row.appendChild(btn);
+            } else {
+                const spacer = document.createElement('span');
+                spacer.className = 'perm-tree-toggle-spacer';
+                row.appendChild(spacer);
+            }
+            const label = document.createElement('span');
+            label.className = 'perm-tree-mstatus-label';
+            label.textContent = labelText;
+            row.appendChild(label);
+            if (key) {
+                const select = document.createElement('select');
+                select.className = 'perm-tree-mstatus-select';
+                select.disabled = readOnly;
+                STATUS_OPTIONS.forEach((opt) => {
+                    const optionEl = document.createElement('option');
+                    optionEl.value = opt.value;
+                    optionEl.textContent = t(opt.labelKey);
+                    select.appendChild(optionEl);
+                });
+                select.value = statusMap.get(key) || DEFAULT_STATUS;
+                select.addEventListener('change', () => {
+                    // Default status needs no entry -- keeps getStatuses()
+                    // down to just the exceptions, mirroring how
+                    // setMasterPermissionStatuses stores them server-side.
+                    if (select.value === DEFAULT_STATUS) statusMap.delete(key);
+                    else statusMap.set(key, select.value);
+                });
+                row.appendChild(select);
+            }
+            return row;
+        }
+
+        function renderStatusColumn(container, section, item, base, col, depth) {
+            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null));
+        }
+
+        function renderStatusClassification(container, section, item, sm, subSm, cls) {
+            const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
+            const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
+            const classExpanded = expandedItems.has(classTreeKey);
+            container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, null, {
+                expanded: classExpanded,
+                onToggle: () => {
+                    if (classExpanded) expandedItems.delete(classTreeKey);
+                    else expandedItems.add(classTreeKey);
+                },
+            }));
+            if (!classExpanded) return;
+            cls.submenu.forEach((col) => {
+                renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6);
+            });
+        }
+
+        function renderStatusTableColumns(container, section, item, sm, subSm) {
+            const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const tableExpanded = expandedItems.has(tableTreeKey);
+            container.appendChild(statusRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, null, {
+                expanded: tableExpanded,
+                onToggle: () => {
+                    if (tableExpanded) expandedItems.delete(tableTreeKey);
+                    else expandedItems.add(tableTreeKey);
+                },
+            }));
+            if (!tableExpanded) return;
+            subSm.submenu.forEach((entry) => {
+                if (entry.isClassification) {
+                    renderStatusClassification(container, section, item, sm, subSm, entry);
+                    return;
+                }
+                renderStatusColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5);
+            });
+        }
+
+        function renderStatusIcons(container, section, item, sm, subSm) {
+            const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const iconsExpanded = expandedItems.has(iconsTreeKey);
+            container.appendChild(statusRow(t('menu.iconsPersonalization'), 4, null, {
+                expanded: iconsExpanded,
+                onToggle: () => {
+                    if (iconsExpanded) expandedItems.delete(iconsTreeKey);
+                    else expandedItems.add(iconsTreeKey);
+                },
+            }));
+            if (!iconsExpanded) return;
+            subSm.iconsSubmenu.forEach((icon) => {
+                const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
+                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null));
+            });
+        }
+
+        function renderStatusTree() {
+            treeRoot.innerHTML = '';
+            sectionsData.forEach((section) => {
+                const sectionExpanded = expandedSections.has(section.id);
+                treeRoot.appendChild(statusRow(t(sectionLabelKey(section)), 0, keyOf(section.id, null, null), section.items.length ? {
+                    expanded: sectionExpanded,
+                    onToggle: () => {
+                        if (sectionExpanded) expandedSections.delete(section.id);
+                        else expandedSections.add(section.id);
+                    },
+                } : null));
+                if (!sectionExpanded) return;
+
+                section.items.forEach((item) => {
+                    const hasSubmenu = !!(item.submenu && item.submenu.length);
+                    const itemKey = `${section.id}::${item.id}`;
+                    const itemExpanded = expandedItems.has(itemKey);
+                    treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), 1, keyOf(section.id, item.id, null), hasSubmenu ? {
+                        expanded: itemExpanded,
+                        onToggle: () => {
+                            if (itemExpanded) expandedItems.delete(itemKey);
+                            else expandedItems.add(itemKey);
+                        },
+                    } : null));
+                    if (!hasSubmenu || !itemExpanded) return;
+
+                    item.submenu.forEach((sm) => {
+                        const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
+                        if (!hasSubSubmenu) {
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, keyOf(section.id, item.id, sm.id), null));
+                            return;
+                        }
+
+                        const smKey = `${section.id}::${item.id}::${sm.id}`;
+                        const smExpandedNow = expandedItems.has(smKey);
+                        treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, keyOf(section.id, item.id, sm.id), {
+                            expanded: smExpandedNow,
+                            onToggle: () => {
+                                if (smExpandedNow) expandedItems.delete(smKey);
+                                else expandedItems.add(smKey);
+                            },
+                        }));
+                        if (!smExpandedNow) return;
+
+                        sm.submenu.forEach((subSm) => {
+                            const key = subSm.standalone
+                                ? keyOf(section.id, subSm.id, null)
+                                : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
+                            const subHasDetail = subSmHasDetail(subSm);
+                            const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
+                            const subDetailExpanded = expandedItems.has(subDetailKey);
+                            treeRoot.appendChild(statusRow(t(subSm.labelKey, subSm.labelParams), 3, key, subHasDetail ? {
+                                expanded: subDetailExpanded,
+                                onToggle: () => {
+                                    if (subDetailExpanded) expandedItems.delete(subDetailKey);
+                                    else expandedItems.add(subDetailKey);
+                                },
+                            } : null));
+                            if (subHasDetail && subDetailExpanded) {
+                                if (subSm.submenu && subSm.submenu.length) {
+                                    renderStatusTableColumns(treeRoot, section, item, sm, subSm);
+                                }
+                                if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
+                                    renderStatusIcons(treeRoot, section, item, sm, subSm);
+                                }
+                            }
+                        });
+                    });
+                });
+            });
+        }
+
         function render() {
+            // statusMode has no checkboxes, no App column, no rollup math --
+            // an entirely separate render path (see renderStatusTree above).
+            // Everything below this guard is the original checkbox-tree
+            // renderer, untouched and unreachable when statusMode is on.
+            if (statusMode) {
+                renderStatusTree();
+                return;
+            }
             treeRoot.innerHTML = '';
             if (appColumnEnabled) treeRoot.appendChild(buildAppColumnHeader());
             sectionsData.forEach((section) => {
@@ -1166,6 +1399,25 @@
                         });
                     return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };
                 });
+                // statusMode never builds a grantSet at all -- initialGrants
+                // here is really a [{sectionId,itemId,submenuId,status}]
+                // list (see getMasterPermissionStatuses in db.js); a node
+                // missing from it, or explicitly at DEFAULT_STATUS, needs no
+                // entry in statusMap (same "only exceptions get stored"
+                // convention the server side already uses). Returns before
+                // any of the grant-only setup below (expand(), showAppTab's
+                // app-screens fetch) ever runs.
+                if (statusMode) {
+                    statusMap = new Map();
+                    (initialGrants || []).forEach((s) => {
+                        if (!s || !s.status || s.status === DEFAULT_STATUS) return;
+                        statusMap.set(keyOf(s.sectionId, s.itemId, s.submenuId), s.status);
+                    });
+                    expandedSections = new Set();
+                    expandedItems = new Set();
+                    render();
+                    return;
+                }
                 grantSet = expand(initialGrants || []);
                 // Column-permission grants (Solo Ver/Ver y Operar/Editar/
                 // Autorizar) are always already leaf-level, and their
@@ -1205,6 +1457,18 @@
                 return Array.from(grantSet).map((k) => {
                     const [sectionId, itemId, submenuId] = k.split('::');
                     return { sectionId, itemId: itemId || null, submenuId: submenuId || null };
+                });
+            },
+            // statusMode's parallel of getGrants() above -- one row per
+            // node whose status was changed away from DEFAULT_STATUS in
+            // this editing session (statusMap never holds default-status
+            // entries to begin with, see the select's onChange in
+            // statusRow). Empty array for every other caller, since
+            // statusMap is only ever populated in statusMode.
+            getStatuses() {
+                return Array.from(statusMap.entries()).map(([k, status]) => {
+                    const [sectionId, itemId, submenuId] = k.split('::');
+                    return { sectionId, itemId: itemId || null, submenuId: submenuId || null, status };
                 });
             },
         };
