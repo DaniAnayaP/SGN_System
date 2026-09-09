@@ -1084,16 +1084,41 @@
         // dropdown always matches the closed box, then re-checks from step
         // 0 each call so widening the tree steps back UP again too, not
         // just ever downward. Called after every render and on resize.
+        //
+        // Can't use select.scrollWidth > select.clientWidth the way the
+        // sidebar's plain <span> ladder does -- a native <select>'s closed
+        // box doesn't reliably report its own text overflow that way (its
+        // displayed value isn't laid out as an ordinary text node), which
+        // is exactly why the ladder never stepped down in practice and only
+        // CSS ellipsis on the untouched full text ever kicked in, wasting
+        // the column's width and squeezing the label next to it. Measuring
+        // the candidate text on an offscreen canvas against the select's
+        // own CSS max-width (fixed, not dependent on the browser's own
+        // select-box quirks) sidesteps that entirely.
+        let statusMeasureCtx = null;
+        function measureTextWidth(text, font) {
+            if (!statusMeasureCtx) statusMeasureCtx = document.createElement('canvas').getContext('2d');
+            statusMeasureCtx.font = font;
+            return statusMeasureCtx.measureText(text).width;
+        }
         function applyStatusAbbreviations() {
             const ladders = STATUS_OPTIONS.map((opt) => STATUS_LADDER_KEYS[opt.value]);
             treeRoot.querySelectorAll('select.perm-tree-mstatus-select').forEach((select) => {
+                const cs = getComputedStyle(select);
+                // clientWidth minus its own padding minus a fixed allowance
+                // for the native dropdown arrow (not part of clientWidth's
+                // content box consistently across browsers) -- a budget in
+                // real CSS pixels the canvas measurement can compare against.
+                const budget = select.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 20;
+                const font = cs.font;
                 let step = 0;
                 for (;;) {
                     Array.from(select.options).forEach((optionEl, i) => {
                         const ladder = ladders[i];
                         optionEl.textContent = t(ladder[Math.min(step, ladder.length - 1)]);
                     });
-                    if (select.scrollWidth <= select.clientWidth) return;
+                    const selectedText = select.options[select.selectedIndex].textContent;
+                    if (measureTextWidth(selectedText, font) <= budget) return;
                     if (!ladders.some((ladder) => step + 1 < ladder.length)) return;
                     step += 1;
                 }
