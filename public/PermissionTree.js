@@ -65,6 +65,21 @@
         { value: 'construccion', labelKey: 'admin.masterTreeStatusConstruccion' },
         { value: 'mejoras', labelKey: 'admin.masterTreeStatusMejoras' },
     ];
+    // Progressively shorter labels for the same 4 known values -- same
+    // "step down until it fits" idea as the sidebar's abbrKeys ladder (see
+    // applySubmenuAbbreviations in Dashboard.js), just applied to a
+    // <select>'s own options instead of a plain label. Rewrites every
+    // option together (not just the selected one) so the OPEN dropdown
+    // always shows the same wording the closed box does -- simpler than a
+    // custom control, and fine for only 4 fixed words everyone already
+    // knows the meaning of. First entry always matches STATUS_OPTIONS'
+    // own labelKey above (the un-abbreviated form).
+    const STATUS_LADDER_KEYS = {
+        habilitado: ['admin.masterTreeStatusHabilitado', 'admin.masterTreeStatusHabilitadoMed', 'admin.masterTreeStatusHabilitadoShort'],
+        inhabilitado: ['admin.masterTreeStatusInhabilitado', 'admin.masterTreeStatusInhabilitadoShort'],
+        construccion: ['admin.masterTreeStatusConstruccion', 'admin.masterTreeStatusConstruccionMed', 'admin.masterTreeStatusConstruccionShort'],
+        mejoras: ['admin.masterTreeStatusMejoras', 'admin.masterTreeStatusMejorasShort'],
+    };
 
     async function loadMenuData() {
         const res = await fetch('data/menu.json');
@@ -232,6 +247,11 @@
         // cluttering a client who never contracted one.
         let appColumnEnabled = false;
         const treeRoot = container;
+        // Estatus ladder (see applyStatusAbbreviations) only cares about
+        // the tree's own width, which a plain re-render never re-checks --
+        // window resize is the one thing that can change it without also
+        // triggering a render on its own.
+        if (statusMode) window.addEventListener('resize', applyStatusAbbreviations);
 
         function isModuleEnabled(moduleKey) {
             return !enabledModuleKeys || enabledModuleKeys.includes(moduleKey);
@@ -965,6 +985,13 @@
             const label = document.createElement('span');
             label.className = 'perm-tree-mstatus-label';
             label.textContent = labelText;
+            // Same "always show the real full name on hover" tooltip the
+            // sidebar already uses (showSubmenuTooltip/hideSidebarTooltip,
+            // both plain globals in Dashboard.js -- reused as-is rather
+            // than reimplemented here) -- a no-op whenever the label
+            // wasn't actually ellipsized (see that function's own guard).
+            label.addEventListener('mouseenter', () => showSubmenuTooltip(label));
+            label.addEventListener('mouseleave', hideSidebarTooltip);
             row.appendChild(label);
             if (key) {
                 // Stashed so a caller (Admin-ArbolMaestro.js's confirm-
@@ -1046,6 +1073,31 @@
                 renderStatusTree();
             });
             return select;
+        }
+
+        // Steps every Estatus <select> in the tree down through its own
+        // ladder (STATUS_LADDER_KEYS) until its closed-box text fits --
+        // same "measure, step down, stop once it fits" loop as the
+        // sidebar's applySubmenuAbbreviations (Dashboard.js), just walking
+        // a <select>'s options instead of a label span. Rewrites every
+        // option together (not just the selected one) so the open
+        // dropdown always matches the closed box, then re-checks from step
+        // 0 each call so widening the tree steps back UP again too, not
+        // just ever downward. Called after every render and on resize.
+        function applyStatusAbbreviations() {
+            const ladders = STATUS_OPTIONS.map((opt) => STATUS_LADDER_KEYS[opt.value]);
+            treeRoot.querySelectorAll('select.perm-tree-mstatus-select').forEach((select) => {
+                let step = 0;
+                for (;;) {
+                    Array.from(select.options).forEach((optionEl, i) => {
+                        const ladder = ladders[i];
+                        optionEl.textContent = t(ladder[Math.min(step, ladder.length - 1)]);
+                    });
+                    if (select.scrollWidth <= select.clientWidth) return;
+                    if (!ladders.some((ladder) => step + 1 < ladder.length)) return;
+                    step += 1;
+                }
+            });
         }
 
         // Small monitor (Web) / phone (App) silhouette -- shared by the
@@ -1366,6 +1418,7 @@
                     });
                 });
             });
+            applyStatusAbbreviations();
         }
 
         function render() {

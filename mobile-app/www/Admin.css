@@ -1294,6 +1294,13 @@ body.dark-mode .perm-tree-depth-2{
 .perm-tree-mstatus-label{
     flex: 1;
     min-width: 0;
+    /* No more wrapping into 2-3 lines on a narrow tree (Comité Directivo,
+       Control de Gestión, ...) -- clips with an ellipsis instead, same as
+       every sidebar label; the hover tooltip (showSubmenuTooltip, wired in
+       PermissionTree.js) still reveals the real full name. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .perm-tree-mstatus-controls{
     flex-shrink: 0;
@@ -1423,6 +1430,7 @@ body.dark-mode .perm-tree-mstatus-rollup-partial{
    reads as the same green as an "Activo" badge elsewhere in this app. */
 .perm-tree-mstatus-select{
     flex-shrink: 0;
+    max-width: 9.5rem;
     padding: 0.2rem 0.55rem;
     border: 1px solid transparent;
     border-radius: 1rem;
@@ -1430,6 +1438,12 @@ body.dark-mode .perm-tree-mstatus-rollup-partial{
     font-size: 0.72rem;
     font-weight: 600;
     cursor: pointer;
+    /* Backstop for whatever the ladder's shortest step still doesn't fit
+       (see applyStatusAbbreviations in PermissionTree.js) -- native <select>
+       already ellipsizes its own closed-box text against max-width. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .perm-tree-mstatus-select:disabled{
     cursor: not-allowed;
@@ -1532,6 +1546,12 @@ body:has(.master-tree-panel) main{
     min-height: 0;
     max-height: none;
     padding: 0.35rem;
+    /* Last resort, after row-label ellipsis and the Estatus ladder have
+       both already done everything they can (see applyStatusAbbreviations
+       in PermissionTree.js and .perm-tree-mstatus-label above) -- a row
+       whose fixed-width pieces (rollup, Estatus pill, Web/App controls)
+       still don't fit scrolls sideways instead of overlapping/wrapping. */
+    overflow-x: auto;
 }
 .master-tree-panel .perm-tree-mstatus-header{
     top: -0.35rem;

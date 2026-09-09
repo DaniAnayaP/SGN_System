@@ -1405,8 +1405,12 @@ function showSidebarTooltip(menuItem, Sidebar) {
 // buildSubmenu/applySubmenuAbbreviations) always shows its tooltip instead,
 // even once shortened enough to fit with no overflow -- the point of the
 // tooltip there isn't "this got cut off", it's "here's the real full name".
+// `link` is usually an <a> with its label in a child <span> (sidebar), but
+// also accepts being handed the label <span> itself directly (Árbol
+// Maestro's row labels, wired from PermissionTree.js) -- same tooltip,
+// reused as-is rather than duplicated for that other caller.
 function showSubmenuTooltip(link) {
-    const span = link.querySelector('span');
+    const span = link.querySelector('span') || (link.tagName === 'SPAN' ? link : null);
     if (!span) return;
     const ladder = span.dataset.abbrLadder ? JSON.parse(span.dataset.abbrLadder) : null;
     const fullLabel = ladder ? ladder[0] : span.textContent;
