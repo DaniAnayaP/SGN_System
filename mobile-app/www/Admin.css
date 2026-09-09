@@ -1514,13 +1514,16 @@ body:has(.master-tree-panel) main{
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
+    /* main's shared rule leaves a much taller gap below (3rem) than above
+       (1rem) -- trimmed to match here so the white card sits with the
+       same breathing room on both sides instead of looking bottom-heavy. */
+    padding-bottom: 1rem;
 }
 .master-tree-panel{
     flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    margin-top: 0.6rem;
     padding: 0.75rem;
     gap: 0.5rem;
 }
