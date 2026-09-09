@@ -1311,9 +1311,32 @@ body.dark-mode .perm-tree-depth-2{
 }
 .perm-tree-mstatus-controls{
     flex-shrink: 0;
-    margin-left: auto;
     display: flex;
     align-items: center;
+    gap: 0.7rem;
+}
+/* Fixed column, matching perm-tree-mstatus-header-status's own width
+   exactly -- the select inside stays a snug pill (max-width just caps
+   it), centered in a column that's always this wide so its left edge
+   lines up under "ESTATUS" regardless of how short the current ladder
+   step's text is. */
+.perm-tree-mstatus-status-cell{
+    flex-shrink: 0;
+    width: 9.5rem;
+    display: flex;
+    justify-content: center;
+}
+/* Fixed column, matching perm-tree-mstatus-header-platforms's own width
+   exactly -- see the comment in statusRow (PermissionTree.js) on why a
+   real matching-width column (not margin-left:auto flush-right) is what
+   actually keeps this under the "Web · App" header regardless of content
+   or window size. */
+.perm-tree-mstatus-platforms-cell{
+    flex-shrink: 0;
+    width: 13rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     gap: 0.7rem;
 }
 .perm-tree-mstatus-badge{
@@ -1494,6 +1517,12 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
    A mismatch here is exactly what let "ESTATUS" end up sitting over a
    row's own (wider) label once the row's floor was added without also
    updating the header's. */
+/* Stands in for a depth-0 row's own chevron + rollup icons (see
+   buildStatusTreeHeader) -- measured against the real thing: toggle
+   button ~1.1rem + rollup ~2.6rem + the row's own 0.3rem gaps on either
+   side ~= 4.3rem. Without this, the header's Estatus/Web·App columns
+   start noticeably left of where a row's own controls actually render. */
+.perm-tree-mstatus-header-spacer{ flex-shrink: 0; width: 4.3rem; }
 .perm-tree-mstatus-header-label{ flex: 1; min-width: 5rem; }
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
 .perm-tree-mstatus-header-status{ width: 9.5rem; }

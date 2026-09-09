@@ -1000,9 +1000,31 @@
                 statusLabelMap.set(key, labelText);
                 const controls = document.createElement('div');
                 controls.className = 'perm-tree-mstatus-controls';
-                controls.appendChild(buildStatusBadgeSelect(key));
-                controls.appendChild(buildPlatformGroup(key, 'web', leafKeys, ancestorLocked));
-                controls.appendChild(buildPlatformGroup(key, 'app', leafKeys, ancestorLocked));
+                // Same fixed-width-cell treatment as platformsCell below --
+                // the select itself stays a snug pill (its own max-width
+                // just caps how wide it CAN get), centered inside a column
+                // that's always exactly as wide as the header's Estatus
+                // label, so its left edge lines up regardless of how short
+                // the current ladder step's text is.
+                const statusCell = document.createElement('div');
+                statusCell.className = 'perm-tree-mstatus-status-cell';
+                statusCell.appendChild(buildStatusBadgeSelect(key));
+                controls.appendChild(statusCell);
+                // Fixed-width cell (matches perm-tree-mstatus-header-
+                // platforms exactly) instead of letting the two platform
+                // groups just sit at whatever width their own content
+                // needs -- .perm-tree-mstatus-controls used to rely on
+                // margin-left:auto to "flush right" against the row's own
+                // edge, which only coincidentally lined up under the
+                // header's fixed Estatus/Web·App columns when there was
+                // enough slack; a real column of the same width as the
+                // header's is what actually keeps them aligned regardless
+                // of content length or window size.
+                const platformsCell = document.createElement('div');
+                platformsCell.className = 'perm-tree-mstatus-platforms-cell';
+                platformsCell.appendChild(buildPlatformGroup(key, 'web', leafKeys, ancestorLocked));
+                platformsCell.appendChild(buildPlatformGroup(key, 'app', leafKeys, ancestorLocked));
+                controls.appendChild(platformsCell);
                 row.appendChild(controls);
             }
             return row;
@@ -1344,6 +1366,17 @@
         function buildStatusTreeHeader() {
             const header = document.createElement('div');
             header.className = 'perm-tree-mstatus-header';
+            // A depth-0 row's own chevron + rollup icons sit before its
+            // label (see statusRow) -- the header has neither, so without
+            // this spacer its Estatus/Web·App columns start ~4.3rem to the
+            // LEFT of where a real row's own controls actually land, which
+            // is exactly what let "Estatus" visibly land on top of a row's
+            // label once things got tight enough for that gap to matter.
+            // Matches depth-0 exactly; deeper rows indent further still, so
+            // this is an approximation for anything nested -- unavoidable
+            // for one flat header over a tree with variable indentation.
+            const spacer = document.createElement('span');
+            spacer.className = 'perm-tree-mstatus-header-spacer';
             const label = document.createElement('span');
             label.className = 'perm-tree-mstatus-header-label';
             label.textContent = t('admin.masterTreeColScreen');
@@ -1353,7 +1386,7 @@
             const platforms = document.createElement('span');
             platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
             platforms.textContent = t('admin.masterTreeColPlatforms');
-            header.append(label, status, platforms);
+            header.append(spacer, label, status, platforms);
             return header;
         }
 
