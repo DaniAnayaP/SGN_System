@@ -37,10 +37,10 @@
     <main class="home-screen">
         <header class="home-header">
             <div class="home-header-top">
-                <div class="home-client-brand">
+                <button type="button" class="home-client-brand admin-brand-btn" id="admin-brand-home-btn">
                     <span class="home-client-logo home-client-logo-fallback"><i class="bx bx-buildings" aria-hidden="true"></i></span>
                     <span class="home-client-name">SGN</span>
-                </div>
+                </button>
                 <div class="home-header-top-actions">
                     <span class="home-pill-btn home-pill-btn-icon-only" id="admin-role-pill">
                         <i class="bx bx-shield-quarter" aria-hidden="true"></i>
@@ -84,7 +84,11 @@
         <section class="home-section" id="admin-content"></section>
 
         <nav class="home-tabbar" id="home-tabbar" aria-label="Main navigation">
-            <button type="button" class="home-tab active" id="admin-tab-tree" data-section="tree">
+            <button type="button" class="home-tab active" id="admin-tab-home" data-section="home">
+                <i class="bx bx-home" aria-hidden="true"></i>
+                <span data-i18n="home.tabHome">Inicio</span>
+            </button>
+            <button type="button" class="home-tab" id="admin-tab-tree" data-section="tree">
                 <i class="bx bx-sitemap" aria-hidden="true"></i>
                 <span data-i18n="home.tabTree">Árbol</span>
             </button>

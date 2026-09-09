@@ -206,14 +206,18 @@ breadcrumbToggle.addEventListener('click', () => {
 });
 
 // --- Tabs / sections -------------------------------------------------------
-const SECTIONS = [
-    { id: 'tree', breadcrumbKey: 'menu.masterPermissionsTree' },
-    { id: 'sectors', breadcrumbKey: 'menu.businessSectorsAbbr1' },
-    { id: 'plans', breadcrumbKey: 'menu.plansRegistered' },
-    { id: 'clients', breadcrumbKey: 'menu.clientesRegistrados' },
-    { id: 'holdings', breadcrumbKey: 'menu.holdingsTitle' },
+// Icon/label pairs reused both by the tab bar (already static markup in
+// AppAdminInicio.html) and by the Inicio tab's own shortcut tiles below --
+// kept in one place so the two never drift apart.
+const HOME_SHORTCUTS = [
+    { id: 'tree', icon: 'bx-sitemap', breadcrumbKey: 'menu.masterPermissionsTree' },
+    { id: 'sectors', icon: 'bx-briefcase-alt-2', breadcrumbKey: 'menu.businessSectorsAbbr1' },
+    { id: 'plans', icon: 'bx-package', breadcrumbKey: 'menu.plansRegistered' },
+    { id: 'clients', icon: 'bx-buildings', breadcrumbKey: 'menu.clientesRegistrados' },
+    { id: 'holdings', icon: 'bx-collection', breadcrumbKey: 'menu.holdingsTitle' },
 ];
-let activeSection = 'tree';
+const SECTIONS = [{ id: 'home', breadcrumbKey: 'home.tabHome' }, ...HOME_SHORTCUTS];
+let activeSection = 'home';
 // Bumped every renderSection() call; loadMasterTree()'s own async chain
 // checks this before each contentEl write and bails out if the user has
 // since switched tabs -- otherwise a slow load (menu.json + ~150 rows) that
@@ -237,16 +241,45 @@ function renderComingSoon() {
     contentEl.appendChild(empty);
 }
 
+// Inicio's own content -- a greeting-style shortcut grid (reuses AppInicio.
+// css's .home-tiles/.home-tile as-is, same "Accesos rápidos" look the
+// client App's own Inicio tab uses), no numbers yet by design -- those
+// would need their own server queries, left for later.
+function renderHomeHub() {
+    contentEl.innerHTML = '';
+    const title = document.createElement('h2');
+    title.className = 'home-section-title';
+    title.textContent = t('home.quickAccess');
+    contentEl.appendChild(title);
+    const grid = document.createElement('div');
+    grid.className = 'home-tiles';
+    HOME_SHORTCUTS.forEach((item) => {
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'home-tile';
+        tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${item.icon}" aria-hidden="true"></i></span><span>${t(item.breadcrumbKey)}</span>`;
+        tile.addEventListener('click', () => document.getElementById(`admin-tab-${item.id}`)?.click());
+        grid.appendChild(tile);
+    });
+    contentEl.appendChild(grid);
+}
+
 function renderSection(id) {
     activeSection = id;
     renderToken += 1;
     document.querySelectorAll('.home-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.section === id));
     updateBreadcrumb();
     if (id === 'tree') loadMasterTree(renderToken);
+    else if (id === 'home') renderHomeHub();
     else renderComingSoon();
 }
 document.querySelectorAll('.home-tab').forEach((tab) => {
     tab.addEventListener('click', () => renderSection(tab.dataset.section));
+});
+// Brand logo -- same "tap to go home" convention as tapping the tab itself,
+// just reachable from anywhere in the header too.
+document.getElementById('admin-brand-home-btn').addEventListener('click', () => {
+    document.getElementById('admin-tab-home')?.click();
 });
 
 // --- Árbol de Permisos Maestro -- same load/describe-changes/confirm/save
@@ -417,7 +450,7 @@ async function loadMasterTree(token) {
         if (user?.role !== 'admin') { window.location.replace('AppInicio.html'); return; }
         document.getElementById('home-user-name').textContent = user?.name || '';
         applyStyle(getStoredStyle());
-        renderSection('tree');
+        renderSection('home');
     } catch (err) {
         console.error('Panel Admin failed to load:', err);
         showToast(t('admin.loadError'));

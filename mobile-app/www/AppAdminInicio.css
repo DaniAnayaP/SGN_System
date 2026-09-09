@@ -40,6 +40,13 @@ body.futuristic-mode{
    switch to here. */
 #admin-role-pill{ cursor: default; }
 
+/* Brand logo doubles as the "go to Inicio" shortcut (see
+   admin-brand-home-btn in AppAdminInicio.js) -- .home-client-brand's own
+   flex/gap/min-width rules apply unchanged since this is that same class,
+   just also a real <button> now instead of a <div>; this only strips the
+   browser's default button chrome so it still looks like plain brand text. */
+.admin-brand-btn{ background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+
 /* AppInicio.css's ".conn-btn svg{ color: var(--home-text-muted) }" only
    targets an <svg> child -- this page's connectivity icon is a boxicon
    <i> instead (see AppAdminInicio.js), which that rule never matches, so
