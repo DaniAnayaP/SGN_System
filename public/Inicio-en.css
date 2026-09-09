@@ -555,6 +555,14 @@
     .menu-link span{
         font-size: 0.8rem;
         font-weight: 500;
+        /* Same ellipsis-instead-of-hard-overflow treatment .sub-menu-link
+           span already had -- a top-level label (e.g. "Administración de
+           Cliente") was never clipped at all before this, just overflowing
+           raw past the sidebar's edge. */
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     /* The hover-driven tooltip used to live here as a pure-CSS rule
        (position:absolute on the label span, revealed via overflow:visible

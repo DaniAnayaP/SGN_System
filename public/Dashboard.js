@@ -1025,7 +1025,16 @@ function buildMenuItem(item) {
     // item.label (literal) wins over labelKey when both could apply — only
     // ever set for runtime-injected items whose text is free-form client
     // data (e.g. a saved report's own name), never a translatable string.
-    span.textContent = item.label || t(item.labelKey, item.labelParams || {});
+    const fullLabel = item.label || t(item.labelKey, item.labelParams || {});
+    span.textContent = fullLabel;
+    // abbrKeys -- same progressively-shorter-label ladder as buildSubmenu's
+    // own abbrLadder (see applySubmenuAbbreviations), just for a top-level
+    // item instead of a nested one. A top-level item with no abbrKeys still
+    // gets plain CSS ellipsis (see .menu-link span in Inicio-en.css) and the
+    // hover tooltip below whenever its label actually overflows.
+    if (item.abbrKeys?.length) {
+        span.dataset.abbrLadder = JSON.stringify([fullLabel, ...item.abbrKeys.map((k) => t(k))]);
+    }
     a.appendChild(span);
 
     if (navigable) {
@@ -1200,15 +1209,17 @@ function renderMenu(data) {
     applySubmenuAbbreviations();
 }
 
-// A label with its own abbrLadder (see buildSubmenu) steps down through
-// progressively shorter versions of itself -- longest that still fits the
-// sidebar's own fixed expanded width wins -- instead of jumping straight
-// to CSS ellipsis. Re-run on resize/collapse-toggle since the sidebar's
-// available width isn't otherwise re-checked once rendered; harmless to
-// call for a menu with no abbreviated items (the selector just matches
-// nothing).
+// A label with its own abbrLadder (see buildSubmenu/buildMenuItem) steps
+// down through progressively shorter versions of itself -- longest that
+// still fits the sidebar's own fixed expanded width wins -- instead of
+// jumping straight to CSS ellipsis. Covers both nested (.sub-menu-link)
+// and top-level (.menu-link) items -- same rule everywhere in the
+// sidebar, not just wherever abbrKeys happened to be added first. Re-run
+// on resize/collapse-toggle since the sidebar's available width isn't
+// otherwise re-checked once rendered; harmless to call for a menu with no
+// abbreviated items (the selector just matches nothing).
 function applySubmenuAbbreviations() {
-    document.querySelectorAll('.sub-menu-link span[data-abbr-ladder]').forEach((span) => {
+    document.querySelectorAll('.sub-menu-link span[data-abbr-ladder], .menu-link span[data-abbr-ladder]').forEach((span) => {
         const ladder = JSON.parse(span.dataset.abbrLadder);
         for (const text of ladder) {
             span.textContent = text;
@@ -1335,6 +1346,22 @@ function wireMenuInteractions() {
     document.querySelectorAll('.menu-item').forEach((menuItem) => {
         menuItem.addEventListener('mouseenter', () => showSidebarTooltip(menuItem, Sidebar));
         menuItem.addEventListener('mouseleave', hideSidebarTooltip);
+    });
+
+    // Expanded-sidebar top-level tooltip -- same "always show the real
+    // full name" rule the sub-menu already had (showSubmenuTooltip is
+    // generic, not actually sub-menu-specific: it just reads a link's own
+    // span + optional abbrLadder), now also wired for .menu-link so a long
+    // top-level item like "Administración de Cliente" behaves identically
+    // instead of just hard-overflowing with nothing on hover. Skipped
+    // while minimized -- the icon-only tooltip above already owns that
+    // case, and the label span isn't meaningfully measurable then anyway.
+    document.querySelectorAll('.menu-link').forEach((link) => {
+        link.addEventListener('mouseenter', () => {
+            if (Sidebar.classList.contains('minimize')) return;
+            showSubmenuTooltip(link);
+        });
+        link.addEventListener('mouseleave', hideSidebarTooltip);
     });
 
     // Expanded-sidebar sub-menu tooltip: a long label (e.g. one of the 7
