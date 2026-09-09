@@ -375,9 +375,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 // --- Static frontend ---------------------------------------------------------
-// Only files inside public/ are ever served to the browser. server.js,
-// db.js, password.js, .env, and the database file all live outside this
-// folder and are never web-accessible.
+// Only files inside public/ (the desktop site) and mobile-app/www (see just
+// below) are ever served to the browser. server.js, db.js, password.js,
+// .env, and the database file all live outside both and are never
+// web-accessible.
 //
 // maxAge is intentionally short (1 minute), not the usual long-lived
 // "immutable" static-asset cache: none of these filenames are content-hashed
@@ -390,6 +391,19 @@ app.use(cookieParser());
 // filenames get a cache-busting hash.
 app.use(express.static(PUBLIC_DIR, { maxAge: '1m' }));
 app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'Login.html')));
+
+// The native Android app normally loads mobile-app/www/* bundled locally
+// inside the .apk (see the NATIVE_APP_ORIGINS comment above), never from
+// here -- this mount exists purely so GEIPSA staff can preview/QA the App's
+// own screens (e.g. AppAdminInicio.html) in a plain desktop browser without
+// building an APK. Every relative asset/i18n/data fetch those pages make
+// resolves fine under this prefix (browsers resolve relative URLs against
+// the current document, not the server root), and every /api/... call they
+// make is root-relative already, so it hits the real API regardless of
+// prefix and shares whatever sgn_session cookie the browser already has
+// from logging in at / -- no separate login needed here. Same short
+// maxAge as public/, same reasoning.
+app.use('/mobile', express.static(path.join(__dirname, 'mobile-app', 'www'), { maxAge: '1m' }));
 
 // --- Rate limiting on auth routes -------------------------------------------
 const loginLimiter = rateLimit({
