@@ -136,6 +136,22 @@
         return [keyOf(section.id, item.id, null)];
     }
 
+    // Same leaf enumeration as leafKeysUnder, scoped to just ONE Apartado
+    // (sm) instead of every one under the whole Área -- statusMode's own
+    // rollup/"aplicar anidados" need this at the Apartado level too
+    // (Catálogos/Operaciones/Admin/... each have their own Pantallas
+    // nested under them), not just at Departamento/Área.
+    function leafKeysUnderSm(section, item, sm) {
+        if (sm.submenu && sm.submenu.length) {
+            return sm.submenu.map((subSm) => (
+                subSm.standalone
+                    ? keyOf(section.id, subSm.id, null)
+                    : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
+            ));
+        }
+        return [keyOf(section.id, item.id, sm.id)];
+    }
+
     // Module keys that gate an individual 'main'-section top-bar button —
     // same catalog as MODULE_CATALOG in db.js minus the department keys
     // (those gate a whole section instead, handled separately below). Only
@@ -1272,13 +1288,14 @@
 
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
                         const smExpandedNow = expandedItems.has(smKey);
+                        const smLeafKeys = leafKeysUnderSm(section, item, sm);
                         treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, {
                             expanded: smExpandedNow,
                             onToggle: () => {
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }, null, null, smAncestorLocked));
+                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked));
                         if (!smExpandedNow) return;
                         const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
 
