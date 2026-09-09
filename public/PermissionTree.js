@@ -251,7 +251,22 @@
         // the tree's own width, which a plain re-render never re-checks --
         // window resize is the one thing that can change it without also
         // triggering a render on its own.
-        if (statusMode) window.addEventListener('resize', applyStatusAbbreviations);
+        // Resizing the window AFTER load (not just loading fresh at a given
+        // width -- exactly what Chrome DevTools' device-toolbar does, and
+        // what a real user resizing their browser does too) can leave
+        // treeRoot scrolled to a non-zero horizontal position on its own
+        // (scroll anchoring / the browser trying to keep something in
+        // view during the reflow) -- applyStatusAbbreviations alone never
+        // corrected that, only a full renderStatusTree() did (see its own
+        // scrollLeft reset), and a resize never triggers that. This is
+        // almost certainly the real cause behind "the label's own start is
+        // cut off, Estatus/Web·App still fully visible" reports -- a
+        // fresh page load at a narrow width never showed it locally, only
+        // resizing an already-loaded wider page down did.
+        if (statusMode) window.addEventListener('resize', () => {
+            applyStatusAbbreviations();
+            treeRoot.scrollLeft = 0;
+        });
 
         function isModuleEnabled(moduleKey) {
             return !enabledModuleKeys || enabledModuleKeys.includes(moduleKey);
