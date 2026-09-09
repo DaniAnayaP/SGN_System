@@ -1513,6 +1513,16 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--color-text-secondary);
+    /* display:flex alone still sizes this to its CONTAINING block's width
+       (.perm-tree's visible width), not to what its own non-shrinking
+       children (spacer/label/status/platforms, all fixed-width now) add
+       up to -- so once those add up to more, they overflowed the
+       header's own box while its background didn't, leaving Web·App
+       rendering on the plain card behind it instead of the header's gray
+       bar. min-width:max-content forces the header itself to actually be
+       as wide as its content, so overflow-x:auto scrolls the WHOLE
+       colored bar together with the rows underneath it. */
+    min-width: max-content;
 }
 /* Must match .perm-tree-mstatus-label's own min-width exactly -- these
    two are laid out independently (fixed-width header columns vs. an
@@ -1635,6 +1645,16 @@ body:has(.master-tree-panel) main{
     top: -0.35rem;
     margin: -0.35rem -0.35rem 0.4rem;
 }
+/* Same reasoning as .perm-tree-mstatus-header's own min-width:max-content
+   above -- a row has no distinct background to visibly reveal it, but
+   without this its own non-shrinking content (label at its fixed column
+   width + Estatus + Web·App) could overflow the row's box without the
+   row itself (and therefore .perm-tree's scrollWidth) actually accounting
+   for that full width, undermining the scrollbar. Scoped here (not the
+   base .perm-tree-row, shared with the ordinary checkbox tree used by 4
+   other screens) since only Árbol Maestro's rows are fixed-width like
+   this. */
+.master-tree-panel .perm-tree-row{ min-width: max-content; }
 .master-tree-panel .admin-form-actions{
     flex-shrink: 0;
     margin: 0;
