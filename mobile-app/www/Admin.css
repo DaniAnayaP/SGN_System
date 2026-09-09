@@ -1527,6 +1527,24 @@ body.dark-mode .perm-tree-mstatus-header{ background-color: #1f2030; }
 .perm-tree-mstatus-nest-btn i{ font-size: 0.75rem; }
 body.dark-mode .perm-tree-mstatus-nest-btn{ background-color: #23242b; }
 
+/* Frees real width back to the row label on a narrow tree instead of
+   letting it keep shrinking past readability (confirmed with the user:
+   abbreviate/hide redundant pieces before ever relying on
+   .master-tree-panel .perm-tree's own overflow-x scroll). Both classes
+   only ever exist in statusMode's Árbol Maestro tree (see
+   buildPlatformCheckbox/buildPlatformGroup), so no other screen sharing
+   .perm-tree is affected even without a .master-tree-panel prefix here.
+   "WEB"/"APP" goes first -- the monitor/phone silhouette already says
+   which platform it is, the word is reinforcement, not the only cue.
+   The "aplicar a anidados" copy icon goes next, once things are tighter
+   still -- a bulk convenience, not needed to use the checkbox itself. */
+@media (max-width: 560px){
+    .perm-tree-mstatus-platform{ display: none; }
+}
+@media (max-width: 420px){
+    .perm-tree-mstatus-nest-btn{ display: none; }
+}
+
 /* Admin-ArbolMaestro.html only -- scoped off .master-tree-panel's own
    presence via :has() so no other screen sharing .admin-panel/.perm-tree
    (Business-Roles, Business-Accesos/AppRoles, Admin-SaaS, Admin-
