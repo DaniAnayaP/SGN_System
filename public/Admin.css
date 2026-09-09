@@ -1607,12 +1607,18 @@ body:has(.master-tree-panel) main{
     min-height: 0;
     max-height: none;
     padding: 0.35rem;
-    /* Last resort, after row-label ellipsis and the Estatus ladder have
-       both already done everything they can (see applyStatusAbbreviations
-       in PermissionTree.js and .perm-tree-mstatus-label above) -- a row
-       whose fixed-width pieces (rollup, Estatus pill, Web/App controls)
-       still don't fit scrolls sideways instead of overlapping/wrapping. */
-    overflow-x: auto;
+    /* Horizontal scroll here was the actual source of every "label's own
+       start is cut off" report -- resizing an already-loaded page left
+       treeRoot's scrollLeft at whatever position the browser's own reflow
+       produced, and neither an explicit reset on render nor one on resize
+       reliably stuck. Removed outright: row-label ellipsis, the Estatus
+       ladder, and hiding WEB/APP text + the nest-apply icon on a narrow
+       tree (see the media queries above) are what actually keep a row
+       from overlapping now. In the rare case none of that is enough, the
+       row simply clips at the container's own right edge -- predictable,
+       and never scrambles text -- instead of relying on scroll position
+       nothing here could keep correct. */
+    overflow-x: hidden;
 }
 .master-tree-panel .perm-tree-mstatus-header{
     top: -0.35rem;
