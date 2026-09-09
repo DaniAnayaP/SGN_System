@@ -74,11 +74,17 @@
     // custom control, and fine for only 4 fixed words everyone already
     // knows the meaning of. First entry always matches STATUS_OPTIONS'
     // own labelKey above (the un-abbreviated form).
+    // Last rung of the ladder -- a single symbol instead of any text at
+    // all, confirmed with the user for whatever's still too tight even
+    // for "Habil.". A native <select>'s options can only hold plain text,
+    // not a real icon font glyph (unlike the Web/App monitor/phone
+    // silhouettes), so this is a Unicode symbol rather than a drawn icon
+    // -- visually just as compact, still literally text under the hood.
     const STATUS_LADDER_KEYS = {
-        habilitado: ['admin.masterTreeStatusHabilitado', 'admin.masterTreeStatusHabilitadoMed', 'admin.masterTreeStatusHabilitadoShort'],
-        inhabilitado: ['admin.masterTreeStatusInhabilitado', 'admin.masterTreeStatusInhabilitadoShort'],
-        construccion: ['admin.masterTreeStatusConstruccion', 'admin.masterTreeStatusConstruccionMed', 'admin.masterTreeStatusConstruccionShort'],
-        mejoras: ['admin.masterTreeStatusMejoras', 'admin.masterTreeStatusMejorasShort'],
+        habilitado: ['admin.masterTreeStatusHabilitado', 'admin.masterTreeStatusHabilitadoMed', 'admin.masterTreeStatusHabilitadoShort', 'admin.masterTreeStatusHabilitadoIcon'],
+        inhabilitado: ['admin.masterTreeStatusInhabilitado', 'admin.masterTreeStatusInhabilitadoShort', 'admin.masterTreeStatusInhabilitadoIcon'],
+        construccion: ['admin.masterTreeStatusConstruccion', 'admin.masterTreeStatusConstruccionMed', 'admin.masterTreeStatusConstruccionShort', 'admin.masterTreeStatusConstruccionIcon'],
+        mejoras: ['admin.masterTreeStatusMejoras', 'admin.masterTreeStatusMejorasShort', 'admin.masterTreeStatusMejorasIcon'],
     };
 
     async function loadMenuData() {
@@ -1098,6 +1104,10 @@
             const state = getNodeState(key);
             select.value = state.status;
             select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${state.status}`;
+            // Always the full, un-abbreviated name -- most useful exactly
+            // when applyStatusAbbreviations has stepped this all the way
+            // down to a bare symbol with no visible word left at all.
+            select.title = t(STATUS_OPTIONS.find((opt) => opt.value === state.status).labelKey);
             select.addEventListener('change', () => {
                 // Estatus is informational only for now -- confirmed with
                 // the user: there's no real test/staging environment yet,
@@ -1107,6 +1117,7 @@
                 const next = { ...getNodeState(key), status: select.value };
                 setNodeState(key, next);
                 select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${select.value}`;
+                select.title = t(STATUS_OPTIONS.find((opt) => opt.value === select.value).labelKey);
                 renderStatusTree();
             });
             return select;
