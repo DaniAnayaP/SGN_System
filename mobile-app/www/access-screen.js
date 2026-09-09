@@ -195,8 +195,9 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
                 cancelTitle: t('login.accessWithPassword', 'Username and password'),
             });
             // Session cookie is already valid (confirmed above) — biometric
-            // success alone is enough to enter, no extra server round-trip.
-            window.location.href = 'AppInicio.html';
+            // success alone is enough to enter, just route it to the right
+            // shell (see resolveHomeScreen).
+            window.location.href = await resolveHomeScreen();
         } catch {
             scanScreen.hidden = true;
             showToast(t('login.accessBiometricFailed', "We couldn't verify your identity. Sign in with your username and password."));
@@ -218,6 +219,24 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
     function showPwError(message) {
         pwError.textContent = message;
         pwError.hidden = false;
+    }
+
+    // GEIPSA staff (role 'admin') land on the separate Panel Admin shell
+    // instead of the client-facing AppInicio.html, which assumes a
+    // department/área/cost-center context an admin account doesn't have.
+    // Defaults to the client screen on any failure to read the role --
+    // the safer fallback, since AppInicio.html already handles a missing
+    // department/área gracefully while AppAdminInicio.html would be the
+    // wrong screen entirely for an actual client account.
+    async function resolveHomeScreen() {
+        try {
+            const res = await fetch(apiUrl('/api/me'), { credentials: 'include' });
+            if (!res.ok) return 'AppInicio.html';
+            const data = await res.json();
+            return data.user?.role === 'admin' ? 'AppAdminInicio.html' : 'AppInicio.html';
+        } catch {
+            return 'AppInicio.html';
+        }
     }
 
     pwForm?.addEventListener('submit', async (event) => {
@@ -252,7 +271,7 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
             }
             sessionStorage.setItem('applyLoginDefaults', '1');
             localStorage.setItem(HAD_SESSION_KEY, '1');
-            window.location.href = 'AppInicio.html';
+            window.location.href = await resolveHomeScreen();
         } catch {
             showPwError(t('login.genericError', 'Something went wrong. Please try again.'));
         } finally {

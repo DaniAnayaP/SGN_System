@@ -1011,8 +1011,12 @@
             // both plain globals in Dashboard.js -- reused as-is rather
             // than reimplemented here) -- a no-op whenever the label
             // wasn't actually ellipsized (see that function's own guard).
-            label.addEventListener('mouseenter', () => showSubmenuTooltip(label));
-            label.addEventListener('mouseleave', hideSidebarTooltip);
+            // Guarded: Dashboard.js (and these two globals) doesn't exist
+            // in the mobile-app/www context that also loads this file, so
+            // an unguarded call would throw the moment statusMode's first
+            // row rendered there.
+            label.addEventListener('mouseenter', () => { if (typeof showSubmenuTooltip === 'function') showSubmenuTooltip(label); });
+            label.addEventListener('mouseleave', () => { if (typeof hideSidebarTooltip === 'function') hideSidebarTooltip(); });
             row.appendChild(label);
             if (key) {
                 // Stashed so a caller (Admin-ArbolMaestro.js's confirm-

@@ -2276,6 +2276,15 @@ async function loadClientBranding() {
             return;
         }
         const { user } = await meRes.json();
+        // GEIPSA staff (role 'admin') has no department/área/cost-center --
+        // everything below this point assumes a client account and would
+        // render broken. access-screen.js already routes a fresh login the
+        // right way; this only catches a stray deep link (e.g. this page's
+        // own manifest.json start_url) landing an admin account here directly.
+        if (user?.role === 'admin') {
+            window.location.replace('AppAdminInicio.html');
+            return;
+        }
         isClientAdmin = !!user?.isClientAdmin;
         // The auto-provisioned client-admin account's `name` is frozen as
         // "Admin <razón social completa>" (see activateClient in db.js) --

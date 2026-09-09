@@ -1,0 +1,62 @@
+/* Panel Admin (App) — GEIPSA staff (role 'admin') shell. Reuses AppInicio.css's
+   home-* components (header/tabbar/breadcrumb/sheets) as-is and Admin.css's
+   .perm-tree-* rules for the Árbol de Permisos Maestro tab. Everything below
+   is only what those two files don't already cover. */
+
+/* Admin.css's .perm-tree-* rules read --color-* custom properties that only
+   Dashboard.css (Web) normally defines -- undefined here otherwise, which
+   would leave the tree's borders/accent fills unstyled. Same light/dark/
+   futuristic hex values Dashboard.css already uses, just re-declared here so
+   this standalone App page has them too. */
+:root{
+    --color-surface: #ffffff;
+    --color-surface-alt: #f2f2f5;
+    --color-border: #9A9EB2;
+    --color-text-primary: #000000;
+    --color-text-secondary: #3F435D;
+    --color-accent: #3F435D;
+    --color-accent-text: #ffffff;
+}
+body.dark-mode{
+    --color-surface: #12141A;
+    --color-surface-alt: #1a1c2b;
+    --color-border: #2B2D3B;
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #9CA2B8;
+    --color-accent: #9CA2B8;
+    --color-accent-text: #12141A;
+}
+body.futuristic-mode{
+    --color-surface: #12141f;
+    --color-surface-alt: #1a1d33;
+    --color-border: #2C3355;
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #C3CBEF;
+    --color-accent: #7FE1FF;
+    --color-accent-text: #0B0D14;
+}
+
+/* Static role chip next to the brand -- not a button, admin has nothing to
+   switch to here. */
+#admin-role-pill{ cursor: default; }
+
+/* Wraps the tree in the Árbol tab -- same "row's own non-shrinking content
+   can overflow its box invisibly" fix Admin.css already applies scoped to
+   .master-tree-panel on the Web table; this page never uses that class (its
+   full-viewport-lock layout is a desktop concern), so the same fix is
+   re-scoped here instead. */
+.admin-master-tree .perm-tree{ overflow-anchor: none; }
+.admin-master-tree .perm-tree-row{ min-width: max-content; }
+
+.admin-tree-save-btn{ margin-top: 0.9rem; }
+
+/* Confirm-before-saving sheet (see openConfirmSheet in AppAdminInicio.js) --
+   reuses Admin.css's .master-tree-confirm-* rows for the change list itself,
+   just inside a .home-sheet instead of the Web's .modal-panel. */
+#admin-confirm-sheet .home-sheet-subtitle{ margin-bottom: 0; }
+.admin-confirm-actions{
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}

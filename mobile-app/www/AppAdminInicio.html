@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title data-i18n="home.adminPanelTitle">Panel Admin</title>
+    <link rel="icon" href="icons/icon-512.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-512.png">
+    <meta name="theme-color" content="#0b0d14">
+    <link rel="stylesheet" href="AppInicio.css">
+    <!-- PermissionTree.js's own .perm-tree-* rules live here -- every one of
+         them is qualified (class/attribute, never a bare tag selector), so
+         loading the whole admin stylesheet doesn't bleed into this page's
+         own AppInicio.css-styled header/tabbar/breadcrumb. -->
+    <link rel="stylesheet" href="Admin.css">
+    <link rel="stylesheet" href="AppAdminInicio.css">
+    <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
+</head>
+<body>
+    <!-- Native App home for GEIPSA staff accounts (role 'admin') -- a
+         separate shell from AppInicio.html (the client-facing one), which
+         assumes a department/área/cost-center context an admin account
+         doesn't have (see access-screen.js's post-login role branch and
+         AppInicio.js's own role guard). Same top-bar/tabbar/breadcrumb
+         building blocks as AppInicio.html (all from AppInicio.css), just a
+         much shorter, admin-only content model: 5 bottom tabs instead of a
+         menu.json-driven category tree, and only the Árbol de Permisos
+         Maestro tab has a real screen behind it so far -- the rest are
+         honest "Próximamente" placeholders (see AppAdminInicio.js), same as
+         the incremental rollout already agreed for this panel. -->
+    <main class="home-screen">
+        <header class="home-header">
+            <div class="home-header-top">
+                <div class="home-client-brand">
+                    <span class="home-client-logo home-client-logo-fallback"><i class="bx bx-buildings" aria-hidden="true"></i></span>
+                    <span class="home-client-name">SGN</span>
+                </div>
+                <div class="home-header-top-actions">
+                    <span class="home-pill-btn home-pill-btn-icon-only" id="admin-role-pill">
+                        <i class="bx bx-shield-quarter" aria-hidden="true"></i>
+                        <span data-i18n="home.adminPill">Admin</span>
+                    </span>
+                    <button type="button" class="home-hamburger-btn" id="home-search-btn" data-i18n-aria="sidebar.searchPlaceholder" aria-label="Search">
+                        <i class="bx bx-search" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="conn-btn" id="home-conn-btn" data-state="online" data-i18n-aria="home.connButtonLabel" aria-label="Connection status">
+                        <i class="bx bx-wifi" id="home-conn-icon" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="home-hamburger-btn" id="home-hamburger-btn" aria-haspopup="true" aria-expanded="false">
+                        <i class="bx bx-menu" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div class="home-hamburger-menu" id="home-hamburger-menu" role="menu" hidden>
+                    <button type="button" role="menuitem" id="home-menu-language">
+                        <i class="bx bx-globe" aria-hidden="true"></i> <span data-i18n="main.language">Language</span>
+                    </button>
+                    <button type="button" role="menuitem" id="home-menu-style">
+                        <i class="bx bx-palette" aria-hidden="true"></i> <span data-i18n="main.style">Style</span>
+                    </button>
+                    <hr>
+                    <button type="button" role="menuitem" class="home-menu-logout" id="home-menu-logout">
+                        <i class="bx bx-log-out-circle" aria-hidden="true"></i> <span data-i18n="sidebar.logout">Log out</span>
+                    </button>
+                </div>
+            </div>
+            <div class="home-search-bar" id="home-search-bar" hidden>
+                <i class="bx bx-search" aria-hidden="true"></i>
+                <label for="home-search-input" class="sr-only" data-i18n="sidebar.searchPlaceholder">Search</label>
+                <input id="home-search-input" type="search" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search" autocomplete="off">
+            </div>
+            <div class="home-header-greeting">
+                <p class="home-hello" data-i18n="home.greeting">Hola,</p>
+                <h1 class="home-name" id="home-user-name">—</h1>
+            </div>
+        </header>
+
+        <section class="home-section" id="admin-content"></section>
+
+        <nav class="home-tabbar" id="home-tabbar" aria-label="Main navigation">
+            <button type="button" class="home-tab active" id="admin-tab-tree" data-section="tree">
+                <i class="bx bx-sitemap" aria-hidden="true"></i>
+                <span data-i18n="home.tabTree">Árbol</span>
+            </button>
+            <button type="button" class="home-tab" id="admin-tab-sectors" data-section="sectors">
+                <i class="bx bx-briefcase-alt-2" aria-hidden="true"></i>
+                <span data-i18n="home.tabBusinessLines">Giros</span>
+            </button>
+            <button type="button" class="home-tab" id="admin-tab-plans" data-section="plans">
+                <i class="bx bx-package" aria-hidden="true"></i>
+                <span data-i18n="home.tabPlans">Planes</span>
+            </button>
+            <button type="button" class="home-tab" id="admin-tab-clients" data-section="clients">
+                <i class="bx bx-buildings" aria-hidden="true"></i>
+                <span data-i18n="home.tabClients">Clientes</span>
+            </button>
+            <button type="button" class="home-tab" id="admin-tab-holdings" data-section="holdings">
+                <i class="bx bx-collection" aria-hidden="true"></i>
+                <span data-i18n="home.tabHoldings">Holdings</span>
+            </button>
+        </nav>
+
+        <div class="home-breadcrumb" id="home-breadcrumb">
+            <div class="home-breadcrumb-trail" id="home-breadcrumb-trail">
+                <span data-i18n="home.breadcrumbHome">Inicio</span>
+                <i class="bx bx-chevron-right" aria-hidden="true"></i>
+                <span class="current" id="home-breadcrumb-current">—</span>
+            </div>
+            <button type="button" class="home-breadcrumb-toggle" id="home-breadcrumb-toggle" data-i18n-aria="main.breadcrumbCollapse" aria-label="Collapse">
+                <i class="bx bx-map-alt" aria-hidden="true"></i>
+                <i class="bx bx-chevron-up" aria-hidden="true" id="home-breadcrumb-toggle-chevron"></i>
+            </button>
+        </div>
+    </main>
+
+    <div class="home-toast-container" id="home-toast-container" aria-live="polite"></div>
+
+    <div class="home-sheet-overlay" id="home-style-overlay" hidden>
+        <div class="home-sheet" role="dialog" aria-modal="true" aria-labelledby="home-style-title">
+            <div class="home-sheet-handle"></div>
+            <h3 class="home-sheet-title" id="home-style-title" data-i18n="main.style">Style</h3>
+            <p class="home-sheet-subtitle" data-i18n="home.styleSubtitle">Choose how your App looks.</p>
+            <div class="home-style-list" id="home-style-list"></div>
+        </div>
+    </div>
+
+    <!-- Árbol de Permisos Maestro's "pantalla alterna" before Guardar
+         actually writes -- same confirm-before-saving step as the desktop
+         version (Admin-ArbolMaestro.js's openConfirmModal), just in this
+         App's own bottom-sheet vocabulary instead of a desktop modal. -->
+    <div class="home-sheet-overlay" id="admin-confirm-overlay" hidden>
+        <div class="home-sheet" id="admin-confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-confirm-title">
+            <div class="home-sheet-handle"></div>
+            <h3 class="home-sheet-title" id="admin-confirm-title" data-i18n="admin.masterTreeConfirmTitle">Confirm changes to the Master Tree</h3>
+            <p class="home-sheet-subtitle" data-i18n="admin.masterTreeConfirmHint">This affects every Business Type, Plan and client that depends on these branches. Review before saving.</p>
+            <div class="master-tree-confirm-list" id="admin-confirm-list"></div>
+            <div class="admin-confirm-actions">
+                <button type="button" class="home-carga-new-btn" id="admin-confirm-save">
+                    <i class="bx bx-check" aria-hidden="true"></i><span data-i18n="admin.save">Save</span>
+                </button>
+                <button type="button" class="home-carga-secondary-btn" id="admin-confirm-cancel">
+                    <span data-i18n="admin.cancel">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="AppConfig.js"></script>
+    <script src="ColorPalette.js"></script>
+    <script src="PermissionTree.js"></script>
+    <script src="AppAdminInicio.js" defer></script>
+</body>
+</html>
