@@ -1607,18 +1607,33 @@ body:has(.master-tree-panel) main{
     min-height: 0;
     max-height: none;
     padding: 0.35rem;
-    /* Horizontal scroll here was the actual source of every "label's own
-       start is cut off" report -- resizing an already-loaded page left
-       treeRoot's scrollLeft at whatever position the browser's own reflow
-       produced, and neither an explicit reset on render nor one on resize
-       reliably stuck. Removed outright: row-label ellipsis, the Estatus
-       ladder, and hiding WEB/APP text + the nest-apply icon on a narrow
-       tree (see the media queries above) are what actually keep a row
-       from overlapping now. In the rare case none of that is enough, the
-       row simply clips at the container's own right edge -- predictable,
-       and never scrambles text -- instead of relying on scroll position
-       nothing here could keep correct. */
-    overflow-x: hidden;
+    /* Back on, alongside the row-wrap rule below -- a row now wraps onto
+       its own extra line(s) well before it would ever need to scroll (see
+       the max-width:600px block), so this is a rarely-needed safety net
+       for whatever's still too wide even wrapped, not the primary
+       defense it used to be. */
+    overflow-x: auto;
+}
+/* Below this width, a row stops trying to fit everything on one line --
+   Estatus and Web·App wrap onto their own line(s) instead of shrinking
+   the label toward unreadability, clipping, or (the previous approach)
+   depending on a scroll position that resizing an already-loaded page
+   couldn't reliably keep at 0. Verified locally: at this width every
+   piece (full label text, Estatus pill, both Web/App controls) renders
+   completely, just spread across 2-3 lines per row instead of one. */
+@media (max-width: 600px){
+    .master-tree-panel .perm-tree-row{ flex-wrap: wrap; row-gap: 0.3rem; }
+    .master-tree-panel .perm-tree-mstatus-controls{
+        flex-basis: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        row-gap: 0.3rem;
+    }
+    /* Fixed 13rem only matters for lining up under the header's own
+       Web·App column on a single line -- once wrapped, the row no longer
+       shares a line with the header at all, so let it size to content
+       instead of possibly still being too wide for a very narrow phone. */
+    .master-tree-panel .perm-tree-mstatus-platforms-cell{ width: auto; }
 }
 .master-tree-panel .perm-tree-mstatus-header{
     top: -0.35rem;
