@@ -376,6 +376,12 @@
     "sectorTreeTitle": "Accesos por default de este giro",
     "sectorTreeHint": "Un Plan nuevo dirigido a este giro empieza exactamente con esto — desde ahí cada Plan puede agregar o quitar por su cuenta.",
     "sectorDefaultTag": "Default",
+    "sectorOrderTitle": "Reordenar Departamentos",
+    "sectorOrderHint": "Arrastra una fila para reordenar los Departamentos solo para este Giro — nunca afecta al Árbol Maestro ni a otros Giros.",
+    "sectorOrderColDepartment": "Departamento",
+    "sectorOrderColMaster": "Orden Árbol Maestro",
+    "sectorOrderColCustom": "Reorden Personalizado",
+    "sectorOrderCustomTag": "Personalizado",
     "appIcon": "Ícono",
     "appColorFrom": "Color (inicio)",
     "appColorTo": "Color (fin)",
@@ -561,7 +567,9 @@
     "masterTreeLockedByAncestor": "Bloqueado: un nivel superior tiene esta plataforma apagada",
     "masterTreeConfirmTitle": "Confirmar cambios al Árbol Maestro",
     "masterTreeConfirmHint": "Esto afecta a todos los Giros de Negocio, Planes y clientes que dependan de estas ramas. Revisa antes de guardar.",
-    "masterTreeNoChanges": "No hay cambios que guardar."
+    "masterTreeNoChanges": "No hay cambios que guardar.",
+    "masterTreeOrderLabel": "Orden de Departamentos",
+    "masterTreeOrderChangeLine": "Nuevo orden: {order}"
   },
   "business": {
     "usersTitle": "Usuarios",

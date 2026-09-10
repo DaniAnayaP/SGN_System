@@ -240,6 +240,14 @@ function renderSectors() {
         treeBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         treeBtn.addEventListener('click', () => openSectorTreeModal(sector));
 
+        const orderBtn = document.createElement('button');
+        orderBtn.type = 'button';
+        orderBtn.className = 'admin-icon-btn';
+        orderBtn.setAttribute('aria-label', Dashboard.t('admin.sectorOrderTitle'));
+        orderBtn.title = Dashboard.t('admin.sectorOrderTitle');
+        orderBtn.innerHTML = '<i class="bx bx-sort-alt-2" aria-hidden="true"></i>';
+        orderBtn.addEventListener('click', () => openSectorOrderModal(sector));
+
         const previewBtn = document.createElement('button');
         previewBtn.type = 'button';
         previewBtn.className = 'admin-icon-btn';
@@ -272,7 +280,7 @@ function renderSectors() {
         toggleBtn.title = Dashboard.t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate');
         toggleBtn.addEventListener('click', () => toggleSectorStatus(sector));
 
-        tdActions.append(treeBtn, previewBtn, editBtn, historyBtn, toggleBtn);
+        tdActions.append(treeBtn, orderBtn, previewBtn, editBtn, historyBtn, toggleBtn);
         tr.append(tdIcon, tdName, tdType, tdDescription, tdPerms, tdStatus, tdCreatedBy, tdCreatedAt, ...systemCols, tdActions);
         tableBody.appendChild(tr);
     });
@@ -572,6 +580,166 @@ function openSectorPermsModal(sector) {
     sectorPermsList.appendChild(goToTree);
     sectorPermsModal.hidden = false;
 }
+
+// --- Departamento reorder (see sector_permission_order/
+// getEffectiveSectorDepartmentOrder in db.js) -- a brand-new, isolated
+// screen rather than folding this into "Actualizar Permisos"'s own tree:
+// the confirmed mockup (orden-dos-columnas.html) is a plain 2-column
+// table, not a nested checkbox tree, and this way needs zero changes to
+// buildRow/PermissionTree.js's grant logic. Drag-only (confirmed with the
+// user) -- a row's rank is just its position in the list, so there's no
+// separate numeric input to keep in sync with the drag.
+const sectorOrderModal = document.getElementById('sector-order-modal');
+const sectorOrderList = document.getElementById('sector-order-list');
+const sectorOrderError = document.getElementById('sector-order-error');
+const sectorOrderSaveBtn = document.getElementById('sector-order-save');
+const sectorOrderCloseBtn = document.getElementById('sector-order-close');
+
+// The Departamento catalog (id -> translated name) is the same for every
+// Giro -- fetched once via PermissionTree.js's getDepartmentCatalog and
+// reused across every openSectorOrderModal call, instead of re-resolving
+// menu.json's labelKeys on every open.
+let departmentCatalog = null;
+let sectorOrderSectorId = null;
+let sectorOrderMasterOrder = [];
+let sectorOrderCustomOrder = [];
+let draggedDepartmentOrderId = null;
+
+async function ensureDepartmentCatalog() {
+    if (!departmentCatalog) departmentCatalog = await window.PermissionTree.getDepartmentCatalog();
+    return departmentCatalog;
+}
+
+function renderSectorOrderList() {
+    sectorOrderList.innerHTML = '';
+    const labelById = new Map(departmentCatalog.map((d) => [d.id, d.label]));
+    // 1-based rank in Master's CURRENT order -- purely a reference number
+    // shown per row, never what determines row order on THIS screen (the
+    // row order below is sectorOrderCustomOrder's own order).
+    const masterRank = new Map(sectorOrderMasterOrder.map((id, i) => [id, i + 1]));
+    sectorOrderCustomOrder.forEach((id, index) => {
+        const tr = document.createElement('tr');
+        tr.draggable = true;
+        tr.className = 'sector-order-row';
+        tr.addEventListener('dragstart', (e) => {
+            draggedDepartmentOrderId = id;
+            tr.classList.add('sector-order-row-dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        tr.addEventListener('dragend', () => {
+            draggedDepartmentOrderId = null;
+            tr.classList.remove('sector-order-row-dragging');
+        });
+        tr.addEventListener('dragover', (e) => {
+            if (!draggedDepartmentOrderId || draggedDepartmentOrderId === id) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            tr.classList.add('sector-order-row-drop-target');
+        });
+        tr.addEventListener('dragleave', () => tr.classList.remove('sector-order-row-drop-target'));
+        tr.addEventListener('drop', (e) => {
+            e.preventDefault();
+            tr.classList.remove('sector-order-row-drop-target');
+            const draggedId = draggedDepartmentOrderId;
+            draggedDepartmentOrderId = null;
+            if (!draggedId || draggedId === id) return;
+            const fromIdx = sectorOrderCustomOrder.indexOf(draggedId);
+            if (fromIdx === -1) return;
+            sectorOrderCustomOrder.splice(fromIdx, 1);
+            const toIdx = sectorOrderCustomOrder.indexOf(id);
+            sectorOrderCustomOrder.splice(toIdx === -1 ? sectorOrderCustomOrder.length : toIdx, 0, draggedId);
+            renderSectorOrderList();
+        });
+
+        const tdName = document.createElement('td');
+        tdName.textContent = labelById.get(id) || id;
+
+        const tdMaster = document.createElement('td');
+        const masterBadge = document.createElement('span');
+        masterBadge.className = 'sector-order-badge';
+        masterBadge.textContent = String(masterRank.get(id) || '—');
+        tdMaster.appendChild(masterBadge);
+
+        const tdCustom = document.createElement('td');
+        const customCell = document.createElement('div');
+        customCell.className = 'sector-order-custom-cell';
+        const grip = document.createElement('span');
+        grip.className = 'sector-order-grip';
+        grip.setAttribute('aria-hidden', 'true');
+        grip.innerHTML = '<i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i>';
+        const customBadge = document.createElement('span');
+        customBadge.className = 'sector-order-badge sector-order-badge-custom';
+        customBadge.textContent = String(index + 1);
+        customCell.append(grip, customBadge);
+        tdCustom.appendChild(customCell);
+        // "Personalizado" only on rows that actually diverged from Master's
+        // own position for that same Departamento -- confirmed with the
+        // user (a Giro that never reordered anything shows this tag on
+        // NO row, even though it's technically "showing Master's order").
+        if ((masterRank.get(id) || 0) !== index + 1) {
+            const tag = document.createElement('span');
+            tag.className = 'sector-order-custom-tag';
+            tag.textContent = Dashboard.t('admin.sectorOrderCustomTag');
+            tdCustom.appendChild(tag);
+        }
+
+        tr.append(tdName, tdMaster, tdCustom);
+        sectorOrderList.appendChild(tr);
+    });
+}
+
+async function openSectorOrderModal(sector) {
+    sectorOrderSectorId = sector.id;
+    sectorOrderError.hidden = true;
+    sectorOrderList.innerHTML = '';
+    sectorOrderModal.hidden = false;
+    try {
+        const [catalog, res] = await Promise.all([
+            ensureDepartmentCatalog(),
+            fetch(`/api/admin/business-sectors/${sector.id}/department-order`, { credentials: 'include' }),
+        ]);
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        sectorOrderMasterOrder = data.masterOrder || [];
+        sectorOrderCustomOrder = (data.customOrder && data.customOrder.length) ? [...data.customOrder] : [...sectorOrderMasterOrder];
+        // A Departamento the catalog knows about but neither order array
+        // mentions yet (added to menu.json after either order was last
+        // saved) is appended at the end -- same "never silently hidden"
+        // rule PermissionTree.js's own departmentOrder fallback applies.
+        catalog.forEach((d) => { if (!sectorOrderCustomOrder.includes(d.id)) sectorOrderCustomOrder.push(d.id); });
+        renderSectorOrderList();
+    } catch {
+        sectorOrderError.textContent = Dashboard.t('admin.loadError');
+        sectorOrderError.hidden = false;
+    }
+}
+
+function closeSectorOrderModal() {
+    sectorOrderModal.hidden = true;
+    sectorOrderSectorId = null;
+}
+sectorOrderCloseBtn.addEventListener('click', closeSectorOrderModal);
+sectorOrderModal.addEventListener('click', (event) => { if (event.target === sectorOrderModal) closeSectorOrderModal(); });
+
+sectorOrderSaveBtn.addEventListener('click', async () => {
+    if (!sectorOrderSectorId) return;
+    sectorOrderSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/business-sectors/${sectorOrderSectorId}/department-order`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ customOrder: sectorOrderCustomOrder }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+        closeSectorOrderModal();
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    } finally {
+        sectorOrderSaveBtn.disabled = false;
+    }
+});
 
 document.addEventListener('dashboard:language-changed', renderSectors);
 

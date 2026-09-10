@@ -376,6 +376,12 @@
     "sectorTreeTitle": "Default access for this business type",
     "sectorTreeHint": "A new Plan aimed at this business type starts with exactly this — from there each Plan can add or remove on its own.",
     "sectorDefaultTag": "Default",
+    "sectorOrderTitle": "Reorder Departments",
+    "sectorOrderHint": "Drag a row to reorder Departments for this business type only — it never affects the Master Tree or other business types.",
+    "sectorOrderColDepartment": "Department",
+    "sectorOrderColMaster": "Master Tree Order",
+    "sectorOrderColCustom": "Custom Order",
+    "sectorOrderCustomTag": "Custom",
     "appIcon": "Icon",
     "appColorFrom": "Color (start)",
     "appColorTo": "Color (end)",
@@ -561,7 +567,9 @@
     "masterTreeLockedByAncestor": "Locked: a level above has this platform off",
     "masterTreeConfirmTitle": "Confirm changes to the Master Tree",
     "masterTreeConfirmHint": "This affects every Business Type, Plan, and client that depends on these branches. Review before saving.",
-    "masterTreeNoChanges": "Nothing to save."
+    "masterTreeNoChanges": "Nothing to save.",
+    "masterTreeOrderLabel": "Department Order",
+    "masterTreeOrderChangeLine": "New order: {order}"
   },
   "business": {
     "usersTitle": "Users",

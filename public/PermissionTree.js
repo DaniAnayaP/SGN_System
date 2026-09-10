@@ -93,6 +93,17 @@
         return res.json();
     }
 
+    // Departamento id + translated label, with none of the área/categoría
+    // resolution create()/init() do below -- a screen that only needs the
+    // Departamento list (e.g. Admin-BusinessSectors.js's own
+    // Reordenar-Departamentos screen) doesn't need a whole tree instance to
+    // get it. 'main' excluded, same as departmentOrder's own convention
+    // (Inicio/Tablero/Administración del Negocio isn't a real Departamento).
+    async function getDepartmentCatalog() {
+        const { sections } = await loadMenuData();
+        return sections.filter((s) => s.id !== 'main').map((s) => ({ id: s.id, label: t(sectionLabelKey(s)) }));
+    }
+
     // Fallback área list for the 8 departments with no named areas of their
     // own (see AREAS_BY_DEPARTMENT/GENERIC_AREAS in Dashboard.js — this is a
     // deliberate hand-kept-in-sync duplicate, same as data/menu.json's own
@@ -196,7 +207,15 @@
     // CLIENT's grants look like, so it doesn't make sense for Admin-Planes'
     // plan-grants tree (a Plan isn't tied to any one client/sector anymore,
     // see the Nuestras APPs redesign — plans.app_id is dead).
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false } = {}) {
+    // departmentOrder: an optional array of department sectionIds in the
+    // order they should render (see Admin-ArbolMaestro.js/
+    // Admin-BusinessSectors.js's own "Reordenar" screen) -- purely a
+    // display-order override applied to the SAME sections menu.json
+    // already returns, computed once in init() below and left completely
+    // alone by every other caller (undefined here, unchanged behavior).
+    // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
+    // not a Giro/Plan-facing "Departamento") is never reordered by this.
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null } = {}) {
         // statusMode (Árbol de Permisos Maestro) is a completely separate,
         // much simpler mode: no grants, no rollup/indeterminate math, no
         // App-visibility column, no cost-center/module filtering -- GEIPSA
@@ -212,6 +231,26 @@
             showAppTab = false;
         }
         let sectionsData = [];
+        // Departamento drag-reorder (statusMode/Árbol Maestro only -- see
+        // statusRow's depth-0 branch and reorderDepartments below). Plain
+        // module-scope state, same pattern grantSet/statusMap already use;
+        // dragging never touches sectionsData's actual CONTENTS, only the
+        // array's own order, so nothing else this file computes from
+        // sectionsData (grants, statuses, labels) needs to change.
+        let draggedDepartmentId = null;
+        function reorderDepartments(draggedId, targetId) {
+            if (draggedId === targetId) return false;
+            const draggedIdx = sectionsData.findIndex((s) => s.id === draggedId);
+            if (draggedIdx === -1) return false;
+            const [moved] = sectionsData.splice(draggedIdx, 1);
+            const targetIdx = sectionsData.findIndex((s) => s.id === targetId);
+            if (targetIdx === -1) {
+                sectionsData.splice(draggedIdx, 0, moved);
+                return false;
+            }
+            sectionsData.splice(targetIdx, 0, moved);
+            return true;
+        }
         let grantSet = new Set();
         // statusMode's own state -- a Map from the same keyOf(...) key
         // vocabulary above to a {status, webEnabled, appEnabled} object. A
@@ -968,9 +1007,52 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, departmentId) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
+            // Departamento-level drag-to-reorder -- Árbol Maestro only
+            // (departmentId is only ever passed at depth 0, see
+            // renderStatusTree). No separate "reorder column": the grip
+            // sits right on the row, and dropping it reorders sectionsData
+            // in place (see reorderDepartments above) before a full
+            // renderStatusTree() redraw picks up the new order. readOnly
+            // mode never gets draggable="true" -- same guard every other
+            // editable control in this file already respects.
+            if (departmentId && !readOnly) {
+                row.classList.add('perm-tree-row-draggable');
+                row.draggable = true;
+                const grip = document.createElement('span');
+                grip.className = 'perm-tree-drag-handle';
+                grip.setAttribute('aria-hidden', 'true');
+                grip.innerHTML = '<i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i>';
+                row.appendChild(grip);
+                row.addEventListener('dragstart', (e) => {
+                    draggedDepartmentId = departmentId;
+                    row.classList.add('perm-tree-row-dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                row.addEventListener('dragend', () => {
+                    draggedDepartmentId = null;
+                    row.classList.remove('perm-tree-row-dragging');
+                });
+                row.addEventListener('dragover', (e) => {
+                    if (!draggedDepartmentId || draggedDepartmentId === departmentId) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    row.classList.add('perm-tree-row-drop-target');
+                });
+                row.addEventListener('dragleave', () => {
+                    row.classList.remove('perm-tree-row-drop-target');
+                });
+                row.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    row.classList.remove('perm-tree-row-drop-target');
+                    const draggedId = draggedDepartmentId;
+                    draggedDepartmentId = null;
+                    if (!draggedId || draggedId === departmentId) return;
+                    if (reorderDepartments(draggedId, departmentId)) renderStatusTree();
+                });
+            }
             if (toggle) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -1532,7 +1614,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? section.id : null));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -1856,9 +1938,27 @@
                 // of the shared category template (Catálogos, Operaciones,
                 // ...) every department already gets.
                 const generalItems = (mainSection?.items || []).filter((i) => ['home', 'panel', 'dashboard'].includes(i.id));
-                const filtered = allowedSectionIds
+                const scopedSections = allowedSectionIds
                     ? allSections.filter((s) => s.id === 'main' || allowedSectionIds.includes(s.id))
                     : allSections;
+                // Reorder the real departments (never 'main', see the
+                // departmentOrder param note on create() above) -- anything
+                // not explicitly ordered yet (a department added to
+                // menu.json after this order was last saved) keeps its
+                // original relative position, appended after the ordered
+                // ones, so a new department is never silently hidden.
+                const filtered = (() => {
+                    if (!departmentOrder || !departmentOrder.length) return scopedSections;
+                    const main = scopedSections.filter((s) => s.id === 'main');
+                    const rest = scopedSections.filter((s) => s.id !== 'main');
+                    const byId = new Map(rest.map((s) => [s.id, s]));
+                    const ordered = [];
+                    departmentOrder.forEach((id) => {
+                        if (byId.has(id)) { ordered.push(byId.get(id)); byId.delete(id); }
+                    });
+                    rest.forEach((s) => { if (byId.has(s.id)) ordered.push(s); });
+                    return [...main, ...ordered];
+                })();
                 // Every department section is just a placeholder in
                 // menu.json now (items: []) — the actual grantable
                 // categories/pantallas (Catálogos, Operaciones, ...) live
@@ -2028,6 +2128,17 @@
             getStatusLabel(sectionId, itemId, submenuId) {
                 return statusLabelMap.get(keyOf(sectionId, itemId, submenuId)) || '';
             },
+            // statusMode only -- current Departamento order (drag-reordered
+            // sectionsData, minus 'main' which is core navigation and never
+            // a reorderable Departamento -- see the departmentOrder param
+            // note on create() above). Admin-ArbolMaestro.js reads this on
+            // Guardar and sends it to the master-permission-order endpoint
+            // alongside status/Web-App changes. Empty array for a caller
+            // that never rendered in statusMode (sectionsData still holds
+            // whatever the last create() call built, harmless either way).
+            getDepartmentOrder() {
+                return sectionsData.filter((s) => s.id !== 'main').map((s) => s.id);
+            },
             // statusMode only -- Admin-ArbolMaestro.js calls this right
             // after a successful save with the server's fresh rows, so
             // every pending-added/pending-removed highlight clears the
@@ -2041,5 +2152,5 @@
         };
     }
 
-    window.PermissionTree = { create };
+    window.PermissionTree = { create, getDepartmentCatalog };
 })();

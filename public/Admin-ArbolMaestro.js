@@ -22,6 +22,10 @@ let masterTree = null;
 // Snapshot from the last successful load/save -- the baseline
 // describeChanges() diffs the tree's current in-memory state against.
 let originalStatuses = [];
+// Same idea, Departamento order (see getDepartmentOrder in
+// PermissionTree.js / master_permission_order in db.js) -- a separate
+// table from statuses, saved together on the same Guardar click.
+let originalDepartmentOrder = [];
 
 function statusRowKey(row) {
     return `${row.sectionId}::${row.itemId || ''}::${row.submenuId || ''}`;
@@ -46,6 +50,21 @@ function describeChanges() {
         changes.push({ label, before: b, after: a });
     });
     return changes;
+}
+
+function departmentOrderChanged() {
+    if (!masterTree) return false;
+    const before = originalDepartmentOrder;
+    const after = masterTree.getDepartmentOrder();
+    return before.length !== after.length || before.some((id, i) => id !== after[i]);
+}
+
+// Department names in their NEW order -- getStatusLabel resolves any node
+// key back to its i18n-translated label (see statusRow's statusLabelMap),
+// depth-0 department keys included, so this needs no separate lookup.
+function departmentOrderLine() {
+    const names = masterTree.getDepartmentOrder().map((id) => masterTree.getStatusLabel(id, null, null) || id);
+    return Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') });
 }
 
 function statusLabel(status) {
@@ -76,7 +95,7 @@ function describeChangeLines(change) {
 // every Giro/Plan/client downstream, so it never saves directly from the
 // tree's own Guardar button. Built fresh each time (not static markup)
 // since its content is entirely the diff computed above.
-function openConfirmModal(changes, onConfirm) {
+function openConfirmModal(changes, orderLine, onConfirm) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     const panel = document.createElement('div');
@@ -112,6 +131,19 @@ function openConfirmModal(changes, onConfirm) {
         });
         list.appendChild(row);
     });
+    if (orderLine) {
+        const row = document.createElement('div');
+        row.className = 'master-tree-confirm-row';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'master-tree-confirm-name';
+        nameEl.textContent = Dashboard.t('admin.masterTreeOrderLabel');
+        row.appendChild(nameEl);
+        const lineEl = document.createElement('div');
+        lineEl.className = 'master-tree-confirm-line';
+        lineEl.textContent = orderLine;
+        row.appendChild(lineEl);
+        list.appendChild(row);
+    }
     document.body.appendChild(overlay);
     overlay.appendChild(panel);
     function close() { overlay.remove(); }
@@ -127,11 +159,15 @@ async function loadMasterTree() {
     masterTreeError.hidden = true;
     masterTreeContainer.innerHTML = '';
     try {
-        const res = await fetch('/api/admin/master-permission-status', { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        originalStatuses = data.statuses || [];
-        masterTree = window.PermissionTree.create(masterTreeContainer, { statusMode: true });
+        const [statusRes, orderRes] = await Promise.all([
+            fetch('/api/admin/master-permission-status', { credentials: 'include' }),
+            fetch('/api/admin/master-permission-order', { credentials: 'include' }),
+        ]);
+        if (!statusRes.ok || !orderRes.ok) throw new Error('load failed');
+        const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        originalStatuses = statusData.statuses || [];
+        originalDepartmentOrder = orderData.departmentOrder || [];
+        masterTree = window.PermissionTree.create(masterTreeContainer, { statusMode: true, departmentOrder: originalDepartmentOrder });
         await masterTree.init(originalStatuses);
     } catch {
         masterTreeError.textContent = Dashboard.t('admin.loadError');
@@ -142,15 +178,24 @@ async function loadMasterTree() {
 async function saveMasterTree() {
     masterTreeSaveBtn.disabled = true;
     try {
-        const res = await fetch('/api/admin/master-permission-status', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ statuses: masterTree.getStatuses() }),
-        });
-        if (!res.ok) throw new Error('save failed');
-        const data = await res.json();
-        originalStatuses = data.statuses || [];
+        const [statusRes, orderRes] = await Promise.all([
+            fetch('/api/admin/master-permission-status', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ statuses: masterTree.getStatuses() }),
+            }),
+            fetch('/api/admin/master-permission-order', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ departmentOrder: masterTree.getDepartmentOrder() }),
+            }),
+        ]);
+        if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
+        const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        originalStatuses = statusData.statuses || [];
+        originalDepartmentOrder = orderData.departmentOrder || [];
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved -- otherwise a checkbox you
         // changed and saved would keep showing yellow/gray forever,
@@ -167,11 +212,12 @@ async function saveMasterTree() {
 masterTreeSaveBtn.addEventListener('click', () => {
     if (!masterTree) return;
     const changes = describeChanges();
-    if (!changes.length) {
+    const orderLine = departmentOrderChanged() ? departmentOrderLine() : null;
+    if (!changes.length && !orderLine) {
         Dashboard.showToast(Dashboard.t('admin.masterTreeNoChanges'), 'info');
         return;
     }
-    openConfirmModal(changes, saveMasterTree);
+    openConfirmModal(changes, orderLine, saveMasterTree);
 });
 
 (async function init() {

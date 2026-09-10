@@ -510,6 +510,37 @@
         </div>
     </div>
 
+    <!-- Departamento reorder for this Giro -- two columns, confirmed with the
+         user: "Orden Árbol Maestro" (read-only reference, this Giro can't
+         edit it here -- that happens on Árbol de Permisos Maestro itself)
+         and "Reorden Personalizado" (drag-only, local to this Giro; see
+         sector_permission_order / getEffectiveSectorDepartmentOrder in
+         db.js). Rows are laid out top-to-bottom IN the custom order --
+         there's no separate rank input, dragging a row IS reordering it. -->
+    <div class="modal-overlay" id="sector-order-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-order-modal-title" style="max-width: 40rem;">
+            <h3 id="sector-order-modal-title" data-i18n="admin.sectorOrderTitle">Reorder Departments</h3>
+            <p class="admin-hint" data-i18n="admin.sectorOrderHint">Drag a row to reorder Departments for this Giro only -- it never affects the Master Tree or other Giros.</p>
+            <div class="admin-table-wrap">
+                <table class="admin-table sector-order-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="admin.sectorOrderColDepartment">Department</th>
+                            <th data-i18n="admin.sectorOrderColMaster">Master Tree Order</th>
+                            <th data-i18n="admin.sectorOrderColCustom">Custom Order</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sector-order-list"></tbody>
+                </table>
+            </div>
+            <div id="sector-order-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="sector-order-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="sector-order-close" data-i18n="admin.cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
             <h3 id="business-summary-modal-title" data-i18n="main.businessProfile">Business User Data</h3>

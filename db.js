@@ -349,6 +349,41 @@ db.exec(`
         changed_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Custom display order for the permission tree (Departamento level
+    -- first -- see PermissionTree.js's own departmentOrder param; Área/
+    -- Apartado/Pantalla/Columna levels are a deliberate follow-up, not
+    -- built yet). One row per "parent" whose children got explicitly
+    -- reordered -- parent_key '__root__' means the top-level Departamento
+    -- list itself; ordered_keys is a JSON array of that parent's child ids
+    -- in the order chosen. A department never explicitly touched here
+    -- keeps menu.json's own original order (see the departmentOrder
+    -- fallback logic in PermissionTree.js) -- this table only ever holds
+    -- the DIFFERENCES from that original order, never a full copy of it.
+    --
+    -- Two separate tables (not one with a nullable business_sector_id),
+    -- same reasoning as master_permission_status vs sector_grants: this
+    -- one is GEIPSA-wide (no owner), that one is scoped per Giro. A Giro
+    -- with no row here for a given parent_key falls back to THIS table's
+    -- own order for that parent_key, which itself falls back to
+    -- menu.json's original order -- the live 3-level cascade the user
+    -- described (Maestro -> Giro -> ... -> Cliente), not a one-time copy.
+    CREATE TABLE IF NOT EXISTS master_permission_order (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        parent_key    TEXT NOT NULL UNIQUE,
+        ordered_keys  TEXT NOT NULL,
+        updated_by    TEXT NOT NULL DEFAULT '',
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS sector_permission_order (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_sector_id  INTEGER NOT NULL REFERENCES business_sectors(id) ON DELETE CASCADE,
+        parent_key          TEXT NOT NULL,
+        ordered_keys        TEXT NOT NULL,
+        updated_by          TEXT NOT NULL DEFAULT '',
+        updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(business_sector_id, parent_key)
+    );
+
     -- Costo $ de cada botón/módulo de MODULE_CATALOG — configurado en su
     -- propia pantalla (Costos de Módulos), usado para calcular "Pago por
     -- Anexos" en Nuestros Clientes (suma del costo de cada módulo que un
@@ -5227,6 +5262,49 @@ function logBusinessSectorChange({ businessSectorId, action, fieldKey, oldValue,
     });
 }
 
+// --- Permission tree display order (Departamento level -- see the ---------
+// master_permission_order/sector_permission_order comment above) ----------
+function deserializeOrderRow(row) {
+    return { parentKey: row.parent_key, orderedKeys: JSON.parse(row.ordered_keys) };
+}
+function getMasterPermissionOrder() {
+    return db.prepare('SELECT parent_key, ordered_keys FROM master_permission_order').all().map(deserializeOrderRow);
+}
+function setMasterPermissionOrder(parentKey, orderedKeys, updatedBy) {
+    db.prepare(`
+        INSERT INTO master_permission_order (parent_key, ordered_keys, updated_by)
+        VALUES (@parentKey, @orderedKeys, @updatedBy)
+        ON CONFLICT(parent_key) DO UPDATE SET ordered_keys = excluded.ordered_keys, updated_by = excluded.updated_by, updated_at = datetime('now')
+    `).run({ parentKey, orderedKeys: JSON.stringify(orderedKeys), updatedBy: updatedBy || '' });
+    return getMasterPermissionOrder();
+}
+
+function getSectorPermissionOrder(sectorId) {
+    return db.prepare('SELECT parent_key, ordered_keys FROM sector_permission_order WHERE business_sector_id = ?').all(sectorId).map(deserializeOrderRow);
+}
+function setSectorPermissionOrder(sectorId, parentKey, orderedKeys, updatedBy) {
+    db.prepare(`
+        INSERT INTO sector_permission_order (business_sector_id, parent_key, ordered_keys, updated_by)
+        VALUES (@sectorId, @parentKey, @orderedKeys, @updatedBy)
+        ON CONFLICT(business_sector_id, parent_key) DO UPDATE SET ordered_keys = excluded.ordered_keys, updated_by = excluded.updated_by, updated_at = datetime('now')
+    `).run({ sectorId, parentKey, orderedKeys: JSON.stringify(orderedKeys), updatedBy: updatedBy || '' });
+    return getSectorPermissionOrder(sectorId);
+}
+
+// The live cascade the user described: a Giro shows its OWN order for a
+// given parent_key if it's ever touched that one, else falls back to
+// whatever Árbol Maestro's CURRENT order is for it (not a frozen copy --
+// if Maestro's order changes later, an untouched Giro sees the new one
+// too), else falls back to menu.json's own original order (the empty-
+// array case, handled by PermissionTree.js's departmentOrder fallback).
+function getEffectiveSectorDepartmentOrder(sectorId) {
+    const ROOT = '__root__';
+    const sectorRow = getSectorPermissionOrder(sectorId).find((r) => r.parentKey === ROOT);
+    if (sectorRow) return sectorRow.orderedKeys;
+    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === ROOT);
+    return masterRow ? masterRow.orderedKeys : [];
+}
+
 // What this Sector grants by default (Nuestros Sectores de Negocio screen)
 // -- same replace-all-on-save shape as plan/profile/job-position grants.
 function getSectorGrants(sectorId) {
@@ -6138,6 +6216,11 @@ module.exports = {
     setSectorGrants,
     getMasterPermissionStatuses,
     setMasterPermissionStatuses,
+    getMasterPermissionOrder,
+    setMasterPermissionOrder,
+    getSectorPermissionOrder,
+    setSectorPermissionOrder,
+    getEffectiveSectorDepartmentOrder,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
     setPlanGrants,

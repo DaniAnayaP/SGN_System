@@ -502,6 +502,7 @@ function renderSectorSubView() {
     else if (sectorSubView.mode === 'form') renderSectorForm(sectorSubView.sector);
     else if (sectorSubView.mode === 'history') renderSectorHistory(sectorSubView.sector);
     else if (sectorSubView.mode === 'perms') renderSectorPerms(sectorSubView.sector);
+    else if (sectorSubView.mode === 'order') renderSectorOrder(sectorSubView.sector);
 }
 
 function subViewBackHeader(title, subtitle, onBack) {
@@ -589,6 +590,7 @@ function renderSectorDetail(sector) {
     grid.className = 'action-grid';
     const actions = [
         { icon: 'bx-shield', label: t('admin.sectorTreeTitle'), onClick: () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); } },
+        { icon: 'bx-sort-alt-2', label: t('admin.sectorOrderTitle'), onClick: () => { sectorSubView = { mode: 'order', sector }; renderSectorSubView(); } },
         { icon: 'bx-compass', label: t('admin.businessSectorPreview'), onClick: () => showToast(t('admin.underConstruction')) },
         { icon: 'bx-edit', label: t('admin.edit'), onClick: () => { sectorSubView = { mode: 'form', sector }; renderSectorSubView(); } },
         { icon: 'bx-history', label: t('admin.businessSectorChangeHistory'), onClick: () => { sectorSubView = { mode: 'history', sector }; renderSectorSubView(); } },
@@ -945,6 +947,145 @@ function renderSectorPerms(sector) {
     goToTree.innerHTML = `<i class="bx bx-shield" aria-hidden="true"></i><span>${t('admin.businessSectorGoToTree')}</span>`;
     goToTree.addEventListener('click', () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); });
     contentEl.appendChild(goToTree);
+}
+
+// --- Departamento reorder (see the Web version's identical screen in
+// Admin-BusinessSectors.js -- same two ideas: "Orden Árbol Maestro" is
+// read-only reference here, "Reorden Personalizado" is drag-only and local
+// to this Giro). Reuses .sector-order-* classes from Admin.css, laid out
+// over .item-row instead of a <table> to match this shell's own list style.
+let departmentCatalogApp = null;
+async function ensureDepartmentCatalogApp() {
+    if (!departmentCatalogApp) departmentCatalogApp = await window.PermissionTree.getDepartmentCatalog();
+    return departmentCatalogApp;
+}
+
+function renderSectorOrder(sector) {
+    contentEl.appendChild(subViewBackHeader(t('admin.sectorOrderTitle'), sector.name, () => {
+        sectorSubView = { mode: 'detail', sector };
+        renderSectorSubView();
+    }));
+    const hintEl = document.createElement('p');
+    hintEl.className = 'home-carga-empty-note';
+    hintEl.style.textAlign = 'left';
+    hintEl.style.padding = '0 0 0.8rem';
+    hintEl.textContent = t('admin.sectorOrderHint');
+    contentEl.appendChild(hintEl);
+
+    const listEl = document.createElement('div');
+    listEl.className = 'home-carga-empty-note';
+    listEl.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(listEl);
+
+    let masterOrder = [];
+    let customOrder = [];
+    let labelById = new Map();
+    let draggedId = null;
+    const rowsWrap = document.createElement('div');
+
+    function renderRows() {
+        rowsWrap.innerHTML = '';
+        const masterRank = new Map(masterOrder.map((id, i) => [id, i + 1]));
+        customOrder.forEach((id, index) => {
+            const row = document.createElement('div');
+            row.className = 'item-row sector-order-row';
+            row.draggable = true;
+            row.addEventListener('dragstart', (e) => {
+                draggedId = id;
+                row.classList.add('sector-order-row-dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            row.addEventListener('dragend', () => {
+                draggedId = null;
+                row.classList.remove('sector-order-row-dragging');
+            });
+            row.addEventListener('dragover', (e) => {
+                if (!draggedId || draggedId === id) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                row.classList.add('sector-order-row-drop-target');
+            });
+            row.addEventListener('dragleave', () => row.classList.remove('sector-order-row-drop-target'));
+            row.addEventListener('drop', (e) => {
+                e.preventDefault();
+                row.classList.remove('sector-order-row-drop-target');
+                const fromId = draggedId;
+                draggedId = null;
+                if (!fromId || fromId === id) return;
+                const fromIdx = customOrder.indexOf(fromId);
+                if (fromIdx === -1) return;
+                customOrder.splice(fromIdx, 1);
+                const toIdx = customOrder.indexOf(id);
+                customOrder.splice(toIdx === -1 ? customOrder.length : toIdx, 0, fromId);
+                renderRows();
+            });
+
+            const main = document.createElement('div');
+            main.className = 'item-main';
+            main.innerHTML = `<div class="item-title">${labelById.get(id) || id}</div>`
+                + `<div class="item-sub">${t('admin.sectorOrderColMaster')}: <span class="sector-order-badge">${masterRank.get(id) || '—'}</span></div>`;
+            row.appendChild(main);
+
+            const customCell = document.createElement('div');
+            customCell.className = 'sector-order-custom-cell';
+            customCell.innerHTML = '<span class="sector-order-grip"><i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i></span>'
+                + `<span class="sector-order-badge sector-order-badge-custom">${index + 1}</span>`;
+            row.appendChild(customCell);
+
+            if ((masterRank.get(id) || 0) !== index + 1) {
+                const tag = document.createElement('span');
+                tag.className = 'sector-order-custom-tag';
+                tag.textContent = t('admin.sectorOrderCustomTag');
+                row.appendChild(tag);
+            }
+            rowsWrap.appendChild(row);
+        });
+    }
+
+    (async () => {
+        try {
+            const [catalog, res] = await Promise.all([
+                ensureDepartmentCatalogApp(),
+                fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/department-order`), { credentials: 'include' }),
+            ]);
+            if (!res.ok) throw new Error('load failed');
+            const data = await res.json();
+            if (sectorSubView.mode !== 'order' || sectorSubView.sector.id !== sector.id) return;
+            labelById = new Map(catalog.map((d) => [d.id, d.label]));
+            masterOrder = data.masterOrder || [];
+            customOrder = (data.customOrder && data.customOrder.length) ? [...data.customOrder] : [...masterOrder];
+            catalog.forEach((d) => { if (!customOrder.includes(d.id)) customOrder.push(d.id); });
+            listEl.remove();
+            contentEl.appendChild(rowsWrap);
+            renderRows();
+        } catch {
+            listEl.textContent = t('admin.loadError');
+        }
+    })();
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'home-carga-new-btn';
+    saveBtn.style.marginTop = '1rem';
+    saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+    saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true;
+        try {
+            const res = await fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/department-order`), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ customOrder }),
+            });
+            if (!res.ok) throw new Error('save failed');
+            showToast(t('main.changeSaved'));
+        } catch {
+            showToast(t('admin.saveError'));
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+    contentEl.appendChild(saveBtn);
 }
 
 (async function init() {
