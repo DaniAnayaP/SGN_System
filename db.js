@@ -320,6 +320,35 @@ db.exec(`
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Tipo Giro -- a flat, admin-created catalog just like business_sectors
+    -- itself, NOT the client-scoped article_categories/catalog-value-request
+    -- mechanism used elsewhere (Tipo Cliente, etc.): that whole request-then-
+    -- escalate-to-a-manager flow exists because a regular client employee
+    -- can't be trusted to add catalog values unsupervised, but every single
+    -- person who can even reach this screen is already role='admin' (GEIPSA
+    -- staff) -- there's no one further up to escalate to, so a new type is
+    -- just created directly, same trust level as creating a Giro itself.
+    CREATE TABLE IF NOT EXISTS business_sector_types (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL UNIQUE,
+        created_by  TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- business_sector_changes: same reasoning as plan_changes just above --
+    -- business_sectors is GEIPSA-wide (no client_id), so it can't reuse
+    -- data_table_changes (client_id NOT NULL there either).
+    CREATE TABLE IF NOT EXISTS business_sector_changes (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_sector_id  INTEGER NOT NULL REFERENCES business_sectors(id) ON DELETE CASCADE,
+        action              TEXT NOT NULL,
+        field_key           TEXT NOT NULL DEFAULT '',
+        old_value           TEXT NOT NULL DEFAULT '',
+        new_value           TEXT NOT NULL DEFAULT '',
+        changed_by          TEXT NOT NULL DEFAULT '',
+        changed_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Costo $ de cada botón/módulo de MODULE_CATALOG — configurado en su
     -- propia pantalla (Costos de Módulos), usado para calcular "Pago por
     -- Anexos" en Nuestros Clientes (suma del costo de cada módulo que un
@@ -1506,6 +1535,9 @@ ensureColumn('users', 'is_test_account', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('clients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('clients', 'training_user_id', 'INTEGER REFERENCES users(id)');
 ensureColumn('business_sectors', 'status', "TEXT NOT NULL DEFAULT 'active'");
+ensureColumn('business_sectors', 'icon', "TEXT NOT NULL DEFAULT 'bx-briefcase'");
+ensureColumn('business_sectors', 'type_id', 'INTEGER REFERENCES business_sector_types(id)');
+ensureColumn('business_sectors', 'description', "TEXT NOT NULL DEFAULT ''");
 // Deliberately NOT every client_id-scoped table: Field Fill Rules,
 // Transacciones Inteligentes and Reportes Programados are configuration a
 // client builds ONCE (which fields gate which, which report to compute) --
@@ -5069,9 +5101,10 @@ function getWebScreenFieldsCatalog(webScreenKey) {
 
 function deserializeBusinessSector(row) {
     if (!row) return row;
-    const { created_at, created_by, ...rest } = row;
+    const { created_at, created_by, type_id, type_name, ...rest } = row;
     return {
         ...rest, createdAt: created_at, createdBy: created_by || '',
+        typeId: type_id || null, typeName: type_name || '',
         ...getSystemColumnsForRecord({
             companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Sectores de Negocio',
             centroCostos: 'SGN', createdAt: created_at,
@@ -5079,15 +5112,72 @@ function deserializeBusinessSector(row) {
     };
 }
 
-function listBusinessSectors() {
-    return db.prepare('SELECT * FROM business_sectors ORDER BY name ASC').all().map(deserializeBusinessSector);
+// One row per node this sector actually grants (see getSectorGrants) --
+// counted against Árbol de Permisos Maestro's own status (default
+// 'habilitado' for anything without an override row, same convention
+// Admin-ArbolMaestro.js's own DEFAULT_ROW uses), split by Web vs App via
+// PermissionTree.js's own "#app"-suffix encoding (see APP_SUFFIX there --
+// an App-visibility grant is the exact same {sectionId,itemId,submenuId}
+// triple as its Web counterpart, just with "#app" appended to whichever
+// segment is last non-null). Purely a count -- no label resolution here,
+// so this never needs to touch menu.json or PermissionTree.js itself.
+function summarizeSectorPermissions(sectorId, masterStatuses) {
+    const statusByKey = new Map(masterStatuses.map((s) => [`${s.sectionId}::${s.itemId || ''}::${s.submenuId || ''}`, s.status]));
+    const grants = getSectorGrants(sectorId);
+    const baseKeys = new Set();
+    grants.forEach((g) => {
+        let { sectionId, itemId, submenuId } = g;
+        // The App-visibility suffix always lands on whichever of the 3
+        // segments is last non-null -- only one of them can ever actually
+        // carry it, so checking all 3 (in any order) and stripping
+        // whichever one matches is safe.
+        if (submenuId && submenuId.endsWith('#app')) submenuId = submenuId.slice(0, -4);
+        else if (itemId && itemId.endsWith('#app')) itemId = itemId.slice(0, -4);
+        else if (sectionId && sectionId.endsWith('#app')) sectionId = sectionId.slice(0, -4);
+        baseKeys.add(`${sectionId}::${itemId || ''}::${submenuId || ''}`);
+    });
+    const summary = { habilitado: 0, inhabilitado: 0, construccion: 0, mejoras: 0 };
+    baseKeys.forEach((key) => {
+        const status = statusByKey.get(key) || 'habilitado';
+        if (summary[status] === undefined) summary[status] = 0;
+        summary[status] += 1;
+    });
+    return summary;
 }
 
-function createBusinessSector({ name, createdBy }) {
+function listBusinessSectors() {
+    const rows = db.prepare(`
+        SELECT bs.*, bst.name AS type_name
+        FROM business_sectors bs
+        LEFT JOIN business_sector_types bst ON bst.id = bs.type_id
+        ORDER BY bs.name ASC
+    `).all();
+    const masterStatuses = getMasterPermissionStatuses();
+    return rows.map((row) => ({ ...deserializeBusinessSector(row), permSummary: summarizeSectorPermissions(row.id, masterStatuses) }));
+}
+
+const BUSINESS_SECTOR_PATCHABLE_FIELDS = {
+    name: { column: 'name', fieldKey: 'admin.businessSectorName' },
+    icon: { column: 'icon', fieldKey: 'admin.businessSectorIcon' },
+    typeId: { column: 'type_id', fieldKey: 'admin.businessSectorType' },
+    description: { column: 'description', fieldKey: 'admin.businessSectorDescription' },
+};
+
+function createBusinessSector({ name, icon, typeId, description, createdBy }) {
     const result = db
-        .prepare('INSERT INTO business_sectors (name, created_by) VALUES (@name, @createdBy)')
-        .run({ name, createdBy: createdBy || '' });
-    return deserializeBusinessSector(db.prepare('SELECT * FROM business_sectors WHERE id = ?').get(result.lastInsertRowid));
+        .prepare('INSERT INTO business_sectors (name, icon, type_id, description, created_by) VALUES (@name, @icon, @typeId, @description, @createdBy)')
+        .run({ name, icon: icon || 'bx-briefcase', typeId: typeId || null, description: description || '', createdBy: createdBy || '' });
+    return getBusinessSectorById(result.lastInsertRowid);
+}
+
+function updateBusinessSector(id, patch) {
+    const fields = Object.keys(patch).filter((key) => BUSINESS_SECTOR_PATCHABLE_FIELDS[key]);
+    if (!fields.length) return getBusinessSectorById(id);
+    const assignments = fields.map((key) => `${BUSINESS_SECTOR_PATCHABLE_FIELDS[key].column} = @${key}`).join(', ');
+    // better-sqlite3 doesn't allow mixing a positional `?` with a named-
+    // param object in the same statement, so `id` is bound as `@id` too.
+    db.prepare(`UPDATE business_sectors SET ${assignments} WHERE id = @id`).run({ ...patch, id });
+    return getBusinessSectorById(id);
 }
 
 function setBusinessSectorStatus(id, status) {
@@ -5096,7 +5186,45 @@ function setBusinessSectorStatus(id, status) {
 }
 
 function getBusinessSectorById(id) {
-    return deserializeBusinessSector(db.prepare('SELECT * FROM business_sectors WHERE id = ?').get(id));
+    const row = db.prepare(`
+        SELECT bs.*, bst.name AS type_name
+        FROM business_sectors bs
+        LEFT JOIN business_sector_types bst ON bst.id = bs.type_id
+        WHERE bs.id = ?
+    `).get(id);
+    if (!row) return null;
+    return { ...deserializeBusinessSector(row), permSummary: summarizeSectorPermissions(id, getMasterPermissionStatuses()) };
+}
+
+function listBusinessSectorTypes() {
+    return db.prepare('SELECT * FROM business_sector_types ORDER BY name ASC').all()
+        .map((row) => ({ id: row.id, name: row.name, createdBy: row.created_by || '', createdAt: row.created_at }));
+}
+
+function createBusinessSectorType({ name, createdBy }) {
+    const result = db
+        .prepare('INSERT INTO business_sector_types (name, created_by) VALUES (@name, @createdBy)')
+        .run({ name, createdBy: createdBy || '' });
+    const row = db.prepare('SELECT * FROM business_sector_types WHERE id = ?').get(result.lastInsertRowid);
+    return { id: row.id, name: row.name, createdBy: row.created_by || '', createdAt: row.created_at };
+}
+
+function getBusinessSectorChanges(sectorId) {
+    return db
+        .prepare('SELECT * FROM business_sector_changes WHERE business_sector_id = ? ORDER BY changed_at DESC, id DESC')
+        .all(sectorId);
+}
+
+function logBusinessSectorChange({ businessSectorId, action, fieldKey, oldValue, newValue, changedBy }) {
+    db.prepare(`
+        INSERT INTO business_sector_changes (business_sector_id, action, field_key, old_value, new_value, changed_by)
+        VALUES (@businessSectorId, @action, @fieldKey, @oldValue, @newValue, @changedBy)
+    `).run({
+        businessSectorId, action, fieldKey: fieldKey || '',
+        oldValue: oldValue == null ? '' : String(oldValue),
+        newValue: newValue == null ? '' : String(newValue),
+        changedBy: changedBy || '',
+    });
 }
 
 // What this Sector grants by default (Nuestros Sectores de Negocio screen)
@@ -5998,8 +6126,14 @@ module.exports = {
     getClientAppScreens,
     listBusinessSectors,
     createBusinessSector,
+    updateBusinessSector,
     setBusinessSectorStatus,
     getBusinessSectorById,
+    listBusinessSectorTypes,
+    createBusinessSectorType,
+    getBusinessSectorChanges,
+    logBusinessSectorChange,
+    BUSINESS_SECTOR_PATCHABLE_FIELDS,
     getSectorGrants,
     setSectorGrants,
     getMasterPermissionStatuses,

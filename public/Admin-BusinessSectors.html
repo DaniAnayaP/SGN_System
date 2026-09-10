@@ -370,11 +370,14 @@
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th data-col="icon"></th>
                             <th data-i18n="admin.businessSectorName" data-col="name">Sector name</th>
-                            <th data-i18n="admin.sectorTreeColumn" data-col="permissions">Default access</th>
-                            <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
-                            <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
+                            <th data-i18n="admin.businessSectorType" data-col="type">Sector type</th>
+                            <th data-i18n="admin.businessSectorDescription" data-col="description">Description</th>
+                            <th data-i18n="admin.businessSectorPermsAssigned" data-col="permsAssigned">Assigned permissions</th>
                             <th data-i18n="main.colHrStatus" data-col="status">Status</th>
+                            <th data-i18n="admin.planCreatedBy" data-col="createdBy">Created by</th>
+                            <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
                             <th class="col-system" data-group="menu.classControlInterno" data-i18n="main.colSysEmpresa" data-col="colSysEmpresa">Company</th>
                             <th class="col-system" data-group="menu.classControlInterno" data-i18n="main.colSysArea" data-col="colSysArea">Area</th>
                             <th class="col-system" data-group="menu.classControlInterno" data-i18n="main.colSysModulo" data-col="colSysModulo">Module</th>
@@ -400,6 +403,9 @@
         </section>
     </main>
 
+    <!-- Doubles as both "+ Crear Nuevo Giro" and "Editar" -- same pattern
+         Admin-Planes.js's own #plan-edit-modal uses, see openAddModal/
+         openEditModal in Admin-BusinessSectors.js. -->
     <div class="modal-overlay" id="sector-add-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-add-modal-title">
             <h3 id="sector-add-modal-title" data-i18n="menu.addBusinessSectorNew">+ Create New Sector</h3>
@@ -409,6 +415,19 @@
                         <label for="sector-name" data-i18n="admin.businessSectorName">Sector name</label>
                         <input id="sector-name" name="name" type="text" required>
                     </div>
+                    <div class="admin-field">
+                        <label data-i18n="admin.businessSectorIcon">Icon</label>
+                        <div class="icon-picker" id="sector-icon-picker" role="radiogroup"></div>
+                    </div>
+                    <div class="admin-field">
+                        <label for="sector-type" data-i18n="admin.businessSectorType">Sector type</label>
+                        <select id="sector-type"></select>
+                        <button type="button" class="admin-link-btn" id="sector-type-new" data-i18n="admin.businessSectorNewType">+ Add new sector type</button>
+                    </div>
+                    <div class="admin-field admin-field-full">
+                        <label for="sector-description" data-i18n="admin.businessSectorDescription">Description</label>
+                        <textarea id="sector-description" rows="3"></textarea>
+                    </div>
                 </div>
                 <div id="sector-form-error" class="admin-error" role="alert" hidden></div>
                 <div class="admin-form-actions">
@@ -416,6 +435,62 @@
                     <button type="button" class="btn btn-secondary" id="sector-form-cancel" data-i18n="admin.cancel">Cancel</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="sector-type-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-type-modal-title">
+            <h3 id="sector-type-modal-title" data-i18n="admin.businessSectorNewType">+ Add new sector type</h3>
+            <form id="sector-type-form" class="admin-form" novalidate>
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="sector-type-name" data-i18n="admin.businessSectorTypeName">Type name</label>
+                        <input id="sector-type-name" name="name" type="text" required>
+                    </div>
+                </div>
+                <div id="sector-type-form-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn" id="sector-type-form-submit" data-i18n="admin.save">Save</button>
+                    <button type="button" class="btn btn-secondary" id="sector-type-form-cancel" data-i18n="admin.cancel">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="sector-history-modal" hidden>
+        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="sector-history-modal-title">
+            <h3 id="sector-history-modal-title" data-i18n="admin.businessSectorChangeHistory">Change history</h3>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="main.changeHistoryDate">Date</th>
+                            <th data-i18n="main.changeHistoryUser">User</th>
+                            <th data-i18n="main.changeHistoryChange">Change</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sector-history-list"></tbody>
+                </table>
+            </div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" id="sector-history-close" data-i18n="admin.cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Read-only "Permisos asignados" breakdown -- opens from the color-dot
+         summary in the table (see openSectorPermsSummary in
+         Admin-BusinessSectors.js). Grouped by Árbol de Permisos Maestro's
+         own Estatus; the "Ver árbol"/nested view is a follow-up (see the
+         legend note left in the mockup this was approved from). -->
+    <div class="modal-overlay" id="sector-perms-modal" hidden>
+        <div class="modal-panel" style="max-width: 36rem;" role="dialog" aria-modal="true" aria-labelledby="sector-perms-modal-title">
+            <h3 id="sector-perms-modal-title" data-i18n="admin.businessSectorPermsAssigned">Assigned permissions</h3>
+            <p class="admin-hint" data-i18n="admin.businessSectorPermsHint">Read-only — grouped by the same Estatus as Árbol de Permisos Maestro.</p>
+            <div id="sector-perms-list"></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" id="sector-perms-close" data-i18n="admin.cancel">Close</button>
+            </div>
         </div>
     </div>
 

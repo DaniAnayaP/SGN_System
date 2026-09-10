@@ -227,8 +227,14 @@ const {
     setSaasAppScreenFields,
     listBusinessSectors,
     createBusinessSector,
+    updateBusinessSector,
     setBusinessSectorStatus,
     getBusinessSectorById,
+    listBusinessSectorTypes,
+    createBusinessSectorType,
+    getBusinessSectorChanges,
+    logBusinessSectorChange,
+    BUSINESS_SECTOR_PATCHABLE_FIELDS,
     getSectorGrants,
     setSectorGrants,
     getMasterPermissionStatuses,
@@ -1702,14 +1708,78 @@ app.get('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) => 
 });
 
 app.post('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) => {
-    const { name } = req.body || {};
+    const { name, icon, typeId, description } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
     try {
-        const sector = createBusinessSector({ name: name.trim(), createdBy: req.user.name });
+        const sector = createBusinessSector({ name: name.trim(), icon, typeId, description, createdBy: req.user.name });
+        logBusinessSectorChange({ businessSectorId: sector.id, action: 'create', changedBy: changedByLabel(req) });
         res.status(201).json({ sector });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(409).json({ message: 'Ya existe ese sector de negocio.' });
+        }
+        throw err;
+    }
+});
+
+// Full edit -- name/icon/type/description. No approval workflow (same
+// reasoning as plans' own PATCH): every account that can even reach this
+// screen is already role='admin', so there's no one to escalate a pending
+// change to. One 'update' row logged, plus one detailed row per field that
+// actually changed (mirrors the plan currency/costPerCostCenter pattern),
+// so Registro de Cambios reads as a real diff, not just "something changed".
+app.patch('/api/admin/business-sectors/:id', requireAuth, requireAdmin, (req, res) => {
+    const existing = getBusinessSectorById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Sector not found.' });
+    const { name, icon, typeId, description } = req.body || {};
+    if (name !== undefined && !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
+    try {
+        const patch = {};
+        if (name !== undefined) patch.name = name.trim();
+        if (icon !== undefined) patch.icon = icon;
+        if (typeId !== undefined) patch.typeId = typeId;
+        if (description !== undefined) patch.description = description;
+        const sector = updateBusinessSector(req.params.id, patch);
+        // One row per field that actually changed -- no extra generic
+        // "update" row on top (unlike plans' own PATCH), since every
+        // patchable field here already gets a real before/after value.
+        Object.entries(BUSINESS_SECTOR_PATCHABLE_FIELDS).forEach(([key, { fieldKey }]) => {
+            if (patch[key] === undefined || patch[key] === existing[key]) return;
+            logBusinessSectorChange({
+                businessSectorId: sector.id, action: 'update', fieldKey,
+                oldValue: existing[key], newValue: patch[key], changedBy: changedByLabel(req),
+            });
+        });
+        res.json({ sector });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'Ya existe ese sector de negocio.' });
+        }
+        throw err;
+    }
+});
+
+app.get('/api/admin/business-sectors/:id/changes', requireAuth, requireAdmin, (req, res) => {
+    const existing = getBusinessSectorById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Sector not found.' });
+    res.json({ changes: getBusinessSectorChanges(req.params.id) });
+});
+
+// Tipo Giro -- flat admin-created catalog (see business_sector_types in
+// db.js's own comment for why this isn't the client-scoped
+// article_categories/catalog-request mechanism used elsewhere).
+app.get('/api/admin/business-sector-types', requireAuth, requireAdmin, (req, res) => {
+    res.json({ types: listBusinessSectorTypes() });
+});
+app.post('/api/admin/business-sector-types', requireAuth, requireAdmin, (req, res) => {
+    const { name } = req.body || {};
+    if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
+    try {
+        const type = createBusinessSectorType({ name: name.trim(), createdBy: req.user.name });
+        res.status(201).json({ type });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'Ya existe ese tipo de giro.' });
         }
         throw err;
     }
@@ -1723,6 +1793,10 @@ app.patch('/api/admin/business-sectors/:id/status', requireAuth, requireAdmin, (
     const { status } = req.body || {};
     if (status !== 'active' && status !== 'inactive') return res.status(400).json({ message: 'status must be active or inactive.' });
     const sector = setBusinessSectorStatus(req.params.id, status);
+    logBusinessSectorChange({
+        businessSectorId: sector.id, action: 'update', fieldKey: 'admin.businessSectorStatus',
+        oldValue: existing.status, newValue: status, changedBy: changedByLabel(req),
+    });
     res.json({ sector });
 });
 

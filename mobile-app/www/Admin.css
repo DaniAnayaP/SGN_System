@@ -237,6 +237,19 @@
     font-family: inherit;
     resize: vertical;
 }
+.admin-field-full{ grid-column: 1 / -1; }
+.icon-picker{ display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.icon-picker-option{
+    width: 2.4rem; height: 2.4rem; border-radius: 0.5rem;
+    border: 1.5px solid var(--color-border); background-color: var(--color-bg);
+    color: var(--color-text-secondary); display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; cursor: pointer;
+}
+.icon-picker-option.active{ border-color: var(--color-accent); background-color: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg)); color: var(--color-accent); }
+.admin-link-btn{
+    align-self: flex-start; margin-top: 0.3rem; background: none; border: none; padding: 0;
+    color: var(--color-accent); font-size: 0.76rem; font-weight: 700; cursor: pointer;
+}
 .admin-field textarea:focus{
     outline: none;
     border-color: var(--color-text-primary);
@@ -841,6 +854,28 @@ body.dark-mode .admin-badge-prospecto{
 body.dark-mode .admin-badge-suspendido{
     background-color: #3a2e10; color: #f0c463;
 }
+
+/* "Permisos Asignados" color-dot summary (Giros de Negocio) -- reuses the
+   same 3 hues as .admin-badge-activo/suspendido/inactivo (green/amber/red)
+   for Habilitado/Construcción-Mejoras/Inhabilitado, so it reads consistent
+   with every other status pill on this screen instead of introducing a 4th
+   palette. Clickable -- opens #sector-perms-modal (read-only breakdown). */
+.perm-dot-summary{ display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; font-weight: 700; cursor: pointer; background: none; border: none; padding: 0; color: var(--color-text-primary); }
+.perm-dot{ width: 0.55rem; height: 0.55rem; border-radius: 50%; display: inline-block; }
+.perm-dot-good{ background-color: #1e7e34; }
+.perm-dot-warn{ background-color: #9a6b00; }
+.perm-dot-bad{ background-color: #8a4b4b; }
+body.dark-mode .perm-dot-good{ background-color: #7fd99a; }
+body.dark-mode .perm-dot-warn{ background-color: #f0c463; }
+body.dark-mode .perm-dot-bad{ background-color: #e0a3a3; }
+.perm-status-group{ margin-bottom: 1rem; }
+.perm-status-group:last-child{ margin-bottom: 0; }
+.perm-status-group-head{ font-size: 0.78rem; font-weight: 700; margin-bottom: 0.5rem; }
+.perm-status-row{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.4rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.4rem; margin-bottom: 0.35rem; font-size: 0.82rem; }
+.perm-status-row:last-child{ margin-bottom: 0; }
+.perm-status-row-tags{ display: flex; gap: 0.35rem; flex-shrink: 0; }
+.perm-status-tag{ font-size: 0.68rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 0.3rem; background-color: var(--color-bg); color: var(--color-text-secondary); }
+.perm-status-tag.perm-status-tag-on{ background-color: color-mix(in srgb, var(--color-accent) 15%, var(--color-bg)); color: var(--color-accent); }
 
 /* Institutional color palette widget */
 .color-palette-widget{

@@ -272,6 +272,7 @@ function renderSection(id) {
     updateBreadcrumb();
     if (id === 'tree') loadMasterTree(renderToken);
     else if (id === 'home') renderHomeHub();
+    else if (id === 'sectors') loadSectorsSection(renderToken);
     else renderComingSoon();
 }
 document.querySelectorAll('.home-tab').forEach((tab) => {
@@ -436,6 +437,502 @@ async function loadMasterTree(token) {
         error.textContent = t('admin.loadError');
         contentEl.appendChild(error);
     }
+}
+
+// --- Giros de Negocio -- ports Admin-BusinessSectors.js's own screen into
+// this App shell. Sub-views (list/detail/tree/form/history/perms) all
+// render straight into contentEl with their own back button, same "swap
+// what's in the tab's content area" model the Inicio/Árbol tabs already
+// use -- no extra sheet/overlay markup needed in the HTML for this.
+const SECTOR_ICON_OPTIONS = ['bx-buildings', 'bx-store-alt', 'bx-briefcase', 'bx-cog', 'bx-package', 'bx-car', 'bx-restaurant', 'bx-leaf'];
+let sectorsList = [];
+let sectorTypesList = [];
+let sectorSubView = { mode: 'list' };
+
+function sectorStatusLabelKey(status) {
+    // Not "...Med" -- confirmed live that variant doesn't exist for
+    // Inhabilitado/Mejoras (only Habilitado/Construcción have it), which
+    // left the raw i18n key showing on screen. The base key exists for
+    // all 4 statuses.
+    return `admin.masterTreeStatus${status.charAt(0).toUpperCase()}${status.slice(1)}`;
+}
+
+async function fetchSectorTypes() {
+    try {
+        const res = await fetch(apiUrl('/api/admin/business-sector-types'), { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        sectorTypesList = (await res.json()).types || [];
+    } catch {
+        sectorTypesList = [];
+    }
+}
+
+async function loadSectorsSection(token) {
+    sectorSubView = { mode: 'list' };
+    contentEl.innerHTML = '';
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+    try {
+        const [sectorsRes] = await Promise.all([
+            fetch(apiUrl('/api/admin/business-sectors'), { credentials: 'include' }),
+            fetchSectorTypes(),
+        ]);
+        if (token !== renderToken) return;
+        if (!sectorsRes.ok) throw new Error('load failed');
+        sectorsList = (await sectorsRes.json()).sectors || [];
+        renderSectorSubView();
+    } catch {
+        if (token !== renderToken) return;
+        contentEl.innerHTML = '';
+        const error = document.createElement('p');
+        error.className = 'home-carga-empty-note';
+        error.textContent = t('admin.loadError');
+        contentEl.appendChild(error);
+    }
+}
+
+function renderSectorSubView() {
+    if (activeSection !== 'sectors') return;
+    contentEl.innerHTML = '';
+    if (sectorSubView.mode === 'list') renderSectorsList();
+    else if (sectorSubView.mode === 'detail') renderSectorDetail(sectorSubView.sector);
+    else if (sectorSubView.mode === 'tree') renderSectorTree(sectorSubView.sector);
+    else if (sectorSubView.mode === 'form') renderSectorForm(sectorSubView.sector);
+    else if (sectorSubView.mode === 'history') renderSectorHistory(sectorSubView.sector);
+    else if (sectorSubView.mode === 'perms') renderSectorPerms(sectorSubView.sector);
+}
+
+function subViewBackHeader(title, subtitle, onBack) {
+    const head = document.createElement('div');
+    head.className = 'home-carga-header-top';
+    head.style.padding = '0.3rem 0 0.8rem';
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'home-subscreen-back';
+    back.innerHTML = '<i class="bx bx-arrow-back" aria-hidden="true"></i>';
+    back.addEventListener('click', onBack);
+    const titleWrap = document.createElement('div');
+    const h2 = document.createElement('h2');
+    h2.style.margin = '0';
+    h2.style.fontSize = '0.9rem';
+    h2.textContent = title;
+    titleWrap.appendChild(h2);
+    if (subtitle) {
+        const sub = document.createElement('div');
+        sub.className = 'home-carga-empty-note';
+        sub.style.padding = '0';
+        sub.style.margin = '0.1rem 0 0';
+        sub.style.textAlign = 'left';
+        sub.textContent = subtitle;
+        titleWrap.appendChild(sub);
+    }
+    head.append(back, titleWrap);
+    return head;
+}
+
+function renderSectorsList() {
+    const list = document.createElement('div');
+    if (!sectorsList.length) {
+        const empty = document.createElement('p');
+        empty.className = 'home-carga-empty-note';
+        empty.textContent = t('admin.noBusinessSectors');
+        list.appendChild(empty);
+    }
+    sectorsList.forEach((sector) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'home-carga-active-row';
+        const s = sector.permSummary || {};
+        const dots = [];
+        if (s.habilitado) dots.push(`<span class="perm-dot perm-dot-good"></span>${s.habilitado}`);
+        if ((s.construccion || 0) + (s.mejoras || 0) > 0) dots.push(`<span class="perm-dot perm-dot-warn"></span>${(s.construccion || 0) + (s.mejoras || 0)}`);
+        if (s.inhabilitado) dots.push(`<span class="perm-dot perm-dot-bad"></span>${s.inhabilitado}`);
+        const statusLabel = t(sector.status === 'inactive' ? 'main.filterInactive' : 'main.filterActive');
+        row.innerHTML = `
+            <span class="home-carga-active-row-icon"><i class="bx ${sector.icon || 'bx-briefcase'}" aria-hidden="true"></i></span>
+            <span class="home-carga-active-row-label">
+                <p>${sector.name}</p>
+                <span>${sector.typeName || '—'} · ${statusLabel}${dots.length ? ' · ' + dots.join(' ') : ''}</span>
+            </span>
+            <i class="bx bx-chevron-right" aria-hidden="true"></i>
+        `;
+        row.addEventListener('click', () => { sectorSubView = { mode: 'detail', sector }; renderSectorSubView(); });
+        list.appendChild(row);
+    });
+    contentEl.appendChild(list);
+
+    const newBtn = document.createElement('button');
+    newBtn.type = 'button';
+    newBtn.className = 'home-carga-new-btn';
+    newBtn.style.marginTop = '1rem';
+    newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('menu.addBusinessSectorNew')}</span>`;
+    newBtn.addEventListener('click', () => { sectorSubView = { mode: 'form', sector: null }; renderSectorSubView(); });
+    contentEl.appendChild(newBtn);
+}
+
+function renderSectorDetail(sector) {
+    contentEl.appendChild(subViewBackHeader(sector.name, `${sector.typeName || '—'} · ${t(sector.status === 'inactive' ? 'main.filterInactive' : 'main.filterActive')}`, () => {
+        sectorSubView = { mode: 'list' };
+        renderSectorSubView();
+    }));
+
+    const label = document.createElement('div');
+    label.className = 'home-carga-empty-note';
+    label.style.textAlign = 'left';
+    label.style.padding = '0 0 0.8rem';
+    label.textContent = sector.description || '';
+    if (sector.description) contentEl.appendChild(label);
+
+    const grid = document.createElement('div');
+    grid.className = 'action-grid';
+    const actions = [
+        { icon: 'bx-shield', label: t('admin.sectorTreeTitle'), onClick: () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); } },
+        { icon: 'bx-compass', label: t('admin.businessSectorPreview'), onClick: () => showToast(t('admin.underConstruction')) },
+        { icon: 'bx-edit', label: t('admin.edit'), onClick: () => { sectorSubView = { mode: 'form', sector }; renderSectorSubView(); } },
+        { icon: 'bx-history', label: t('admin.businessSectorChangeHistory'), onClick: () => { sectorSubView = { mode: 'history', sector }; renderSectorSubView(); } },
+        {
+            icon: sector.status === 'inactive' ? 'bx-check-circle' : 'bx-x-circle',
+            label: t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate'),
+            onClick: () => toggleSectorStatusApp(sector),
+        },
+    ];
+    actions.forEach((a) => {
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'action-cell';
+        cell.innerHTML = `<span class="item-icon"><i class="bx ${a.icon}" aria-hidden="true"></i></span><span class="lbl">${a.label}</span>`;
+        cell.addEventListener('click', a.onClick);
+        grid.appendChild(cell);
+    });
+    contentEl.appendChild(grid);
+
+    const permsBtn = document.createElement('button');
+    permsBtn.type = 'button';
+    permsBtn.className = 'home-carga-secondary-btn';
+    permsBtn.style.marginTop = '1rem';
+    permsBtn.innerHTML = `<i class="bx bx-pie-chart-alt" aria-hidden="true"></i><span>${t('admin.businessSectorPermsAssigned')}</span>`;
+    permsBtn.addEventListener('click', () => { sectorSubView = { mode: 'perms', sector }; renderSectorSubView(); });
+    contentEl.appendChild(permsBtn);
+}
+
+async function toggleSectorStatusApp(sector) {
+    const nextStatus = sector.status === 'inactive' ? 'active' : 'inactive';
+    try {
+        const res = await fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/status`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ status: nextStatus }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const { sector: updated } = await res.json();
+        sectorsList = sectorsList.map((s) => (s.id === updated.id ? updated : s));
+        sectorSubView = { mode: 'detail', sector: updated };
+        renderSectorSubView();
+    } catch {
+        showToast(t('admin.saveError'));
+    }
+}
+
+function renderSectorTree(sector) {
+    contentEl.appendChild(subViewBackHeader(t('admin.sectorTreeTitle'), sector.name, () => {
+        sectorSubView = { mode: 'detail', sector };
+        renderSectorSubView();
+    }));
+    const treeWrap = document.createElement('div');
+    // Plain grant-checkbox mode (not statusMode), same as AppRoles.js's own
+    // tree -- that one already works fine in the App with zero extra CSS
+    // scoping, unlike statusMode's row-overflow fix needed for the Árbol tab.
+    treeWrap.className = 'perm-tree';
+    contentEl.appendChild(treeWrap);
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    treeWrap.appendChild(hint);
+
+    let sectorTreeInstance = null;
+    (async () => {
+        try {
+            const res = await fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/grants`), { credentials: 'include' });
+            if (!res.ok) throw new Error('load failed');
+            const data = await res.json();
+            if (sectorSubView.mode !== 'tree' || sectorSubView.sector.id !== sector.id) return;
+            treeWrap.innerHTML = '';
+            sectorTreeInstance = window.PermissionTree.create(treeWrap, { showAppTab: true });
+            await sectorTreeInstance.init(data.grants || []);
+        } catch {
+            treeWrap.innerHTML = '';
+            const error = document.createElement('p');
+            error.className = 'home-carga-empty-note';
+            error.textContent = t('admin.loadError');
+            treeWrap.appendChild(error);
+        }
+    })();
+
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '0.5rem';
+    btnRow.style.marginTop = '1rem';
+    const equalizeBtn = document.createElement('button');
+    equalizeBtn.type = 'button';
+    equalizeBtn.className = 'home-carga-secondary-btn';
+    equalizeBtn.innerHTML = `<i class="bx bx-copy" aria-hidden="true"></i><span>${t('main.appEqualizeAll')}</span>`;
+    equalizeBtn.addEventListener('click', () => sectorTreeInstance?.equalizeAllAppToWeb());
+    const fillBtn = document.createElement('button');
+    fillBtn.type = 'button';
+    fillBtn.className = 'home-carga-secondary-btn';
+    fillBtn.innerHTML = `<i class="bx bx-list-plus" aria-hidden="true"></i><span>${t('main.appFillMissingAll')}</span>`;
+    fillBtn.addEventListener('click', () => sectorTreeInstance?.fillAllMissingAppToWeb());
+    btnRow.append(equalizeBtn, fillBtn);
+    contentEl.appendChild(btnRow);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'home-carga-new-btn';
+    saveBtn.style.marginTop = '0.7rem';
+    saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+    saveBtn.addEventListener('click', async () => {
+        if (!sectorTreeInstance) return;
+        saveBtn.disabled = true;
+        try {
+            const res = await fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/grants`), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ grants: sectorTreeInstance.getGrants() }),
+            });
+            if (!res.ok) throw new Error('save failed');
+            showToast(t('main.changeSaved'));
+            const refreshed = await fetch(apiUrl('/api/admin/business-sectors'), { credentials: 'include' });
+            if (refreshed.ok) sectorsList = (await refreshed.json()).sectors || [];
+        } catch {
+            showToast(t('admin.saveError'));
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+    contentEl.appendChild(saveBtn);
+}
+
+function renderSectorForm(sector) {
+    const isEdit = !!sector;
+    contentEl.appendChild(subViewBackHeader(isEdit ? t('admin.businessSectorEditTitle') : t('menu.addBusinessSectorNew'), null, () => {
+        sectorSubView = isEdit ? { mode: 'detail', sector } : { mode: 'list' };
+        renderSectorSubView();
+    }));
+
+    let selectedIcon = (sector && sector.icon) || SECTOR_ICON_OPTIONS[0];
+
+    const nameLabel = document.createElement('label');
+    nameLabel.className = 'home-carga-empty-note';
+    nameLabel.style.cssText = 'text-align:left; padding:0; display:block; margin-bottom:0.3rem;';
+    nameLabel.textContent = t('admin.businessSectorName');
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = (sector && sector.name) || '';
+    nameInput.style.cssText = 'width:100%; padding:0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); margin-bottom:0.8rem; font:inherit;';
+    contentEl.append(nameLabel, nameInput);
+
+    const iconLabel = nameLabel.cloneNode(true);
+    iconLabel.textContent = t('admin.businessSectorIcon');
+    contentEl.appendChild(iconLabel);
+    const iconPicker = document.createElement('div');
+    iconPicker.style.cssText = 'display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.8rem;';
+    function renderIcons() {
+        iconPicker.innerHTML = '';
+        SECTOR_ICON_OPTIONS.forEach((icon) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.style.cssText = `width:2.4rem; height:2.4rem; border-radius:0.5rem; border:1.5px solid ${icon === selectedIcon ? 'var(--home-accent)' : 'var(--home-divider)'}; background:${icon === selectedIcon ? 'var(--home-surface-2, #eef0fd)' : 'var(--home-surface)'}; color:${icon === selectedIcon ? 'var(--home-accent)' : 'var(--home-text-secondary)'}; display:flex; align-items:center; justify-content:center; font-size:1.1rem;`;
+            btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+            btn.addEventListener('click', () => { selectedIcon = icon; renderIcons(); });
+            iconPicker.appendChild(btn);
+        });
+    }
+    renderIcons();
+    contentEl.appendChild(iconPicker);
+
+    const typeLabel = nameLabel.cloneNode(true);
+    typeLabel.textContent = t('admin.businessSectorType');
+    contentEl.appendChild(typeLabel);
+    const typeSelect = document.createElement('select');
+    typeSelect.style.cssText = 'width:100%; padding:0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); margin-bottom:0.4rem; font:inherit;';
+    function renderTypeOptions() {
+        typeSelect.innerHTML = '';
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = t('admin.businessSectorTypeNone');
+        typeSelect.appendChild(blank);
+        sectorTypesList.forEach((type) => {
+            const opt = document.createElement('option');
+            opt.value = String(type.id);
+            opt.textContent = type.name;
+            typeSelect.appendChild(opt);
+        });
+        if (sector && sector.typeId) typeSelect.value = String(sector.typeId);
+    }
+    renderTypeOptions();
+    contentEl.appendChild(typeSelect);
+
+    const newTypeBtn = document.createElement('button');
+    newTypeBtn.type = 'button';
+    newTypeBtn.className = 'home-carga-secondary-btn';
+    newTypeBtn.style.marginBottom = '0.8rem';
+    newTypeBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('admin.businessSectorNewType')}</span>`;
+    newTypeBtn.addEventListener('click', async () => {
+        const name = window.prompt(t('admin.businessSectorTypeName'));
+        if (!name || !name.trim()) return;
+        try {
+            const res = await fetch(apiUrl('/api/admin/business-sector-types'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name: name.trim() }),
+            });
+            if (!res.ok) { showToast(t('admin.saveError')); return; }
+            const { type } = await res.json();
+            sectorTypesList = [...sectorTypesList, type].sort((a, b) => a.name.localeCompare(b.name));
+            renderTypeOptions();
+            typeSelect.value = String(type.id);
+        } catch {
+            showToast(t('admin.saveError'));
+        }
+    });
+    contentEl.appendChild(newTypeBtn);
+
+    const descLabel = nameLabel.cloneNode(true);
+    descLabel.textContent = t('admin.businessSectorDescription');
+    contentEl.appendChild(descLabel);
+    const descInput = document.createElement('textarea');
+    descInput.rows = 3;
+    descInput.value = (sector && sector.description) || '';
+    descInput.style.cssText = 'width:100%; padding:0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); margin-bottom:0.8rem; font:inherit; resize:vertical;';
+    contentEl.appendChild(descInput);
+
+    const errorEl = document.createElement('p');
+    errorEl.className = 'home-carga-empty-note';
+    errorEl.style.color = 'var(--home-danger)';
+    errorEl.hidden = true;
+    contentEl.appendChild(errorEl);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'home-carga-new-btn';
+    saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+    saveBtn.addEventListener('click', async () => {
+        const name = nameInput.value.trim();
+        if (!name) {
+            errorEl.textContent = t('admin.requiredFields');
+            errorEl.hidden = false;
+            return;
+        }
+        errorEl.hidden = true;
+        saveBtn.disabled = true;
+        const payload = {
+            name, icon: selectedIcon,
+            typeId: typeSelect.value ? Number(typeSelect.value) : null,
+            description: descInput.value.trim(),
+        };
+        try {
+            const url = isEdit ? apiUrl(`/api/admin/business-sectors/${sector.id}`) : apiUrl('/api/admin/business-sectors');
+            const res = await fetch(url, {
+                method: isEdit ? 'PATCH' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                errorEl.textContent = body.message || t('admin.saveError');
+                errorEl.hidden = false;
+                return;
+            }
+            const { sector: saved } = await res.json();
+            sectorsList = isEdit
+                ? sectorsList.map((s) => (s.id === saved.id ? saved : s))
+                : [...sectorsList, saved].sort((a, b) => a.name.localeCompare(b.name));
+            showToast(t('main.recordSaved'));
+            sectorSubView = { mode: 'detail', sector: saved };
+            renderSectorSubView();
+        } catch {
+            errorEl.textContent = t('admin.saveError');
+            errorEl.hidden = false;
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+    contentEl.appendChild(saveBtn);
+}
+
+function renderSectorHistory(sector) {
+    contentEl.appendChild(subViewBackHeader(t('admin.businessSectorChangeHistory'), sector.name, () => {
+        sectorSubView = { mode: 'detail', sector };
+        renderSectorSubView();
+    }));
+    const list = document.createElement('div');
+    list.className = 'home-carga-empty-note';
+    list.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(list);
+    (async () => {
+        try {
+            const res = await fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/changes`), { credentials: 'include' });
+            if (!res.ok) throw new Error('load failed');
+            const { changes } = await res.json();
+            list.innerHTML = '';
+            if (!changes || !changes.length) {
+                list.textContent = t('main.changeHistoryEmpty');
+                return;
+            }
+            changes.forEach((change) => {
+                const row = document.createElement('div');
+                row.className = 'item-row';
+                let description;
+                if (change.action === 'create') description = t('main.changeHistoryCreated');
+                else description = `${t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+                row.innerHTML = `<div class="item-main"><div class="item-title">${description}</div><div class="item-sub">${change.changed_at} · ${change.changed_by || '—'}</div></div>`;
+                contentEl.appendChild(row);
+            });
+            list.remove();
+        } catch {
+            list.textContent = t('admin.loadError');
+        }
+    })();
+}
+
+function renderSectorPerms(sector) {
+    contentEl.appendChild(subViewBackHeader(t('admin.businessSectorPermsAssigned'), sector.name, () => {
+        sectorSubView = { mode: 'detail', sector };
+        renderSectorSubView();
+    }));
+    const s = sector.permSummary || {};
+    const groups = [
+        { key: 'habilitado', count: s.habilitado || 0 },
+        { key: 'construccion', count: s.construccion || 0 },
+        { key: 'mejoras', count: s.mejoras || 0 },
+        { key: 'inhabilitado', count: s.inhabilitado || 0 },
+    ].filter((g) => g.count > 0);
+    if (!groups.length) {
+        const empty = document.createElement('p');
+        empty.className = 'home-carga-empty-note';
+        empty.textContent = t('admin.businessSectorPermsEmpty');
+        contentEl.appendChild(empty);
+    } else {
+        groups.forEach((g) => {
+            const row = document.createElement('div');
+            row.className = 'item-row';
+            row.innerHTML = `<div class="item-main"><div class="item-title">${t(sectorStatusLabelKey(g.key))}</div></div><span class="perm-status-tag perm-status-tag-on">${g.count}</span>`;
+            contentEl.appendChild(row);
+        });
+    }
+    const goToTree = document.createElement('button');
+    goToTree.type = 'button';
+    goToTree.className = 'home-carga-secondary-btn';
+    goToTree.style.marginTop = '1rem';
+    goToTree.innerHTML = `<i class="bx bx-shield" aria-hidden="true"></i><span>${t('admin.businessSectorGoToTree')}</span>`;
+    goToTree.addEventListener('click', () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); });
+    contentEl.appendChild(goToTree);
 }
 
 (async function init() {
