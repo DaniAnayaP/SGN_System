@@ -1386,6 +1386,12 @@ body.dark-mode .perm-tree-depth-2{
     justify-content: center;
     gap: 0.7rem;
 }
+/* Vista Previa/Navegar -- a fixed icon-only column (never abbreviates,
+   see applyStatusAbbreviations' fixedNeighbors), same reasoning as the
+   Web·App column above: a real column this width, not margin/padding
+   guesswork, is what keeps it aligned under its own header regardless of
+   content length or window size. */
+.perm-tree-mstatus-navigate-cell{ flex-shrink: 0; width: 2.2rem; display: flex; align-items: center; justify-content: center; }
 .perm-tree-mstatus-badge{
     display: flex;
     align-items: center;
@@ -1587,6 +1593,7 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
 .perm-tree-mstatus-header-status{ width: var(--perm-tree-status-col-width, 9.5rem); }
 .perm-tree-mstatus-header-platforms{ width: 13rem; }
+.perm-tree-mstatus-header-navigate{ width: 2.2rem; font-size: 0.85rem; }
 /* Wraps the Estatus + Web·App header columns together, flush against the
    header's own right edge -- see perm-tree-mstatus-controls (the row's
    equivalent) for why margin-left:auto here instead of just trusting a

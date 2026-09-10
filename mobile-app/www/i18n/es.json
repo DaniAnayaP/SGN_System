@@ -554,6 +554,7 @@
     "masterTreeColScreen": "Pantalla / Función",
     "masterTreeColStatus": "Estatus",
     "masterTreeColPlatforms": "Web · App",
+    "masterTreeColNavigate": "Navegar",
     "masterTreeApplyNestedWeb": "Aplicar Web a todo lo anidado debajo",
     "masterTreeApplyNestedApp": "Aplicar App a todo lo anidado debajo",
     "masterTreeLockedByAncestor": "Bloqueado: un nivel superior tiene esta plataforma apagada",

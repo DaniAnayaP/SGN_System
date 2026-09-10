@@ -1050,6 +1050,27 @@
                 platformsCell.appendChild(buildPlatformGroup(key, 'web', leafKeys, ancestorLocked));
                 platformsCell.appendChild(buildPlatformGroup(key, 'app', leafKeys, ancestorLocked));
                 controls.appendChild(platformsCell);
+                // Vista Previa/Navegar -- a stub for now (just an "under
+                // construction" toast), same as the identical icon already
+                // shipped on Nuestros Sectores de Negocio's own Acciones
+                // column. Reuses .perm-tree-mstatus-nest-btn's exact look
+                // (a small square icon button) rather than adding a new
+                // button style for one icon.
+                const navigateCell = document.createElement('div');
+                navigateCell.className = 'perm-tree-mstatus-navigate-cell';
+                const navigateBtn = document.createElement('button');
+                navigateBtn.type = 'button';
+                navigateBtn.className = 'perm-tree-mstatus-nest-btn';
+                navigateBtn.title = t('admin.businessSectorPreview');
+                navigateBtn.setAttribute('aria-label', t('admin.businessSectorPreview'));
+                navigateBtn.innerHTML = '<i class="bx bx-compass" aria-hidden="true"></i>';
+                navigateBtn.addEventListener('click', () => {
+                    const message = t('admin.underConstruction');
+                    if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'info');
+                    else if (typeof window.showToast === 'function') window.showToast(message);
+                });
+                navigateCell.appendChild(navigateBtn);
+                controls.appendChild(navigateCell);
                 row.appendChild(controls);
             }
             return row;
@@ -1177,10 +1198,12 @@
             const rootFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
             const labelColWidth = parseFloat(getComputedStyle(treeRoot).getPropertyValue('--perm-tree-label-col-width')) || 0;
             // 4.3rem leading allowance (matches the header's own spacer) +
-            // the label column + the fixed 13rem Web·App column + ~3rem of
-            // slack for gaps/padding/the select's own native dropdown
-            // arrow -- everything Estatus always shares its line with.
-            const fixedNeighbors = (4.3 * rootFontPx) + labelColWidth + (13 * rootFontPx) + (3 * rootFontPx);
+            // the label column + the fixed 13rem Web·App column + the
+            // Navegar icon column (~2.2rem, fixed -- an icon button never
+            // needs its own abbreviation step) + ~3rem of slack for gaps/
+            // padding/the select's own native dropdown arrow -- everything
+            // Estatus always shares its line with.
+            const fixedNeighbors = (4.3 * rootFontPx) + labelColWidth + (13 * rootFontPx) + (2.2 * rootFontPx) + (3 * rootFontPx);
             const available = Math.max(treeRoot.clientWidth - fixedNeighbors, 0);
 
             let step = 0;
@@ -1471,6 +1494,13 @@
             const platforms = document.createElement('span');
             platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
             platforms.textContent = t('admin.masterTreeColPlatforms');
+            // Icon-only header (matches the icon-only navigate button
+            // itself) -- a text label here would need its own place in the
+            // abbreviation ladder for no real benefit at this width.
+            const navigate = document.createElement('span');
+            navigate.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-navigate';
+            navigate.innerHTML = '<i class="bx bx-compass" aria-hidden="true"></i>';
+            navigate.title = t('admin.masterTreeColNavigate');
             // Wrapped together with margin-left:auto -- same trailing group
             // a row's own .perm-tree-mstatus-controls is (see statusRow),
             // so both end up flush against the SAME right edge regardless
@@ -1479,7 +1509,7 @@
             // (often much wider) available width on their own.
             const controls = document.createElement('div');
             controls.className = 'perm-tree-mstatus-header-controls';
-            controls.append(status, platforms);
+            controls.append(status, platforms, navigate);
             header.append(spacer, label, controls);
             return header;
         }
