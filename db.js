@@ -5265,11 +5265,16 @@ function logBusinessSectorChange({ businessSectorId, action, fieldKey, oldValue,
 // --- Permission tree display order (see the master_permission_order/ ------
 // sector_permission_order comment above). parent_key vocabulary: '__root__'
 // is the top-level Departamento list; `area::<sectionId>` is the Área list
-// for one department (see areaOrderKey below). Deeper levels (Apartado,
-// Pantalla, Columna) will add their own prefix here later, same pattern.
+// for one department; `apartado::<sectionId>::<areaId>` is the Apartado
+// list for one área (see areaOrderKey/apartadoOrderKey below). Deeper
+// levels (Pantalla, Columna) will add their own prefix here later, same
+// pattern.
 const PERMISSION_ORDER_ROOT_KEY = '__root__';
 function areaOrderKey(sectionId) {
     return `area::${sectionId}`;
+}
+function apartadoOrderKey(sectionId, areaId) {
+    return `apartado::${sectionId}::${areaId}`;
 }
 function deserializeOrderRow(row) {
     return { parentKey: row.parent_key, orderedKeys: JSON.parse(row.ordered_keys) };
@@ -6273,6 +6278,7 @@ module.exports = {
     getEffectiveSectorOrder,
     getEffectiveSectorOrdersByPrefix,
     areaOrderKey,
+    apartadoOrderKey,
     PERMISSION_ORDER_ROOT_KEY,
     WEB_SCREEN_CATALOG,
     getPlanGrants,

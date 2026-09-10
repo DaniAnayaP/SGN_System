@@ -570,6 +570,7 @@
     "masterTreeNoChanges": "Nothing to save.",
     "masterTreeOrderLabel": "Department Order",
     "masterTreeAreaOrderLabel": "Área Order — {department}",
+    "masterTreeApartadoOrderLabel": "Apartado Order — {area}",
     "masterTreeOrderChangeLine": "New order: {order}"
   },
   "business": {

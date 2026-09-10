@@ -263,7 +263,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null } = {}) {
         // statusMode (Árbol de Permisos Maestro) is a completely separate,
         // much simpler mode: no grants, no rollup/indeterminate math, no
         // App-visibility column, no cost-center/module filtering -- GEIPSA
@@ -316,6 +316,18 @@
             const section = sectionsData.find((s) => s.id === sectionId);
             if (!section) return false;
             return reorderInPlace(section.items, draggedId, targetId);
+        }
+        // Same idea one level deeper -- an Apartado (a "Catálogos"/
+        // "Operaciones"/... category, see categoriesForArea) only ever
+        // reorders among the OTHER apartados of that SAME área, never
+        // across áreas or departments. area.submenu holds nothing but real
+        // apartado entries (unlike section.items, there's no
+        // GENERAL_ITEM_IDS-style leading block to worry about here).
+        function reorderApartados(sectionId, areaId, draggedId, targetId) {
+            const section = sectionsData.find((s) => s.id === sectionId);
+            const area = section && section.items.find((i) => i.id === areaId);
+            if (!area || !area.submenu) return false;
+            return reorderInPlace(area.submenu, draggedId, targetId);
         }
         let grantSet = new Set();
         // statusMode's own state -- a Map from the same keyOf(...) key
@@ -1077,22 +1089,29 @@
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             // Drag-to-reorder -- Árbol Maestro only. dragCtx is
-            // { kind, id, sectionId, onDrop(draggedId, targetId) }, passed
-            // at whichever depth is currently reorderable (depth 0 for
-            // Departamento, depth 1 for Área under it -- see
-            // renderStatusTree). No separate "reorder column": the grip
-            // sits right on the row, and dropping it mutates sectionsData
-            // in place (via onDrop) before a full renderStatusTree() redraw
-            // picks up the new order. `kind`+`sectionId` guard against a
-            // drag started on one level/department being dropped as if it
-            // were another -- can't happen through the UI since a drag
-            // never leaves its own level's rows, but without the
-            // sectionId check here an Área dragged from one department
-            // would still show the "valid drop" highlight over an Área row
-            // under a DIFFERENT department (the drop itself would still be
-            // a no-op, since reorderAreas would never find that id in the
-            // wrong department's list -- but the highlight would lie about
-            // it being a valid target). readOnly mode never gets
+            // { kind, id, scope, onDrop(draggedId, targetId) }, passed at
+            // whichever depth is currently reorderable (depth 0 for
+            // Departamento, depth 1 for Área under it, depth 2 for Apartado
+            // under THAT área -- see renderStatusTree). `scope` is just
+            // whatever key identifies the specific sibling group a row
+            // belongs to -- null for Departamento (one single list), a
+            // sectionId for Área (one list per department), a
+            // "sectionId::areaId" compound for Apartado (one list per
+            // área) -- it doesn't need to mean anything to statusRow
+            // itself, only to match between a dragged row and a candidate
+            // drop target. No separate "reorder column": the grip sits
+            // right on the row, and dropping it mutates sectionsData in
+            // place (via onDrop) before a full renderStatusTree() redraw
+            // picks up the new order. `kind`+`scope` guard against a drag
+            // started on one level/group being dropped as if it were
+            // another -- can't happen through the UI since a drag never
+            // leaves its own group's rows, but without the scope check
+            // here an Área (or Apartado) dragged from one group would
+            // still show the "valid drop" highlight over a row from a
+            // DIFFERENT group (the drop itself would still be a no-op,
+            // since the matching onDrop would never find that id in the
+            // wrong group's list -- but the highlight would lie about it
+            // being a valid target). readOnly mode never gets
             // draggable="true" -- same guard every other editable control
             // in this file already respects.
             if (dragCtx && !readOnly) {
@@ -1105,10 +1124,10 @@
                 row.appendChild(grip);
                 const matchesDragged = () => !!draggedNode
                     && draggedNode.kind === dragCtx.kind
-                    && draggedNode.sectionId === dragCtx.sectionId
+                    && draggedNode.scope === dragCtx.scope
                     && draggedNode.id !== dragCtx.id;
                 row.addEventListener('dragstart', (e) => {
-                    draggedNode = { kind: dragCtx.kind, id: dragCtx.id, sectionId: dragCtx.sectionId };
+                    draggedNode = { kind: dragCtx.kind, id: dragCtx.id, scope: dragCtx.scope };
                     row.classList.add('perm-tree-row-dragging');
                     e.dataTransfer.effectAllowed = 'move';
                 });
@@ -1696,7 +1715,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, sectionId: null, onDrop: reorderDepartments } : null));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -1717,15 +1736,21 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, sectionId: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null));
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
+                    // Apartado (Catálogos/Operaciones/...) only reorders
+                    // among its own área's siblings -- same isRealArea
+                    // guard as Área itself, since a non-área item (Inicio/
+                    // Panel/Tablero) never has real apartado children here.
+                    const apartadoScope = `${section.id}::${item.id}`;
 
                     item.submenu.forEach((sm) => {
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
                         const smStateKey = keyOf(section.id, item.id, sm.id);
+                        const apartadoDragCtx = isRealArea ? { kind: 'apartado', id: sm.id, scope: apartadoScope, onDrop: (draggedId, targetId) => reorderApartados(section.id, item.id, draggedId, targetId) } : null;
                         if (!hasSubSubmenu) {
-                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked));
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked, apartadoDragCtx));
                             return;
                         }
 
@@ -1738,7 +1763,7 @@
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked));
+                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx));
                         if (!smExpandedNow) return;
                         const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
 
@@ -2093,11 +2118,30 @@
                         // its own áreas independently, same cascade idea as
                         // departmentOrder itself just one level down.
                         const deptAreas = applyOrder((areas && areas[s.id]) || GENERIC_AREAS, areaOrder && areaOrder[s.id]);
+                        // apartadoOrder is keyed by "sectionId::areaId" --
+                        // each área reorders its own apartados (Catálogos/
+                        // Operaciones/...) independently, same cascade idea
+                        // one level deeper still.
                         const areaItems = deptAreas.map((area) => ({
                             id: area.id,
                             labelKey: area.labelKey,
                             labelParams: area.labelParams,
-                            submenu: categoriesForArea(s.id, area.id, areaCategories || [], areaOverrides),
+                            // Wrapped in [...] -- categoriesForArea returns
+                            // the SHARED areaCategories template array itself
+                            // (not a copy) for any área with no override of
+                            // its own, and applyOrder passes that same
+                            // reference straight through when there's no
+                            // order to apply yet either. Without cloning
+                            // here, reorderApartados's in-place splice on
+                            // ONE área's submenu would silently reorder
+                            // every OTHER área still sharing that template
+                            // too -- confirmed live before this fix (dragging
+                            // one área's apartado moved it for a sibling área
+                            // as well).
+                            submenu: [...applyOrder(
+                                categoriesForArea(s.id, area.id, areaCategories || [], areaOverrides),
+                                apartadoOrder && apartadoOrder[`${s.id}::${area.id}`],
+                            )],
                         }));
                         return { ...s, items: [...generalItems, ...areaItems] };
                     }
@@ -2233,6 +2277,23 @@
                 sectionsData.forEach((s) => {
                     if (s.id === 'main') return;
                     result[s.id] = s.items.filter((i) => !GENERAL_ITEM_IDS.includes(i.id)).map((i) => i.id);
+                });
+                return result;
+            },
+            // statusMode only -- current Apartado order for EVERY área of
+            // EVERY department at once, keyed by "sectionId::areaId" (same
+            // shape apartadoOrder accepts). Only áreas that actually have a
+            // submenu contribute a key -- an área with none has nothing to
+            // reorder here.
+            getApartadoOrders() {
+                const result = {};
+                sectionsData.forEach((s) => {
+                    if (s.id === 'main') return;
+                    s.items.filter((i) => !GENERAL_ITEM_IDS.includes(i.id)).forEach((area) => {
+                        if (area.submenu && area.submenu.length) {
+                            result[`${s.id}::${area.id}`] = area.submenu.map((sm) => sm.id);
+                        }
+                    });
                 });
                 return result;
             },

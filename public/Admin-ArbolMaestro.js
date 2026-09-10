@@ -29,6 +29,9 @@ let originalDepartmentOrder = [];
 // Same idea one level down -- each department's own Área order, keyed by
 // sectionId (see getAreaOrders in PermissionTree.js).
 let originalAreaOrders = {};
+// One level deeper still -- each área's own Apartado order, keyed by
+// "sectionId::areaId" (see getApartadoOrders in PermissionTree.js).
+let originalApartadoOrders = {};
 
 function statusRowKey(row) {
     return `${row.sectionId}::${row.itemId || ''}::${row.submenuId || ''}`;
@@ -90,6 +93,19 @@ function collectOrderChanges() {
         const names = after.map((id) => masterTree.getStatusLabel(sectionId, id, null) || id);
         items.push({
             label: Dashboard.t('admin.masterTreeAreaOrderLabel', { department: deptName }),
+            line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    });
+    const afterApartadoOrders = masterTree.getApartadoOrders();
+    Object.keys(afterApartadoOrders).forEach((compoundKey) => {
+        const before = originalApartadoOrders[compoundKey] || [];
+        const after = afterApartadoOrders[compoundKey];
+        if (!orderArraysDiffer(before, after)) return;
+        const [sectionId, areaId] = compoundKey.split('::');
+        const areaName = masterTree.getStatusLabel(sectionId, areaId, null) || areaId;
+        const names = after.map((id) => masterTree.getStatusLabel(sectionId, areaId, id) || id);
+        items.push({
+            label: Dashboard.t('admin.masterTreeApartadoOrderLabel', { area: areaName }),
             line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
         });
     });
@@ -195,14 +211,24 @@ async function loadMasterTree() {
         if (!statusRes.ok || !orderRes.ok) throw new Error('load failed');
         const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
         originalStatuses = statusData.statuses || [];
-        originalDepartmentOrder = orderData.departmentOrder || [];
-        originalAreaOrders = orderData.areaOrders || {};
         masterTree = window.PermissionTree.create(masterTreeContainer, {
             statusMode: true,
-            departmentOrder: originalDepartmentOrder,
-            areaOrder: originalAreaOrders,
+            departmentOrder: orderData.departmentOrder || [],
+            areaOrder: orderData.areaOrders || {},
+            apartadoOrder: orderData.apartadoOrders || {},
         });
         await masterTree.init(originalStatuses);
+        // The baseline is what the tree actually ends up SHOWING, not the
+        // raw (possibly empty) server response -- when nothing has ever
+        // been saved, the tree still renders menu.json's own natural order,
+        // and that's what "unchanged" has to mean. Comparing against the
+        // raw empty response instead would falsely flag every department/
+        // área/apartado as "reordered" the very first time anyone hits
+        // Guardar, purely because the snapshot started empty while the
+        // tree was never empty -- confirmed live before this fix.
+        originalDepartmentOrder = masterTree.getDepartmentOrder();
+        originalAreaOrders = masterTree.getAreaOrders();
+        originalApartadoOrders = masterTree.getApartadoOrders();
     } catch {
         masterTreeError.textContent = Dashboard.t('admin.loadError');
         masterTreeError.hidden = false;
@@ -223,14 +249,22 @@ async function saveMasterTree() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ departmentOrder: masterTree.getDepartmentOrder(), areaOrders: masterTree.getAreaOrders() }),
+                body: JSON.stringify({
+                    departmentOrder: masterTree.getDepartmentOrder(),
+                    areaOrders: masterTree.getAreaOrders(),
+                    apartadoOrders: masterTree.getApartadoOrders(),
+                }),
             }),
         ]);
         if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
-        const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        const [statusData] = await Promise.all([statusRes.json(), orderRes.json()]);
         originalStatuses = statusData.statuses || [];
-        originalDepartmentOrder = orderData.departmentOrder || [];
-        originalAreaOrders = orderData.areaOrders || {};
+        // Same reasoning as loadMasterTree's own baseline fix -- what was
+        // just sent IS what the server now has, no need to round-trip
+        // through its response to know that.
+        originalDepartmentOrder = masterTree.getDepartmentOrder();
+        originalAreaOrders = masterTree.getAreaOrders();
+        originalApartadoOrders = masterTree.getApartadoOrders();
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved -- otherwise a checkbox you
         // changed and saved would keep showing yellow/gray forever,

@@ -294,6 +294,7 @@ let originalStatuses = [];
 // the same Guardar tap (see saveMasterTree below).
 let originalDepartmentOrder = [];
 let originalAreaOrders = {};
+let originalApartadoOrders = {};
 
 function statusRowKey(row) {
     return `${row.sectionId}::${row.itemId || ''}::${row.submenuId || ''}`;
@@ -345,6 +346,19 @@ function collectOrderChanges() {
         const names = after.map((id) => masterTree.getStatusLabel(sectionId, id, null) || id);
         items.push({
             label: t('admin.masterTreeAreaOrderLabel', { department: deptName }),
+            line: t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    });
+    const afterApartadoOrders = masterTree.getApartadoOrders();
+    Object.keys(afterApartadoOrders).forEach((compoundKey) => {
+        const before = originalApartadoOrders[compoundKey] || [];
+        const after = afterApartadoOrders[compoundKey];
+        if (!orderArraysDiffer(before, after)) return;
+        const [sectionId, areaId] = compoundKey.split('::');
+        const areaName = masterTree.getStatusLabel(sectionId, areaId, null) || areaId;
+        const names = after.map((id) => masterTree.getStatusLabel(sectionId, areaId, id) || id);
+        items.push({
+            label: t('admin.masterTreeApartadoOrderLabel', { area: areaName }),
             line: t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
         });
     });
@@ -429,14 +443,21 @@ async function saveMasterTree(saveBtn) {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ departmentOrder: masterTree.getDepartmentOrder(), areaOrders: masterTree.getAreaOrders() }),
+                body: JSON.stringify({
+                    departmentOrder: masterTree.getDepartmentOrder(),
+                    areaOrders: masterTree.getAreaOrders(),
+                    apartadoOrders: masterTree.getApartadoOrders(),
+                }),
             }),
         ]);
         if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
-        const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        const [statusData] = await Promise.all([statusRes.json(), orderRes.json()]);
         originalStatuses = statusData.statuses || [];
-        originalDepartmentOrder = orderData.departmentOrder || [];
-        originalAreaOrders = orderData.areaOrders || {};
+        // Same reasoning as loadMasterTree's own baseline fix below -- what
+        // was just sent IS what the server now has.
+        originalDepartmentOrder = masterTree.getDepartmentOrder();
+        originalAreaOrders = masterTree.getAreaOrders();
+        originalApartadoOrders = masterTree.getApartadoOrders();
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved.
         masterTree.setBaseline(originalStatuses);
@@ -467,8 +488,6 @@ async function loadMasterTree(token) {
         const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
         if (token !== renderToken) return;
         originalStatuses = statusData.statuses || [];
-        originalDepartmentOrder = orderData.departmentOrder || [];
-        originalAreaOrders = orderData.areaOrders || {};
         contentEl.innerHTML = '';
 
         const treeWrap = document.createElement('div');
@@ -481,11 +500,19 @@ async function loadMasterTree(token) {
         contentEl.appendChild(treeWrap);
         masterTree = window.PermissionTree.create(treeWrap, {
             statusMode: true,
-            departmentOrder: originalDepartmentOrder,
-            areaOrder: originalAreaOrders,
+            departmentOrder: orderData.departmentOrder || [],
+            areaOrder: orderData.areaOrders || {},
+            apartadoOrder: orderData.apartadoOrders || {},
         });
         await masterTree.init(originalStatuses);
         if (token !== renderToken) return; // switched away while menu.json/tree rows were still loading
+        // The baseline is what the tree actually ends up SHOWING, not the
+        // raw (possibly empty) server response -- see the identical fix and
+        // full explanation in public/Admin-ArbolMaestro.js's own
+        // loadMasterTree.
+        originalDepartmentOrder = masterTree.getDepartmentOrder();
+        originalAreaOrders = masterTree.getAreaOrders();
+        originalApartadoOrders = masterTree.getApartadoOrders();
 
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
