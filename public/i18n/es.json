@@ -365,6 +365,7 @@
     "businessSectorPermsHint": "Solo lectura — agrupado por el mismo Estatus que usa el Árbol de Permisos Maestro.",
     "businessSectorPermsEmpty": "Este giro no tiene permisos asignados todavía.",
     "businessSectorGoToTree": "Ver árbol completo",
+    "businessSectorViewPerms": "Ver resumen / estatus de estos accesos",
     "businessSectorChangeHistory": "Registro de Cambios",
     "businessSectorEditTitle": "Editar Giro de Negocio",
     "businessSectorPreview": "Vista Previa",

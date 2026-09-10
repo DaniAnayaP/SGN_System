@@ -641,6 +641,18 @@ function renderSectorTree(sector) {
         sectorSubView = { mode: 'detail', sector };
         renderSectorSubView();
     }));
+    // Cross-link to the read-only "Permisos asignados" breakdown -- same
+    // reasoning as the Web version's #sector-tree-view-perms: the Resumen/
+    // Árbol toggle only ever lived on that other sub-view, hard to find
+    // from here otherwise.
+    const viewPermsBtn = document.createElement('button');
+    viewPermsBtn.type = 'button';
+    viewPermsBtn.className = 'home-carga-secondary-btn';
+    viewPermsBtn.style.marginBottom = '0.7rem';
+    viewPermsBtn.innerHTML = `<i class="bx bx-pie-chart-alt" aria-hidden="true"></i><span>${t('admin.businessSectorViewPerms')}</span>`;
+    viewPermsBtn.addEventListener('click', () => { sectorSubView = { mode: 'perms', sector }; renderSectorSubView(); });
+    contentEl.appendChild(viewPermsBtn);
+
     const treeWrap = document.createElement('div');
     // Plain grant-checkbox mode (not statusMode), same as AppRoles.js's own
     // tree -- that one already works fine in the App with zero extra CSS

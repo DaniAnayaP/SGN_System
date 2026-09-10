@@ -365,6 +365,7 @@
     "businessSectorPermsHint": "Read-only — grouped by the same Estatus Árbol de Permisos Maestro uses.",
     "businessSectorPermsEmpty": "This sector has no assigned permissions yet.",
     "businessSectorGoToTree": "View full tree",
+    "businessSectorViewPerms": "See summary / status of this access",
     "businessSectorChangeHistory": "Change History",
     "businessSectorEditTitle": "Edit Business Sector",
     "businessSectorPreview": "Preview",
