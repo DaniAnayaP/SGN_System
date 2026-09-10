@@ -368,11 +368,48 @@
             <div class="admin-form-actions">
                 <button type="button" class="btn" id="master-tree-save" data-i18n="admin.save">Save</button>
             </div>
+            <div class="currency-bar">
+                <span class="currency-label"><i class="bx bx-coin-stack" aria-hidden="true"></i><span data-i18n="admin.masterCostCurrencyLabel">Currency</span></span>
+                <select class="currency-select" id="master-currency-select">
+                    <option value="MXN">MXN — Peso Mexicano</option>
+                    <option value="USD">USD — Dólar Americano</option>
+                    <option value="EUR">EUR — Euro</option>
+                </select>
+                <span class="currency-hint" data-i18n="admin.masterCostCurrencyHint">Every cost in this tree (Web and App, at every level) is in this currency.</span>
+            </div>
             <div id="master-tree-container" class="perm-tree"></div>
             <div id="master-tree-error" class="admin-error" role="alert" hidden></div>
             <p class="admin-subtitle" data-i18n="admin.masterTreeSubtitle">Set the status of every node in the system here — independent of any Giro, Plan or client.</p>
         </section>
     </main>
+
+    <!-- Currency change confirmation -- opened when master-currency-select
+         changes to something other than the currency the tree is already
+         showing (see Admin-ArbolMaestro.js). Converts every already-saved
+         $ Web/$ App value using the exchange rate entered here; the
+         "suggested" rate is whatever was last used (master_cost_settings
+         in db.js), always editable before confirming. -->
+    <div class="modal-overlay" id="currency-modal" hidden>
+        <div class="modal-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="currency-modal-title">
+            <h3 id="currency-modal-title"></h3>
+            <p class="admin-hint" data-i18n="admin.masterCostCurrencyChangeHint">This changes the currency for the WHOLE Master Tree. To convert the prices already captured, we need an exchange rate.</p>
+            <div class="currency-rate-box">
+                <span class="currency-rate-label" data-i18n="admin.masterCostSuggestedRateLabel">Suggested rate</span>
+                <div class="currency-rate-value" id="currency-rate-value"></div>
+            </div>
+            <span class="currency-rate-question" data-i18n="admin.masterCostRateQuestion">Do you authorize this exchange rate, or want to enter another one?</span>
+            <div class="currency-rate-input-row">
+                <span id="currency-rate-input-label"></span>
+                <input type="number" id="currency-rate-input" step="0.01" min="0.01">
+                <span>MXN</span>
+            </div>
+            <div class="currency-preview-box" id="currency-preview-box"></div>
+            <div class="admin-form-actions">
+                <button type="button" class="btn" id="currency-confirm-btn" data-i18n="admin.masterCostConfirmConvert">Confirm and convert</button>
+                <button type="button" class="btn btn-secondary" id="currency-cancel-btn" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">

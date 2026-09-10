@@ -159,6 +159,36 @@
         </div>
     </div>
 
+    <!-- Currency change confirmation -- same flow as public/Admin-
+         ArbolMaestro.js's own currency-modal, just as a bottom-sheet (see
+         AppAdminInicio.js's openCurrencySheet). -->
+    <div class="home-sheet-overlay" id="currency-sheet-overlay" hidden>
+        <div class="home-sheet" role="dialog" aria-modal="true" aria-labelledby="currency-sheet-title">
+            <div class="home-sheet-handle"></div>
+            <h3 class="home-sheet-title" id="currency-sheet-title"></h3>
+            <p class="home-sheet-subtitle" data-i18n="admin.masterCostCurrencyChangeHint">This changes the currency for the WHOLE Master Tree. To convert the prices already captured, we need an exchange rate.</p>
+            <div class="currency-rate-box">
+                <span class="currency-rate-label" data-i18n="admin.masterCostSuggestedRateLabel">Suggested rate</span>
+                <div class="currency-rate-value" id="currency-sheet-rate-value"></div>
+            </div>
+            <span class="currency-rate-question" data-i18n="admin.masterCostRateQuestion">Do you authorize this exchange rate, or want to enter another one?</span>
+            <div class="currency-rate-input-row">
+                <span id="currency-sheet-rate-input-label"></span>
+                <input type="number" id="currency-sheet-rate-input" step="0.01" min="0.01">
+                <span>MXN</span>
+            </div>
+            <div class="currency-preview-box" id="currency-sheet-preview-box"></div>
+            <div class="admin-confirm-actions">
+                <button type="button" class="home-carga-new-btn" id="currency-sheet-confirm-btn">
+                    <i class="bx bx-check" aria-hidden="true"></i><span data-i18n="admin.masterCostConfirmConvert">Confirm and convert</span>
+                </button>
+                <button type="button" class="home-carga-secondary-btn" id="currency-sheet-cancel-btn">
+                    <span data-i18n="admin.cancel">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="AppConfig.js"></script>
     <script src="ColorPalette.js"></script>
     <script src="PermissionTree.js"></script>

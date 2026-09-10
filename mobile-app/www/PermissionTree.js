@@ -344,6 +344,13 @@
         // setBaseline() below (called from init() and again by
         // Admin-ArbolMaestro.js right after a successful PUT).
         let baselineMap = new Map();
+        // Árbol Maestro's own $ Web / $ App cost per node (statusMode only)
+        // -- same keyOf(...) vocabulary and sparse "absent = 0" convention
+        // as statusMap above (see master_permission_cost in db.js). Shown
+        // on Departamento/Área/Apartado/Pantalla rows only (showCost param
+        // on statusRow, see renderStatusTree) -- Columna never gets its own
+        // price, same rule plan_permission_costs already enforces.
+        let costMap = new Map();
         // key -> the human label shown on that row, filled in as
         // statusRow renders each one -- lets a caller (Admin-ArbolMaestro.js's
         // confirm-changes screen) turn a bare {sectionId,itemId,submenuId}
@@ -1085,7 +1092,7 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, showCost) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             // Drag-to-reorder -- Árbol Maestro only. dragCtx is
@@ -1233,6 +1240,41 @@
                 platformsCell.appendChild(buildPlatformGroup(key, 'web', leafKeys, ancestorLocked));
                 platformsCell.appendChild(buildPlatformGroup(key, 'app', leafKeys, ancestorLocked));
                 controls.appendChild(platformsCell);
+                // $ Web / $ App -- Árbol Maestro's own suggested/base cost
+                // for this node (see master_permission_cost in db.js). Only
+                // Departamento/Área/Apartado/Pantalla get one (showCost is
+                // only ever passed true from those 4 depths in
+                // renderStatusTree) -- Columna never has its own price,
+                // same rule plan_permission_costs already enforces. Plain
+                // number inputs, not tied to readOnly/ancestorLocked --
+                // price and status/grants are independent axes, same as the
+                // existing Costo Accesos-Permisos screen.
+                if (showCost) {
+                    const cost = getNodeCost(key);
+                    const buildCostInput = (platform, value) => {
+                        const input = document.createElement('input');
+                        input.type = 'number';
+                        input.min = '0';
+                        input.step = '0.01';
+                        input.className = 'perm-tree-cost-input';
+                        input.value = (Number(value) || 0).toFixed(2);
+                        input.addEventListener('change', () => {
+                            const current = getNodeCost(key);
+                            const parsed = Math.max(0, parseFloat(input.value) || 0);
+                            setNodeCost(key, { ...current, [platform]: parsed });
+                            input.value = parsed.toFixed(2);
+                        });
+                        return input;
+                    };
+                    const costWebCell = document.createElement('div');
+                    costWebCell.className = 'perm-tree-mstatus-cost-cell';
+                    costWebCell.appendChild(buildCostInput('web', cost.web));
+                    controls.appendChild(costWebCell);
+                    const costAppCell = document.createElement('div');
+                    costAppCell.className = 'perm-tree-mstatus-cost-cell';
+                    costAppCell.appendChild(buildCostInput('app', cost.app));
+                    controls.appendChild(costAppCell);
+                }
                 // Vista Previa/Navegar -- a stub for now (just an "under
                 // construction" toast), same as the identical icon already
                 // shipped on Nuestros Sectores de Negocio's own Acciones
@@ -1268,6 +1310,13 @@
         function setNodeState(key, next) {
             if (next.status === DEFAULT_STATUS && next.webEnabled && !next.appEnabled) statusMap.delete(key);
             else statusMap.set(key, next);
+        }
+        function getNodeCost(key) {
+            return costMap.get(key) || { web: 0, app: 0 };
+        }
+        function setNodeCost(key, next) {
+            if (!next.web && !next.app) costMap.delete(key);
+            else costMap.set(key, next);
         }
         function nodeWebOff(key) {
             return !getNodeState(key).webEnabled;
@@ -1677,6 +1726,14 @@
             const platforms = document.createElement('span');
             platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
             platforms.textContent = t('admin.masterTreeColPlatforms');
+            // $ Web / $ App -- suggested/base cost, see the showCost param
+            // note on statusRow above.
+            const costWeb = document.createElement('span');
+            costWeb.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-cost';
+            costWeb.textContent = t('admin.masterTreeColCostWeb');
+            const costApp = document.createElement('span');
+            costApp.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-cost';
+            costApp.textContent = t('admin.masterTreeColCostApp');
             // Icon-only header (matches the icon-only navigate button
             // itself) -- a text label here would need its own place in the
             // abbreviation ladder for no real benefit at this width.
@@ -1692,7 +1749,7 @@
             // (often much wider) available width on their own.
             const controls = document.createElement('div');
             controls.className = 'perm-tree-mstatus-header-controls';
-            controls.append(status, platforms, navigate);
+            controls.append(status, platforms, costWeb, costApp, navigate);
             header.append(spacer, label, controls);
             return header;
         }
@@ -1715,7 +1772,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, true));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -1736,7 +1793,7 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, true));
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
                     // Apartado (Catálogos/Operaciones/...) only reorders
@@ -1750,7 +1807,7 @@
                         const smStateKey = keyOf(section.id, item.id, sm.id);
                         const apartadoDragCtx = isRealArea ? { kind: 'apartado', id: sm.id, scope: apartadoScope, onDrop: (draggedId, targetId) => reorderApartados(section.id, item.id, draggedId, targetId) } : null;
                         if (!hasSubSubmenu) {
-                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked, apartadoDragCtx));
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked, apartadoDragCtx, true));
                             return;
                         }
 
@@ -1763,7 +1820,7 @@
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx));
+                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, true));
                         if (!smExpandedNow) return;
                         const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
 
@@ -1780,7 +1837,7 @@
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null, null, null, subSmAncestorLocked));
+                            } : null, null, null, subSmAncestorLocked, null, true));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
                                 if (subSm.submenu && subSm.submenu.length) {
@@ -2039,7 +2096,7 @@
         }
 
         return {
-            async init(initialGrants) {
+            async init(initialGrants, initialCosts) {
                 const { sections: allSections, areaCategories, areaOverrides, areas } = await loadMenuData();
                 // 'main' (Inicio, Tablero, Administración del Negocio, etc.)
                 // is core navigation, not a contracted module — always shown
@@ -2183,6 +2240,17 @@
                         if (status === DEFAULT_STATUS && webEnabled && !appEnabled) return;
                         statusMap.set(keyOf(s.sectionId, s.itemId, s.submenuId), { status, webEnabled, appEnabled });
                     });
+                    // Same sparse "absent = 0" convention as statusMap above
+                    // (see master_permission_cost in db.js) -- a node never
+                    // priced needs no entry here at all.
+                    costMap = new Map();
+                    (initialCosts || []).forEach((c) => {
+                        if (!c) return;
+                        const web = Number(c.web) || 0;
+                        const app = Number(c.app) || 0;
+                        if (!web && !app) return;
+                        costMap.set(keyOf(c.sectionId, c.itemId, c.submenuId), { web, app });
+                    });
                     // Baseline starts identical to what was just loaded --
                     // nothing is "pending" right after opening the screen,
                     // only once you start actually changing something.
@@ -2246,6 +2314,16 @@
                 return Array.from(statusMap.entries()).map(([k, state]) => {
                     const [sectionId, itemId, submenuId] = k.split('::');
                     return { sectionId, itemId: itemId || null, submenuId: submenuId || null, ...state };
+                });
+            },
+            // Same idea, for $ Web / $ App (see master_permission_cost in
+            // db.js) -- one row per node with a non-zero price. Empty array
+            // for every other caller, since costMap is only ever populated
+            // in statusMode.
+            getCosts() {
+                return Array.from(costMap.entries()).map(([k, cost]) => {
+                    const [sectionId, itemId, submenuId] = k.split('::');
+                    return { sectionId, itemId: itemId || null, submenuId: submenuId || null, ...cost };
                 });
             },
             // Turns a {sectionId,itemId,submenuId} back into the same human

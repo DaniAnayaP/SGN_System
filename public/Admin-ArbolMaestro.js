@@ -17,6 +17,7 @@
 const masterTreeContainer = document.getElementById('master-tree-container');
 const masterTreeError = document.getElementById('master-tree-error');
 const masterTreeSaveBtn = document.getElementById('master-tree-save');
+const currencySelect = document.getElementById('master-currency-select');
 
 let masterTree = null;
 // Snapshot from the last successful load/save -- the baseline
@@ -32,6 +33,15 @@ let originalAreaOrders = {};
 // One level deeper still -- each área's own Apartado order, keyed by
 // "sectionId::areaId" (see getApartadoOrders in PermissionTree.js).
 let originalApartadoOrders = {};
+// Árbol Maestro's own suggested/base cost per node (see getCosts in
+// PermissionTree.js / master_permission_cost in db.js) -- a separate
+// table from statuses/order, saved together on the same Guardar click.
+let originalCosts = [];
+// Currency the tree's $ Web/$ App values are CURRENTLY denominated in, and
+// the last exchange rate GEIPSA used to get there (see master_cost_settings
+// in db.js) -- suggested back the next time someone switches currency.
+let currentCurrency = 'MXN';
+let lastExchangeRate = 1;
 
 function statusRowKey(row) {
     return `${row.sectionId}::${row.itemId || ''}::${row.submenuId || ''}`;
@@ -108,6 +118,30 @@ function collectOrderChanges() {
             label: Dashboard.t('admin.masterTreeApartadoOrderLabel', { area: areaName }),
             line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
         });
+    });
+    return items;
+}
+
+// Same { label, line } shape as collectOrderChanges above, for $ Web/$ App
+// (see getCosts in PermissionTree.js). getStatusLabel resolves any node key
+// back to its i18n-translated label, same as every other cost-change
+// summary on this screen.
+function collectCostChanges() {
+    if (!masterTree) return [];
+    const before = new Map(originalCosts.map((r) => [statusRowKey(r), r]));
+    const after = masterTree.getCosts();
+    const afterMap = new Map(after.map((r) => [statusRowKey(r), r]));
+    const items = [];
+    new Set([...before.keys(), ...afterMap.keys()]).forEach((key) => {
+        const b = before.get(key) || { web: 0, app: 0 };
+        const a = afterMap.get(key) || { web: 0, app: 0 };
+        if (b.web === a.web && b.app === a.app) return;
+        const sample = afterMap.get(key) || before.get(key);
+        const label = masterTree.getStatusLabel(sample.sectionId, sample.itemId, sample.submenuId) || key;
+        const lines = [];
+        if (b.web !== a.web) lines.push(`${Dashboard.t('admin.masterTreeColCostWeb')}: $${b.web.toFixed(2)} → $${a.web.toFixed(2)}`);
+        if (b.app !== a.app) lines.push(`${Dashboard.t('admin.masterTreeColCostApp')}: $${b.app.toFixed(2)} → $${a.app.toFixed(2)}`);
+        items.push({ label: Dashboard.t('admin.masterTreeCostChangeLabel', { node: label }), line: lines.join(' · ') });
     });
     return items;
 }
@@ -204,20 +238,24 @@ async function loadMasterTree() {
     masterTreeError.hidden = true;
     masterTreeContainer.innerHTML = '';
     try {
-        const [statusRes, orderRes] = await Promise.all([
+        const [statusRes, orderRes, costRes] = await Promise.all([
             fetch('/api/admin/master-permission-status', { credentials: 'include' }),
             fetch('/api/admin/master-permission-order', { credentials: 'include' }),
+            fetch('/api/admin/master-permission-costs', { credentials: 'include' }),
         ]);
-        if (!statusRes.ok || !orderRes.ok) throw new Error('load failed');
-        const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        if (!statusRes.ok || !orderRes.ok || !costRes.ok) throw new Error('load failed');
+        const [statusData, orderData, costData] = await Promise.all([statusRes.json(), orderRes.json(), costRes.json()]);
         originalStatuses = statusData.statuses || [];
+        currentCurrency = costData.currency || 'MXN';
+        lastExchangeRate = costData.lastExchangeRate || 1;
+        currencySelect.value = currentCurrency;
         masterTree = window.PermissionTree.create(masterTreeContainer, {
             statusMode: true,
             departmentOrder: orderData.departmentOrder || [],
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
         });
-        await masterTree.init(originalStatuses);
+        await masterTree.init(originalStatuses, costData.costs || []);
         // The baseline is what the tree actually ends up SHOWING, not the
         // raw (possibly empty) server response -- when nothing has ever
         // been saved, the tree still renders menu.json's own natural order,
@@ -229,6 +267,7 @@ async function loadMasterTree() {
         originalDepartmentOrder = masterTree.getDepartmentOrder();
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
+        originalCosts = masterTree.getCosts();
     } catch {
         masterTreeError.textContent = Dashboard.t('admin.loadError');
         masterTreeError.hidden = false;
@@ -238,7 +277,7 @@ async function loadMasterTree() {
 async function saveMasterTree() {
     masterTreeSaveBtn.disabled = true;
     try {
-        const [statusRes, orderRes] = await Promise.all([
+        const [statusRes, orderRes, costRes] = await Promise.all([
             fetch('/api/admin/master-permission-status', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -255,9 +294,15 @@ async function saveMasterTree() {
                     apartadoOrders: masterTree.getApartadoOrders(),
                 }),
             }),
+            fetch('/api/admin/master-permission-costs', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ costs: masterTree.getCosts() }),
+            }),
         ]);
-        if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
-        const [statusData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        if (!statusRes.ok || !orderRes.ok || !costRes.ok) throw new Error('save failed');
+        const [statusData] = await Promise.all([statusRes.json(), orderRes.json(), costRes.json()]);
         originalStatuses = statusData.statuses || [];
         // Same reasoning as loadMasterTree's own baseline fix -- what was
         // just sent IS what the server now has, no need to round-trip
@@ -265,6 +310,7 @@ async function saveMasterTree() {
         originalDepartmentOrder = masterTree.getDepartmentOrder();
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
+        originalCosts = masterTree.getCosts();
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved -- otherwise a checkbox you
         // changed and saved would keep showing yellow/gray forever,
@@ -281,12 +327,80 @@ async function saveMasterTree() {
 masterTreeSaveBtn.addEventListener('click', () => {
     if (!masterTree) return;
     const changes = describeChanges();
-    const orderChanges = collectOrderChanges();
-    if (!changes.length && !orderChanges.length) {
+    const extraChanges = [...collectOrderChanges(), ...collectCostChanges()];
+    if (!changes.length && !extraChanges.length) {
         Dashboard.showToast(Dashboard.t('admin.masterTreeNoChanges'), 'info');
         return;
     }
-    openConfirmModal(changes, orderChanges, saveMasterTree);
+    openConfirmModal(changes, extraChanges, saveMasterTree);
+});
+
+// --- Currency (see master_permission_cost/master_cost_settings in db.js)
+// -- switching currency converts every already-saved $ Web/$ App value
+// using an exchange rate the admin confirms (or overrides) in a dialog
+// first, never silently. The rate is always "1 <the non-MXN side> = rate
+// MXN", same convention shown in the dialog regardless of which direction
+// the switch goes (MXN -> foreign or foreign -> MXN).
+const currencyModal = document.getElementById('currency-modal');
+const currencyModalTitle = document.getElementById('currency-modal-title');
+const currencyRateValue = document.getElementById('currency-rate-value');
+const currencyRateInputLabel = document.getElementById('currency-rate-input-label');
+const currencyRateInput = document.getElementById('currency-rate-input');
+const currencyPreviewBox = document.getElementById('currency-preview-box');
+const currencyConfirmBtn = document.getElementById('currency-confirm-btn');
+const currencyCancelBtn = document.getElementById('currency-cancel-btn');
+let pendingCurrency = null;
+
+// No per-node before/after preview here (unlike the mockup's hardcoded
+// example) -- just how many already-priced nodes will move, since listing
+// specific ones would mean re-deriving labels for an arbitrary subset of
+// the tree for little real benefit.
+function updateCurrencyPreview() {
+    const count = masterTree ? masterTree.getCosts().length : 0;
+    currencyPreviewBox.textContent = count
+        ? Dashboard.t('admin.masterCostPreviewCount', { count: String(count) })
+        : Dashboard.t('admin.masterCostPreviewEmpty');
+}
+
+currencySelect.addEventListener('change', () => {
+    const to = currencySelect.value;
+    if (!masterTree || to === currentCurrency) return;
+    pendingCurrency = to;
+    const foreign = to === 'MXN' ? currentCurrency : to;
+    currencyModalTitle.textContent = Dashboard.t('admin.masterCostChangeCurrencyTitle', { from: currentCurrency, to });
+    currencyRateValue.textContent = Dashboard.t('admin.masterCostRateLine', { foreign, rate: lastExchangeRate.toFixed(2) });
+    currencyRateInputLabel.textContent = `1 ${foreign} =`;
+    currencyRateInput.value = lastExchangeRate.toFixed(2);
+    updateCurrencyPreview();
+    currencyModal.hidden = false;
+});
+currencyCancelBtn.addEventListener('click', () => {
+    currencySelect.value = currentCurrency;
+    currencyModal.hidden = true;
+});
+currencyModal.addEventListener('click', (event) => { if (event.target === currencyModal) currencyCancelBtn.click(); });
+currencyConfirmBtn.addEventListener('click', async () => {
+    const rate = parseFloat(currencyRateInput.value) || 1;
+    currencyConfirmBtn.disabled = true;
+    try {
+        const res = await fetch('/api/admin/master-permission-costs/currency', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ currency: pendingCurrency, exchangeRate: rate }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        currencyModal.hidden = true;
+        // Every $ Web/$ App value just changed server-side -- simplest to
+        // reload the whole tree fresh rather than try to rewrite each
+        // input in place from here.
+        await loadMasterTree();
+        Dashboard.showToast(Dashboard.t('admin.masterCostCurrencySaved'), 'success');
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.masterCostSaveError'), 'error');
+    } finally {
+        currencyConfirmBtn.disabled = false;
+    }
 });
 
 (async function init() {

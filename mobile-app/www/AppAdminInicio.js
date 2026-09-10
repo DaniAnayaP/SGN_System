@@ -295,6 +295,11 @@ let originalStatuses = [];
 let originalDepartmentOrder = [];
 let originalAreaOrders = {};
 let originalApartadoOrders = {};
+// Same idea, Árbol Maestro's own suggested/base cost per node (see
+// public/Admin-ArbolMaestro.js's own originalCosts).
+let originalCosts = [];
+let currentCurrency = 'MXN';
+let lastExchangeRate = 1;
 
 function statusRowKey(row) {
     return `${row.sectionId}::${row.itemId || ''}::${row.submenuId || ''}`;
@@ -364,6 +369,26 @@ function collectOrderChanges() {
     });
     return items;
 }
+// Same idea as public/Admin-ArbolMaestro.js's own collectCostChanges.
+function collectCostChanges() {
+    if (!masterTree) return [];
+    const before = new Map(originalCosts.map((r) => [statusRowKey(r), r]));
+    const after = masterTree.getCosts();
+    const afterMap = new Map(after.map((r) => [statusRowKey(r), r]));
+    const items = [];
+    new Set([...before.keys(), ...afterMap.keys()]).forEach((key) => {
+        const b = before.get(key) || { web: 0, app: 0 };
+        const a = afterMap.get(key) || { web: 0, app: 0 };
+        if (b.web === a.web && b.app === a.app) return;
+        const sample = afterMap.get(key) || before.get(key);
+        const label = masterTree.getStatusLabel(sample.sectionId, sample.itemId, sample.submenuId) || key;
+        const lines = [];
+        if (b.web !== a.web) lines.push(`${t('admin.masterTreeColCostWeb')}: $${b.web.toFixed(2)} → $${a.web.toFixed(2)}`);
+        if (b.app !== a.app) lines.push(`${t('admin.masterTreeColCostApp')}: $${b.app.toFixed(2)} → $${a.app.toFixed(2)}`);
+        items.push({ label: t('admin.masterTreeCostChangeLabel', { node: label }), line: lines.join(' · ') });
+    });
+    return items;
+}
 function statusLabel(status) {
     return t(`admin.masterTreeStatus${status.charAt(0).toUpperCase()}${status.slice(1)}`);
 }
@@ -429,10 +454,93 @@ function openConfirmSheet(changes, orderChanges, onConfirm) {
 confirmCancelBtn.addEventListener('click', () => { confirmOverlay.hidden = true; });
 confirmOverlay.addEventListener('click', (event) => { if (event.target === confirmOverlay) confirmOverlay.hidden = true; });
 
+// --- Currency (see master_permission_cost/master_cost_settings in db.js,
+// and the identical flow in public/Admin-ArbolMaestro.js) -- switching
+// currency converts every already-saved $ Web/$ App value using an
+// exchange rate confirmed (or overridden) in a bottom-sheet first.
+const currencySheetOverlay = document.getElementById('currency-sheet-overlay');
+const currencySheetTitle = document.getElementById('currency-sheet-title');
+const currencySheetRateValue = document.getElementById('currency-sheet-rate-value');
+const currencySheetRateInputLabel = document.getElementById('currency-sheet-rate-input-label');
+const currencySheetRateInput = document.getElementById('currency-sheet-rate-input');
+const currencySheetPreviewBox = document.getElementById('currency-sheet-preview-box');
+const currencySheetConfirmBtn = document.getElementById('currency-sheet-confirm-btn');
+const currencySheetCancelBtn = document.getElementById('currency-sheet-cancel-btn');
+let pendingCurrency = null;
+let currencySelectEl = null;
+
+function updateCurrencySheetPreview() {
+    const count = masterTree ? masterTree.getCosts().length : 0;
+    currencySheetPreviewBox.textContent = count
+        ? t('admin.masterCostPreviewCount', { count: String(count) })
+        : t('admin.masterCostPreviewEmpty');
+}
+
+function buildCurrencyBar() {
+    const bar = document.createElement('div');
+    bar.className = 'currency-bar';
+    bar.innerHTML = `<span class="currency-label"><i class="bx bx-coin-stack" aria-hidden="true"></i><span>${t('admin.masterCostCurrencyLabel')}</span></span>`;
+    const select = document.createElement('select');
+    select.className = 'currency-select';
+    ['MXN', 'USD', 'EUR'].forEach((code) => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = code;
+        select.appendChild(opt);
+    });
+    select.value = currentCurrency;
+    select.addEventListener('change', () => {
+        const to = select.value;
+        if (!masterTree || to === currentCurrency) return;
+        pendingCurrency = to;
+        const foreign = to === 'MXN' ? currentCurrency : to;
+        currencySheetTitle.textContent = t('admin.masterCostChangeCurrencyTitle', { from: currentCurrency, to });
+        currencySheetRateValue.textContent = t('admin.masterCostRateLine', { foreign, rate: lastExchangeRate.toFixed(2) });
+        currencySheetRateInputLabel.textContent = `1 ${foreign} =`;
+        currencySheetRateInput.value = lastExchangeRate.toFixed(2);
+        updateCurrencySheetPreview();
+        currencySheetOverlay.hidden = false;
+    });
+    currencySelectEl = select;
+    bar.appendChild(select);
+    const hint = document.createElement('span');
+    hint.className = 'currency-hint';
+    hint.textContent = t('admin.masterCostCurrencyHint');
+    bar.appendChild(hint);
+    return bar;
+}
+currencySheetCancelBtn.addEventListener('click', () => {
+    if (currencySelectEl) currencySelectEl.value = currentCurrency;
+    currencySheetOverlay.hidden = true;
+});
+currencySheetOverlay.addEventListener('click', (event) => { if (event.target === currencySheetOverlay) currencySheetCancelBtn.click(); });
+currencySheetConfirmBtn.addEventListener('click', async () => {
+    const rate = parseFloat(currencySheetRateInput.value) || 1;
+    currencySheetConfirmBtn.disabled = true;
+    try {
+        const res = await fetch(apiUrl('/api/admin/master-permission-costs/currency'), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ currency: pendingCurrency, exchangeRate: rate }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        currencySheetOverlay.hidden = true;
+        // Every $ Web/$ App value just changed server-side -- simplest to
+        // reload the whole tree fresh rather than rewrite each input here.
+        await loadMasterTree(renderToken);
+        showToast(t('admin.masterCostCurrencySaved'));
+    } catch {
+        showToast(t('admin.masterCostSaveError'));
+    } finally {
+        currencySheetConfirmBtn.disabled = false;
+    }
+});
+
 async function saveMasterTree(saveBtn) {
     saveBtn.disabled = true;
     try {
-        const [statusRes, orderRes] = await Promise.all([
+        const [statusRes, orderRes, costRes] = await Promise.all([
             fetch(apiUrl('/api/admin/master-permission-status'), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -449,15 +557,22 @@ async function saveMasterTree(saveBtn) {
                     apartadoOrders: masterTree.getApartadoOrders(),
                 }),
             }),
+            fetch(apiUrl('/api/admin/master-permission-costs'), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ costs: masterTree.getCosts() }),
+            }),
         ]);
-        if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
-        const [statusData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        if (!statusRes.ok || !orderRes.ok || !costRes.ok) throw new Error('save failed');
+        const [statusData] = await Promise.all([statusRes.json(), orderRes.json(), costRes.json()]);
         originalStatuses = statusData.statuses || [];
         // Same reasoning as loadMasterTree's own baseline fix below -- what
         // was just sent IS what the server now has.
         originalDepartmentOrder = masterTree.getDepartmentOrder();
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
+        originalCosts = masterTree.getCosts();
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved.
         masterTree.setBaseline(originalStatuses);
@@ -479,16 +594,21 @@ async function loadMasterTree(token) {
     hint.textContent = t('admin.loading') || '...';
     contentEl.appendChild(hint);
     try {
-        const [statusRes, orderRes] = await Promise.all([
+        const [statusRes, orderRes, costRes] = await Promise.all([
             fetch(apiUrl('/api/admin/master-permission-status'), { credentials: 'include' }),
             fetch(apiUrl('/api/admin/master-permission-order'), { credentials: 'include' }),
+            fetch(apiUrl('/api/admin/master-permission-costs'), { credentials: 'include' }),
         ]);
         if (token !== renderToken) return; // switched tabs while this was in flight
-        if (!statusRes.ok || !orderRes.ok) throw new Error('load failed');
-        const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        if (!statusRes.ok || !orderRes.ok || !costRes.ok) throw new Error('load failed');
+        const [statusData, orderData, costData] = await Promise.all([statusRes.json(), orderRes.json(), costRes.json()]);
         if (token !== renderToken) return;
         originalStatuses = statusData.statuses || [];
+        currentCurrency = costData.currency || 'MXN';
+        lastExchangeRate = costData.lastExchangeRate || 1;
         contentEl.innerHTML = '';
+
+        contentEl.appendChild(buildCurrencyBar());
 
         const treeWrap = document.createElement('div');
         // .perm-tree is the class Admin.css's own base rules key off of
@@ -504,7 +624,7 @@ async function loadMasterTree(token) {
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
         });
-        await masterTree.init(originalStatuses);
+        await masterTree.init(originalStatuses, costData.costs || []);
         if (token !== renderToken) return; // switched away while menu.json/tree rows were still loading
         // The baseline is what the tree actually ends up SHOWING, not the
         // raw (possibly empty) server response -- see the identical fix and
@@ -513,6 +633,7 @@ async function loadMasterTree(token) {
         originalDepartmentOrder = masterTree.getDepartmentOrder();
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
+        originalCosts = masterTree.getCosts();
 
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
@@ -521,12 +642,12 @@ async function loadMasterTree(token) {
         saveBtn.addEventListener('click', () => {
             if (!masterTree) return;
             const changes = describeChanges();
-            const orderChanges = collectOrderChanges();
-            if (!changes.length && !orderChanges.length) {
+            const extraChanges = [...collectOrderChanges(), ...collectCostChanges()];
+            if (!changes.length && !extraChanges.length) {
                 showToast(t('admin.masterTreeNoChanges'));
                 return;
             }
-            openConfirmSheet(changes, orderChanges, () => saveMasterTree(saveBtn));
+            openConfirmSheet(changes, extraChanges, () => saveMasterTree(saveBtn));
         });
         contentEl.appendChild(saveBtn);
     } catch {

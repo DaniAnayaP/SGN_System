@@ -384,6 +384,44 @@ db.exec(`
         UNIQUE(business_sector_id, parent_key)
     );
 
+    -- Árbol Maestro's own suggested/base $ Web + $ App cost per node --
+    -- same {section_id, item_id, submenu_id} triple as plan_permission_costs
+    -- (still the real per-Plan price a client pays), but GEIPSA-global and
+    -- meant as the starting point every Giro/Plan cascades from -- see the
+    -- user's own framing: "vamos a definir un costo principal [aquí], pero
+    -- en giro manejaremos descuentos e incrementos". Sparse (only priced
+    -- nodes get a row, same convention as plan_permission_costs); Web and
+    -- App are two independent numbers on the SAME row here (unlike
+    -- plan_permission_costs' #app-suffix-on-submenu_id trick) since this
+    -- table never needed to also double as a generic {section,item,submenu}
+    -- grant key the way that one's schema history did.
+    CREATE TABLE IF NOT EXISTS master_permission_cost (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        section_id  TEXT NOT NULL,
+        item_id     TEXT,
+        submenu_id  TEXT,
+        cost_web    REAL NOT NULL DEFAULT 0,
+        cost_app    REAL NOT NULL DEFAULT 0,
+        UNIQUE(section_id, item_id, submenu_id)
+    );
+
+    -- Single-row settings for the Árbol Maestro cost tree: which currency
+    -- every cost_web/cost_app value above is currently denominated in, and
+    -- the last exchange rate GEIPSA actually used (see the currency-change
+    -- dialog on Admin-ArbolMaestro.js) -- suggested back the NEXT time
+    -- someone switches currency. Manual entry only for now, no live rate
+    -- service wired in -- open question for the user (see the "de dónde
+    -- sale el tipo de cambio sugerido" question), easy to swap later since
+    -- nothing downstream cares HOW last_exchange_rate got its value.
+    CREATE TABLE IF NOT EXISTS master_cost_settings (
+        id                   INTEGER PRIMARY KEY CHECK (id = 1),
+        currency             TEXT NOT NULL DEFAULT 'MXN',
+        last_exchange_rate   REAL NOT NULL DEFAULT 1,
+        updated_by           TEXT NOT NULL DEFAULT '',
+        updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT OR IGNORE INTO master_cost_settings (id, currency, last_exchange_rate) VALUES (1, 'MXN', 1);
+
     -- Costo $ de cada botón/módulo de MODULE_CATALOG — configurado en su
     -- propia pantalla (Costos de Módulos), usado para calcular "Pago por
     -- Anexos" en Nuestros Clientes (suma del costo de cada módulo que un
@@ -5493,6 +5531,71 @@ function setPlanPermissionCosts(planId, costs) {
     return getPlanPermissionCosts(planId);
 }
 
+// --- Árbol Maestro's own suggested/base cost (see master_permission_cost --
+// comment above) -- same sparse-storage/replace-all-on-save shape as
+// plan_permission_costs, just GEIPSA-global (no plan_id) and Web+App as two
+// columns on one row instead of a #app-suffixed second row.
+function getMasterPermissionCosts() {
+    return db
+        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId, cost_web AS web, cost_app AS app FROM master_permission_cost')
+        .all();
+}
+function setMasterPermissionCosts(costs) {
+    const replace = db.transaction((rows) => {
+        db.prepare('DELETE FROM master_permission_cost').run();
+        const insert = db.prepare(`
+            INSERT INTO master_permission_cost (section_id, item_id, submenu_id, cost_web, cost_app)
+            VALUES (@sectionId, @itemId, @submenuId, @web, @app)
+        `);
+        for (const c of rows) {
+            const web = Math.max(0, Number(c.web) || 0);
+            const app = Math.max(0, Number(c.app) || 0);
+            if (!web && !app) continue; // sparse, same convention as plan_permission_costs
+            insert.run({ sectionId: c.sectionId, itemId: c.itemId || null, submenuId: c.submenuId || null, web, app });
+        }
+    });
+    replace(costs);
+    return getMasterPermissionCosts();
+}
+
+function getMasterCostSettings() {
+    const row = db.prepare('SELECT currency, last_exchange_rate AS lastExchangeRate FROM master_cost_settings WHERE id = 1').get();
+    return row || { currency: 'MXN', lastExchangeRate: 1 };
+}
+function setMasterCostSettings(currency, lastExchangeRate, updatedBy) {
+    db.prepare(`
+        INSERT INTO master_cost_settings (id, currency, last_exchange_rate, updated_by)
+        VALUES (1, @currency, @lastExchangeRate, @updatedBy)
+        ON CONFLICT(id) DO UPDATE SET currency = excluded.currency, last_exchange_rate = excluded.last_exchange_rate, updated_by = excluded.updated_by, updated_at = datetime('now')
+    `).run({ currency, lastExchangeRate, updatedBy: updatedBy || '' });
+    return getMasterCostSettings();
+}
+
+// Currency switch: recomputes every already-saved cost_web/cost_app in
+// place using `exchangeRate`, then records the new currency + that rate as
+// the one to suggest next time (see master_cost_settings above). `fromCode`
+// is always the CURRENT currency (whatever getMasterCostSettings() already
+// says) -- exchangeRate is always "1 <the non-MXN side> = exchangeRate
+// MXN", same convention the confirm dialog itself shows, regardless of
+// which direction the switch goes.
+function applyMasterCostCurrencyChange(toCurrency, exchangeRate, updatedBy) {
+    const { currency: fromCurrency } = getMasterCostSettings();
+    const rate = Number(exchangeRate) || 1;
+    const convert = db.transaction(() => {
+        if (fromCurrency !== toCurrency) {
+            const rows = db.prepare('SELECT id, cost_web, cost_app FROM master_permission_cost').all();
+            const update = db.prepare('UPDATE master_permission_cost SET cost_web = @web, cost_app = @app WHERE id = @id');
+            rows.forEach((r) => {
+                const factor = fromCurrency === 'MXN' ? (1 / rate) : rate;
+                update.run({ id: r.id, web: Math.round(r.cost_web * factor * 100) / 100, app: Math.round(r.cost_app * factor * 100) / 100 });
+            });
+        }
+        setMasterCostSettings(toCurrency, rate, updatedBy);
+    });
+    convert();
+    return { costs: getMasterPermissionCosts(), settings: getMasterCostSettings() };
+}
+
 // --- buildPlanTreeSections / computeCostTotalForGrantSet: walk the SAME ---
 // --- universal tree PermissionTree.js builds, for whichever grant set ----
 // --- actually needs gating (a client's ADDITIONAL cost, not a plan's own
@@ -6286,6 +6389,11 @@ module.exports = {
     syncPlanModulesFromGrants,
     getPlanPermissionCosts,
     setPlanPermissionCosts,
+    getMasterPermissionCosts,
+    setMasterPermissionCosts,
+    getMasterCostSettings,
+    setMasterCostSettings,
+    applyMasterCostCurrencyChange,
     computeAccessCostTotal,
     getClientPermissionGrants,
     setClientPermissionGrants,

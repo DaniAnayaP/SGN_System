@@ -971,6 +971,86 @@ body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c4
     color: var(--color-text-secondary);
 }
 
+/* Árbol Maestro's own cost currency -- bar above the tree (see
+   Admin-ArbolMaestro.js) + the exchange-rate confirmation modal that opens
+   when the <select> below changes. */
+.currency-bar{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 0.8rem;
+}
+.currency-label{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 700;
+    font-size: 0.82rem;
+    flex-shrink: 0;
+}
+.currency-label i{ color: var(--color-accent); font-size: 1rem; }
+.currency-select{
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 0.35rem 0.6rem;
+    border-radius: 0.4rem;
+    border: 1.5px solid var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg));
+    color: var(--color-accent);
+    flex-shrink: 0;
+}
+.currency-hint{ font-size: 0.76rem; color: var(--color-text-secondary); }
+
+.currency-rate-box{
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    margin: 0.8rem 0;
+}
+.currency-rate-label{
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-text-secondary);
+}
+.currency-rate-value{ font-size: 1.05rem; font-weight: 800; }
+.currency-rate-question{ font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 0.4rem; }
+.currency-rate-input-row{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+.currency-rate-input-row input{
+    width: 6rem;
+    font: inherit;
+    font-weight: 700;
+    padding: 0.35rem 0.5rem;
+    border: 1.5px solid var(--color-accent);
+    border-radius: 0.4rem;
+    text-align: right;
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg));
+}
+.currency-preview-box{
+    border-top: 1px dashed var(--color-border);
+    padding-top: 0.6rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.8rem;
+}
+.currency-preview-row{ display: flex; justify-content: space-between; padding: 0.15rem 0; }
+.currency-preview-row b{ color: var(--color-accent); }
+
 /* Institutional color palette widget */
 .color-palette-widget{
     margin-bottom: 1rem;
@@ -1508,6 +1588,20 @@ body.dark-mode .perm-tree-depth-2{
     justify-content: center;
     gap: 0.7rem;
 }
+/* $ Web / $ App -- same fixed-column reasoning as platforms-cell above.
+   .perm-tree-cost-input's own margin-left:auto/width (see below) were
+   sized for PermissionCostTree.js's flat flex row, where it's the only
+   trailing element; overridden here so it fills this cell instead. */
+.perm-tree-mstatus-cost-cell{
+    flex-shrink: 0;
+    width: 6.5rem;
+    display: flex;
+    justify-content: center;
+}
+.perm-tree-mstatus-cost-cell .perm-tree-cost-input{
+    margin-left: 0;
+    width: 100%;
+}
 /* Vista Previa/Navegar -- a fixed icon-only column (never abbreviates,
    see applyStatusAbbreviations' fixedNeighbors), same reasoning as the
    Web·App column above: a real column this width, not margin/padding
@@ -1715,6 +1809,7 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
 .perm-tree-mstatus-header-status{ width: var(--perm-tree-status-col-width, 9.5rem); }
 .perm-tree-mstatus-header-platforms{ width: 13rem; }
+.perm-tree-mstatus-header-cost{ width: 6.5rem; }
 .perm-tree-mstatus-header-navigate{ width: 2.2rem; font-size: 0.85rem; }
 /* Wraps the Estatus + Web·App header columns together, flush against the
    header's own right edge -- see perm-tree-mstatus-controls (the row's

@@ -254,6 +254,10 @@ const {
     syncPlanModulesFromGrants,
     getPlanPermissionCosts,
     setPlanPermissionCosts,
+    getMasterPermissionCosts,
+    setMasterPermissionCosts,
+    getMasterCostSettings,
+    applyMasterCostCurrencyChange,
     computeAccessCostTotal,
     getClientPermissionGrants,
     setClientPermissionGrants,
@@ -1576,6 +1580,57 @@ app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) =>
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     res.json({ changes: getPlanChanges(req.params.id) });
+});
+
+// --- Árbol Maestro's own suggested/base cost (see master_permission_cost --
+// in db.js) -- GEIPSA-global, independent of any one Plan. Web and App are
+// two numbers per row here (not the #app-suffix trick plan_permission_costs
+// uses), since this table never needed to double as a grant key.
+const MASTER_COST_CURRENCIES = ['MXN', 'USD', 'EUR'];
+function validateMasterPermissionCosts(costs) {
+    if (!Array.isArray(costs)) return 'costs must be an array.';
+    for (const c of costs) {
+        if (!c || typeof c.sectionId !== 'string' || !c.sectionId) return 'each cost row needs a sectionId.';
+        if (c.web !== undefined && (typeof c.web !== 'number' || Number.isNaN(c.web) || c.web < 0)) return 'web cost must be a number >= 0.';
+        if (c.app !== undefined && (typeof c.app !== 'number' || Number.isNaN(c.app) || c.app < 0)) return 'app cost must be a number >= 0.';
+    }
+    return null;
+}
+
+app.get('/api/admin/master-permission-costs', requireAuth, requireAdmin, (req, res) => {
+    res.json({ costs: getMasterPermissionCosts(), ...getMasterCostSettings() });
+});
+
+app.put('/api/admin/master-permission-costs', requireAuth, requireAdmin, (req, res) => {
+    const { costs } = req.body || {};
+    const error = validateMasterPermissionCosts(costs);
+    if (error) return res.status(400).json({ message: error });
+    const saved = setMasterPermissionCosts(costs);
+    res.json({ costs: saved, ...getMasterCostSettings() });
+});
+
+// Currency switch -- confirmed via a dialog on Admin-ArbolMaestro.js before
+// this ever gets called: converts every already-saved cost using
+// exchangeRate ("1 <the non-MXN side> = exchangeRate MXN", same convention
+// the dialog itself shows), and remembers it to suggest next time. Only
+// MXN<->foreign is supported for now (never foreign<->foreign directly) --
+// the conversion math only has one exchange rate to work with per call, so
+// a USD->EUR switch would need routing through MXN first, not implemented
+// here yet.
+app.put('/api/admin/master-permission-costs/currency', requireAuth, requireAdmin, (req, res) => {
+    const { currency, exchangeRate } = req.body || {};
+    if (!MASTER_COST_CURRENCIES.includes(currency)) {
+        return res.status(400).json({ message: `currency must be one of ${MASTER_COST_CURRENCIES.join(', ')}.` });
+    }
+    if (typeof exchangeRate !== 'number' || Number.isNaN(exchangeRate) || exchangeRate <= 0) {
+        return res.status(400).json({ message: 'exchangeRate must be a number > 0.' });
+    }
+    const { currency: fromCurrency } = getMasterCostSettings();
+    if (fromCurrency !== 'MXN' && currency !== 'MXN' && fromCurrency !== currency) {
+        return res.status(400).json({ message: 'Switching directly between two non-MXN currencies is not supported yet -- switch back to MXN first.' });
+    }
+    const result = applyMasterCostCurrencyChange(currency, exchangeRate, changedByLabel(req));
+    res.json({ costs: result.costs, ...result.settings });
 });
 
 // --- Nuestras APPs -----------------------------------------------------------
