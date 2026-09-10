@@ -263,7 +263,12 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, costCurrency = 'MXN' } = {}) {
+        // Shown inside every $ Web/$ App input (see buildCostInput below) --
+        // purely a label, never affects the number stored/sent; the caller
+        // (Admin-ArbolMaestro.js) is the one that actually knows/persists
+        // which currency the values are in (master_cost_settings in db.js).
+        const costCurrencySymbol = { MXN: '$', USD: '$', EUR: '€' }[costCurrency] || '$';
         // statusMode (Árbol de Permisos Maestro) is a completely separate,
         // much simpler mode: no grants, no rollup/indeterminate math, no
         // App-visibility column, no cost-center/module filtering -- GEIPSA
@@ -1252,6 +1257,13 @@
                 if (showCost) {
                     const cost = getNodeCost(key);
                     const buildCostInput = (platform, value) => {
+                        const wrap = document.createElement('div');
+                        wrap.className = 'perm-tree-mstatus-cost-wrap';
+                        const symbol = document.createElement('span');
+                        symbol.className = 'perm-tree-mstatus-cost-symbol';
+                        symbol.textContent = costCurrencySymbol;
+                        symbol.setAttribute('aria-hidden', 'true');
+                        wrap.appendChild(symbol);
                         const input = document.createElement('input');
                         input.type = 'number';
                         input.min = '0';
@@ -1264,7 +1276,8 @@
                             setNodeCost(key, { ...current, [platform]: parsed });
                             input.value = parsed.toFixed(2);
                         });
-                        return input;
+                        wrap.appendChild(input);
+                        return wrap;
                     };
                     const costWebCell = document.createElement('div');
                     costWebCell.className = 'perm-tree-mstatus-cost-cell';

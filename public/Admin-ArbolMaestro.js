@@ -254,6 +254,7 @@ async function loadMasterTree() {
             departmentOrder: orderData.departmentOrder || [],
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
+            costCurrency: currentCurrency,
         });
         await masterTree.init(originalStatuses, costData.costs || []);
         // The baseline is what the tree actually ends up SHOWING, not the

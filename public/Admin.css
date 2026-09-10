@@ -1510,6 +1510,17 @@ body.dark-mode .perm-tree-depth-2{
     font: inherit;
     font-size: inherit;
     text-align: right;
+    -moz-appearance: textfield;
+}
+/* No native up/down spin arrows on either context this class is used in
+   (PermissionCostTree.js's own flat input, or Árbol Maestro's $ Web/$ App
+   wrap below) -- they only ever showed on the ONE input that happened to
+   have focus, making it visually inconsistent with its own un-focused
+   siblings a moment earlier. */
+.perm-tree-cost-input::-webkit-outer-spin-button,
+.perm-tree-cost-input::-webkit-inner-spin-button{
+    -webkit-appearance: none;
+    margin: 0;
 }
 .perm-tree-cost-readonly{
     width: 6.5rem;
@@ -1589,18 +1600,42 @@ body.dark-mode .perm-tree-depth-2{
     gap: 0.7rem;
 }
 /* $ Web / $ App -- same fixed-column reasoning as platforms-cell above.
-   .perm-tree-cost-input's own margin-left:auto/width (see below) were
-   sized for PermissionCostTree.js's flat flex row, where it's the only
-   trailing element; overridden here so it fills this cell instead. */
+   .perm-tree-cost-input's own margin-left:auto/width/border/font-size (see
+   below) were sized for PermissionCostTree.js's flat flex row, where it's
+   the only control on the row and can afford to be bigger/bolder;
+   overridden here to match the compact scale of this row's OTHER controls
+   (.perm-tree-mstatus-select's own 0.72rem/1px transparent-until-colored
+   border) instead of visually dominating them. */
 .perm-tree-mstatus-cost-cell{
     flex-shrink: 0;
     width: 6.5rem;
     display: flex;
     justify-content: center;
 }
+.perm-tree-mstatus-cost-wrap{
+    display: flex;
+    align-items: center;
+    width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-surface);
+    padding: 0 0.35rem;
+}
+.perm-tree-mstatus-cost-wrap:focus-within{ border-color: var(--color-accent); }
+.perm-tree-mstatus-cost-symbol{
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
 .perm-tree-mstatus-cost-cell .perm-tree-cost-input{
     margin-left: 0;
     width: 100%;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    padding: 0.25rem 0.15rem;
+    font-size: 0.78rem;
 }
 /* Vista Previa/Navegar -- a fixed icon-only column (never abbreviates,
    see applyStatusAbbreviations' fixedNeighbors), same reasoning as the

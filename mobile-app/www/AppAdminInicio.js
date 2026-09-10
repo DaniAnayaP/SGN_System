@@ -623,6 +623,7 @@ async function loadMasterTree(token) {
             departmentOrder: orderData.departmentOrder || [],
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
+            costCurrency: currentCurrency,
         });
         await masterTree.init(originalStatuses, costData.costs || []);
         if (token !== renderToken) return; // switched away while menu.json/tree rows were still loading
