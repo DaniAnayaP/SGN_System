@@ -87,10 +87,19 @@
         mejoras: ['admin.masterTreeStatusMejoras', 'admin.masterTreeStatusMejorasShort', 'admin.masterTreeStatusMejorasIcon'],
     };
 
+    // Cached at module scope (not per create() instance) -- menu.json is a
+    // static file that never changes within a page's lifetime, and screens
+    // like Admin-BusinessSectors.js's own department/área reorder now call
+    // getDepartmentCatalog/getAreaCatalog repeatedly (once per department)
+    // without ever instantiating a tree, which would otherwise mean one
+    // redundant fetch per call.
+    let menuDataCache = null;
     async function loadMenuData() {
+        if (menuDataCache) return menuDataCache;
         const res = await fetch('data/menu.json');
         if (!res.ok) throw new Error('failed to load menu.json');
-        return res.json();
+        menuDataCache = await res.json();
+        return menuDataCache;
     }
 
     // Departamento id + translated label, with none of the área/categoría
@@ -115,6 +124,45 @@
         { id: 'area-2', labelKey: 'menu.area.generic', labelParams: { n: 2 } },
         { id: 'area-3', labelKey: 'menu.area.generic', labelParams: { n: 3 } },
     ];
+
+    // Área id + translated label for one department, same lightweight idea
+    // as getDepartmentCatalog above (no submenu/categoría resolution) --
+    // used by Admin-BusinessSectors.js's own Área-reorder screen, which
+    // needs área names without building a tree.
+    async function getAreaCatalog(sectionId) {
+        const { areas } = await loadMenuData();
+        const deptAreas = (areas && areas[sectionId]) || GENERIC_AREAS;
+        return deptAreas.map((area) => ({ id: area.id, label: t(area.labelKey, area.labelParams) }));
+    }
+
+    // Every department's Inicio/Panel/Tablero -- always depth-1 items
+    // alongside its real áreas (see generalItems below), but core
+    // navigation rather than a Giro/Plan-facing "Área", so never
+    // draggable/reorderable (see isRealArea in renderStatusTree).
+    const GENERAL_ITEM_IDS = ['home', 'panel', 'dashboard'];
+
+    // Reorders `list` (in place) to match `orderIds` as closely as
+    // possible: anything named in orderIds comes first, in that order;
+    // anything in `list` but NOT mentioned in orderIds keeps its original
+    // relative position, appended after -- so an item added to menu.json
+    // after an order was last saved is never silently dropped. Shared by
+    // departmentOrder (below) and areaOrder (see sectionsData's own
+    // construction further down) rather than duplicating this per level.
+    function applyOrder(list, orderIds) {
+        if (!orderIds || !orderIds.length) return list;
+        const byId = new Map(list.map((item) => [item.id, item]));
+        const ordered = [];
+        orderIds.forEach((id) => {
+            if (byId.has(id)) {
+                ordered.push(byId.get(id));
+                byId.delete(id);
+            }
+        });
+        list.forEach((item) => {
+            if (byId.has(item.id)) ordered.push(item);
+        });
+        return ordered;
+    }
 
     // Each área within a department gets its OWN resolved category list —
     // an área-specific submenu override (menu.json's areaOverrides, keyed
@@ -215,7 +263,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null } = {}) {
         // statusMode (Árbol de Permisos Maestro) is a completely separate,
         // much simpler mode: no grants, no rollup/indeterminate math, no
         // App-visibility column, no cost-center/module filtering -- GEIPSA
@@ -231,25 +279,43 @@
             showAppTab = false;
         }
         let sectionsData = [];
-        // Departamento drag-reorder (statusMode/Árbol Maestro only -- see
-        // statusRow's depth-0 branch and reorderDepartments below). Plain
+        // Departamento/Área drag-reorder (statusMode/Árbol Maestro only --
+        // see statusRow's dragCtx param and renderStatusTree below). Plain
         // module-scope state, same pattern grantSet/statusMap already use;
-        // dragging never touches sectionsData's actual CONTENTS, only the
-        // array's own order, so nothing else this file computes from
-        // sectionsData (grants, statuses, labels) needs to change.
-        let draggedDepartmentId = null;
-        function reorderDepartments(draggedId, targetId) {
+        // dragging never touches sectionsData's actual CONTENTS, only a
+        // list's own order, so nothing else this file computes from it
+        // (grants, statuses, labels) needs to change. One shared
+        // draggedNode (not a separate variable per level) so a drag started
+        // on one level can never be accidentally dropped as if it were
+        // another (see the kind check in statusRow).
+        let draggedNode = null;
+        function reorderInPlace(list, draggedId, targetId) {
             if (draggedId === targetId) return false;
-            const draggedIdx = sectionsData.findIndex((s) => s.id === draggedId);
+            const draggedIdx = list.findIndex((s) => s.id === draggedId);
             if (draggedIdx === -1) return false;
-            const [moved] = sectionsData.splice(draggedIdx, 1);
-            const targetIdx = sectionsData.findIndex((s) => s.id === targetId);
+            const [moved] = list.splice(draggedIdx, 1);
+            const targetIdx = list.findIndex((s) => s.id === targetId);
             if (targetIdx === -1) {
-                sectionsData.splice(draggedIdx, 0, moved);
+                list.splice(draggedIdx, 0, moved);
                 return false;
             }
-            sectionsData.splice(targetIdx, 0, moved);
+            list.splice(targetIdx, 0, moved);
             return true;
+        }
+        function reorderDepartments(draggedId, targetId) {
+            return reorderInPlace(sectionsData, draggedId, targetId);
+        }
+        // Áreas only ever reorder among their OWN department's siblings
+        // (confirmed with the user: never across departments) -- sectionId
+        // scopes the splice to that one department's own items array, which
+        // also holds Inicio/Panel/Tablero (GENERAL_ITEM_IDS, never
+        // draggable -- see the isRealArea guard in renderStatusTree) ahead
+        // of the real áreas; reorderInPlace only ever matches on área ids,
+        // so that leading block never moves.
+        function reorderAreas(sectionId, draggedId, targetId) {
+            const section = sectionsData.find((s) => s.id === sectionId);
+            if (!section) return false;
+            return reorderInPlace(section.items, draggedId, targetId);
         }
         let grantSet = new Set();
         // statusMode's own state -- a Map from the same keyOf(...) key
@@ -1007,18 +1073,29 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, departmentId) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
-            // Departamento-level drag-to-reorder -- Árbol Maestro only
-            // (departmentId is only ever passed at depth 0, see
+            // Drag-to-reorder -- Árbol Maestro only. dragCtx is
+            // { kind, id, sectionId, onDrop(draggedId, targetId) }, passed
+            // at whichever depth is currently reorderable (depth 0 for
+            // Departamento, depth 1 for Área under it -- see
             // renderStatusTree). No separate "reorder column": the grip
-            // sits right on the row, and dropping it reorders sectionsData
-            // in place (see reorderDepartments above) before a full
-            // renderStatusTree() redraw picks up the new order. readOnly
-            // mode never gets draggable="true" -- same guard every other
-            // editable control in this file already respects.
-            if (departmentId && !readOnly) {
+            // sits right on the row, and dropping it mutates sectionsData
+            // in place (via onDrop) before a full renderStatusTree() redraw
+            // picks up the new order. `kind`+`sectionId` guard against a
+            // drag started on one level/department being dropped as if it
+            // were another -- can't happen through the UI since a drag
+            // never leaves its own level's rows, but without the
+            // sectionId check here an Área dragged from one department
+            // would still show the "valid drop" highlight over an Área row
+            // under a DIFFERENT department (the drop itself would still be
+            // a no-op, since reorderAreas would never find that id in the
+            // wrong department's list -- but the highlight would lie about
+            // it being a valid target). readOnly mode never gets
+            // draggable="true" -- same guard every other editable control
+            // in this file already respects.
+            if (dragCtx && !readOnly) {
                 row.classList.add('perm-tree-row-draggable');
                 row.draggable = true;
                 const grip = document.createElement('span');
@@ -1026,17 +1103,21 @@
                 grip.setAttribute('aria-hidden', 'true');
                 grip.innerHTML = '<i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i>';
                 row.appendChild(grip);
+                const matchesDragged = () => !!draggedNode
+                    && draggedNode.kind === dragCtx.kind
+                    && draggedNode.sectionId === dragCtx.sectionId
+                    && draggedNode.id !== dragCtx.id;
                 row.addEventListener('dragstart', (e) => {
-                    draggedDepartmentId = departmentId;
+                    draggedNode = { kind: dragCtx.kind, id: dragCtx.id, sectionId: dragCtx.sectionId };
                     row.classList.add('perm-tree-row-dragging');
                     e.dataTransfer.effectAllowed = 'move';
                 });
                 row.addEventListener('dragend', () => {
-                    draggedDepartmentId = null;
+                    draggedNode = null;
                     row.classList.remove('perm-tree-row-dragging');
                 });
                 row.addEventListener('dragover', (e) => {
-                    if (!draggedDepartmentId || draggedDepartmentId === departmentId) return;
+                    if (!matchesDragged()) return;
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
                     row.classList.add('perm-tree-row-drop-target');
@@ -1047,10 +1128,11 @@
                 row.addEventListener('drop', (e) => {
                     e.preventDefault();
                     row.classList.remove('perm-tree-row-drop-target');
-                    const draggedId = draggedDepartmentId;
-                    draggedDepartmentId = null;
-                    if (!draggedId || draggedId === departmentId) return;
-                    if (reorderDepartments(draggedId, departmentId)) renderStatusTree();
+                    const wasValid = matchesDragged();
+                    const draggedId = draggedNode ? draggedNode.id : null;
+                    draggedNode = null;
+                    if (!wasValid) return;
+                    if (dragCtx.onDrop(draggedId, dragCtx.id)) renderStatusTree();
                 });
             }
             if (toggle) {
@@ -1614,7 +1696,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? section.id : null));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, sectionId: null, onDrop: reorderDepartments } : null));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -1624,13 +1706,18 @@
                     const itemExpanded = expandedItems.has(itemKey);
                     const itemLeafKeys = hasSubmenu ? leafKeysUnder(section, item) : [];
                     const itemStateKey = keyOf(section.id, item.id, null);
+                    // Only real áreas reorder (never Inicio/Panel/Tablero,
+                    // and never anything under 'main' -- same GENERAL_ITEM_IDS
+                    // exclusion sectionsData's own construction already
+                    // applies when merging generalItems ahead of areaItems).
+                    const isRealArea = section.id !== 'main' && !GENERAL_ITEM_IDS.includes(item.id);
                     treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), 1, itemStateKey, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => {
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, sectionId: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null));
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
 
@@ -1937,7 +2024,7 @@
                 // grantable per area, not just once under General — on top
                 // of the shared category template (Catálogos, Operaciones,
                 // ...) every department already gets.
-                const generalItems = (mainSection?.items || []).filter((i) => ['home', 'panel', 'dashboard'].includes(i.id));
+                const generalItems = (mainSection?.items || []).filter((i) => GENERAL_ITEM_IDS.includes(i.id));
                 const scopedSections = allowedSectionIds
                     ? allSections.filter((s) => s.id === 'main' || allowedSectionIds.includes(s.id))
                     : allSections;
@@ -1946,19 +2033,12 @@
                 // not explicitly ordered yet (a department added to
                 // menu.json after this order was last saved) keeps its
                 // original relative position, appended after the ordered
-                // ones, so a new department is never silently hidden.
-                const filtered = (() => {
-                    if (!departmentOrder || !departmentOrder.length) return scopedSections;
-                    const main = scopedSections.filter((s) => s.id === 'main');
-                    const rest = scopedSections.filter((s) => s.id !== 'main');
-                    const byId = new Map(rest.map((s) => [s.id, s]));
-                    const ordered = [];
-                    departmentOrder.forEach((id) => {
-                        if (byId.has(id)) { ordered.push(byId.get(id)); byId.delete(id); }
-                    });
-                    rest.forEach((s) => { if (byId.has(s.id)) ordered.push(s); });
-                    return [...main, ...ordered];
-                })();
+                // ones, so a new department is never silently hidden (see
+                // applyOrder above).
+                const filtered = [
+                    ...scopedSections.filter((s) => s.id === 'main'),
+                    ...applyOrder(scopedSections.filter((s) => s.id !== 'main'), departmentOrder),
+                ];
                 // Every department section is just a placeholder in
                 // menu.json now (items: []) — the actual grantable
                 // categories/pantallas (Catálogos, Operaciones, ...) live
@@ -2008,7 +2088,11 @@
                         // department becomes its own item, carrying its OWN
                         // resolved category list — a pantalla belongs to
                         // exactly one área, not merged across all of them.
-                        const deptAreas = (areas && areas[s.id]) || GENERIC_AREAS;
+                        // areaOrder (see create()'s own param note) is keyed
+                        // by department sectionId -- each department reorders
+                        // its own áreas independently, same cascade idea as
+                        // departmentOrder itself just one level down.
+                        const deptAreas = applyOrder((areas && areas[s.id]) || GENERIC_AREAS, areaOrder && areaOrder[s.id]);
                         const areaItems = deptAreas.map((area) => ({
                             id: area.id,
                             labelKey: area.labelKey,
@@ -2139,6 +2223,19 @@
             getDepartmentOrder() {
                 return sectionsData.filter((s) => s.id !== 'main').map((s) => s.id);
             },
+            // statusMode only -- current Área order for EVERY department at
+            // once, keyed by department sectionId (same shape the areaOrder
+            // param on create() accepts, so a caller can just round-trip
+            // this straight back in on the next load). GENERAL_ITEM_IDS
+            // (Inicio/Panel/Tablero) are excluded -- never a real Área.
+            getAreaOrders() {
+                const result = {};
+                sectionsData.forEach((s) => {
+                    if (s.id === 'main') return;
+                    result[s.id] = s.items.filter((i) => !GENERAL_ITEM_IDS.includes(i.id)).map((i) => i.id);
+                });
+                return result;
+            },
             // statusMode only -- Admin-ArbolMaestro.js calls this right
             // after a successful save with the server's fresh rows, so
             // every pending-added/pending-removed highlight clears the
@@ -2152,5 +2249,5 @@
         };
     }
 
-    window.PermissionTree = { create, getDepartmentCatalog };
+    window.PermissionTree = { create, getDepartmentCatalog, getAreaCatalog };
 })();

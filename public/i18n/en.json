@@ -569,6 +569,7 @@
     "masterTreeConfirmHint": "This affects every Business Type, Plan, and client that depends on these branches. Review before saving.",
     "masterTreeNoChanges": "Nothing to save.",
     "masterTreeOrderLabel": "Department Order",
+    "masterTreeAreaOrderLabel": "Área Order — {department}",
     "masterTreeOrderChangeLine": "New order: {order}"
   },
   "business": {

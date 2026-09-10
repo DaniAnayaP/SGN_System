@@ -26,6 +26,9 @@ let originalStatuses = [];
 // PermissionTree.js / master_permission_order in db.js) -- a separate
 // table from statuses, saved together on the same Guardar click.
 let originalDepartmentOrder = [];
+// Same idea one level down -- each department's own Área order, keyed by
+// sectionId (see getAreaOrders in PermissionTree.js).
+let originalAreaOrders = {};
 
 function statusRowKey(row) {
     return `${row.sectionId}::${row.itemId || ''}::${row.submenuId || ''}`;
@@ -52,19 +55,45 @@ function describeChanges() {
     return changes;
 }
 
-function departmentOrderChanged() {
-    if (!masterTree) return false;
-    const before = originalDepartmentOrder;
-    const after = masterTree.getDepartmentOrder();
+function orderArraysDiffer(before, after) {
     return before.length !== after.length || before.some((id, i) => id !== after[i]);
 }
 
-// Department names in their NEW order -- getStatusLabel resolves any node
-// key back to its i18n-translated label (see statusRow's statusLabelMap),
-// depth-0 department keys included, so this needs no separate lookup.
-function departmentOrderLine() {
-    const names = masterTree.getDepartmentOrder().map((id) => masterTree.getStatusLabel(id, null, null) || id);
-    return Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') });
+function departmentOrderChanged() {
+    if (!masterTree) return false;
+    return orderArraysDiffer(originalDepartmentOrder, masterTree.getDepartmentOrder());
+}
+
+// One { label, line } entry per order that actually changed since the last
+// load/save -- Departamento (if it moved) plus one entry per department
+// whose OWN Área order moved. getStatusLabel resolves any node key back to
+// its i18n-translated label (see statusRow's statusLabelMap); a depth-0
+// key (sectionId, null, null) names a Departamento, a depth-1 key
+// (sectionId, areaId, null) names one of its Áreas -- no separate lookup
+// needed for either.
+function collectOrderChanges() {
+    if (!masterTree) return [];
+    const items = [];
+    if (departmentOrderChanged()) {
+        const names = masterTree.getDepartmentOrder().map((id) => masterTree.getStatusLabel(id, null, null) || id);
+        items.push({
+            label: Dashboard.t('admin.masterTreeOrderLabel'),
+            line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    }
+    const afterAreaOrders = masterTree.getAreaOrders();
+    Object.keys(afterAreaOrders).forEach((sectionId) => {
+        const before = originalAreaOrders[sectionId] || [];
+        const after = afterAreaOrders[sectionId];
+        if (!orderArraysDiffer(before, after)) return;
+        const deptName = masterTree.getStatusLabel(sectionId, null, null) || sectionId;
+        const names = after.map((id) => masterTree.getStatusLabel(sectionId, id, null) || id);
+        items.push({
+            label: Dashboard.t('admin.masterTreeAreaOrderLabel', { department: deptName }),
+            line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    });
+    return items;
 }
 
 function statusLabel(status) {
@@ -95,7 +124,7 @@ function describeChangeLines(change) {
 // every Giro/Plan/client downstream, so it never saves directly from the
 // tree's own Guardar button. Built fresh each time (not static markup)
 // since its content is entirely the diff computed above.
-function openConfirmModal(changes, orderLine, onConfirm) {
+function openConfirmModal(changes, orderChanges, onConfirm) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     const panel = document.createElement('div');
@@ -131,19 +160,19 @@ function openConfirmModal(changes, orderLine, onConfirm) {
         });
         list.appendChild(row);
     });
-    if (orderLine) {
+    orderChanges.forEach((change) => {
         const row = document.createElement('div');
         row.className = 'master-tree-confirm-row';
         const nameEl = document.createElement('div');
         nameEl.className = 'master-tree-confirm-name';
-        nameEl.textContent = Dashboard.t('admin.masterTreeOrderLabel');
+        nameEl.textContent = change.label;
         row.appendChild(nameEl);
         const lineEl = document.createElement('div');
         lineEl.className = 'master-tree-confirm-line';
-        lineEl.textContent = orderLine;
+        lineEl.textContent = change.line;
         row.appendChild(lineEl);
         list.appendChild(row);
-    }
+    });
     document.body.appendChild(overlay);
     overlay.appendChild(panel);
     function close() { overlay.remove(); }
@@ -167,7 +196,12 @@ async function loadMasterTree() {
         const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
         originalStatuses = statusData.statuses || [];
         originalDepartmentOrder = orderData.departmentOrder || [];
-        masterTree = window.PermissionTree.create(masterTreeContainer, { statusMode: true, departmentOrder: originalDepartmentOrder });
+        originalAreaOrders = orderData.areaOrders || {};
+        masterTree = window.PermissionTree.create(masterTreeContainer, {
+            statusMode: true,
+            departmentOrder: originalDepartmentOrder,
+            areaOrder: originalAreaOrders,
+        });
         await masterTree.init(originalStatuses);
     } catch {
         masterTreeError.textContent = Dashboard.t('admin.loadError');
@@ -189,13 +223,14 @@ async function saveMasterTree() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ departmentOrder: masterTree.getDepartmentOrder() }),
+                body: JSON.stringify({ departmentOrder: masterTree.getDepartmentOrder(), areaOrders: masterTree.getAreaOrders() }),
             }),
         ]);
         if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
         const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
         originalStatuses = statusData.statuses || [];
         originalDepartmentOrder = orderData.departmentOrder || [];
+        originalAreaOrders = orderData.areaOrders || {};
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved -- otherwise a checkbox you
         // changed and saved would keep showing yellow/gray forever,
@@ -212,12 +247,12 @@ async function saveMasterTree() {
 masterTreeSaveBtn.addEventListener('click', () => {
     if (!masterTree) return;
     const changes = describeChanges();
-    const orderLine = departmentOrderChanged() ? departmentOrderLine() : null;
-    if (!changes.length && !orderLine) {
+    const orderChanges = collectOrderChanges();
+    if (!changes.length && !orderChanges.length) {
         Dashboard.showToast(Dashboard.t('admin.masterTreeNoChanges'), 'info');
         return;
     }
-    openConfirmModal(changes, orderLine, saveMasterTree);
+    openConfirmModal(changes, orderChanges, saveMasterTree);
 });
 
 (async function init() {

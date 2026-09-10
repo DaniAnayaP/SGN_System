@@ -932,6 +932,44 @@ body.dark-mode .perm-dot-bad{ background-color: #e0a3a3; }
     color: #9a6b00;
 }
 body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c463; }
+/* Área rows nested under their Departamento (see buildOrderRow/
+   renderSectorOrderList in Admin-BusinessSectors.js) -- same expand/
+   collapse chevron idea as PermissionTree.js's own perm-tree-toggle, just
+   inline in the Departamento column instead of a leading spacer cell. */
+.sector-order-name-cell{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.sector-order-toggle{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.sector-order-toggle i{
+    font-size: 0.9rem;
+    transition: transform 0.15s ease;
+}
+.sector-order-toggle[aria-expanded="true"] i{
+    transform: rotate(180deg);
+}
+.sector-order-row-depth-1 .sector-order-name-cell{
+    padding-left: 1.5rem;
+    color: var(--color-text-secondary);
+}
+.sector-order-area-loading{
+    padding: 0.5rem 0.9rem 0.5rem 2.4rem;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+}
 
 /* Institutional color palette widget */
 .color-palette-widget{

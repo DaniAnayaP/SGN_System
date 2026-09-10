@@ -569,6 +569,7 @@
     "masterTreeConfirmHint": "Esto afecta a todos los Giros de Negocio, Planes y clientes que dependan de estas ramas. Revisa antes de guardar.",
     "masterTreeNoChanges": "No hay cambios que guardar.",
     "masterTreeOrderLabel": "Orden de Departamentos",
+    "masterTreeAreaOrderLabel": "Orden de Áreas — {department}",
     "masterTreeOrderChangeLine": "Nuevo orden: {order}"
   },
   "business": {

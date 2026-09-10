@@ -5262,8 +5262,15 @@ function logBusinessSectorChange({ businessSectorId, action, fieldKey, oldValue,
     });
 }
 
-// --- Permission tree display order (Departamento level -- see the ---------
-// master_permission_order/sector_permission_order comment above) ----------
+// --- Permission tree display order (see the master_permission_order/ ------
+// sector_permission_order comment above). parent_key vocabulary: '__root__'
+// is the top-level Departamento list; `area::<sectionId>` is the Área list
+// for one department (see areaOrderKey below). Deeper levels (Apartado,
+// Pantalla, Columna) will add their own prefix here later, same pattern.
+const PERMISSION_ORDER_ROOT_KEY = '__root__';
+function areaOrderKey(sectionId) {
+    return `area::${sectionId}`;
+}
 function deserializeOrderRow(row) {
     return { parentKey: row.parent_key, orderedKeys: JSON.parse(row.ordered_keys) };
 }
@@ -5278,6 +5285,17 @@ function setMasterPermissionOrder(parentKey, orderedKeys, updatedBy) {
     `).run({ parentKey, orderedKeys: JSON.stringify(orderedKeys), updatedBy: updatedBy || '' });
     return getMasterPermissionOrder();
 }
+// Saves several parent_key rows together (e.g. Departamento order + every
+// touched department's own Área order from a single Guardar click) as one
+// transaction -- either all of them land or none do, instead of a partial
+// save if one INSERT somehow failed midway.
+const setMasterPermissionOrdersTx = db.transaction((rows, updatedBy) => {
+    rows.forEach(({ parentKey, orderedKeys }) => setMasterPermissionOrder(parentKey, orderedKeys, updatedBy));
+});
+function setMasterPermissionOrders(rows, updatedBy) {
+    setMasterPermissionOrdersTx(rows, updatedBy);
+    return getMasterPermissionOrder();
+}
 
 function getSectorPermissionOrder(sectorId) {
     return db.prepare('SELECT parent_key, ordered_keys FROM sector_permission_order WHERE business_sector_id = ?').all(sectorId).map(deserializeOrderRow);
@@ -5290,19 +5308,48 @@ function setSectorPermissionOrder(sectorId, parentKey, orderedKeys, updatedBy) {
     `).run({ sectorId, parentKey, orderedKeys: JSON.stringify(orderedKeys), updatedBy: updatedBy || '' });
     return getSectorPermissionOrder(sectorId);
 }
+const setSectorPermissionOrdersTx = db.transaction((sectorId, rows, updatedBy) => {
+    rows.forEach(({ parentKey, orderedKeys }) => setSectorPermissionOrder(sectorId, parentKey, orderedKeys, updatedBy));
+});
+function setSectorPermissionOrders(sectorId, rows, updatedBy) {
+    setSectorPermissionOrdersTx(sectorId, rows, updatedBy);
+    return getSectorPermissionOrder(sectorId);
+}
 
 // The live cascade the user described: a Giro shows its OWN order for a
 // given parent_key if it's ever touched that one, else falls back to
 // whatever Árbol Maestro's CURRENT order is for it (not a frozen copy --
 // if Maestro's order changes later, an untouched Giro sees the new one
 // too), else falls back to menu.json's own original order (the empty-
-// array case, handled by PermissionTree.js's departmentOrder fallback).
-function getEffectiveSectorDepartmentOrder(sectorId) {
-    const ROOT = '__root__';
-    const sectorRow = getSectorPermissionOrder(sectorId).find((r) => r.parentKey === ROOT);
+// array case, handled by PermissionTree.js's departmentOrder/areaOrder
+// fallback). Generalized over parentKey so the same cascade covers
+// Departamento (parentKey '__root__') and Área (areaOrderKey(sectionId))
+// alike, rather than duplicating this per level.
+function getEffectiveSectorOrder(sectorId, parentKey) {
+    const sectorRow = getSectorPermissionOrder(sectorId).find((r) => r.parentKey === parentKey);
     if (sectorRow) return sectorRow.orderedKeys;
-    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === ROOT);
+    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === parentKey);
     return masterRow ? masterRow.orderedKeys : [];
+}
+function getEffectiveSectorDepartmentOrder(sectorId) {
+    return getEffectiveSectorOrder(sectorId, PERMISSION_ORDER_ROOT_KEY);
+}
+// Every parent_key under `prefix` (e.g. 'area::') that has EITHER a Master
+// or a Sector row -- a department nobody has ever reordered simply has no
+// entry here (server.js/the frontend then fall back to menu.json's own
+// order for it, same as always). Keyed by the parentKey's own suffix (e.g.
+// a sectionId for the 'area::' prefix) so callers don't need to know the
+// prefix convention themselves.
+function getEffectiveSectorOrdersByPrefix(sectorId, prefix) {
+    const keys = new Set([
+        ...getMasterPermissionOrder().map((r) => r.parentKey),
+        ...getSectorPermissionOrder(sectorId).map((r) => r.parentKey),
+    ].filter((k) => k.startsWith(prefix)));
+    const result = {};
+    keys.forEach((parentKey) => {
+        result[parentKey.slice(prefix.length)] = getEffectiveSectorOrder(sectorId, parentKey);
+    });
+    return result;
 }
 
 // What this Sector grants by default (Nuestros Sectores de Negocio screen)
@@ -6218,9 +6265,15 @@ module.exports = {
     setMasterPermissionStatuses,
     getMasterPermissionOrder,
     setMasterPermissionOrder,
+    setMasterPermissionOrders,
     getSectorPermissionOrder,
     setSectorPermissionOrder,
+    setSectorPermissionOrders,
     getEffectiveSectorDepartmentOrder,
+    getEffectiveSectorOrder,
+    getEffectiveSectorOrdersByPrefix,
+    areaOrderKey,
+    PERMISSION_ORDER_ROOT_KEY,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
     setPlanGrants,

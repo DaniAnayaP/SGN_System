@@ -289,6 +289,11 @@ document.getElementById('admin-brand-home-btn').addEventListener('click', () => 
 // sheet confirm dialog instead of a desktop modal. --------------------------
 let masterTree = null;
 let originalStatuses = [];
+// Same idea as public/Admin-ArbolMaestro.js's own originalDepartmentOrder/
+// originalAreaOrders -- a separate table from statuses, saved together on
+// the same Guardar tap (see saveMasterTree below).
+let originalDepartmentOrder = [];
+let originalAreaOrders = {};
 
 function statusRowKey(row) {
     return `${row.sectionId}::${row.itemId || ''}::${row.submenuId || ''}`;
@@ -309,6 +314,41 @@ function describeChanges() {
         changes.push({ label, before: b, after: a });
     });
     return changes;
+}
+function orderArraysDiffer(before, after) {
+    return before.length !== after.length || before.some((id, i) => id !== after[i]);
+}
+function departmentOrderChanged() {
+    if (!masterTree) return false;
+    return orderArraysDiffer(originalDepartmentOrder, masterTree.getDepartmentOrder());
+}
+// Same idea as public/Admin-ArbolMaestro.js's own collectOrderChanges --
+// one { label, line } entry per order that actually changed since the
+// last load/save (Departamento, plus one per department whose Área order
+// moved).
+function collectOrderChanges() {
+    if (!masterTree) return [];
+    const items = [];
+    if (departmentOrderChanged()) {
+        const names = masterTree.getDepartmentOrder().map((id) => masterTree.getStatusLabel(id, null, null) || id);
+        items.push({
+            label: t('admin.masterTreeOrderLabel'),
+            line: t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    }
+    const afterAreaOrders = masterTree.getAreaOrders();
+    Object.keys(afterAreaOrders).forEach((sectionId) => {
+        const before = originalAreaOrders[sectionId] || [];
+        const after = afterAreaOrders[sectionId];
+        if (!orderArraysDiffer(before, after)) return;
+        const deptName = masterTree.getStatusLabel(sectionId, null, null) || sectionId;
+        const names = after.map((id) => masterTree.getStatusLabel(sectionId, id, null) || id);
+        items.push({
+            label: t('admin.masterTreeAreaOrderLabel', { department: deptName }),
+            line: t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    });
+    return items;
 }
 function statusLabel(status) {
     return t(`admin.masterTreeStatus${status.charAt(0).toUpperCase()}${status.slice(1)}`);
@@ -334,7 +374,7 @@ const confirmOverlay = document.getElementById('admin-confirm-overlay');
 const confirmList = document.getElementById('admin-confirm-list');
 const confirmSaveBtn = document.getElementById('admin-confirm-save');
 const confirmCancelBtn = document.getElementById('admin-confirm-cancel');
-function openConfirmSheet(changes, onConfirm) {
+function openConfirmSheet(changes, orderChanges, onConfirm) {
     confirmList.innerHTML = '';
     changes.forEach((change) => {
         const row = document.createElement('div');
@@ -353,6 +393,19 @@ function openConfirmSheet(changes, onConfirm) {
         });
         confirmList.appendChild(row);
     });
+    (orderChanges || []).forEach((change) => {
+        const row = document.createElement('div');
+        row.className = 'master-tree-confirm-row';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'master-tree-confirm-name';
+        nameEl.textContent = change.label;
+        row.appendChild(nameEl);
+        const lineEl = document.createElement('div');
+        lineEl.className = 'master-tree-confirm-line';
+        lineEl.textContent = change.line;
+        row.appendChild(lineEl);
+        confirmList.appendChild(row);
+    });
     confirmOverlay.hidden = false;
     confirmSaveBtn.onclick = async () => {
         confirmOverlay.hidden = true;
@@ -365,15 +418,25 @@ confirmOverlay.addEventListener('click', (event) => { if (event.target === confi
 async function saveMasterTree(saveBtn) {
     saveBtn.disabled = true;
     try {
-        const res = await fetch(apiUrl('/api/admin/master-permission-status'), {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ statuses: masterTree.getStatuses() }),
-        });
-        if (!res.ok) throw new Error('save failed');
-        const data = await res.json();
-        originalStatuses = data.statuses || [];
+        const [statusRes, orderRes] = await Promise.all([
+            fetch(apiUrl('/api/admin/master-permission-status'), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ statuses: masterTree.getStatuses() }),
+            }),
+            fetch(apiUrl('/api/admin/master-permission-order'), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ departmentOrder: masterTree.getDepartmentOrder(), areaOrders: masterTree.getAreaOrders() }),
+            }),
+        ]);
+        if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
+        const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
+        originalStatuses = statusData.statuses || [];
+        originalDepartmentOrder = orderData.departmentOrder || [];
+        originalAreaOrders = orderData.areaOrders || {};
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved.
         masterTree.setBaseline(originalStatuses);
@@ -395,12 +458,17 @@ async function loadMasterTree(token) {
     hint.textContent = t('admin.loading') || '...';
     contentEl.appendChild(hint);
     try {
-        const res = await fetch(apiUrl('/api/admin/master-permission-status'), { credentials: 'include' });
+        const [statusRes, orderRes] = await Promise.all([
+            fetch(apiUrl('/api/admin/master-permission-status'), { credentials: 'include' }),
+            fetch(apiUrl('/api/admin/master-permission-order'), { credentials: 'include' }),
+        ]);
         if (token !== renderToken) return; // switched tabs while this was in flight
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
+        if (!statusRes.ok || !orderRes.ok) throw new Error('load failed');
+        const [statusData, orderData] = await Promise.all([statusRes.json(), orderRes.json()]);
         if (token !== renderToken) return;
-        originalStatuses = data.statuses || [];
+        originalStatuses = statusData.statuses || [];
+        originalDepartmentOrder = orderData.departmentOrder || [];
+        originalAreaOrders = orderData.areaOrders || {};
         contentEl.innerHTML = '';
 
         const treeWrap = document.createElement('div');
@@ -411,7 +479,11 @@ async function loadMasterTree(token) {
         // page's own scoping hook (see AppAdminInicio.css).
         treeWrap.className = 'admin-master-tree perm-tree';
         contentEl.appendChild(treeWrap);
-        masterTree = window.PermissionTree.create(treeWrap, { statusMode: true });
+        masterTree = window.PermissionTree.create(treeWrap, {
+            statusMode: true,
+            departmentOrder: originalDepartmentOrder,
+            areaOrder: originalAreaOrders,
+        });
         await masterTree.init(originalStatuses);
         if (token !== renderToken) return; // switched away while menu.json/tree rows were still loading
 
@@ -422,11 +494,12 @@ async function loadMasterTree(token) {
         saveBtn.addEventListener('click', () => {
             if (!masterTree) return;
             const changes = describeChanges();
-            if (!changes.length) {
+            const orderChanges = collectOrderChanges();
+            if (!changes.length && !orderChanges.length) {
                 showToast(t('admin.masterTreeNoChanges'));
                 return;
             }
-            openConfirmSheet(changes, () => saveMasterTree(saveBtn));
+            openConfirmSheet(changes, orderChanges, () => saveMasterTree(saveBtn));
         });
         contentEl.appendChild(saveBtn);
     } catch {
@@ -959,6 +1032,22 @@ async function ensureDepartmentCatalogApp() {
     if (!departmentCatalogApp) departmentCatalogApp = await window.PermissionTree.getDepartmentCatalog();
     return departmentCatalogApp;
 }
+// Área names don't vary per Giro, only their order does -- cached across
+// every renderSectorOrder call the same way departmentCatalogApp is.
+let areaCatalogsApp = {};
+async function ensureAreaCatalogApp(sectionId) {
+    if (!areaCatalogsApp[sectionId]) areaCatalogsApp[sectionId] = await window.PermissionTree.getAreaCatalog(sectionId);
+    return areaCatalogsApp[sectionId];
+}
+function reorderOrderListApp(list, draggedId, targetId) {
+    if (draggedId === targetId) return false;
+    const fromIdx = list.indexOf(draggedId);
+    if (fromIdx === -1) return false;
+    list.splice(fromIdx, 1);
+    const toIdx = list.indexOf(targetId);
+    list.splice(toIdx === -1 ? list.length : toIdx, 0, draggedId);
+    return true;
+}
 
 function renderSectorOrder(sector) {
     contentEl.appendChild(subViewBackHeader(t('admin.sectorOrderTitle'), sector.name, () => {
@@ -980,65 +1069,141 @@ function renderSectorOrder(sector) {
     let masterOrder = [];
     let customOrder = [];
     let labelById = new Map();
-    let draggedId = null;
+    // Same lazy-per-department idea as the Web version's own
+    // sectorOrderCustomAreaOrders -- only departments actually expanded
+    // this session get an entry, which is also exactly what Guardar sends.
+    let masterAreaOrders = {};
+    let areaOrdersFromServer = {};
+    let customAreaOrders = {};
+    const expandedDepts = new Set();
+    // One shared dragged-node reference -- kind+sectionId guard against a
+    // Departamento drag being dropped as if it were an Área, or an Área
+    // from one department landing under another (same as the Web version).
+    let draggedNode = null;
     const rowsWrap = document.createElement('div');
+
+    function buildRow({ kind, id, sectionId, label, depth, index, masterRank, hasChildren, expanded, onToggle, onDrop }) {
+        const row = document.createElement('div');
+        row.className = `item-row sector-order-row sector-order-row-depth-${depth}`;
+        row.draggable = true;
+        row.addEventListener('dragstart', (e) => {
+            draggedNode = { kind, id, sectionId };
+            row.classList.add('sector-order-row-dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        row.addEventListener('dragend', () => {
+            draggedNode = null;
+            row.classList.remove('sector-order-row-dragging');
+        });
+        row.addEventListener('dragover', (e) => {
+            if (!draggedNode || draggedNode.kind !== kind || draggedNode.sectionId !== sectionId || draggedNode.id === id) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            row.classList.add('sector-order-row-drop-target');
+        });
+        row.addEventListener('dragleave', () => row.classList.remove('sector-order-row-drop-target'));
+        row.addEventListener('drop', (e) => {
+            e.preventDefault();
+            row.classList.remove('sector-order-row-drop-target');
+            const dragged = draggedNode;
+            draggedNode = null;
+            if (!dragged || dragged.kind !== kind || dragged.sectionId !== sectionId || dragged.id === id) return;
+            if (onDrop(dragged.id, id)) renderRows();
+        });
+
+        const main = document.createElement('div');
+        main.className = 'item-main';
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'sector-order-name-cell';
+        if (hasChildren) {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'sector-order-toggle';
+            toggleBtn.setAttribute('aria-expanded', String(!!expanded));
+            toggleBtn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
+            toggleBtn.addEventListener('click', onToggle);
+            titleWrap.appendChild(toggleBtn);
+        }
+        const titleEl = document.createElement('span');
+        titleEl.className = 'item-title';
+        titleEl.textContent = label;
+        titleWrap.appendChild(titleEl);
+        main.appendChild(titleWrap);
+        const subEl = document.createElement('div');
+        subEl.className = 'item-sub';
+        subEl.innerHTML = `${t('admin.sectorOrderColMaster')}: <span class="sector-order-badge">${masterRank || '—'}</span>`;
+        main.appendChild(subEl);
+        row.appendChild(main);
+
+        const customCell = document.createElement('div');
+        customCell.className = 'sector-order-custom-cell';
+        customCell.innerHTML = '<span class="sector-order-grip"><i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i></span>'
+            + `<span class="sector-order-badge sector-order-badge-custom">${index + 1}</span>`;
+        row.appendChild(customCell);
+
+        if ((masterRank || 0) !== index + 1) {
+            const tag = document.createElement('span');
+            tag.className = 'sector-order-custom-tag';
+            tag.textContent = t('admin.sectorOrderCustomTag');
+            row.appendChild(tag);
+        }
+        return row;
+    }
 
     function renderRows() {
         rowsWrap.innerHTML = '';
         const masterRank = new Map(masterOrder.map((id, i) => [id, i + 1]));
         customOrder.forEach((id, index) => {
-            const row = document.createElement('div');
-            row.className = 'item-row sector-order-row';
-            row.draggable = true;
-            row.addEventListener('dragstart', (e) => {
-                draggedId = id;
-                row.classList.add('sector-order-row-dragging');
-                e.dataTransfer.effectAllowed = 'move';
-            });
-            row.addEventListener('dragend', () => {
-                draggedId = null;
-                row.classList.remove('sector-order-row-dragging');
-            });
-            row.addEventListener('dragover', (e) => {
-                if (!draggedId || draggedId === id) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                row.classList.add('sector-order-row-drop-target');
-            });
-            row.addEventListener('dragleave', () => row.classList.remove('sector-order-row-drop-target'));
-            row.addEventListener('drop', (e) => {
-                e.preventDefault();
-                row.classList.remove('sector-order-row-drop-target');
-                const fromId = draggedId;
-                draggedId = null;
-                if (!fromId || fromId === id) return;
-                const fromIdx = customOrder.indexOf(fromId);
-                if (fromIdx === -1) return;
-                customOrder.splice(fromIdx, 1);
-                const toIdx = customOrder.indexOf(id);
-                customOrder.splice(toIdx === -1 ? customOrder.length : toIdx, 0, fromId);
-                renderRows();
-            });
+            const expanded = expandedDepts.has(id);
+            rowsWrap.appendChild(buildRow({
+                kind: 'department',
+                id,
+                sectionId: null,
+                label: labelById.get(id) || id,
+                depth: 0,
+                index,
+                masterRank: masterRank.get(id),
+                hasChildren: true,
+                expanded,
+                onToggle: () => {
+                    if (expanded) expandedDepts.delete(id);
+                    else expandedDepts.add(id);
+                    renderRows();
+                },
+                onDrop: (draggedId, targetId) => reorderOrderListApp(customOrder, draggedId, targetId),
+            }));
+            if (!expanded) return;
 
-            const main = document.createElement('div');
-            main.className = 'item-main';
-            main.innerHTML = `<div class="item-title">${labelById.get(id) || id}</div>`
-                + `<div class="item-sub">${t('admin.sectorOrderColMaster')}: <span class="sector-order-badge">${masterRank.get(id) || '—'}</span></div>`;
-            row.appendChild(main);
-
-            const customCell = document.createElement('div');
-            customCell.className = 'sector-order-custom-cell';
-            customCell.innerHTML = '<span class="sector-order-grip"><i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i></span>'
-                + `<span class="sector-order-badge sector-order-badge-custom">${index + 1}</span>`;
-            row.appendChild(customCell);
-
-            if ((masterRank.get(id) || 0) !== index + 1) {
-                const tag = document.createElement('span');
-                tag.className = 'sector-order-custom-tag';
-                tag.textContent = t('admin.sectorOrderCustomTag');
-                row.appendChild(tag);
+            if (!areaCatalogsApp[id]) {
+                const loadingRow = document.createElement('div');
+                loadingRow.className = 'sector-order-area-loading';
+                loadingRow.textContent = t('admin.loading') || '...';
+                rowsWrap.appendChild(loadingRow);
+                ensureAreaCatalogApp(id).then(() => { if (expandedDepts.has(id)) renderRows(); });
+                return;
             }
-            rowsWrap.appendChild(row);
+            const areaCatalog = areaCatalogsApp[id];
+            const areaLabelById = new Map(areaCatalog.map((a) => [a.id, a.label]));
+            const areaMasterOrder = masterAreaOrders[id] || areaCatalog.map((a) => a.id);
+            const areaMasterRank = new Map(areaMasterOrder.map((areaId, i) => [areaId, i + 1]));
+            if (!customAreaOrders[id]) {
+                const fromServer = areaOrdersFromServer[id];
+                customAreaOrders[id] = (fromServer && fromServer.length) ? [...fromServer] : [...areaMasterOrder];
+                areaCatalog.forEach((a) => { if (!customAreaOrders[id].includes(a.id)) customAreaOrders[id].push(a.id); });
+            }
+            customAreaOrders[id].forEach((areaId, areaIndex) => {
+                rowsWrap.appendChild(buildRow({
+                    kind: 'area',
+                    id: areaId,
+                    sectionId: id,
+                    label: areaLabelById.get(areaId) || areaId,
+                    depth: 1,
+                    index: areaIndex,
+                    masterRank: areaMasterRank.get(areaId),
+                    hasChildren: false,
+                    onDrop: (draggedId, targetId) => reorderOrderListApp(customAreaOrders[id], draggedId, targetId),
+                }));
+            });
         });
     }
 
@@ -1055,6 +1220,8 @@ function renderSectorOrder(sector) {
             masterOrder = data.masterOrder || [];
             customOrder = (data.customOrder && data.customOrder.length) ? [...data.customOrder] : [...masterOrder];
             catalog.forEach((d) => { if (!customOrder.includes(d.id)) customOrder.push(d.id); });
+            masterAreaOrders = data.masterAreaOrders || {};
+            areaOrdersFromServer = data.customAreaOrders || {};
             listEl.remove();
             contentEl.appendChild(rowsWrap);
             renderRows();
@@ -1075,7 +1242,7 @@ function renderSectorOrder(sector) {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ customOrder }),
+                body: JSON.stringify({ customOrder, customAreaOrders }),
             });
             if (!res.ok) throw new Error('save failed');
             showToast(t('main.changeSaved'));

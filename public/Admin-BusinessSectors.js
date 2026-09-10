@@ -598,16 +598,134 @@ const sectorOrderCloseBtn = document.getElementById('sector-order-close');
 // The Departamento catalog (id -> translated name) is the same for every
 // Giro -- fetched once via PermissionTree.js's getDepartmentCatalog and
 // reused across every openSectorOrderModal call, instead of re-resolving
-// menu.json's labelKeys on every open.
+// menu.json's labelKeys on every open. Same for each department's own Área
+// catalog (sectorOrderAreaCatalogs, keyed by sectionId) -- área NAMES don't
+// vary per Giro, only their order does.
 let departmentCatalog = null;
+let sectorOrderAreaCatalogs = {};
 let sectorOrderSectorId = null;
 let sectorOrderMasterOrder = [];
 let sectorOrderCustomOrder = [];
-let draggedDepartmentOrderId = null;
+// Área order is per-department and loaded lazily (only once a department
+// row is expanded) -- sectorOrderAreaOrdersFromServer holds the raw GET
+// response (server's already-cascaded effective order + Master's own, per
+// sectionId), sectorOrderCustomAreaOrders is the LOCAL editable state a
+// drag actually mutates, seeded from the server data the first time a
+// department is expanded. Only departments the admin actually expanded
+// this session end up in sectorOrderCustomAreaOrders, which is also
+// exactly what gets sent back on Guardar.
+let sectorOrderMasterAreaOrders = {};
+let sectorOrderAreaOrdersFromServer = {};
+let sectorOrderCustomAreaOrders = {};
+let expandedSectorOrderDepts = new Set();
+// One shared dragged-node reference (not a separate variable per level),
+// same reasoning as PermissionTree.js's own draggedNode: `kind`+`sectionId`
+// guard against a Departamento drag ever being dropped as if it were an
+// Área (or an Área from one department landing under another).
+let draggedOrderNode = null;
 
 async function ensureDepartmentCatalog() {
     if (!departmentCatalog) departmentCatalog = await window.PermissionTree.getDepartmentCatalog();
     return departmentCatalog;
+}
+async function ensureAreaCatalog(sectionId) {
+    if (!sectorOrderAreaCatalogs[sectionId]) {
+        sectorOrderAreaCatalogs[sectionId] = await window.PermissionTree.getAreaCatalog(sectionId);
+    }
+    return sectorOrderAreaCatalogs[sectionId];
+}
+
+function reorderOrderList(list, draggedId, targetId) {
+    if (draggedId === targetId) return false;
+    const fromIdx = list.indexOf(draggedId);
+    if (fromIdx === -1) return false;
+    list.splice(fromIdx, 1);
+    const toIdx = list.indexOf(targetId);
+    list.splice(toIdx === -1 ? list.length : toIdx, 0, draggedId);
+    return true;
+}
+
+// Builds one draggable <tr> -- shared by both Departamento (depth 0,
+// expandable) and Área (depth 1, no children) rows so the drag/drop wiring
+// and the Master-reference + custom-order-with-grip cell pair (see the
+// confirmed orden-dos-columnas.html mockup) exist in exactly one place.
+function buildOrderRow({ kind, id, sectionId, label, depth, index, masterRank, hasChildren, expanded, onToggle, onDrop }) {
+    const tr = document.createElement('tr');
+    tr.draggable = true;
+    tr.className = `sector-order-row sector-order-row-depth-${depth}`;
+    tr.addEventListener('dragstart', (e) => {
+        draggedOrderNode = { kind, id, sectionId };
+        tr.classList.add('sector-order-row-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    tr.addEventListener('dragend', () => {
+        draggedOrderNode = null;
+        tr.classList.remove('sector-order-row-dragging');
+    });
+    tr.addEventListener('dragover', (e) => {
+        if (!draggedOrderNode || draggedOrderNode.kind !== kind || draggedOrderNode.sectionId !== sectionId || draggedOrderNode.id === id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        tr.classList.add('sector-order-row-drop-target');
+    });
+    tr.addEventListener('dragleave', () => tr.classList.remove('sector-order-row-drop-target'));
+    tr.addEventListener('drop', (e) => {
+        e.preventDefault();
+        tr.classList.remove('sector-order-row-drop-target');
+        const dragged = draggedOrderNode;
+        draggedOrderNode = null;
+        if (!dragged || dragged.kind !== kind || dragged.sectionId !== sectionId || dragged.id === id) return;
+        if (onDrop(dragged.id, id)) renderSectorOrderList();
+    });
+
+    const tdName = document.createElement('td');
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'sector-order-name-cell';
+    if (hasChildren) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'sector-order-toggle';
+        toggleBtn.setAttribute('aria-expanded', String(!!expanded));
+        toggleBtn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
+        toggleBtn.addEventListener('click', onToggle);
+        nameWrap.appendChild(toggleBtn);
+    }
+    const nameLabel = document.createElement('span');
+    nameLabel.textContent = label;
+    nameWrap.appendChild(nameLabel);
+    tdName.appendChild(nameWrap);
+
+    const tdMaster = document.createElement('td');
+    const masterBadge = document.createElement('span');
+    masterBadge.className = 'sector-order-badge';
+    masterBadge.textContent = String(masterRank || '—');
+    tdMaster.appendChild(masterBadge);
+
+    const tdCustom = document.createElement('td');
+    const customCell = document.createElement('div');
+    customCell.className = 'sector-order-custom-cell';
+    const grip = document.createElement('span');
+    grip.className = 'sector-order-grip';
+    grip.setAttribute('aria-hidden', 'true');
+    grip.innerHTML = '<i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i>';
+    const customBadge = document.createElement('span');
+    customBadge.className = 'sector-order-badge sector-order-badge-custom';
+    customBadge.textContent = String(index + 1);
+    customCell.append(grip, customBadge);
+    tdCustom.appendChild(customCell);
+    // "Personalizado" only on rows that actually diverged from Master's own
+    // position for that same node -- confirmed with the user (a Giro that
+    // never reordered anything shows this tag on NO row, even though it's
+    // technically "showing Master's order").
+    if ((masterRank || 0) !== index + 1) {
+        const tag = document.createElement('span');
+        tag.className = 'sector-order-custom-tag';
+        tag.textContent = Dashboard.t('admin.sectorOrderCustomTag');
+        tdCustom.appendChild(tag);
+    }
+
+    tr.append(tdName, tdMaster, tdCustom);
+    return tr;
 }
 
 function renderSectorOrderList() {
@@ -618,73 +736,61 @@ function renderSectorOrderList() {
     // row order below is sectorOrderCustomOrder's own order).
     const masterRank = new Map(sectorOrderMasterOrder.map((id, i) => [id, i + 1]));
     sectorOrderCustomOrder.forEach((id, index) => {
-        const tr = document.createElement('tr');
-        tr.draggable = true;
-        tr.className = 'sector-order-row';
-        tr.addEventListener('dragstart', (e) => {
-            draggedDepartmentOrderId = id;
-            tr.classList.add('sector-order-row-dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        });
-        tr.addEventListener('dragend', () => {
-            draggedDepartmentOrderId = null;
-            tr.classList.remove('sector-order-row-dragging');
-        });
-        tr.addEventListener('dragover', (e) => {
-            if (!draggedDepartmentOrderId || draggedDepartmentOrderId === id) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            tr.classList.add('sector-order-row-drop-target');
-        });
-        tr.addEventListener('dragleave', () => tr.classList.remove('sector-order-row-drop-target'));
-        tr.addEventListener('drop', (e) => {
-            e.preventDefault();
-            tr.classList.remove('sector-order-row-drop-target');
-            const draggedId = draggedDepartmentOrderId;
-            draggedDepartmentOrderId = null;
-            if (!draggedId || draggedId === id) return;
-            const fromIdx = sectorOrderCustomOrder.indexOf(draggedId);
-            if (fromIdx === -1) return;
-            sectorOrderCustomOrder.splice(fromIdx, 1);
-            const toIdx = sectorOrderCustomOrder.indexOf(id);
-            sectorOrderCustomOrder.splice(toIdx === -1 ? sectorOrderCustomOrder.length : toIdx, 0, draggedId);
-            renderSectorOrderList();
-        });
+        const expanded = expandedSectorOrderDepts.has(id);
+        sectorOrderList.appendChild(buildOrderRow({
+            kind: 'department',
+            id,
+            sectionId: null,
+            label: labelById.get(id) || id,
+            depth: 0,
+            index,
+            masterRank: masterRank.get(id),
+            hasChildren: true,
+            expanded,
+            onToggle: () => {
+                if (expanded) expandedSectorOrderDepts.delete(id);
+                else expandedSectorOrderDepts.add(id);
+                renderSectorOrderList();
+            },
+            onDrop: (draggedId, targetId) => reorderOrderList(sectorOrderCustomOrder, draggedId, targetId),
+        }));
+        if (!expanded) return;
 
-        const tdName = document.createElement('td');
-        tdName.textContent = labelById.get(id) || id;
-
-        const tdMaster = document.createElement('td');
-        const masterBadge = document.createElement('span');
-        masterBadge.className = 'sector-order-badge';
-        masterBadge.textContent = String(masterRank.get(id) || '—');
-        tdMaster.appendChild(masterBadge);
-
-        const tdCustom = document.createElement('td');
-        const customCell = document.createElement('div');
-        customCell.className = 'sector-order-custom-cell';
-        const grip = document.createElement('span');
-        grip.className = 'sector-order-grip';
-        grip.setAttribute('aria-hidden', 'true');
-        grip.innerHTML = '<i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i>';
-        const customBadge = document.createElement('span');
-        customBadge.className = 'sector-order-badge sector-order-badge-custom';
-        customBadge.textContent = String(index + 1);
-        customCell.append(grip, customBadge);
-        tdCustom.appendChild(customCell);
-        // "Personalizado" only on rows that actually diverged from Master's
-        // own position for that same Departamento -- confirmed with the
-        // user (a Giro that never reordered anything shows this tag on
-        // NO row, even though it's technically "showing Master's order").
-        if ((masterRank.get(id) || 0) !== index + 1) {
-            const tag = document.createElement('span');
-            tag.className = 'sector-order-custom-tag';
-            tag.textContent = Dashboard.t('admin.sectorOrderCustomTag');
-            tdCustom.appendChild(tag);
+        if (!sectorOrderAreaCatalogs[id]) {
+            const loadingTr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 3;
+            td.className = 'sector-order-area-loading';
+            td.textContent = Dashboard.t('admin.loading') || '...';
+            loadingTr.appendChild(td);
+            sectorOrderList.appendChild(loadingTr);
+            ensureAreaCatalog(id).then(() => {
+                if (expandedSectorOrderDepts.has(id)) renderSectorOrderList();
+            });
+            return;
         }
-
-        tr.append(tdName, tdMaster, tdCustom);
-        sectorOrderList.appendChild(tr);
+        const areaCatalog = sectorOrderAreaCatalogs[id];
+        const areaLabelById = new Map(areaCatalog.map((a) => [a.id, a.label]));
+        const areaMasterOrder = sectorOrderMasterAreaOrders[id] || areaCatalog.map((a) => a.id);
+        const areaMasterRank = new Map(areaMasterOrder.map((areaId, i) => [areaId, i + 1]));
+        if (!sectorOrderCustomAreaOrders[id]) {
+            const fromServer = sectorOrderAreaOrdersFromServer[id];
+            sectorOrderCustomAreaOrders[id] = (fromServer && fromServer.length) ? [...fromServer] : [...areaMasterOrder];
+            areaCatalog.forEach((a) => { if (!sectorOrderCustomAreaOrders[id].includes(a.id)) sectorOrderCustomAreaOrders[id].push(a.id); });
+        }
+        sectorOrderCustomAreaOrders[id].forEach((areaId, areaIndex) => {
+            sectorOrderList.appendChild(buildOrderRow({
+                kind: 'area',
+                id: areaId,
+                sectionId: id,
+                label: areaLabelById.get(areaId) || areaId,
+                depth: 1,
+                index: areaIndex,
+                masterRank: areaMasterRank.get(areaId),
+                hasChildren: false,
+                onDrop: (draggedId, targetId) => reorderOrderList(sectorOrderCustomAreaOrders[id], draggedId, targetId),
+            }));
+        });
     });
 }
 
@@ -693,6 +799,8 @@ async function openSectorOrderModal(sector) {
     sectorOrderError.hidden = true;
     sectorOrderList.innerHTML = '';
     sectorOrderModal.hidden = false;
+    expandedSectorOrderDepts = new Set();
+    sectorOrderCustomAreaOrders = {};
     try {
         const [catalog, res] = await Promise.all([
             ensureDepartmentCatalog(),
@@ -707,6 +815,8 @@ async function openSectorOrderModal(sector) {
         // saved) is appended at the end -- same "never silently hidden"
         // rule PermissionTree.js's own departmentOrder fallback applies.
         catalog.forEach((d) => { if (!sectorOrderCustomOrder.includes(d.id)) sectorOrderCustomOrder.push(d.id); });
+        sectorOrderMasterAreaOrders = data.masterAreaOrders || {};
+        sectorOrderAreaOrdersFromServer = data.customAreaOrders || {};
         renderSectorOrderList();
     } catch {
         sectorOrderError.textContent = Dashboard.t('admin.loadError');
@@ -729,7 +839,10 @@ sectorOrderSaveBtn.addEventListener('click', async () => {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ customOrder: sectorOrderCustomOrder }),
+            // Only departments actually expanded this session have an
+            // entry in sectorOrderCustomAreaOrders -- everything else keeps
+            // whatever the server already had for it, untouched.
+            body: JSON.stringify({ customOrder: sectorOrderCustomOrder, customAreaOrders: sectorOrderCustomAreaOrders }),
         });
         if (!res.ok) throw new Error('save failed');
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');

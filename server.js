@@ -240,9 +240,12 @@ const {
     getMasterPermissionStatuses,
     setMasterPermissionStatuses,
     getMasterPermissionOrder,
-    setMasterPermissionOrder,
-    setSectorPermissionOrder,
+    setMasterPermissionOrders,
+    setSectorPermissionOrders,
     getEffectiveSectorDepartmentOrder,
+    getEffectiveSectorOrdersByPrefix,
+    areaOrderKey,
+    PERMISSION_ORDER_ROOT_KEY,
     getClientAppScreens,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
@@ -1822,43 +1825,71 @@ app.put('/api/admin/business-sectors/:id/grants', requireAuth, requireAdmin, (re
     res.json({ grants: setSectorGrants(req.params.id, grants) });
 });
 
-// Departamento display order (see master_permission_order/
-// sector_permission_order in db.js) -- '__root__' is the only parent_key
-// that exists yet (top-level Departamento list); deeper levels (Área,
-// Apartado, ...) will reuse the same table with their own parent_key once
-// built, so the wire shape here is already { parentKey, orderedKeys } to
-// avoid a breaking change later.
-const PERMISSION_ORDER_ROOT = '__root__';
+// Departamento/Área display order (see master_permission_order/
+// sector_permission_order in db.js) -- '__root__' is Departamento, and
+// areaOrderKey(sectionId) is one department's own Área list. Deeper levels
+// (Apartado, Pantalla, Columna) will reuse the same table with their own
+// parent_key prefix once built.
+function isValidOrderArray(arr) {
+    return Array.isArray(arr) && arr.every((id) => typeof id === 'string' && id);
+}
+// { sectionId: [id, ...], ... } -- one Área order per department.
+function isValidOrderMap(obj) {
+    return !!obj && typeof obj === 'object' && !Array.isArray(obj)
+        && Object.values(obj).every((arr) => isValidOrderArray(arr));
+}
+// Every department's Área order currently saved on Árbol Maestro (only the
+// ones that have ever been touched -- the rest keep menu.json's own order,
+// same fallback departmentOrder itself already relies on).
+function buildMasterAreaOrders() {
+    const result = {};
+    getMasterPermissionOrder()
+        .filter((r) => r.parentKey.startsWith('area::'))
+        .forEach((r) => { result[r.parentKey.slice('area::'.length)] = r.orderedKeys; });
+    return result;
+}
 
-// Departamento display order for this Sector (see sector_permission_order /
-// getEffectiveSectorDepartmentOrder in db.js). Two things come back: the
-// Árbol Maestro's CURRENT order (read-only reference column on this
-// screen -- reordering it happens on Admin-ArbolMaestro.js, not here) and
-// this sector's own effective order (its own saved order if it has ever
-// diverged, else live-falls-back to Master's, per the cascade the user
-// described -- never a frozen one-time copy).
+// Departamento/Área display order for this Sector (see
+// sector_permission_order / getEffectiveSectorOrder(sByPrefix) in db.js).
+// Both the Árbol Maestro's CURRENT order (read-only reference columns on
+// this screen -- reordering Master happens on Admin-ArbolMaestro.js, not
+// here) and this sector's own effective order (its own saved order if it
+// has ever diverged for that department, else live-falls-back to Master's,
+// per the cascade the user described -- never a frozen one-time copy)
+// come back together so the screen can render both columns in one request.
 app.get('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
-    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT);
+    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
     res.json({
         masterOrder: masterRow ? masterRow.orderedKeys : [],
         customOrder: getEffectiveSectorDepartmentOrder(req.params.id),
+        masterAreaOrders: buildMasterAreaOrders(),
+        customAreaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'area::'),
     });
 });
 
 app.put('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
-    const { customOrder } = req.body || {};
-    if (!Array.isArray(customOrder) || customOrder.some((id) => typeof id !== 'string' || !id)) {
+    const { customOrder, customAreaOrders } = req.body || {};
+    if (!isValidOrderArray(customOrder)) {
         return res.status(400).json({ message: 'customOrder must be an array of section ids.' });
     }
-    setSectorPermissionOrder(req.params.id, PERMISSION_ORDER_ROOT, customOrder, changedByLabel(req));
-    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT);
+    if (customAreaOrders !== undefined && !isValidOrderMap(customAreaOrders)) {
+        return res.status(400).json({ message: 'customAreaOrders must be a map of sectionId to an array of area ids.' });
+    }
+    const rows = [{ parentKey: PERMISSION_ORDER_ROOT_KEY, orderedKeys: customOrder }];
+    Object.entries(customAreaOrders || {}).forEach(([sectionId, orderedKeys]) => {
+        rows.push({ parentKey: areaOrderKey(sectionId), orderedKeys });
+    });
+    setSectorPermissionOrders(req.params.id, rows, changedByLabel(req));
+    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
     res.json({
         masterOrder: masterRow ? masterRow.orderedKeys : [],
         customOrder: getEffectiveSectorDepartmentOrder(req.params.id),
+        masterAreaOrders: buildMasterAreaOrders(),
+        customAreaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'area::'),
     });
 });
 
@@ -1886,18 +1917,25 @@ app.put('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, 
 });
 
 app.get('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, res) => {
-    const row = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT);
-    res.json({ departmentOrder: row ? row.orderedKeys : [] });
+    const row = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
+    res.json({ departmentOrder: row ? row.orderedKeys : [], areaOrders: buildMasterAreaOrders() });
 });
 
 app.put('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, res) => {
-    const { departmentOrder } = req.body || {};
-    if (!Array.isArray(departmentOrder) || departmentOrder.some((id) => typeof id !== 'string' || !id)) {
+    const { departmentOrder, areaOrders } = req.body || {};
+    if (!isValidOrderArray(departmentOrder)) {
         return res.status(400).json({ message: 'departmentOrder must be an array of section ids.' });
     }
-    const rows = setMasterPermissionOrder(PERMISSION_ORDER_ROOT, departmentOrder, changedByLabel(req));
-    const row = rows.find((r) => r.parentKey === PERMISSION_ORDER_ROOT);
-    res.json({ departmentOrder: row ? row.orderedKeys : [] });
+    if (areaOrders !== undefined && !isValidOrderMap(areaOrders)) {
+        return res.status(400).json({ message: 'areaOrders must be a map of sectionId to an array of area ids.' });
+    }
+    const rows = [{ parentKey: PERMISSION_ORDER_ROOT_KEY, orderedKeys: departmentOrder }];
+    Object.entries(areaOrders || {}).forEach(([sectionId, orderedKeys]) => {
+        rows.push({ parentKey: areaOrderKey(sectionId), orderedKeys });
+    });
+    setMasterPermissionOrders(rows, changedByLabel(req));
+    const row = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
+    res.json({ departmentOrder: row ? row.orderedKeys : [], areaOrders: buildMasterAreaOrders() });
 });
 
 // --- Equipo SaaS (GEIPSA's own staff — role='admin' accounts) ---------------
