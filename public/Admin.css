@@ -1999,7 +1999,13 @@ body.dark-mode .perm-tree-depth-2{
    toolbar's own global Filtro icon above the table) was missing. Same
    Excel-style checklist idea as the real .data-table-col-filter-trigger
    (see Dashboard.js), simplified for a 2-row demo table. */
-.perm-preview-col-head{ display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
+/* NOT on .perm-preview-col-head itself -- a <th>'s display has to stay
+   table-cell (or nothing) for it to sit side by side with its siblings;
+   setting flex/block directly on it knocks it out of the table's own
+   layout and every header stacks vertically instead, confirmed live.
+   The flex row lives in its own inner wrapper instead (see
+   buildPreviewWebTable in PermissionTree.js). */
+.perm-preview-col-head-inner{ display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
 .perm-preview-col-filter-trigger{
     flex-shrink: 0;
     width: 1.1rem;

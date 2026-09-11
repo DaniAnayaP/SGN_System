@@ -263,7 +263,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, costCurrency = 'MXN' } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN' } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -343,6 +343,22 @@
             const apartado = area && area.submenu && area.submenu.find((sm) => sm.id === apartadoId);
             if (!apartado || !apartado.submenu) return false;
             return reorderInPlace(apartado.submenu, draggedId, targetId);
+        }
+        // Columna only ever reorders within its own Clasificación (e.g.
+        // "Control Interno"'s 13 columns among themselves) -- a standalone
+        // column (one with no Clasificación wrapper, e.g. "Autorización
+        // para Eliminar") never drags, same as every level above guards a
+        // group that genuinely has nothing else in it: in practice a
+        // Pantalla only ever has one or two such standalone columns, so
+        // there's nothing real to reorder there.
+        function reorderColumns(sectionId, areaId, apartadoId, pantallaId, classId, draggedId, targetId) {
+            const section = sectionsData.find((s) => s.id === sectionId);
+            const area = section && section.items.find((i) => i.id === areaId);
+            const apartado = area && area.submenu && area.submenu.find((sm) => sm.id === apartadoId);
+            const subSm = apartado && apartado.submenu && apartado.submenu.find((p) => p.id === pantallaId);
+            const cls = subSm && subSm.submenu && subSm.submenu.find((entry) => entry.isClassification && entry.id === classId);
+            if (!cls || !cls.submenu) return false;
+            return reorderInPlace(cls.submenu, draggedId, targetId);
         }
         let grantSet = new Set();
         // statusMode's own state -- a Map from the same keyOf(...) key
@@ -1291,7 +1307,9 @@
                 event.stopPropagation();
                 openPreviewColumnFilterMenu(colTh, tableEl, colIndex, trigger);
             });
-            colTh.appendChild(trigger);
+            // Into the label's own inner flex row, not the <th> directly
+            // -- see buildPreviewWebTable's own comment on why.
+            (colTh.querySelector('.perm-preview-col-head-inner') || colTh).appendChild(trigger);
         }
 
         // previewInfo.focusColumnId (only set for kind:'columna') highlights
@@ -1321,9 +1339,17 @@
                     const colTh = document.createElement('th');
                     colTh.className = 'perm-preview-col-head';
                     if (col.id === focusColumnId) colTh.classList.add('perm-preview-col-focus');
+                    // The label + filter-trigger flex row lives in its OWN
+                    // inner <div> -- setting display:flex directly on the
+                    // <th> itself knocks it out of the table's own layout
+                    // (every header stacks vertically instead of sitting
+                    // side by side), confirmed live.
+                    const colHeadInner = document.createElement('div');
+                    colHeadInner.className = 'perm-preview-col-head-inner';
                     const colLabel = document.createElement('span');
                     colLabel.textContent = col.label;
-                    colTh.appendChild(colLabel);
+                    colHeadInner.appendChild(colLabel);
+                    colTh.appendChild(colHeadInner);
                     colRow.appendChild(colTh);
                     flatCols.push(col);
                 });
@@ -2133,18 +2159,42 @@
         // longer node collapses out of view. Re-run at the end of every
         // renderStatusTree() -- expand/collapse is the only thing that
         // changes which labels are "currently visible" to measure.
+        // A row's own indentation (.perm-tree-depth-N's padding-left) PLUS
+        // whatever combination of toggle/rollup-icons/drag-grip it has
+        // before its label -- both vary by depth AND by which controls
+        // that specific row happens to have -- used to just add straight
+        // onto a SINGLE shared label-column width, so Estatus/Web·App/etc
+        // drifted further right the deeper (and the more decorated) a row
+        // was (a Columna nested under Tabla > Clasificación could land way
+        // right of where the same controls sit on a Departamento row),
+        // confirmed live once Vista Previa made it natural to actually
+        // expand that deep. Fixed by measuring each label's OWN actual
+        // rendered offset from its row's left edge (covers indentation AND
+        // every preceding control, whatever the mix), then giving each
+        // row an inline width so offset + width is the SAME total for
+        // every row -- whichever row needs the most room sets that shared
+        // total, then each row's own width is just that total minus its
+        // own offset.
         function alignLabelColumnWidth() {
             const labels = treeRoot.querySelectorAll('.perm-tree-mstatus-label');
             if (!labels.length) return;
-            const font = getComputedStyle(labels[0]).font;
-            let maxWidth = 0;
+            const treeLeft = treeRoot.getBoundingClientRect().left;
+            let maxRightEdge = 0;
+            const measured = [];
             labels.forEach((label) => {
-                const width = measureTextWidth(label.textContent, font);
-                if (width > maxWidth) maxWidth = width;
+                const offsetLeft = label.getBoundingClientRect().left - treeLeft;
+                const font = getComputedStyle(label).font;
+                const rightEdge = offsetLeft + measureTextWidth(label.textContent, font);
+                if (rightEdge > maxRightEdge) maxRightEdge = rightEdge;
+                measured.push({ label, offsetLeft });
             });
             // Small buffer so the longest label itself doesn't sit flush
             // against the next column's edge.
-            treeRoot.style.setProperty('--perm-tree-label-col-width', `${Math.ceil(maxWidth) + 8}px`);
+            const target = Math.ceil(maxRightEdge) + 8;
+            treeRoot.style.setProperty('--perm-tree-label-col-width', `${target}px`);
+            measured.forEach(({ label, offsetLeft }) => {
+                label.style.width = `${Math.max(0, target - offsetLeft)}px`;
+            });
         }
 
         // Small monitor (Web) / phone (App) silhouette -- shared by the
@@ -2937,11 +2987,25 @@
                                 // confirmed live for apartados before this
                                 // fix (dragging one área's apartado moved it
                                 // for a sibling área as well); pantallaOrder
-                                // is one level deeper still, same risk.
+                                // and columnOrder are deeper still, same
+                                // risk in principle -- each Pantalla object
+                                // (and each of ITS classifications' own
+                                // submenu) gets cloned too below, not just
+                                // passed through, for the exact same reason.
                                 submenu: apartados.map((cat) => ({
                                     ...cat,
                                     submenu: cat.submenu
-                                        ? [...applyOrder(cat.submenu, pantallaOrder && pantallaOrder[`${s.id}::${area.id}::${cat.id}`])]
+                                        ? [...applyOrder(cat.submenu, pantallaOrder && pantallaOrder[`${s.id}::${area.id}::${cat.id}`])].map((subSm) => {
+                                            if (subSm.standalone || !subSm.submenu) return subSm;
+                                            return {
+                                                ...subSm,
+                                                submenu: subSm.submenu.map((entry) => {
+                                                    if (!entry.isClassification || !entry.submenu) return entry;
+                                                    const colKey = `${s.id}::${area.id}::${cat.id}::${subSm.id}::${entry.id}`;
+                                                    return { ...entry, submenu: [...applyOrder(entry.submenu, columnOrder && columnOrder[colKey])] };
+                                                }),
+                                            };
+                                        })
                                         : cat.submenu,
                                 })),
                             };
@@ -3186,6 +3250,31 @@
                             if (apartado.submenu && apartado.submenu.length) {
                                 result[`${s.id}::${area.id}::${apartado.id}`] = apartado.submenu.map((subSm) => subSm.id);
                             }
+                        });
+                    });
+                });
+                return result;
+            },
+            // statusMode only -- current Columna order for EVERY
+            // Clasificación of EVERY Pantalla at once, keyed by
+            // "sectionId::areaId::apartadoId::pantallaId::classId" (same
+            // shape columnOrder accepts). Only a Clasificación with real
+            // columns contributes a key -- a standalone column (no
+            // Clasificación wrapper) never reorders, see reorderColumns.
+            getColumnOrders() {
+                const result = {};
+                sectionsData.forEach((s) => {
+                    if (s.id === 'main') return;
+                    s.items.filter((i) => !GENERAL_ITEM_IDS.includes(i.id)).forEach((area) => {
+                        (area.submenu || []).forEach((apartado) => {
+                            (apartado.submenu || []).forEach((subSm) => {
+                                if (subSm.standalone) return;
+                                (subSm.submenu || []).forEach((entry) => {
+                                    if (entry.isClassification && entry.submenu && entry.submenu.length) {
+                                        result[`${s.id}::${area.id}::${apartado.id}::${subSm.id}::${entry.id}`] = entry.submenu.map((col) => col.id);
+                                    }
+                                });
+                            });
                         });
                     });
                 });
