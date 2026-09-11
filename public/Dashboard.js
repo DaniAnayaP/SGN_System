@@ -635,7 +635,14 @@ function buildSidebarData(data, role, activePage) {
         // access tree (sector_grants) will only be allowed to grant nodes
         // marked 'habilitado' here (deferred, not built yet), so it's
         // listed right before it.
-        { id: 'admin-master-permissions', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html' },
+        {
+            id: 'admin-master-permissions', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html',
+            // Same ladder idea as admin-business-sectors below -- this label
+            // used to ellipsize straight to "Árbol de Permisos Mae..." even
+            // though "Árbol Permisos Mtro." fits the sidebar's own width on
+            // its own.
+            abbrKeys: ['menu.masterPermissionsTreeAbbr1', 'menu.masterPermissionsTreeAbbr2', 'menu.masterPermissionsTreeAbbr3', 'menu.masterPermissionsTreeAbbr4'],
+        },
         {
             id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html',
             // Longest label in this dropdown -- steps down this ladder (in
@@ -649,7 +656,12 @@ function buildSidebarData(data, role, activePage) {
         { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', saasItemId: 'saas-backups' },
         { id: 'admin-material-apoyo', labelKey: 'menu.ourSupportMaterial', href: 'Admin-MaterialApoyo.html', saasItemId: 'saas-material-apoyo' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
-    const adminItem = { id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings', submenu: adminSubmenu };
+    const adminItem = {
+        id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings', submenu: adminSubmenu,
+        // Same ladder idea as this dropdown's own items -- "Administración
+        // de Clientes" used to ellipsize on the toggle button itself.
+        abbrKeys: ['menu.clientAdminAbbr1', 'menu.clientAdminAbbr2', 'menu.clientAdminAbbr3'],
+    };
     if (role !== 'admin') return data;
 
     const mainSection = data.sections.find((s) => s.id === 'main');

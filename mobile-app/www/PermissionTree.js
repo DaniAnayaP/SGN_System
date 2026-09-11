@@ -46,6 +46,7 @@
         'general-management': 'menu.generalManagement',
         'steering-committee': 'menu.steeringCommittee',
         certifications: 'menu.certifications',
+        'org-empresa': 'menu.orgEmpresa',
     };
 
     function sectionLabelKey(section) {
@@ -3060,6 +3061,32 @@
                         });
                     return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };
                 });
+                // Organizational hierarchy (Empresa > Sucursal > Centro de
+                // Costos) -- statusMode only, a sibling of 'main'/"General"
+                // (its own top-level section) so it gets the exact same
+                // Estatus/Web·App/$ cost row every other department gets,
+                // for free, via the same generic rendering code below. A
+                // synthetic section with no data/menu.json backing on
+                // purpose -- it represents SGN's own org hierarchy for the
+                // future Holding cost-mirroring feature (see the Holding
+                // roadmap), never a real navigable screen, so it must never
+                // show up in the ordinary Puesto de Trabajo/Accesos y
+                // Permisos grant trees every other PermissionTree.js caller
+                // builds straight from menu.json.
+                if (statusMode) {
+                    sectionsData = [...sectionsData, {
+                        id: 'org-empresa',
+                        icon: 'bx-buildings',
+                        items: [{
+                            id: 'org-sucursal',
+                            labelKey: 'menu.orgSucursal',
+                            icon: 'bx-git-branch',
+                            submenu: [
+                                { id: 'org-centro-costos', labelKey: 'menu.orgCentroCostos', icon: 'bx-purchase-tag-alt' },
+                            ],
+                        }],
+                    }];
+                }
                 // statusMode never builds a grantSet at all -- initialGrants
                 // here is really a [{sectionId,itemId,submenuId,status,
                 // webEnabled,appEnabled}] list (see getMasterPermissionStatuses
