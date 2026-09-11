@@ -1116,7 +1116,7 @@
                     if (!includeSystem && entry.id === 'class-control-interno') return;
                     groups.push({
                         bandLabel: t(entry.labelKey, entry.labelParams),
-                        columns: (entry.submenu || []).map((col) => t(col.labelKey, col.labelParams)),
+                        columns: (entry.submenu || []).map((col) => ({ id: col.id, label: t(col.labelKey, col.labelParams) })),
                     });
                     return;
                 }
@@ -1124,9 +1124,47 @@
                     plainGroup = { bandLabel: null, columns: [] };
                     groups.push(plainGroup);
                 }
-                plainGroup.columns.push(t(entry.labelKey, entry.labelParams));
+                plainGroup.columns.push({ id: entry.id, label: t(entry.labelKey, entry.labelParams) });
             });
             return groups;
+        }
+
+        // Every "...Evidencia" column (colCargaTripAntesEvidencia, etc.) is
+        // a photo upload everywhere in this codebase -- checking the ID
+        // suffix (language-independent) rather than the translated label
+        // text is what every real screen's own upload wiring already does
+        // the same way.
+        function isPreviewEvidenceField(id) {
+            return /evidencia$/i.test(id || '');
+        }
+
+        // Confirmed with the user: Vista Previa isn't just something to
+        // LOOK at -- typing into a text field or tapping the camera button
+        // has to actually respond, so it feels like really trying the
+        // screen. Nothing here ever leaves the browser tab though: no
+        // fetch, no fetch stand-in, no write to costMap/statusMap/anything
+        // persisted -- a photo "upload" just flips the button's own local
+        // state, a typed value lives only in that <input> until the modal
+        // closes and this whole subtree is thrown away.
+        // compact=true: a small icon-only square (fits a Web table cell).
+        // compact=false: icon + visible text label (App's own field rows
+        // have the room, and every real App upload button already shows
+        // its label the same way).
+        function buildPreviewPhotoButton(compact) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = compact ? 'perm-preview-photo-btn' : 'perm-preview-phone-photo-btn';
+            const setState = (taken) => {
+                btn.classList.toggle('taken', taken);
+                const label = t(taken ? 'admin.masterTreePreviewPhotoTaken' : 'admin.masterTreePreviewTakePhoto');
+                const icon = `<i class="bx ${taken ? 'bx-check' : 'bx-camera'}" aria-hidden="true"></i>`;
+                btn.innerHTML = compact ? icon : `${icon}<span>${label}</span>`;
+                btn.title = label;
+                btn.setAttribute('aria-label', label);
+            };
+            setState(false);
+            btn.addEventListener('click', () => setState(!btn.classList.contains('taken')));
+            return btn;
         }
 
         function buildPreviewWebTable(subSm) {
@@ -1138,19 +1176,19 @@
             const thead = document.createElement('thead');
             const bandRow = document.createElement('tr');
             const colRow = document.createElement('tr');
-            let totalCols = 0;
+            const flatCols = [];
             groups.forEach((group) => {
                 const bandTh = document.createElement('th');
                 bandTh.colSpan = group.columns.length;
                 bandTh.className = group.bandLabel ? 'perm-preview-band' : 'perm-preview-band perm-preview-band-plain';
                 bandTh.textContent = group.bandLabel || '';
                 bandRow.appendChild(bandTh);
-                group.columns.forEach((label) => {
+                group.columns.forEach((col) => {
                     const colTh = document.createElement('th');
                     colTh.className = 'perm-preview-col-head';
-                    colTh.textContent = label;
+                    colTh.textContent = col.label;
                     colRow.appendChild(colTh);
-                    totalCols += 1;
+                    flatCols.push(col);
                 });
             });
             thead.append(bandRow, colRow);
@@ -1159,11 +1197,19 @@
             for (let r = 0; r < 2; r++) {
                 const tr = document.createElement('tr');
                 tr.className = 'perm-preview-example-row';
-                for (let c = 0; c < totalCols; c++) {
+                flatCols.forEach((col) => {
                     const td = document.createElement('td');
-                    td.textContent = '···';
+                    if (isPreviewEvidenceField(col.id)) {
+                        td.appendChild(buildPreviewPhotoButton(true));
+                    } else {
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'perm-preview-input';
+                        input.placeholder = '···';
+                        td.appendChild(input);
+                    }
                     tr.appendChild(td);
-                }
+                });
                 tbody.appendChild(tr);
             }
             table.appendChild(tbody);
@@ -1181,11 +1227,29 @@
             const body = document.createElement('div');
             body.className = 'perm-preview-phone-body';
             groups.forEach((group) => {
-                group.columns.forEach((label) => {
+                group.columns.forEach((col) => {
+                    const isEvidence = isPreviewEvidenceField(col.id);
                     const field = document.createElement('div');
                     field.className = 'perm-preview-phone-field';
-                    field.innerHTML = '<span class="perm-preview-phone-field-icon"><i class="bx bx-pencil" aria-hidden="true"></i></span>'
-                        + `<span class="perm-preview-phone-field-label">${label}</span>`;
+                    const icon = document.createElement('span');
+                    icon.className = 'perm-preview-phone-field-icon';
+                    icon.innerHTML = `<i class="bx ${isEvidence ? 'bx-camera' : 'bx-pencil'}" aria-hidden="true"></i>`;
+                    const textWrap = document.createElement('span');
+                    textWrap.className = 'perm-preview-phone-field-text';
+                    const labelEl = document.createElement('span');
+                    labelEl.className = 'perm-preview-phone-field-label';
+                    labelEl.textContent = col.label;
+                    textWrap.appendChild(labelEl);
+                    if (isEvidence) {
+                        textWrap.appendChild(buildPreviewPhotoButton(false));
+                    } else {
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'perm-preview-phone-input';
+                        input.placeholder = '···';
+                        textWrap.appendChild(input);
+                    }
+                    field.append(icon, textWrap);
                     body.appendChild(field);
                 });
             });

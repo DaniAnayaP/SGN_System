@@ -1807,7 +1807,36 @@ body.dark-mode .perm-tree-depth-2{
 }
 .perm-preview-band-plain{ background: var(--color-bg); }
 .perm-preview-col-head{ background: var(--color-bg); color: var(--color-text-secondary); font-weight: 700; }
-.perm-preview-example-row td{ color: var(--color-text-secondary); font-style: italic; }
+.perm-preview-example-row td{ padding: 0.25rem; }
+/* Real inputs, not static placeholder text -- confirmed with the user
+   Vista Previa has to be something you can actually try (type into,
+   tap the camera button), not just look at. Nothing here is wired to
+   any fetch/save -- see buildPreviewPhotoButton's own comment. */
+.perm-preview-input{
+    width: 100%;
+    min-width: 5.5rem;
+    font: inherit;
+    font-size: 0.72rem;
+    color: var(--color-text-primary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 0.3rem;
+    padding: 0.25rem 0.35rem;
+}
+.perm-preview-input:hover, .perm-preview-input:focus{ border-color: var(--color-border); outline: none; }
+.perm-preview-photo-btn{
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 0.4rem;
+    border: 1px dashed var(--color-border-strong, var(--color-border));
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.perm-preview-photo-btn.taken{ border-style: solid; border-color: #2ea44f; color: #1e7e34; }
 /* App tab -- a narrow phone-shaped card instead of a wide table, matching
    how a real App capture screen actually looks (a scrollable list of
    icon+label fields, not a data table -- see AppCargaCombustible.js's own
@@ -1850,7 +1879,35 @@ body.dark-mode .perm-tree-depth-2{
     padding: 0.5rem 0.6rem;
 }
 .perm-preview-phone-field-icon{ color: var(--color-text-secondary); font-size: 0.85rem; flex-shrink: 0; }
-.perm-preview-phone-field-label{ font-size: 0.72rem; color: var(--color-text-primary); }
+.perm-preview-phone-field-text{ display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 0; }
+.perm-preview-phone-field-label{ font-size: 0.66rem; color: var(--color-text-secondary); }
+.perm-preview-phone-input{
+    font: inherit;
+    font-size: 0.76rem;
+    color: var(--color-text-primary);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    padding: 0.3rem 0.45rem;
+    width: 100%;
+}
+.perm-preview-phone-input:focus{ outline: none; border-color: var(--color-accent); }
+.perm-preview-phone-photo-btn{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    align-self: flex-start;
+    font: inherit;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: var(--color-surface);
+    border: 1px dashed var(--color-border-strong, var(--color-border));
+    border-radius: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
+}
+.perm-preview-phone-photo-btn.taken{ border-style: solid; border-color: #2ea44f; color: #1e7e34; }
 .perm-tree-mstatus-badge{
     display: flex;
     align-items: center;
