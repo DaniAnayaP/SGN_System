@@ -2050,6 +2050,10 @@
                 // row is. Always the last segment (Clasificación/Columna
                 // keys never go through it), so returning here is safe.
                 if (segments[i] === '__table__') return `${t('main.tablePrefix')} ${t(node.labelKey, node.labelParams)}`;
+                // __icons__ is "Iconos Personalización"'s own reserved
+                // segment (see renderStatusIcons) -- a fixed, generic label
+                // (not derived from node, unlike __table__ above).
+                if (segments[i] === '__icons__') return t('menu.iconsPersonalization');
                 node = (node.submenu || []).find((entry) => entry.id === segments[i]);
             }
             return node ? t(node.labelKey, node.labelParams) : '';
@@ -2489,13 +2493,21 @@
         function renderStatusIcons(container, section, item, sm, subSm, ancestorLocked) {
             const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const iconsExpanded = expandedItems.has(iconsTreeKey);
-            container.appendChild(statusRow(t('menu.iconsPersonalization'), 4, null, {
+            // Own independent Estatus AND its own real $ Web/$ App --
+            // confirmed with the user: unlike Tabla/Clasificación, Iconos
+            // Personalización IS sold as its own bundle (the whole
+            // toolbar-customization feature), separate from any one
+            // Ícono's own price (still never priced individually below,
+            // same as always). __icons__ is a reserved segment, never a
+            // real icon id, same idea as "Tabla X"'s own __table__.
+            const iconsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`);
+            container.appendChild(statusRow(t('menu.iconsPersonalization'), 4, iconsKey, {
                 expanded: iconsExpanded,
                 onToggle: () => {
                     if (iconsExpanded) expandedItems.delete(iconsTreeKey);
                     else expandedItems.add(iconsTreeKey);
                 },
-            }));
+            }, null, null, ancestorLocked, null, true, null));
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
@@ -2631,9 +2643,17 @@
                                     addChild(tableKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`));
                                 });
                             }
-                            (subSm.iconsSubmenu || []).forEach((icon) => {
-                                addChild(subKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`));
-                            });
+                            // "Iconos Personalización" (see renderStatusIcons)
+                            // is a real intermediate node too, same idea as
+                            // "Tabla X" above -- each Ícono nests under ITS
+                            // key, not directly under the Pantalla's.
+                            if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
+                                const iconsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`);
+                                addChild(subKey, iconsKey);
+                                subSm.iconsSubmenu.forEach((icon) => {
+                                    addChild(iconsKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`));
+                                });
+                            }
                         });
                     });
                 });
@@ -3477,6 +3497,34 @@
                         submenuId: `${apartadoId}/${pantallaId}/${entry.id}`,
                         label: t(entry.labelKey, entry.labelParams),
                     }));
+            },
+            // "Iconos Personalización" itself now carries its own
+            // independent Estatus (and real cost) too -- see
+            // renderStatusIcons. null when this pantalla has no icons at
+            // all. Same "otherwise invisible in Resumen" reasoning as
+            // getTableEntry/getClassificationEntries above.
+            getIconsGroupEntry(sectionId, areaId, apartadoId, pantallaId) {
+                const section = sectionsData.find((s) => s.id === sectionId);
+                const area = section && section.items.find((i) => i.id === areaId);
+                const apartado = area && (area.submenu || []).find((sm) => sm.id === apartadoId);
+                const subSm = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
+                if (!subSm || !subSm.iconsSubmenu || !subSm.iconsSubmenu.length) return null;
+                return { submenuId: `${apartadoId}/${pantallaId}/__icons__`, label: t('menu.iconsPersonalization') };
+            },
+            // Every real Ícono under this pantalla's own toolbar -- each one
+            // already carried its own Estatus before today (see
+            // renderStatusIcons), but Resumen never had a way to see it,
+            // same gap getColumnEntries already closed for Columnas.
+            getIconEntries(sectionId, areaId, apartadoId, pantallaId) {
+                const section = sectionsData.find((s) => s.id === sectionId);
+                const area = section && section.items.find((i) => i.id === areaId);
+                const apartado = area && (area.submenu || []).find((sm) => sm.id === apartadoId);
+                const subSm = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
+                if (!subSm || !subSm.iconsSubmenu) return [];
+                return subSm.iconsSubmenu.map((icon) => ({
+                    submenuId: `${apartadoId}/${pantallaId}/${icon.id}`,
+                    label: t(icon.labelKey),
+                }));
             },
             // statusMode only -- current Área order for EVERY department at
             // once, keyed by department sectionId (same shape the areaOrder
