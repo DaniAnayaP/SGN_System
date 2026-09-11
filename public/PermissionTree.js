@@ -378,9 +378,11 @@
         // Árbol Maestro's own $ Web / $ App cost per node (statusMode only)
         // -- same keyOf(...) vocabulary and sparse "absent = 0" convention
         // as statusMap above (see master_permission_cost in db.js). Shown
-        // on Departamento/Área/Apartado/Pantalla rows only (showCost param
-        // on statusRow, see renderStatusTree) -- Columna never gets its own
-        // price, same rule plan_permission_costs already enforces.
+        // on Departamento/Área/Apartado/Pantalla/Columna rows (showCost
+        // param on statusRow, see renderStatusTree/renderStatusColumn) --
+        // Ícono and Clasificación never get their own price, same as
+        // plan_permission_costs/PermissionCostTree.js never price those
+        // either.
         let costMap = new Map();
         // key -> the human label shown on that row, filled in as
         // statusRow renders each one -- lets a caller (Admin-ArbolMaestro.js's
@@ -1883,14 +1885,18 @@
                 platformsCell.appendChild(buildPlatformGroup(key, 'app', leafKeys, ancestorLocked));
                 controls.appendChild(platformsCell);
                 // $ Web / $ App -- Árbol Maestro's own suggested/base cost
-                // for this node (see master_permission_cost in db.js). Only
-                // Departamento/Área/Apartado/Pantalla get one (showCost is
-                // only ever passed true from those 4 depths in
-                // renderStatusTree) -- Columna never has its own price,
-                // same rule plan_permission_costs already enforces. Plain
-                // number inputs, not tied to readOnly/ancestorLocked --
-                // price and status/grants are independent axes, same as the
-                // existing Costo Accesos-Permisos screen.
+                // for this node (see master_permission_cost in db.js).
+                // Departamento/Área/Apartado/Pantalla/Columna all get one
+                // (showCost is passed true from those 5 depths in
+                // renderStatusTree/renderStatusColumn) -- Ícono and
+                // Clasificación don't, since neither is ever its own
+                // priced unit in plan_permission_costs/PermissionCostTree.js
+                // either (a column is priced as a whole; its classification
+                // is just a visual grouping of columns, same as Ícono has
+                // no price anywhere in the system). Plain number inputs,
+                // not tied to readOnly/ancestorLocked -- price and status/
+                // grants are independent axes, same as the existing Costo
+                // Accesos-Permisos screen.
                 if (showCost) {
                     const cost = getNodeCost(key);
                     const buildCostInput = (platform, value) => {
@@ -2385,7 +2391,7 @@
                 scope: `${section.id}::${item.id}::${sm.id}::${subSm.id}::${cls.id}`,
                 onDrop: (draggedId, targetId) => reorderColumns(section.id, item.id, sm.id, subSm.id, cls.id, draggedId, targetId),
             } : null;
-            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, columnDragCtx, false, previewInfo));
+            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, columnDragCtx, true, previewInfo));
         }
 
         function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked) {
