@@ -2309,10 +2309,20 @@
                     lastChild = rows[j];
                 }
                 if (!lastChild) return;
-                const toggleRect = toggle.getBoundingClientRect();
+                // Anchored to this row's OWN drag handle when it has one
+                // (a level deeper always does too, whenever it's a real
+                // reorderable Área/Apartado/Pantalla/Columna -- see dragCtx
+                // in statusRow) -- its LEFT edge minus a small gap, not the
+                // toggle's own center: confirmed live that centering on the
+                // toggle put the guide right on top of the next level's own
+                // drag handle (grip+toggle together are roughly as wide as
+                // one whole depth's own indent step). Falls back to the
+                // toggle when there's no grip (Departamento/'main' rows).
+                const anchor = row.querySelector('.perm-tree-drag-handle') || toggle;
+                const anchorRect = anchor.getBoundingClientRect();
                 const guide = document.createElement('div');
                 guide.className = 'perm-tree-nest-guide';
-                guide.style.left = `${toggleRect.left - treeRect.left + toggleRect.width / 2 + treeRoot.scrollLeft}px`;
+                guide.style.left = `${anchorRect.left - treeRect.left - 4 + treeRoot.scrollLeft}px`;
                 guide.style.top = `${row.getBoundingClientRect().bottom - treeRect.top + treeRoot.scrollTop}px`;
                 guide.style.height = `${lastChild.getBoundingClientRect().bottom - row.getBoundingClientRect().bottom}px`;
                 treeRoot.appendChild(guide);
