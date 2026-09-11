@@ -589,6 +589,7 @@
     "masterTreeAreaOrderLabel": "Orden de Áreas — {department}",
     "masterTreeApartadoOrderLabel": "Orden de Apartados — {area}",
     "masterTreePantallaOrderLabel": "Orden de Pantallas — {apartado}",
+    "masterTreeColumnOrderLabel": "Orden de Columnas — {classification}",
     "masterTreeOrderChangeLine": "Nuevo orden: {order}",
     "masterTreeCostChangeLabel": "Costo — {node}",
     "masterCostCurrencyLabel": "Moneda",

@@ -296,6 +296,7 @@ let originalDepartmentOrder = [];
 let originalAreaOrders = {};
 let originalApartadoOrders = {};
 let originalPantallaOrders = {};
+let originalColumnOrders = {};
 // Same idea, Árbol Maestro's own suggested/base cost per node (see
 // public/Admin-ArbolMaestro.js's own originalCosts).
 let originalCosts = [];
@@ -378,6 +379,20 @@ function collectOrderChanges() {
         const names = after.map((id) => masterTree.getStatusLabel(sectionId, areaId, `${apartadoId}/${id}`) || id);
         items.push({
             label: t('admin.masterTreePantallaOrderLabel', { apartado: apartadoName }),
+            line: t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    });
+    const afterColumnOrders = masterTree.getColumnOrders();
+    Object.keys(afterColumnOrders).forEach((compoundKey) => {
+        const before = originalColumnOrders[compoundKey] || [];
+        const after = afterColumnOrders[compoundKey];
+        if (!orderArraysDiffer(before, after)) return;
+        const [sectionId, areaId, apartadoId, pantallaId, classId] = compoundKey.split('::');
+        const classBase = `${apartadoId}/${pantallaId}/${classId}`;
+        const className = masterTree.getStatusLabel(sectionId, areaId, classBase) || classId;
+        const names = after.map((id) => masterTree.getStatusLabel(sectionId, areaId, `${classBase}/${id}`) || id);
+        items.push({
+            label: t('admin.masterTreeColumnOrderLabel', { classification: className }),
             line: t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
         });
     });
@@ -773,6 +788,7 @@ async function saveMasterTree(saveBtn) {
                     areaOrders: masterTree.getAreaOrders(),
                     apartadoOrders: masterTree.getApartadoOrders(),
                     pantallaOrders: masterTree.getPantallaOrders(),
+                    columnOrders: masterTree.getColumnOrders(),
                 }),
             }),
             fetch(apiUrl('/api/admin/master-permission-costs'), {
@@ -791,6 +807,7 @@ async function saveMasterTree(saveBtn) {
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
         originalPantallaOrders = masterTree.getPantallaOrders();
+        originalColumnOrders = masterTree.getColumnOrders();
         originalCosts = masterTree.getCosts();
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved.
@@ -902,6 +919,7 @@ async function loadMasterTree(token) {
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
             pantallaOrder: orderData.pantallaOrders || {},
+            columnOrder: orderData.columnOrders || {},
             costCurrency: currentCurrency,
         });
         await masterTree.init(originalStatuses, costData.costs || []);
@@ -914,6 +932,7 @@ async function loadMasterTree(token) {
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
         originalPantallaOrders = masterTree.getPantallaOrders();
+        originalColumnOrders = masterTree.getColumnOrders();
         originalCosts = masterTree.getCosts();
 
         const saveBtn = document.createElement('button');

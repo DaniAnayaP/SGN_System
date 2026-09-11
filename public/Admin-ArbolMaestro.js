@@ -42,6 +42,10 @@ let originalApartadoOrders = {};
 // "sectionId::areaId::apartadoId" (see getPantallaOrders in
 // PermissionTree.js).
 let originalPantallaOrders = {};
+// One level deeper still -- each pantalla's own Columna order, PER
+// Clasificación, keyed by "sectionId::areaId::apartadoId::pantallaId::
+// classId" (see getColumnOrders in PermissionTree.js).
+let originalColumnOrders = {};
 // Árbol Maestro's own suggested/base cost per node (see getCosts in
 // PermissionTree.js / master_permission_cost in db.js) -- a separate
 // table from statuses/order, saved together on the same Guardar click.
@@ -138,6 +142,20 @@ function collectOrderChanges() {
         const names = after.map((id) => masterTree.getStatusLabel(sectionId, areaId, `${apartadoId}/${id}`) || id);
         items.push({
             label: Dashboard.t('admin.masterTreePantallaOrderLabel', { apartado: apartadoName }),
+            line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    });
+    const afterColumnOrders = masterTree.getColumnOrders();
+    Object.keys(afterColumnOrders).forEach((compoundKey) => {
+        const before = originalColumnOrders[compoundKey] || [];
+        const after = afterColumnOrders[compoundKey];
+        if (!orderArraysDiffer(before, after)) return;
+        const [sectionId, areaId, apartadoId, pantallaId, classId] = compoundKey.split('::');
+        const classBase = `${apartadoId}/${pantallaId}/${classId}`;
+        const className = masterTree.getStatusLabel(sectionId, areaId, classBase) || classId;
+        const names = after.map((id) => masterTree.getStatusLabel(sectionId, areaId, `${classBase}/${id}`) || id);
+        items.push({
+            label: Dashboard.t('admin.masterTreeColumnOrderLabel', { classification: className }),
             line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
         });
     });
@@ -498,6 +516,7 @@ async function loadMasterTree() {
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
             pantallaOrder: orderData.pantallaOrders || {},
+            columnOrder: orderData.columnOrders || {},
             costCurrency: currentCurrency,
         });
         await masterTree.init(originalStatuses, costData.costs || []);
@@ -513,6 +532,7 @@ async function loadMasterTree() {
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
         originalPantallaOrders = masterTree.getPantallaOrders();
+        originalColumnOrders = masterTree.getColumnOrders();
         originalCosts = masterTree.getCosts();
     } catch {
         masterTreeError.textContent = Dashboard.t('admin.loadError');
@@ -539,6 +559,7 @@ async function saveMasterTree() {
                     areaOrders: masterTree.getAreaOrders(),
                     apartadoOrders: masterTree.getApartadoOrders(),
                     pantallaOrders: masterTree.getPantallaOrders(),
+                    columnOrders: masterTree.getColumnOrders(),
                 }),
             }),
             fetch('/api/admin/master-permission-costs', {
@@ -558,6 +579,7 @@ async function saveMasterTree() {
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
         originalPantallaOrders = masterTree.getPantallaOrders();
+        originalColumnOrders = masterTree.getColumnOrders();
         originalCosts = masterTree.getCosts();
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved -- otherwise a checkbox you

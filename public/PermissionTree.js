@@ -1981,6 +1981,13 @@
         // '' for a standalone pantalla (never reachable through
         // getPantallaOrders either, see its own comment) or a stale
         // reference to a since-removed menu.json entry.
+        // Walks as many "/"-separated segments as submenuId actually has --
+        // 1 (Apartado), 2 (.../Pantalla), 3 (.../Clasificación OR a
+        // standalone column with no Clasificación wrapper), 4 (.../
+        // Clasificación/Columna) -- same compound-key vocabulary
+        // statusRow's own key already uses at every one of those depths,
+        // just resolved generically instead of hardcoding each depth's
+        // own branch.
         function resolveNodeLabel(sectionId, itemId, submenuId) {
             const section = sectionsData.find((s) => s.id === sectionId);
             if (!section) return '';
@@ -1988,14 +1995,12 @@
             const area = section.items.find((i) => i.id === itemId);
             if (!area) return '';
             if (!submenuId) return t(area.labelKey, area.labelParams);
-            if (submenuId.includes('/')) {
-                const [apartadoId, pantallaId] = submenuId.split('/');
-                const apartado = (area.submenu || []).find((sm) => sm.id === apartadoId);
-                const pantalla = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
-                return pantalla ? t(pantalla.labelKey, pantalla.labelParams) : '';
+            const segments = submenuId.split('/');
+            let node = (area.submenu || []).find((sm) => sm.id === segments[0]);
+            for (let i = 1; node && i < segments.length; i += 1) {
+                node = (node.submenu || []).find((entry) => entry.id === segments[i]);
             }
-            const apartado = (area.submenu || []).find((sm) => sm.id === submenuId);
-            return apartado ? t(apartado.labelKey, apartado.labelParams) : '';
+            return node ? t(node.labelKey, node.labelParams) : '';
         }
         function getNodeCost(key) {
             return costMap.get(key) || { web: 0, app: 0 };
@@ -2350,7 +2355,7 @@
             return el;
         }
 
-        function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked, sm, subSm) {
+        function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked, sm, subSm, cls) {
             // Vista Previa here highlights this one column inside its own
             // real table (Web) / field list (App) -- gated on the OWNING
             // pantalla being built, same rule as the pantalla's own preview.
@@ -2362,7 +2367,19 @@
                 node: subSm,
                 focusColumnId: col.id,
             } : null;
-            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, null, false, previewInfo));
+            // Columna only reorders within its own Clasificación (cls) --
+            // a standalone column (cls is null here, see
+            // renderStatusTableColumns below) never drags, same as every
+            // level above guards a group that genuinely has nothing else
+            // in it (a Pantalla only ever has one or two standalone
+            // columns in practice).
+            const columnDragCtx = cls ? {
+                kind: 'columna',
+                id: col.id,
+                scope: `${section.id}::${item.id}::${sm.id}::${subSm.id}::${cls.id}`,
+                onDrop: (draggedId, targetId) => reorderColumns(section.id, item.id, sm.id, subSm.id, cls.id, draggedId, targetId),
+            } : null;
+            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, columnDragCtx, false, previewInfo));
         }
 
         function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked) {
@@ -2378,7 +2395,7 @@
             }));
             if (!classExpanded) return;
             cls.submenu.forEach((col) => {
-                renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked, sm, subSm);
+                renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked, sm, subSm, cls);
             });
         }
 
@@ -2398,7 +2415,7 @@
                     renderStatusClassification(container, section, item, sm, subSm, entry, ancestorLocked);
                     return;
                 }
-                renderStatusColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5, ancestorLocked, sm, subSm);
+                renderStatusColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5, ancestorLocked, sm, subSm, null);
             });
         }
 

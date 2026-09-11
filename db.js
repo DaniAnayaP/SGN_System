@@ -5305,9 +5305,10 @@ function logBusinessSectorChange({ businessSectorId, action, fieldKey, oldValue,
 // is the top-level Departamento list; `area::<sectionId>` is the Área list
 // for one department; `apartado::<sectionId>::<areaId>` is the Apartado
 // list for one área; `pantalla::<sectionId>::<areaId>::<apartadoId>` is the
-// Pantalla list for one apartado (see areaOrderKey/apartadoOrderKey/
-// pantallaOrderKey below). Columna will add its own prefix here later,
-// same pattern.
+// Pantalla list for one apartado; `columna::<sectionId>::<areaId>::
+// <apartadoId>::<pantallaId>::<classId>` is the Columna list for one
+// Clasificación of one pantalla (see areaOrderKey/apartadoOrderKey/
+// pantallaOrderKey/columnOrderKey below).
 const PERMISSION_ORDER_ROOT_KEY = '__root__';
 function areaOrderKey(sectionId) {
     return `area::${sectionId}`;
@@ -5317,6 +5318,9 @@ function apartadoOrderKey(sectionId, areaId) {
 }
 function pantallaOrderKey(sectionId, areaId, apartadoId) {
     return `pantalla::${sectionId}::${areaId}::${apartadoId}`;
+}
+function columnOrderKey(sectionId, areaId, apartadoId, pantallaId, classId) {
+    return `columna::${sectionId}::${areaId}::${apartadoId}::${pantallaId}::${classId}`;
 }
 function deserializeOrderRow(row) {
     return { parentKey: row.parent_key, orderedKeys: JSON.parse(row.ordered_keys) };
@@ -6387,6 +6391,7 @@ module.exports = {
     areaOrderKey,
     apartadoOrderKey,
     pantallaOrderKey,
+    columnOrderKey,
     PERMISSION_ORDER_ROOT_KEY,
     WEB_SCREEN_CATALOG,
     getPlanGrants,
