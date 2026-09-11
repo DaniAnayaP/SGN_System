@@ -3085,6 +3085,28 @@
                     expandedSections = new Set();
                     expandedItems = new Set();
                     render();
+                    // alignLabelColumnWidth measures each label on a canvas
+                    // using getComputedStyle's OWN font string (e.g.
+                    // "Poppins, sans-serif") -- but the canvas can only
+                    // ever draw with whatever font is ACTUALLY loaded yet,
+                    // so on a fresh page load (before the Google Font
+                    // finishes fetching) it silently measures with the
+                    // browser's own fallback serif/sans-serif instead,
+                    // whose per-character widths don't match Poppins'.
+                    // Longer labels accumulate more error than short ones,
+                    // so a long deeply-nested Columna label drifted out of
+                    // alignment with a short Departamento label even
+                    // though both used the exact same (wrong, that one
+                    // frame) measurement logic -- confirmed live, and
+                    // never reproduced testing locally where the font was
+                    // already cached from an earlier run. document.fonts.
+                    // ready resolves once every CSS-declared font is
+                    // actually usable, so re-rendering then re-measures
+                    // with the real metrics -- a no-op re-render if the
+                    // font had already loaded by the first render.
+                    if (document.fonts && document.fonts.ready) {
+                        document.fonts.ready.then(() => { if (statusMode) render(); });
+                    }
                     return;
                 }
                 grantSet = expand(initialGrants || []);
