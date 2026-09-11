@@ -1234,6 +1234,11 @@ body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c4
     border: 1px solid var(--color-border);
     border-radius: 0.4rem;
     padding: 0.5rem;
+    /* Positioning context for .perm-tree-nest-guide (statusMode only) --
+       those are absolutely positioned and computed against THIS element's
+       own getBoundingClientRect (see drawNestGuides in PermissionTree.js),
+       not just any positioned ancestor further up the page. */
+    position: relative;
 }
 /* Column titles for the costEdit tree (Costo Accesos-Permisos) — sits just
    above .perm-tree, not inside it (the tree wipes and rebuilds its own
@@ -1614,6 +1619,34 @@ body.dark-mode .perm-tree-depth-2{
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+/* Total nested nodes under this row (see statusRow in PermissionTree.js)
+   -- a sibling of perm-tree-mstatus-label, never a child of it: that label
+   has a fixed, JS-measured width plus overflow:hidden (above), so
+   anything appended inside it would get clipped and would also corrupt
+   alignLabelColumnWidth's own text-only width measurement. flex-shrink:0
+   so a long row never squeezes this down to nothing first. */
+.perm-tree-mstatus-count-badge{
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    color: var(--color-text-secondary);
+    background: var(--color-surface-alt, #f2f2f5);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 0.05rem 0.45rem;
+    font-variant-numeric: tabular-nums;
+}
+/* Dashed vertical guide for a currently-expanded group's own descendants
+   (see drawNestGuides in PermissionTree.js) -- purely decorative and
+   computed from real rendered positions, appended straight into .perm-tree
+   itself (see its own position:relative above), so it scrolls together
+   with the rows it points at. pointer-events:none so it never intercepts
+   a click meant for the row/toggle underneath it. */
+.perm-tree-nest-guide{
+    position: absolute;
+    width: 0;
+    border-left: 1.5px dashed var(--color-border);
+    pointer-events: none;
 }
 .perm-tree-mstatus-controls{
     flex-shrink: 0;

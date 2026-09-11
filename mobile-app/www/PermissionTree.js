@@ -1871,6 +1871,23 @@
             label.addEventListener('mouseenter', () => { if (typeof showSubmenuTooltip === 'function') showSubmenuTooltip(label); });
             label.addEventListener('mouseleave', () => { if (typeof hideSidebarTooltip === 'function') hideSidebarTooltip(); });
             row.appendChild(label);
+            // Total nested nodes under this row (same count "aplicar a
+            // anidados" already shows in its own confirm prompt, see
+            // applyNestedStatus) -- a SIBLING of label, deliberately never
+            // a child of it: alignLabelColumnWidth measures label.textContent
+            // and sets label.style.width from that alone, so anything
+            // appended inside label would both corrupt that measurement
+            // (it'd start including the badge's own digits) and get
+            // squeezed into a width sized for the text alone. Shown
+            // whenever this row has anything at all nested below it,
+            // regardless of what that count is (confirmed with the user:
+            // still shown even when it's just 1).
+            if (key && hasStatusChildren(key)) {
+                const countBadge = document.createElement('span');
+                countBadge.className = 'perm-tree-mstatus-count-badge';
+                countBadge.textContent = String(collectDescendantStatusKeys(key).length);
+                row.appendChild(countBadge);
+            }
             if (key) {
                 // Stashed so a caller (Admin-ArbolMaestro.js's confirm-
                 // changes screen) can turn a bare key back into the same
@@ -2259,6 +2276,46 @@
             treeRoot.style.setProperty('--perm-tree-label-col-width', `${target}px`);
             measured.forEach(({ label, offsetLeft }) => {
                 label.style.width = `${Math.max(0, target - offsetLeft)}px`;
+            });
+        }
+
+        // One dashed vertical guide per currently-expanded group row,
+        // spanning from its own toggle down to its last currently-rendered
+        // descendant, positioned at THIS row's own toggle -- never its
+        // children's, deeper one, so it never crosses their own chevrons
+        // (confirmed with the user: it belongs in the parent's own lane).
+        // Deliberately a read-only, purely additive overlay computed from
+        // real rendered positions (getBoundingClientRect, same technique
+        // alignLabelColumnWidth already relies on) rather than any new DOM
+        // nesting: it only ever ADDS new elements after the fact, never
+        // touches/moves/re-parents an existing row, so it can't be the
+        // thing that breaks anything else in here.
+        function drawNestGuides() {
+            treeRoot.querySelectorAll('.perm-tree-nest-guide').forEach((el) => el.remove());
+            const rows = Array.from(treeRoot.querySelectorAll('.perm-tree-row'));
+            if (!rows.length) return;
+            const treeRect = treeRoot.getBoundingClientRect();
+            const depthOf = (row) => {
+                const cls = Array.from(row.classList).find((c) => c.startsWith('perm-tree-depth-'));
+                return cls ? parseInt(cls.replace('perm-tree-depth-', ''), 10) : 0;
+            };
+            rows.forEach((row, i) => {
+                const toggle = row.querySelector('.perm-tree-toggle');
+                if (!toggle || toggle.getAttribute('aria-expanded') !== 'true') return;
+                const depth = depthOf(row);
+                let lastChild = null;
+                for (let j = i + 1; j < rows.length; j += 1) {
+                    if (depthOf(rows[j]) <= depth) break;
+                    lastChild = rows[j];
+                }
+                if (!lastChild) return;
+                const toggleRect = toggle.getBoundingClientRect();
+                const guide = document.createElement('div');
+                guide.className = 'perm-tree-nest-guide';
+                guide.style.left = `${toggleRect.left - treeRect.left + toggleRect.width / 2 + treeRoot.scrollLeft}px`;
+                guide.style.top = `${row.getBoundingClientRect().bottom - treeRect.top + treeRoot.scrollTop}px`;
+                guide.style.height = `${lastChild.getBoundingClientRect().bottom - row.getBoundingClientRect().bottom}px`;
+                treeRoot.appendChild(guide);
             });
         }
 
@@ -2922,6 +2979,7 @@
             });
             alignLabelColumnWidth();
             applyStatusAbbreviations();
+            drawNestGuides();
             // Defensive reset -- seen live scrolled to a non-zero position
             // on load in Chrome's device-toolbar responsive mode (label
             // start hidden, Estatus/Web·App fully visible instead), not
