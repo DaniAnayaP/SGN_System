@@ -1321,6 +1321,18 @@ body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c4
     font-style: italic;
     color: var(--color-text-secondary);
 }
+/* A Columna's own 4 levels (Operar/Editar/Autorizar/Eliminar, see
+   COLUMN_STATUS_LEVELS/renderStatusColumn in PermissionTree.js) render one
+   level deeper than their own Columna -- depth 6 for a plain column
+   (already covered above) or depth 7 for one nested under a Clasificación.
+   Without this rule, a level row at depth 7 fell back to zero extra
+   padding, landing flush against the tree's own left edge instead of
+   nested under its column. */
+.perm-tree-depth-7{
+    padding-left: 10.5rem;
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+}
 body.dark-mode .perm-tree-depth-1{
     color: #B9D2F2;
 }
