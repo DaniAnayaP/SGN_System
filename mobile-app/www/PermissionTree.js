@@ -1748,7 +1748,7 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, showCost, previewInfo) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, previewInfo) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             // Drag-to-reorder -- Árbol Maestro only. dragCtx is
@@ -1919,57 +1919,47 @@
                 controls.appendChild(platformsCell);
                 // $ Web / $ App -- Árbol Maestro's own suggested/base cost
                 // for this node (see master_permission_cost in db.js).
-                // Departamento/Área/Apartado/Pantalla/Columna all get one
-                // (showCost is passed true from those 5 depths in
-                // renderStatusTree/renderStatusColumn) -- Ícono and
-                // Clasificación don't, since neither is ever its own
-                // priced unit in plan_permission_costs/PermissionCostTree.js
-                // either (a column is priced as a whole; its classification
-                // is just a visual grouping of columns, same as Ícono has
-                // no price anywhere in the system). Plain number inputs,
-                // not tied to readOnly/ancestorLocked -- price and status/
-                // grants are independent axes, same as the existing Costo
-                // Accesos-Permisos screen.
-                if (showCost) {
-                    const cost = getNodeCost(key);
-                    const buildCostInput = (platform, value) => {
-                        const wrap = document.createElement('div');
-                        wrap.className = 'perm-tree-mstatus-cost-wrap';
-                        const symbol = document.createElement('span');
-                        symbol.className = 'perm-tree-mstatus-cost-symbol';
-                        symbol.textContent = costCurrencySymbol;
-                        symbol.setAttribute('aria-hidden', 'true');
-                        wrap.appendChild(symbol);
-                        const input = document.createElement('input');
-                        input.type = 'number';
-                        input.min = '0';
-                        input.step = '0.01';
-                        input.className = 'perm-tree-cost-input';
-                        input.value = (Number(value) || 0).toFixed(2);
-                        input.addEventListener('change', () => {
-                            const current = getNodeCost(key);
-                            const parsed = Math.max(0, parseFloat(input.value) || 0);
-                            setNodeCost(key, { ...current, [platform]: parsed });
-                            input.value = parsed.toFixed(2);
-                        });
-                        wrap.appendChild(input);
-                        return wrap;
-                    };
-                    const costWebCell = document.createElement('div');
-                    costWebCell.className = 'perm-tree-mstatus-cost-cell';
-                    costWebCell.appendChild(buildCostInput('web', cost.web));
-                    controls.appendChild(costWebCell);
-                    const costAppCell = document.createElement('div');
-                    costAppCell.className = 'perm-tree-mstatus-cost-cell';
-                    costAppCell.appendChild(buildCostInput('app', cost.app));
-                    controls.appendChild(costAppCell);
-                } else {
-                    // controls is right-aligned via margin-left:auto, so its
-                    // width has to stay constant regardless of showCost, or
-                    // Estatus (its first child) drifts left/right per row.
-                    controls.appendChild(document.createElement('div')).className = 'perm-tree-mstatus-cost-cell';
-                    controls.appendChild(document.createElement('div')).className = 'perm-tree-mstatus-cost-cell';
-                }
+                // Every key-bearing row gets one -- confirmed with the user:
+                // no exceptions, not even Ícono/Clasificación/Tabla, which
+                // used to render two empty placeholder cells here instead
+                // (kept ONLY for width -- controls is right-aligned via
+                // margin-left:auto, so a narrower row would otherwise drift
+                // Estatus left/right, see the alignment fix elsewhere in
+                // this file). Plain number inputs, not tied to readOnly/
+                // ancestorLocked -- price and status/grants are independent
+                // axes, same as the existing Costo Accesos-Permisos screen.
+                const cost = getNodeCost(key);
+                const buildCostInput = (platform, value) => {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'perm-tree-mstatus-cost-wrap';
+                    const symbol = document.createElement('span');
+                    symbol.className = 'perm-tree-mstatus-cost-symbol';
+                    symbol.textContent = costCurrencySymbol;
+                    symbol.setAttribute('aria-hidden', 'true');
+                    wrap.appendChild(symbol);
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.min = '0';
+                    input.step = '0.01';
+                    input.className = 'perm-tree-cost-input';
+                    input.value = (Number(value) || 0).toFixed(2);
+                    input.addEventListener('change', () => {
+                        const current = getNodeCost(key);
+                        const parsed = Math.max(0, parseFloat(input.value) || 0);
+                        setNodeCost(key, { ...current, [platform]: parsed });
+                        input.value = parsed.toFixed(2);
+                    });
+                    wrap.appendChild(input);
+                    return wrap;
+                };
+                const costWebCell = document.createElement('div');
+                costWebCell.className = 'perm-tree-mstatus-cost-cell';
+                costWebCell.appendChild(buildCostInput('web', cost.web));
+                controls.appendChild(costWebCell);
+                const costAppCell = document.createElement('div');
+                costAppCell.className = 'perm-tree-mstatus-cost-cell';
+                costAppCell.appendChild(buildCostInput('app', cost.app));
+                controls.appendChild(costAppCell);
                 // Vista Previa/Navegar -- real preview (openPreviewModal
                 // above) only for a Pantalla whose own menu.json href is
                 // already a real page; everything else (Departamento/Área/
@@ -2436,18 +2426,17 @@
                 scope: `${section.id}::${item.id}::${sm.id}::${subSm.id}::${cls.id}`,
                 onDrop: (draggedId, targetId) => reorderColumns(section.id, item.id, sm.id, subSm.id, cls.id, draggedId, targetId),
             } : null;
-            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, columnDragCtx, true, previewInfo));
+            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, columnDragCtx, previewInfo));
         }
 
         function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked) {
             const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
-            // Own independent Estatus (cls.id is already a real menu.json
-            // id, so this needs no synthetic key unlike the Tabla row
-            // below) -- no rollup/leafKeys (same bare treatment as a plain
-            // Columna row), never draggable, never priced (showCost false,
-            // same reasoning as Ícono/Columna's own cost note above).
+            // Own independent Estatus AND its own real $ Web/$ App (cls.id
+            // is already a real menu.json id, so this needs no synthetic
+            // key unlike the Tabla row below) -- no rollup/leafKeys (same
+            // bare treatment as a plain Columna row), never draggable.
             const classKey = keyOf(section.id, item.id, classBase);
             container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, classKey, {
                 expanded: classExpanded,
@@ -2455,7 +2444,7 @@
                     if (classExpanded) expandedItems.delete(classTreeKey);
                     else expandedItems.add(classTreeKey);
                 },
-            }, null, null, ancestorLocked, null, false, null));
+            }, null, null, ancestorLocked, null, null));
             if (!classExpanded) return;
             cls.submenu.forEach((col) => {
                 renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked, sm, subSm, cls);
@@ -2479,7 +2468,7 @@
                     if (tableExpanded) expandedItems.delete(tableTreeKey);
                     else expandedItems.add(tableTreeKey);
                 },
-            }, null, null, ancestorLocked, null, false, null));
+            }, null, null, ancestorLocked, null, null));
             if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
@@ -2493,13 +2482,11 @@
         function renderStatusIcons(container, section, item, sm, subSm, ancestorLocked) {
             const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const iconsExpanded = expandedItems.has(iconsTreeKey);
-            // Own independent Estatus AND its own real $ Web/$ App --
-            // confirmed with the user: unlike Tabla/Clasificación, Iconos
-            // Personalización IS sold as its own bundle (the whole
-            // toolbar-customization feature), separate from any one
-            // Ícono's own price (still never priced individually below,
-            // same as always). __icons__ is a reserved segment, never a
-            // real icon id, same idea as "Tabla X"'s own __table__.
+            // Own independent Estatus AND its own real $ Web/$ App, same as
+            // every real Ícono under it now gets too (confirmed with the
+            // user: no exceptions anywhere in the tree). __icons__ is a
+            // reserved segment, never a real icon id, same idea as "Tabla
+            // X"'s own __table__.
             const iconsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`);
             container.appendChild(statusRow(t('menu.iconsPersonalization'), 4, iconsKey, {
                 expanded: iconsExpanded,
@@ -2507,7 +2494,7 @@
                     if (iconsExpanded) expandedItems.delete(iconsTreeKey);
                     else expandedItems.add(iconsTreeKey);
                 },
-            }, null, null, ancestorLocked, null, true, null));
+            }, null, null, ancestorLocked, null, null));
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
@@ -2523,7 +2510,7 @@
                     node: subSm,
                     iconId: icon.id,
                 } : null;
-                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, null, null, ancestorLocked, null, false, previewInfo));
+                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, null, null, ancestorLocked, null, previewInfo));
             });
         }
 
@@ -2727,7 +2714,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, true, deptPreviewInfo));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -2758,7 +2745,7 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, true, areaPreviewInfo));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo));
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
                     // Apartado (Catálogos/Operaciones/...) only reorders
@@ -2784,7 +2771,7 @@
                             children: hasSubSubmenu ? sm.submenu.filter((s) => !s.standalone).map((subSm) => ({ id: subSm.id, label: t(subSm.labelKey, subSm.labelParams), icon: subSm.icon })) : [],
                         };
                         if (!hasSubSubmenu) {
-                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked, apartadoDragCtx, true, apartadoPreviewInfo));
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo));
                             return;
                         }
 
@@ -2797,7 +2784,7 @@
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, true, apartadoPreviewInfo));
+                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo));
                         if (!smExpandedNow) return;
                         const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
                         // Pantalla only reorders among its own apartado's
@@ -2833,7 +2820,7 @@
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null, null, null, subSmAncestorLocked, pantallaDragCtx, true, previewInfo));
+                            } : null, null, null, subSmAncestorLocked, pantallaDragCtx, previewInfo));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
                                 if (subSm.submenu && subSm.submenu.length) {
