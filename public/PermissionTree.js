@@ -2043,6 +2043,13 @@
             const segments = submenuId.split('/');
             let node = (area.submenu || []).find((sm) => sm.id === segments[0]);
             for (let i = 1; node && i < segments.length; i += 1) {
+                // __table__ is the "Tabla X" row's own made-up segment (see
+                // renderStatusTableColumns) -- it's not a real menu.json id
+                // anywhere, it's this SAME node (node is already the
+                // Pantalla at this point) just relabeled the way its own
+                // row is. Always the last segment (Clasificación/Columna
+                // keys never go through it), so returning here is safe.
+                if (segments[i] === '__table__') return `${t('main.tablePrefix')} ${t(node.labelKey, node.labelParams)}`;
                 node = (node.submenu || []).find((entry) => entry.id === segments[i]);
             }
             return node ? t(node.labelKey, node.labelParams) : '';
@@ -2432,13 +2439,19 @@
             const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
-            container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, null, {
+            // Own independent Estatus (cls.id is already a real menu.json
+            // id, so this needs no synthetic key unlike the Tabla row
+            // below) -- no rollup/leafKeys (same bare treatment as a plain
+            // Columna row), never draggable, never priced (showCost false,
+            // same reasoning as Ícono/Columna's own cost note above).
+            const classKey = keyOf(section.id, item.id, classBase);
+            container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, classKey, {
                 expanded: classExpanded,
                 onToggle: () => {
                     if (classExpanded) expandedItems.delete(classTreeKey);
                     else expandedItems.add(classTreeKey);
                 },
-            }));
+            }, null, null, ancestorLocked, null, false, null));
             if (!classExpanded) return;
             cls.submenu.forEach((col) => {
                 renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked, sm, subSm, cls);
@@ -2448,13 +2461,21 @@
         function renderStatusTableColumns(container, section, item, sm, subSm, ancestorLocked) {
             const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const tableExpanded = expandedItems.has(tableTreeKey);
-            container.appendChild(statusRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, null, {
+            // Own independent Estatus, separate from its own Pantalla's
+            // (confirmed with the user: NOT a mirror of it). "Tabla X" has
+            // no id of its own anywhere in menu.json (it's just this same
+            // Pantalla's own submenu, redisplayed) -- __table__ is a made-up
+            // segment, never a real column/classification id, reserved for
+            // exactly this row (see resolveNodeLabel/buildStatusChildrenMap,
+            // which both special-case it back to this same subSm).
+            const tableKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`);
+            container.appendChild(statusRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, tableKey, {
                 expanded: tableExpanded,
                 onToggle: () => {
                     if (tableExpanded) expandedItems.delete(tableTreeKey);
                     else expandedItems.add(tableTreeKey);
                 },
-            }));
+            }, null, null, ancestorLocked, null, false, null));
             if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
@@ -2589,15 +2610,27 @@
                                 ? keyOf(section.id, subSm.id, null)
                                 : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
                             addChild(smKey, subKey);
-                            (subSm.submenu || []).forEach((entry) => {
-                                if (entry.isClassification) {
-                                    (entry.submenu || []).forEach((col) => {
-                                        addChild(subKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}/${col.id}`));
-                                    });
-                                    return;
-                                }
-                                addChild(subKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`));
-                            });
+                            // "Tabla X" (see renderStatusTableColumns) is a
+                            // real intermediate node now too -- everything
+                            // under it (plain columns, and each
+                            // Clasificación's own columns) nests under ITS
+                            // key, not directly under the Pantalla's,
+                            // exactly matching the real render tree.
+                            if (subSm.submenu && subSm.submenu.length) {
+                                const tableKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`);
+                                addChild(subKey, tableKey);
+                                subSm.submenu.forEach((entry) => {
+                                    if (entry.isClassification) {
+                                        const clsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`);
+                                        addChild(tableKey, clsKey);
+                                        (entry.submenu || []).forEach((col) => {
+                                            addChild(clsKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}/${col.id}`));
+                                        });
+                                        return;
+                                    }
+                                    addChild(tableKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`));
+                                });
+                            }
                             (subSm.iconsSubmenu || []).forEach((icon) => {
                                 addChild(subKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`));
                             });
@@ -3411,6 +3444,39 @@
                     entries.push({ submenuId: `${apartadoId}/${pantallaId}/${entry.id}`, label: t(entry.labelKey, entry.labelParams) });
                 });
                 return entries;
+            },
+            // "Tabla X" itself now carries its own independent Estatus too
+            // (see renderStatusTableColumns) -- null when this pantalla has
+            // no table at all. Same "otherwise invisible in Resumen"
+            // reasoning as getColumnEntries above.
+            getTableEntry(sectionId, areaId, apartadoId, pantallaId) {
+                const section = sectionsData.find((s) => s.id === sectionId);
+                const area = section && section.items.find((i) => i.id === areaId);
+                const apartado = area && (area.submenu || []).find((sm) => sm.id === apartadoId);
+                const subSm = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
+                if (!subSm || !subSm.submenu || !subSm.submenu.length) return null;
+                return {
+                    submenuId: `${apartadoId}/${pantallaId}/__table__`,
+                    label: `${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`,
+                };
+            },
+            // One entry per Clasificación (e.g. "Control Interno") directly
+            // under this pantalla's table -- its own columns are still
+            // covered by getColumnEntries above, this is just the
+            // classification header's OWN Estatus (see
+            // renderStatusClassification), same reasoning as getTableEntry.
+            getClassificationEntries(sectionId, areaId, apartadoId, pantallaId) {
+                const section = sectionsData.find((s) => s.id === sectionId);
+                const area = section && section.items.find((i) => i.id === areaId);
+                const apartado = area && (area.submenu || []).find((sm) => sm.id === apartadoId);
+                const subSm = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
+                if (!subSm) return [];
+                return (subSm.submenu || [])
+                    .filter((entry) => entry.isClassification)
+                    .map((entry) => ({
+                        submenuId: `${apartadoId}/${pantallaId}/${entry.id}`,
+                        label: t(entry.labelKey, entry.labelParams),
+                    }));
             },
             // statusMode only -- current Área order for EVERY department at
             // once, keyed by department sectionId (same shape the areaOrder

@@ -265,6 +265,18 @@ function buildResumenGroups() {
                     masterTree.getColumnEntries(sectionId, areaId, apartadoId, pantallaId).forEach((col) => {
                         push(sectionId, areaId, col.submenuId, [deptLabel, areaLabel, apartadoLabel, pantallaLabel, col.label]);
                     });
+                    // "Tabla X" and each Clasificación (e.g. "Control
+                    // Interno") now carry their own independent Estatus too
+                    // -- same "otherwise invisible in Resumen" reasoning as
+                    // the Columna push above. Kept as flat siblings of the
+                    // Columnas above (not nested under them) rather than
+                    // reshaping every column's own path, same convention
+                    // Iconos de Personalización already gets away with.
+                    const tableEntry = masterTree.getTableEntry(sectionId, areaId, apartadoId, pantallaId);
+                    if (tableEntry) push(sectionId, areaId, tableEntry.submenuId, [deptLabel, areaLabel, apartadoLabel, pantallaLabel, tableEntry.label]);
+                    masterTree.getClassificationEntries(sectionId, areaId, apartadoId, pantallaId).forEach((cls) => {
+                        push(sectionId, areaId, cls.submenuId, [deptLabel, areaLabel, apartadoLabel, pantallaLabel, cls.label]);
+                    });
                 });
             });
         });
