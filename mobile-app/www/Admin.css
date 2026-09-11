@@ -971,27 +971,29 @@ body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c4
     color: var(--color-text-secondary);
 }
 
-/* Árbol Maestro's own unified toolbar -- Moneda, the Árbol/Resumen toggle
-   and Guardar together in one flex-wrap row (confirmed with the user
-   after they saw Moneda and the toggle awkwardly stacked on two separate
-   rows): all of them share one row when there's room, and wrap onto more
-   rows as the screen narrows, instead of being 2 rigid separate blocks
-   that always stack regardless of how much width is actually available. */
+/* App-only unified toolbar (see AppAdminInicio.js's buildCurrencyGroup) --
+   Moneda and the Árbol/Resumen toggle together in one flex-wrap row
+   (confirmed with the user after they saw these awkwardly stacked on two
+   separate rows): both share one row when there's room, wrapping onto
+   their own row as the phone's screen narrows, instead of always
+   stacking regardless of how much width is actually available. Web
+   deliberately does NOT use this -- confirmed with the user this was
+   requested for the App only; Web keeps its own separate .admin-form-
+   actions/.currency-bar rows below exactly as they were. */
 .admin-toolbar{
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem;
 }
-/* Pushes whatever comes after it (Guardar) to the row's right edge when
-   everything fits on one line; a no-op once the row wraps, since there's
-   no trailing space left on an earlier line to push into. */
+/* Pushes whatever comes after it to the row's right edge when everything
+   fits on one line; a no-op once the row wraps, since there's no
+   trailing space left on an earlier line to push into. */
 .admin-toolbar-spacer{
     flex: 1 1 auto;
 }
-/* Árbol Maestro's own cost currency -- compact pill inside .admin-toolbar
-   above (see Admin-ArbolMaestro.js) + the exchange-rate confirmation
-   modal that opens when the <select> below changes. */
+/* Compact pill (icon+label+select) inside .admin-toolbar above -- App
+   only, see buildCurrencyGroup in AppAdminInicio.js. */
 .currency-group{
     display: flex;
     align-items: center;
@@ -1000,6 +1002,21 @@ body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c4
     border: 1px solid var(--color-border);
     border-radius: 999px;
     padding: 0.3rem 0.3rem 0.3rem 0.75rem;
+}
+
+/* Árbol Maestro's own cost currency on Web -- bar above the tree (see
+   Admin-ArbolMaestro.js) + the exchange-rate confirmation modal that
+   opens when the <select> below changes. */
+.currency-bar{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 0.8rem;
 }
 .currency-label{
     display: flex;
@@ -1021,10 +1038,11 @@ body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c4
     color: var(--color-accent);
     flex-shrink: 0;
 }
-/* Now a standalone caption below .admin-toolbar instead of sitting inline
-   inside the row -- it's descriptive text, not a control, so it doesn't
-   need to compete with Moneda/Árbol-Resumen/Guardar for the same row. */
-.currency-hint{
+.currency-hint{ font-size: 0.76rem; color: var(--color-text-secondary); }
+/* App-only standalone caption below .admin-toolbar (see loadMasterTree in
+   AppAdminInicio.js) -- not reusing .currency-hint above since that one's
+   an inline flex child of Web's own .currency-bar, a different context. */
+.admin-toolbar-hint{
     display: block;
     font-size: 0.76rem;
     color: var(--color-text-secondary);
@@ -1998,8 +2016,9 @@ body:has(.master-tree-panel) main{
    other screens) since only Árbol Maestro's rows are fixed-width like
    this. */
 .master-tree-panel .perm-tree-row{ min-width: max-content; }
-.master-tree-panel .admin-toolbar{
+.master-tree-panel .admin-form-actions{
     flex-shrink: 0;
+    margin: 0;
 }
 .master-tree-panel .admin-subtitle{
     flex-shrink: 0;

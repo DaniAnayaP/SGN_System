@@ -834,7 +834,7 @@ async function loadMasterTree(token) {
         contentEl.appendChild(toolbar);
 
         const currencyHint = document.createElement('span');
-        currencyHint.className = 'currency-hint';
+        currencyHint.className = 'admin-toolbar-hint';
         currencyHint.textContent = t('admin.masterCostCurrencyHint');
         contentEl.appendChild(currencyHint);
 
