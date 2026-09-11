@@ -1924,6 +1924,12 @@
                     costAppCell.className = 'perm-tree-mstatus-cost-cell';
                     costAppCell.appendChild(buildCostInput('app', cost.app));
                     controls.appendChild(costAppCell);
+                } else {
+                    // controls is right-aligned via margin-left:auto, so its
+                    // width has to stay constant regardless of showCost, or
+                    // Estatus (its first child) drifts left/right per row.
+                    controls.appendChild(document.createElement('div')).className = 'perm-tree-mstatus-cost-cell';
+                    controls.appendChild(document.createElement('div')).className = 'perm-tree-mstatus-cost-cell';
                 }
                 // Vista Previa/Navegar -- real preview (openPreviewModal
                 // above) only for a Pantalla whose own menu.json href is
