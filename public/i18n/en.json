@@ -371,6 +371,8 @@
     "businessSectorPreview": "Preview",
     "businessSectorStatus": "Status",
     "underConstruction": "This feature is under construction.",
+    "masterTreePreviewClose": "Close preview",
+    "masterTreePreviewNote": "Illustrative preview of this screen's real columns/fields, with example data -- not actual captured information.",
     "noBusinessSectors": "No business types yet. Add the first one above.",
     "sectorTreeColumn": "Permissions",
     "sectorTreeTitle": "Default access for this business type",

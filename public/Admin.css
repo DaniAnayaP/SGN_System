@@ -1693,6 +1693,164 @@ body.dark-mode .perm-tree-depth-2{
    guesswork, is what keeps it aligned under its own header regardless of
    content length or window size. */
 .perm-tree-mstatus-navigate-cell{ flex-shrink: 0; width: 2.2rem; display: flex; align-items: center; justify-content: center; }
+
+/* Vista Previa (see openPreviewModal in PermissionTree.js) -- built with
+   its own dedicated classes rather than reusing Web's .modal-overlay/
+   .modal-panel (Dashboard.css-only, never loaded by the App) or the App's
+   own bottom-sheet markup, since PermissionTree.js is shared by both and
+   needs one implementation that looks right on either. */
+.perm-preview-overlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 1000;
+}
+.perm-preview-panel{
+    background: var(--color-surface);
+    border-radius: 0.9rem;
+    box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.3);
+    max-width: 42rem;
+    width: 100%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.perm-preview-head{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.9rem 1.1rem;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+.perm-preview-head-icon{
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 0.6rem;
+    background: var(--color-bg);
+    color: var(--color-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+}
+.perm-preview-head-text{ flex: 1; min-width: 0; }
+.perm-preview-breadcrumb{ font-size: 0.68rem; color: var(--color-text-secondary); }
+.perm-preview-title{ font-size: 0.95rem; font-weight: 700; }
+.perm-preview-close{
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.perm-preview-toggle{
+    display: inline-flex;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    padding: 0.2rem;
+    gap: 0.15rem;
+    margin: 0.8rem 1.1rem 0;
+    align-self: flex-start;
+}
+.perm-preview-toggle button{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+}
+.perm-preview-toggle button.active{ background: var(--color-surface); color: var(--color-text-primary); }
+.perm-preview-body{ padding: 0.8rem 1.1rem 1.1rem; overflow-y: auto; }
+.perm-preview-note{
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+    background: var(--color-bg);
+    border: 1px dashed var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    margin: 0 0 0.8rem;
+}
+.perm-preview-table-scroll{ overflow-x: auto; border: 1px solid var(--color-border); border-radius: 0.5rem; }
+.perm-preview-table{ border-collapse: collapse; font-size: 0.72rem; white-space: nowrap; min-width: 100%; }
+.perm-preview-table th, .perm-preview-table td{
+    padding: 0.35rem 0.55rem;
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+}
+.perm-preview-table th:last-child, .perm-preview-table td:last-child{ border-right: none; }
+.perm-preview-band{
+    background: var(--color-column-system-band-bg, var(--color-bg));
+    color: var(--color-text-secondary);
+    font-weight: 700;
+    text-align: center;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+.perm-preview-band-plain{ background: var(--color-bg); }
+.perm-preview-col-head{ background: var(--color-bg); color: var(--color-text-secondary); font-weight: 700; }
+.perm-preview-example-row td{ color: var(--color-text-secondary); font-style: italic; }
+/* App tab -- a narrow phone-shaped card instead of a wide table, matching
+   how a real App capture screen actually looks (a scrollable list of
+   icon+label fields, not a data table -- see AppCargaCombustible.js's own
+   FIELDS/GROUPS pattern). Control Interno is excluded from this list (see
+   buildPreviewColumnGroups's own comment) since it's never something a
+   person fills in on either platform. */
+.perm-preview-app-wrap{ display: flex; justify-content: center; }
+.perm-preview-phone{
+    width: 16rem;
+    border: 1px solid var(--color-border);
+    border-radius: 1.1rem;
+    overflow: hidden;
+    background: var(--color-surface);
+}
+.perm-preview-phone-header{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.6rem 0.8rem;
+}
+.perm-preview-phone-body{
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 20rem;
+    overflow-y: auto;
+}
+.perm-preview-phone-field{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    padding: 0.5rem 0.6rem;
+}
+.perm-preview-phone-field-icon{ color: var(--color-text-secondary); font-size: 0.85rem; flex-shrink: 0; }
+.perm-preview-phone-field-label{ font-size: 0.72rem; color: var(--color-text-primary); }
 .perm-tree-mstatus-badge{
     display: flex;
     align-items: center;

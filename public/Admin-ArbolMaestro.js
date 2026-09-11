@@ -216,6 +216,18 @@ function buildResumenGroups() {
         const status = statusByKey.get(`${sectionId}::${itemId || ''}::${submenuId || ''}`) || 'habilitado';
         insertResumenPath(groups[status] || groups.habilitado, path);
     };
+    // 'main' ("General") and its own Inicio/Panel/Tablero items are
+    // excluded from getDepartmentOrder (never reorderable, never a real
+    // Área) -- but 'main' still has its own status like any other node, so
+    // it needs its own separate push here or it never appears in ANY
+    // Resumen card no matter what its actual status is (confirmed live: an
+    // Inhabilitado "General" still showed 0 across every card).
+    const mainLabel = masterTree.getNodeLabel('main', null, null) || 'main';
+    push('main', null, null, [mainLabel]);
+    masterTree.getGeneralItemIds().forEach((itemId) => {
+        const itemLabel = masterTree.getNodeLabel('main', itemId, null) || itemId;
+        push('main', itemId, null, [mainLabel, itemLabel]);
+    });
     masterTree.getDepartmentOrder().forEach((sectionId) => {
         const deptLabel = masterTree.getNodeLabel(sectionId, null, null) || sectionId;
         push(sectionId, null, null, [deptLabel]);

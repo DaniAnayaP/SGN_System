@@ -1094,6 +1094,181 @@
             return header;
         }
 
+        // Vista Previa/Navegar -- Pantalla rows only (see the previewInfo
+        // param on statusRow below). Confirmed with the user: a pantalla
+        // that's already built for real (its own menu.json href is
+        // something other than '#') gets an actual preview; anything still
+        // unbuilt keeps the plain "under construction" toast every row
+        // already had. Walks the exact same submenu structure
+        // renderStatusTableColumns already walks for the checkbox tree --
+        // no separate preview data to maintain per screen, it's just the
+        // catalog's own column definitions. includeSystem=false drops the
+        // "Control Interno" classification -- those 13 columns are always
+        // auto-filled, never something a person actually fills in on
+        // either platform, so the App tab (which previews the CAPTURE
+        // form, not a read-only table) excludes them; the Web tab keeps
+        // them since the real Web table always shows them too.
+        function buildPreviewColumnGroups(subSm, includeSystem) {
+            const groups = [];
+            let plainGroup = null;
+            (subSm.submenu || []).forEach((entry) => {
+                if (entry.isClassification) {
+                    if (!includeSystem && entry.id === 'class-control-interno') return;
+                    groups.push({
+                        bandLabel: t(entry.labelKey, entry.labelParams),
+                        columns: (entry.submenu || []).map((col) => t(col.labelKey, col.labelParams)),
+                    });
+                    return;
+                }
+                if (!plainGroup) {
+                    plainGroup = { bandLabel: null, columns: [] };
+                    groups.push(plainGroup);
+                }
+                plainGroup.columns.push(t(entry.labelKey, entry.labelParams));
+            });
+            return groups;
+        }
+
+        function buildPreviewWebTable(subSm) {
+            const groups = buildPreviewColumnGroups(subSm, true);
+            const scroll = document.createElement('div');
+            scroll.className = 'perm-preview-table-scroll';
+            const table = document.createElement('table');
+            table.className = 'perm-preview-table';
+            const thead = document.createElement('thead');
+            const bandRow = document.createElement('tr');
+            const colRow = document.createElement('tr');
+            let totalCols = 0;
+            groups.forEach((group) => {
+                const bandTh = document.createElement('th');
+                bandTh.colSpan = group.columns.length;
+                bandTh.className = group.bandLabel ? 'perm-preview-band' : 'perm-preview-band perm-preview-band-plain';
+                bandTh.textContent = group.bandLabel || '';
+                bandRow.appendChild(bandTh);
+                group.columns.forEach((label) => {
+                    const colTh = document.createElement('th');
+                    colTh.className = 'perm-preview-col-head';
+                    colTh.textContent = label;
+                    colRow.appendChild(colTh);
+                    totalCols += 1;
+                });
+            });
+            thead.append(bandRow, colRow);
+            table.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            for (let r = 0; r < 2; r++) {
+                const tr = document.createElement('tr');
+                tr.className = 'perm-preview-example-row';
+                for (let c = 0; c < totalCols; c++) {
+                    const td = document.createElement('td');
+                    td.textContent = '···';
+                    tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            }
+            table.appendChild(tbody);
+            scroll.appendChild(table);
+            return scroll;
+        }
+
+        function buildPreviewAppMock(subSm, previewInfo) {
+            const groups = buildPreviewColumnGroups(subSm, false);
+            const phone = document.createElement('div');
+            phone.className = 'perm-preview-phone';
+            const header = document.createElement('div');
+            header.className = 'perm-preview-phone-header';
+            header.innerHTML = `<i class="bx ${previewInfo.icon || 'bx-window'}" aria-hidden="true"></i><span>${previewInfo.label}</span>`;
+            const body = document.createElement('div');
+            body.className = 'perm-preview-phone-body';
+            groups.forEach((group) => {
+                group.columns.forEach((label) => {
+                    const field = document.createElement('div');
+                    field.className = 'perm-preview-phone-field';
+                    field.innerHTML = '<span class="perm-preview-phone-field-icon"><i class="bx bx-pencil" aria-hidden="true"></i></span>'
+                        + `<span class="perm-preview-phone-field-label">${label}</span>`;
+                    body.appendChild(field);
+                });
+            });
+            phone.append(header, body);
+            return phone;
+        }
+
+        // previewInfo = { label, breadcrumb, icon, node } -- node is the raw
+        // menu.json pantalla object (has .href and .submenu), only ever
+        // passed for depth-3 (Pantalla) rows, see renderStatusTree.
+        function openPreviewModal(previewInfo) {
+            const overlay = document.createElement('div');
+            overlay.className = 'perm-preview-overlay';
+            const panel = document.createElement('div');
+            panel.className = 'perm-preview-panel';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-modal', 'true');
+
+            const head = document.createElement('div');
+            head.className = 'perm-preview-head';
+            const headIcon = document.createElement('span');
+            headIcon.className = 'perm-preview-head-icon';
+            headIcon.innerHTML = `<i class="bx ${previewInfo.icon || 'bx-window'}" aria-hidden="true"></i>`;
+            const headText = document.createElement('div');
+            headText.className = 'perm-preview-head-text';
+            const crumb = document.createElement('div');
+            crumb.className = 'perm-preview-breadcrumb';
+            crumb.textContent = previewInfo.breadcrumb;
+            const title = document.createElement('div');
+            title.className = 'perm-preview-title';
+            title.textContent = previewInfo.label;
+            headText.append(crumb, title);
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'perm-preview-close';
+            closeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+            closeBtn.setAttribute('aria-label', t('admin.masterTreePreviewClose'));
+            head.append(headIcon, headText, closeBtn);
+
+            const toggle = document.createElement('div');
+            toggle.className = 'perm-preview-toggle';
+            const webBtn = document.createElement('button');
+            webBtn.type = 'button';
+            webBtn.className = 'active';
+            webBtn.innerHTML = `<i class="bx bx-desktop" aria-hidden="true"></i><span>${t('admin.masterTreePlatformWeb')}</span>`;
+            const appBtn = document.createElement('button');
+            appBtn.type = 'button';
+            appBtn.innerHTML = `<i class="bx bx-mobile-alt" aria-hidden="true"></i><span>${t('admin.masterTreePlatformApp')}</span>`;
+            toggle.append(webBtn, appBtn);
+
+            const body = document.createElement('div');
+            body.className = 'perm-preview-body';
+            const note = document.createElement('p');
+            note.className = 'perm-preview-note';
+            note.textContent = t('admin.masterTreePreviewNote');
+            const content = document.createElement('div');
+
+            function showWeb() {
+                webBtn.classList.add('active');
+                appBtn.classList.remove('active');
+                content.innerHTML = '';
+                content.appendChild(buildPreviewWebTable(previewInfo.node));
+            }
+            function showApp() {
+                appBtn.classList.add('active');
+                webBtn.classList.remove('active');
+                content.innerHTML = '';
+                content.className = 'perm-preview-app-wrap';
+                content.appendChild(buildPreviewAppMock(previewInfo.node, previewInfo));
+            }
+            webBtn.addEventListener('click', () => { content.className = ''; showWeb(); });
+            appBtn.addEventListener('click', showApp);
+
+            body.append(note, content);
+            panel.append(head, toggle, body);
+            overlay.appendChild(panel);
+            function close() { overlay.remove(); }
+            closeBtn.addEventListener('click', close);
+            overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+            document.body.appendChild(overlay);
+            showWeb();
+        }
+
         // -------------------------------------------------------------
         // statusMode rendering (Árbol de Permisos Maestro) -- an entirely
         // separate, parallel walk of the SAME sectionsData tree built by
@@ -1107,7 +1282,7 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, showCost) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, showCost, previewInfo) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             // Drag-to-reorder -- Árbol Maestro only. dragCtx is
@@ -1298,12 +1473,15 @@
                     costAppCell.appendChild(buildCostInput('app', cost.app));
                     controls.appendChild(costAppCell);
                 }
-                // Vista Previa/Navegar -- a stub for now (just an "under
-                // construction" toast), same as the identical icon already
-                // shipped on Nuestros Sectores de Negocio's own Acciones
-                // column. Reuses .perm-tree-mstatus-nest-btn's exact look
-                // (a small square icon button) rather than adding a new
-                // button style for one icon.
+                // Vista Previa/Navegar -- real preview (openPreviewModal
+                // above) only for a Pantalla whose own menu.json href is
+                // already a real page; everything else (Departamento/Área/
+                // Apartado, or a Pantalla still on href:'#') keeps the
+                // plain "under construction" toast, same as the identical
+                // icon already shipped on Nuestros Sectores de Negocio's
+                // own Acciones column. Reuses .perm-tree-mstatus-nest-btn's
+                // exact look (a small square icon button) rather than
+                // adding a new button style for one icon.
                 const navigateCell = document.createElement('div');
                 navigateCell.className = 'perm-tree-mstatus-navigate-cell';
                 const navigateBtn = document.createElement('button');
@@ -1312,7 +1490,9 @@
                 navigateBtn.title = t('admin.businessSectorPreview');
                 navigateBtn.setAttribute('aria-label', t('admin.businessSectorPreview'));
                 navigateBtn.innerHTML = '<i class="bx bx-compass" aria-hidden="true"></i>';
+                const canPreview = !!(previewInfo && previewInfo.node && previewInfo.node.href && previewInfo.node.href !== '#');
                 navigateBtn.addEventListener('click', () => {
+                    if (canPreview) { openPreviewModal(previewInfo); return; }
                     const message = t('admin.underConstruction');
                     if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'info');
                     else if (typeof window.showToast === 'function') window.showToast(message);
@@ -1888,13 +2068,23 @@
                             const pantallaDragCtx = (isRealArea && !subSm.standalone)
                                 ? { kind: 'pantalla', id: subSm.id, scope: pantallaScope, onDrop: (draggedId, targetId) => reorderPantallas(section.id, item.id, sm.id, draggedId, targetId) }
                                 : null;
+                            // Vista Previa only for a real Pantalla node (not
+                            // a standalone Departamento/Área/C.Costos button
+                            // displayed nested here -- those aren't a table/
+                            // form screen with a column structure to preview).
+                            const previewInfo = subSm.standalone ? null : {
+                                label: t(subSm.labelKey, subSm.labelParams),
+                                breadcrumb: `${t(sectionLabelKey(section))} › ${t(item.labelKey, item.labelParams)} › ${t(sm.labelKey, sm.labelParams)}`,
+                                icon: subSm.icon,
+                                node: subSm,
+                            };
                             treeRoot.appendChild(statusRow(t(subSm.labelKey, subSm.labelParams), 3, key, subHasDetail ? {
                                 expanded: subDetailExpanded,
                                 onToggle: () => {
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null, null, null, subSmAncestorLocked, pantallaDragCtx, true));
+                            } : null, null, null, subSmAncestorLocked, pantallaDragCtx, true, previewInfo));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
                                 if (subSm.submenu && subSm.submenu.length) {
@@ -2419,6 +2609,21 @@
             // whatever the last create() call built, harmless either way).
             getDepartmentOrder() {
                 return sectionsData.filter((s) => s.id !== 'main').map((s) => s.id);
+            },
+            // 'main' itself (labeled "General") and its own Inicio/Panel/
+            // Tablero items are excluded from getDepartmentOrder/
+            // getAreaOrders/etc above (never reorderable, never a real
+            // Área) -- but 'main' still has its OWN status like any other
+            // node, set the same way via its row's Estatus select. A
+            // caller that walks getDepartmentOrder alone to enumerate every
+            // node (Admin-ArbolMaestro.js's Resumen view) needs this too,
+            // or 'main' silently never appears in ANY status group there,
+            // no matter what its actual status is -- confirmed live: an
+            // Inhabilitado "General" still showed as 0 across every
+            // Resumen card.
+            getGeneralItemIds() {
+                const mainSection = sectionsData.find((s) => s.id === 'main');
+                return mainSection ? mainSection.items.map((i) => i.id) : [];
             },
             // statusMode only -- current Área order for EVERY department at
             // once, keyed by department sectionId (same shape the areaOrder
