@@ -2286,8 +2286,8 @@ body.dark-mode .perm-tree-mstatus-rollup-partial{
    statusMode's own rollup icons, just recolored per state instead of by
    full/partial/empty. */
 .perm-tree-gate-icon{
-    width: 1.65rem;
-    height: 1.65rem;
+    width: 1.5rem;
+    height: 1.5rem;
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -2335,27 +2335,6 @@ body.dark-mode .perm-tree-gate-icon-granted{
 body.dark-mode .perm-tree-gate-icon-blocked{
     background: color-mix(in srgb, #e37b73 18%, transparent);
     color: #e37b73;
-}
-.perm-tree-gate-controls{
-    gap: 0.5rem;
-}
-.perm-tree-gate-legend{
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.9rem;
-    margin: 0.4rem 0 0.8rem;
-    font-size: 0.72rem;
-    color: var(--color-text-secondary);
-}
-.perm-tree-gate-legend-item{
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-.perm-tree-gate-legend-item .perm-tree-gate-icon{
-    width: 1.15rem;
-    height: 1.15rem;
-    pointer-events: none;
 }
 /* Re-skinned per its own current value (see the
    perm-tree-mstatus-select-<status> modifier classes below) instead of the

@@ -1233,18 +1233,6 @@ function renderSectorTree(sector) {
         sectorSubView = { mode: 'detail', sector };
         renderSectorSubView();
     }));
-    // Cross-link to the read-only "Permisos asignados" breakdown -- same
-    // reasoning as the Web version's #sector-tree-view-perms: the Resumen/
-    // Árbol toggle only ever lived on that other sub-view, hard to find
-    // from here otherwise.
-    const viewPermsBtn = document.createElement('button');
-    viewPermsBtn.type = 'button';
-    viewPermsBtn.className = 'home-carga-secondary-btn';
-    viewPermsBtn.style.marginBottom = '0.7rem';
-    viewPermsBtn.innerHTML = `<i class="bx bx-pie-chart-alt" aria-hidden="true"></i><span>${t('admin.businessSectorViewPerms')}</span>`;
-    viewPermsBtn.addEventListener('click', () => { sectorSubView = { mode: 'perms', sector }; renderSectorSubView(); });
-    contentEl.appendChild(viewPermsBtn);
-
     const treeWrap = document.createElement('div');
     // grantMode 'giro' -- same replica of Árbol de Permisos Maestro's own
     // tree shell as the Web version (Admin-BusinessSectors.js), gated by
@@ -1262,16 +1250,23 @@ function renderSectorTree(sector) {
     let sectorTreeInstance = null;
     (async () => {
         try {
-            const [grantsRes, statusRes] = await Promise.all([
+            const [grantsRes, statusRes, costsRes] = await Promise.all([
                 fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/grants`), { credentials: 'include' }),
                 fetch(apiUrl('/api/admin/master-permission-status'), { credentials: 'include' }),
+                fetch(apiUrl('/api/admin/master-permission-costs'), { credentials: 'include' }),
             ]);
-            if (!grantsRes.ok || !statusRes.ok) throw new Error('load failed');
+            if (!grantsRes.ok || !statusRes.ok || !costsRes.ok) throw new Error('load failed');
             const grantsData = await grantsRes.json();
             const statusData = await statusRes.json();
+            const costsData = await costsRes.json();
             if (sectorSubView.mode !== 'tree' || sectorSubView.sector.id !== sector.id) return;
             treeWrap.innerHTML = '';
-            sectorTreeInstance = window.PermissionTree.create(treeWrap, { grantMode: 'giro', masterGate: statusData.statuses || [] });
+            sectorTreeInstance = window.PermissionTree.create(treeWrap, {
+                grantMode: 'giro',
+                masterGate: statusData.statuses || [],
+                masterCosts: costsData.costs || [],
+                costCurrency: costsData.currency || 'MXN',
+            });
             await sectorTreeInstance.init(grantsData.grants || []);
         } catch {
             treeWrap.innerHTML = '';

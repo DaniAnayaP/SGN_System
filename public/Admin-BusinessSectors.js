@@ -429,14 +429,21 @@ async function openSectorTreeModal(sector) {
     sectorTreeContainer.innerHTML = '';
     sectorTreeModal.hidden = false;
     try {
-        const [grantsRes, statusRes] = await Promise.all([
+        const [grantsRes, statusRes, costsRes] = await Promise.all([
             fetch(`/api/admin/business-sectors/${sector.id}/grants`, { credentials: 'include' }),
             fetch('/api/admin/master-permission-status', { credentials: 'include' }),
+            fetch('/api/admin/master-permission-costs', { credentials: 'include' }),
         ]);
-        if (!grantsRes.ok || !statusRes.ok) throw new Error('load failed');
+        if (!grantsRes.ok || !statusRes.ok || !costsRes.ok) throw new Error('load failed');
         const grantsData = await grantsRes.json();
         const statusData = await statusRes.json();
-        sectorTree = window.PermissionTree.create(sectorTreeContainer, { grantMode: 'giro', masterGate: statusData.statuses || [] });
+        const costsData = await costsRes.json();
+        sectorTree = window.PermissionTree.create(sectorTreeContainer, {
+            grantMode: 'giro',
+            masterGate: statusData.statuses || [],
+            masterCosts: costsData.costs || [],
+            costCurrency: costsData.currency || 'MXN',
+        });
         await sectorTree.init(grantsData.grants || []);
     } catch {
         sectorTreeError.textContent = Dashboard.t('admin.loadError');
@@ -451,23 +458,6 @@ function closeSectorTreeModal() {
 }
 sectorTreeCloseBtn.addEventListener('click', closeSectorTreeModal);
 sectorTreeModal.addEventListener('click', (event) => { if (event.target === sectorTreeModal) closeSectorTreeModal(); });
-
-// Cross-link to the read-only "Permisos asignados" breakdown -- confirmed
-// live that without this, the Resumen/Árbol toggle (which only ever lived
-// on that other screen, opened from the color dots) was hard to find from
-// here. Not a merge of the two screens (that would mean adding a read-only
-// Estatus badge to this tree's own rows, which needs threading a status
-// lookup through every buildRow() call site in PermissionTree.js -- shared
-// by Business-Roles/Business-Accesos/AppRoles too, left for its own
-// carefully-tested pass instead of rushing it here) -- just a direct path
-// between the two.
-document.getElementById('sector-tree-view-perms').addEventListener('click', () => {
-    if (!selectedSectorId) return;
-    const sector = sectors.find((s) => s.id === selectedSectorId);
-    if (!sector) return;
-    closeSectorTreeModal();
-    openSectorPermsModal(sector);
-});
 
 sectorTreeSaveBtn.addEventListener('click', async () => {
     if (!selectedSectorId || !sectorTree) return;

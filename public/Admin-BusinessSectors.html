@@ -494,27 +494,20 @@
         </div>
     </div>
 
-    <!-- "Accesos Globales" -- a replica of Árbol de Permisos Maestro's own
-         full-depth tree (same order, same Departamento..Ícono/grant-level
-         structure), but as a Web/App SELECTION gated by whatever Árbol
-         Maestro currently allows (grantMode:'giro' in PermissionTree.js) --
-         not the old ungated checkbox tree this replaced. No reorder here
+    <!-- "Accesos Globales" -- literally the same tree Árbol de Permisos
+         Maestro renders (same header, same full Departamento..grant-level
+         structure/order), with its Estatus/cost editing controls swapped
+         for a Web/App selection gated by whatever Árbol Maestro currently
+         allows (grantMode:'giro' in PermissionTree.js). No reorder here
          (that's Reorden Personalizado, see sector-order-modal below); a
          blocked icon is still clickable, it just shows why instead of
-         toggling (see buildGateIcon). -->
+         toggling (see buildGateIcon). Confirmed with the user: nothing
+         else on this screen -- no extra hint text, no legend, no link to
+         the old flat Permisos Asignados summary. -->
     <div class="modal-overlay" id="sector-tree-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-tree-modal-title" style="max-width: 48rem;">
             <h3 id="sector-tree-modal-title" data-i18n="admin.giroAccesosGlobalesTitle">Global Access</h3>
-            <p class="admin-hint" data-i18n="admin.sectorTreeHint">A new Plan aimed at this sector starts with exactly this — from there each Plan can add or remove on its own.</p>
-            <div class="perm-tree-gate-legend">
-                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-granted"></span><span data-i18n="admin.giroGateLegendGranted">Granted</span></span>
-                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-partial"></span><span data-i18n="admin.giroGateLegendPartial">Partial</span></span>
-                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-available"></span><span data-i18n="admin.giroGateLegendAvailable">Available, not granted</span></span>
-                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-needs-web"></span><span data-i18n="admin.giroGateLegendNeedsWeb">App needs Web first</span></span>
-                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-blocked"></span><span data-i18n="admin.giroGateLegendBlocked">Blocked by Master Tree</span></span>
-            </div>
-            <button type="button" class="admin-link-btn" id="sector-tree-view-perms" data-i18n="admin.businessSectorViewPerms">See summary / status of this sector's access</button>
-            <div id="sector-tree-container"></div>
+            <div id="sector-tree-container" class="perm-tree"></div>
             <div id="sector-tree-error" class="admin-error" role="alert" hidden></div>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
                 <button type="button" class="btn" id="sector-tree-save" data-i18n="admin.save">Save</button>
