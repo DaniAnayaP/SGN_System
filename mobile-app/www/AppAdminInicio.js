@@ -22,9 +22,61 @@ function t(key, params = {}) {
     if (typeof value !== 'string') return key;
     return value.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? `{${name}}`);
 }
-// PermissionTree.js's only Dashboard.js dependency -- see AppRoles.js for
-// the same shim.
-window.Dashboard = { t };
+// PermissionTree.js's two Dashboard.js dependencies -- t (see AppRoles.js
+// for the same shim) and, since Árbol Maestro's "aplicar Estatus a
+// anidados" button needs a yes/no answer before overwriting a whole
+// subtree, confirm (see simpleConfirm below -- this App's own bottom-sheet
+// equivalent of Dashboard.js's confirmDialog on Web).
+window.Dashboard = { t, confirm: simpleConfirm };
+
+// Same singleton-overlay idea as Dashboard.js's ensureConfirmModal/
+// confirmDialog, just built from this App's own bottom-sheet vocabulary
+// (home-sheet-overlay/home-sheet, same classes admin-confirm-overlay
+// already uses below) instead of a desktop modal.
+function ensureSimpleConfirmSheet() {
+    let overlay = document.getElementById('simple-confirm-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'simple-confirm-overlay';
+    overlay.className = 'home-sheet-overlay';
+    overlay.hidden = true;
+    overlay.innerHTML = `
+        <div class="home-sheet" role="dialog" aria-modal="true" aria-labelledby="simple-confirm-title">
+            <div class="home-sheet-handle"></div>
+            <h3 class="home-sheet-title" id="simple-confirm-title"></h3>
+            <div class="admin-confirm-actions">
+                <button type="button" class="home-carga-new-btn" id="simple-confirm-accept"></button>
+                <button type="button" class="home-carga-secondary-btn" id="simple-confirm-cancel"></button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    return overlay;
+}
+function simpleConfirm(message) {
+    return new Promise((resolve) => {
+        const overlay = ensureSimpleConfirmSheet();
+        overlay.querySelector('#simple-confirm-title').textContent = message;
+        const acceptBtn = overlay.querySelector('#simple-confirm-accept');
+        const cancelBtn = overlay.querySelector('#simple-confirm-cancel');
+        acceptBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.confirmAccept')}</span>`;
+        cancelBtn.innerHTML = `<span>${t('admin.cancel')}</span>`;
+        const done = (result) => {
+            overlay.hidden = true;
+            acceptBtn.removeEventListener('click', onAccept);
+            cancelBtn.removeEventListener('click', onCancel);
+            overlay.removeEventListener('click', onBackdrop);
+            resolve(result);
+        };
+        const onAccept = () => done(true);
+        const onCancel = () => done(false);
+        const onBackdrop = (event) => { if (event.target === overlay) done(false); };
+        acceptBtn.addEventListener('click', onAccept);
+        cancelBtn.addEventListener('click', onCancel);
+        overlay.addEventListener('click', onBackdrop);
+        overlay.hidden = false;
+    });
+}
 
 async function loadLanguage() {
     const stored = localStorage.getItem('lang');

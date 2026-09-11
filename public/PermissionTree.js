@@ -385,6 +385,17 @@
         // plan_permission_costs/PermissionCostTree.js never price those
         // either.
         let costMap = new Map();
+        // key -> [child keys] for EVERY node in sectionsData, rebuilt at the
+        // top of every renderStatusTree() call (see buildStatusChildrenMap
+        // below) -- lets "aplicar Estatus a anidados" (applyNestedStatus)
+        // find every real descendant of a clicked node regardless of
+        // expand/collapse state. Deliberately separate from leafKeys
+        // (leafKeysUnder/leafKeysUnderSm), which only ever enumerate LEAF
+        // nodes for the Web/App rollup/cascade -- Estatus is set
+        // independently on every level (Departamento/Área/Apartado/
+        // Pantalla/Columna all have their own selector), so cascading it
+        // needs every intermediate node's key too, not just leaves.
+        let statusChildrenMap = new Map();
         // key -> the human label shown on that row, filled in as
         // statusRow renders each one -- lets a caller (Admin-ArbolMaestro.js's
         // confirm-changes screen) turn a bare {sectionId,itemId,submenuId}
@@ -1870,6 +1881,27 @@
                 statusCell.className = 'perm-tree-mstatus-status-cell';
                 statusCell.appendChild(buildStatusBadgeSelect(key));
                 controls.appendChild(statusCell);
+                // "Aplicar Estatus a anidados" -- own fixed-width cell
+                // (never inside statusCell itself, which applyStatusAbbreviations
+                // sizes to fit only the select's own text) so this button
+                // can't fight that ladder's own width math. Always rendered
+                // (empty when this node has no descendants -- see
+                // hasStatusChildren) so every row's total controls width
+                // stays constant, same "empty placeholder" fix as the cost
+                // cells above.
+                const statusNestCell = document.createElement('div');
+                statusNestCell.className = 'perm-tree-mstatus-status-nest-cell';
+                if (!readOnly && hasStatusChildren(key)) {
+                    const statusNestBtn = document.createElement('button');
+                    statusNestBtn.type = 'button';
+                    statusNestBtn.className = 'perm-tree-mstatus-nest-btn';
+                    statusNestBtn.title = t('admin.masterTreeApplyNestedStatus');
+                    statusNestBtn.setAttribute('aria-label', statusNestBtn.title);
+                    statusNestBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+                    statusNestBtn.addEventListener('click', () => applyNestedStatus(key));
+                    statusNestCell.appendChild(statusNestBtn);
+                }
+                controls.appendChild(statusNestCell);
                 // Fixed-width cell (matches perm-tree-mstatus-header-
                 // platforms exactly) instead of letting the two platform
                 // groups just sit at whatever width their own content
@@ -2136,10 +2168,11 @@
             // 4.3rem leading allowance (matches the header's own spacer) +
             // the label column + the fixed 13rem Web·App column + the
             // Navegar icon column (~2.2rem, fixed -- an icon button never
-            // needs its own abbreviation step) + ~3rem of slack for gaps/
-            // padding/the select's own native dropdown arrow -- everything
-            // Estatus always shares its line with.
-            const fixedNeighbors = (4.3 * rootFontPx) + labelColWidth + (13 * rootFontPx) + (2.2 * rootFontPx) + (3 * rootFontPx);
+            // needs its own abbreviation step) + the "aplicar a anidados"
+            // icon column (~1.4rem, same reasoning) + ~3rem of slack for
+            // gaps/padding/the select's own native dropdown arrow --
+            // everything Estatus always shares its line with.
+            const fixedNeighbors = (4.3 * rootFontPx) + labelColWidth + (13 * rootFontPx) + (2.2 * rootFontPx) + (1.4 * rootFontPx) + (3 * rootFontPx);
             const available = Math.max(treeRoot.clientWidth - fixedNeighbors, 0);
 
             let step = 0;
@@ -2486,6 +2519,13 @@
             const status = document.createElement('span');
             status.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status';
             status.textContent = t('admin.masterTreeColStatus');
+            // Icon-only, matches the navigate column's own convention --
+            // sits right after Estatus, same spot the "aplicar a anidados"
+            // button itself renders on group rows (see statusRow).
+            const applyNestedStatusHeader = document.createElement('span');
+            applyNestedStatusHeader.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status-nest';
+            applyNestedStatusHeader.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+            applyNestedStatusHeader.title = t('admin.masterTreeColApplyNested');
             const platforms = document.createElement('span');
             platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
             platforms.textContent = t('admin.masterTreeColPlatforms');
@@ -2512,9 +2552,96 @@
             // (often much wider) available width on their own.
             const controls = document.createElement('div');
             controls.className = 'perm-tree-mstatus-header-controls';
-            controls.append(status, platforms, costWeb, costApp, navigate);
+            controls.append(status, applyNestedStatusHeader, platforms, costWeb, costApp, navigate);
             header.append(spacer, label, controls);
             return header;
+        }
+
+        // Rebuilds statusChildrenMap (key -> [child keys]) by walking
+        // sectionsData exactly the same way renderStatusTree/
+        // renderStatusTableColumns/renderStatusClassification/
+        // renderStatusIcons themselves do, branch for branch -- so it
+        // covers every node regardless of whether it's currently expanded.
+        // A standalone node (subSm.standalone, e.g. btn-salir nested inside
+        // "Configuración de Botones") gets its OWN unrelated key (see
+        // statusRow's key computation in renderStatusTree) instead of one
+        // nested under its visual parent's tuple -- tracking real
+        // parent -> child EDGES here (rather than reconstructing "is this a
+        // descendant" from the key strings afterward) is what still finds
+        // it correctly.
+        function buildStatusChildrenMap() {
+            const map = new Map();
+            const addChild = (parentKey, childKey) => {
+                if (!map.has(parentKey)) map.set(parentKey, []);
+                map.get(parentKey).push(childKey);
+            };
+            sectionsData.forEach((section) => {
+                const sectionKey = keyOf(section.id, null, null);
+                (section.items || []).forEach((item) => {
+                    const itemKey = keyOf(section.id, item.id, null);
+                    addChild(sectionKey, itemKey);
+                    (item.submenu || []).forEach((sm) => {
+                        const smKey = keyOf(section.id, item.id, sm.id);
+                        addChild(itemKey, smKey);
+                        if (!sm.submenu || !sm.submenu.length) return;
+                        sm.submenu.forEach((subSm) => {
+                            const subKey = subSm.standalone
+                                ? keyOf(section.id, subSm.id, null)
+                                : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
+                            addChild(smKey, subKey);
+                            (subSm.submenu || []).forEach((entry) => {
+                                if (entry.isClassification) {
+                                    (entry.submenu || []).forEach((col) => {
+                                        addChild(subKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}/${col.id}`));
+                                    });
+                                    return;
+                                }
+                                addChild(subKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`));
+                            });
+                            (subSm.iconsSubmenu || []).forEach((icon) => {
+                                addChild(subKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`));
+                            });
+                        });
+                    });
+                });
+            });
+            return map;
+        }
+        function hasStatusChildren(key) {
+            return !!(statusChildrenMap.get(key) || []).length;
+        }
+        // Depth-first flatten of everything under key, via the SAME edges
+        // buildStatusChildrenMap just recorded -- correct regardless of
+        // collapse state since it never touches expandedSections/
+        // expandedItems, only sectionsData's own real structure.
+        function collectDescendantStatusKeys(rootKey) {
+            const result = [];
+            (function walk(key) {
+                (statusChildrenMap.get(key) || []).forEach((childKey) => {
+                    result.push(childKey);
+                    walk(childKey);
+                });
+            })(rootKey);
+            return result;
+        }
+        // "Aplicar Estatus a anidados" -- same one-directional, only-ever-
+        // writes-downward idea as applyNestedPlatform above, just copying
+        // the Estatus select instead of a Web/App checkbox, and onto EVERY
+        // descendant (any depth, any kind) instead of only leafKeys. Asks
+        // first (unlike applyNestedPlatform) since a single click here can
+        // silently overwrite the Estatus of a much larger, often-collapsed
+        // subtree the admin never actually looked at before confirming.
+        async function applyNestedStatus(key) {
+            const descendantKeys = collectDescendantStatusKeys(key);
+            if (!descendantKeys.length) return;
+            const confirmFn = (window.Dashboard && window.Dashboard.confirm) || window.confirm;
+            const message = t('admin.masterTreeApplyNestedStatusConfirm', { count: String(descendantKeys.length) });
+            if (!(await confirmFn(message))) return;
+            const value = getNodeState(key).status;
+            descendantKeys.forEach((descKey) => {
+                setNodeState(descKey, { ...getNodeState(descKey), status: value });
+            });
+            renderStatusTree();
         }
 
         // ancestorLocked cascades one level at a time: each node's own
@@ -2523,6 +2650,7 @@
         // down, never mutated, so re-enabling an ancestor's Web instantly
         // un-locks everything under it back to whatever was already there.
         function renderStatusTree() {
+            statusChildrenMap = buildStatusChildrenMap();
             treeRoot.innerHTML = '';
             treeRoot.appendChild(buildStatusTreeHeader());
             sectionsData.forEach((section) => {

@@ -1636,6 +1636,19 @@ body.dark-mode .perm-tree-depth-2{
     display: flex;
     justify-content: center;
 }
+/* "Aplicar Estatus a anidados" -- own fixed column, same width as the
+   button itself (1.4rem, matching perm-tree-mstatus-nest-btn), always
+   rendered (empty on a row with no descendants) so it never disturbs
+   perm-tree-mstatus-status-cell's own ladder-driven width (see the
+   comment in statusRow, PermissionTree.js). */
+.perm-tree-mstatus-status-nest-cell{
+    flex-shrink: 0;
+    width: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.perm-tree-mstatus-header-status-nest{ width: 1.4rem; }
 /* Fixed column, matching perm-tree-mstatus-header-platforms's own width
    exactly -- see the comment in statusRow (PermissionTree.js) on why a
    real matching-width column (not margin-left:auto flush-right) is what
