@@ -729,6 +729,13 @@
         // canDeleteColumn in db.js for what actually reads this leaf.
         const COLUMN_ELIMINAR = { id: 'eliminar', labelKey: 'main.permEliminar' };
         const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash' };
+        // statusMode only -- the same 4 non-"Solo Ver" levels above (Ver y
+        // Operar/Editar/Autorizar/Eliminar), each now also its own
+        // independent Estatus/Web·App/$ cost row one level under its own
+        // Columna (see renderStatusColumn) -- confirmed with the user: no
+        // exceptions anywhere in the tree. Solo Ver stays the implicit
+        // baseline, never its own row here either, same as the grant tree.
+        const COLUMN_STATUS_LEVELS = [...COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver'), COLUMN_AUTHORIZE, COLUMN_ELIMINAR];
 
         // Ver y Operar/Editar/Autorizar as one connected row instead of 3
         // stacked plain checkboxes — the user's own complaint looking at
@@ -2044,6 +2051,12 @@
                 // segment (see renderStatusIcons) -- a fixed, generic label
                 // (not derived from node, unlike __table__ above).
                 if (segments[i] === '__icons__') return t('menu.iconsPersonalization');
+                // A Columna's own level (see COLUMN_STATUS_LEVELS above) --
+                // node is already the Columna at this point (it has no real
+                // submenu of its own, these levels are plain UI checkboxes,
+                // never menu.json data), always the last segment.
+                const level = COLUMN_STATUS_LEVELS.find((l) => l.id === segments[i]);
+                if (level) return `${t(node.labelKey, node.labelParams)} — ${t(level.labelKey)}`;
                 node = (node.submenu || []).find((entry) => entry.id === segments[i]);
             }
             return node ? t(node.labelKey, node.labelParams) : '';
@@ -2427,6 +2440,16 @@
                 onDrop: (draggedId, targetId) => reorderColumns(section.id, item.id, sm.id, subSm.id, cls.id, draggedId, targetId),
             } : null;
             container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, columnDragCtx, previewInfo));
+            // Same 4 grant-levels the regular (non-statusMode) column row
+            // already offers (Ver y Operar/Editar/Autorizar/Eliminar, see
+            // COLUMN_STATUS_LEVELS above) -- each now gets its own
+            // independent Estatus/Web·App/$ cost row too, one level under
+            // the column itself. Never draggable, no preview of their own
+            // (they're not a real screen/field, just a grant tier).
+            COLUMN_STATUS_LEVELS.forEach((level) => {
+                const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                container.appendChild(statusRow(t(level.labelKey), depth + 1, levelKey, null, null, null, ancestorLocked, null, null));
+            });
         }
 
         function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked) {
@@ -2595,6 +2618,14 @@
                 if (!map.has(parentKey)) map.set(parentKey, []);
                 map.get(parentKey).push(childKey);
             };
+            // Every Columna's own 4 levels (see COLUMN_STATUS_LEVELS/
+            // renderStatusColumn) -- shared by both places a column gets
+            // added below (plain, and under a Clasificación).
+            const addColumnLevels = (colKey, sectionId, itemId, colBase) => {
+                COLUMN_STATUS_LEVELS.forEach((level) => {
+                    addChild(colKey, keyOf(sectionId, itemId, `${colBase}/${level.id}`));
+                });
+            };
             sectionsData.forEach((section) => {
                 const sectionKey = keyOf(section.id, null, null);
                 (section.items || []).forEach((item) => {
@@ -2623,11 +2654,19 @@
                                         const clsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`);
                                         addChild(tableKey, clsKey);
                                         (entry.submenu || []).forEach((col) => {
-                                            addChild(clsKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}/${col.id}`));
+                                            const colBase = `${sm.id}/${subSm.id}/${entry.id}/${col.id}`;
+                                            const colKey = keyOf(section.id, item.id, colBase);
+                                            addChild(clsKey, colKey);
+                                            addColumnLevels(colKey, section.id, item.id, colBase);
                                         });
                                         return;
                                     }
-                                    addChild(tableKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`));
+                                    {
+                                        const colBase = `${sm.id}/${subSm.id}/${entry.id}`;
+                                        const colKey = keyOf(section.id, item.id, colBase);
+                                        addChild(tableKey, colKey);
+                                        addColumnLevels(colKey, section.id, item.id, colBase);
+                                    }
                                 });
                             }
                             // "Iconos Personalización" (see renderStatusIcons)
@@ -3388,6 +3427,18 @@
             // the tree itself. '' if that node was never rendered (e.g. a
             // stale reference to a since-removed menu.json entry).
             getStatusLabel(sectionId, itemId, submenuId) {
+                // A Columna level's OWN row label is just "Operar"/"Editar"/
+                // ... (see renderStatusColumn) -- fine on the row itself
+                // (already nested under its own column), but ambiguous once
+                // flattened into a change summary next to another column's
+                // own "Operar". resolveNodeLabel's "Columna — Nivel" form
+                // disambiguates -- skip the plain rendered label for
+                // exactly this key shape, regardless of whether it was
+                // rendered (and so already cached) this session.
+                const lastSegment = submenuId ? submenuId.split('/').pop() : null;
+                if (lastSegment && COLUMN_STATUS_LEVELS.some((level) => level.id === lastSegment)) {
+                    return resolveNodeLabel(sectionId, itemId, submenuId);
+                }
                 return statusLabelMap.get(keyOf(sectionId, itemId, submenuId)) || resolveNodeLabel(sectionId, itemId, submenuId);
             },
             // Same resolution getStatusLabel above falls back to, exposed
