@@ -2439,7 +2439,8 @@
                 scope: `${section.id}::${item.id}::${sm.id}::${subSm.id}::${cls.id}`,
                 onDrop: (draggedId, targetId) => reorderColumns(section.id, item.id, sm.id, subSm.id, cls.id, draggedId, targetId),
             } : null;
-            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, columnDragCtx, previewInfo));
+            const colKey = keyOf(section.id, item.id, base);
+            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, colKey, null, computeNodeRollup(colKey), null, ancestorLocked, columnDragCtx, previewInfo));
             // Same 4 grant-levels the regular (non-statusMode) column row
             // already offers (Ver y Operar/Editar/Autorizar/Eliminar, see
             // COLUMN_STATUS_LEVELS above) -- each now gets its own
@@ -2458,8 +2459,8 @@
             const classExpanded = expandedItems.has(classTreeKey);
             // Own independent Estatus AND its own real $ Web/$ App (cls.id
             // is already a real menu.json id, so this needs no synthetic
-            // key unlike the Tabla row below) -- no rollup/leafKeys (same
-            // bare treatment as a plain Columna row), never draggable.
+            // key unlike the Tabla row below), plus a rollup of its own
+            // columns' 4 levels -- never draggable.
             const classKey = keyOf(section.id, item.id, classBase);
             container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, classKey, {
                 expanded: classExpanded,
@@ -2467,7 +2468,7 @@
                     if (classExpanded) expandedItems.delete(classTreeKey);
                     else expandedItems.add(classTreeKey);
                 },
-            }, null, null, ancestorLocked, null, null));
+            }, computeNodeRollup(classKey), null, ancestorLocked, null, null));
             if (!classExpanded) return;
             cls.submenu.forEach((col) => {
                 renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked, sm, subSm, cls);
@@ -2491,7 +2492,7 @@
                     if (tableExpanded) expandedItems.delete(tableTreeKey);
                     else expandedItems.add(tableTreeKey);
                 },
-            }, null, null, ancestorLocked, null, null));
+            }, computeNodeRollup(tableKey), null, ancestorLocked, null, null));
             if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
@@ -2517,7 +2518,7 @@
                     if (iconsExpanded) expandedItems.delete(iconsTreeKey);
                     else expandedItems.add(iconsTreeKey);
                 },
-            }, null, null, ancestorLocked, null, null));
+            }, computeNodeRollup(iconsKey), null, ancestorLocked, null, null));
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
@@ -2703,6 +2704,24 @@
             })(rootKey);
             return result;
         }
+        // Same idea as leafKeysUnder/leafKeysUnderSm's own "true leaves
+        // only" filter, just walking statusChildrenMap instead -- a
+        // descendant that itself has no children (hasStatusChildren false)
+        // is a real leaf regardless of depth (a Columna's own 4 levels,
+        // an Ícono, a plain Pantalla with no Tabla/Iconos, ...).
+        function collectLeafStatusKeys(rootKey) {
+            return collectDescendantStatusKeys(rootKey).filter((k) => !hasStatusChildren(k));
+        }
+        // Group rollup for any node with real descendants now (Pantalla/
+        // Tabla/Clasificación/Columna/Iconos Personalización, on top of the
+        // Departamento/Área/Apartado this already worked for) -- confirmed
+        // with the user: consistent everywhere, so a group's own Web/App
+        // summary is never just silently missing depending on which level
+        // it happens to be.
+        function computeNodeRollup(key) {
+            const leafKeys = collectLeafStatusKeys(key);
+            return { web: computeRollup(leafKeys, 'web'), app: computeRollup(leafKeys, 'app') };
+        }
         // "Aplicar Estatus a anidados" -- same one-directional, only-ever-
         // writes-downward idea as applyNestedPlatform above, just copying
         // the Estatus select instead of a Web/App checkbox, and onto EVERY
@@ -2859,7 +2878,7 @@
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null, null, null, subSmAncestorLocked, pantallaDragCtx, previewInfo));
+                            } : null, hasStatusChildren(key) ? computeNodeRollup(key) : null, null, subSmAncestorLocked, pantallaDragCtx, previewInfo));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
                                 if (subSm.submenu && subSm.submenu.length) {
