@@ -1908,6 +1908,148 @@ body.dark-mode .perm-tree-depth-2{
     cursor: pointer;
 }
 .perm-preview-phone-photo-btn.taken{ border-style: solid; border-color: #2ea44f; color: #1e7e34; }
+
+/* Vista Previa: Columna -- the one column this preview is FOR, still
+   sitting inside its own real table/field list for context, called out
+   with the same accent-tint treatment used everywhere else in this file
+   for "this is the thing that matters here". */
+.perm-preview-col-focus{ background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)) !important; }
+.perm-preview-phone-field-focus{ border-color: var(--color-accent); border-width: 1.5px; }
+
+/* Vista Previa: Ícono -- a real toolbar (see buildIconToolbarWrap in
+   PermissionTree.js) sitting above the same real table/field-list every
+   other kind uses, each button actually performing its action against
+   that table instead of just being decorative. */
+.perm-preview-icon-toolbar{ display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.perm-preview-icon-btn{
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+}
+.perm-preview-icon-btn:hover{ background: var(--color-bg); color: var(--color-accent); }
+.perm-preview-icon-hint{ font-size: 0.76rem; color: var(--color-text-secondary); margin: 0 0 0.6rem; }
+.perm-preview-icon-app-note{
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+    background: var(--color-bg);
+    border: 1px dashed var(--color-border);
+    border-radius: 0.6rem;
+    padding: 0.7rem 0.9rem;
+}
+.perm-preview-icon-app-note i{ font-size: 1rem; flex-shrink: 0; }
+.perm-preview-filter-row{ margin-bottom: 0.6rem; }
+.perm-preview-filter-input{
+    font: inherit;
+    font-size: 0.78rem;
+    width: 100%;
+    max-width: 16rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+}
+.perm-preview-filter-input:focus{ outline: none; border-color: var(--color-accent); }
+.perm-preview-info-box{
+    font-size: 0.75rem;
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.6rem;
+}
+.perm-preview-legend-dot{
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    margin-right: 0.4rem;
+}
+.perm-preview-legend-dot + .perm-preview-legend-dot{ margin-left: 0.9rem; }
+.perm-preview-legend-habilitado{ background: #2ea44f; }
+.perm-preview-legend-inhabilitado{ background: #b05a5a; }
+.perm-preview-legend-construccion{ background: #c98a00; }
+.perm-preview-legend-mejoras{ background: #3f74c4; }
+/* "Pin" and "column visibility" demo states -- toggled on the live
+   .perm-preview-table itself by buildIconToolbarWrap's own click
+   handlers, not separate markup. */
+.perm-preview-pinned td:first-child, .perm-preview-pinned th:first-child{
+    position: sticky;
+    left: 0;
+    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+    z-index: 1;
+}
+.perm-preview-col-hidden tr > *:last-child{ display: none; }
+
+/* Vista Previa: Departamento/Área/Apartado -- these have no screen of
+   their own, so "preview" means showing them as a navigation point
+   instead (see buildPreviewNavWeb/App in PermissionTree.js): the Web
+   sidebar-style list of what's underneath, the App's tile grid of the
+   same. */
+.perm-preview-nav-list-head, .perm-preview-nav-app .perm-preview-phone-header{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid var(--color-border);
+}
+.perm-preview-nav-app .perm-preview-phone-header{
+    color: var(--color-accent-text);
+    background: var(--color-accent);
+    border-bottom: none;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0;
+}
+.perm-preview-nav-item{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--color-text-primary);
+    padding: 0.5rem 0.3rem 0.5rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+.perm-preview-nav-item:last-child{ border-bottom: none; }
+.perm-preview-nav-item i{ color: var(--color-text-secondary); }
+.perm-preview-nav-empty{ font-size: 0.78rem; color: var(--color-text-secondary); padding: 0.6rem 0.3rem; }
+.perm-preview-nav-app{
+    width: 16rem;
+    border: 1px solid var(--color-border);
+    border-radius: 1.1rem;
+    overflow: hidden;
+    background: var(--color-surface);
+}
+.perm-preview-nav-app-grid{ display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; padding: 0.7rem; }
+.perm-preview-nav-app-tile{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    padding: 0.7rem 0.4rem;
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+    text-align: center;
+}
+.perm-preview-nav-app-tile i{ font-size: 1.15rem; color: var(--color-accent); }
 .perm-tree-mstatus-badge{
     display: flex;
     align-items: center;

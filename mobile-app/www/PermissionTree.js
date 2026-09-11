@@ -1108,6 +1108,16 @@
         // either platform, so the App tab (which previews the CAPTURE
         // form, not a read-only table) excludes them; the Web tab keeps
         // them since the real Web table always shows them too.
+        // Shared by Columna/Ícono previewInfo below -- the full 4-level
+        // path down to (and including) the Pantalla that owns them.
+        function previewScreenBreadcrumb(section, item, sm, subSm) {
+            return `${t(sectionLabelKey(section))} › ${t(item.labelKey, item.labelParams)} › ${t(sm.labelKey, sm.labelParams)} › ${t(subSm.labelKey, subSm.labelParams)}`;
+        }
+
+        function previewNodeIsBuilt(subSm) {
+            return !!(subSm && subSm.href && subSm.href !== '#');
+        }
+
         function buildPreviewColumnGroups(subSm, includeSystem) {
             const groups = [];
             let plainGroup = null;
@@ -1167,12 +1177,19 @@
             return btn;
         }
 
-        function buildPreviewWebTable(subSm) {
+        // previewInfo.focusColumnId (only set for kind:'columna') highlights
+        // that one column while still showing every other real column
+        // around it for context -- confirmed with the user a column never
+        // exists in isolation on the real screen either.
+        function buildPreviewWebTable(previewInfo) {
+            const subSm = previewInfo.node;
+            const focusColumnId = previewInfo.focusColumnId;
             const groups = buildPreviewColumnGroups(subSm, true);
             const scroll = document.createElement('div');
             scroll.className = 'perm-preview-table-scroll';
             const table = document.createElement('table');
             table.className = 'perm-preview-table';
+            table.dataset.previewTable = 'true';
             const thead = document.createElement('thead');
             const bandRow = document.createElement('tr');
             const colRow = document.createElement('tr');
@@ -1186,6 +1203,7 @@
                 group.columns.forEach((col) => {
                     const colTh = document.createElement('th');
                     colTh.className = 'perm-preview-col-head';
+                    if (col.id === focusColumnId) colTh.classList.add('perm-preview-col-focus');
                     colTh.textContent = col.label;
                     colRow.appendChild(colTh);
                     flatCols.push(col);
@@ -1199,6 +1217,7 @@
                 tr.className = 'perm-preview-example-row';
                 flatCols.forEach((col) => {
                     const td = document.createElement('td');
+                    if (col.id === focusColumnId) td.classList.add('perm-preview-col-focus');
                     if (isPreviewEvidenceField(col.id)) {
                         td.appendChild(buildPreviewPhotoButton(true));
                     } else {
@@ -1231,6 +1250,7 @@
                     const isEvidence = isPreviewEvidenceField(col.id);
                     const field = document.createElement('div');
                     field.className = 'perm-preview-phone-field';
+                    if (col.id === previewInfo.focusColumnId) field.classList.add('perm-preview-phone-field-focus');
                     const icon = document.createElement('span');
                     icon.className = 'perm-preview-phone-field-icon';
                     icon.innerHTML = `<i class="bx ${isEvidence ? 'bx-camera' : 'bx-pencil'}" aria-hidden="true"></i>`;
@@ -1257,9 +1277,225 @@
             return phone;
         }
 
-        // previewInfo = { label, breadcrumb, icon, node } -- node is the raw
-        // menu.json pantalla object (has .href and .submenu), only ever
-        // passed for depth-3 (Pantalla) rows, see renderStatusTree.
+        // --- Vista Previa: Ícono, a REAL simulation of what each toolbar
+        // icon actually does (zoom/pin/visibility/history/legend/filter),
+        // not just a picture of it -- confirmed with the user this has to
+        // work, not just look right. Everything below only ever touches
+        // its own local demo table/inputs, never anything persisted. -----
+        const ICON_DEMO_GLYPHS = {
+            iconZoomOut: 'bx-zoom-out',
+            iconZoomIn: 'bx-zoom-in',
+            iconPin: 'bx-pin',
+            iconVisibility: 'bx-show',
+            iconHistory: 'bx-history',
+            iconLegend: 'bx-info-circle',
+            iconFilter: 'bx-filter-alt',
+            iconFilterClear: 'bx-x-circle',
+        };
+
+        function buildPreviewLegendHtml() {
+            return ['habilitado', 'construccion', 'mejoras', 'inhabilitado'].map((key) => {
+                const cap = key.charAt(0).toUpperCase() + key.slice(1);
+                return `<span class="perm-preview-legend-dot perm-preview-legend-${key}"></span>${t(`admin.masterTreeStatus${cap}`)}`;
+            }).join('');
+        }
+
+        // iconEntries: [{ id, label }] -- one demo toolbar shared by both
+        // the full-screen mock (every icon) and the standalone Ícono
+        // preview (just that one), same behavior either way. Returns the
+        // toolbar + its (initially hidden) filter row and info popover;
+        // caller appends this once, before the table it controls.
+        function buildIconToolbarWrap(iconEntries, tableEl) {
+            const wrap = document.createElement('div');
+            const toolbar = document.createElement('div');
+            toolbar.className = 'perm-preview-icon-toolbar';
+            const filterRow = document.createElement('div');
+            filterRow.className = 'perm-preview-filter-row';
+            filterRow.hidden = true;
+            const filterInput = document.createElement('input');
+            filterInput.type = 'text';
+            filterInput.className = 'perm-preview-filter-input';
+            filterInput.placeholder = t('admin.masterTreePreviewFilterPlaceholder');
+            filterRow.appendChild(filterInput);
+            const infoBox = document.createElement('div');
+            infoBox.className = 'perm-preview-info-box';
+            infoBox.hidden = true;
+
+            filterInput.addEventListener('input', () => {
+                const q = filterInput.value.trim().toLowerCase();
+                Array.from(tableEl.querySelectorAll('tbody tr')).forEach((tr) => {
+                    tr.style.display = (!q || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+                });
+            });
+
+            const shared = {
+                zoom: 1,
+                showInfo(kind) {
+                    const reopening = infoBox.hidden || infoBox.dataset.kind !== kind;
+                    infoBox.hidden = !reopening;
+                    infoBox.dataset.kind = kind;
+                    infoBox.innerHTML = kind === 'legend' ? buildPreviewLegendHtml() : t('admin.masterTreePreviewHistorySample');
+                },
+            };
+
+            iconEntries.forEach((entry) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'perm-preview-icon-btn';
+                btn.innerHTML = `<i class="bx ${ICON_DEMO_GLYPHS[entry.id] || 'bx-square'}" aria-hidden="true"></i>`;
+                btn.title = entry.label;
+                btn.setAttribute('aria-label', entry.label);
+                btn.addEventListener('click', () => {
+                    switch (entry.id) {
+                        case 'iconZoomIn':
+                            shared.zoom = Math.min(1.5, shared.zoom + 0.15);
+                            tableEl.style.fontSize = `${shared.zoom}em`;
+                            break;
+                        case 'iconZoomOut':
+                            shared.zoom = Math.max(0.65, shared.zoom - 0.15);
+                            tableEl.style.fontSize = `${shared.zoom}em`;
+                            break;
+                        case 'iconPin':
+                            tableEl.classList.toggle('perm-preview-pinned');
+                            break;
+                        case 'iconVisibility':
+                            tableEl.classList.toggle('perm-preview-col-hidden');
+                            break;
+                        case 'iconHistory':
+                            shared.showInfo('history');
+                            break;
+                        case 'iconLegend':
+                            shared.showInfo('legend');
+                            break;
+                        case 'iconFilter':
+                            filterRow.hidden = !filterRow.hidden;
+                            if (!filterRow.hidden) filterInput.focus();
+                            break;
+                        case 'iconFilterClear':
+                            filterInput.value = '';
+                            filterInput.dispatchEvent(new Event('input'));
+                            break;
+                        default:
+                            break;
+                    }
+                });
+                toolbar.appendChild(btn);
+            });
+
+            wrap.append(toolbar, filterRow, infoBox);
+            return wrap;
+        }
+
+        // kind:'pantalla' Web tab -- the full screen, not just its column
+        // table: the same toolbar the real page has (every one of its
+        // icons, each actually working against the table below it) plus
+        // every real column. This is the "toda la funcionalidad de la
+        // pantalla" the user asked for, one step up from a bare table.
+        function buildPreviewScreenMock(previewInfo) {
+            const subSm = previewInfo.node;
+            const wrapAll = document.createElement('div');
+            const tableWrap = buildPreviewWebTable(previewInfo);
+            const tableEl = tableWrap.querySelector('table');
+            const iconEntries = (subSm.iconsSubmenu || []).map((icon) => ({ id: icon.id, label: t(icon.labelKey) }));
+            if (iconEntries.length) wrapAll.appendChild(buildIconToolbarWrap(iconEntries, tableEl));
+            wrapAll.appendChild(tableWrap);
+            return wrapAll;
+        }
+
+        // kind:'icono' Web tab -- the SAME real table its screen has, but
+        // the toolbar only shows that one icon, so trying it isn't buried
+        // among the other six.
+        function buildPreviewIconDemoWeb(previewInfo) {
+            const wrapAll = document.createElement('div');
+            const hint = document.createElement('p');
+            hint.className = 'perm-preview-icon-hint';
+            hint.textContent = t('admin.masterTreePreviewIconHint', { icon: previewInfo.label });
+            const tableWrap = buildPreviewWebTable(previewInfo);
+            const tableEl = tableWrap.querySelector('table');
+            wrapAll.appendChild(hint);
+            wrapAll.appendChild(buildIconToolbarWrap([{ id: previewInfo.iconId, label: previewInfo.label }], tableEl));
+            wrapAll.appendChild(tableWrap);
+            return wrapAll;
+        }
+
+        // kind:'icono' App tab -- honest, not fabricated: zoom/pin/
+        // visibility/history/legend/filter are all Web-table conveniences,
+        // the App's own capture screens (a scrollable field list, see
+        // buildPreviewAppMock) never had an equivalent to begin with.
+        function buildPreviewIconWebOnlyNote() {
+            const note = document.createElement('div');
+            note.className = 'perm-preview-icon-app-note';
+            note.innerHTML = `<i class="bx bx-info-circle" aria-hidden="true"></i><span>${t('admin.masterTreePreviewIconWebOnly')}</span>`;
+            return note;
+        }
+
+        // --- Vista Previa: nodos de navegación (Departamento/Área/
+        // Apartado) -- no tienen su propia pantalla que probar, así que
+        // aquí "vista previa" significa mostrar cómo se ve ESE nivel como
+        // punto de navegación: la lista de lo que contiene en Web, la
+        // rejilla de accesos directos en App. previewInfo.children = [{id,
+        // label, icon}], ya resuelto por cada uno de los 3 call sites en
+        // renderStatusTree (nunca vacío por construcción salvo un nodo sin
+        // hijos reales, ej. Inicio/Panel/Tablero). --------------------------
+        function buildPreviewNavWeb(previewInfo) {
+            const wrap = document.createElement('div');
+            wrap.className = 'perm-preview-nav-list';
+            const head = document.createElement('div');
+            head.className = 'perm-preview-nav-list-head';
+            head.innerHTML = `<i class="bx ${previewInfo.icon || 'bx-folder'}" aria-hidden="true"></i><span>${previewInfo.label}</span>`;
+            wrap.appendChild(head);
+            if (!previewInfo.children.length) {
+                const empty = document.createElement('p');
+                empty.className = 'perm-preview-nav-empty';
+                empty.textContent = t('admin.masterTreePreviewNavEmpty');
+                wrap.appendChild(empty);
+            } else {
+                previewInfo.children.forEach((child) => {
+                    const item = document.createElement('div');
+                    item.className = 'perm-preview-nav-item';
+                    item.innerHTML = `<i class="bx bx-chevron-right" aria-hidden="true"></i><span>${child.label}</span>`;
+                    wrap.appendChild(item);
+                });
+            }
+            return wrap;
+        }
+
+        function buildPreviewNavApp(previewInfo) {
+            const phone = document.createElement('div');
+            phone.className = 'perm-preview-nav-app';
+            const head = document.createElement('div');
+            head.className = 'perm-preview-phone-header';
+            head.innerHTML = `<i class="bx ${previewInfo.icon || 'bx-folder'}" aria-hidden="true"></i><span>${previewInfo.label}</span>`;
+            phone.appendChild(head);
+            if (!previewInfo.children.length) {
+                const empty = document.createElement('p');
+                empty.className = 'perm-preview-nav-empty';
+                empty.textContent = t('admin.masterTreePreviewNavEmpty');
+                phone.appendChild(empty);
+            } else {
+                const grid = document.createElement('div');
+                grid.className = 'perm-preview-nav-app-grid';
+                previewInfo.children.forEach((child) => {
+                    const tile = document.createElement('div');
+                    tile.className = 'perm-preview-nav-app-tile';
+                    tile.innerHTML = `<i class="bx ${child.icon || 'bx-square'}" aria-hidden="true"></i><span>${child.label}</span>`;
+                    grid.appendChild(tile);
+                });
+                phone.appendChild(grid);
+            }
+            return phone;
+        }
+
+        // previewInfo.kind decides the whole shape of the panel:
+        // 'pantalla' -- Web: full screen mock (toolbar + table). App: the
+        //   field-list capture form.
+        // 'columna' -- Web: the same real table, one column highlighted.
+        //   App: the same field list, one field highlighted.
+        // 'icono' -- Web: the real table with just that one icon's toolbar,
+        //   actually working. App: an honest "this is Web-only" note.
+        // 'nav' -- Departamento/Área/Apartado, no screen of their own:
+        //   Web a sidebar-style list of what's under this node, App a tile
+        //   grid of the same, always available (no href to gate on).
         function openPreviewModal(previewInfo) {
             const overlay = document.createElement('div');
             overlay.className = 'perm-preview-overlay';
@@ -1310,17 +1546,23 @@
             function showWeb() {
                 webBtn.classList.add('active');
                 appBtn.classList.remove('active');
+                content.className = '';
                 content.innerHTML = '';
-                content.appendChild(buildPreviewWebTable(previewInfo.node));
+                if (previewInfo.kind === 'nav') content.appendChild(buildPreviewNavWeb(previewInfo));
+                else if (previewInfo.kind === 'icono') content.appendChild(buildPreviewIconDemoWeb(previewInfo));
+                else if (previewInfo.kind === 'pantalla') content.appendChild(buildPreviewScreenMock(previewInfo));
+                else content.appendChild(buildPreviewWebTable(previewInfo)); // 'columna'
             }
             function showApp() {
                 appBtn.classList.add('active');
                 webBtn.classList.remove('active');
-                content.innerHTML = '';
                 content.className = 'perm-preview-app-wrap';
-                content.appendChild(buildPreviewAppMock(previewInfo.node, previewInfo));
+                content.innerHTML = '';
+                if (previewInfo.kind === 'nav') content.appendChild(buildPreviewNavApp(previewInfo));
+                else if (previewInfo.kind === 'icono') content.appendChild(buildPreviewIconWebOnlyNote());
+                else content.appendChild(buildPreviewAppMock(previewInfo.node, previewInfo)); // 'pantalla' + 'columna'
             }
-            webBtn.addEventListener('click', () => { content.className = ''; showWeb(); });
+            webBtn.addEventListener('click', showWeb);
             appBtn.addEventListener('click', showApp);
 
             body.append(note, content);
@@ -1554,7 +1796,12 @@
                 navigateBtn.title = t('admin.businessSectorPreview');
                 navigateBtn.setAttribute('aria-label', t('admin.businessSectorPreview'));
                 navigateBtn.innerHTML = '<i class="bx bx-compass" aria-hidden="true"></i>';
-                const canPreview = !!(previewInfo && previewInfo.node && previewInfo.node.href && previewInfo.node.href !== '#');
+                // 'nav' (Departamento/Área/Apartado) always previews --
+                // it's just menu.json's own structure, no built/unbuilt
+                // page to gate on. Every other kind still needs its
+                // OWNING pantalla to actually have a real page.
+                const canPreview = !!previewInfo && (previewInfo.kind === 'nav'
+                    || !!(previewInfo.node && previewInfo.node.href && previewInfo.node.href !== '#'));
                 navigateBtn.addEventListener('click', () => {
                     if (canPreview) { openPreviewModal(previewInfo); return; }
                     const message = t('admin.underConstruction');
@@ -1933,8 +2180,19 @@
             return el;
         }
 
-        function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked) {
-            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked));
+        function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked, sm, subSm) {
+            // Vista Previa here highlights this one column inside its own
+            // real table (Web) / field list (App) -- gated on the OWNING
+            // pantalla being built, same rule as the pantalla's own preview.
+            const previewInfo = (sm && previewNodeIsBuilt(subSm)) ? {
+                kind: 'columna',
+                label: t(col.labelKey, col.labelParams),
+                breadcrumb: previewScreenBreadcrumb(section, item, sm, subSm),
+                icon: subSm.icon,
+                node: subSm,
+                focusColumnId: col.id,
+            } : null;
+            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, keyOf(section.id, item.id, base), null, null, null, ancestorLocked, null, false, previewInfo));
         }
 
         function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked) {
@@ -1950,7 +2208,7 @@
             }));
             if (!classExpanded) return;
             cls.submenu.forEach((col) => {
-                renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked);
+                renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked, sm, subSm);
             });
         }
 
@@ -1970,7 +2228,7 @@
                     renderStatusClassification(container, section, item, sm, subSm, entry, ancestorLocked);
                     return;
                 }
-                renderStatusColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5, ancestorLocked);
+                renderStatusColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5, ancestorLocked, sm, subSm);
             });
         }
 
@@ -1987,7 +2245,19 @@
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
-                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, null, null, ancestorLocked));
+                // Vista Previa here shows the SAME real table this
+                // pantalla's own preview has, with only this one icon's
+                // toolbar -- see buildPreviewIconDemoWeb -- gated on the
+                // pantalla being built, same rule as everything else here.
+                const previewInfo = previewNodeIsBuilt(subSm) ? {
+                    kind: 'icono',
+                    label: t(icon.labelKey),
+                    breadcrumb: previewScreenBreadcrumb(section, item, sm, subSm),
+                    icon: subSm.icon,
+                    node: subSm,
+                    iconId: icon.id,
+                } : null;
+                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, null, null, ancestorLocked, null, false, previewInfo));
             });
         }
 
@@ -2059,13 +2329,24 @@
                 const sectionExpanded = expandedSections.has(section.id);
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
                 const sectionStateKey = keyOf(section.id, null, null);
+                // Departamento has no screen of its own to try -- 'nav'
+                // preview instead shows how it looks as a navigation point
+                // (its own Áreas, see buildPreviewNavWeb/App), always
+                // available regardless of what's built underneath.
+                const deptPreviewInfo = {
+                    kind: 'nav',
+                    label: t(sectionLabelKey(section)),
+                    breadcrumb: '',
+                    icon: section.icon,
+                    children: section.items.filter((i) => !GENERAL_ITEM_IDS.includes(i.id)).map((i) => ({ id: i.id, label: t(i.labelKey, i.labelParams), icon: i.icon })),
+                };
                 treeRoot.appendChild(statusRow(t(sectionLabelKey(section)), 0, sectionStateKey, section.items.length ? {
                     expanded: sectionExpanded,
                     onToggle: () => {
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, true));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, true, deptPreviewInfo));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -2080,13 +2361,23 @@
                     // exclusion sectionsData's own construction already
                     // applies when merging generalItems ahead of areaItems).
                     const isRealArea = section.id !== 'main' && !GENERAL_ITEM_IDS.includes(item.id);
+                    // Same 'nav' idea as Departamento above, one level down
+                    // -- an Área's own children are its Apartados
+                    // (Catálogos/Operaciones/...).
+                    const areaPreviewInfo = {
+                        kind: 'nav',
+                        label: t(item.labelKey, item.labelParams),
+                        breadcrumb: t(sectionLabelKey(section)),
+                        icon: item.icon,
+                        children: hasSubmenu ? item.submenu.map((sm) => ({ id: sm.id, label: t(sm.labelKey, sm.labelParams), icon: sm.icon })) : [],
+                    };
                     treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), 1, itemStateKey, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => {
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, true));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, true, areaPreviewInfo));
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
                     // Apartado (Catálogos/Operaciones/...) only reorders
@@ -2099,8 +2390,20 @@
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
                         const smStateKey = keyOf(section.id, item.id, sm.id);
                         const apartadoDragCtx = isRealArea ? { kind: 'apartado', id: sm.id, scope: apartadoScope, onDrop: (draggedId, targetId) => reorderApartados(section.id, item.id, draggedId, targetId) } : null;
+                        // Same 'nav' idea one level deeper still -- an
+                        // Apartado's own children are its Pantallas (a
+                        // standalone one, e.g. under 'main', is excluded --
+                        // same reasoning as pantallaDragCtx below, it isn't
+                        // really one of THIS apartado's own screens).
+                        const apartadoPreviewInfo = {
+                            kind: 'nav',
+                            label: t(sm.labelKey, sm.labelParams),
+                            breadcrumb: `${t(sectionLabelKey(section))} › ${t(item.labelKey, item.labelParams)}`,
+                            icon: sm.icon,
+                            children: hasSubSubmenu ? sm.submenu.filter((s) => !s.standalone).map((subSm) => ({ id: subSm.id, label: t(subSm.labelKey, subSm.labelParams), icon: subSm.icon })) : [],
+                        };
                         if (!hasSubSubmenu) {
-                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked, apartadoDragCtx, true));
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked, apartadoDragCtx, true, apartadoPreviewInfo));
                             return;
                         }
 
@@ -2113,7 +2416,7 @@
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, true));
+                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, true, apartadoPreviewInfo));
                         if (!smExpandedNow) return;
                         const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
                         // Pantalla only reorders among its own apartado's
@@ -2137,6 +2440,7 @@
                             // displayed nested here -- those aren't a table/
                             // form screen with a column structure to preview).
                             const previewInfo = subSm.standalone ? null : {
+                                kind: 'pantalla',
                                 label: t(subSm.labelKey, subSm.labelParams),
                                 breadcrumb: `${t(sectionLabelKey(section))} › ${t(item.labelKey, item.labelParams)} › ${t(sm.labelKey, sm.labelParams)}`,
                                 icon: subSm.icon,
