@@ -380,6 +380,8 @@
     "masterTreePreviewIconHint": "Prueba el ícono \"{icon}\" en la tabla de abajo:",
     "masterTreePreviewIconWebOnly": "Este ícono es parte de la tabla de Web — la App no tiene esta herramienta, sus pantallas de captura son una lista de campos, no una tabla.",
     "masterTreePreviewNavEmpty": "Sin elementos todavía.",
+    "masterTreePreviewFilterAll": "Seleccionar todo",
+    "masterTreePreviewFilterColumn": "Filtrar esta columna",
     "noBusinessSectors": "Aún no hay giros. Agrega el primero arriba.",
     "sectorTreeColumn": "Permisos",
     "sectorTreeTitle": "Accesos por default de este giro",

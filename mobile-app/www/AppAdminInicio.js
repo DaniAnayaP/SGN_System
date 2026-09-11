@@ -471,6 +471,13 @@ function buildResumenGroups() {
                 (pantallaOrders[`${sectionId}::${areaId}::${apartadoId}`] || []).forEach((pantallaId) => {
                     const pantallaLabel = masterTree.getNodeLabel(sectionId, areaId, `${apartadoId}/${pantallaId}`) || pantallaId;
                     push(sectionId, areaId, `${apartadoId}/${pantallaId}`, [deptLabel, areaLabel, apartadoLabel, pantallaLabel]);
+                    // One level deeper still -- a Pantalla's own Columnas,
+                    // each of which can carry its own status override too
+                    // (confirmed live: without this, a Pantalla could
+                    // never expand any further in Resumen).
+                    masterTree.getColumnEntries(sectionId, areaId, apartadoId, pantallaId).forEach((col) => {
+                        push(sectionId, areaId, col.submenuId, [deptLabel, areaLabel, apartadoLabel, pantallaLabel, col.label]);
+                    });
                 });
             });
         });

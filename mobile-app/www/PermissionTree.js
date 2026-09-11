@@ -1177,6 +1177,123 @@
             return btn;
         }
 
+        // Reads whatever's currently in a demo table cell -- the typed
+        // <input> value, or the photo button's own taken/not label for an
+        // Evidencia cell -- so the column filter below always reflects
+        // what's actually showing right now, including anything the admin
+        // just typed while trying the preview.
+        function readPreviewCellValue(cell) {
+            if (!cell) return '';
+            const input = cell.querySelector('input');
+            if (input) return input.value.trim() || '···';
+            const photoBtn = cell.querySelector('.perm-preview-photo-btn');
+            if (photoBtn) return t(photoBtn.classList.contains('taken') ? 'admin.masterTreePreviewPhotoTaken' : 'admin.masterTreePreviewTakePhoto');
+            return '';
+        }
+
+        // A row hides once ANY of its columns' own active filter excludes
+        // its current value -- same "every active filter narrows further"
+        // rule the real per-column header filter uses (see Dashboard.js's
+        // applyColumnValueFilters), not just whichever column was touched
+        // last.
+        function reapplyPreviewColumnFilters(tableEl) {
+            const filters = tableEl.previewColFilters;
+            Array.from(tableEl.querySelectorAll('tbody tr')).forEach((tr) => {
+                let visible = true;
+                if (filters) {
+                    filters.forEach((allowed, colIndex) => {
+                        if (!allowed.has(readPreviewCellValue(tr.children[colIndex]))) visible = false;
+                    });
+                }
+                tr.classList.toggle('perm-preview-row-col-filtered', !visible);
+            });
+        }
+
+        // The small funnel icon that lives right on every column header --
+        // confirmed with the user this specific control (distinct from the
+        // toolbar's own global Filtro icon above the table) was missing.
+        // Same Excel-style "checklist of this column's own current values"
+        // idea as the real .data-table-col-filter-trigger, simplified (no
+        // search box or date-range mode -- a demo table only ever has 2
+        // rows, a full text search over 1-2 distinct values isn't worth
+        // the extra chrome).
+        function openPreviewColumnFilterMenu(colTh, tableEl, colIndex, trigger) {
+            document.querySelectorAll('.perm-preview-col-filter-menu').forEach((m) => m.remove());
+            if (!tableEl.previewColFilters) tableEl.previewColFilters = new Map();
+            const distinct = Array.from(new Set(Array.from(tableEl.querySelectorAll('tbody tr')).map((tr) => readPreviewCellValue(tr.children[colIndex]))));
+            const current = tableEl.previewColFilters.get(colIndex) || new Set(distinct);
+
+            const menu = document.createElement('div');
+            menu.className = 'perm-preview-col-filter-menu';
+            const allRow = document.createElement('label');
+            allRow.className = 'perm-preview-col-filter-option perm-preview-col-filter-all';
+            const allCb = document.createElement('input');
+            allCb.type = 'checkbox';
+            allCb.checked = current.size === distinct.length;
+            const allSpan = document.createElement('span');
+            allSpan.textContent = t('admin.masterTreePreviewFilterAll');
+            allRow.append(allCb, allSpan);
+            menu.appendChild(allRow);
+
+            const list = document.createElement('div');
+            list.className = 'perm-preview-col-filter-list';
+            const checkboxes = [];
+            distinct.forEach((val) => {
+                const row = document.createElement('label');
+                row.className = 'perm-preview-col-filter-option';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = current.has(val);
+                cb.addEventListener('change', () => {
+                    const next = new Set(tableEl.previewColFilters.get(colIndex) || new Set(distinct));
+                    if (cb.checked) next.add(val); else next.delete(val);
+                    if (next.size === distinct.length) tableEl.previewColFilters.delete(colIndex);
+                    else tableEl.previewColFilters.set(colIndex, next);
+                    allCb.checked = !tableEl.previewColFilters.has(colIndex) || next.size === distinct.length;
+                    reapplyPreviewColumnFilters(tableEl);
+                    colTh.classList.toggle('perm-preview-col-filter-active', tableEl.previewColFilters.has(colIndex));
+                });
+                const span = document.createElement('span');
+                span.textContent = val;
+                row.append(cb, span);
+                list.appendChild(row);
+                checkboxes.push(cb);
+            });
+            menu.appendChild(list);
+
+            allCb.addEventListener('change', () => {
+                checkboxes.forEach((cb) => { cb.checked = allCb.checked; });
+                if (allCb.checked) tableEl.previewColFilters.delete(colIndex);
+                else tableEl.previewColFilters.set(colIndex, new Set());
+                reapplyPreviewColumnFilters(tableEl);
+                colTh.classList.toggle('perm-preview-col-filter-active', tableEl.previewColFilters.has(colIndex));
+            });
+
+            document.body.appendChild(menu);
+            const rect = trigger.getBoundingClientRect();
+            menu.style.top = `${rect.bottom + 4}px`;
+            menu.style.left = `${Math.min(rect.left, window.innerWidth - 224)}px`;
+            const closeOnOutsideClick = (event) => {
+                if (menu.contains(event.target) || event.target === trigger) return;
+                menu.remove();
+                document.removeEventListener('click', closeOnOutsideClick);
+            };
+            setTimeout(() => document.addEventListener('click', closeOnOutsideClick), 0);
+        }
+
+        function attachPreviewColumnFilterTrigger(colTh, tableEl, colIndex) {
+            const trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'perm-preview-col-filter-trigger';
+            trigger.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
+            trigger.setAttribute('aria-label', t('admin.masterTreePreviewFilterColumn'));
+            trigger.addEventListener('click', (event) => {
+                event.stopPropagation();
+                openPreviewColumnFilterMenu(colTh, tableEl, colIndex, trigger);
+            });
+            colTh.appendChild(trigger);
+        }
+
         // previewInfo.focusColumnId (only set for kind:'columna') highlights
         // that one column while still showing every other real column
         // around it for context -- confirmed with the user a column never
@@ -1204,7 +1321,9 @@
                     const colTh = document.createElement('th');
                     colTh.className = 'perm-preview-col-head';
                     if (col.id === focusColumnId) colTh.classList.add('perm-preview-col-focus');
-                    colTh.textContent = col.label;
+                    const colLabel = document.createElement('span');
+                    colLabel.textContent = col.label;
+                    colTh.appendChild(colLabel);
                     colRow.appendChild(colTh);
                     flatCols.push(col);
                 });
@@ -1232,6 +1351,7 @@
                 tbody.appendChild(tr);
             }
             table.appendChild(tbody);
+            Array.from(colRow.children).forEach((colTh, index) => attachPreviewColumnFilterTrigger(colTh, table, index));
             scroll.appendChild(table);
             return scroll;
         }
@@ -2992,6 +3112,35 @@
             getGeneralItemIds() {
                 const mainSection = sectionsData.find((s) => s.id === 'main');
                 return mainSection ? mainSection.items.map((i) => i.id) : [];
+            },
+            // statusMode only -- every real Columna under one Pantalla,
+            // { submenuId, label } already resolved (submenuId matches
+            // exactly what a column's own row uses for its status key --
+            // see renderStatusColumn/renderStatusClassification's own
+            // base construction). getPantallaOrders/getNodeLabel stop at
+            // Pantalla; Admin-ArbolMaestro.js's Resumen view needs to go
+            // one level deeper too, since a column can carry its own
+            // status override same as anything else here -- confirmed
+            // live: without this, a Pantalla could never expand any
+            // further in Resumen, and a column-level override was
+            // invisible there no matter what it actually was.
+            getColumnEntries(sectionId, areaId, apartadoId, pantallaId) {
+                const section = sectionsData.find((s) => s.id === sectionId);
+                const area = section && section.items.find((i) => i.id === areaId);
+                const apartado = area && (area.submenu || []).find((sm) => sm.id === apartadoId);
+                const subSm = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
+                if (!subSm) return [];
+                const entries = [];
+                (subSm.submenu || []).forEach((entry) => {
+                    if (entry.isClassification) {
+                        (entry.submenu || []).forEach((col) => {
+                            entries.push({ submenuId: `${apartadoId}/${pantallaId}/${entry.id}/${col.id}`, label: t(col.labelKey, col.labelParams) });
+                        });
+                        return;
+                    }
+                    entries.push({ submenuId: `${apartadoId}/${pantallaId}/${entry.id}`, label: t(entry.labelKey, entry.labelParams) });
+                });
+                return entries;
             },
             // statusMode only -- current Área order for EVERY department at
             // once, keyed by department sectionId (same shape the areaOrder

@@ -380,6 +380,8 @@
     "masterTreePreviewIconHint": "Try the \"{icon}\" icon on the table below:",
     "masterTreePreviewIconWebOnly": "This icon is part of the Web table -- the App doesn't have this tool, its capture screens are a list of fields, not a table.",
     "masterTreePreviewNavEmpty": "Nothing here yet.",
+    "masterTreePreviewFilterAll": "Select all",
+    "masterTreePreviewFilterColumn": "Filter this column",
     "noBusinessSectors": "No business types yet. Add the first one above.",
     "sectorTreeColumn": "Permissions",
     "sectorTreeTitle": "Default access for this business type",

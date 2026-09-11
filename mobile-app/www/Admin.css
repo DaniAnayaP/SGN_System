@@ -1994,6 +1994,55 @@ body.dark-mode .perm-tree-depth-2{
 }
 .perm-preview-col-hidden tr > *:last-child{ display: none; }
 
+/* Per-column header filter -- confirmed with the user this specific
+   control (the funnel icon that lives ON each header, distinct from the
+   toolbar's own global Filtro icon above the table) was missing. Same
+   Excel-style checklist idea as the real .data-table-col-filter-trigger
+   (see Dashboard.js), simplified for a 2-row demo table. */
+.perm-preview-col-head{ display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
+.perm-preview-col-filter-trigger{
+    flex-shrink: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 0.68rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+}
+.perm-preview-col-filter-trigger:hover{ background: var(--color-bg); color: var(--color-accent); }
+.perm-preview-col-head.perm-preview-col-filter-active .perm-preview-col-filter-trigger{ color: var(--color-accent); }
+.perm-preview-row-col-filtered{ display: none; }
+.perm-preview-col-filter-menu{
+    position: fixed;
+    z-index: 1100;
+    min-width: 12rem;
+    max-width: 16rem;
+    max-height: 14rem;
+    overflow-y: auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    box-shadow: 0 0.6rem 1.4rem rgba(0, 0, 0, 0.22);
+    padding: 0.5rem;
+}
+.perm-preview-col-filter-option{
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.76rem;
+    color: var(--color-text-primary);
+    padding: 0.3rem 0.3rem;
+    border-radius: 0.35rem;
+    cursor: pointer;
+}
+.perm-preview-col-filter-option:hover{ background: var(--color-bg); }
+.perm-preview-col-filter-all{ font-weight: 700; border-bottom: 1px solid var(--color-border); border-radius: 0; margin-bottom: 0.3rem; padding-bottom: 0.5rem; }
+
 /* Vista Previa: Departamento/Área/Apartado -- these have no screen of
    their own, so "preview" means showing them as a navigation point
    instead (see buildPreviewNavWeb/App in PermissionTree.js): the Web
