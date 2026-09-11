@@ -2095,46 +2095,116 @@ body:has(.master-tree-panel) main{
 .status-card.expanded .status-card-list{
     display: block;
 }
-.status-card-crumb{
-    font-size: 0.72rem;
-    color: var(--color-text-secondary);
-    padding: 0.4rem 0;
-    border-top: 1px solid var(--color-border);
-    line-height: 1.5;
+/* Resumen's own mini-tree -- each status card's list nests Departamento →
+   Área → Apartado → Pantalla instead of one flat line per node repeating
+   its whole breadcrumb (confirmed with the user: the flat version got
+   noisy fast once a whole department's 900+ default nodes were all
+   "Habilitado" at once). Read-only, same collapse-by-default convention
+   as the Árbol itself (see renderStatusTree's own comment on that) --
+   built by buildResumenGroups/buildMiniNode in Admin-ArbolMaestro.js,
+   walking the exact same getDepartmentOrder/getAreaOrders/
+   getApartadoOrders/getPantallaOrders getters as before, just kept as a
+   tree instead of flattened into breadcrumb strings. */
+.mini-row{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.3rem;
+    border-radius: 0.4rem;
+    font-size: 0.75rem;
 }
-.status-card-crumb b{
+.mini-row.has-children{
+    cursor: pointer;
+}
+.mini-row.has-children:hover{
+    background: var(--color-surface);
+}
+.mini-toggle{
+    width: 0.9rem;
+    height: 0.9rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    font-size: 0.55rem;
+    transition: transform 0.15s ease;
+}
+.mini-node.open > .mini-row .mini-toggle{
+    transform: rotate(90deg);
+}
+.mini-toggle-spacer{
+    width: 0.9rem;
+    flex-shrink: 0;
+}
+.mini-label{
     color: var(--color-text-primary);
-    font-weight: 600;
 }
-.status-card-crumb-sep{
+.mini-row[data-depth="0"] .mini-label{ font-weight: 600; }
+.mini-row[data-depth="1"] .mini-label{ font-weight: 500; }
+/* A node can be its OWN match for this status AND still have matching
+   descendants nested under it (e.g. a whole Área marked "En construcción"
+   while only one of its Pantallas is ALSO independently "En
+   construcción") -- this dot flags that the row itself counts too, not
+   only whatever is nested inside it (see buildResumenNode's own isMatch
+   check in Admin-ArbolMaestro.js). Colored per its status card via the
+   same .status-card-<key> rules as .status-card-name/.status-card-count
+   above. */
+.mini-self-match{
+    font-size: 0.5rem;
+    margin-left: 0.15rem;
+}
+.mini-count{
+    margin-left: auto;
+    font-size: 0.62rem;
     color: var(--color-text-secondary);
-    opacity: 0.6;
-    padding: 0 0.2rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 0.05rem 0.4rem;
+    font-variant-numeric: tabular-nums;
+}
+.mini-children{
+    display: none;
+    padding-left: 1.3rem;
+    border-left: 1px dashed var(--color-border);
+    margin-left: 0.8rem;
+}
+.mini-node.open > .mini-children{
+    display: block;
 }
 .status-card-con .status-dot{ background-color: #c98a00; }
 .status-card-con .status-card-name,
-.status-card-con .status-card-count{ color: #9a6b00; }
+.status-card-con .status-card-count,
+.status-card-con .mini-self-match{ color: #9a6b00; }
 .status-card-mej .status-dot{ background-color: #3f74c4; }
 .status-card-mej .status-card-name,
-.status-card-mej .status-card-count{ color: #2c5aa0; }
+.status-card-mej .status-card-count,
+.status-card-mej .mini-self-match{ color: #2c5aa0; }
 .status-card-inh .status-dot{ background-color: #b05a5a; }
 .status-card-inh .status-card-name,
-.status-card-inh .status-card-count{ color: #8a4b4b; }
+.status-card-inh .status-card-count,
+.status-card-inh .mini-self-match{ color: #8a4b4b; }
 .status-card-hab .status-dot{ background-color: #2ea44f; }
 .status-card-hab .status-card-name,
-.status-card-hab .status-card-count{ color: #1e7e34; }
+.status-card-hab .status-card-count,
+.status-card-hab .mini-self-match{ color: #1e7e34; }
 body.dark-mode .status-card-con .status-dot{ background-color: #e0ac3f; }
 body.dark-mode .status-card-con .status-card-name,
-body.dark-mode .status-card-con .status-card-count{ color: #f0c463; }
+body.dark-mode .status-card-con .status-card-count,
+body.dark-mode .status-card-con .mini-self-match{ color: #f0c463; }
 body.dark-mode .status-card-mej .status-dot{ background-color: #5f93d6; }
 body.dark-mode .status-card-mej .status-card-name,
-body.dark-mode .status-card-mej .status-card-count{ color: #8fb8ea; }
+body.dark-mode .status-card-mej .status-card-count,
+body.dark-mode .status-card-mej .mini-self-match{ color: #8fb8ea; }
 body.dark-mode .status-card-inh .status-dot{ background-color: #c97a7a; }
 body.dark-mode .status-card-inh .status-card-name,
-body.dark-mode .status-card-inh .status-card-count{ color: #e0a3a3; }
+body.dark-mode .status-card-inh .status-card-count,
+body.dark-mode .status-card-inh .mini-self-match{ color: #e0a3a3; }
 body.dark-mode .status-card-hab .status-dot{ background-color: #3fbf6a; }
 body.dark-mode .status-card-hab .status-card-name,
-body.dark-mode .status-card-hab .status-card-count{ color: #7fd99a; }
+body.dark-mode .status-card-hab .status-card-count,
+body.dark-mode .status-card-hab .mini-self-match{ color: #7fd99a; }
 
 /* Árbol de Permisos Maestro's own confirm-before-saving screen (see
    openConfirmModal in Admin-ArbolMaestro.js) -- one row per changed node,

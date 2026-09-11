@@ -180,6 +180,31 @@ function collectCostChanges() {
 // its human name. ------------------------------------------------------
 const STATUS_GROUP_ORDER = ['construccion', 'mejoras', 'inhabilitado', 'habilitado'];
 
+// Each status group is a small forest (one root per Departamento that has
+// at least one matching node under it) instead of a flat list -- a node's
+// own ancestors (which may well sit in a DIFFERENT status themselves)
+// exist here purely as shared grouping structure, deduplicated by label at
+// each level, so e.g. 900 Departamento/Área/Apartado/Pantalla nodes that
+// are all "Habilitado" collapse into one real tree instead of 900 lines
+// each repeating their own full breadcrumb (confirmed with the user after
+// seeing the flat version live -- it got noisy fast).
+function insertResumenPath(children, path) {
+    const [head, ...rest] = path;
+    let node = children.find((n) => n.label === head);
+    if (!node) {
+        // isMatch: whether THIS node itself is the thing that has this
+        // status, as opposed to just being an ancestor another match
+        // needed for structure -- a node can be both (e.g. a whole Área
+        // marked this status while one of its own Pantallas is ALSO
+        // independently marked it), so this can't just be "has no
+        // children" -- see countResumenLeaves/buildResumenNode below.
+        node = { label: head, children: [], isMatch: false };
+        children.push(node);
+    }
+    if (rest.length) insertResumenPath(node.children, rest);
+    else node.isMatch = true;
+}
+
 function buildResumenGroups() {
     const groups = { habilitado: [], inhabilitado: [], construccion: [], mejoras: [] };
     if (!masterTree) return groups;
@@ -187,27 +212,85 @@ function buildResumenGroups() {
     const areaOrders = masterTree.getAreaOrders();
     const apartadoOrders = masterTree.getApartadoOrders();
     const pantallaOrders = masterTree.getPantallaOrders();
-    const push = (sectionId, itemId, submenuId, breadcrumb) => {
+    const push = (sectionId, itemId, submenuId, path) => {
         const status = statusByKey.get(`${sectionId}::${itemId || ''}::${submenuId || ''}`) || 'habilitado';
-        const label = masterTree.getNodeLabel(sectionId, itemId, submenuId) || submenuId || itemId || sectionId;
-        (groups[status] || groups.habilitado).push({ label, breadcrumb: breadcrumb.join(' › ') });
+        insertResumenPath(groups[status] || groups.habilitado, path);
     };
     masterTree.getDepartmentOrder().forEach((sectionId) => {
         const deptLabel = masterTree.getNodeLabel(sectionId, null, null) || sectionId;
-        push(sectionId, null, null, []);
+        push(sectionId, null, null, [deptLabel]);
         (areaOrders[sectionId] || []).forEach((areaId) => {
             const areaLabel = masterTree.getNodeLabel(sectionId, areaId, null) || areaId;
-            push(sectionId, areaId, null, [deptLabel]);
+            push(sectionId, areaId, null, [deptLabel, areaLabel]);
             (apartadoOrders[`${sectionId}::${areaId}`] || []).forEach((apartadoId) => {
                 const apartadoLabel = masterTree.getNodeLabel(sectionId, areaId, apartadoId) || apartadoId;
-                push(sectionId, areaId, apartadoId, [deptLabel, areaLabel]);
+                push(sectionId, areaId, apartadoId, [deptLabel, areaLabel, apartadoLabel]);
                 (pantallaOrders[`${sectionId}::${areaId}::${apartadoId}`] || []).forEach((pantallaId) => {
-                    push(sectionId, areaId, `${apartadoId}/${pantallaId}`, [deptLabel, areaLabel, apartadoLabel]);
+                    const pantallaLabel = masterTree.getNodeLabel(sectionId, areaId, `${apartadoId}/${pantallaId}`) || pantallaId;
+                    push(sectionId, areaId, `${apartadoId}/${pantallaId}`, [deptLabel, areaLabel, apartadoLabel, pantallaLabel]);
                 });
             });
         });
     });
     return groups;
+}
+
+function countResumenLeaves(node) {
+    const own = node.isMatch ? 1 : 0;
+    return own + node.children.reduce((sum, child) => sum + countResumenLeaves(child), 0);
+}
+
+// One collapsible row per node, same all-collapsed-by-default convention
+// as the Árbol itself (see renderStatusTree's own comment on that) --
+// nothing here remembers what was open once Resumen closes.
+function buildResumenNode(node, depth) {
+    const wrap = document.createElement('div');
+    wrap.className = 'mini-node';
+    const row = document.createElement('div');
+    row.className = 'mini-row';
+    row.dataset.depth = String(depth);
+    const hasChildren = node.children.length > 0;
+    if (hasChildren) {
+        row.classList.add('has-children');
+        const toggle = document.createElement('span');
+        toggle.className = 'mini-toggle';
+        toggle.textContent = '▶';
+        toggle.setAttribute('aria-hidden', 'true');
+        row.appendChild(toggle);
+    } else {
+        const spacer = document.createElement('span');
+        spacer.className = 'mini-toggle-spacer';
+        row.appendChild(spacer);
+    }
+    const label = document.createElement('span');
+    label.className = 'mini-label';
+    label.textContent = node.label;
+    row.appendChild(label);
+    if (node.isMatch && hasChildren) {
+        // This node is a match in its own right, not just a path an actual
+        // match sits under -- flag it, since otherwise it'd silently read
+        // as pure grouping structure once it also has children.
+        const selfMatch = document.createElement('span');
+        selfMatch.className = 'mini-self-match';
+        selfMatch.textContent = '●';
+        selfMatch.setAttribute('aria-hidden', 'true');
+        row.appendChild(selfMatch);
+    }
+    if (hasChildren) {
+        const count = document.createElement('span');
+        count.className = 'mini-count';
+        count.textContent = String(countResumenLeaves(node));
+        row.appendChild(count);
+        row.addEventListener('click', () => wrap.classList.toggle('open'));
+    }
+    wrap.appendChild(row);
+    if (hasChildren) {
+        const childrenWrap = document.createElement('div');
+        childrenWrap.className = 'mini-children';
+        node.children.forEach((child) => childrenWrap.appendChild(buildResumenNode(child, depth + 1)));
+        wrap.appendChild(childrenWrap);
+    }
+    return wrap;
 }
 
 // Re-built fresh every time the Resumen tab is opened (not cached) -- it
@@ -218,7 +301,8 @@ function renderResumen() {
     masterResumenGrid.innerHTML = '';
     const groups = buildResumenGroups();
     STATUS_GROUP_ORDER.forEach((key) => {
-        const items = groups[key];
+        const roots = groups[key];
+        const totalCount = roots.reduce((sum, root) => sum + countResumenLeaves(root), 0);
         const card = document.createElement('div');
         card.className = `status-card status-card-${key.slice(0, 3)}`;
         // Habilitado is the default status almost everything sits in, so
@@ -236,7 +320,7 @@ function renderResumen() {
         name.textContent = statusLabel(key);
         const count = document.createElement('span');
         count.className = 'status-card-count';
-        count.textContent = String(items.length);
+        count.textContent = String(totalCount);
         const chev = document.createElement('span');
         chev.className = 'status-card-chev';
         chev.textContent = '▶';
@@ -246,26 +330,13 @@ function renderResumen() {
         card.appendChild(head);
         const list = document.createElement('div');
         list.className = 'status-card-list';
-        if (!items.length) {
+        if (!roots.length) {
             const empty = document.createElement('p');
             empty.className = 'admin-hint';
             empty.textContent = Dashboard.t('admin.masterResumenGroupEmpty');
             list.appendChild(empty);
         } else {
-            items.forEach((item) => {
-                const crumb = document.createElement('div');
-                crumb.className = 'status-card-crumb';
-                const b = document.createElement('b');
-                b.textContent = item.label;
-                crumb.appendChild(b);
-                if (item.breadcrumb) {
-                    const sep = document.createElement('span');
-                    sep.className = 'status-card-crumb-sep';
-                    sep.textContent = '·';
-                    crumb.append(sep, document.createTextNode(item.breadcrumb));
-                }
-                list.appendChild(crumb);
-            });
+            roots.forEach((root) => list.appendChild(buildResumenNode(root, 0)));
         }
         card.appendChild(list);
         masterResumenGrid.appendChild(card);
