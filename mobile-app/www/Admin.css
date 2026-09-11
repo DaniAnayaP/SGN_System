@@ -1574,6 +1574,14 @@ body.dark-mode .perm-tree-depth-2{
        width columns just sat wherever the label ended, leaving a large
        empty gap on a card wider than the row actually needs. */
     margin-left: auto;
+    /* .perm-tree-depth-6 (a Columna nested under a Clasificación, e.g.
+       Control Interno) sets font-style:italic on the whole row for its
+       LABEL's sake -- font-style inherits, so without this every control
+       in here (Estatus select, Web/App icons, $ Web/$ App) rendered
+       italic too, visually inconsistent with the same controls on every
+       shallower row. Controls are never meant to italicize regardless of
+       how deep the row sits. */
+    font-style: normal;
 }
 /* Width set by applyStatusAbbreviations (PermissionTree.js) to whatever
    the CURRENT ladder step actually needs -- matches
@@ -1974,6 +1982,159 @@ body:has(.master-tree-panel) main{
     flex-shrink: 0;
     margin: 0;
 }
+.master-tree-panel .master-tree-subview{
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+/* Same reasoning as .modal-overlay[hidden] below -- without this, [hidden]
+   loses to the class rule above (equal specificity, author CSS beats the
+   UA stylesheet) and the inactive view (Árbol or Resumen, whichever the
+   toggle isn't showing) would stay visible underneath the active one. */
+.master-tree-panel .master-tree-subview[hidden]{
+    display: none;
+}
+#master-resumen-view{
+    overflow-y: auto;
+    padding: 0.35rem;
+}
+
+/* Árbol Maestro's own Árbol/Resumen toggle -- same idea as Giro de
+   Negocio's Resumen/Árbol toggle (Admin-BusinessSectors.js) but for the
+   whole system's catalog instead of one Giro's accesses. Resumen (see
+   buildResumenGroups in Admin-ArbolMaestro.js) is read-only: no
+   checkboxes, no drag, the same nodes just grouped by Estatus instead of
+   nested by Departamento/Área/Apartado/Pantalla. */
+.master-tree-view-toggle{
+    display: inline-flex;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.9rem;
+    padding: 0.2rem;
+    gap: 0.15rem;
+}
+.master-tree-view-btn{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 0.7rem;
+    padding: 0.45rem 0.9rem;
+    cursor: pointer;
+}
+.master-tree-view-btn.active{
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    box-shadow: 0 1px 2px var(--shadow-border);
+}
+
+/* Resumen status cards -- same 4 colors as .perm-tree-mstatus-select-*
+   above, so "Habilitado" here reads as the same green badge it is on the
+   Árbol's own rows. */
+.status-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 0.6rem;
+    align-content: start;
+}
+.status-card{
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    background: var(--color-bg);
+    overflow: hidden;
+}
+.status-card-head{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.75rem 0.85rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    color: var(--color-text-primary);
+}
+.status-dot{
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.status-card-name{
+    font-size: 0.8rem;
+    font-weight: 600;
+    flex: 1;
+}
+.status-card-count{
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.status-card-chev{
+    color: var(--color-text-secondary);
+    font-size: 0.65rem;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+.status-card.expanded .status-card-chev{
+    transform: rotate(90deg);
+}
+.status-card-list{
+    display: none;
+    padding: 0 0.85rem 0.85rem;
+}
+.status-card.expanded .status-card-list{
+    display: block;
+}
+.status-card-crumb{
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+    padding: 0.4rem 0;
+    border-top: 1px solid var(--color-border);
+    line-height: 1.5;
+}
+.status-card-crumb b{
+    color: var(--color-text-primary);
+    font-weight: 600;
+}
+.status-card-crumb-sep{
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+    padding: 0 0.2rem;
+}
+.status-card-con .status-dot{ background-color: #c98a00; }
+.status-card-con .status-card-name,
+.status-card-con .status-card-count{ color: #9a6b00; }
+.status-card-mej .status-dot{ background-color: #3f74c4; }
+.status-card-mej .status-card-name,
+.status-card-mej .status-card-count{ color: #2c5aa0; }
+.status-card-inh .status-dot{ background-color: #b05a5a; }
+.status-card-inh .status-card-name,
+.status-card-inh .status-card-count{ color: #8a4b4b; }
+.status-card-hab .status-dot{ background-color: #2ea44f; }
+.status-card-hab .status-card-name,
+.status-card-hab .status-card-count{ color: #1e7e34; }
+body.dark-mode .status-card-con .status-dot{ background-color: #e0ac3f; }
+body.dark-mode .status-card-con .status-card-name,
+body.dark-mode .status-card-con .status-card-count{ color: #f0c463; }
+body.dark-mode .status-card-mej .status-dot{ background-color: #5f93d6; }
+body.dark-mode .status-card-mej .status-card-name,
+body.dark-mode .status-card-mej .status-card-count{ color: #8fb8ea; }
+body.dark-mode .status-card-inh .status-dot{ background-color: #c97a7a; }
+body.dark-mode .status-card-inh .status-card-name,
+body.dark-mode .status-card-inh .status-card-count{ color: #e0a3a3; }
+body.dark-mode .status-card-hab .status-dot{ background-color: #3fbf6a; }
+body.dark-mode .status-card-hab .status-card-name,
+body.dark-mode .status-card-hab .status-card-count{ color: #7fd99a; }
 
 /* Árbol de Permisos Maestro's own confirm-before-saving screen (see
    openConfirmModal in Admin-ArbolMaestro.js) -- one row per changed node,

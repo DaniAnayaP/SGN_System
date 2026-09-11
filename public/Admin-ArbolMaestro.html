@@ -366,6 +366,16 @@
 
         <section class="admin-panel master-tree-panel">
             <div class="admin-form-actions">
+                <div class="master-tree-view-toggle" role="tablist">
+                    <button type="button" class="master-tree-view-btn active" id="master-view-tree-btn" role="tab" aria-selected="true">
+                        <i class="bx bx-sitemap" aria-hidden="true"></i>
+                        <span data-i18n="admin.masterTreeViewTree">Tree</span>
+                    </button>
+                    <button type="button" class="master-tree-view-btn" id="master-view-resumen-btn" role="tab" aria-selected="false">
+                        <i class="bx bx-list-ul" aria-hidden="true"></i>
+                        <span data-i18n="admin.masterTreeViewResumen">Summary</span>
+                    </button>
+                </div>
                 <button type="button" class="btn" id="master-tree-save" data-i18n="admin.save">Save</button>
             </div>
             <div class="currency-bar">
@@ -377,9 +387,15 @@
                 </select>
                 <span class="currency-hint" data-i18n="admin.masterCostCurrencyHint">Every cost in this tree (Web and App, at every level) is in this currency.</span>
             </div>
-            <div id="master-tree-container" class="perm-tree"></div>
-            <div id="master-tree-error" class="admin-error" role="alert" hidden></div>
-            <p class="admin-subtitle" data-i18n="admin.masterTreeSubtitle">Set the status of every node in the system here — independent of any Giro, Plan or client.</p>
+            <div id="master-tree-view" class="master-tree-subview">
+                <div id="master-tree-container" class="perm-tree"></div>
+                <div id="master-tree-error" class="admin-error" role="alert" hidden></div>
+                <p class="admin-subtitle" data-i18n="admin.masterTreeSubtitle">Set the status of every node in the system here — independent of any Giro, Plan or client.</p>
+            </div>
+            <div id="master-resumen-view" class="master-tree-subview" hidden>
+                <p class="admin-hint" data-i18n="admin.masterResumenHint">Read-only — the same catalog grouped by Status instead of by Department/Area/Section/Screen.</p>
+                <div class="status-grid" id="master-resumen-grid"></div>
+            </div>
         </section>
     </main>
 

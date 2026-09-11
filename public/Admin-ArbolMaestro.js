@@ -18,6 +18,11 @@ const masterTreeContainer = document.getElementById('master-tree-container');
 const masterTreeError = document.getElementById('master-tree-error');
 const masterTreeSaveBtn = document.getElementById('master-tree-save');
 const currencySelect = document.getElementById('master-currency-select');
+const viewTreeBtn = document.getElementById('master-view-tree-btn');
+const viewResumenBtn = document.getElementById('master-view-resumen-btn');
+const masterTreeView = document.getElementById('master-tree-view');
+const masterResumenView = document.getElementById('master-resumen-view');
+const masterResumenGrid = document.getElementById('master-resumen-grid');
 
 let masterTree = null;
 // Snapshot from the last successful load/save -- the baseline
@@ -33,6 +38,10 @@ let originalAreaOrders = {};
 // One level deeper still -- each área's own Apartado order, keyed by
 // "sectionId::areaId" (see getApartadoOrders in PermissionTree.js).
 let originalApartadoOrders = {};
+// One level deeper still -- each apartado's own Pantalla order, keyed by
+// "sectionId::areaId::apartadoId" (see getPantallaOrders in
+// PermissionTree.js).
+let originalPantallaOrders = {};
 // Árbol Maestro's own suggested/base cost per node (see getCosts in
 // PermissionTree.js / master_permission_cost in db.js) -- a separate
 // table from statuses/order, saved together on the same Guardar click.
@@ -119,6 +128,19 @@ function collectOrderChanges() {
             line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
         });
     });
+    const afterPantallaOrders = masterTree.getPantallaOrders();
+    Object.keys(afterPantallaOrders).forEach((compoundKey) => {
+        const before = originalPantallaOrders[compoundKey] || [];
+        const after = afterPantallaOrders[compoundKey];
+        if (!orderArraysDiffer(before, after)) return;
+        const [sectionId, areaId, apartadoId] = compoundKey.split('::');
+        const apartadoName = masterTree.getStatusLabel(sectionId, areaId, apartadoId) || apartadoId;
+        const names = after.map((id) => masterTree.getStatusLabel(sectionId, areaId, `${apartadoId}/${id}`) || id);
+        items.push({
+            label: Dashboard.t('admin.masterTreePantallaOrderLabel', { apartado: apartadoName }),
+            line: Dashboard.t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    });
     return items;
 }
 
@@ -145,6 +167,130 @@ function collectCostChanges() {
     });
     return items;
 }
+
+// --- Resumen (read-only, grouped by Estatus) -- same idea as Giro de
+// Negocio's own Resumen/Árbol toggle (Admin-BusinessSectors.js), but for
+// the WHOLE system's catalog instead of one Giro's accesses, and with a
+// per-status breakdown instead of just a count (the full catalog is much
+// bigger than any one Giro's, so a bare count alone isn't enough to audit
+// it). Built entirely from PermissionTree.js's already-exposed getters --
+// no new tree-side API needed: getDepartmentOrder/getAreaOrders/
+// getApartadoOrders/getPantallaOrders together already walk every real
+// node menu.json defines, and getStatusLabel resolves any of them back to
+// its human name. ------------------------------------------------------
+const STATUS_GROUP_ORDER = ['construccion', 'mejoras', 'inhabilitado', 'habilitado'];
+
+function buildResumenGroups() {
+    const groups = { habilitado: [], inhabilitado: [], construccion: [], mejoras: [] };
+    if (!masterTree) return groups;
+    const statusByKey = new Map(masterTree.getStatuses().map((r) => [statusRowKey(r), r.status]));
+    const areaOrders = masterTree.getAreaOrders();
+    const apartadoOrders = masterTree.getApartadoOrders();
+    const pantallaOrders = masterTree.getPantallaOrders();
+    const push = (sectionId, itemId, submenuId, breadcrumb) => {
+        const status = statusByKey.get(`${sectionId}::${itemId || ''}::${submenuId || ''}`) || 'habilitado';
+        const label = masterTree.getNodeLabel(sectionId, itemId, submenuId) || submenuId || itemId || sectionId;
+        (groups[status] || groups.habilitado).push({ label, breadcrumb: breadcrumb.join(' › ') });
+    };
+    masterTree.getDepartmentOrder().forEach((sectionId) => {
+        const deptLabel = masterTree.getNodeLabel(sectionId, null, null) || sectionId;
+        push(sectionId, null, null, []);
+        (areaOrders[sectionId] || []).forEach((areaId) => {
+            const areaLabel = masterTree.getNodeLabel(sectionId, areaId, null) || areaId;
+            push(sectionId, areaId, null, [deptLabel]);
+            (apartadoOrders[`${sectionId}::${areaId}`] || []).forEach((apartadoId) => {
+                const apartadoLabel = masterTree.getNodeLabel(sectionId, areaId, apartadoId) || apartadoId;
+                push(sectionId, areaId, apartadoId, [deptLabel, areaLabel]);
+                (pantallaOrders[`${sectionId}::${areaId}::${apartadoId}`] || []).forEach((pantallaId) => {
+                    push(sectionId, areaId, `${apartadoId}/${pantallaId}`, [deptLabel, areaLabel, apartadoLabel]);
+                });
+            });
+        });
+    });
+    return groups;
+}
+
+// Re-built fresh every time the Resumen tab is opened (not cached) -- it
+// reflects whatever's currently in the tree, including edits made on the
+// Árbol tab that haven't been saved yet, same live-state convention as
+// describeChanges()/collectOrderChanges() above.
+function renderResumen() {
+    masterResumenGrid.innerHTML = '';
+    const groups = buildResumenGroups();
+    STATUS_GROUP_ORDER.forEach((key) => {
+        const items = groups[key];
+        const card = document.createElement('div');
+        card.className = `status-card status-card-${key.slice(0, 3)}`;
+        // Habilitado is the default status almost everything sits in, so
+        // it starts collapsed (its own list is the longest, by far, and
+        // rarely what an admin opens Resumen to check) -- the other 3
+        // start expanded since those are exactly what's worth auditing.
+        if (key !== 'habilitado') card.classList.add('expanded');
+        const head = document.createElement('button');
+        head.type = 'button';
+        head.className = 'status-card-head';
+        const dot = document.createElement('span');
+        dot.className = 'status-dot';
+        const name = document.createElement('span');
+        name.className = 'status-card-name';
+        name.textContent = statusLabel(key);
+        const count = document.createElement('span');
+        count.className = 'status-card-count';
+        count.textContent = String(items.length);
+        const chev = document.createElement('span');
+        chev.className = 'status-card-chev';
+        chev.textContent = '▶';
+        chev.setAttribute('aria-hidden', 'true');
+        head.append(dot, name, count, chev);
+        head.addEventListener('click', () => card.classList.toggle('expanded'));
+        card.appendChild(head);
+        const list = document.createElement('div');
+        list.className = 'status-card-list';
+        if (!items.length) {
+            const empty = document.createElement('p');
+            empty.className = 'admin-hint';
+            empty.textContent = Dashboard.t('admin.masterResumenGroupEmpty');
+            list.appendChild(empty);
+        } else {
+            items.forEach((item) => {
+                const crumb = document.createElement('div');
+                crumb.className = 'status-card-crumb';
+                const b = document.createElement('b');
+                b.textContent = item.label;
+                crumb.appendChild(b);
+                if (item.breadcrumb) {
+                    const sep = document.createElement('span');
+                    sep.className = 'status-card-crumb-sep';
+                    sep.textContent = '·';
+                    crumb.append(sep, document.createTextNode(item.breadcrumb));
+                }
+                list.appendChild(crumb);
+            });
+        }
+        card.appendChild(list);
+        masterResumenGrid.appendChild(card);
+    });
+}
+
+function showTreeView() {
+    viewTreeBtn.classList.add('active');
+    viewTreeBtn.setAttribute('aria-selected', 'true');
+    viewResumenBtn.classList.remove('active');
+    viewResumenBtn.setAttribute('aria-selected', 'false');
+    masterTreeView.hidden = false;
+    masterResumenView.hidden = true;
+}
+function showResumenView() {
+    viewResumenBtn.classList.add('active');
+    viewResumenBtn.setAttribute('aria-selected', 'true');
+    viewTreeBtn.classList.remove('active');
+    viewTreeBtn.setAttribute('aria-selected', 'false');
+    masterResumenView.hidden = false;
+    masterTreeView.hidden = true;
+    renderResumen();
+}
+viewTreeBtn.addEventListener('click', showTreeView);
+viewResumenBtn.addEventListener('click', showResumenView);
 
 function statusLabel(status) {
     return Dashboard.t(`admin.masterTreeStatus${status.charAt(0).toUpperCase()}${status.slice(1)}`);
@@ -254,6 +400,7 @@ async function loadMasterTree() {
             departmentOrder: orderData.departmentOrder || [],
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
+            pantallaOrder: orderData.pantallaOrders || {},
             costCurrency: currentCurrency,
         });
         await masterTree.init(originalStatuses, costData.costs || []);
@@ -268,6 +415,7 @@ async function loadMasterTree() {
         originalDepartmentOrder = masterTree.getDepartmentOrder();
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
+        originalPantallaOrders = masterTree.getPantallaOrders();
         originalCosts = masterTree.getCosts();
     } catch {
         masterTreeError.textContent = Dashboard.t('admin.loadError');
@@ -293,6 +441,7 @@ async function saveMasterTree() {
                     departmentOrder: masterTree.getDepartmentOrder(),
                     areaOrders: masterTree.getAreaOrders(),
                     apartadoOrders: masterTree.getApartadoOrders(),
+                    pantallaOrders: masterTree.getPantallaOrders(),
                 }),
             }),
             fetch('/api/admin/master-permission-costs', {
@@ -311,6 +460,7 @@ async function saveMasterTree() {
         originalDepartmentOrder = masterTree.getDepartmentOrder();
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
+        originalPantallaOrders = masterTree.getPantallaOrders();
         originalCosts = masterTree.getCosts();
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved -- otherwise a checkbox you

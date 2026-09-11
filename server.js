@@ -246,6 +246,7 @@ const {
     getEffectiveSectorOrdersByPrefix,
     areaOrderKey,
     apartadoOrderKey,
+    pantallaOrderKey,
     PERMISSION_ORDER_ROOT_KEY,
     getClientAppScreens,
     WEB_SCREEN_CATALOG,
@@ -1980,11 +1981,12 @@ app.get('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, r
         departmentOrder: row ? row.orderedKeys : [],
         areaOrders: buildMasterOrdersByPrefix('area::'),
         apartadoOrders: buildMasterOrdersByPrefix('apartado::'),
+        pantallaOrders: buildMasterOrdersByPrefix('pantalla::'),
     });
 });
 
 app.put('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, res) => {
-    const { departmentOrder, areaOrders, apartadoOrders } = req.body || {};
+    const { departmentOrder, areaOrders, apartadoOrders, pantallaOrders } = req.body || {};
     if (!isValidOrderArray(departmentOrder)) {
         return res.status(400).json({ message: 'departmentOrder must be an array of section ids.' });
     }
@@ -1994,6 +1996,9 @@ app.put('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, r
     if (apartadoOrders !== undefined && !isValidOrderMap(apartadoOrders)) {
         return res.status(400).json({ message: 'apartadoOrders must be a map of "sectionId::areaId" to an array of apartado ids.' });
     }
+    if (pantallaOrders !== undefined && !isValidOrderMap(pantallaOrders)) {
+        return res.status(400).json({ message: 'pantallaOrders must be a map of "sectionId::areaId::apartadoId" to an array of pantalla ids.' });
+    }
     const rows = [{ parentKey: PERMISSION_ORDER_ROOT_KEY, orderedKeys: departmentOrder }];
     Object.entries(areaOrders || {}).forEach(([sectionId, orderedKeys]) => {
         rows.push({ parentKey: areaOrderKey(sectionId), orderedKeys });
@@ -2002,12 +2007,17 @@ app.put('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, r
         const [sectionId, areaId] = compoundKey.split('::');
         rows.push({ parentKey: apartadoOrderKey(sectionId, areaId), orderedKeys });
     });
+    Object.entries(pantallaOrders || {}).forEach(([compoundKey, orderedKeys]) => {
+        const [sectionId, areaId, apartadoId] = compoundKey.split('::');
+        rows.push({ parentKey: pantallaOrderKey(sectionId, areaId, apartadoId), orderedKeys });
+    });
     setMasterPermissionOrders(rows, changedByLabel(req));
     const row = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
     res.json({
         departmentOrder: row ? row.orderedKeys : [],
         areaOrders: buildMasterOrdersByPrefix('area::'),
         apartadoOrders: buildMasterOrdersByPrefix('apartado::'),
+        pantallaOrders: buildMasterOrdersByPrefix('pantalla::'),
     });
 });
 

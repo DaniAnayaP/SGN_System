@@ -263,7 +263,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, costCurrency = 'MXN' } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, costCurrency = 'MXN' } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -333,6 +333,16 @@
             const area = section && section.items.find((i) => i.id === areaId);
             if (!area || !area.submenu) return false;
             return reorderInPlace(area.submenu, draggedId, targetId);
+        }
+        // One level deeper still -- a Pantalla only ever reorders among the
+        // OTHER pantallas of that SAME apartado, never across apartados,
+        // áreas or departments.
+        function reorderPantallas(sectionId, areaId, apartadoId, draggedId, targetId) {
+            const section = sectionsData.find((s) => s.id === sectionId);
+            const area = section && section.items.find((i) => i.id === areaId);
+            const apartado = area && area.submenu && area.submenu.find((sm) => sm.id === apartadoId);
+            if (!apartado || !apartado.submenu) return false;
+            return reorderInPlace(apartado.submenu, draggedId, targetId);
         }
         let grantSet = new Set();
         // statusMode's own state -- a Map from the same keyOf(...) key
@@ -1836,6 +1846,11 @@
                         }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, true));
                         if (!smExpandedNow) return;
                         const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
+                        // Pantalla only reorders among its own apartado's
+                        // siblings -- same isRealArea guard as Área/Apartado
+                        // (a standalone pantalla, e.g. under 'main', is
+                        // never draggable either way).
+                        const pantallaScope = `${section.id}::${item.id}::${sm.id}`;
 
                         sm.submenu.forEach((subSm) => {
                             const key = subSm.standalone
@@ -1844,13 +1859,16 @@
                             const subHasDetail = subSmHasDetail(subSm);
                             const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
                             const subDetailExpanded = expandedItems.has(subDetailKey);
+                            const pantallaDragCtx = (isRealArea && !subSm.standalone)
+                                ? { kind: 'pantalla', id: subSm.id, scope: pantallaScope, onDrop: (draggedId, targetId) => reorderPantallas(section.id, item.id, sm.id, draggedId, targetId) }
+                                : null;
                             treeRoot.appendChild(statusRow(t(subSm.labelKey, subSm.labelParams), 3, key, subHasDetail ? {
                                 expanded: subDetailExpanded,
                                 onToggle: () => {
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null, null, null, subSmAncestorLocked, null, true));
+                            } : null, null, null, subSmAncestorLocked, pantallaDragCtx, true));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
                                 if (subSm.submenu && subSm.submenu.length) {
@@ -2192,27 +2210,38 @@
                         // each área reorders its own apartados (Catálogos/
                         // Operaciones/...) independently, same cascade idea
                         // one level deeper still.
-                        const areaItems = deptAreas.map((area) => ({
-                            id: area.id,
-                            labelKey: area.labelKey,
-                            labelParams: area.labelParams,
-                            // Wrapped in [...] -- categoriesForArea returns
-                            // the SHARED areaCategories template array itself
-                            // (not a copy) for any área with no override of
-                            // its own, and applyOrder passes that same
-                            // reference straight through when there's no
-                            // order to apply yet either. Without cloning
-                            // here, reorderApartados's in-place splice on
-                            // ONE área's submenu would silently reorder
-                            // every OTHER área still sharing that template
-                            // too -- confirmed live before this fix (dragging
-                            // one área's apartado moved it for a sibling área
-                            // as well).
-                            submenu: [...applyOrder(
+                        const areaItems = deptAreas.map((area) => {
+                            const apartados = applyOrder(
                                 categoriesForArea(s.id, area.id, areaCategories || [], areaOverrides),
                                 apartadoOrder && apartadoOrder[`${s.id}::${area.id}`],
-                            )],
-                        }));
+                            );
+                            return {
+                                id: area.id,
+                                labelKey: area.labelKey,
+                                labelParams: area.labelParams,
+                                // Wrapped in [...], and EACH apartado below
+                                // also cloned (never just passed through as
+                                // `cat`) -- categoriesForArea returns the
+                                // SHARED areaCategories template itself (not
+                                // a copy) for any área/apartado with no
+                                // override of its own, submenu (pantallas)
+                                // included. Without cloning both levels,
+                                // reorderApartados/reorderPantallas's
+                                // in-place splice on ONE área would silently
+                                // reorder every OTHER área still sharing
+                                // that same template object too --
+                                // confirmed live for apartados before this
+                                // fix (dragging one área's apartado moved it
+                                // for a sibling área as well); pantallaOrder
+                                // is one level deeper still, same risk.
+                                submenu: apartados.map((cat) => ({
+                                    ...cat,
+                                    submenu: cat.submenu
+                                        ? [...applyOrder(cat.submenu, pantallaOrder && pantallaOrder[`${s.id}::${area.id}::${cat.id}`])]
+                                        : cat.submenu,
+                                })),
+                            };
+                        });
                         return { ...s, items: [...generalItems, ...areaItems] };
                     }
                     const items = s.items
@@ -2347,6 +2376,32 @@
             getStatusLabel(sectionId, itemId, submenuId) {
                 return statusLabelMap.get(keyOf(sectionId, itemId, submenuId)) || '';
             },
+            // Same idea as getStatusLabel above, but resolved directly from
+            // sectionsData instead of statusLabelMap -- statusLabelMap only
+            // ever gets a node once statusRow actually renders it, which
+            // (Departamento aside) only happens once its parent has been
+            // expanded at least once this session. Admin-ArbolMaestro.js's
+            // Resumen view needs every node's name up front, whether or not
+            // it was ever expanded in the Árbol tab, so it uses this
+            // instead. '' for a standalone pantalla (never reachable via
+            // getPantallaOrders either, see its own comment) or a stale
+            // reference to a since-removed menu.json entry.
+            getNodeLabel(sectionId, itemId, submenuId) {
+                const section = sectionsData.find((s) => s.id === sectionId);
+                if (!section) return '';
+                if (!itemId) return t(sectionLabelKey(section));
+                const area = section.items.find((i) => i.id === itemId);
+                if (!area) return '';
+                if (!submenuId) return t(area.labelKey, area.labelParams);
+                if (submenuId.includes('/')) {
+                    const [apartadoId, pantallaId] = submenuId.split('/');
+                    const apartado = (area.submenu || []).find((sm) => sm.id === apartadoId);
+                    const pantalla = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
+                    return pantalla ? t(pantalla.labelKey, pantalla.labelParams) : '';
+                }
+                const apartado = (area.submenu || []).find((sm) => sm.id === submenuId);
+                return apartado ? t(apartado.labelKey, apartado.labelParams) : '';
+            },
             // statusMode only -- current Departamento order (drag-reordered
             // sectionsData, minus 'main' which is core navigation and never
             // a reorderable Departamento -- see the departmentOrder param
@@ -2384,6 +2439,25 @@
                         if (area.submenu && area.submenu.length) {
                             result[`${s.id}::${area.id}`] = area.submenu.map((sm) => sm.id);
                         }
+                    });
+                });
+                return result;
+            },
+            // statusMode only -- current Pantalla order for EVERY apartado
+            // of EVERY área at once, keyed by "sectionId::areaId::apartadoId"
+            // (same shape pantallaOrder accepts). A standalone pantalla
+            // (e.g. under 'main') is never included -- it's not part of any
+            // apartado's own submenu to begin with.
+            getPantallaOrders() {
+                const result = {};
+                sectionsData.forEach((s) => {
+                    if (s.id === 'main') return;
+                    s.items.filter((i) => !GENERAL_ITEM_IDS.includes(i.id)).forEach((area) => {
+                        (area.submenu || []).forEach((apartado) => {
+                            if (apartado.submenu && apartado.submenu.length) {
+                                result[`${s.id}::${area.id}::${apartado.id}`] = apartado.submenu.map((subSm) => subSm.id);
+                            }
+                        });
                     });
                 });
                 return result;

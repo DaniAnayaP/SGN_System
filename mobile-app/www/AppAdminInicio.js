@@ -295,6 +295,7 @@ let originalStatuses = [];
 let originalDepartmentOrder = [];
 let originalAreaOrders = {};
 let originalApartadoOrders = {};
+let originalPantallaOrders = {};
 // Same idea, Árbol Maestro's own suggested/base cost per node (see
 // public/Admin-ArbolMaestro.js's own originalCosts).
 let originalCosts = [];
@@ -367,6 +368,19 @@ function collectOrderChanges() {
             line: t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
         });
     });
+    const afterPantallaOrders = masterTree.getPantallaOrders();
+    Object.keys(afterPantallaOrders).forEach((compoundKey) => {
+        const before = originalPantallaOrders[compoundKey] || [];
+        const after = afterPantallaOrders[compoundKey];
+        if (!orderArraysDiffer(before, after)) return;
+        const [sectionId, areaId, apartadoId] = compoundKey.split('::');
+        const apartadoName = masterTree.getStatusLabel(sectionId, areaId, apartadoId) || apartadoId;
+        const names = after.map((id) => masterTree.getStatusLabel(sectionId, areaId, `${apartadoId}/${id}`) || id);
+        items.push({
+            label: t('admin.masterTreePantallaOrderLabel', { apartado: apartadoName }),
+            line: t('admin.masterTreeOrderChangeLine', { order: names.join(' → ') }),
+        });
+    });
     return items;
 }
 // Same idea as public/Admin-ArbolMaestro.js's own collectCostChanges.
@@ -389,6 +403,109 @@ function collectCostChanges() {
     });
     return items;
 }
+// Same idea as public/Admin-ArbolMaestro.js's own buildResumenGroups/
+// renderResumen -- read-only, grouped by Estatus, built entirely from
+// PermissionTree.js's already-exposed getters. Ported to this App's own
+// "swap what's in contentEl" pattern instead of a static #master-resumen-*
+// container -- renderResumenInto(container) builds the whole view fresh
+// into whatever wrapper loadMasterTree hands it.
+const STATUS_GROUP_ORDER = ['construccion', 'mejoras', 'inhabilitado', 'habilitado'];
+
+function buildResumenGroups() {
+    const groups = { habilitado: [], inhabilitado: [], construccion: [], mejoras: [] };
+    if (!masterTree) return groups;
+    const statusByKey = new Map(masterTree.getStatuses().map((r) => [statusRowKey(r), r.status]));
+    const areaOrders = masterTree.getAreaOrders();
+    const apartadoOrders = masterTree.getApartadoOrders();
+    const pantallaOrders = masterTree.getPantallaOrders();
+    const push = (sectionId, itemId, submenuId, breadcrumb) => {
+        const status = statusByKey.get(`${sectionId}::${itemId || ''}::${submenuId || ''}`) || 'habilitado';
+        const label = masterTree.getNodeLabel(sectionId, itemId, submenuId) || submenuId || itemId || sectionId;
+        (groups[status] || groups.habilitado).push({ label, breadcrumb: breadcrumb.join(' › ') });
+    };
+    masterTree.getDepartmentOrder().forEach((sectionId) => {
+        const deptLabel = masterTree.getNodeLabel(sectionId, null, null) || sectionId;
+        push(sectionId, null, null, []);
+        (areaOrders[sectionId] || []).forEach((areaId) => {
+            const areaLabel = masterTree.getNodeLabel(sectionId, areaId, null) || areaId;
+            push(sectionId, areaId, null, [deptLabel]);
+            (apartadoOrders[`${sectionId}::${areaId}`] || []).forEach((apartadoId) => {
+                const apartadoLabel = masterTree.getNodeLabel(sectionId, areaId, apartadoId) || apartadoId;
+                push(sectionId, areaId, apartadoId, [deptLabel, areaLabel]);
+                (pantallaOrders[`${sectionId}::${areaId}::${apartadoId}`] || []).forEach((pantallaId) => {
+                    push(sectionId, areaId, `${apartadoId}/${pantallaId}`, [deptLabel, areaLabel, apartadoLabel]);
+                });
+            });
+        });
+    });
+    return groups;
+}
+
+function renderResumenInto(container) {
+    container.innerHTML = '';
+    const hint = document.createElement('p');
+    hint.className = 'admin-hint';
+    hint.textContent = t('admin.masterResumenHint');
+    container.appendChild(hint);
+    const grid = document.createElement('div');
+    grid.className = 'status-grid';
+    container.appendChild(grid);
+    const groups = buildResumenGroups();
+    STATUS_GROUP_ORDER.forEach((key) => {
+        const items = groups[key];
+        const card = document.createElement('div');
+        card.className = `status-card status-card-${key.slice(0, 3)}`;
+        // Habilitado starts collapsed -- it's the default status almost
+        // everything sits in (by far the longest list), rarely what
+        // someone opens Resumen to check. The other 3 start expanded
+        // since those are exactly what's worth auditing.
+        if (key !== 'habilitado') card.classList.add('expanded');
+        const head = document.createElement('button');
+        head.type = 'button';
+        head.className = 'status-card-head';
+        const dot = document.createElement('span');
+        dot.className = 'status-dot';
+        const name = document.createElement('span');
+        name.className = 'status-card-name';
+        name.textContent = statusLabel(key);
+        const count = document.createElement('span');
+        count.className = 'status-card-count';
+        count.textContent = String(items.length);
+        const chev = document.createElement('span');
+        chev.className = 'status-card-chev';
+        chev.textContent = '▶';
+        chev.setAttribute('aria-hidden', 'true');
+        head.append(dot, name, count, chev);
+        head.addEventListener('click', () => card.classList.toggle('expanded'));
+        card.appendChild(head);
+        const list = document.createElement('div');
+        list.className = 'status-card-list';
+        if (!items.length) {
+            const empty = document.createElement('p');
+            empty.className = 'admin-hint';
+            empty.textContent = t('admin.masterResumenGroupEmpty');
+            list.appendChild(empty);
+        } else {
+            items.forEach((item) => {
+                const crumb = document.createElement('div');
+                crumb.className = 'status-card-crumb';
+                const b = document.createElement('b');
+                b.textContent = item.label;
+                crumb.appendChild(b);
+                if (item.breadcrumb) {
+                    const sep = document.createElement('span');
+                    sep.className = 'status-card-crumb-sep';
+                    sep.textContent = '·';
+                    crumb.append(sep, document.createTextNode(item.breadcrumb));
+                }
+                list.appendChild(crumb);
+            });
+        }
+        card.appendChild(list);
+        grid.appendChild(card);
+    });
+}
+
 function statusLabel(status) {
     return t(`admin.masterTreeStatus${status.charAt(0).toUpperCase()}${status.slice(1)}`);
 }
@@ -555,6 +672,7 @@ async function saveMasterTree(saveBtn) {
                     departmentOrder: masterTree.getDepartmentOrder(),
                     areaOrders: masterTree.getAreaOrders(),
                     apartadoOrders: masterTree.getApartadoOrders(),
+                    pantallaOrders: masterTree.getPantallaOrders(),
                 }),
             }),
             fetch(apiUrl('/api/admin/master-permission-costs'), {
@@ -572,6 +690,7 @@ async function saveMasterTree(saveBtn) {
         originalDepartmentOrder = masterTree.getDepartmentOrder();
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
+        originalPantallaOrders = masterTree.getPantallaOrders();
         originalCosts = masterTree.getCosts();
         // Resets the tree's own pending-added/pending-removed highlight
         // baseline to what just got saved.
@@ -610,6 +729,24 @@ async function loadMasterTree(token) {
 
         contentEl.appendChild(buildCurrencyBar());
 
+        // Árbol/Resumen toggle -- same idea as public/Admin-ArbolMaestro.js's
+        // own #master-view-tree-btn/#master-view-resumen-btn, reusing the
+        // exact same .master-tree-view-toggle/.master-tree-view-btn classes
+        // from Admin.css (already linked here, shared with the Web page).
+        const viewToggle = document.createElement('div');
+        viewToggle.className = 'master-tree-view-toggle';
+        const viewTreeBtn = document.createElement('button');
+        viewTreeBtn.type = 'button';
+        viewTreeBtn.className = 'master-tree-view-btn active';
+        viewTreeBtn.innerHTML = `<i class="bx bx-sitemap" aria-hidden="true"></i><span>${t('admin.masterTreeViewTree')}</span>`;
+        const viewResumenBtn = document.createElement('button');
+        viewResumenBtn.type = 'button';
+        viewResumenBtn.className = 'master-tree-view-btn';
+        viewResumenBtn.innerHTML = `<i class="bx bx-list-ul" aria-hidden="true"></i><span>${t('admin.masterTreeViewResumen')}</span>`;
+        viewToggle.append(viewTreeBtn, viewResumenBtn);
+        contentEl.appendChild(viewToggle);
+
+        const treeViewWrap = document.createElement('div');
         const treeWrap = document.createElement('div');
         // .perm-tree is the class Admin.css's own base rules key off of
         // (max-height/scroll/border) -- Admin-ArbolMaestro.html hardcodes it
@@ -617,12 +754,36 @@ async function loadMasterTree(token) {
         // itself; this container needs it too. .admin-master-tree is this
         // page's own scoping hook (see AppAdminInicio.css).
         treeWrap.className = 'admin-master-tree perm-tree';
-        contentEl.appendChild(treeWrap);
+        treeViewWrap.appendChild(treeWrap);
+        contentEl.appendChild(treeViewWrap);
+
+        const resumenViewWrap = document.createElement('div');
+        resumenViewWrap.hidden = true;
+        contentEl.appendChild(resumenViewWrap);
+
+        viewTreeBtn.addEventListener('click', () => {
+            viewTreeBtn.classList.add('active');
+            viewResumenBtn.classList.remove('active');
+            treeViewWrap.hidden = false;
+            resumenViewWrap.hidden = true;
+        });
+        viewResumenBtn.addEventListener('click', () => {
+            viewResumenBtn.classList.add('active');
+            viewTreeBtn.classList.remove('active');
+            resumenViewWrap.hidden = false;
+            treeViewWrap.hidden = true;
+            // Re-built fresh every time, so it reflects whatever's
+            // currently in the tree, including edits made on the Árbol
+            // tab that haven't been saved yet.
+            renderResumenInto(resumenViewWrap);
+        });
+
         masterTree = window.PermissionTree.create(treeWrap, {
             statusMode: true,
             departmentOrder: orderData.departmentOrder || [],
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
+            pantallaOrder: orderData.pantallaOrders || {},
             costCurrency: currentCurrency,
         });
         await masterTree.init(originalStatuses, costData.costs || []);
@@ -634,6 +795,7 @@ async function loadMasterTree(token) {
         originalDepartmentOrder = masterTree.getDepartmentOrder();
         originalAreaOrders = masterTree.getAreaOrders();
         originalApartadoOrders = masterTree.getApartadoOrders();
+        originalPantallaOrders = masterTree.getPantallaOrders();
         originalCosts = masterTree.getCosts();
 
         const saveBtn = document.createElement('button');
