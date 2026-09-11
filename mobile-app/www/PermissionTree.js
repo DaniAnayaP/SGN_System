@@ -2464,7 +2464,7 @@
             // (they're not a real screen/field, just a grant tier).
             COLUMN_STATUS_LEVELS.forEach((level) => {
                 const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
-                container.appendChild(statusRow(t(level.labelKey), depth + 1, levelKey, null, null, null, ancestorLocked, null, null));
+                container.appendChild(statusRow(t(level.labelKey), depth + 1, levelKey, null, selfStateRollup(levelKey), null, ancestorLocked, null, null));
             });
         }
 
@@ -2549,7 +2549,7 @@
                     node: subSm,
                     iconId: icon.id,
                 } : null;
-                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, null, null, ancestorLocked, null, previewInfo));
+                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, selfStateRollup(iconKey), null, ancestorLocked, null, previewInfo));
             });
         }
 
@@ -2737,6 +2737,19 @@
             const leafKeys = collectLeafStatusKeys(key);
             return { web: computeRollup(leafKeys, 'web'), app: computeRollup(leafKeys, 'app') };
         }
+        // A true leaf (Operar/Editar/Autorizar/Eliminar, an Ícono, Inicio/
+        // Panel/Tablero, an Apartado/Pantalla with nothing else nested
+        // under it) has nothing to roll up -- but it still HAS its own
+        // Web/App checkboxes, so it gets the exact same icon everywhere
+        // else, just mirroring its own value directly instead of
+        // aggregating descendants (confirmed with the user: green/full
+        // when its own checkbox is on, empty/white when it's off --
+        // "partial" never applies here on purpose, there's nothing to be
+        // partial between).
+        function selfStateRollup(key) {
+            const state = getNodeState(key);
+            return { web: state.webEnabled ? 'full' : 'empty', app: state.appEnabled ? 'full' : 'empty' };
+        }
         // "Aplicar Estatus a anidados" -- same one-directional, only-ever-
         // writes-downward idea as applyNestedPlatform above, just copying
         // the Estatus select instead of a Web/App checkbox, and onto EVERY
@@ -2787,7 +2800,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : null, sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo));
+                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, section.id !== 'main' ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -2818,7 +2831,7 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : null, itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo));
+                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo));
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
                     // Apartado (Catálogos/Operaciones/...) only reorders
@@ -2844,7 +2857,7 @@
                             children: hasSubSubmenu ? sm.submenu.filter((s) => !s.standalone).map((subSm) => ({ id: subSm.id, label: t(subSm.labelKey, subSm.labelParams), icon: subSm.icon })) : [],
                         };
                         if (!hasSubSubmenu) {
-                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, null, null, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo));
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, selfStateRollup(smStateKey), null, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo));
                             return;
                         }
 
@@ -2893,7 +2906,7 @@
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null, hasStatusChildren(key) ? computeNodeRollup(key) : null, null, subSmAncestorLocked, pantallaDragCtx, previewInfo));
+                            } : null, hasStatusChildren(key) ? computeNodeRollup(key) : selfStateRollup(key), null, subSmAncestorLocked, pantallaDragCtx, previewInfo));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
                                 if (subSm.submenu && subSm.submenu.length) {
