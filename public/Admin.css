@@ -971,19 +971,35 @@ body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c4
     color: var(--color-text-secondary);
 }
 
-/* Árbol Maestro's own cost currency -- bar above the tree (see
-   Admin-ArbolMaestro.js) + the exchange-rate confirmation modal that opens
-   when the <select> below changes. */
-.currency-bar{
+/* Árbol Maestro's own unified toolbar -- Moneda, the Árbol/Resumen toggle
+   and Guardar together in one flex-wrap row (confirmed with the user
+   after they saw Moneda and the toggle awkwardly stacked on two separate
+   rows): all of them share one row when there's room, and wrap onto more
+   rows as the screen narrows, instead of being 2 rigid separate blocks
+   that always stack regardless of how much width is actually available. */
+.admin-toolbar{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+}
+/* Pushes whatever comes after it (Guardar) to the row's right edge when
+   everything fits on one line; a no-op once the row wraps, since there's
+   no trailing space left on an earlier line to push into. */
+.admin-toolbar-spacer{
+    flex: 1 1 auto;
+}
+/* Árbol Maestro's own cost currency -- compact pill inside .admin-toolbar
+   above (see Admin-ArbolMaestro.js) + the exchange-rate confirmation
+   modal that opens when the <select> below changes. */
+.currency-group{
     display: flex;
     align-items: center;
-    gap: 0.7rem;
-    flex-wrap: wrap;
+    gap: 0.5rem;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 0.6rem;
-    padding: 0.6rem 0.9rem;
-    margin-bottom: 0.8rem;
+    border-radius: 999px;
+    padding: 0.3rem 0.3rem 0.3rem 0.75rem;
 }
 .currency-label{
     display: flex;
@@ -1005,7 +1021,15 @@ body.dark-mode .sector-order-custom-tag{ background-color: #3a2e10; color: #f0c4
     color: var(--color-accent);
     flex-shrink: 0;
 }
-.currency-hint{ font-size: 0.76rem; color: var(--color-text-secondary); }
+/* Now a standalone caption below .admin-toolbar instead of sitting inline
+   inside the row -- it's descriptive text, not a control, so it doesn't
+   need to compete with Moneda/Árbol-Resumen/Guardar for the same row. */
+.currency-hint{
+    display: block;
+    font-size: 0.76rem;
+    color: var(--color-text-secondary);
+    margin-top: 0.5rem;
+}
 
 .currency-rate-box{
     background: var(--color-bg);
@@ -1974,9 +1998,8 @@ body:has(.master-tree-panel) main{
    other screens) since only Árbol Maestro's rows are fixed-width like
    this. */
 .master-tree-panel .perm-tree-row{ min-width: max-content; }
-.master-tree-panel .admin-form-actions{
+.master-tree-panel .admin-toolbar{
     flex-shrink: 0;
-    margin: 0;
 }
 .master-tree-panel .admin-subtitle{
     flex-shrink: 0;

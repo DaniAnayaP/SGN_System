@@ -9,6 +9,7 @@
    futuristic hex values Dashboard.css already uses, just re-declared here so
    this standalone App page has them too. */
 :root{
+    --color-bg: #EBECF2;
     --color-surface: #ffffff;
     --color-surface-alt: #f2f2f5;
     --color-border: #9A9EB2;
@@ -18,6 +19,7 @@
     --color-accent-text: #ffffff;
 }
 body.dark-mode{
+    --color-bg: #3A3D4D;
     --color-surface: #12141A;
     --color-surface-alt: #1a1c2b;
     --color-border: #2B2D3B;
@@ -27,6 +29,7 @@ body.dark-mode{
     --color-accent-text: #12141A;
 }
 body.futuristic-mode{
+    --color-bg: #0B0D14;
     --color-surface: #12141f;
     --color-surface-alt: #1a1d33;
     --color-border: #2C3355;

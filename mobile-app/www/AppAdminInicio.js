@@ -664,10 +664,17 @@ function updateCurrencySheetPreview() {
         : t('admin.masterCostPreviewEmpty');
 }
 
-function buildCurrencyBar() {
-    const bar = document.createElement('div');
-    bar.className = 'currency-bar';
-    bar.innerHTML = `<span class="currency-label"><i class="bx bx-coin-stack" aria-hidden="true"></i><span>${t('admin.masterCostCurrencyLabel')}</span></span>`;
+// Compact pill (icon+label+select), no hint text bundled in -- meant to
+// sit inside .admin-toolbar next to the Árbol/Resumen toggle (see
+// loadMasterTree below), same idea as public/Admin-ArbolMaestro.html's own
+// .currency-group. The long hint text is its own standalone caption below
+// the toolbar instead (admin.masterCostCurrencyHint), since it's
+// descriptive text, not a control -- it doesn't need to compete with
+// Moneda/Árbol-Resumen for room in the same row.
+function buildCurrencyGroup() {
+    const group = document.createElement('div');
+    group.className = 'currency-group';
+    group.innerHTML = `<span class="currency-label"><i class="bx bx-coin-stack" aria-hidden="true"></i><span>${t('admin.masterCostCurrencyLabel')}</span></span>`;
     const select = document.createElement('select');
     select.className = 'currency-select';
     ['MXN', 'USD', 'EUR'].forEach((code) => {
@@ -690,12 +697,8 @@ function buildCurrencyBar() {
         currencySheetOverlay.hidden = false;
     });
     currencySelectEl = select;
-    bar.appendChild(select);
-    const hint = document.createElement('span');
-    hint.className = 'currency-hint';
-    hint.textContent = t('admin.masterCostCurrencyHint');
-    bar.appendChild(hint);
-    return bar;
+    group.appendChild(select);
+    return group;
 }
 currencySheetCancelBtn.addEventListener('click', () => {
     if (currencySelectEl) currencySelectEl.value = currentCurrency;
@@ -798,7 +801,19 @@ async function loadMasterTree(token) {
         lastExchangeRate = costData.lastExchangeRate || 1;
         contentEl.innerHTML = '';
 
-        contentEl.appendChild(buildCurrencyBar());
+        // Moneda + Árbol/Resumen together in one flex-wrap row (confirmed
+        // with the user after they saw these awkwardly stacked on two
+        // separate rows on Web) -- both fit on one line when there's room,
+        // wrapping onto their own line as the screen narrows. Guardar
+        // deliberately stays its own full-width button below (see the end
+        // of this function) rather than joining this row -- every other
+        // save/submit action in the App uses that same full-width
+        // .home-carga-new-btn treatment, and this screen is always a
+        // narrow phone width to begin with, unlike Web's own wide-screen
+        // case where Guardar sharing the row actually saves space.
+        const toolbar = document.createElement('div');
+        toolbar.className = 'admin-toolbar';
+        toolbar.appendChild(buildCurrencyGroup());
 
         // Árbol/Resumen toggle -- same idea as public/Admin-ArbolMaestro.js's
         // own #master-view-tree-btn/#master-view-resumen-btn, reusing the
@@ -815,7 +830,13 @@ async function loadMasterTree(token) {
         viewResumenBtn.className = 'master-tree-view-btn';
         viewResumenBtn.innerHTML = `<i class="bx bx-list-ul" aria-hidden="true"></i><span>${t('admin.masterTreeViewResumen')}</span>`;
         viewToggle.append(viewTreeBtn, viewResumenBtn);
-        contentEl.appendChild(viewToggle);
+        toolbar.appendChild(viewToggle);
+        contentEl.appendChild(toolbar);
+
+        const currencyHint = document.createElement('span');
+        currencyHint.className = 'currency-hint';
+        currencyHint.textContent = t('admin.masterCostCurrencyHint');
+        contentEl.appendChild(currencyHint);
 
         const treeViewWrap = document.createElement('div');
         const treeWrap = document.createElement('div');
