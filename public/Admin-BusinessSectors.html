@@ -494,18 +494,31 @@
         </div>
     </div>
 
+    <!-- "Accesos Globales" -- a replica of Árbol de Permisos Maestro's own
+         full-depth tree (same order, same Departamento..Ícono/grant-level
+         structure), but as a Web/App SELECTION gated by whatever Árbol
+         Maestro currently allows (grantMode:'giro' in PermissionTree.js) --
+         not the old ungated checkbox tree this replaced. No reorder here
+         (that's Reorden Personalizado, see sector-order-modal below); a
+         blocked icon is still clickable, it just shows why instead of
+         toggling (see buildGateIcon). -->
     <div class="modal-overlay" id="sector-tree-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-tree-modal-title" style="max-width: 48rem;">
-            <h3 id="sector-tree-modal-title" data-i18n="admin.sectorTreeTitle">Default access for this sector</h3>
+            <h3 id="sector-tree-modal-title" data-i18n="admin.giroAccesosGlobalesTitle">Global Access</h3>
             <p class="admin-hint" data-i18n="admin.sectorTreeHint">A new Plan aimed at this sector starts with exactly this — from there each Plan can add or remove on its own.</p>
+            <div class="perm-tree-gate-legend">
+                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-granted"></span><span data-i18n="admin.giroGateLegendGranted">Granted</span></span>
+                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-partial"></span><span data-i18n="admin.giroGateLegendPartial">Partial</span></span>
+                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-available"></span><span data-i18n="admin.giroGateLegendAvailable">Available, not granted</span></span>
+                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-needs-web"></span><span data-i18n="admin.giroGateLegendNeedsWeb">App needs Web first</span></span>
+                <span class="perm-tree-gate-legend-item"><span class="perm-tree-gate-icon perm-tree-gate-icon-blocked"></span><span data-i18n="admin.giroGateLegendBlocked">Blocked by Master Tree</span></span>
+            </div>
             <button type="button" class="admin-link-btn" id="sector-tree-view-perms" data-i18n="admin.businessSectorViewPerms">See summary / status of this sector's access</button>
             <div id="sector-tree-container"></div>
             <div id="sector-tree-error" class="admin-error" role="alert" hidden></div>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
                 <button type="button" class="btn" id="sector-tree-save" data-i18n="admin.save">Save</button>
                 <button type="button" class="btn btn-secondary" id="sector-tree-close" data-i18n="admin.cancel">Close</button>
-                <button type="button" class="btn btn-secondary" id="sector-tree-equalize-app" data-i18n="main.appEqualizeAll" style="margin-left: auto;">Match APP visibility to Web</button>
-                <button type="button" class="btn btn-secondary" id="sector-tree-fill-missing-app" data-i18n="main.appFillMissingAll">Add missing APP visibility</button>
             </div>
         </div>
     </div>

@@ -264,7 +264,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN' } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, grantMode = null, masterGate = null, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN' } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -279,6 +279,24 @@
         // init() below (which normally reacts to them) behave exactly as if
         // the caller had simply never passed them.
         if (statusMode) {
+            allowedSectionIds = null;
+            costCenters = [];
+            enabledModuleKeys = null;
+            showAppTab = false;
+        }
+        // grantMode ('giro' is the only real value so far) is Nuestros
+        // Sectores de Negocio's "Accesos Globales" screen -- a selection
+        // tree gated by Árbol Maestro's own master_permission_status,
+        // instead of an Estatus editor (statusMode) or a plain ungated
+        // grant tree. Mutually exclusive with statusMode by convention
+        // (never both passed) and forces the exact same irrelevant options
+        // off; showAppTab specifically must never combine with grantMode
+        // 'giro' -- its App-eligibility fetch (GET /api/business/app-screens)
+        // 404s for the GEIPSA admin session that opens this screen (no
+        // req.user.clientId), so Accesos Globales's own Web/App icons are
+        // built entirely on the new masterGate/grantSet plumbing below,
+        // never on showAppTab's inert-for-Giro pipeline.
+        if (grantMode) {
             allowedSectionIds = null;
             costCenters = [];
             enabledModuleKeys = null;
@@ -396,6 +414,18 @@
         // Pantalla/Columna all have their own selector), so cascading it
         // needs every intermediate node's key too, not just leaves.
         let statusChildrenMap = new Map();
+        // grantMode 'giro' only -- key -> {status,webEnabled,appEnabled}
+        // read from master_permission_status (passed in as the masterGate
+        // option), same sparse convention as statusMap but READ-ONLY here:
+        // Accesos Globales never edits Árbol Maestro's own Estatus, it only
+        // gates what THIS Giro can select against it. giroGateBlockMap is
+        // derived from it once per render (see buildGiroGateBlockMap) --
+        // key -> {webBlocked, webBlockedBy, appBlocked, appBlockedBy},
+        // already cascaded down from every ancestor so any row can look up
+        // its own fully-resolved blocked state in one map read instead of
+        // walking back up to Departamento every time.
+        let masterGateMap = new Map();
+        let giroGateBlockMap = new Map();
         // key -> the human label shown on that row, filled in as
         // statusRow renders each one -- lets a caller (Admin-ArbolMaestro.js's
         // confirm-changes screen) turn a bare {sectionId,itemId,submenuId}
@@ -2818,6 +2848,420 @@
             const state = getNodeState(key);
             return { web: state.webEnabled ? 'full' : 'empty', app: state.appEnabled ? 'full' : 'empty' };
         }
+
+        // ── grantMode 'giro' ("Accesos Globales") ──────────────────────────
+        // A brand-new, additive-only sibling of the statusMode render family
+        // above (renderStatusTree/statusRow/buildStatusChildrenMap/etc, all
+        // completely untouched by anything below this point). Reuses that
+        // family's shared, purely-structural plumbing as-is --
+        // buildStatusChildrenMap/collectDescendantStatusKeys/
+        // collectLeafStatusKeys (depend only on sectionsData, never on
+        // statusMap), plus alignLabelColumnWidth/drawNestGuides/
+        // deviceIconSvg (depend only on rendered DOM classes/structure) --
+        // and adds its own row-content renderer (giroRow) and gate-state
+        // math (masterGateMap/giroGateBlockMap/computeGateState) instead of
+        // Estatus/cost. Never touches grantSet's meaning: getGrants() keeps
+        // returning exactly what it always has, so Save (PUT .../grants)
+        // needs no changes either.
+        function getMasterGateState(key) {
+            return masterGateMap.get(key) || { status: DEFAULT_STATUS, webEnabled: true, appEnabled: false };
+        }
+        // Cascades a blocked ancestor down once, into a flat key -> state
+        // map covering every node in sectionsData (same walk shape as
+        // buildStatusChildrenMap, kept separate rather than folded into it
+        // since this one needs to carry a running "blocked so far" value
+        // down through the recursion, not just record parent/child edges).
+        // appBlocked also inherits webBlocked (App can never be selectable
+        // somewhere Web itself isn't, matching buildPlatformCheckbox's own
+        // "App can't stay on once Web turns off" rule) on top of its own
+        // appEnabled/status. *BlockedBy carries WHICH key's own master row
+        // is actually responsible, so a click's toast can quote the real
+        // reason instead of a generic "something upstream is off".
+        function buildGiroGateBlockMap() {
+            const map = new Map();
+            const setBlock = (key, parentWeb, parentApp) => {
+                const own = getMasterGateState(key);
+                const ownBad = own.status !== DEFAULT_STATUS;
+                const webBlockedBy = parentWeb.blocked ? parentWeb.by : ((ownBad || !own.webEnabled) ? key : null);
+                const web = { blocked: !!webBlockedBy, by: webBlockedBy };
+                const appBlockedBy = web.blocked ? web.by : (parentApp.blocked ? parentApp.by : ((ownBad || !own.appEnabled) ? key : null));
+                const app = { blocked: !!appBlockedBy, by: appBlockedBy };
+                map.set(key, { webBlocked: web.blocked, webBlockedBy: web.by, appBlocked: app.blocked, appBlockedBy: app.by });
+                return { web, app };
+            };
+            const ROOT = { blocked: false, by: null };
+            sectionsData.forEach((section) => {
+                const sectionKey = keyOf(section.id, null, null);
+                const { web: sWeb, app: sApp } = setBlock(sectionKey, ROOT, ROOT);
+                (section.items || []).forEach((item) => {
+                    const itemKey = keyOf(section.id, item.id, null);
+                    const { web: iWeb, app: iApp } = setBlock(itemKey, sWeb, sApp);
+                    (item.submenu || []).forEach((sm) => {
+                        const smKey = keyOf(section.id, item.id, sm.id);
+                        const { web: smWeb, app: smApp } = setBlock(smKey, iWeb, iApp);
+                        if (!sm.submenu || !sm.submenu.length) return;
+                        sm.submenu.forEach((subSm) => {
+                            const subKey = subSm.standalone ? keyOf(section.id, subSm.id, null) : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
+                            const { web: subWeb, app: subApp } = setBlock(subKey, smWeb, smApp);
+                            // Everything from here down (Tabla/Clasificación/
+                            // Columna/its 4 levels/Iconos-group/Ícono) is a
+                            // SYNTHETIC container that exists only to mirror
+                            // the grant tree's own finer granularity -- none
+                            // of them gate their OWN children beyond what the
+                            // Pantalla above already cascaded, same as
+                            // statusMode's real precedent: renderStatusTableColumns/
+                            // renderStatusClassification/renderStatusColumn all
+                            // pass the SAME ancestorLocked they received straight
+                            // through, never re-deriving it from Tabla's own (or
+                            // Clasificación's, or the Columna's own bare-key)
+                            // webEnabled/appEnabled. Each one's OWN row still
+                            // gets its own map entry (setBlock still runs on it),
+                            // it just never becomes the PARENT value for its
+                            // children -- subWeb/subApp (the Pantalla's own
+                            // cascaded state) is threaded down unchanged instead.
+                            if (subSm.submenu && subSm.submenu.length) {
+                                const tableKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`);
+                                setBlock(tableKey, subWeb, subApp);
+                                subSm.submenu.forEach((entry) => {
+                                    if (entry.isClassification) {
+                                        const clsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`);
+                                        setBlock(clsKey, subWeb, subApp);
+                                        (entry.submenu || []).forEach((col) => {
+                                            const colBase = `${sm.id}/${subSm.id}/${entry.id}/${col.id}`;
+                                            const colKey = keyOf(section.id, item.id, colBase);
+                                            setBlock(colKey, subWeb, subApp);
+                                            COLUMN_STATUS_LEVELS.forEach((level) => setBlock(keyOf(section.id, item.id, `${colBase}/${level.id}`), subWeb, subApp));
+                                        });
+                                        return;
+                                    }
+                                    const colBase = `${sm.id}/${subSm.id}/${entry.id}`;
+                                    const colKey = keyOf(section.id, item.id, colBase);
+                                    setBlock(colKey, subWeb, subApp);
+                                    COLUMN_STATUS_LEVELS.forEach((level) => setBlock(keyOf(section.id, item.id, `${colBase}/${level.id}`), subWeb, subApp));
+                                });
+                            }
+                            if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
+                                const iconsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`);
+                                setBlock(iconsKey, subWeb, subApp);
+                                subSm.iconsSubmenu.forEach((icon) => setBlock(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`), subWeb, subApp));
+                            }
+                        });
+                    });
+                });
+            });
+            return map;
+        }
+        // True-leaf read: 'blocked' (Árbol Maestro forbids this platform,
+        // anywhere from this node up to Departamento) / 'needsWeb' (App
+        // only -- master allows it, but THIS Giro hasn't granted Web on
+        // this exact node yet) / 'granted' / 'available'.
+        function computeGateState(key, platform) {
+            const block = giroGateBlockMap.get(key) || { webBlocked: true, appBlocked: true };
+            if (platform === 'web') return block.webBlocked ? 'blocked' : (grantSet.has(key) ? 'granted' : 'available');
+            if (block.appBlocked) return 'blocked';
+            if (!grantSet.has(key)) return 'needsWeb';
+            return grantSet.has(key + APP_SUFFIX) ? 'granted' : 'available';
+        }
+        // Any key's own icon state -- a leaf reads its own grant directly;
+        // a group (Pantalla/Tabla/Clasificación/Columna/Iconos, anything
+        // with real descendants) has no independent grant of its own in
+        // this screen, only a rollup of what's underneath, so it recurses.
+        function computeGateNodeState(key, platform) {
+            return hasStatusChildren(key) ? computeGateRollup(collectLeafStatusKeys(key), platform) : computeGateState(key, platform);
+        }
+        // Aggregates a list of keys (each resolved via computeGateNodeState,
+        // so a shallow Pantalla-level list -- see renderGiroTree's own
+        // Departamento/Área/Apartado rows, matching statusMode's own
+        // by-screen rollup granularity there -- still correctly recurses
+        // into any built-out Pantalla's real columns/icons rather than
+        // checking a grant bit that Pantalla never independently has).
+        // 'needsWeb' folds into 'partial'/'available' here, same as any
+        // other non-granted, non-blocked leaf -- it isn't its own rollup
+        // color, just a reason a leaf-level icon shows dashed instead of
+        // plain white.
+        function computeGateRollup(keys, platform) {
+            if (!keys.length) return 'available';
+            const states = keys.map((k) => computeGateNodeState(k, platform));
+            if (states.every((s) => s === 'blocked')) return 'blocked';
+            const active = states.filter((s) => s !== 'blocked');
+            const grantedCount = active.filter((s) => s === 'granted').length;
+            const mixed = states.some((s) => s === 'blocked' || s === 'partial');
+            if (!mixed && grantedCount === active.length) return 'granted';
+            if (!mixed && grantedCount === 0) return 'available';
+            return 'partial';
+        }
+        // Toast text for a blocked click -- quotes the real reason (Estatus
+        // label, or which platform Árbol Maestro hasn't enabled) off
+        // whichever key buildGiroGateBlockMap recorded as actually
+        // responsible, which may be an ancestor rather than the clicked
+        // node itself.
+        function describeMasterBlock(blockedByKey) {
+            const state = getMasterGateState(blockedByKey);
+            if (state.status !== DEFAULT_STATUS) {
+                const opt = STATUS_OPTIONS.find((o) => o.value === state.status);
+                return t('admin.giroGateBlockedByStatus', { status: opt ? t(opt.labelKey) : state.status });
+            }
+            const platformLabel = t(!state.webEnabled ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
+            return t('admin.giroGateBlockedByPlatform', { platform: platformLabel });
+        }
+        function showGiroToast(message) {
+            if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'warning');
+            else if (typeof window.showToast === 'function') window.showToast(message);
+        }
+        // Web/App gate icon -- a real, always-clickable <button> (never the
+        // HTML disabled attribute on blocked/needsWeb, so the toast still
+        // fires) styled per state via perm-tree-gate-icon-<state>. Clicking
+        // a granted/available/partial icon toggles this node's platform ON
+        // (if not already fully granted) or OFF (if it was), cascading over
+        // every real underlying leaf (collectLeafStatusKeys -- true leaf
+        // gets just itself) and skipping any that are individually blocked
+        // for that platform -- mirrors applyNestedPlatform's direct,
+        // no-confirm cascade, never Estatus's confirm-first one, since this
+        // is a selection tree, not an Estatus editor. Turning Web off also
+        // clears App on the same leaves (same rule statusMode's own
+        // buildPlatformCheckbox already enforces).
+        function buildGateIcon(platform, key, state) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `perm-tree-gate-icon perm-tree-gate-icon-${state}`;
+            btn.title = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
+            btn.innerHTML = deviceIconSvg(platform, '');
+            if (readOnly) {
+                btn.disabled = true;
+                return btn;
+            }
+            btn.addEventListener('click', () => {
+                const leaves = hasStatusChildren(key) ? collectLeafStatusKeys(key) : [key];
+                if (state === 'needsWeb') {
+                    showGiroToast(t('admin.giroGateNeedsWebFirst'));
+                    return;
+                }
+                if (state === 'blocked') {
+                    const blockedKind = platform === 'web' ? 'webBlockedBy' : 'appBlockedBy';
+                    const responsible = leaves.map((k) => giroGateBlockMap.get(k)).find((b) => b && b[blockedKind]);
+                    showGiroToast(describeMasterBlock(responsible ? responsible[blockedKind] : key));
+                    return;
+                }
+                const turnOn = state !== 'granted';
+                leaves.forEach((leafKey) => {
+                    const block = giroGateBlockMap.get(leafKey) || { webBlocked: true, appBlocked: true };
+                    if (platform === 'web') {
+                        if (block.webBlocked) return;
+                        if (turnOn) grantSet.add(leafKey);
+                        else { grantSet.delete(leafKey); grantSet.delete(leafKey + APP_SUFFIX); }
+                    } else {
+                        if (block.appBlocked || !grantSet.has(leafKey)) return;
+                        if (turnOn) grantSet.add(leafKey + APP_SUFFIX);
+                        else grantSet.delete(leafKey + APP_SUFFIX);
+                    }
+                });
+                renderGiroTree();
+            });
+            return btn;
+        }
+        // Same visual shell as statusRow (toggle/label/count-badge line up
+        // identically, same classes -- réplica del árbol maestro), but the
+        // trailing controls are just the two gate icons -- no drag handle,
+        // no cost, no Estatus select/nest-button, no Vista Previa: this
+        // screen only ever selects what's already habilitado, it never
+        // describes or reorders anything.
+        function giroRow(labelText, depth, key, toggle, gate) {
+            const row = document.createElement('div');
+            row.className = `perm-tree-row perm-tree-depth-${depth}`;
+            if (toggle) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'perm-tree-toggle';
+                btn.setAttribute('aria-expanded', String(toggle.expanded));
+                const icon = document.createElement('i');
+                icon.className = 'bx bx-chevron-down';
+                icon.setAttribute('aria-hidden', 'true');
+                btn.appendChild(icon);
+                btn.addEventListener('click', () => { toggle.onToggle(); renderGiroTree(); });
+                row.appendChild(btn);
+            } else {
+                const spacer = document.createElement('span');
+                spacer.className = 'perm-tree-toggle-spacer';
+                row.appendChild(spacer);
+            }
+            const label = document.createElement('span');
+            label.className = 'perm-tree-mstatus-label';
+            label.textContent = labelText;
+            label.addEventListener('mouseenter', () => { if (typeof showSubmenuTooltip === 'function') showSubmenuTooltip(label); });
+            label.addEventListener('mouseleave', () => { if (typeof hideSidebarTooltip === 'function') hideSidebarTooltip(); });
+            row.appendChild(label);
+            if (key) {
+                const countBadge = document.createElement('span');
+                countBadge.className = 'perm-tree-mstatus-count-badge';
+                countBadge.textContent = String(Math.max(1, collectDescendantStatusKeys(key).length));
+                row.appendChild(countBadge);
+            }
+            if (key && gate) {
+                const controls = document.createElement('div');
+                controls.className = 'perm-tree-mstatus-controls perm-tree-gate-controls';
+                controls.appendChild(buildGateIcon('web', key, gate.web));
+                controls.appendChild(buildGateIcon('app', key, gate.app));
+                row.appendChild(controls);
+            }
+            return row;
+        }
+        function renderGiroColumn(container, section, item, base, col, depth) {
+            const colKey = keyOf(section.id, item.id, base);
+            const colTreeKey = `col::${section.id}::${item.id}::${base}`;
+            const colExpanded = expandedItems.has(colTreeKey);
+            container.appendChild(giroRow(t(col.labelKey, col.labelParams), depth, colKey, {
+                expanded: colExpanded,
+                onToggle: () => {
+                    if (colExpanded) expandedItems.delete(colTreeKey);
+                    else expandedItems.add(colTreeKey);
+                },
+            }, { web: computeGateNodeState(colKey, 'web'), app: computeGateNodeState(colKey, 'app') }));
+            if (!colExpanded) return;
+            COLUMN_STATUS_LEVELS.forEach((level) => {
+                const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                container.appendChild(giroRow(t(level.labelKey), depth + 1, levelKey, null, { web: computeGateState(levelKey, 'web'), app: computeGateState(levelKey, 'app') }));
+            });
+        }
+        function renderGiroClassification(container, section, item, sm, subSm, cls) {
+            const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
+            const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
+            const classExpanded = expandedItems.has(classTreeKey);
+            const classKey = keyOf(section.id, item.id, classBase);
+            container.appendChild(giroRow(t(cls.labelKey, cls.labelParams), 5, classKey, {
+                expanded: classExpanded,
+                onToggle: () => {
+                    if (classExpanded) expandedItems.delete(classTreeKey);
+                    else expandedItems.add(classTreeKey);
+                },
+            }, { web: computeGateNodeState(classKey, 'web'), app: computeGateNodeState(classKey, 'app') }));
+            if (!classExpanded) return;
+            cls.submenu.forEach((col) => {
+                renderGiroColumn(container, section, item, `${classBase}/${col.id}`, col, 6);
+            });
+        }
+        function renderGiroTableColumns(container, section, item, sm, subSm) {
+            const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const tableExpanded = expandedItems.has(tableTreeKey);
+            const tableKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`);
+            container.appendChild(giroRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, tableKey, {
+                expanded: tableExpanded,
+                onToggle: () => {
+                    if (tableExpanded) expandedItems.delete(tableTreeKey);
+                    else expandedItems.add(tableTreeKey);
+                },
+            }, { web: computeGateNodeState(tableKey, 'web'), app: computeGateNodeState(tableKey, 'app') }));
+            if (!tableExpanded) return;
+            subSm.submenu.forEach((entry) => {
+                if (entry.isClassification) {
+                    renderGiroClassification(container, section, item, sm, subSm, entry);
+                    return;
+                }
+                renderGiroColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5);
+            });
+        }
+        function renderGiroIcons(container, section, item, sm, subSm) {
+            const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const iconsExpanded = expandedItems.has(iconsTreeKey);
+            const iconsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`);
+            container.appendChild(giroRow(t('menu.iconsPersonalization'), 4, iconsKey, {
+                expanded: iconsExpanded,
+                onToggle: () => {
+                    if (iconsExpanded) expandedItems.delete(iconsTreeKey);
+                    else expandedItems.add(iconsTreeKey);
+                },
+            }, { web: computeGateNodeState(iconsKey, 'web'), app: computeGateNodeState(iconsKey, 'app') }));
+            if (!iconsExpanded) return;
+            subSm.iconsSubmenu.forEach((icon) => {
+                const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
+                container.appendChild(giroRow(t(icon.labelKey), 5, iconKey, null, { web: computeGateState(iconKey, 'web'), app: computeGateState(iconKey, 'app') }));
+            });
+        }
+        function renderGiroTree() {
+            statusChildrenMap = buildStatusChildrenMap();
+            giroGateBlockMap = buildGiroGateBlockMap();
+            treeRoot.innerHTML = '';
+            sectionsData.forEach((section) => {
+                const sectionExpanded = expandedSections.has(section.id);
+                const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
+                const sectionStateKey = keyOf(section.id, null, null);
+                treeRoot.appendChild(giroRow(t(sectionLabelKey(section)), 0, sectionStateKey, section.items.length ? {
+                    expanded: sectionExpanded,
+                    onToggle: () => {
+                        if (sectionExpanded) expandedSections.delete(section.id);
+                        else expandedSections.add(section.id);
+                    },
+                } : null, section.items.length
+                    ? { web: computeGateRollup(sectionLeafKeys, 'web'), app: computeGateRollup(sectionLeafKeys, 'app') }
+                    : { web: computeGateNodeState(sectionStateKey, 'web'), app: computeGateNodeState(sectionStateKey, 'app') }));
+                if (!sectionExpanded) return;
+
+                section.items.forEach((item) => {
+                    const hasSubmenu = !!(item.submenu && item.submenu.length);
+                    const itemKey = `${section.id}::${item.id}`;
+                    const itemExpanded = expandedItems.has(itemKey);
+                    const itemStateKey = keyOf(section.id, item.id, null);
+                    const itemLeafKeys = hasSubmenu ? leafKeysUnder(section, item) : [];
+                    treeRoot.appendChild(giroRow(t(item.labelKey, item.labelParams), 1, itemStateKey, hasSubmenu ? {
+                        expanded: itemExpanded,
+                        onToggle: () => {
+                            if (itemExpanded) expandedItems.delete(itemKey);
+                            else expandedItems.add(itemKey);
+                        },
+                    } : null, hasSubmenu
+                        ? { web: computeGateRollup(itemLeafKeys, 'web'), app: computeGateRollup(itemLeafKeys, 'app') }
+                        : { web: computeGateNodeState(itemStateKey, 'web'), app: computeGateNodeState(itemStateKey, 'app') }));
+                    if (!hasSubmenu || !itemExpanded) return;
+
+                    item.submenu.forEach((sm) => {
+                        const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
+                        const smStateKey = keyOf(section.id, item.id, sm.id);
+                        if (!hasSubSubmenu) {
+                            treeRoot.appendChild(giroRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, { web: computeGateNodeState(smStateKey, 'web'), app: computeGateNodeState(smStateKey, 'app') }));
+                            return;
+                        }
+                        const smKey = `${section.id}::${item.id}::${sm.id}`;
+                        const smExpandedNow = expandedItems.has(smKey);
+                        const smLeafKeys = leafKeysUnderSm(section, item, sm);
+                        treeRoot.appendChild(giroRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, {
+                            expanded: smExpandedNow,
+                            onToggle: () => {
+                                if (smExpandedNow) expandedItems.delete(smKey);
+                                else expandedItems.add(smKey);
+                            },
+                        }, { web: computeGateRollup(smLeafKeys, 'web'), app: computeGateRollup(smLeafKeys, 'app') }));
+                        if (!smExpandedNow) return;
+
+                        sm.submenu.forEach((subSm) => {
+                            const key = subSm.standalone
+                                ? keyOf(section.id, subSm.id, null)
+                                : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
+                            const subHasDetail = subSmHasDetail(subSm);
+                            const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
+                            const subDetailExpanded = expandedItems.has(subDetailKey);
+                            treeRoot.appendChild(giroRow(t(subSm.labelKey, subSm.labelParams), 3, key, subHasDetail ? {
+                                expanded: subDetailExpanded,
+                                onToggle: () => {
+                                    if (subDetailExpanded) expandedItems.delete(subDetailKey);
+                                    else expandedItems.add(subDetailKey);
+                                },
+                            } : null, { web: computeGateNodeState(key, 'web'), app: computeGateNodeState(key, 'app') }));
+                            if (subHasDetail && subDetailExpanded) {
+                                if (subSm.submenu && subSm.submenu.length) {
+                                    renderGiroTableColumns(treeRoot, section, item, sm, subSm);
+                                }
+                                if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
+                                    renderGiroIcons(treeRoot, section, item, sm, subSm);
+                                }
+                            }
+                        });
+                    });
+                });
+            });
+            alignLabelColumnWidth();
+            drawNestGuides();
+            treeRoot.scrollLeft = 0;
+        }
+
         // "Aplicar Estatus a anidados" -- same one-directional, only-ever-
         // writes-downward idea as applyNestedPlatform above, just copying
         // the Estatus select instead of a Web/App checkbox, and onto EVERY
@@ -3009,6 +3453,10 @@
             // renderer, untouched and unreachable when statusMode is on.
             if (statusMode) {
                 renderStatusTree();
+                return;
+            }
+            if (grantMode) {
+                renderGiroTree();
                 return;
             }
             treeRoot.innerHTML = '';
@@ -3468,6 +3916,36 @@
                     // font had already loaded by the first render.
                     if (document.fonts && document.fonts.ready) {
                         document.fonts.ready.then(() => { if (statusMode) render(); });
+                    }
+                    return;
+                }
+                // grantMode 'giro' -- initialGrants here is already
+                // leaf-precise {sectionId,itemId,submenuId} rows (exactly
+                // what getGrants() below returns, the same shape
+                // sector_grants stores), so this seeds grantSet directly
+                // rather than through expand() (which exists to broaden a
+                // coarser legacy grant into every leaf it implies -- never
+                // needed here, Accesos Globales never saves anything but
+                // already-leaf-precise rows). masterGate is the
+                // GET /api/admin/master-permission-status payload, read
+                // once into masterGateMap; never re-fetched or re-written
+                // by this screen.
+                if (grantMode) {
+                    grantSet = new Set((initialGrants || []).map((g) => keyOf(g.sectionId, g.itemId, g.submenuId)));
+                    masterGateMap = new Map();
+                    (masterGate || []).forEach((s) => {
+                        if (!s) return;
+                        masterGateMap.set(keyOf(s.sectionId, s.itemId, s.submenuId), {
+                            status: s.status || DEFAULT_STATUS,
+                            webEnabled: s.webEnabled !== false,
+                            appEnabled: s.appEnabled === true,
+                        });
+                    });
+                    expandedSections = new Set();
+                    expandedItems = new Set();
+                    render();
+                    if (document.fonts && document.fonts.ready) {
+                        document.fonts.ready.then(() => { if (grantMode) render(); });
                     }
                     return;
                 }

@@ -2277,6 +2277,86 @@ body.dark-mode .perm-tree-mstatus-rollup-full{
 body.dark-mode .perm-tree-mstatus-rollup-partial{
     color: var(--color-text-secondary);
 }
+/* Giro de Negocio's "Accesos Globales" gate icons (grantMode 'giro' in
+   PermissionTree.js) -- a semáforo, not a checkbox: blocked (Árbol
+   Maestro forbids it, red), needs-web (App only, dashed -- otorga Web en
+   este mismo nodo primero), available (habilitado, nada otorgado aún),
+   granted (verde), and partial (mezcla, en filas de grupo). Reuses the
+   same monitor/phone silhouette deviceIconSvg already draws for
+   statusMode's own rollup icons, just recolored per state instead of by
+   full/partial/empty. */
+.perm-tree-gate-icon{
+    width: 1.65rem;
+    height: 1.65rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.4rem;
+    border: 1.5px solid transparent;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+}
+.perm-tree-gate-icon svg{
+    width: 1rem;
+    height: 1rem;
+}
+.perm-tree-gate-icon-granted{
+    background: color-mix(in srgb, #1e7e34 14%, transparent);
+    color: #1e7e34;
+}
+.perm-tree-gate-icon-partial{
+    background: var(--color-surface-alt, #f2f2f5);
+    color: var(--color-text-secondary);
+}
+.perm-tree-gate-icon-available{
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-color: var(--color-border);
+}
+.perm-tree-gate-icon-needs-web{
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-style: dashed;
+    border-color: var(--color-border);
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.perm-tree-gate-icon-blocked{
+    background: color-mix(in srgb, #b3261e 12%, transparent);
+    color: #b3261e;
+    cursor: not-allowed;
+}
+body.dark-mode .perm-tree-gate-icon-granted{
+    background: color-mix(in srgb, #7fd99a 18%, transparent);
+    color: #7fd99a;
+}
+body.dark-mode .perm-tree-gate-icon-blocked{
+    background: color-mix(in srgb, #e37b73 18%, transparent);
+    color: #e37b73;
+}
+.perm-tree-gate-controls{
+    gap: 0.5rem;
+}
+.perm-tree-gate-legend{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    margin: 0.4rem 0 0.8rem;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+.perm-tree-gate-legend-item{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.perm-tree-gate-legend-item .perm-tree-gate-icon{
+    width: 1.15rem;
+    height: 1.15rem;
+    pointer-events: none;
+}
 /* Re-skinned per its own current value (see the
    perm-tree-mstatus-select-<status> modifier classes below) instead of the
    browser's bare default <select> look -- same 4 colors Nuestros Sectores

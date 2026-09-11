@@ -209,7 +209,7 @@ function renderSectors() {
         tdStatus.dataset.col = 'status';
         const statusBadge = document.createElement('span');
         statusBadge.className = `admin-badge admin-badge-${sector.status === 'inactive' ? 'inactivo' : 'activo'}`;
-        statusBadge.textContent = Dashboard.t(sector.status === 'inactive' ? 'main.filterInactive' : 'main.filterActive');
+        statusBadge.textContent = Dashboard.t(sector.status === 'inactive' ? 'admin.businessSectorStatusInactive' : 'admin.businessSectorStatusActive');
         tdStatus.appendChild(statusBadge);
 
         const tdCreatedBy = document.createElement('td');
@@ -235,16 +235,16 @@ function renderSectors() {
         const treeBtn = document.createElement('button');
         treeBtn.type = 'button';
         treeBtn.className = 'admin-icon-btn';
-        treeBtn.setAttribute('aria-label', Dashboard.t('admin.sectorTreeTitle'));
-        treeBtn.title = Dashboard.t('admin.sectorTreeTitle');
+        treeBtn.setAttribute('aria-label', Dashboard.t('admin.giroAccesosGlobalesTitle'));
+        treeBtn.title = Dashboard.t('admin.giroAccesosGlobalesTitle');
         treeBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         treeBtn.addEventListener('click', () => openSectorTreeModal(sector));
 
         const orderBtn = document.createElement('button');
         orderBtn.type = 'button';
         orderBtn.className = 'admin-icon-btn';
-        orderBtn.setAttribute('aria-label', Dashboard.t('admin.sectorOrderTitle'));
-        orderBtn.title = Dashboard.t('admin.sectorOrderTitle');
+        orderBtn.setAttribute('aria-label', Dashboard.t('admin.giroReordenPersonalizadoTitle'));
+        orderBtn.title = Dashboard.t('admin.giroReordenPersonalizadoTitle');
         orderBtn.innerHTML = '<i class="bx bx-sort-alt-2" aria-hidden="true"></i>';
         orderBtn.addEventListener('click', () => openSectorOrderModal(sector));
 
@@ -403,35 +403,41 @@ function renderNewSectorButton() {
     toolbar.prepend(btn);
 }
 
-// --- Default access tree per sector (mirrors Business-Roles.js's per-
-// Puesto panel, opened as a modal instead of an inline panel — same
-// "pantalla alterna" idea Nuestros Planes' own tree modal already uses) ---
+// --- Accesos Globales -- a réplica of Árbol de Permisos Maestro's own
+// full-depth tree (PermissionTree.js's grantMode:'giro'), gated by
+// whatever Árbol Maestro currently allows (GET master-permission-status)
+// instead of the old ungated checkbox tree this replaced. No reorder here
+// on purpose (see openSectorOrderModal below for that) -- the removed
+// equalize/fill-missing-APP buttons belonged to showAppTab's own
+// App-eligibility pipeline, which never actually worked for a GEIPSA admin
+// session anyway (GET /api/business/app-screens 404s with no clientId) --
+// grantMode's own Web/App icons don't go through that pipeline at all. ---
 const sectorTreeModal = document.getElementById('sector-tree-modal');
 const sectorTreeModalTitle = document.getElementById('sector-tree-modal-title');
 const sectorTreeContainer = document.getElementById('sector-tree-container');
 const sectorTreeError = document.getElementById('sector-tree-error');
 const sectorTreeSaveBtn = document.getElementById('sector-tree-save');
 const sectorTreeCloseBtn = document.getElementById('sector-tree-close');
-const sectorTreeEqualizeBtn = document.getElementById('sector-tree-equalize-app');
-sectorTreeEqualizeBtn.addEventListener('click', () => sectorTree?.equalizeAllAppToWeb());
-const sectorTreeFillMissingBtn = document.getElementById('sector-tree-fill-missing-app');
-sectorTreeFillMissingBtn.addEventListener('click', () => sectorTree?.fillAllMissingAppToWeb());
 
 let sectorTree = null;
 let selectedSectorId = null;
 
 async function openSectorTreeModal(sector) {
     selectedSectorId = sector.id;
-    sectorTreeModalTitle.textContent = `${Dashboard.t('admin.sectorTreeTitle')} — ${sector.name}`;
+    sectorTreeModalTitle.textContent = `${Dashboard.t('admin.giroAccesosGlobalesTitle')} — ${sector.name}`;
     sectorTreeError.hidden = true;
     sectorTreeContainer.innerHTML = '';
     sectorTreeModal.hidden = false;
     try {
-        const res = await fetch(`/api/admin/business-sectors/${sector.id}/grants`, { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        sectorTree = window.PermissionTree.create(sectorTreeContainer, { showAppTab: true });
-        await sectorTree.init(data.grants || []);
+        const [grantsRes, statusRes] = await Promise.all([
+            fetch(`/api/admin/business-sectors/${sector.id}/grants`, { credentials: 'include' }),
+            fetch('/api/admin/master-permission-status', { credentials: 'include' }),
+        ]);
+        if (!grantsRes.ok || !statusRes.ok) throw new Error('load failed');
+        const grantsData = await grantsRes.json();
+        const statusData = await statusRes.json();
+        sectorTree = window.PermissionTree.create(sectorTreeContainer, { grantMode: 'giro', masterGate: statusData.statuses || [] });
+        await sectorTree.init(grantsData.grants || []);
     } catch {
         sectorTreeError.textContent = Dashboard.t('admin.loadError');
         sectorTreeError.hidden = false;

@@ -1140,7 +1140,7 @@ function renderSectorsList() {
         if (s.habilitado) dots.push(`<span class="perm-dot perm-dot-good"></span>${s.habilitado}`);
         if ((s.construccion || 0) + (s.mejoras || 0) > 0) dots.push(`<span class="perm-dot perm-dot-warn"></span>${(s.construccion || 0) + (s.mejoras || 0)}`);
         if (s.inhabilitado) dots.push(`<span class="perm-dot perm-dot-bad"></span>${s.inhabilitado}`);
-        const statusLabel = t(sector.status === 'inactive' ? 'main.filterInactive' : 'main.filterActive');
+        const statusLabel = t(sector.status === 'inactive' ? 'admin.businessSectorStatusInactive' : 'admin.businessSectorStatusActive');
         row.innerHTML = `
             <span class="home-carga-active-row-icon"><i class="bx ${sector.icon || 'bx-briefcase'}" aria-hidden="true"></i></span>
             <span class="home-carga-active-row-label">
@@ -1164,7 +1164,7 @@ function renderSectorsList() {
 }
 
 function renderSectorDetail(sector) {
-    contentEl.appendChild(subViewBackHeader(sector.name, `${sector.typeName || '—'} · ${t(sector.status === 'inactive' ? 'main.filterInactive' : 'main.filterActive')}`, () => {
+    contentEl.appendChild(subViewBackHeader(sector.name, `${sector.typeName || '—'} · ${t(sector.status === 'inactive' ? 'admin.businessSectorStatusInactive' : 'admin.businessSectorStatusActive')}`, () => {
         sectorSubView = { mode: 'list' };
         renderSectorSubView();
     }));
@@ -1179,8 +1179,8 @@ function renderSectorDetail(sector) {
     const grid = document.createElement('div');
     grid.className = 'action-grid';
     const actions = [
-        { icon: 'bx-shield', label: t('admin.sectorTreeTitle'), onClick: () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); } },
-        { icon: 'bx-sort-alt-2', label: t('admin.sectorOrderTitle'), onClick: () => { sectorSubView = { mode: 'order', sector }; renderSectorSubView(); } },
+        { icon: 'bx-shield', label: t('admin.giroAccesosGlobalesTitle'), onClick: () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); } },
+        { icon: 'bx-sort-alt-2', label: t('admin.giroReordenPersonalizadoTitle'), onClick: () => { sectorSubView = { mode: 'order', sector }; renderSectorSubView(); } },
         { icon: 'bx-compass', label: t('admin.businessSectorPreview'), onClick: () => showToast(t('admin.underConstruction')) },
         { icon: 'bx-edit', label: t('admin.edit'), onClick: () => { sectorSubView = { mode: 'form', sector }; renderSectorSubView(); } },
         { icon: 'bx-history', label: t('admin.businessSectorChangeHistory'), onClick: () => { sectorSubView = { mode: 'history', sector }; renderSectorSubView(); } },
@@ -1229,7 +1229,7 @@ async function toggleSectorStatusApp(sector) {
 }
 
 function renderSectorTree(sector) {
-    contentEl.appendChild(subViewBackHeader(t('admin.sectorTreeTitle'), sector.name, () => {
+    contentEl.appendChild(subViewBackHeader(t('admin.giroAccesosGlobalesTitle'), sector.name, () => {
         sectorSubView = { mode: 'detail', sector };
         renderSectorSubView();
     }));
@@ -1246,9 +1246,12 @@ function renderSectorTree(sector) {
     contentEl.appendChild(viewPermsBtn);
 
     const treeWrap = document.createElement('div');
-    // Plain grant-checkbox mode (not statusMode), same as AppRoles.js's own
-    // tree -- that one already works fine in the App with zero extra CSS
-    // scoping, unlike statusMode's row-overflow fix needed for the Árbol tab.
+    // grantMode 'giro' -- same replica of Árbol de Permisos Maestro's own
+    // tree shell as the Web version (Admin-BusinessSectors.js), gated by
+    // master_permission_status instead of the old ungated showAppTab
+    // checkbox tree this replaced (that one's App column never actually
+    // worked here either -- GET /api/business/app-screens 404s with no
+    // req.user.clientId on a GEIPSA admin session).
     treeWrap.className = 'perm-tree';
     contentEl.appendChild(treeWrap);
     const hint = document.createElement('p');
@@ -1259,13 +1262,17 @@ function renderSectorTree(sector) {
     let sectorTreeInstance = null;
     (async () => {
         try {
-            const res = await fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/grants`), { credentials: 'include' });
-            if (!res.ok) throw new Error('load failed');
-            const data = await res.json();
+            const [grantsRes, statusRes] = await Promise.all([
+                fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/grants`), { credentials: 'include' }),
+                fetch(apiUrl('/api/admin/master-permission-status'), { credentials: 'include' }),
+            ]);
+            if (!grantsRes.ok || !statusRes.ok) throw new Error('load failed');
+            const grantsData = await grantsRes.json();
+            const statusData = await statusRes.json();
             if (sectorSubView.mode !== 'tree' || sectorSubView.sector.id !== sector.id) return;
             treeWrap.innerHTML = '';
-            sectorTreeInstance = window.PermissionTree.create(treeWrap, { showAppTab: true });
-            await sectorTreeInstance.init(data.grants || []);
+            sectorTreeInstance = window.PermissionTree.create(treeWrap, { grantMode: 'giro', masterGate: statusData.statuses || [] });
+            await sectorTreeInstance.init(grantsData.grants || []);
         } catch {
             treeWrap.innerHTML = '';
             const error = document.createElement('p');
@@ -1274,23 +1281,6 @@ function renderSectorTree(sector) {
             treeWrap.appendChild(error);
         }
     })();
-
-    const btnRow = document.createElement('div');
-    btnRow.style.display = 'flex';
-    btnRow.style.gap = '0.5rem';
-    btnRow.style.marginTop = '1rem';
-    const equalizeBtn = document.createElement('button');
-    equalizeBtn.type = 'button';
-    equalizeBtn.className = 'home-carga-secondary-btn';
-    equalizeBtn.innerHTML = `<i class="bx bx-copy" aria-hidden="true"></i><span>${t('main.appEqualizeAll')}</span>`;
-    equalizeBtn.addEventListener('click', () => sectorTreeInstance?.equalizeAllAppToWeb());
-    const fillBtn = document.createElement('button');
-    fillBtn.type = 'button';
-    fillBtn.className = 'home-carga-secondary-btn';
-    fillBtn.innerHTML = `<i class="bx bx-list-plus" aria-hidden="true"></i><span>${t('main.appFillMissingAll')}</span>`;
-    fillBtn.addEventListener('click', () => sectorTreeInstance?.fillAllMissingAppToWeb());
-    btnRow.append(equalizeBtn, fillBtn);
-    contentEl.appendChild(btnRow);
 
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
@@ -1567,7 +1557,7 @@ function reorderOrderListApp(list, draggedId, targetId) {
 }
 
 function renderSectorOrder(sector) {
-    contentEl.appendChild(subViewBackHeader(t('admin.sectorOrderTitle'), sector.name, () => {
+    contentEl.appendChild(subViewBackHeader(t('admin.giroReordenPersonalizadoTitle'), sector.name, () => {
         sectorSubView = { mode: 'detail', sector };
         renderSectorSubView();
     }));
