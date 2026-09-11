@@ -1334,6 +1334,32 @@
             if (next.status === DEFAULT_STATUS && next.webEnabled && !next.appEnabled) statusMap.delete(key);
             else statusMap.set(key, next);
         }
+        // Resolves a node's label directly from sectionsData, independent
+        // of whether statusRow has ever actually rendered that row this
+        // session (statusLabelMap -- see getStatusLabel below -- only gets
+        // a node once its row renders, which needs every ancestor expanded
+        // first; "aplicar a anidados" (applyNestedPlatform above) writes
+        // straight into statusMap without expanding anything, so a bulk
+        // change can easily touch far more nodes than were ever rendered).
+        // '' for a standalone pantalla (never reachable through
+        // getPantallaOrders either, see its own comment) or a stale
+        // reference to a since-removed menu.json entry.
+        function resolveNodeLabel(sectionId, itemId, submenuId) {
+            const section = sectionsData.find((s) => s.id === sectionId);
+            if (!section) return '';
+            if (!itemId) return t(sectionLabelKey(section));
+            const area = section.items.find((i) => i.id === itemId);
+            if (!area) return '';
+            if (!submenuId) return t(area.labelKey, area.labelParams);
+            if (submenuId.includes('/')) {
+                const [apartadoId, pantallaId] = submenuId.split('/');
+                const apartado = (area.submenu || []).find((sm) => sm.id === apartadoId);
+                const pantalla = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
+                return pantalla ? t(pantalla.labelKey, pantalla.labelParams) : '';
+            }
+            const apartado = (area.submenu || []).find((sm) => sm.id === submenuId);
+            return apartado ? t(apartado.labelKey, apartado.labelParams) : '';
+        }
         function getNodeCost(key) {
             return costMap.get(key) || { web: 0, app: 0 };
         }
@@ -2374,33 +2400,14 @@
             // the tree itself. '' if that node was never rendered (e.g. a
             // stale reference to a since-removed menu.json entry).
             getStatusLabel(sectionId, itemId, submenuId) {
-                return statusLabelMap.get(keyOf(sectionId, itemId, submenuId)) || '';
+                return statusLabelMap.get(keyOf(sectionId, itemId, submenuId)) || resolveNodeLabel(sectionId, itemId, submenuId);
             },
-            // Same idea as getStatusLabel above, but resolved directly from
-            // sectionsData instead of statusLabelMap -- statusLabelMap only
-            // ever gets a node once statusRow actually renders it, which
-            // (Departamento aside) only happens once its parent has been
-            // expanded at least once this session. Admin-ArbolMaestro.js's
-            // Resumen view needs every node's name up front, whether or not
-            // it was ever expanded in the Árbol tab, so it uses this
-            // instead. '' for a standalone pantalla (never reachable via
-            // getPantallaOrders either, see its own comment) or a stale
-            // reference to a since-removed menu.json entry.
+            // Same resolution getStatusLabel above falls back to, exposed
+            // directly for a caller (Admin-ArbolMaestro.js's Resumen view)
+            // that needs every node's name up front, whether or not it was
+            // ever expanded/rendered this session.
             getNodeLabel(sectionId, itemId, submenuId) {
-                const section = sectionsData.find((s) => s.id === sectionId);
-                if (!section) return '';
-                if (!itemId) return t(sectionLabelKey(section));
-                const area = section.items.find((i) => i.id === itemId);
-                if (!area) return '';
-                if (!submenuId) return t(area.labelKey, area.labelParams);
-                if (submenuId.includes('/')) {
-                    const [apartadoId, pantallaId] = submenuId.split('/');
-                    const apartado = (area.submenu || []).find((sm) => sm.id === apartadoId);
-                    const pantalla = apartado && (apartado.submenu || []).find((p) => p.id === pantallaId);
-                    return pantalla ? t(pantalla.labelKey, pantalla.labelParams) : '';
-                }
-                const apartado = (area.submenu || []).find((sm) => sm.id === submenuId);
-                return apartado ? t(apartado.labelKey, apartado.labelParams) : '';
+                return resolveNodeLabel(sectionId, itemId, submenuId);
             },
             // statusMode only -- current Departamento order (drag-reordered
             // sectionsData, minus 'main' which is core navigation and never
