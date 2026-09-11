@@ -1878,14 +1878,15 @@
             // and sets label.style.width from that alone, so anything
             // appended inside label would both corrupt that measurement
             // (it'd start including the badge's own digits) and get
-            // squeezed into a width sized for the text alone. Shown
-            // whenever this row has anything at all nested below it,
-            // regardless of what that count is (confirmed with the user:
-            // still shown even when it's just 1).
-            if (key && hasStatusChildren(key)) {
+            // squeezed into a width sized for the text alone. Shown on
+            // EVERY key-bearing row, no exceptions (confirmed with the
+            // user) -- a true leaf (Operar, an Ícono, an unbuilt Pantalla
+            // with no Tabla/Iconos of its own yet, ...) has nothing to
+            // count, so it floors at 1, representing the row itself.
+            if (key) {
                 const countBadge = document.createElement('span');
                 countBadge.className = 'perm-tree-mstatus-count-badge';
-                countBadge.textContent = String(collectDescendantStatusKeys(key).length);
+                countBadge.textContent = String(Math.max(1, collectDescendantStatusKeys(key).length));
                 row.appendChild(countBadge);
             }
             if (key) {
