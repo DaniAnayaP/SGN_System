@@ -277,9 +277,16 @@ function buildResumenNode(node, depth) {
         row.appendChild(selfMatch);
     }
     if (hasChildren) {
+        // Sum of the CHILDREN's own counts only -- never node's own isMatch
+        // (countResumenLeaves would include it) -- this badge promises "this
+        // many rows appear once you expand", so it has to match exactly what
+        // expanding actually reveals. The node's own match (if any) already
+        // has its own visible signal right here on this same row (the dot
+        // above), it doesn't need to also inflate the count of what's below.
+        const childrenCount = node.children.reduce((sum, child) => sum + countResumenLeaves(child), 0);
         const count = document.createElement('span');
         count.className = 'mini-count';
-        count.textContent = String(countResumenLeaves(node));
+        count.textContent = String(childrenCount);
         row.appendChild(count);
         row.addEventListener('click', () => wrap.classList.toggle('open'));
     }
