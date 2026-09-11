@@ -2440,7 +2440,22 @@
                 onDrop: (draggedId, targetId) => reorderColumns(section.id, item.id, sm.id, subSm.id, cls.id, draggedId, targetId),
             } : null;
             const colKey = keyOf(section.id, item.id, base);
-            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, colKey, null, computeNodeRollup(colKey), null, ancestorLocked, columnDragCtx, previewInfo));
+            // Collapsed by default, same convention as Tabla/Clasificación/
+            // Iconos Personalización -- confirmed with the user: expanding
+            // a Clasificación (e.g. "Carga Operador") used to dump every
+            // column's own 4 levels straight onto the screen at once ("que
+            // aparezca todo mostrado"). Now a column's own levels stay
+            // hidden until its OWN chevron is opened, one column at a time.
+            const colTreeKey = `col::${section.id}::${item.id}::${base}`;
+            const colExpanded = expandedItems.has(colTreeKey);
+            container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, colKey, {
+                expanded: colExpanded,
+                onToggle: () => {
+                    if (colExpanded) expandedItems.delete(colTreeKey);
+                    else expandedItems.add(colTreeKey);
+                },
+            }, computeNodeRollup(colKey), null, ancestorLocked, columnDragCtx, previewInfo));
+            if (!colExpanded) return;
             // Same 4 grant-levels the regular (non-statusMode) column row
             // already offers (Ver y Operar/Editar/Autorizar/Eliminar, see
             // COLUMN_STATUS_LEVELS above) -- each now gets its own
