@@ -2415,7 +2415,15 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
    button ~1.1rem + rollup ~2.6rem + the row's own 0.3rem gaps on either
    side ~= 4.3rem. Without this, the header's Estatus/Web·App columns
    start noticeably left of where a row's own controls actually render. */
-.perm-tree-mstatus-header-spacer{ flex-shrink: 0; width: 4.3rem; }
+/* No width at all -- alignLabelColumnWidth already gives the header's own
+   label the same `target` width every row's label effectively resolves to
+   (offsetLeft + label.width = target, for every row, regardless of its
+   own leading toggle/rollup/drag-handle content), so the header needs no
+   leading spacer of its own to land its Estatus/Web·App/etc columns at
+   the same place a row's own do -- a non-zero spacer here just makes the
+   header that much wider than any row (confirmed live: "columnas
+   desalineadas"), it doesn't compensate for anything a row still needs. */
+.perm-tree-mstatus-header-spacer{ flex-shrink: 0; width: 0; }
 /* Same --perm-tree-label-col-width as a row's own label -- must match
    exactly for the header to stay aligned with wherever Estatus/Web·App
    actually start on each row (see alignLabelColumnWidth). */
@@ -2545,6 +2553,23 @@ body:has(.master-tree-panel) main{
    other screens) since only Árbol Maestro's rows are fixed-width like
    this. */
 .master-tree-panel .perm-tree-row{ min-width: max-content; }
+/* Same fix, for grantMode 'giro' trees living outside .master-tree-panel
+   (a modal, not a full page) -- .perm-tree-mstatus-header already sizes
+   to its own full content everywhere (min-width:max-content, unscoped,
+   see above), but .perm-tree-row only gets that treatment inside
+   .master-tree-panel; without it here the header stretches to its
+   natural width while rows get squeezed to the modal's own width instead,
+   so each one's margin-left:auto-flushed controls land at a DIFFERENT
+   right edge -- header's controls drift right of the row's own, the
+   "columnas desalineadas" reported live. Scoped to this class rather than
+   the base .perm-tree-row for the same reason .master-tree-panel already
+   keeps it scoped: the plain checkbox tree shared by 4 other screens
+   relies on shrinking to fit its own (often narrower) container instead. */
+.perm-tree-scroll-x{
+    overflow-x: auto;
+    overflow-anchor: none;
+}
+.perm-tree-scroll-x .perm-tree-row{ min-width: max-content; }
 .master-tree-panel .admin-form-actions{
     flex-shrink: 0;
     margin: 0;

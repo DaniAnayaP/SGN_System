@@ -1240,7 +1240,7 @@ function renderSectorTree(sector) {
     // checkbox tree this replaced (that one's App column never actually
     // worked here either -- GET /api/business/app-screens 404s with no
     // req.user.clientId on a GEIPSA admin session).
-    treeWrap.className = 'perm-tree';
+    treeWrap.className = 'perm-tree perm-tree-scroll-x';
     contentEl.appendChild(treeWrap);
     const hint = document.createElement('p');
     hint.className = 'home-carga-empty-note';

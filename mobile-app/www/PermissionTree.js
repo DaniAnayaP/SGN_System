@@ -2246,14 +2246,15 @@
 
             const rootFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
             const labelColWidth = parseFloat(getComputedStyle(treeRoot).getPropertyValue('--perm-tree-label-col-width')) || 0;
-            // 4.3rem leading allowance (matches the header's own spacer) +
-            // the label column + the fixed 13rem Web·App column + the
-            // Navegar icon column (~2.2rem, fixed -- an icon button never
-            // needs its own abbreviation step) + the "aplicar a anidados"
-            // icon column (~1.4rem, same reasoning) + ~3rem of slack for
-            // gaps/padding/the select's own native dropdown arrow --
-            // everything Estatus always shares its line with.
-            const fixedNeighbors = (4.3 * rootFontPx) + labelColWidth + (13 * rootFontPx) + (2.2 * rootFontPx) + (1.4 * rootFontPx) + (3 * rootFontPx);
+            // No leading allowance -- the header's own spacer is 0 now (see
+            // alignLabelColumnWidth) -- + the label column + the fixed
+            // 13rem Web·App column + the Navegar icon column (~2.2rem,
+            // fixed -- an icon button never needs its own abbreviation
+            // step) + the "aplicar a anidados" icon column (~1.4rem, same
+            // reasoning) + ~3rem of slack for gaps/padding/the select's own
+            // native dropdown arrow -- everything Estatus always shares its
+            // line with.
+            const fixedNeighbors = labelColWidth + (13 * rootFontPx) + (2.2 * rootFontPx) + (1.4 * rootFontPx) + (3 * rootFontPx);
             const available = Math.max(treeRoot.clientWidth - fixedNeighbors, 0);
 
             let step = 0;
@@ -2324,6 +2325,22 @@
             // against the next column's edge.
             const target = Math.ceil(maxRightEdge) + 8;
             treeRoot.style.setProperty('--perm-tree-label-col-width', `${target}px`);
+            // Every row's OWN cumulative width up to the end of its label is
+            // now the SAME constant (target) regardless of its own leading
+            // content (toggle+rollup+drag-handle, whatever it has) -- that's
+            // the whole point of giving each one its OWN inline width below.
+            // So the header needs NO leading spacer of its own to match:
+            // its label already gets that same `target` width (via the CSS
+            // var above), so spacer 0 already lines its own end-of-label
+            // (and therefore its Estatus/Web·App columns) up with every
+            // row's. A non-zero spacer (this used to hardcode 4.3rem, a
+            // guess at a depth-0 row's own leading width) just makes the
+            // header's own total width that much WIDER than any row's,
+            // pushing its columns measurably right of the row's own --
+            // confirmed live ("columnas desalineadas") once grantMode's
+            // rows (no drag handle at all) made the guess visibly wrong,
+            // though the same drift already existed for statusMode too, at
+            // a smaller, easier-to-miss scale.
             measured.forEach(({ label, offsetLeft }) => {
                 label.style.width = `${Math.max(0, target - offsetLeft)}px`;
             });
