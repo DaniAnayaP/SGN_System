@@ -275,9 +275,23 @@
     flex: 1; border: none; background: none; outline: none;
     font: inherit; font-size: 0.85rem; color: var(--color-text-primary);
 }
-.sector-icon-picker-chips{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
+/* Quick jump for a rubro, complementing the scrollable chip row below it
+   (see the "combinado" request: select for a fast direct jump, chips to
+   see/tap the others without opening anything). */
+.sector-icon-picker-cat-select{
+    padding: 0.5rem 0.6rem; border-radius: 0.5rem; border: 1px solid var(--color-border);
+    background-color: var(--color-bg); color: var(--color-text-primary);
+    font: inherit; font-size: 0.8rem;
+}
+/* Single scrollable row instead of wrapping to several -- same 14 rubros,
+   ~5 rows shorter. The mask fades the trailing edge as a scroll hint. */
+.sector-icon-picker-chips{
+    display: flex; flex-wrap: nowrap; gap: 0.4rem; overflow-x: auto; padding-bottom: 0.2rem;
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
+    mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
+}
 .sector-icon-picker-chip{
-    border: 1px solid var(--color-border); border-radius: 999px;
+    flex: none; border: 1px solid var(--color-border); border-radius: 999px;
     background-color: var(--color-bg); color: var(--color-text-secondary);
     font-size: 0.74rem; font-weight: 600; padding: 0.32rem 0.7rem; cursor: pointer;
 }

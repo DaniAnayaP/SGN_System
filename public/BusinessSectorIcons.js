@@ -51,6 +51,7 @@
                 <i class="bx bx-search" aria-hidden="true"></i>
                 <input type="text" class="sector-icon-picker-search-input" placeholder="${t('admin.sectorIconSearchPlaceholder')}">
             </div>
+            <select class="sector-icon-picker-cat-select"></select>
             <div class="sector-icon-picker-chips"></div>
             <div class="sector-icon-picker-count"></div>
             <div class="sector-icon-picker-grid"></div>
@@ -59,9 +60,28 @@
         container.appendChild(shell);
 
         const searchInput = shell.querySelector('.sector-icon-picker-search-input');
+        const catSelect = shell.querySelector('.sector-icon-picker-cat-select');
         const chipsEl = shell.querySelector('.sector-icon-picker-chips');
         const countEl = shell.querySelector('.sector-icon-picker-count');
         const gridEl = shell.querySelector('.sector-icon-picker-grid');
+
+        // Select and chip row are two paths to the same activeCategory --
+        // jumping from either one keeps the other in sync (see renderChips'
+        // own catSelect.value line below).
+        function renderCatSelect() {
+            catSelect.innerHTML = '';
+            const allOpt = document.createElement('option');
+            allOpt.value = '';
+            allOpt.textContent = t('admin.sectorIconAllCategories');
+            catSelect.appendChild(allOpt);
+            data.categoryIds.forEach((catId) => {
+                const opt = document.createElement('option');
+                opt.value = catId;
+                opt.textContent = categoryLabel(catId, t);
+                catSelect.appendChild(opt);
+            });
+            catSelect.value = activeCategory || '';
+        }
 
         function renderChips() {
             chipsEl.innerHTML = '';
@@ -83,7 +103,13 @@
                 });
                 chipsEl.appendChild(chip);
             });
+            catSelect.value = activeCategory || '';
         }
+
+        catSelect.addEventListener('change', () => {
+            activeCategory = catSelect.value || null;
+            render();
+        });
 
         function visibleIcons() {
             const q = query.trim().toLowerCase();
@@ -142,6 +168,7 @@
         const ready = loadData().then((loaded) => {
             data = loaded;
             if (currentValue == null) currentValue = data.all[0];
+            renderCatSelect();
             render();
         });
 
