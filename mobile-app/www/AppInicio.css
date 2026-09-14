@@ -579,6 +579,10 @@ body{
 .home-tile{ position: relative; }
 .home-tile.soon{ opacity: 0.55; }
 .home-tile.soon .home-tile-icon{ background: var(--home-surface-2); color: var(--home-text-muted); }
+/* A Giro's own "Desactivar" tile (see renderSectorDetail in
+   AppAdminInicio.js) -- same card, red icon square instead of the accent
+   gradient so it reads as the one different, harder-to-undo action. */
+.home-tile.danger .home-tile-icon{ background: linear-gradient(135deg, var(--home-danger), color-mix(in srgb, var(--home-danger) 70%, black)); }
 .home-tile-soon-tag{
     position: absolute;
     top: 0.35rem;

@@ -1175,8 +1175,12 @@ function renderSectorDetail(sector) {
     label.textContent = sector.description || '';
     if (sector.description) contentEl.appendChild(label);
 
+    // Reuses AppInicio.css's own .home-tiles/.home-tile (the same "Accesos
+    // rápidos" card Inicio already shows) -- .action-grid/.action-cell had
+    // no matching CSS anywhere, which is exactly why this looked like plain
+    // unstyled text before.
     const grid = document.createElement('div');
-    grid.className = 'action-grid';
+    grid.className = 'home-tiles';
     const actions = [
         { icon: 'bx-shield', label: t('admin.giroAccesosGlobalesTitle'), onClick: () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); } },
         { icon: 'bx-sort-alt-2', label: t('admin.giroReordenPersonalizadoTitle'), onClick: () => { sectorSubView = { mode: 'order', sector }; renderSectorSubView(); } },
@@ -1187,15 +1191,16 @@ function renderSectorDetail(sector) {
             icon: sector.status === 'inactive' ? 'bx-check-circle' : 'bx-x-circle',
             label: t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate'),
             onClick: () => toggleSectorStatusApp(sector),
+            danger: sector.status !== 'inactive',
         },
     ];
     actions.forEach((a) => {
-        const cell = document.createElement('button');
-        cell.type = 'button';
-        cell.className = 'action-cell';
-        cell.innerHTML = `<span class="item-icon"><i class="bx ${a.icon}" aria-hidden="true"></i></span><span class="lbl">${a.label}</span>`;
-        cell.addEventListener('click', a.onClick);
-        grid.appendChild(cell);
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'home-tile' + (a.danger ? ' danger' : '');
+        tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${a.icon}" aria-hidden="true"></i></span><span>${a.label}</span>`;
+        tile.addEventListener('click', a.onClick);
+        grid.appendChild(tile);
     });
     contentEl.appendChild(grid);
 
