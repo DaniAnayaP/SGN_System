@@ -2867,9 +2867,28 @@
         // with the user: consistent everywhere, so a group's own Web/App
         // summary is never just silently missing depending on which level
         // it happens to be.
+        // grantMode 'giro' -- maps computeGateState/computeGateRollup's own
+        // vocabulary onto the 'full'/'partial'/'empty' one buildRollupIcon
+        // already knows, plus a new 'blocked' bucket (red, see the CSS) --
+        // confirmed with the user: this row's own rollup icon (before the
+        // label) must track what THIS Giro actually has selected/blocked,
+        // not Árbol Maestro's own enablement on its own -- otherwise it can
+        // show green here while the semáforo right next to it shows red,
+        // which reads as contradictory even though both were technically
+        // correct (two different questions). 'available'/'needsWeb' both
+        // read as 'empty' here -- neither has anything granted yet.
+        function gateStateToRollupState(state) {
+            if (state === 'granted') return 'full';
+            if (state === 'blocked') return 'blocked';
+            if (state === 'partial') return 'partial';
+            return 'empty';
+        }
+        function rollupPlatformState(leafKeys, platform) {
+            return grantMode ? gateStateToRollupState(computeGateRollup(leafKeys, platform)) : computeRollup(leafKeys, platform);
+        }
         function computeNodeRollup(key) {
             const leafKeys = collectLeafStatusKeys(key);
-            return { web: computeRollup(leafKeys, 'web'), app: computeRollup(leafKeys, 'app') };
+            return { web: rollupPlatformState(leafKeys, 'web'), app: rollupPlatformState(leafKeys, 'app') };
         }
         // A true leaf (Operar/Editar/Autorizar/Eliminar, an Ícono, Inicio/
         // Panel/Tablero, an Apartado/Pantalla with nothing else nested
@@ -2881,6 +2900,9 @@
         // "partial" never applies here on purpose, there's nothing to be
         // partial between).
         function selfStateRollup(key) {
+            if (grantMode) {
+                return { web: gateStateToRollupState(computeGateState(key, 'web')), app: gateStateToRollupState(computeGateState(key, 'app')) };
+            }
             const state = getNodeState(key);
             return { web: state.webEnabled ? 'full' : 'empty', app: state.appEnabled ? 'full' : 'empty' };
         }
@@ -3151,7 +3173,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: computeRollup(sectionLeafKeys, 'web'), app: computeRollup(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, (!grantMode && section.id !== 'main') ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo));
+                } : null, section.items.length ? { web: rollupPlatformState(sectionLeafKeys, 'web'), app: rollupPlatformState(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, (!grantMode && section.id !== 'main') ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -3184,7 +3206,7 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: computeRollup(itemLeafKeys, 'web'), app: computeRollup(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo));
+                    } : null, hasSubmenu ? { web: rollupPlatformState(itemLeafKeys, 'web'), app: rollupPlatformState(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo));
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
                     // Apartado (Catálogos/Operaciones/...) only reorders
@@ -3223,7 +3245,7 @@
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }, { web: computeRollup(smLeafKeys, 'web'), app: computeRollup(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo));
+                        }, { web: rollupPlatformState(smLeafKeys, 'web'), app: rollupPlatformState(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo));
                         if (!smExpandedNow) return;
                         const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
                         // Pantalla only reorders among its own apartado's

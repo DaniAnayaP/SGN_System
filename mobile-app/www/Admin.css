@@ -2277,6 +2277,15 @@ body.dark-mode .perm-tree-mstatus-rollup-full{
 body.dark-mode .perm-tree-mstatus-rollup-partial{
     color: var(--color-text-secondary);
 }
+/* grantMode 'giro' only -- this row's own selection is blocked outright
+   (Árbol Maestro doesn't allow it, anywhere from here up), matching the
+   semáforo's own red so the two never contradict each other. */
+.perm-tree-mstatus-rollup-blocked{
+    color: #b3261e;
+}
+body.dark-mode .perm-tree-mstatus-rollup-blocked{
+    color: #e37b73;
+}
 /* Giro de Negocio's "Accesos Globales" gate icons (grantMode 'giro' in
    PermissionTree.js) -- a semáforo, not a checkbox: blocked (Árbol
    Maestro forbids it, red), needs-web (App only, dashed -- otorga Web en
