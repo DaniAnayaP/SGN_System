@@ -24,6 +24,14 @@
         return t(`admin.sectorIconCat.${id}`);
     }
 
+    // "bxs-coffee-alt" -> "Coffee alt" -- a plain-language label under each
+    // icon (see the "se ve amontonado" feedback: recognizing 1,479 icons by
+    // shape alone doesn't scale, a name does).
+    function iconLabel(name) {
+        const words = name.replace(/^bxs?-/, '').replace(/-/g, ' ');
+        return words.charAt(0).toUpperCase() + words.slice(1);
+    }
+
     // Exposed so a "Tipo de Giro" form can offer the same 14 categories in
     // its own dropdown without waiting on a picker instance to exist yet.
     function getCategories(t) {
@@ -103,13 +111,14 @@
                 gridEl.appendChild(empty);
             } else {
                 icons.forEach((name) => {
+                    const label = iconLabel(name);
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'icon-picker-option' + (name === currentValue ? ' active' : '');
                     btn.setAttribute('role', 'radio');
                     btn.setAttribute('aria-checked', String(name === currentValue));
-                    btn.title = name.replace(/^bxs?-/, '').replace(/-/g, ' ');
-                    btn.innerHTML = `<i class="bx ${name}" aria-hidden="true"></i>`;
+                    btn.title = label;
+                    btn.innerHTML = `<i class="bx ${name}" aria-hidden="true"></i><span>${label}</span>`;
                     btn.addEventListener('click', () => selectIcon(name));
                     gridEl.appendChild(btn);
                 });
