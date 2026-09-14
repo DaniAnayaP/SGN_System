@@ -6484,8 +6484,16 @@ function ensurePlanHistoryModal() {
     planHistoryModal = document.createElement('div');
     planHistoryModal.className = 'modal-overlay';
     planHistoryModal.hidden = true;
+    // Same 6-column shape openChangeHistory's own canonical table uses
+    // everywhere else (Fecha/Usuario/Registro/Cambio/Solicitó/Autorizó) --
+    // confirmed with the user: no screen keeps a reduced 3-column version
+    // anymore. Registro is this same Plan's own name on every row (the
+    // modal is already scoped to one plan); Solicitó/Autorizó always "—"
+    // here since plan_changes has no requested_by/authorized_by at all
+    // (Planes has no approval workflow, same as every other screen's own
+    // history shows "—" for any edit that didn't go through Autorizar).
     planHistoryModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="plan-history-title">
+        <div class="modal-panel" style="max-width: 56rem;" role="dialog" aria-modal="true" aria-labelledby="plan-history-title">
             <h3 id="plan-history-title">${t('admin.planChangeHistory')}</h3>
             <div class="admin-table-wrap">
                 <table class="admin-table">
@@ -6493,7 +6501,10 @@ function ensurePlanHistoryModal() {
                         <tr>
                             <th>${t('main.changeHistoryDate')}</th>
                             <th>${t('main.changeHistoryUser')}</th>
+                            <th>${t('main.changeHistoryRecord')}</th>
                             <th>${t('main.changeHistoryChange')}</th>
+                            <th>${t('main.changeHistoryRequestedBy')}</th>
+                            <th>${t('main.changeHistoryAuthorizedBy')}</th>
                         </tr>
                     </thead>
                     <tbody data-role="list"></tbody>
@@ -6525,7 +6536,7 @@ async function openPlanChangeHistory(plan) {
     ensurePlanHistoryModal();
     planHistoryModal.hidden = false;
     planHistoryList.innerHTML = '';
-    planHistoryList.appendChild(planHistoryRow([t('main.changeHistoryEmpty'), '', '']));
+    planHistoryList.appendChild(planHistoryRow([t('main.changeHistoryEmpty'), '', '', '', '', '']));
     try {
         const res = await fetch(`/api/admin/plans/${plan.id}/changes`, { credentials: 'include' });
         if (!res.ok) return;
@@ -6539,7 +6550,7 @@ async function openPlanChangeHistory(plan) {
             else if (change.field_key === 'admin.activeTree') description = `${t('admin.planTreeTitle')}: ${change.new_value} permisos`;
             else if (change.field_key === 'admin.accessPermissionsCost') description = `${t('admin.accessPermCostColumn')}: ${change.new_value} costos`;
             else description = `${t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-            planHistoryList.appendChild(planHistoryRow([change.changed_at, change.changed_by || '—', description]));
+            planHistoryList.appendChild(planHistoryRow([change.changed_at, change.changed_by || '—', plan.name, description, '—', '—']));
         });
     } catch {
         // Leave the empty-state row in place — no network/parse errors surfaced here.

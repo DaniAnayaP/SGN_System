@@ -1480,7 +1480,14 @@ function renderSectorHistory(sector) {
                 let description;
                 if (change.action === 'create') description = t('main.changeHistoryCreated');
                 else description = `${t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-                row.innerHTML = `<div class="item-main"><div class="item-title">${description}</div><div class="item-sub">${change.changed_at} · ${change.changed_by || '—'}</div></div>`;
+                // Same 6-field shape Web's own change-history tables show
+                // everywhere now (Fecha/Usuario/Registro/Cambio/Solicitó/
+                // Autorizó) -- Registro is this same Giro's own name on
+                // every row (already scoped to one sector), Solicitó/
+                // Autorizó are always "—" since business_sector_changes has
+                // no requested_by/authorized_by at all (no approval
+                // workflow here, same as elsewhere).
+                row.innerHTML = `<div class="item-main"><div class="item-title">${description}</div><div class="item-sub">${change.changed_at} · ${change.changed_by || '—'}</div><div class="item-sub">${t('main.changeHistoryRecord')}: ${sector.name} · ${t('main.changeHistoryRequestedBy')}: — · ${t('main.changeHistoryAuthorizedBy')}: —</div></div>`;
                 contentEl.appendChild(row);
             });
             list.remove();

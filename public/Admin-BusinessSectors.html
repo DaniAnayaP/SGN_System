@@ -457,8 +457,19 @@
         </div>
     </div>
 
+    <!-- Same 6-column shape the canonical Dashboard.openChangeHistory table
+         already uses everywhere else (Fecha/Usuario/Registro/Cambio/
+         Solicitó/Autorizó) -- confirmed with the user: no screen keeps a
+         reduced 3-column version anymore. Registro is this same Giro's own
+         name on every row (the modal is already scoped to one sector, so
+         there's nothing to disambiguate, but the column still shows it for
+         a consistent shape everywhere) -- see openSectorHistoryModal.
+         Solicitó/Autorizó always render "—" here: business_sector_changes
+         has no requested_by/authorized_by columns at all (Giro has no
+         approval workflow, same as every OTHER screen's own history shows
+         "—" for any edit that didn't go through Autorizar). -->
     <div class="modal-overlay" id="sector-history-modal" hidden>
-        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="sector-history-modal-title">
+        <div class="modal-panel" style="max-width: 56rem;" role="dialog" aria-modal="true" aria-labelledby="sector-history-modal-title">
             <h3 id="sector-history-modal-title" data-i18n="admin.businessSectorChangeHistory">Change history</h3>
             <div class="admin-table-wrap">
                 <table class="admin-table">
@@ -466,7 +477,10 @@
                         <tr>
                             <th data-i18n="main.changeHistoryDate">Date</th>
                             <th data-i18n="main.changeHistoryUser">User</th>
+                            <th data-i18n="main.changeHistoryRecord">Record</th>
                             <th data-i18n="main.changeHistoryChange">Change</th>
+                            <th data-i18n="main.changeHistoryRequestedBy">Requested by</th>
+                            <th data-i18n="main.changeHistoryAuthorizedBy">Authorized by</th>
                         </tr>
                     </thead>
                     <tbody id="sector-history-list"></tbody>

@@ -506,7 +506,7 @@ function historyRow(cells) {
 async function openSectorHistoryModal(sector) {
     sectorHistoryModal.hidden = false;
     sectorHistoryList.innerHTML = '';
-    sectorHistoryList.appendChild(historyRow([Dashboard.t('main.changeHistoryEmpty'), '', '']));
+    sectorHistoryList.appendChild(historyRow([Dashboard.t('main.changeHistoryEmpty'), '', '', '', '', '']));
     try {
         const res = await fetch(`/api/admin/business-sectors/${sector.id}/changes`, { credentials: 'include' });
         if (!res.ok) return;
@@ -517,7 +517,12 @@ async function openSectorHistoryModal(sector) {
             let description;
             if (change.action === 'create') description = Dashboard.t('main.changeHistoryCreated');
             else description = `${Dashboard.t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-            sectorHistoryList.appendChild(historyRow([change.changed_at, change.changed_by || '—', description]));
+            // Registro = this same Giro's own name on every row (the modal
+            // is already scoped to one sector, nothing to disambiguate) --
+            // Solicitó/Autorizó are always "—": business_sector_changes has
+            // no requested_by/authorized_by at all, same as the canonical
+            // table's own "—" for any edit outside the Autorizar flow.
+            sectorHistoryList.appendChild(historyRow([change.changed_at, change.changed_by || '—', sector.name, description, '—', '—']));
         });
     } catch {
         // Empty-state row above stays in place.
