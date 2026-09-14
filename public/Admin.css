@@ -249,9 +249,12 @@
     color: var(--color-text-secondary); cursor: pointer;
 }
 .icon-picker-option i{ font-size: 1.3rem; }
+/* Two lines instead of a single truncated one -- works the same on touch
+   (App) as it does with a mouse, unlike a hover-only scrolling name. */
 .icon-picker-option span{
     font-size: 0.64rem; font-weight: 500; color: var(--color-text-primary); text-align: center;
-    line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    line-height: 1.25; max-width: 100%; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 .icon-picker-option.active{ border-color: var(--color-accent); background-color: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg)); color: var(--color-accent); }
 .icon-picker-option.active span{ color: var(--color-accent); }
