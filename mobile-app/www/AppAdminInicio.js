@@ -1146,9 +1146,21 @@ function renderSectorsList() {
                 <p>${sector.name}</p>
                 <span>${sector.typeName || '—'} · ${statusLabel}${dots.length ? ' · ' + dots.join(' ') : ''}</span>
             </span>
+            <span class="home-carga-active-row-preview" role="button" tabindex="0" aria-label="${t('admin.businessSectorPreview')}" title="${t('admin.businessSectorPreview')}"><i class="bx bx-compass" aria-hidden="true"></i></span>
             <i class="bx bx-chevron-right" aria-hidden="true"></i>
         `;
         row.addEventListener('click', () => { sectorSubView = { mode: 'detail', sector }; renderSectorSubView(); });
+        const previewBtn = row.querySelector('.home-carga-active-row-preview');
+        previewBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            showToast(t('admin.underConstruction'));
+        });
+        previewBtn.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            event.stopPropagation();
+            showToast(t('admin.underConstruction'));
+        });
         list.appendChild(row);
     });
     contentEl.appendChild(list);

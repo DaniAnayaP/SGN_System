@@ -1241,6 +1241,7 @@ body{
     margin-bottom: 0.5rem;
 }
 .home-carga-active-row-icon{ width: 2rem; height: 2rem; border-radius: 0.6rem; flex-shrink: 0; background: var(--home-surface-2); color: var(--home-accent); display: flex; align-items: center; justify-content: center; font-size: 1.05rem; }
+.home-carga-active-row-preview{ width: 1.9rem; height: 1.9rem; border-radius: 0.55rem; flex-shrink: 0; border: 1px solid var(--home-border); background: var(--home-surface-2); color: var(--home-accent); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; cursor: pointer; }
 .home-carga-active-row-label{ flex: 1; min-width: 0; }
 .home-carga-active-row-label p{ margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--home-text-secondary); }
 .home-carga-active-row-label span{ font-size: 0.68rem; color: var(--home-text-muted); }
