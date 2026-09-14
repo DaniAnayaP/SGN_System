@@ -246,10 +246,42 @@
     font-size: 1.1rem; cursor: pointer;
 }
 .icon-picker-option.active{ border-color: var(--color-accent); background-color: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg)); color: var(--color-accent); }
+
+/* Sector Icon Picker — Giro de Negocio's own icon field, backed by
+   BusinessSectorIcons.js (data/business-sector-icons.json, ~1,480 real
+   boxicons classified into 14 rubros). Reuses .icon-picker-option itself
+   (the button look stays identical to the old fixed 8-icon grid) so this
+   is purely a bigger, filterable shell around the same visual language. */
+.sector-icon-picker{ display: flex; flex-direction: column; gap: 0.6rem; }
+.sector-icon-picker-search{
+    display: flex; align-items: center; gap: 0.5rem;
+    border: 1px solid var(--color-border); border-radius: 0.5rem;
+    padding: 0.5rem 0.7rem; background-color: var(--color-bg);
+}
+.sector-icon-picker-search i{ color: var(--color-text-secondary); font-size: 1rem; }
+.sector-icon-picker-search-input{
+    flex: 1; border: none; background: none; outline: none;
+    font: inherit; font-size: 0.85rem; color: var(--color-text-primary);
+}
+.sector-icon-picker-chips{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.sector-icon-picker-chip{
+    border: 1px solid var(--color-border); border-radius: 999px;
+    background-color: var(--color-bg); color: var(--color-text-secondary);
+    font-size: 0.74rem; font-weight: 600; padding: 0.32rem 0.7rem; cursor: pointer;
+}
+.sector-icon-picker-chip.active{ background-color: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+.sector-icon-picker-count{ font-size: 0.72rem; color: var(--color-text-secondary); }
+.sector-icon-picker-grid{
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr));
+    gap: 0.5rem; max-height: 15rem; overflow-y: auto; padding: 0.15rem;
+}
+.sector-icon-picker-empty{ grid-column: 1 / -1; font-size: 0.8rem; color: var(--color-text-secondary); text-align: center; padding: 1rem 0; }
 .admin-link-btn{
     align-self: flex-start; margin-top: 0.3rem; background: none; border: none; padding: 0;
     color: var(--color-accent); font-size: 0.76rem; font-weight: 700; cursor: pointer;
 }
+.admin-link-row{ display: flex; flex-wrap: wrap; gap: 0.9rem; }
+.admin-link-row .admin-link-btn{ margin-top: 0.3rem; }
 .admin-field textarea:focus{
     outline: none;
     border-color: var(--color-text-primary);

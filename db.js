@@ -1611,6 +1611,10 @@ ensureColumn('business_sectors', 'status', "TEXT NOT NULL DEFAULT 'active'");
 ensureColumn('business_sectors', 'icon', "TEXT NOT NULL DEFAULT 'bx-briefcase'");
 ensureColumn('business_sectors', 'type_id', 'INTEGER REFERENCES business_sector_types(id)');
 ensureColumn('business_sectors', 'description', "TEXT NOT NULL DEFAULT ''");
+// Which of BusinessSectorIcons.js's 14 rubros this Tipo de Giro's own icon
+// picker should jump to by default (null = no default, picker opens on
+// "todos los rubros") -- see the icon-category picker feature.
+ensureColumn('business_sector_types', 'icon_category', 'TEXT');
 // Deliberately NOT every client_id-scoped table: Field Fill Rules,
 // Transacciones Inteligentes and Reportes Programados are configuration a
 // client builds ONCE (which fields gate which, which report to compute) --
@@ -5269,17 +5273,34 @@ function getBusinessSectorById(id) {
     return { ...deserializeBusinessSector(row), permSummary: summarizeSectorPermissions(id, getMasterPermissionStatuses()) };
 }
 
-function listBusinessSectorTypes() {
-    return db.prepare('SELECT * FROM business_sector_types ORDER BY name ASC').all()
-        .map((row) => ({ id: row.id, name: row.name, createdBy: row.created_by || '', createdAt: row.created_at }));
+function deserializeBusinessSectorType(row) {
+    return { id: row.id, name: row.name, iconCategory: row.icon_category || null, createdBy: row.created_by || '', createdAt: row.created_at };
 }
 
-function createBusinessSectorType({ name, createdBy }) {
+function listBusinessSectorTypes() {
+    return db.prepare('SELECT * FROM business_sector_types ORDER BY name ASC').all().map(deserializeBusinessSectorType);
+}
+
+function createBusinessSectorType({ name, iconCategory, createdBy }) {
     const result = db
-        .prepare('INSERT INTO business_sector_types (name, created_by) VALUES (@name, @createdBy)')
-        .run({ name, createdBy: createdBy || '' });
+        .prepare('INSERT INTO business_sector_types (name, icon_category, created_by) VALUES (@name, @iconCategory, @createdBy)')
+        .run({ name, iconCategory: iconCategory || null, createdBy: createdBy || '' });
     const row = db.prepare('SELECT * FROM business_sector_types WHERE id = ?').get(result.lastInsertRowid);
-    return { id: row.id, name: row.name, createdBy: row.created_by || '', createdAt: row.created_at };
+    return deserializeBusinessSectorType(row);
+}
+
+// Only `name`/`iconCategory` are ever editable here -- a type is a flat
+// admin-created lookup, same reasoning as createBusinessSectorType's own
+// lack of a status/soft-delete concept.
+function updateBusinessSectorType(id, { name, iconCategory }) {
+    const existing = db.prepare('SELECT * FROM business_sector_types WHERE id = ?').get(id);
+    if (!existing) return null;
+    db.prepare('UPDATE business_sector_types SET name = @name, icon_category = @iconCategory WHERE id = @id').run({
+        id,
+        name: name !== undefined ? name : existing.name,
+        iconCategory: iconCategory !== undefined ? (iconCategory || null) : existing.icon_category,
+    });
+    return deserializeBusinessSectorType(db.prepare('SELECT * FROM business_sector_types WHERE id = ?').get(id));
 }
 
 function getBusinessSectorChanges(sectorId) {
@@ -6372,6 +6393,7 @@ module.exports = {
     getBusinessSectorById,
     listBusinessSectorTypes,
     createBusinessSectorType,
+    updateBusinessSectorType,
     getBusinessSectorChanges,
     logBusinessSectorChange,
     BUSINESS_SECTOR_PATCHABLE_FIELDS,

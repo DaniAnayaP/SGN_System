@@ -416,13 +416,16 @@
                         <input id="sector-name" name="name" type="text" required>
                     </div>
                     <div class="admin-field">
-                        <label data-i18n="admin.businessSectorIcon">Icon</label>
-                        <div class="icon-picker" id="sector-icon-picker" role="radiogroup"></div>
-                    </div>
-                    <div class="admin-field">
                         <label for="sector-type" data-i18n="admin.businessSectorType">Sector type</label>
                         <select id="sector-type"></select>
-                        <button type="button" class="admin-link-btn" id="sector-type-new" data-i18n="admin.businessSectorNewType">+ Add new sector type</button>
+                        <div class="admin-link-row">
+                            <button type="button" class="admin-link-btn" id="sector-type-new" data-i18n="admin.businessSectorNewType">+ Add new sector type</button>
+                            <button type="button" class="admin-link-btn" id="sector-type-edit" data-i18n="admin.businessSectorEditType" hidden>Edit sector type</button>
+                        </div>
+                    </div>
+                    <div class="admin-field admin-field-full">
+                        <label data-i18n="admin.businessSectorIcon">Icon</label>
+                        <div id="sector-icon-picker" role="radiogroup"></div>
                     </div>
                     <div class="admin-field admin-field-full">
                         <label for="sector-description" data-i18n="admin.businessSectorDescription">Description</label>
@@ -446,6 +449,10 @@
                     <div class="admin-field">
                         <label for="sector-type-name" data-i18n="admin.businessSectorTypeName">Type name</label>
                         <input id="sector-type-name" name="name" type="text" required>
+                    </div>
+                    <div class="admin-field">
+                        <label for="sector-type-category" data-i18n="admin.sectorTypeCategory">Icon category</label>
+                        <select id="sector-type-category"></select>
                     </div>
                 </div>
                 <div id="sector-type-form-error" class="admin-error" role="alert" hidden></div>
@@ -605,6 +612,7 @@
     <script src="Dashboard.js"></script>
     <script src="AppConfig.js"></script>
     <script src="PermissionTree.js"></script>
+    <script src="BusinessSectorIcons.js"></script>
     <script src="Admin-BusinessSectors.js"></script>
 </body>
 </html>

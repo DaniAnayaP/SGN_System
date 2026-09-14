@@ -1034,7 +1034,6 @@ async function loadMasterTree(token) {
 // render straight into contentEl with their own back button, same "swap
 // what's in the tab's content area" model the Inicio/Árbol tabs already
 // use -- no extra sheet/overlay markup needed in the HTML for this.
-const SECTOR_ICON_OPTIONS = ['bx-buildings', 'bx-store-alt', 'bx-briefcase', 'bx-cog', 'bx-package', 'bx-car', 'bx-restaurant', 'bx-leaf'];
 let sectorsList = [];
 let sectorTypesList = [];
 let sectorSubView = { mode: 'list' };
@@ -1312,8 +1311,6 @@ function renderSectorForm(sector) {
         renderSectorSubView();
     }));
 
-    let selectedIcon = (sector && sector.icon) || SECTOR_ICON_OPTIONS[0];
-
     const nameLabel = document.createElement('label');
     nameLabel.className = 'home-carga-empty-note';
     nameLabel.style.cssText = 'text-align:left; padding:0; display:block; margin-bottom:0.3rem;';
@@ -1324,25 +1321,9 @@ function renderSectorForm(sector) {
     nameInput.style.cssText = 'width:100%; padding:0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); margin-bottom:0.8rem; font:inherit;';
     contentEl.append(nameLabel, nameInput);
 
-    const iconLabel = nameLabel.cloneNode(true);
-    iconLabel.textContent = t('admin.businessSectorIcon');
-    contentEl.appendChild(iconLabel);
-    const iconPicker = document.createElement('div');
-    iconPicker.style.cssText = 'display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.8rem;';
-    function renderIcons() {
-        iconPicker.innerHTML = '';
-        SECTOR_ICON_OPTIONS.forEach((icon) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.style.cssText = `width:2.4rem; height:2.4rem; border-radius:0.5rem; border:1.5px solid ${icon === selectedIcon ? 'var(--home-accent)' : 'var(--home-divider)'}; background:${icon === selectedIcon ? 'var(--home-surface-2, #eef0fd)' : 'var(--home-surface)'}; color:${icon === selectedIcon ? 'var(--home-accent)' : 'var(--home-text-secondary)'}; display:flex; align-items:center; justify-content:center; font-size:1.1rem;`;
-            btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
-            btn.addEventListener('click', () => { selectedIcon = icon; renderIcons(); });
-            iconPicker.appendChild(btn);
-        });
-    }
-    renderIcons();
-    contentEl.appendChild(iconPicker);
-
+    // Tipo de Giro goes first now (was after Icono) -- picking it jumps the
+    // icon picker below straight to that type's own rubro (see
+    // BusinessSectorIcons.js's setCategory), same order Web's own form uses.
     const typeLabel = nameLabel.cloneNode(true);
     typeLabel.textContent = t('admin.businessSectorType');
     contentEl.appendChild(typeLabel);
@@ -1364,32 +1345,135 @@ function renderSectorForm(sector) {
     }
     renderTypeOptions();
     contentEl.appendChild(typeSelect);
+    function sectorTypeById(id) { return sectorTypesList.find((type) => type.id === id) || null; }
 
+    const typeBtnRow = document.createElement('div');
+    typeBtnRow.style.cssText = 'display:flex; gap:1.2rem; margin-bottom:0.6rem;';
     const newTypeBtn = document.createElement('button');
     newTypeBtn.type = 'button';
-    newTypeBtn.className = 'home-carga-secondary-btn';
-    newTypeBtn.style.marginBottom = '0.8rem';
-    newTypeBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('admin.businessSectorNewType')}</span>`;
-    newTypeBtn.addEventListener('click', async () => {
-        const name = window.prompt(t('admin.businessSectorTypeName'));
-        if (!name || !name.trim()) return;
-        try {
-            const res = await fetch(apiUrl('/api/admin/business-sector-types'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ name: name.trim() }),
+    newTypeBtn.className = 'admin-link-btn';
+    newTypeBtn.style.cssText = 'background:none; border:none; padding:0; color:var(--home-accent); font:inherit; font-weight:700; font-size:0.8rem;';
+    newTypeBtn.textContent = t('admin.businessSectorNewType');
+    const editTypeBtn = document.createElement('button');
+    editTypeBtn.type = 'button';
+    editTypeBtn.style.cssText = newTypeBtn.style.cssText;
+    editTypeBtn.textContent = t('admin.businessSectorEditType');
+    editTypeBtn.hidden = !typeSelect.value;
+    typeBtnRow.append(newTypeBtn, editTypeBtn);
+    contentEl.appendChild(typeBtnRow);
+
+    // Inline reveal instead of Web's modal (this shell has no modal
+    // infrastructure) -- collects both name and rubro now that a type
+    // carries a category, replacing the old single-field window.prompt().
+    const typeEditorWrap = document.createElement('div');
+    typeEditorWrap.hidden = true;
+    typeEditorWrap.style.cssText = 'border:1px solid var(--home-divider); border-radius:0.5rem; padding:0.7rem; margin-bottom:0.8rem; display:flex; flex-direction:column; gap:0.5rem;';
+    contentEl.appendChild(typeEditorWrap);
+
+    let editingTypeId = null;
+    function openTypeEditor(type) {
+        editingTypeId = type ? type.id : null;
+        typeEditorWrap.innerHTML = '';
+        typeEditorWrap.hidden = false;
+
+        const typeNameInput = document.createElement('input');
+        typeNameInput.type = 'text';
+        typeNameInput.placeholder = t('admin.businessSectorTypeName');
+        typeNameInput.value = type ? type.name : '';
+        typeNameInput.style.cssText = 'width:100%; padding:0.5rem; border-radius:0.4rem; border:1px solid var(--home-divider); font:inherit;';
+
+        const typeCategorySelect = document.createElement('select');
+        typeCategorySelect.style.cssText = typeNameInput.style.cssText;
+        window.BusinessSectorIcons.getCategories(t).then((categories) => {
+            typeCategorySelect.innerHTML = '';
+            const none = document.createElement('option');
+            none.value = '';
+            none.textContent = t('admin.sectorTypeCategoryNone');
+            typeCategorySelect.appendChild(none);
+            categories.forEach((cat) => {
+                const opt = document.createElement('option');
+                opt.value = cat.id;
+                opt.textContent = cat.label;
+                typeCategorySelect.appendChild(opt);
             });
-            if (!res.ok) { showToast(t('admin.saveError')); return; }
-            const { type } = await res.json();
-            sectorTypesList = [...sectorTypesList, type].sort((a, b) => a.name.localeCompare(b.name));
-            renderTypeOptions();
-            typeSelect.value = String(type.id);
-        } catch {
-            showToast(t('admin.saveError'));
-        }
+            typeCategorySelect.value = (type && type.iconCategory) || '';
+        });
+
+        const typeError = document.createElement('p');
+        typeError.className = 'home-carga-empty-note';
+        typeError.style.color = 'var(--home-danger)';
+        typeError.hidden = true;
+
+        const typeBtns = document.createElement('div');
+        typeBtns.style.cssText = 'display:flex; gap:0.6rem;';
+        const saveTypeBtn = document.createElement('button');
+        saveTypeBtn.type = 'button';
+        saveTypeBtn.className = 'home-carga-new-btn';
+        saveTypeBtn.textContent = t('admin.save');
+        const cancelTypeBtn = document.createElement('button');
+        cancelTypeBtn.type = 'button';
+        cancelTypeBtn.className = 'home-carga-secondary-btn';
+        cancelTypeBtn.textContent = t('admin.cancel');
+        typeBtns.append(saveTypeBtn, cancelTypeBtn);
+
+        typeEditorWrap.append(typeNameInput, typeCategorySelect, typeError, typeBtns);
+
+        saveTypeBtn.addEventListener('click', async () => {
+            const name = typeNameInput.value.trim();
+            if (!name) {
+                typeError.textContent = t('admin.requiredFields');
+                typeError.hidden = false;
+                return;
+            }
+            try {
+                const url = editingTypeId
+                    ? apiUrl(`/api/admin/business-sector-types/${editingTypeId}`)
+                    : apiUrl('/api/admin/business-sector-types');
+                const res = await fetch(url, {
+                    method: editingTypeId ? 'PATCH' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ name, iconCategory: typeCategorySelect.value || null }),
+                });
+                if (!res.ok) { typeError.textContent = t('admin.saveError'); typeError.hidden = false; return; }
+                const { type: saved } = await res.json();
+                sectorTypesList = editingTypeId
+                    ? sectorTypesList.map((t2) => (t2.id === saved.id ? saved : t2))
+                    : [...sectorTypesList, saved].sort((a, b) => a.name.localeCompare(b.name));
+                renderTypeOptions();
+                typeSelect.value = String(saved.id);
+                editTypeBtn.hidden = false;
+                iconPickerInstance.setCategory(saved.iconCategory);
+                typeEditorWrap.hidden = true;
+            } catch {
+                typeError.textContent = t('admin.saveError');
+                typeError.hidden = false;
+            }
+        });
+        cancelTypeBtn.addEventListener('click', () => { typeEditorWrap.hidden = true; });
+    }
+    newTypeBtn.addEventListener('click', () => openTypeEditor(null));
+    editTypeBtn.addEventListener('click', () => {
+        const current = sectorTypeById(Number(typeSelect.value));
+        if (current) openTypeEditor(current);
     });
-    contentEl.appendChild(newTypeBtn);
+    typeSelect.addEventListener('change', () => {
+        editTypeBtn.hidden = !typeSelect.value;
+        typeEditorWrap.hidden = true;
+        iconPickerInstance.setCategory(sectorTypeById(Number(typeSelect.value) || null)?.iconCategory);
+    });
+
+    const iconLabel = nameLabel.cloneNode(true);
+    iconLabel.textContent = t('admin.businessSectorIcon');
+    contentEl.appendChild(iconLabel);
+    const iconPickerContainer = document.createElement('div');
+    iconPickerContainer.style.marginBottom = '0.8rem';
+    contentEl.appendChild(iconPickerContainer);
+    const iconPickerInstance = window.BusinessSectorIcons.create(iconPickerContainer, {
+        t,
+        selected: (sector && sector.icon) || null,
+        category: sector && sector.typeId ? sectorTypeById(sector.typeId)?.iconCategory : null,
+    });
 
     const descLabel = nameLabel.cloneNode(true);
     descLabel.textContent = t('admin.businessSectorDescription');
@@ -1420,7 +1504,7 @@ function renderSectorForm(sector) {
         errorEl.hidden = true;
         saveBtn.disabled = true;
         const payload = {
-            name, icon: selectedIcon,
+            name, icon: iconPickerInstance.getValue(),
             typeId: typeSelect.value ? Number(typeSelect.value) : null,
             description: descInput.value.trim(),
         };

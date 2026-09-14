@@ -16,13 +16,6 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
 
-// Fixed icon set (see the "Icono se elige de un set fijo" decision) — plain
-// boxicons, same icon language the rest of the desktop app already uses.
-const SECTOR_ICON_OPTIONS = [
-    'bx-buildings', 'bx-store-alt', 'bx-briefcase', 'bx-cog',
-    'bx-package', 'bx-car', 'bx-restaurant', 'bx-leaf',
-];
-
 const tableBody = document.getElementById('sectors-table-body');
 const emptyMsg = document.getElementById('sectors-empty');
 
@@ -30,9 +23,10 @@ const addModal = document.getElementById('sector-add-modal');
 const addModalTitle = document.getElementById('sector-add-modal-title');
 const form = document.getElementById('sector-form');
 const nameField = document.getElementById('sector-name');
-const iconPicker = document.getElementById('sector-icon-picker');
+const iconPickerContainer = document.getElementById('sector-icon-picker');
 const typeSelect = document.getElementById('sector-type');
 const typeNewBtn = document.getElementById('sector-type-new');
+const typeEditBtn = document.getElementById('sector-type-edit');
 const descriptionField = document.getElementById('sector-description');
 const formError = document.getElementById('sector-form-error');
 const submitBtn = document.getElementById('sector-form-submit');
@@ -40,7 +34,6 @@ const cancelBtn = document.getElementById('sector-form-cancel');
 
 let sectors = [];
 let sectorTypes = [];
-let selectedIcon = SECTOR_ICON_OPTIONS[0];
 let editingSectorId = null; // null while creating, a real id while editing
 
 function showError(message) {
@@ -53,21 +46,14 @@ function clearError() {
 }
 
 // --- Icon picker -------------------------------------------------------------
-function renderIconPicker() {
-    iconPicker.innerHTML = '';
-    SECTOR_ICON_OPTIONS.forEach((icon) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `icon-picker-option${icon === selectedIcon ? ' active' : ''}`;
-        btn.setAttribute('role', 'radio');
-        btn.setAttribute('aria-checked', String(icon === selectedIcon));
-        btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
-        btn.addEventListener('click', () => {
-            selectedIcon = icon;
-            renderIconPicker();
-        });
-        iconPicker.appendChild(btn);
-    });
+// BusinessSectorIcons.js's own searchable, category-filtered grid (see
+// data/business-sector-icons.json) — replaces the old fixed 8-icon set.
+// One instance lives for the lifetime of the page; openAddModal/
+// openEditModal just re-seed its value each time the modal (re)opens.
+let sectorIconPicker = null;
+function typeIconCategory(typeId) {
+    const type = sectorTypes.find((t) => t.id === typeId);
+    return type ? type.iconCategory : null;
 }
 
 // --- Sector type (Tipo Giro) — flat admin-created catalog, no approval ------
@@ -98,17 +84,48 @@ function renderTypeSelect(selectedId) {
         typeSelect.appendChild(opt);
     });
     if (current) typeSelect.value = String(current);
+    typeEditBtn.hidden = !typeSelect.value;
 }
+// Picking a Tipo de Giro jumps the icon grid straight to that type's own
+// rubro (see BusinessSectorIcons.js's setCategory) — a pure convenience,
+// never overrides an icon already chosen.
+typeSelect.addEventListener('change', () => {
+    typeEditBtn.hidden = !typeSelect.value;
+    if (sectorIconPicker) sectorIconPicker.setCategory(typeIconCategory(Number(typeSelect.value) || null));
+});
 
 const typeModal = document.getElementById('sector-type-modal');
 const typeForm = document.getElementById('sector-type-form');
 const typeNameField = document.getElementById('sector-type-name');
+const typeCategorySelect = document.getElementById('sector-type-category');
 const typeFormError = document.getElementById('sector-type-form-error');
 const typeFormSubmit = document.getElementById('sector-type-form-submit');
 const typeFormCancel = document.getElementById('sector-type-form-cancel');
+const typeModalTitle = document.getElementById('sector-type-modal-title');
 
-function openTypeModal() {
+let editingTypeId = null; // null while creating a type, a real id while editing one
+
+async function renderTypeCategoryOptions(selected) {
+    typeCategorySelect.innerHTML = '';
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = Dashboard.t('admin.sectorTypeCategoryNone');
+    typeCategorySelect.appendChild(none);
+    const categories = await window.BusinessSectorIcons.getCategories(Dashboard.t);
+    categories.forEach((cat) => {
+        const opt = document.createElement('option');
+        opt.value = cat.id;
+        opt.textContent = cat.label;
+        typeCategorySelect.appendChild(opt);
+    });
+    typeCategorySelect.value = selected || '';
+}
+function openTypeModal(type) {
+    editingTypeId = type ? type.id : null;
+    typeModalTitle.textContent = Dashboard.t(type ? 'admin.businessSectorEditType' : 'admin.businessSectorNewType');
     typeForm.reset();
+    typeNameField.value = type ? type.name : '';
+    renderTypeCategoryOptions(type ? type.iconCategory : '');
     typeFormError.hidden = true;
     typeModal.hidden = false;
     typeNameField.focus();
@@ -116,7 +133,11 @@ function openTypeModal() {
 function closeTypeModal() {
     typeModal.hidden = true;
 }
-typeNewBtn.addEventListener('click', openTypeModal);
+typeNewBtn.addEventListener('click', () => openTypeModal(null));
+typeEditBtn.addEventListener('click', () => {
+    const current = sectorTypes.find((t) => t.id === Number(typeSelect.value));
+    if (current) openTypeModal(current);
+});
 typeFormCancel.addEventListener('click', closeTypeModal);
 typeModal.addEventListener('click', (event) => { if (event.target === typeModal) closeTypeModal(); });
 typeForm.addEventListener('submit', async (event) => {
@@ -130,11 +151,12 @@ typeForm.addEventListener('submit', async (event) => {
     }
     typeFormSubmit.disabled = true;
     try {
-        const res = await fetch('/api/admin/business-sector-types', {
-            method: 'POST',
+        const url = editingTypeId ? `/api/admin/business-sector-types/${editingTypeId}` : '/api/admin/business-sector-types';
+        const res = await fetch(url, {
+            method: editingTypeId ? 'PATCH' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name }),
+            body: JSON.stringify({ name, iconCategory: typeCategorySelect.value || null }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -143,8 +165,11 @@ typeForm.addEventListener('submit', async (event) => {
             return;
         }
         const { type } = await res.json();
-        sectorTypes = [...sectorTypes, type].sort((a, b) => a.name.localeCompare(b.name));
+        sectorTypes = editingTypeId
+            ? sectorTypes.map((t) => (t.id === type.id ? type : t))
+            : [...sectorTypes, type].sort((a, b) => a.name.localeCompare(b.name));
         renderTypeSelect(type.id);
+        if (sectorIconPicker) sectorIconPicker.setCategory(typeIconCategory(type.id));
         closeTypeModal();
     } catch {
         typeFormError.textContent = Dashboard.t('admin.saveError');
@@ -321,9 +346,8 @@ function openAddModal() {
     editingSectorId = null;
     addModalTitle.textContent = Dashboard.t('menu.addBusinessSectorNew');
     form.reset();
-    selectedIcon = SECTOR_ICON_OPTIONS[0];
-    renderIconPicker();
     renderTypeSelect(null);
+    sectorIconPicker = window.BusinessSectorIcons.create(iconPickerContainer, { t: Dashboard.t });
     clearError();
     addModal.hidden = false;
     nameField.focus();
@@ -332,9 +356,12 @@ function openEditModal(sector) {
     editingSectorId = sector.id;
     addModalTitle.textContent = Dashboard.t('admin.businessSectorEditTitle');
     nameField.value = sector.name;
-    selectedIcon = sector.icon || SECTOR_ICON_OPTIONS[0];
-    renderIconPicker();
     renderTypeSelect(sector.typeId);
+    sectorIconPicker = window.BusinessSectorIcons.create(iconPickerContainer, {
+        t: Dashboard.t,
+        selected: sector.icon || null,
+        category: typeIconCategory(sector.typeId),
+    });
     descriptionField.value = sector.description || '';
     clearError();
     addModal.hidden = false;
@@ -356,7 +383,7 @@ form.addEventListener('submit', async (event) => {
     }
     const payload = {
         name,
-        icon: selectedIcon,
+        icon: sectorIconPicker ? sectorIconPicker.getValue() : null,
         typeId: typeSelect.value ? Number(typeSelect.value) : null,
         description: descriptionField.value.trim(),
     };

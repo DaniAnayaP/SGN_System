@@ -232,6 +232,7 @@ const {
     getBusinessSectorById,
     listBusinessSectorTypes,
     createBusinessSectorType,
+    updateBusinessSectorType,
     getBusinessSectorChanges,
     logBusinessSectorChange,
     BUSINESS_SECTOR_PATCHABLE_FIELDS,
@@ -1836,12 +1837,40 @@ app.get('/api/admin/business-sectors/:id/changes', requireAuth, requireAdmin, (r
 app.get('/api/admin/business-sector-types', requireAuth, requireAdmin, (req, res) => {
     res.json({ types: listBusinessSectorTypes() });
 });
+// One of BusinessSectorIcons.js's own 14 rubro ids (data/business-sector-
+// icons.json's categoryIds), or empty/absent for "sin rubro" -- shape-only
+// check (matches this file's usual validation depth for admin-only lookup
+// data), not a hardcoded copy of the 14 ids themselves so the two never
+// need to be kept in sync by hand.
+function isValidIconCategory(value) {
+    return value === undefined || value === null || value === '' || /^[a-z]{2,40}$/.test(value);
+}
+
 app.post('/api/admin/business-sector-types', requireAuth, requireAdmin, (req, res) => {
-    const { name } = req.body || {};
+    const { name, iconCategory } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
+    if (!isValidIconCategory(iconCategory)) return res.status(400).json({ message: 'iconCategory inválido.' });
     try {
-        const type = createBusinessSectorType({ name: name.trim(), createdBy: req.user.name });
+        const type = createBusinessSectorType({ name: name.trim(), iconCategory: iconCategory || null, createdBy: req.user.name });
         res.status(201).json({ type });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return res.status(409).json({ message: 'Ya existe ese tipo de giro.' });
+        }
+        throw err;
+    }
+});
+app.patch('/api/admin/business-sector-types/:id', requireAuth, requireAdmin, (req, res) => {
+    const { name, iconCategory } = req.body || {};
+    if (name !== undefined && !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
+    if (!isValidIconCategory(iconCategory)) return res.status(400).json({ message: 'iconCategory inválido.' });
+    try {
+        const type = updateBusinessSectorType(req.params.id, {
+            name: name !== undefined ? name.trim() : undefined,
+            iconCategory: iconCategory !== undefined ? (iconCategory || null) : undefined,
+        });
+        if (!type) return res.status(404).json({ message: 'Tipo de giro no encontrado.' });
+        res.json({ type });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return res.status(409).json({ message: 'Ya existe ese tipo de giro.' });
