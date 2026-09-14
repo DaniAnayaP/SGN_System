@@ -1531,227 +1531,84 @@ function renderSectorPerms(sector) {
     contentEl.appendChild(goToTree);
 }
 
-// --- Departamento reorder (see the Web version's identical screen in
-// Admin-BusinessSectors.js -- same two ideas: "Orden Árbol Maestro" is
-// read-only reference here, "Reorden Personalizado" is drag-only and local
-// to this Giro). Reuses .sector-order-* classes from Admin.css, laid out
-// over .item-row instead of a <table> to match this shell's own list style.
-let departmentCatalogApp = null;
-async function ensureDepartmentCatalogApp() {
-    if (!departmentCatalogApp) departmentCatalogApp = await window.PermissionTree.getDepartmentCatalog();
-    return departmentCatalogApp;
-}
-// Área names don't vary per Giro, only their order does -- cached across
-// every renderSectorOrder call the same way departmentCatalogApp is.
-let areaCatalogsApp = {};
-async function ensureAreaCatalogApp(sectionId) {
-    if (!areaCatalogsApp[sectionId]) areaCatalogsApp[sectionId] = await window.PermissionTree.getAreaCatalog(sectionId);
-    return areaCatalogsApp[sectionId];
-}
-function reorderOrderListApp(list, draggedId, targetId) {
-    if (draggedId === targetId) return false;
-    const fromIdx = list.indexOf(draggedId);
-    if (fromIdx === -1) return false;
-    list.splice(fromIdx, 1);
-    const toIdx = list.indexOf(targetId);
-    list.splice(toIdx === -1 ? list.length : toIdx, 0, draggedId);
-    return true;
-}
-
+// --- Reorden Personalizado -- literal réplica of Accesos Globales's own
+// tree (grantMode:'giro'), filtered down to only what this Giro already
+// has granted (grantOrderMode), with drag-reorder turned back on at every
+// depth Árbol Maestro itself reorders at (Departamento/Área/Apartado/
+// Pantalla/Columna) -- same replacement the Web version's own
+// openSectorOrderModal got, mirrored here over contentEl/subViewBackHeader
+// instead of a modal to match this shell's own navigation style.
 function renderSectorOrder(sector) {
     contentEl.appendChild(subViewBackHeader(t('admin.giroReordenPersonalizadoTitle'), sector.name, () => {
         sectorSubView = { mode: 'detail', sector };
         renderSectorSubView();
     }));
-    const hintEl = document.createElement('p');
-    hintEl.className = 'home-carga-empty-note';
-    hintEl.style.textAlign = 'left';
-    hintEl.style.padding = '0 0 0.8rem';
-    hintEl.textContent = t('admin.sectorOrderHint');
-    contentEl.appendChild(hintEl);
+    const treeWrap = document.createElement('div');
+    treeWrap.className = 'perm-tree perm-tree-scroll-x';
+    contentEl.appendChild(treeWrap);
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    treeWrap.appendChild(hint);
 
-    const listEl = document.createElement('div');
-    listEl.className = 'home-carga-empty-note';
-    listEl.textContent = t('admin.loading') || '...';
-    contentEl.appendChild(listEl);
-
-    let masterOrder = [];
-    let customOrder = [];
-    let labelById = new Map();
-    // Same lazy-per-department idea as the Web version's own
-    // sectorOrderCustomAreaOrders -- only departments actually expanded
-    // this session get an entry, which is also exactly what Guardar sends.
-    let masterAreaOrders = {};
-    let areaOrdersFromServer = {};
-    let customAreaOrders = {};
-    const expandedDepts = new Set();
-    // One shared dragged-node reference -- kind+sectionId guard against a
-    // Departamento drag being dropped as if it were an Área, or an Área
-    // from one department landing under another (same as the Web version).
-    let draggedNode = null;
-    const rowsWrap = document.createElement('div');
-
-    function buildRow({ kind, id, sectionId, label, depth, index, masterRank, hasChildren, expanded, onToggle, onDrop }) {
-        const row = document.createElement('div');
-        row.className = `item-row sector-order-row sector-order-row-depth-${depth}`;
-        row.draggable = true;
-        row.addEventListener('dragstart', (e) => {
-            draggedNode = { kind, id, sectionId };
-            row.classList.add('sector-order-row-dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        });
-        row.addEventListener('dragend', () => {
-            draggedNode = null;
-            row.classList.remove('sector-order-row-dragging');
-        });
-        row.addEventListener('dragover', (e) => {
-            if (!draggedNode || draggedNode.kind !== kind || draggedNode.sectionId !== sectionId || draggedNode.id === id) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            row.classList.add('sector-order-row-drop-target');
-        });
-        row.addEventListener('dragleave', () => row.classList.remove('sector-order-row-drop-target'));
-        row.addEventListener('drop', (e) => {
-            e.preventDefault();
-            row.classList.remove('sector-order-row-drop-target');
-            const dragged = draggedNode;
-            draggedNode = null;
-            if (!dragged || dragged.kind !== kind || dragged.sectionId !== sectionId || dragged.id === id) return;
-            if (onDrop(dragged.id, id)) renderRows();
-        });
-
-        const main = document.createElement('div');
-        main.className = 'item-main';
-        const titleWrap = document.createElement('div');
-        titleWrap.className = 'sector-order-name-cell';
-        if (hasChildren) {
-            const toggleBtn = document.createElement('button');
-            toggleBtn.type = 'button';
-            toggleBtn.className = 'sector-order-toggle';
-            toggleBtn.setAttribute('aria-expanded', String(!!expanded));
-            toggleBtn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
-            toggleBtn.addEventListener('click', onToggle);
-            titleWrap.appendChild(toggleBtn);
-        }
-        const titleEl = document.createElement('span');
-        titleEl.className = 'item-title';
-        titleEl.textContent = label;
-        titleWrap.appendChild(titleEl);
-        main.appendChild(titleWrap);
-        const subEl = document.createElement('div');
-        subEl.className = 'item-sub';
-        subEl.innerHTML = `${t('admin.sectorOrderColMaster')}: <span class="sector-order-badge">${masterRank || '—'}</span>`;
-        main.appendChild(subEl);
-        row.appendChild(main);
-
-        const customCell = document.createElement('div');
-        customCell.className = 'sector-order-custom-cell';
-        customCell.innerHTML = '<span class="sector-order-grip"><i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i></span>'
-            + `<span class="sector-order-badge sector-order-badge-custom">${index + 1}</span>`;
-        row.appendChild(customCell);
-
-        if ((masterRank || 0) !== index + 1) {
-            const tag = document.createElement('span');
-            tag.className = 'sector-order-custom-tag';
-            tag.textContent = t('admin.sectorOrderCustomTag');
-            row.appendChild(tag);
-        }
-        return row;
-    }
-
-    function renderRows() {
-        rowsWrap.innerHTML = '';
-        const masterRank = new Map(masterOrder.map((id, i) => [id, i + 1]));
-        customOrder.forEach((id, index) => {
-            const expanded = expandedDepts.has(id);
-            rowsWrap.appendChild(buildRow({
-                kind: 'department',
-                id,
-                sectionId: null,
-                label: labelById.get(id) || id,
-                depth: 0,
-                index,
-                masterRank: masterRank.get(id),
-                hasChildren: true,
-                expanded,
-                onToggle: () => {
-                    if (expanded) expandedDepts.delete(id);
-                    else expandedDepts.add(id);
-                    renderRows();
-                },
-                onDrop: (draggedId, targetId) => reorderOrderListApp(customOrder, draggedId, targetId),
-            }));
-            if (!expanded) return;
-
-            if (!areaCatalogsApp[id]) {
-                const loadingRow = document.createElement('div');
-                loadingRow.className = 'sector-order-area-loading';
-                loadingRow.textContent = t('admin.loading') || '...';
-                rowsWrap.appendChild(loadingRow);
-                ensureAreaCatalogApp(id).then(() => { if (expandedDepts.has(id)) renderRows(); });
-                return;
-            }
-            const areaCatalog = areaCatalogsApp[id];
-            const areaLabelById = new Map(areaCatalog.map((a) => [a.id, a.label]));
-            const areaMasterOrder = masterAreaOrders[id] || areaCatalog.map((a) => a.id);
-            const areaMasterRank = new Map(areaMasterOrder.map((areaId, i) => [areaId, i + 1]));
-            if (!customAreaOrders[id]) {
-                const fromServer = areaOrdersFromServer[id];
-                customAreaOrders[id] = (fromServer && fromServer.length) ? [...fromServer] : [...areaMasterOrder];
-                areaCatalog.forEach((a) => { if (!customAreaOrders[id].includes(a.id)) customAreaOrders[id].push(a.id); });
-            }
-            customAreaOrders[id].forEach((areaId, areaIndex) => {
-                rowsWrap.appendChild(buildRow({
-                    kind: 'area',
-                    id: areaId,
-                    sectionId: id,
-                    label: areaLabelById.get(areaId) || areaId,
-                    depth: 1,
-                    index: areaIndex,
-                    masterRank: areaMasterRank.get(areaId),
-                    hasChildren: false,
-                    onDrop: (draggedId, targetId) => reorderOrderListApp(customAreaOrders[id], draggedId, targetId),
-                }));
-            });
-        });
-    }
-
+    let sectorOrderInstance = null;
     (async () => {
         try {
-            const [catalog, res] = await Promise.all([
-                ensureDepartmentCatalogApp(),
+            const [grantsRes, statusRes, costsRes, orderRes] = await Promise.all([
+                fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/grants`), { credentials: 'include' }),
+                fetch(apiUrl('/api/admin/master-permission-status'), { credentials: 'include' }),
+                fetch(apiUrl('/api/admin/master-permission-costs'), { credentials: 'include' }),
                 fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/department-order`), { credentials: 'include' }),
             ]);
-            if (!res.ok) throw new Error('load failed');
-            const data = await res.json();
+            if (!grantsRes.ok || !statusRes.ok || !costsRes.ok || !orderRes.ok) throw new Error('load failed');
+            const grantsData = await grantsRes.json();
+            const statusData = await statusRes.json();
+            const costsData = await costsRes.json();
+            const orderData = await orderRes.json();
             if (sectorSubView.mode !== 'order' || sectorSubView.sector.id !== sector.id) return;
-            labelById = new Map(catalog.map((d) => [d.id, d.label]));
-            masterOrder = data.masterOrder || [];
-            customOrder = (data.customOrder && data.customOrder.length) ? [...data.customOrder] : [...masterOrder];
-            catalog.forEach((d) => { if (!customOrder.includes(d.id)) customOrder.push(d.id); });
-            masterAreaOrders = data.masterAreaOrders || {};
-            areaOrdersFromServer = data.customAreaOrders || {};
-            listEl.remove();
-            contentEl.appendChild(rowsWrap);
-            renderRows();
+            treeWrap.innerHTML = '';
+            sectorOrderInstance = window.PermissionTree.create(treeWrap, {
+                grantMode: 'giro',
+                grantOrderMode: true,
+                masterGate: statusData.statuses || [],
+                masterCosts: costsData.costs || [],
+                costCurrency: costsData.currency || 'MXN',
+                departmentOrder: orderData.customOrder || [],
+                areaOrder: orderData.customAreaOrders || {},
+                apartadoOrder: orderData.customApartadoOrders || {},
+                pantallaOrder: orderData.customPantallaOrders || {},
+                columnOrder: orderData.customColumnOrders || {},
+            });
+            await sectorOrderInstance.init(grantsData.grants || []);
         } catch {
-            listEl.textContent = t('admin.loadError');
+            treeWrap.innerHTML = '';
+            const error = document.createElement('p');
+            error.className = 'home-carga-empty-note';
+            error.textContent = t('admin.loadError');
+            treeWrap.appendChild(error);
         }
     })();
 
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.className = 'home-carga-new-btn';
-    saveBtn.style.marginTop = '1rem';
+    saveBtn.style.marginTop = '0.7rem';
     saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
     saveBtn.addEventListener('click', async () => {
+        if (!sectorOrderInstance) return;
         saveBtn.disabled = true;
         try {
             const res = await fetch(apiUrl(`/api/admin/business-sectors/${sector.id}/department-order`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ customOrder, customAreaOrders }),
+                body: JSON.stringify({
+                    customOrder: sectorOrderInstance.getDepartmentOrder(),
+                    customAreaOrders: sectorOrderInstance.getAreaOrders(),
+                    customApartadoOrders: sectorOrderInstance.getApartadoOrders(),
+                    customPantallaOrders: sectorOrderInstance.getPantallaOrders(),
+                    customColumnOrders: sectorOrderInstance.getColumnOrders(),
+                }),
             });
             if (!res.ok) throw new Error('save failed');
             showToast(t('main.changeSaved'));

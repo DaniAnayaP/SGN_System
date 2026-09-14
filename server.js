@@ -1917,6 +1917,10 @@ function buildMasterOrdersByPrefix(prefix) {
 // has ever diverged for that department, else live-falls-back to Master's,
 // per the cascade the user described -- never a frozen one-time copy)
 // come back together so the screen can render both columns in one request.
+// Extended to all 5 levels (same as master-permission-order below) for
+// "Reorden Personalizado" -- confirmed with the user: a réplica of Accesos
+// Globales, filtered to what's granted, with reorder enabled at every
+// depth Árbol Maestro itself reorders at, not just Departamento/Área.
 app.get('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
@@ -1926,22 +1930,49 @@ app.get('/api/admin/business-sectors/:id/department-order', requireAuth, require
         customOrder: getEffectiveSectorDepartmentOrder(req.params.id),
         masterAreaOrders: buildMasterOrdersByPrefix('area::'),
         customAreaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'area::'),
+        masterApartadoOrders: buildMasterOrdersByPrefix('apartado::'),
+        customApartadoOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'apartado::'),
+        masterPantallaOrders: buildMasterOrdersByPrefix('pantalla::'),
+        customPantallaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'pantalla::'),
+        masterColumnOrders: buildMasterOrdersByPrefix('columna::'),
+        customColumnOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'columna::'),
     });
 });
 
 app.put('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
-    const { customOrder, customAreaOrders } = req.body || {};
+    const { customOrder, customAreaOrders, customApartadoOrders, customPantallaOrders, customColumnOrders } = req.body || {};
     if (!isValidOrderArray(customOrder)) {
         return res.status(400).json({ message: 'customOrder must be an array of section ids.' });
     }
     if (customAreaOrders !== undefined && !isValidOrderMap(customAreaOrders)) {
         return res.status(400).json({ message: 'customAreaOrders must be a map of sectionId to an array of area ids.' });
     }
+    if (customApartadoOrders !== undefined && !isValidOrderMap(customApartadoOrders)) {
+        return res.status(400).json({ message: 'customApartadoOrders must be a map of "sectionId::areaId" to an array of apartado ids.' });
+    }
+    if (customPantallaOrders !== undefined && !isValidOrderMap(customPantallaOrders)) {
+        return res.status(400).json({ message: 'customPantallaOrders must be a map of "sectionId::areaId::apartadoId" to an array of pantalla ids.' });
+    }
+    if (customColumnOrders !== undefined && !isValidOrderMap(customColumnOrders)) {
+        return res.status(400).json({ message: 'customColumnOrders must be a map of "sectionId::areaId::apartadoId::pantallaId::classId" to an array of column ids.' });
+    }
     const rows = [{ parentKey: PERMISSION_ORDER_ROOT_KEY, orderedKeys: customOrder }];
     Object.entries(customAreaOrders || {}).forEach(([sectionId, orderedKeys]) => {
         rows.push({ parentKey: areaOrderKey(sectionId), orderedKeys });
+    });
+    Object.entries(customApartadoOrders || {}).forEach(([compoundKey, orderedKeys]) => {
+        const [sectionId, areaId] = compoundKey.split('::');
+        rows.push({ parentKey: apartadoOrderKey(sectionId, areaId), orderedKeys });
+    });
+    Object.entries(customPantallaOrders || {}).forEach(([compoundKey, orderedKeys]) => {
+        const [sectionId, areaId, apartadoId] = compoundKey.split('::');
+        rows.push({ parentKey: pantallaOrderKey(sectionId, areaId, apartadoId), orderedKeys });
+    });
+    Object.entries(customColumnOrders || {}).forEach(([compoundKey, orderedKeys]) => {
+        const [sectionId, areaId, apartadoId, pantallaId, classId] = compoundKey.split('::');
+        rows.push({ parentKey: columnOrderKey(sectionId, areaId, apartadoId, pantallaId, classId), orderedKeys });
     });
     setSectorPermissionOrders(req.params.id, rows, changedByLabel(req));
     const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
@@ -1950,6 +1981,12 @@ app.put('/api/admin/business-sectors/:id/department-order', requireAuth, require
         customOrder: getEffectiveSectorDepartmentOrder(req.params.id),
         masterAreaOrders: buildMasterOrdersByPrefix('area::'),
         customAreaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'area::'),
+        masterApartadoOrders: buildMasterOrdersByPrefix('apartado::'),
+        customApartadoOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'apartado::'),
+        masterPantallaOrders: buildMasterOrdersByPrefix('pantalla::'),
+        customPantallaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'pantalla::'),
+        masterColumnOrders: buildMasterOrdersByPrefix('columna::'),
+        customColumnOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'columna::'),
     });
 });
 

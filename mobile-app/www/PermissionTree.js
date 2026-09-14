@@ -264,7 +264,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, grantMode = null, masterGate = null, masterCosts = null, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN' } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN' } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -302,6 +302,14 @@
             enabledModuleKeys = null;
             showAppTab = false;
         }
+        // grantOrderMode ("Reorden Personalizado") only ever combines with
+        // grantMode:'giro' -- réplica of Accesos Globales, filtered to
+        // whatever's already granted, but with drag-reorder turned back ON
+        // (Accesos Globales itself never reorders, see the dragAllowed
+        // checks below) and the semáforo itself now read-only (see
+        // buildGateIcon) -- this screen only ever reorders, it never
+        // changes what's granted.
+        const dragAllowed = !grantMode || grantOrderMode;
         let sectionsData = [];
         // Departamento/Área drag-reorder (statusMode/Árbol Maestro only --
         // see statusRow's dragCtx param and renderStatusTree below). Plain
@@ -2567,7 +2575,7 @@
             // level above guards a group that genuinely has nothing else
             // in it (a Pantalla only ever has one or two standalone
             // columns in practice).
-            const columnDragCtx = (cls && !grantMode) ? {
+            const columnDragCtx = (cls && dragAllowed) ? {
                 kind: 'columna',
                 id: col.id,
                 scope: `${section.id}::${item.id}::${sm.id}::${subSm.id}::${cls.id}`,
@@ -2598,6 +2606,7 @@
             // (they're not a real screen/field, just a grant tier).
             COLUMN_STATUS_LEVELS.forEach((level) => {
                 const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                if (grantOrderMode && !subtreeHasGrant(levelKey)) return;
                 container.appendChild(statusRow(t(level.labelKey), depth + 1, levelKey, null, selfStateRollup(levelKey), null, ancestorLocked, null, null));
             });
         }
@@ -2620,6 +2629,8 @@
             }, computeNodeRollup(classKey), null, ancestorLocked, null, null));
             if (!classExpanded) return;
             cls.submenu.forEach((col) => {
+                const colKey = keyOf(section.id, item.id, `${classBase}/${col.id}`);
+                if (grantOrderMode && !subtreeHasGrant(colKey)) return;
                 renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked, sm, subSm, cls);
             });
         }
@@ -2644,6 +2655,8 @@
             }, computeNodeRollup(tableKey), null, ancestorLocked, null, null));
             if (!tableExpanded) return;
             subSm.submenu.forEach((entry) => {
+                const entryKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`);
+                if (grantOrderMode && !subtreeHasGrant(entryKey)) return;
                 if (entry.isClassification) {
                     renderStatusClassification(container, section, item, sm, subSm, entry, ancestorLocked);
                     return;
@@ -2671,6 +2684,7 @@
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
+                if (grantOrderMode && !subtreeHasGrant(iconKey)) return;
                 // Vista Previa here shows the SAME real table this
                 // pantalla's own preview has, with only this one icon's
                 // toolbar -- see buildPreviewIconDemoWeb -- gated on the
@@ -2867,6 +2881,18 @@
         // with the user: consistent everywhere, so a group's own Web/App
         // summary is never just silently missing depending on which level
         // it happens to be.
+        // grantOrderMode ("Reorden Personalizado") only -- true the moment
+        // ANY leaf under key (or key itself, if it's already a leaf) has
+        // been granted Web or App for this Giro, regardless of Árbol
+        // Maestro's own blocked/available distinction (a blocked leaf is
+        // never actually granted in grantSet to begin with, so this needs
+        // no separate blocked-check of its own). Used to filter every
+        // level of the tree down to only the branches this Giro actually
+        // uses -- everything else is skipped entirely, not just grayed out.
+        function subtreeHasGrant(key) {
+            const leaves = hasStatusChildren(key) ? collectLeafStatusKeys(key) : [key];
+            return leaves.some((k) => grantSet.has(k) || grantSet.has(k + APP_SUFFIX));
+        }
         // grantMode 'giro' -- maps computeGateState/computeGateRollup's own
         // vocabulary onto the 'full'/'partial'/'empty' one buildRollupIcon
         // already knows, plus a new 'blocked' bucket (red, see the CSS) --
@@ -3084,7 +3110,11 @@
             btn.className = `perm-tree-gate-icon perm-tree-gate-icon-${state}`;
             btn.title = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
             btn.innerHTML = deviceIconSvg(platform, '');
-            if (readOnly) {
+            // grantOrderMode ("Reorden Personalizado") only ever reorders --
+            // the semáforo here is read-only reference (what's already
+            // granted), same as readOnly mode; Accesos Globales is the only
+            // screen that ever grants/revokes through this icon.
+            if (readOnly || grantOrderMode) {
                 btn.disabled = true;
                 return btn;
             }
@@ -3156,6 +3186,14 @@
                 const sectionExpanded = expandedSections.has(section.id);
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
                 const sectionStateKey = keyOf(section.id, null, null);
+                // grantOrderMode ("Reorden Personalizado") -- skip this
+                // whole Departamento (and everything nested under it)
+                // entirely when this Giro has nothing granted anywhere
+                // inside it, at every level below too (see the matching
+                // subtreeHasGrant checks further down this same function
+                // and in renderStatusTableColumns/renderStatusClassification/
+                // renderStatusColumn/renderStatusIcons).
+                if (grantOrderMode && !subtreeHasGrant(sectionStateKey)) return;
                 // Departamento has no screen of its own to try -- 'nav'
                 // preview instead shows how it looks as a navigation point
                 // (its own Áreas, see buildPreviewNavWeb/App), always
@@ -3173,7 +3211,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: rollupPlatformState(sectionLeafKeys, 'web'), app: rollupPlatformState(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, (!grantMode && section.id !== 'main') ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo));
+                } : null, section.items.length ? { web: rollupPlatformState(sectionLeafKeys, 'web'), app: rollupPlatformState(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, (dragAllowed && section.id !== 'main') ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -3183,13 +3221,14 @@
                     const itemExpanded = expandedItems.has(itemKey);
                     const itemLeafKeys = hasSubmenu ? leafKeysUnder(section, item) : [];
                     const itemStateKey = keyOf(section.id, item.id, null);
+                    if (grantOrderMode && !subtreeHasGrant(itemStateKey)) return;
                     // Only real áreas reorder (never Inicio/Panel/Tablero,
                     // and never anything under 'main' -- same GENERAL_ITEM_IDS
                     // exclusion sectionsData's own construction already
                     // applies when merging generalItems ahead of areaItems).
                     // grantMode never reorders anything at all (see also the
                     // Departamento dragCtx just below, gated the same way).
-                    const isRealArea = !grantMode && section.id !== 'main' && !GENERAL_ITEM_IDS.includes(item.id);
+                    const isRealArea = dragAllowed && section.id !== 'main' && !GENERAL_ITEM_IDS.includes(item.id);
                     // Same 'nav' idea as Departamento above, one level down
                     // -- an Área's own children are its Apartados
                     // (Catálogos/Operaciones/...).
@@ -3218,6 +3257,7 @@
                     item.submenu.forEach((sm) => {
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
                         const smStateKey = keyOf(section.id, item.id, sm.id);
+                        if (grantOrderMode && !subtreeHasGrant(smStateKey)) return;
                         const apartadoDragCtx = isRealArea ? { kind: 'apartado', id: sm.id, scope: apartadoScope, onDrop: (draggedId, targetId) => reorderApartados(section.id, item.id, draggedId, targetId) } : null;
                         // Same 'nav' idea one level deeper still -- an
                         // Apartado's own children are its Pantallas (a
@@ -3258,6 +3298,7 @@
                             const key = subSm.standalone
                                 ? keyOf(section.id, subSm.id, null)
                                 : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`);
+                            if (grantOrderMode && !subtreeHasGrant(key)) return;
                             const subHasDetail = subSmHasDetail(subSm);
                             const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
                             const subDetailExpanded = expandedItems.has(subDetailKey);
@@ -3284,10 +3325,12 @@
                             } : null, hasStatusChildren(key) ? computeNodeRollup(key) : selfStateRollup(key), null, subSmAncestorLocked, pantallaDragCtx, previewInfo));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
-                                if (subSm.submenu && subSm.submenu.length) {
+                                if (subSm.submenu && subSm.submenu.length
+                                    && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`)))) {
                                     renderStatusTableColumns(treeRoot, section, item, sm, subSm, detailAncestorLocked);
                                 }
-                                if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
+                                if (subSm.iconsSubmenu && subSm.iconsSubmenu.length
+                                    && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`)))) {
                                     renderStatusIcons(treeRoot, section, item, sm, subSm, detailAncestorLocked);
                                 }
                             }
