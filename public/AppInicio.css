@@ -1245,6 +1245,18 @@ body{
 .home-carga-active-row-label{ flex: 1; min-width: 0; }
 .home-carga-active-row-label p{ margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--home-text-secondary); }
 .home-carga-active-row-label span{ font-size: 0.68rem; color: var(--home-text-muted); }
+.home-carga-active-row-caret{ transition: transform 0.15s ease; }
+
+/* A Giro's card, expanded in place instead of navigating to a separate
+   detail screen (see renderSectorsList in AppAdminInicio.js) -- wraps the
+   row above plus its action tiles below in one bordered card, so the row
+   itself drops its own border/margin while nested here. */
+.home-carga-active-card{ border: 1px solid var(--home-border); border-radius: 0.9rem; background: var(--home-surface); margin-bottom: 0.5rem; overflow: hidden; }
+.home-carga-active-card > .home-carga-active-row{ border: none; border-radius: 0; margin-bottom: 0; background: transparent; width: 100%; }
+.home-carga-active-card.open > .home-carga-active-row{ border-bottom: 1px solid var(--home-border); }
+.home-carga-active-card.open .home-carga-active-row-caret{ transform: rotate(90deg); color: var(--home-accent); }
+.home-carga-active-card-desc{ margin: 0; padding: 0.6rem 0.85rem 0; font-size: 0.68rem; color: var(--home-text-muted); line-height: 1.4; text-align: left; }
+.home-carga-active-card-actions{ padding: 0.7rem 0.85rem 0.85rem; }
 .home-carga-active-row-progress{
     width: 2.4rem; height: 2.4rem; border-radius: 50%; flex-shrink: 0; position: relative;
     display: flex; align-items: center; justify-content: center;

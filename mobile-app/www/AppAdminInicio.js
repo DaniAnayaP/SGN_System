@@ -1037,14 +1037,10 @@ async function loadMasterTree(token) {
 let sectorsList = [];
 let sectorTypesList = [];
 let sectorSubView = { mode: 'list' };
-
-function sectorStatusLabelKey(status) {
-    // Not "...Med" -- confirmed live that variant doesn't exist for
-    // Inhabilitado/Mejoras (only Habilitado/Construcción have it), which
-    // left the raw i18n key showing on screen. The base key exists for
-    // all 4 statuses.
-    return `admin.masterTreeStatus${status.charAt(0).toUpperCase()}${status.slice(1)}`;
-}
+// Which Giro's card is expanded in the list -- set alongside every
+// navigation into/out of a sub-screen (tree/order/form/history) so coming
+// back re-opens the same card instead of dropping to a flat list.
+let expandedSectorId = null;
 
 async function fetchSectorTypes() {
     try {
@@ -1058,6 +1054,7 @@ async function fetchSectorTypes() {
 
 async function loadSectorsSection(token) {
     sectorSubView = { mode: 'list' };
+    expandedSectorId = null;
     contentEl.innerHTML = '';
     const hint = document.createElement('p');
     hint.className = 'home-carga-empty-note';
@@ -1086,11 +1083,9 @@ function renderSectorSubView() {
     if (activeSection !== 'sectors') return;
     contentEl.innerHTML = '';
     if (sectorSubView.mode === 'list') renderSectorsList();
-    else if (sectorSubView.mode === 'detail') renderSectorDetail(sectorSubView.sector);
     else if (sectorSubView.mode === 'tree') renderSectorTree(sectorSubView.sector);
     else if (sectorSubView.mode === 'form') renderSectorForm(sectorSubView.sector);
     else if (sectorSubView.mode === 'history') renderSectorHistory(sectorSubView.sector);
-    else if (sectorSubView.mode === 'perms') renderSectorPerms(sectorSubView.sector);
     else if (sectorSubView.mode === 'order') renderSectorOrder(sectorSubView.sector);
 }
 
@@ -1131,6 +1126,10 @@ function renderSectorsList() {
         list.appendChild(empty);
     }
     sectorsList.forEach((sector) => {
+        const isOpen = expandedSectorId === sector.id;
+        const card = document.createElement('div');
+        card.className = 'home-carga-active-card' + (isOpen ? ' open' : '');
+
         const row = document.createElement('button');
         row.type = 'button';
         row.className = 'home-carga-active-row';
@@ -1147,9 +1146,12 @@ function renderSectorsList() {
                 <span>${sector.typeName || '—'} · ${statusLabel}${dots.length ? ' · ' + dots.join(' ') : ''}</span>
             </span>
             <span class="home-carga-active-row-preview" role="button" tabindex="0" aria-label="${t('admin.businessSectorPreview')}" title="${t('admin.businessSectorPreview')}"><i class="bx bx-compass" aria-hidden="true"></i></span>
-            <i class="bx bx-chevron-right" aria-hidden="true"></i>
+            <i class="bx bx-chevron-right home-carga-active-row-caret" aria-hidden="true"></i>
         `;
-        row.addEventListener('click', () => { sectorSubView = { mode: 'detail', sector }; renderSectorSubView(); });
+        row.addEventListener('click', () => {
+            expandedSectorId = isOpen ? null : sector.id;
+            renderSectorSubView();
+        });
         const previewBtn = row.querySelector('.home-carga-active-row-preview');
         previewBtn.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -1161,7 +1163,47 @@ function renderSectorsList() {
             event.stopPropagation();
             showToast(t('admin.underConstruction'));
         });
-        list.appendChild(row);
+        card.appendChild(row);
+
+        // Expanded in place instead of a separate detail screen -- Vista
+        // Previa and Permisos Asignados used to live here too, but both
+        // turned out fully redundant (the former with the row's own preview
+        // icon above, the latter with the counts already on the row plus a
+        // "go to tree" button pointing at the same place Accesos Globales
+        // does below), so only the 5 real actions remain.
+        if (isOpen) {
+            if (sector.description) {
+                const desc = document.createElement('p');
+                desc.className = 'home-carga-active-card-desc';
+                desc.textContent = sector.description;
+                card.appendChild(desc);
+            }
+            const grid = document.createElement('div');
+            grid.className = 'home-tiles home-carga-active-card-actions';
+            const actions = [
+                { icon: 'bx-shield', label: t('admin.giroAccesosGlobalesTitle'), onClick: () => { expandedSectorId = sector.id; sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); } },
+                { icon: 'bx-sort-alt-2', label: t('admin.giroReordenPersonalizadoTitle'), onClick: () => { expandedSectorId = sector.id; sectorSubView = { mode: 'order', sector }; renderSectorSubView(); } },
+                { icon: 'bx-edit', label: t('admin.edit'), onClick: () => { expandedSectorId = sector.id; sectorSubView = { mode: 'form', sector }; renderSectorSubView(); } },
+                { icon: 'bx-history', label: t('admin.businessSectorChangeHistory'), onClick: () => { expandedSectorId = sector.id; sectorSubView = { mode: 'history', sector }; renderSectorSubView(); } },
+                {
+                    icon: sector.status === 'inactive' ? 'bx-check-circle' : 'bx-x-circle',
+                    label: t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate'),
+                    onClick: () => toggleSectorStatusApp(sector),
+                    danger: sector.status !== 'inactive',
+                },
+            ];
+            actions.forEach((a) => {
+                const tile = document.createElement('button');
+                tile.type = 'button';
+                tile.className = 'home-tile' + (a.danger ? ' danger' : '');
+                tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${a.icon}" aria-hidden="true"></i></span><span>${a.label}</span>`;
+                tile.addEventListener('click', a.onClick);
+                grid.appendChild(tile);
+            });
+            card.appendChild(grid);
+        }
+
+        list.appendChild(card);
     });
     contentEl.appendChild(list);
 
@@ -1172,57 +1214,6 @@ function renderSectorsList() {
     newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('menu.addBusinessSectorNew')}</span>`;
     newBtn.addEventListener('click', () => { sectorSubView = { mode: 'form', sector: null }; renderSectorSubView(); });
     contentEl.appendChild(newBtn);
-}
-
-function renderSectorDetail(sector) {
-    contentEl.appendChild(subViewBackHeader(sector.name, `${sector.typeName || '—'} · ${t(sector.status === 'inactive' ? 'admin.businessSectorStatusInactive' : 'admin.businessSectorStatusActive')}`, () => {
-        sectorSubView = { mode: 'list' };
-        renderSectorSubView();
-    }));
-
-    const label = document.createElement('div');
-    label.className = 'home-carga-empty-note';
-    label.style.textAlign = 'left';
-    label.style.padding = '0 0 0.8rem';
-    label.textContent = sector.description || '';
-    if (sector.description) contentEl.appendChild(label);
-
-    // Reuses AppInicio.css's own .home-tiles/.home-tile (the same "Accesos
-    // rápidos" card Inicio already shows) -- .action-grid/.action-cell had
-    // no matching CSS anywhere, which is exactly why this looked like plain
-    // unstyled text before.
-    const grid = document.createElement('div');
-    grid.className = 'home-tiles';
-    const actions = [
-        { icon: 'bx-shield', label: t('admin.giroAccesosGlobalesTitle'), onClick: () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); } },
-        { icon: 'bx-sort-alt-2', label: t('admin.giroReordenPersonalizadoTitle'), onClick: () => { sectorSubView = { mode: 'order', sector }; renderSectorSubView(); } },
-        { icon: 'bx-compass', label: t('admin.businessSectorPreview'), onClick: () => showToast(t('admin.underConstruction')) },
-        { icon: 'bx-edit', label: t('admin.edit'), onClick: () => { sectorSubView = { mode: 'form', sector }; renderSectorSubView(); } },
-        { icon: 'bx-history', label: t('admin.businessSectorChangeHistory'), onClick: () => { sectorSubView = { mode: 'history', sector }; renderSectorSubView(); } },
-        {
-            icon: sector.status === 'inactive' ? 'bx-check-circle' : 'bx-x-circle',
-            label: t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate'),
-            onClick: () => toggleSectorStatusApp(sector),
-            danger: sector.status !== 'inactive',
-        },
-    ];
-    actions.forEach((a) => {
-        const tile = document.createElement('button');
-        tile.type = 'button';
-        tile.className = 'home-tile' + (a.danger ? ' danger' : '');
-        tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${a.icon}" aria-hidden="true"></i></span><span>${a.label}</span>`;
-        tile.addEventListener('click', a.onClick);
-        grid.appendChild(tile);
-    });
-    contentEl.appendChild(grid);
-
-    const permsBtn = document.createElement('button');
-    permsBtn.type = 'button';
-    permsBtn.className = 'home-carga-secondary-btn';
-    permsBtn.style.marginTop = '1rem';
-    permsBtn.innerHTML = `<i class="bx bx-pie-chart-alt" aria-hidden="true"></i><span>${t('admin.businessSectorPermsAssigned')}</span>`;
-    permsBtn.addEventListener('click', () => { sectorSubView = { mode: 'perms', sector }; renderSectorSubView(); });
-    contentEl.appendChild(permsBtn);
 }
 
 async function toggleSectorStatusApp(sector) {
@@ -1237,7 +1228,7 @@ async function toggleSectorStatusApp(sector) {
         if (!res.ok) throw new Error('save failed');
         const { sector: updated } = await res.json();
         sectorsList = sectorsList.map((s) => (s.id === updated.id ? updated : s));
-        sectorSubView = { mode: 'detail', sector: updated };
+        expandedSectorId = updated.id;
         renderSectorSubView();
     } catch {
         showToast(t('admin.saveError'));
@@ -1246,7 +1237,8 @@ async function toggleSectorStatusApp(sector) {
 
 function renderSectorTree(sector) {
     contentEl.appendChild(subViewBackHeader(t('admin.giroAccesosGlobalesTitle'), sector.name, () => {
-        sectorSubView = { mode: 'detail', sector };
+        expandedSectorId = sector.id;
+        sectorSubView = { mode: 'list' };
         renderSectorSubView();
     }));
     const treeWrap = document.createElement('div');
@@ -1324,7 +1316,8 @@ function renderSectorTree(sector) {
 function renderSectorForm(sector) {
     const isEdit = !!sector;
     contentEl.appendChild(subViewBackHeader(isEdit ? t('admin.businessSectorEditTitle') : t('menu.addBusinessSectorNew'), null, () => {
-        sectorSubView = isEdit ? { mode: 'detail', sector } : { mode: 'list' };
+        if (isEdit) expandedSectorId = sector.id;
+        sectorSubView = { mode: 'list' };
         renderSectorSubView();
     }));
 
@@ -1544,7 +1537,8 @@ function renderSectorForm(sector) {
                 ? sectorsList.map((s) => (s.id === saved.id ? saved : s))
                 : [...sectorsList, saved].sort((a, b) => a.name.localeCompare(b.name));
             showToast(t('main.recordSaved'));
-            sectorSubView = { mode: 'detail', sector: saved };
+            expandedSectorId = saved.id;
+            sectorSubView = { mode: 'list' };
             renderSectorSubView();
         } catch {
             errorEl.textContent = t('admin.saveError');
@@ -1558,7 +1552,8 @@ function renderSectorForm(sector) {
 
 function renderSectorHistory(sector) {
     contentEl.appendChild(subViewBackHeader(t('admin.businessSectorChangeHistory'), sector.name, () => {
-        sectorSubView = { mode: 'detail', sector };
+        expandedSectorId = sector.id;
+        sectorSubView = { mode: 'list' };
         renderSectorSubView();
     }));
     const list = document.createElement('div');
@@ -1598,40 +1593,6 @@ function renderSectorHistory(sector) {
     })();
 }
 
-function renderSectorPerms(sector) {
-    contentEl.appendChild(subViewBackHeader(t('admin.businessSectorPermsAssigned'), sector.name, () => {
-        sectorSubView = { mode: 'detail', sector };
-        renderSectorSubView();
-    }));
-    const s = sector.permSummary || {};
-    const groups = [
-        { key: 'habilitado', count: s.habilitado || 0 },
-        { key: 'construccion', count: s.construccion || 0 },
-        { key: 'mejoras', count: s.mejoras || 0 },
-        { key: 'inhabilitado', count: s.inhabilitado || 0 },
-    ].filter((g) => g.count > 0);
-    if (!groups.length) {
-        const empty = document.createElement('p');
-        empty.className = 'home-carga-empty-note';
-        empty.textContent = t('admin.businessSectorPermsEmpty');
-        contentEl.appendChild(empty);
-    } else {
-        groups.forEach((g) => {
-            const row = document.createElement('div');
-            row.className = 'item-row';
-            row.innerHTML = `<div class="item-main"><div class="item-title">${t(sectorStatusLabelKey(g.key))}</div></div><span class="perm-status-tag perm-status-tag-on">${g.count}</span>`;
-            contentEl.appendChild(row);
-        });
-    }
-    const goToTree = document.createElement('button');
-    goToTree.type = 'button';
-    goToTree.className = 'home-carga-secondary-btn';
-    goToTree.style.marginTop = '1rem';
-    goToTree.innerHTML = `<i class="bx bx-shield" aria-hidden="true"></i><span>${t('admin.businessSectorGoToTree')}</span>`;
-    goToTree.addEventListener('click', () => { sectorSubView = { mode: 'tree', sector }; renderSectorSubView(); });
-    contentEl.appendChild(goToTree);
-}
-
 // --- Reorden Personalizado -- literal réplica of Accesos Globales's own
 // tree (grantMode:'giro'), filtered down to only what this Giro already
 // has granted (grantOrderMode), with drag-reorder turned back on at every
@@ -1641,7 +1602,8 @@ function renderSectorPerms(sector) {
 // instead of a modal to match this shell's own navigation style.
 function renderSectorOrder(sector) {
     contentEl.appendChild(subViewBackHeader(t('admin.giroReordenPersonalizadoTitle'), sector.name, () => {
-        sectorSubView = { mode: 'detail', sector };
+        expandedSectorId = sector.id;
+        sectorSubView = { mode: 'list' };
         renderSectorSubView();
     }));
     const treeWrap = document.createElement('div');
