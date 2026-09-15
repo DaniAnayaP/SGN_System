@@ -431,7 +431,12 @@ function renderList() {
     generalRow.appendChild(rollupEl(computeRollup(allLeafKeys, 'web'), computeRollup(allLeafKeys, 'app')));
     generalRow.appendChild(labelEl(Dashboard.t('admin.saasMasterTreeGeneral')));
     generalRow.appendChild(countBadge(allLeafKeys.length));
-    generalRow.appendChild(buildControls('__general__', allLeafKeys, null));
+    // Points at the very first screen overall -- General spans every
+    // screen, so there's no single natural destination, but confirmed with
+    // the user every row needs a real, clickable Navegar button, same as
+    // the real Árbol de Permisos Maestro gives its own Departamento-level
+    // rows (not just Pantalla ones).
+    generalRow.appendChild(buildControls('__general__', allLeafKeys, CATALOG[0].screens[0].href));
     listEl.appendChild(generalRow);
 
     orderedGroups().forEach((group) => {
@@ -449,9 +454,10 @@ function renderList() {
         groupRow.appendChild(countBadge(groupLeafKeys.length));
         // Confirmed against a real Departamento row (Comité Directivo) in
         // Árbol de Permisos Maestro: every row gets its own Estatus/Web-App
-        // controls, not just a read-only rollup -- this row looked "empty"
-        // next to its own siblings without this.
-        groupRow.appendChild(buildControls(group.groupId, groupLeafKeys, null));
+        // controls AND a working Navegar button, not just a read-only
+        // rollup -- points at this group's own first screen, same
+        // first-screen fallback General uses just above.
+        groupRow.appendChild(buildControls(group.groupId, groupLeafKeys, group.screens[0].href));
         listEl.appendChild(groupRow);
         if (collapsed.has(`g:${group.groupId}`)) return;
 
