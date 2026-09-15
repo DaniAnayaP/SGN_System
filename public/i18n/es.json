@@ -80,6 +80,8 @@
     "dashboard": "Tablero",
     "adminBusiness": "Administración del Negocio",
     "classControlInterno": "Control Interno",
+    "classPorDefinir": "Por Definir Clasificación",
+    "classBotones": "Botones",
     "iconsPersonalization": "Iconos Personalización",
     "databaseGroup": "Base de Datos",
     "databaseCompany": "Base Datos Global",

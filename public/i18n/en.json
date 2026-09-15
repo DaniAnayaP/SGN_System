@@ -80,6 +80,8 @@
     "dashboard": "Dashboard",
     "adminBusiness": "Admin Business",
     "classControlInterno": "Internal Control",
+    "classPorDefinir": "Unclassified",
+    "classBotones": "Buttons",
     "iconsPersonalization": "Icon Customization",
     "databaseGroup": "Database",
     "databaseCompany": "Global Database",

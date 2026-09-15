@@ -474,7 +474,19 @@
                 { "id": "colFleetStatus", "labelKey": "main.colFleetStatus", "permissionOnly": true }
               ]
             },
-            { "id": "colFleetDeleteAuth", "labelKey": "main.colFleetDeleteAuth", "permissionOnly": true }
+            {
+              "id": "class-por-definir", "labelKey": "menu.classPorDefinir", "isClassification": true,
+              "submenu": [
+                { "id": "colFleetDeleteAuth", "labelKey": "main.colFleetDeleteAuth", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "btnChangeHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+                { "id": "btnDelete", "labelKey": "admin.delete", "permissionOnly": true }
+              ]
+            }
           ],
           "iconsSubmenu": [
             { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
