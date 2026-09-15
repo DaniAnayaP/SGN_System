@@ -2414,34 +2414,56 @@
             let maxRightEdge = 0;
             const measured = [];
             labels.forEach((label) => {
-                const offsetLeft = label.getBoundingClientRect().left - treeLeft;
+                const labelRect = label.getBoundingClientRect();
+                const offsetLeft = labelRect.left - treeLeft;
                 const font = getComputedStyle(label).font;
-                const rightEdge = offsetLeft + measureTextWidth(label.textContent, font);
+                // The count badge (see statusRow) sits right after the
+                // label as its own sibling, with its own natural,
+                // digit-count-dependent width -- "3" vs "2160" render at
+                // very different widths even though both use the exact
+                // same badge style. Reading its CURRENT (not yet
+                // stretched) gap+width straight from the real layout --
+                // rather than hardcoding the row's own flex `gap` in px,
+                // which would go stale the moment the UI Scale setting
+                // changes the root font size -- and folding it into this
+                // row's own "content so far" is what keeps Clasificación/
+                // Estatus/Web·App landing at the same x for every row
+                // regardless of how many digits its own count happens to
+                // have (confirmed live: "se ven sutilmente desalineadas"
+                // once a shallow count like "3" sat next to rows with a
+                // much longer one like "2160").
+                const badge = label.nextElementSibling && label.nextElementSibling.classList.contains('perm-tree-mstatus-count-badge')
+                    ? label.nextElementSibling : null;
+                const trailing = badge ? badge.getBoundingClientRect().right - labelRect.right : 0;
+                const rightEdge = offsetLeft + measureTextWidth(label.textContent, font) + trailing;
                 if (rightEdge > maxRightEdge) maxRightEdge = rightEdge;
-                measured.push({ label, offsetLeft });
+                measured.push({ label, offsetLeft, trailing });
             });
-            // Small buffer so the longest label itself doesn't sit flush
-            // against the next column's edge.
+            // Small buffer so the longest row's own badge doesn't sit
+            // flush against the next column's edge.
             const target = Math.ceil(maxRightEdge) + 8;
             treeRoot.style.setProperty('--perm-tree-label-col-width', `${target}px`);
-            // Every row's OWN cumulative width up to the end of its label is
-            // now the SAME constant (target) regardless of its own leading
-            // content (toggle+rollup+drag-handle, whatever it has) -- that's
-            // the whole point of giving each one its OWN inline width below.
-            // So the header needs NO leading spacer of its own to match:
-            // its label already gets that same `target` width (via the CSS
-            // var above), so spacer 0 already lines its own end-of-label
-            // (and therefore its Estatus/Web·App columns) up with every
-            // row's. A non-zero spacer (this used to hardcode 4.3rem, a
-            // guess at a depth-0 row's own leading width) just makes the
-            // header's own total width that much WIDER than any row's,
-            // pushing its columns measurably right of the row's own --
-            // confirmed live ("columnas desalineadas") once grantMode's
-            // rows (no drag handle at all) made the guess visibly wrong,
-            // though the same drift already existed for statusMode too, at
-            // a smaller, easier-to-miss scale.
-            measured.forEach(({ label, offsetLeft }) => {
-                label.style.width = `${Math.max(0, target - offsetLeft)}px`;
+            // Every row's OWN cumulative width up to the end of its badge
+            // (label + gap + count badge, see `trailing` above) is now the
+            // SAME constant (target) regardless of its own leading content
+            // (toggle+rollup+drag-handle, whatever it has) or its own
+            // badge's digit count -- that's the whole point of giving each
+            // one its OWN inline label width below. So the header needs NO
+            // leading spacer of its own to match: its label already gets
+            // that same `target` width (via the CSS var above, and it has
+            // no badge of its own, so trailing is simply 0 there), so
+            // spacer 0 already lines its own end-of-label (and therefore
+            // its Estatus/Web·App columns) up with every row's. A non-zero
+            // spacer (this used to hardcode 4.3rem, a guess at a depth-0
+            // row's own leading width) just makes the header's own total
+            // width that much WIDER than any row's, pushing its columns
+            // measurably right of the row's own -- confirmed live
+            // ("columnas desalineadas") once grantMode's rows (no drag
+            // handle at all) made the guess visibly wrong, though the same
+            // drift already existed for statusMode too, at a smaller,
+            // easier-to-miss scale.
+            measured.forEach(({ label, offsetLeft, trailing }) => {
+                label.style.width = `${Math.max(0, target - offsetLeft - trailing)}px`;
             });
         }
 
