@@ -94,7 +94,21 @@ let draggedId = null;
 // permanent, non-collapsible summary card (see renderList), same
 // relationship it always had to the real rows in this screen's original
 // 3-row version, just now sitting above 2 groups instead of 3 screens.
-const collapsed = new Set();
+// Persisted to localStorage (this browser only, never sent to the server
+// -- it's not real data, just where you left the tree) -- confirmed live
+// that without this, collapsing everything and then reloading (e.g. right
+// after Guardar, to double check the save landed) silently threw all of
+// it back open, since this Set previously lived in memory only.
+const COLLAPSED_STORAGE_KEY = 'saasMasterTreeCollapsed';
+let collapsed;
+try {
+    collapsed = new Set(JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) || '[]'));
+} catch {
+    collapsed = new Set();
+}
+function persistCollapsed() {
+    try { localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsed])); } catch { /* private/blocked storage -- collapse state just won't survive a reload */ }
+}
 
 function getState(key) {
     return statuses.find((s) => s.itemId === key) || { itemId: key, status: 'habilitado', webEnabled: true, appEnabled: false };

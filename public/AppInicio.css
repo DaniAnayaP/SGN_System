@@ -582,6 +582,65 @@ body{
    AppAdminInicio.js) -- same card, red icon square instead of the accent
    gradient so it reads as the one different, harder-to-undo action. */
 .home-tile.danger .home-tile-icon{ background: linear-gradient(135deg, var(--home-danger), color-mix(in srgb, var(--home-danger) 70%, black)); }
+
+/* Panel Admin's own personal reorder of a category's tile grid (see
+   renderCategorySection/enableTileReorder in AppAdminInicio.js) --
+   confirmed with the user this must move the real screen they operate
+   from, not just some separate admin tree. Same tile, dashed accent
+   border + a gentle wiggle (a11y: prefers-reduced-motion turns it off,
+   the dashed border alone still signals "these move") while active, so
+   it's obvious which tiles are draggable without a mode banner alone. */
+.home-category-toolbar{ display: flex; justify-content: flex-end; margin: 0 0 0.6rem; }
+.home-reorder-toggle{
+    display: flex; align-items: center; gap: 0.3rem;
+    background: var(--home-surface); border: 1px solid var(--home-border);
+    border-radius: 999px; padding: 0.35rem 0.75rem;
+    font-size: 0.66rem; font-weight: 700; color: var(--home-text-secondary);
+    font-family: inherit; cursor: pointer;
+}
+.home-reorder-toggle.active{ background: var(--home-accent-strong-1); border-color: var(--home-accent-strong-1); color: var(--home-on-accent); }
+.home-reorder-toggle i{ font-size: 0.85rem; }
+.home-reorder-hint{
+    display: flex; align-items: center; gap: 0.35rem;
+    font-size: 0.66rem; color: var(--home-accent-strong-1); margin: 0 0 0.6rem;
+}
+.home-tile-reorder-mode{
+    border-color: var(--home-accent-strong-1);
+    border-style: dashed;
+    animation: home-tile-wiggle 0.28s ease-in-out infinite alternate;
+}
+.home-tile-reorder-mode:nth-child(even){ animation-delay: 0.09s; }
+@media (prefers-reduced-motion: reduce){
+    .home-tile-reorder-mode{ animation: none; }
+}
+@keyframes home-tile-wiggle{
+    from{ transform: rotate(-0.6deg); }
+    to{ transform: rotate(0.6deg); }
+}
+.home-tile-dragging{
+    opacity: 0.6;
+    animation: none;
+    border-style: solid;
+    box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.25);
+    z-index: 5;
+    position: relative;
+    pointer-events: none;
+}
+.home-tile-drag-handle{
+    position: absolute;
+    top: -0.4rem;
+    right: -0.4rem;
+    width: 1.3rem;
+    height: 1.3rem;
+    border-radius: 50%;
+    background: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    touch-action: none;
+}
 .home-tile-soon-tag{
     position: absolute;
     top: 0.35rem;

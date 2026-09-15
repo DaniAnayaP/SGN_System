@@ -363,19 +363,158 @@ function renderHomeHub() {
     contentEl.appendChild(grid);
 }
 
+// Personal reorder of a category's own tile grid -- confirmed with the
+// user this must actually move the real screen they operate from (this
+// grid IS that screen, there's no separate admin tree for it), not just
+// some cosmetic-only order. Cached per categoryId after the first fetch so
+// re-entering a tab (or toggling reorder mode) doesn't re-fetch every time
+// -- cleared only by a successful save, which already has the fresh value
+// in hand anyway.
+const personalOrderCache = {};
+async function fetchPersonalOrder(catId) {
+    if (personalOrderCache[catId]) return personalOrderCache[catId];
+    try {
+        const res = await fetch(apiUrl(`/api/me/saas-personal-order/${catId}`), { credentials: 'include' });
+        const data = res.ok ? await res.json() : { personalOrder: null, masterOrder: null };
+        personalOrderCache[catId] = data;
+        return data;
+    } catch {
+        return { personalOrder: null, masterOrder: null };
+    }
+}
+async function savePersonalOrder(catId, orderedItems) {
+    try {
+        const res = await fetch(apiUrl(`/api/me/saas-personal-order/${catId}`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ orderedItems }),
+        });
+        if (res.ok) personalOrderCache[catId] = await res.json();
+    } catch { /* best-effort -- the tile grid already reflects the new order either way, just won't survive a reload if this failed */ }
+}
+// Cascade: this account's own order (if they ever reordered) -> Árbol
+// Maestro SaaS's own order (if IT was ever reordered) -> the catalog's own
+// natural array order -- same "most specific wins, else fall back one
+// level" idea as getEffectiveSectorOrder (db.js) has for Master -> Sector.
+function orderCategoryItems(catId, items, personalOrder, masterOrder) {
+    const allIds = items.map((i) => i.id);
+    const base = (masterOrder || []).filter((id) => allIds.includes(id));
+    const baseRest = allIds.filter((id) => !base.includes(id));
+    const baseOrder = [...base, ...baseRest];
+    const personal = (personalOrder || []).filter((id) => allIds.includes(id));
+    const personalRest = baseOrder.filter((id) => !personal.includes(id));
+    const finalOrder = [...personal, ...personalRest];
+    return finalOrder.map((id) => items.find((i) => i.id === id));
+}
+
+// Drag handle + long-press-and-drag reordering, pointer-events based (not
+// HTML5 dragstart/dragover) -- confirmed live that the native drag API has
+// no real touch support in this WebView, only a mouse. Reorders the DOM
+// live as the dragged tile crosses a neighbor's midpoint, then saves the
+// final order on release.
+function enableTileReorder(grid, catId, currentOrderRef) {
+    let dragEl = null;
+    let startY = 0;
+    let startX = 0;
+    function onPointerMove(e) {
+        if (!dragEl) return;
+        e.preventDefault();
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        dragEl.style.transform = `translate(${dx}px, ${dy}px)`;
+        const under = document.elementFromPoint(e.clientX, e.clientY)?.closest('.home-tile');
+        if (under && under !== dragEl && under.parentElement === grid) {
+            const rect = under.getBoundingClientRect();
+            const before = e.clientY < rect.top + rect.height / 2 || (Math.abs(e.clientY - (rect.top + rect.height/2)) < rect.height/2 && e.clientX < rect.left + rect.width / 2);
+            grid.insertBefore(dragEl, before ? under : under.nextSibling);
+        }
+    }
+    function onPointerUp() {
+        if (!dragEl) return;
+        dragEl.classList.remove('home-tile-dragging');
+        dragEl.style.transform = '';
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+        const newOrder = Array.from(grid.children).map((el) => el.dataset.itemId);
+        dragEl = null;
+        currentOrderRef.order = newOrder;
+        savePersonalOrder(catId, newOrder);
+    }
+    Array.from(grid.children).forEach((tile) => {
+        const handle = tile.querySelector('.home-tile-drag-handle');
+        if (!handle) return;
+        handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            dragEl = tile;
+            startX = e.clientX;
+            startY = e.clientY;
+            tile.classList.add('home-tile-dragging');
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+        });
+    });
+}
+
 // A category tab's own content -- same tile grid Inicio uses, just listing
 // that category's screens instead (see AppInicio.js's renderCategoryScreens
 // for the client-side equivalent this mirrors). Anything without a real
 // screen behind it yet still gets a real tile here (not hidden) -- tapping
 // it just lands on the same "Próximamente" placeholder renderComingSoon
 // already shows for a directly-tapped unbuilt section.
-function renderCategorySection(catId) {
+let categoryReorderMode = false;
+async function renderCategorySection(catId) {
     contentEl.innerHTML = '';
     const items = CATEGORY_ITEMS[catId] || [];
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'home-category-toolbar';
+    const reorderBtn = document.createElement('button');
+    reorderBtn.type = 'button';
+    reorderBtn.className = 'home-reorder-toggle';
+    const setReorderBtnLabel = () => {
+        reorderBtn.innerHTML = categoryReorderMode
+            ? `<i class="bx bx-check" aria-hidden="true"></i> ${t('home.reorderDone')}`
+            : `<i class="bx bx-up-arrow-alt" aria-hidden="true"></i><i class="bx bx-down-arrow-alt" aria-hidden="true"></i> ${t('home.reorderStart')}`;
+        reorderBtn.classList.toggle('active', categoryReorderMode);
+    };
+    setReorderBtnLabel();
+    reorderBtn.addEventListener('click', () => {
+        categoryReorderMode = !categoryReorderMode;
+        renderCategorySection(catId);
+    });
+    toolbar.appendChild(reorderBtn);
+    contentEl.appendChild(toolbar);
+
+    if (categoryReorderMode) {
+        const hint = document.createElement('p');
+        hint.className = 'home-reorder-hint';
+        hint.innerHTML = `<i class="bx bx-move" aria-hidden="true"></i> ${t('home.reorderHint')}`;
+        contentEl.appendChild(hint);
+    }
+
+    const { personalOrder, masterOrder } = await fetchPersonalOrder(catId);
+    if (activeSection !== catId) return; // tapped away while this was loading
+    const orderedItems = orderCategoryItems(catId, items, personalOrder, masterOrder);
+
     const grid = document.createElement('div');
     grid.className = 'home-tiles';
-    items.forEach((item) => grid.appendChild(buildShortcutTile(item)));
+    const currentOrderRef = { order: orderedItems.map((i) => i.id) };
+    orderedItems.forEach((item) => {
+        const tile = buildShortcutTile(item);
+        tile.dataset.itemId = item.id;
+        if (categoryReorderMode) {
+            tile.classList.add('home-tile-reorder-mode');
+            tile.disabled = true; // no accidental navigation while reordering
+            const handle = document.createElement('span');
+            handle.className = 'home-tile-drag-handle';
+            handle.innerHTML = '<i class="bx bx-move" aria-hidden="true"></i>';
+            tile.appendChild(handle);
+        }
+        grid.appendChild(tile);
+    });
     contentEl.appendChild(grid);
+    if (categoryReorderMode) enableTileReorder(grid, catId, currentOrderRef);
 }
 
 function renderSection(id) {

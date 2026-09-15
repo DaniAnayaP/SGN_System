@@ -1211,6 +1211,25 @@ db.exec(`
         updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- saas_personal_order: each Equipo SaaS account's OWN reorder of the
+    -- Panel Admin's category tile grids (Servicio a Cliente / Config.
+    -- SaaS), confirmed with the user this must show up on the real screen
+    -- they operate from (renderCategorySection in AppAdminInicio.js), not
+    -- just some separate admin tree -- there's no separate "tree" for this
+    -- one, the tile grid itself IS the real screen. Falls back to
+    -- saas_master_order's own order whenever this account hasn't
+    -- personally reordered a given category, same cascade relationship
+    -- master_permission_order has to a Sector's own sector_permission_order.
+    -- Never visible to anyone but that one account.
+    CREATE TABLE IF NOT EXISTS saas_personal_order (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        category_id    TEXT NOT NULL,
+        ordered_items  TEXT NOT NULL,
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(user_id, category_id)
+    );
+
     CREATE TABLE IF NOT EXISTS plan_changes (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         plan_id       INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
@@ -5578,6 +5597,30 @@ function setSaasMasterOrder(order, updatedBy) {
     return getSaasMasterOrder();
 }
 
+// saas_personal_order -- one row per (user, category), never touched by
+// anyone but that account. null (no row) means "hasn't personally
+// reordered this category" -- the caller (GET /api/me/saas-personal-order)
+// falls back to saas_master_order's own order for that case, same cascade
+// getEffectiveSectorOrder already does for Master -> Sector.
+function getSaasPersonalOrder(userId, categoryId) {
+    const row = db.prepare('SELECT ordered_items FROM saas_personal_order WHERE user_id = ? AND category_id = ?').get(userId, categoryId);
+    if (!row) return null;
+    try {
+        const parsed = JSON.parse(row.ordered_items);
+        return Array.isArray(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+function setSaasPersonalOrder(userId, categoryId, orderedItems) {
+    db.prepare(`
+        INSERT INTO saas_personal_order (user_id, category_id, ordered_items, updated_at)
+        VALUES (@userId, @categoryId, @orderedItems, datetime('now'))
+        ON CONFLICT(user_id, category_id) DO UPDATE SET ordered_items = excluded.ordered_items, updated_at = excluded.updated_at
+    `).run({ userId, categoryId, orderedItems: JSON.stringify(orderedItems || []) });
+    return getSaasPersonalOrder(userId, categoryId);
+}
+
 function getPlanGrants(planId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM plan_grants WHERE plan_id = ?')
@@ -6496,6 +6539,8 @@ module.exports = {
     setSaasMasterStatuses,
     getSaasMasterOrder,
     setSaasMasterOrder,
+    getSaasPersonalOrder,
+    setSaasPersonalOrder,
     getMasterPermissionOrder,
     setMasterPermissionOrder,
     setMasterPermissionOrders,

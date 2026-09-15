@@ -245,6 +245,8 @@ const {
     setSaasMasterStatuses,
     getSaasMasterOrder,
     setSaasMasterOrder,
+    getSaasPersonalOrder,
+    setSaasPersonalOrder,
     getMasterPermissionOrder,
     setMasterPermissionOrders,
     setSectorPermissionOrders,
@@ -2118,6 +2120,37 @@ app.put('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) =>
         return res.status(400).json({ message: 'order must be an object.' });
     }
     res.json({ order: setSaasMasterOrder(order, changedByLabel(req)) });
+});
+
+// Self-service, not admin-only in the "manage everyone" sense -- any Panel
+// Admin account reorders only their OWN view of a category's tile grid
+// (Servicio a Cliente / Configuración SaaS), never anyone else's. Falls
+// back to saas_master_order when this account hasn't personally reordered
+// this category yet -- confirmed with the user this must show up on the
+// real screen they operate the App from (renderCategorySection in
+// AppAdminInicio.js), same cascade relationship Master has to a Sector's
+// own reorder.
+const SAAS_PERSONAL_ORDER_CATEGORIES = ['customerService', 'saasConfig'];
+app.get('/api/me/saas-personal-order/:categoryId', requireAuth, requireAdmin, (req, res) => {
+    const { categoryId } = req.params;
+    if (!SAAS_PERSONAL_ORDER_CATEGORIES.includes(categoryId)) {
+        return res.status(400).json({ message: `categoryId must be one of ${SAAS_PERSONAL_ORDER_CATEGORIES.join(', ')}.` });
+    }
+    const personalOrder = getSaasPersonalOrder(req.user.sub, categoryId);
+    const master = getSaasMasterOrder();
+    const masterOrder = (master?.screensByGroup && master.screensByGroup[categoryId]) || null;
+    res.json({ personalOrder, masterOrder });
+});
+app.put('/api/me/saas-personal-order/:categoryId', requireAuth, requireAdmin, (req, res) => {
+    const { categoryId } = req.params;
+    if (!SAAS_PERSONAL_ORDER_CATEGORIES.includes(categoryId)) {
+        return res.status(400).json({ message: `categoryId must be one of ${SAAS_PERSONAL_ORDER_CATEGORIES.join(', ')}.` });
+    }
+    const { orderedItems } = req.body || {};
+    if (!isValidOrderArray(orderedItems)) {
+        return res.status(400).json({ message: 'orderedItems must be an array of item ids.' });
+    }
+    res.json({ personalOrder: setSaasPersonalOrder(req.user.sub, categoryId, orderedItems) });
 });
 
 app.get('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, res) => {
