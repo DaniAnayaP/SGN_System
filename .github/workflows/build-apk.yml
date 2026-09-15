@@ -37,7 +37,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Capacitor CLI 8.x hard-requires >=22 (confirmed live: "[fatal]
+          # The Capacitor CLI requires NodeJS >=22.0.0" -- cap sync android
+          # exits 1 immediately under 20, before touching anything else).
+          node-version: 22
 
       # Refreshes the client-only App pages mobile-app/www copies from
       # public/ (see mobile-app/sync-web-assets.js's own comment for why
