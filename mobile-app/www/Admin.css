@@ -1658,6 +1658,32 @@ body.dark-mode .perm-tree-depth-2{
     justify-content: center;
 }
 .perm-tree-mstatus-header-status-nest{ width: 1.4rem; }
+/* Purely visual reclassification picker (see classificationCtx/
+   buildClassificationCtx in PermissionTree.js) -- own fixed column, same
+   "always rendered, empty on a row with no picker" convention as
+   perm-tree-mstatus-status-nest-cell above, so it never disturbs any
+   other column's own width. */
+.perm-tree-mstatus-class-cell{
+    flex-shrink: 0;
+    width: 9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.perm-tree-mstatus-header-class{ width: 9rem; }
+.perm-tree-mstatus-class-select{
+    width: 100%;
+    max-width: 9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 0.25rem 0.5rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+}
 /* Fixed column, matching perm-tree-mstatus-header-platforms's own width
    exactly -- see the comment in statusRow (PermissionTree.js) on why a
    real matching-width column (not margin-left:auto flush-right) is what

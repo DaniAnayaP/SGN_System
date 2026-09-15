@@ -1793,7 +1793,7 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
-        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, previewInfo) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, previewInfo, classificationCtx) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             // Drag-to-reorder -- Árbol Maestro only. dragCtx is
@@ -1965,6 +1965,44 @@
                     statusNestCell.appendChild(statusNestBtn);
                 }
                 controls.appendChild(statusNestCell);
+                // Purely visual "which classification does this row show
+                // under" picker -- see classificationCtx's own comment
+                // (buildClassificationCtx). Present only for a column/
+                // acción row or a real classification's own group row;
+                // every other level (Departamento/Área/Apartado/Pantalla/
+                // Tabla/Iconos Personalización/a column's own 4 sub-levels)
+                // passes null and gets the same empty placeholder cell
+                // every other conditional column here already uses, so
+                // every row's total controls width stays constant.
+                const classificationCell = document.createElement('div');
+                classificationCell.className = 'perm-tree-mstatus-class-cell';
+                if (classificationCtx) {
+                    const select = document.createElement('select');
+                    select.className = 'perm-tree-mstatus-class-select';
+                    classificationCtx.options.forEach((opt) => {
+                        const optionEl = document.createElement('option');
+                        optionEl.value = opt.id;
+                        optionEl.textContent = t(opt.labelKey, opt.labelParams);
+                        select.appendChild(optionEl);
+                    });
+                    // The current classification might not be in `options`
+                    // yet (e.g. just moved to "Botones" on a Pantalla with
+                    // no other classification of its own) -- add it so the
+                    // select never silently shows the wrong thing instead.
+                    if (!classificationCtx.options.some((o) => o.id === classificationCtx.currentId)) {
+                        const optionEl = document.createElement('option');
+                        optionEl.value = classificationCtx.currentId;
+                        optionEl.textContent = classificationCtx.currentId || t('menu.classNone');
+                        select.appendChild(optionEl);
+                    }
+                    select.value = classificationCtx.currentId;
+                    select.title = t('admin.masterTreeClassificationPicker');
+                    select.setAttribute('aria-label', select.title);
+                    select.addEventListener('click', (e) => e.stopPropagation());
+                    select.addEventListener('change', () => classificationCtx.onPick(select.value));
+                    classificationCell.appendChild(select);
+                }
+                controls.appendChild(classificationCell);
                 // Fixed-width cell (matches perm-tree-mstatus-header-
                 // platforms exactly) instead of letting the two platform
                 // groups just sit at whatever width their own content
@@ -2557,7 +2595,142 @@
             return el;
         }
 
-        function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked, sm, subSm, cls) {
+        // Purely VISUAL reclassification (see master_permission_classification_overrides'
+        // own comment in db.js) -- an admin can move a column/acción's own
+        // row under a different classification heading without moving its
+        // real object between menu.json's own submenu arrays, which would
+        // silently change the key every already-saved Estatus/$/grant for
+        // it is stored under (base below always stays the column's real
+        // structural path, never the visual one). statusMode only.
+        // nodeKey (keyOf's own output) -> {classificationId, classificationLabel}.
+        let classificationOverrides = new Map();
+        // The 2 classifications every Pantalla can use even if menu.json
+        // never gave it one of its own -- "Por Definir Clasificación" for
+        // anything an admin explicitly wants pulled out of "just sitting
+        // loose", "Botones" for the real per-record action buttons
+        // (Historial de Cambios, Eliminar, ...) that never had a tree
+        // presence before. Both already have global i18n keys (reused, not
+        // duplicated) so no custom-string rendering path is needed for
+        // them specifically.
+        const UNIVERSAL_CLASSIFICATIONS = [
+            { id: 'class-por-definir', labelKey: 'menu.classPorDefinir' },
+            { id: 'class-botones', labelKey: 'menu.classBotones' },
+        ];
+        function resolveOverrideTargetClassification(classificationId, subSm) {
+            const real = (subSm.submenu || []).find((e) => e.isClassification && e.id === classificationId);
+            if (real) return { cls: real, isVirtual: false };
+            const universal = UNIVERSAL_CLASSIFICATIONS.find((u) => u.id === classificationId);
+            if (universal) return { cls: universal, isVirtual: true };
+            return null;
+        }
+        // Every classification actually selectable for a Pantalla's own
+        // columns: its own real ones (menu.json) first, then the 2
+        // universal ones (skipped if this Pantalla happens to already have
+        // its own real classification using that same id, e.g. Nuestras
+        // Unidades' pilot screen already has a REAL "class-por-definir").
+        function availableClassificationsFor(subSm) {
+            const real = (subSm.submenu || []).filter((e) => e.isClassification);
+            const universal = UNIVERSAL_CLASSIFICATIONS.filter((u) => !real.some((r) => r.id === u.id));
+            return [...real, ...universal];
+        }
+        // Single source of truth for "what actually renders under this
+        // Tabla row" -- shared by renderStatusTableColumns (the DOM) and
+        // buildStatusChildrenMap (the invisible rollup/count-badge graph)
+        // so the two can never disagree. Preserves menu.json's own order;
+        // an overridden entry leaves its structural run and joins (or
+        // starts) its target's group, wherever that group first appears.
+        function getEffectiveTableGroups(section, item, sm, subSm) {
+            const groups = [];
+            const groupById = new Map();
+            let looseRun = null;
+            function targetGroupFor(cls, isVirtual) {
+                let g = groupById.get(cls.id);
+                if (!g) {
+                    g = { cls, isVirtual, columns: [] };
+                    groupById.set(cls.id, g);
+                    groups.push(g);
+                }
+                return g;
+            }
+            (subSm.submenu || []).forEach((entry) => {
+                if (entry.isClassification) {
+                    looseRun = null;
+                    const ownGroup = targetGroupFor(entry, false);
+                    (entry.submenu || []).forEach((col) => {
+                        const base = `${sm.id}/${subSm.id}/${entry.id}/${col.id}`;
+                        const override = classificationOverrides.get(keyOf(section.id, item.id, base));
+                        const resolved = (override && override.classificationId !== entry.id)
+                            ? resolveOverrideTargetClassification(override.classificationId, subSm)
+                            : null;
+                        const row = { col, base, structuralClsId: entry.id };
+                        if (resolved) targetGroupFor(resolved.cls, resolved.isVirtual).columns.push(row);
+                        else ownGroup.columns.push(row);
+                    });
+                } else {
+                    const base = `${sm.id}/${subSm.id}/${entry.id}`;
+                    const override = classificationOverrides.get(keyOf(section.id, item.id, base));
+                    const resolved = override ? resolveOverrideTargetClassification(override.classificationId, subSm) : null;
+                    const row = { col: entry, base, structuralClsId: null };
+                    if (resolved) {
+                        looseRun = null;
+                        targetGroupFor(resolved.cls, resolved.isVirtual).columns.push(row);
+                    } else {
+                        if (!looseRun) { looseRun = { cls: null, isVirtual: false, columns: [] }; groups.push(looseRun); }
+                        looseRun.columns.push(row);
+                    }
+                }
+            });
+            return groups.filter((g) => g.columns.length);
+        }
+        // Writes (or, picking a column's own real classification again,
+        // clears) one override and repaints -- renderStatusTree() is the
+        // same "just call it again" pattern every other change here
+        // already uses (toggle, reorder, aplicar-a-anidados, ...).
+        async function saveClassificationOverride(nodeKey, classificationId) {
+            try {
+                const res = await fetch('/api/admin/master-permission-classifications', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ nodeKey, classificationId }),
+                });
+                if (!res.ok) throw new Error('save failed');
+                if (classificationId) classificationOverrides.set(nodeKey, { classificationId, classificationLabel: null });
+                else classificationOverrides.delete(nodeKey);
+                renderStatusTree();
+            } catch {
+                const message = t('admin.saveError');
+                if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'error');
+                else if (typeof window.showToast === 'function') window.showToast(message);
+            }
+        }
+        // classificationCtx passed into statusRow -- see its own "class
+        // cell" below. `structuralId` is what a pick equal to it reverts
+        // to (deletes the override instead of writing a same-as-default
+        // one); `bulkKeys`, only set on a classification GROUP's own row,
+        // re-targets every column currently inside it in one go (the
+        // "move this whole group" case) rather than just the one row.
+        function buildClassificationCtx(nodeKey, currentId, structuralId, subSm, bulkKeys) {
+            if (readOnly || grantMode) return null;
+            const options = availableClassificationsFor(subSm);
+            // A column whose real home is "just loose" (structuralId null,
+            // never inside any menu.json classification) needs an explicit
+            // way BACK to that state once it's been moved somewhere --
+            // every other column's real home is already one of `options`
+            // above, so only this case needs a synthetic entry for it.
+            if (structuralId === null) options.unshift({ id: '', labelKey: 'menu.classNone' });
+            const normalizedStructuralId = structuralId === null ? '' : structuralId;
+            return {
+                currentId: currentId === null ? '' : currentId,
+                options,
+                onPick: (newId) => {
+                    const targetKeys = bulkKeys && bulkKeys.length ? bulkKeys : [nodeKey];
+                    targetKeys.forEach((k) => saveClassificationOverride(k, newId === normalizedStructuralId ? null : newId));
+                },
+            };
+        }
+
+        function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked, sm, subSm, cls, structuralClsId) {
             // Vista Previa here highlights this one column inside its own
             // real table (Web) / field list (App) -- gated on the OWNING
             // pantalla being built, same rule as the pantalla's own preview.
@@ -2590,13 +2763,14 @@
             // hidden until its OWN chevron is opened, one column at a time.
             const colTreeKey = `col::${section.id}::${item.id}::${base}`;
             const colExpanded = expandedItems.has(colTreeKey);
+            const classificationCtx = buildClassificationCtx(colKey, cls ? cls.id : null, structuralClsId, subSm, null);
             container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, colKey, {
                 expanded: colExpanded,
                 onToggle: () => {
                     if (colExpanded) expandedItems.delete(colTreeKey);
                     else expandedItems.add(colTreeKey);
                 },
-            }, computeNodeRollup(colKey), null, ancestorLocked, columnDragCtx, previewInfo));
+            }, computeNodeRollup(colKey), null, ancestorLocked, columnDragCtx, previewInfo, classificationCtx));
             if (!colExpanded) return;
             // Same 4 grant-levels the regular (non-statusMode) column row
             // already offers (Ver y Operar/Editar/Autorizar/Eliminar, see
@@ -2611,7 +2785,7 @@
             });
         }
 
-        function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked) {
+        function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked, effectiveColumns, isVirtual) {
             const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
@@ -2620,18 +2794,26 @@
             // key unlike the Tabla row below), plus a rollup of its own
             // columns' 4 levels -- never draggable.
             const classKey = keyOf(section.id, item.id, classBase);
+            const columns = effectiveColumns || (cls.submenu || []).map((col) => ({ col, base: `${classBase}/${col.id}`, structuralClsId: cls.id }));
+            // "Move this whole group" only offered on a REAL classification
+            // (isVirtual ones are just an aggregation of columns that came
+            // from all over the Pantalla -- there's no single coherent
+            // "home" to bulk-move together).
+            const classificationCtx = isVirtual ? null : buildClassificationCtx(
+                classKey, cls.id, cls.id, subSm, columns.map(({ base }) => keyOf(section.id, item.id, base)),
+            );
             container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, classKey, {
                 expanded: classExpanded,
                 onToggle: () => {
                     if (classExpanded) expandedItems.delete(classTreeKey);
                     else expandedItems.add(classTreeKey);
                 },
-            }, computeNodeRollup(classKey), null, ancestorLocked, null, null));
+            }, computeNodeRollup(classKey), null, ancestorLocked, null, null, classificationCtx));
             if (!classExpanded) return;
-            cls.submenu.forEach((col) => {
-                const colKey = keyOf(section.id, item.id, `${classBase}/${col.id}`);
+            columns.forEach(({ col, base, structuralClsId }) => {
+                const colKey = keyOf(section.id, item.id, base);
                 if (grantOrderMode && !subtreeHasGrant(colKey)) return;
-                renderStatusColumn(container, section, item, `${classBase}/${col.id}`, col, 6, ancestorLocked, sm, subSm, cls);
+                renderStatusColumn(container, section, item, base, col, 6, ancestorLocked, sm, subSm, cls, structuralClsId);
             });
         }
 
@@ -2654,14 +2836,16 @@
                 },
             }, computeNodeRollup(tableKey), null, ancestorLocked, null, null));
             if (!tableExpanded) return;
-            subSm.submenu.forEach((entry) => {
-                const entryKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`);
-                if (grantOrderMode && !subtreeHasGrant(entryKey)) return;
-                if (entry.isClassification) {
-                    renderStatusClassification(container, section, item, sm, subSm, entry, ancestorLocked);
+            getEffectiveTableGroups(section, item, sm, subSm).forEach((group) => {
+                if (group.cls) {
+                    renderStatusClassification(container, section, item, sm, subSm, group.cls, ancestorLocked, group.columns, group.isVirtual);
                     return;
                 }
-                renderStatusColumn(container, section, item, `${sm.id}/${subSm.id}/${entry.id}`, entry, 5, ancestorLocked, sm, subSm, null);
+                group.columns.forEach(({ col: entry, base, structuralClsId }) => {
+                    const entryKey = keyOf(section.id, item.id, base);
+                    if (grantOrderMode && !subtreeHasGrant(entryKey)) return;
+                    renderStatusColumn(container, section, item, base, entry, 5, ancestorLocked, sm, subSm, null, structuralClsId);
+                });
             });
         }
 
@@ -2733,6 +2917,12 @@
             applyNestedStatusHeader.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status-nest';
             applyNestedStatusHeader.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
             applyNestedStatusHeader.title = t('admin.masterTreeColApplyNested');
+            // Icon-only, matches applyNestedStatusHeader's own convention --
+            // see classificationCtx/buildClassificationCtx in statusRow.
+            const classificationHeader = document.createElement('span');
+            classificationHeader.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-class';
+            classificationHeader.innerHTML = '<i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>';
+            classificationHeader.title = t('admin.masterTreeColClassification');
             const platforms = document.createElement('span');
             platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
             platforms.textContent = t('admin.masterTreeColPlatforms');
@@ -2759,7 +2949,7 @@
             // (often much wider) available width on their own.
             const controls = document.createElement('div');
             controls.className = 'perm-tree-mstatus-header-controls';
-            controls.append(status, applyNestedStatusHeader, platforms, costWeb, costApp, navigate);
+            controls.append(status, applyNestedStatusHeader, classificationHeader, platforms, costWeb, costApp, navigate);
             header.append(spacer, label, controls);
             return header;
         }
@@ -2813,24 +3003,26 @@
                             if (subSm.submenu && subSm.submenu.length) {
                                 const tableKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`);
                                 addChild(subKey, tableKey);
-                                subSm.submenu.forEach((entry) => {
-                                    if (entry.isClassification) {
-                                        const clsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}`);
+                                // Same effective (post-reclassification) grouping
+                                // renderStatusTableColumns actually draws -- built
+                                // from the SAME function so rollups/count badges
+                                // can never disagree with what's on screen.
+                                getEffectiveTableGroups(section, item, sm, subSm).forEach((group) => {
+                                    if (group.cls) {
+                                        const clsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${group.cls.id}`);
                                         addChild(tableKey, clsKey);
-                                        (entry.submenu || []).forEach((col) => {
-                                            const colBase = `${sm.id}/${subSm.id}/${entry.id}/${col.id}`;
-                                            const colKey = keyOf(section.id, item.id, colBase);
+                                        group.columns.forEach(({ base }) => {
+                                            const colKey = keyOf(section.id, item.id, base);
                                             addChild(clsKey, colKey);
-                                            addColumnLevels(colKey, section.id, item.id, colBase);
+                                            addColumnLevels(colKey, section.id, item.id, base);
                                         });
                                         return;
                                     }
-                                    {
-                                        const colBase = `${sm.id}/${subSm.id}/${entry.id}`;
-                                        const colKey = keyOf(section.id, item.id, colBase);
+                                    group.columns.forEach(({ base }) => {
+                                        const colKey = keyOf(section.id, item.id, base);
                                         addChild(tableKey, colKey);
-                                        addColumnLevels(colKey, section.id, item.id, colBase);
-                                    }
+                                        addColumnLevels(colKey, section.id, item.id, base);
+                                    });
                                 });
                             }
                             // "Iconos Personalización" (see renderStatusIcons)
@@ -3591,7 +3783,7 @@
         }
 
         return {
-            async init(initialGrants, initialCosts) {
+            async init(initialGrants, initialCosts, initialClassificationOverrides) {
                 const { sections: allSections, areaCategories, areaOverrides, areas } = await loadMenuData();
                 // 'main' (Inicio, Tablero, Administración del Negocio, etc.)
                 // is core navigation, not a contracted module — always shown
@@ -3796,6 +3988,13 @@
                         const app = Number(c.app) || 0;
                         if (!web && !app) return;
                         costMap.set(keyOf(c.sectionId, c.itemId, c.submenuId), { web, app });
+                    });
+                    // See classificationOverrides' own comment above -- a
+                    // column never reclassified needs no entry here either.
+                    classificationOverrides = new Map();
+                    (initialClassificationOverrides || []).forEach((o) => {
+                        if (!o || !o.nodeKey || !o.classificationId) return;
+                        classificationOverrides.set(o.nodeKey, { classificationId: o.classificationId, classificationLabel: o.classificationLabel || null });
                     });
                     // Baseline starts identical to what was just loaded --
                     // nothing is "pending" right after opening the screen,

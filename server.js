@@ -241,6 +241,9 @@ const {
     setSectorGrants,
     getMasterPermissionStatuses,
     setMasterPermissionStatuses,
+    getMasterPermissionClassificationOverrides,
+    setMasterPermissionClassificationOverride,
+    deleteMasterPermissionClassificationOverride,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     getSaasMasterOrder,
@@ -2083,6 +2086,35 @@ app.put('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, 
         }
     }
     res.json({ statuses: setMasterPermissionStatuses(statuses, changedByLabel(req)) });
+});
+
+// Purely visual reclassification of one column/acción row -- see
+// master_permission_classification_overrides' own DDL comment in db.js for
+// why nodeKey (PermissionTree.js's own keyOf() output) is never
+// interpreted here, just stored/looked-up verbatim as an opaque string.
+// One row at a time (unlike master-permission-status's whole-table
+// replace above) -- a picker on a single row calls this, not a bulk save.
+app.get('/api/admin/master-permission-classifications', requireAuth, requireAdmin, (req, res) => {
+    res.json({ overrides: getMasterPermissionClassificationOverrides() });
+});
+app.put('/api/admin/master-permission-classifications', requireAuth, requireAdmin, (req, res) => {
+    const { nodeKey, classificationId, classificationLabel } = req.body || {};
+    if (typeof nodeKey !== 'string' || !nodeKey) {
+        return res.status(400).json({ message: 'nodeKey is required.' });
+    }
+    // An empty/null classificationId means "put this column back under its
+    // own real structural classification" -- just remove the exception row.
+    if (!classificationId) {
+        deleteMasterPermissionClassificationOverride(nodeKey);
+        return res.json({ override: null });
+    }
+    if (typeof classificationId !== 'string') {
+        return res.status(400).json({ message: 'classificationId must be a string.' });
+    }
+    if (classificationLabel !== undefined && classificationLabel !== null && typeof classificationLabel !== 'string') {
+        return res.status(400).json({ message: 'classificationLabel must be a string.' });
+    }
+    res.json({ override: setMasterPermissionClassificationOverride(nodeKey, classificationId, classificationLabel, changedByLabel(req)) });
 });
 
 // Árbol Maestro SaaS -- same shape as master-permission-status above, but

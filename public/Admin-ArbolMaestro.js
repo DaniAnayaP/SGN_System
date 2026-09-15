@@ -516,13 +516,16 @@ async function loadMasterTree() {
     masterTreeError.hidden = true;
     masterTreeContainer.innerHTML = '';
     try {
-        const [statusRes, orderRes, costRes] = await Promise.all([
+        const [statusRes, orderRes, costRes, classificationsRes] = await Promise.all([
             fetch('/api/admin/master-permission-status', { credentials: 'include' }),
             fetch('/api/admin/master-permission-order', { credentials: 'include' }),
             fetch('/api/admin/master-permission-costs', { credentials: 'include' }),
+            fetch('/api/admin/master-permission-classifications', { credentials: 'include' }),
         ]);
-        if (!statusRes.ok || !orderRes.ok || !costRes.ok) throw new Error('load failed');
-        const [statusData, orderData, costData] = await Promise.all([statusRes.json(), orderRes.json(), costRes.json()]);
+        if (!statusRes.ok || !orderRes.ok || !costRes.ok || !classificationsRes.ok) throw new Error('load failed');
+        const [statusData, orderData, costData, classificationsData] = await Promise.all([
+            statusRes.json(), orderRes.json(), costRes.json(), classificationsRes.json(),
+        ]);
         originalStatuses = statusData.statuses || [];
         currentCurrency = costData.currency || 'MXN';
         lastExchangeRate = costData.lastExchangeRate || 1;
@@ -536,7 +539,7 @@ async function loadMasterTree() {
             columnOrder: orderData.columnOrders || {},
             costCurrency: currentCurrency,
         });
-        await masterTree.init(originalStatuses, costData.costs || []);
+        await masterTree.init(originalStatuses, costData.costs || [], classificationsData.overrides || []);
         // The baseline is what the tree actually ends up SHOWING, not the
         // raw (possibly empty) server response -- when nothing has ever
         // been saved, the tree still renders menu.json's own natural order,

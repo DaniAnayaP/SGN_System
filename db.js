@@ -1174,6 +1174,29 @@ db.exec(`
         UNIQUE(section_id, item_id, submenu_id)
     );
 
+    -- Purely VISUAL reclassification for a column/acción row in Árbol de
+    -- Permisos Maestro -- confirmed by direct code reading (PermissionTree.js's
+    -- renderStatusClassification) that a column's real key is derived from
+    -- its structural position inside menu.json (sectionId/itemId/submenuId,
+    -- see keyOf), so moving the column's own JS object between a real
+    -- classification's submenu arrays would silently change that key and
+    -- orphan every already-saved Estatus/$Web/$App/Giro/Plan/cliente grant
+    -- for it. node_key is that SAME string keyOf() already produces --
+    -- this table only says "render this key under a different
+    -- classification heading," never touches the key itself or menu.json.
+    -- One row per reclassified column; anything absent here just renders
+    -- under its real structural classification (or "Por Definir
+    -- Clasificación" if it was never inside one), same "only store the
+    -- exceptions" convention as master_permission_status above.
+    CREATE TABLE IF NOT EXISTS master_permission_classification_overrides (
+        id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_key               TEXT NOT NULL UNIQUE,
+        classification_id      TEXT NOT NULL,
+        classification_label   TEXT,
+        updated_by             TEXT,
+        updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- saas_master_status: same idea as master_permission_status above, but
     -- for GEIPSA's OWN internal SaaS screens (the full catalog in
     -- SaasAdminCatalog.js -- Grupo -> Pantalla -> Apartado/Tabla/Modal ->
@@ -5543,6 +5566,38 @@ function setMasterPermissionStatuses(rows, updatedBy) {
     return getMasterPermissionStatuses();
 }
 
+// Purely visual reclassification overrides (see this table's own DDL
+// comment) -- unlike master_permission_status above, this is edited one
+// row at a time (one column reclassified at a time from its own picker),
+// never a whole-table replace, so it gets a real get-one/upsert-one/
+// delete-one shape instead.
+function getMasterPermissionClassificationOverrides() {
+    return db
+        .prepare(`
+            SELECT node_key AS nodeKey, classification_id AS classificationId, classification_label AS classificationLabel
+            FROM master_permission_classification_overrides
+        `)
+        .all();
+}
+function setMasterPermissionClassificationOverride(nodeKey, classificationId, classificationLabel, updatedBy) {
+    db.prepare(`
+        INSERT INTO master_permission_classification_overrides (node_key, classification_id, classification_label, updated_by)
+        VALUES (@nodeKey, @classificationId, @classificationLabel, @updatedBy)
+        ON CONFLICT(node_key) DO UPDATE SET
+            classification_id = excluded.classification_id,
+            classification_label = excluded.classification_label,
+            updated_by = excluded.updated_by,
+            updated_at = datetime('now')
+    `).run({ nodeKey, classificationId, classificationLabel: classificationLabel || null, updatedBy: updatedBy || '' });
+    return { nodeKey, classificationId, classificationLabel: classificationLabel || null };
+}
+// Reverting a column back to its real structural classification -- just
+// removes the exception row, same "no row = default" convention as every
+// other override table here.
+function deleteMasterPermissionClassificationOverride(nodeKey) {
+    db.prepare('DELETE FROM master_permission_classification_overrides WHERE node_key = ?').run(nodeKey);
+}
+
 // saas_master_status pair -- same replace-the-whole-table shape as
 // getMasterPermissionStatuses/setMasterPermissionStatuses above, just
 // keyed by a flat itemId instead of the sectionId/itemId/submenuId triple
@@ -6535,6 +6590,9 @@ module.exports = {
     setSectorGrants,
     getMasterPermissionStatuses,
     setMasterPermissionStatuses,
+    getMasterPermissionClassificationOverrides,
+    setMasterPermissionClassificationOverride,
+    deleteMasterPermissionClassificationOverride,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     getSaasMasterOrder,

@@ -1104,14 +1104,17 @@ async function loadMasterTree(token) {
     hint.textContent = t('admin.loading') || '...';
     contentEl.appendChild(hint);
     try {
-        const [statusRes, orderRes, costRes] = await Promise.all([
+        const [statusRes, orderRes, costRes, classificationsRes] = await Promise.all([
             fetch(apiUrl('/api/admin/master-permission-status'), { credentials: 'include' }),
             fetch(apiUrl('/api/admin/master-permission-order'), { credentials: 'include' }),
             fetch(apiUrl('/api/admin/master-permission-costs'), { credentials: 'include' }),
+            fetch(apiUrl('/api/admin/master-permission-classifications'), { credentials: 'include' }),
         ]);
         if (token !== renderToken) return; // switched tabs while this was in flight
-        if (!statusRes.ok || !orderRes.ok || !costRes.ok) throw new Error('load failed');
-        const [statusData, orderData, costData] = await Promise.all([statusRes.json(), orderRes.json(), costRes.json()]);
+        if (!statusRes.ok || !orderRes.ok || !costRes.ok || !classificationsRes.ok) throw new Error('load failed');
+        const [statusData, orderData, costData, classificationsData] = await Promise.all([
+            statusRes.json(), orderRes.json(), costRes.json(), classificationsRes.json(),
+        ]);
         if (token !== renderToken) return;
         originalStatuses = statusData.statuses || [];
         currentCurrency = costData.currency || 'MXN';
@@ -1196,7 +1199,7 @@ async function loadMasterTree(token) {
             columnOrder: orderData.columnOrders || {},
             costCurrency: currentCurrency,
         });
-        await masterTree.init(originalStatuses, costData.costs || []);
+        await masterTree.init(originalStatuses, costData.costs || [], classificationsData.overrides || []);
         if (token !== renderToken) return; // switched away while menu.json/tree rows were still loading
         // The baseline is what the tree actually ends up SHOWING, not the
         // raw (possibly empty) server response -- see the identical fix and
