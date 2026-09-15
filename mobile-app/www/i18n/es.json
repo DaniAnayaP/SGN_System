@@ -633,6 +633,8 @@
     "masterTreeColNavigate": "Navegar",
     "masterTreeColApplyNested": "Aplicar a anidados",
     "masterTreeColClassification": "Clasificación",
+    "masterTreeLevelApartado": "Apartado",
+    "masterTreeLevelIcono": "Ícono",
     "masterTreeApplyNestedWeb": "Aplicar Web a todo lo anidado debajo",
     "masterTreeApplyNestedApp": "Aplicar App a todo lo anidado debajo",
     "masterTreeApplyNestedStatus": "Aplicar Estatus a todo lo anidado debajo",

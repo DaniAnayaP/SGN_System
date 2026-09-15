@@ -1940,31 +1940,6 @@
                 // that's always exactly as wide as the header's Estatus
                 // label, so its left edge lines up regardless of how short
                 // the current ladder step's text is.
-                const statusCell = document.createElement('div');
-                statusCell.className = 'perm-tree-mstatus-status-cell';
-                statusCell.appendChild(buildStatusBadgeSelect(key));
-                controls.appendChild(statusCell);
-                // "Aplicar Estatus a anidados" -- own fixed-width cell
-                // (never inside statusCell itself, which applyStatusAbbreviations
-                // sizes to fit only the select's own text) so this button
-                // can't fight that ladder's own width math. Always rendered
-                // (empty when this node has no descendants -- see
-                // hasStatusChildren) so every row's total controls width
-                // stays constant, same "empty placeholder" fix as the cost
-                // cells above.
-                const statusNestCell = document.createElement('div');
-                statusNestCell.className = 'perm-tree-mstatus-status-nest-cell';
-                if (!readOnly && !grantMode && hasStatusChildren(key)) {
-                    const statusNestBtn = document.createElement('button');
-                    statusNestBtn.type = 'button';
-                    statusNestBtn.className = 'perm-tree-mstatus-nest-btn';
-                    statusNestBtn.title = t('admin.masterTreeApplyNestedStatus');
-                    statusNestBtn.setAttribute('aria-label', statusNestBtn.title);
-                    statusNestBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
-                    statusNestBtn.addEventListener('click', () => applyNestedStatus(key));
-                    statusNestCell.appendChild(statusNestBtn);
-                }
-                controls.appendChild(statusNestCell);
                 // Purely visual "which classification does this row show
                 // under" picker -- see classificationCtx's own comment
                 // (buildClassificationCtx). Present only for a column/
@@ -1973,12 +1948,32 @@
                 // Tabla/Iconos Personalización/a column's own 4 sub-levels)
                 // passes null and gets the same empty placeholder cell
                 // every other conditional column here already uses, so
-                // every row's total controls width stays constant.
+                // every row's total controls width stays constant. Placed
+                // before Estatus (confirmed with the user) -- which
+                // classification a row belongs to is read before its own
+                // Estatus, not after.
                 const classificationCell = document.createElement('div');
                 classificationCell.className = 'perm-tree-mstatus-class-cell';
-                if (classificationCtx) {
+                if (classificationCtx && classificationCtx.readOnlyLabel !== undefined) {
+                    // Structural level badge (see buildLevelBadgeCtx) --
+                    // plain colored text, never a <select>: there's nothing
+                    // to pick, this just names what the row IS.
+                    const badge = document.createElement('span');
+                    badge.className = 'perm-tree-mstatus-class-badge';
+                    badge.textContent = classificationCtx.readOnlyLabel;
+                    badge.style.color = classificationCtx.readOnlyColor;
+                    badge.style.borderColor = classificationCtx.readOnlyColor;
+                    badge.style.backgroundColor = `color-mix(in srgb, ${classificationCtx.readOnlyColor} 14%, var(--color-bg))`;
+                    classificationCell.appendChild(badge);
+                } else if (classificationCtx) {
                     const select = document.createElement('select');
                     select.className = 'perm-tree-mstatus-class-select';
+                    // grantMode ('giro') shows it as read-only reference,
+                    // same convention Estatus/buildStatusBadgeSelect
+                    // already uses -- Accesos Globales isn't where a
+                    // column's classification gets edited, only where it's
+                    // useful to see at a glance which one it's already in.
+                    select.disabled = !!grantMode;
                     classificationCtx.options.forEach((opt) => {
                         const optionEl = document.createElement('option');
                         optionEl.value = opt.id;
@@ -2017,6 +2012,31 @@
                     classificationCell.appendChild(select);
                 }
                 controls.appendChild(classificationCell);
+                const statusCell = document.createElement('div');
+                statusCell.className = 'perm-tree-mstatus-status-cell';
+                statusCell.appendChild(buildStatusBadgeSelect(key));
+                controls.appendChild(statusCell);
+                // "Aplicar Estatus a anidados" -- own fixed-width cell
+                // (never inside statusCell itself, which applyStatusAbbreviations
+                // sizes to fit only the select's own text) so this button
+                // can't fight that ladder's own width math. Always rendered
+                // (empty when this node has no descendants -- see
+                // hasStatusChildren) so every row's total controls width
+                // stays constant, same "empty placeholder" fix as the cost
+                // cells above.
+                const statusNestCell = document.createElement('div');
+                statusNestCell.className = 'perm-tree-mstatus-status-nest-cell';
+                if (!readOnly && !grantMode && hasStatusChildren(key)) {
+                    const statusNestBtn = document.createElement('button');
+                    statusNestBtn.type = 'button';
+                    statusNestBtn.className = 'perm-tree-mstatus-nest-btn';
+                    statusNestBtn.title = t('admin.masterTreeApplyNestedStatus');
+                    statusNestBtn.setAttribute('aria-label', statusNestBtn.title);
+                    statusNestBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+                    statusNestBtn.addEventListener('click', () => applyNestedStatus(key));
+                    statusNestCell.appendChild(statusNestBtn);
+                }
+                controls.appendChild(statusNestCell);
                 // Fixed-width cell (matches perm-tree-mstatus-header-
                 // platforms exactly) instead of letting the two platform
                 // groups just sit at whatever width their own content
@@ -2648,6 +2668,28 @@
             for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
             return CLASSIFICATION_COLOR_PALETTE[hash % CLASSIFICATION_COLOR_PALETTE.length];
         }
+        // Structural levels (Departamento/Área/Apartado/Pantalla/Tabla/
+        // Ícono) never had anything in the Clasificación column at all --
+        // confirmed live that reads as broken ("no me gusta que la fila
+        // clasificación esté vacía"). Read-only (no toggle/onPick at all,
+        // see statusRow's own branch for classificationCtx.readOnlyLabel):
+        // this says what the row IS, not something an admin picks, so its
+        // color is a FIXED assignment per level -- the same 6 colors
+        // everywhere in the system, never hashed/computed like a real
+        // classification's own color above.
+        const LEVEL_BADGES = {
+            departamento: { labelKey: 'sidebar.department', color: '#6C4BA6' },
+            area: { labelKey: 'sidebar.area', color: '#0E7C86' },
+            apartado: { labelKey: 'admin.masterTreeLevelApartado', color: '#9A6B00' },
+            pantalla: { labelKey: 'main.colSysPantalla', color: '#3A4BC9' },
+            tabla: { labelKey: 'main.tablePrefix', color: '#5C6079' },
+            icono: { labelKey: 'admin.masterTreeLevelIcono', color: '#B3261E' },
+        };
+        function buildLevelBadgeCtx(level) {
+            if (readOnly) return null;
+            const badge = LEVEL_BADGES[level];
+            return { readOnlyLabel: t(badge.labelKey), readOnlyColor: badge.color };
+        }
         function resolveOverrideTargetClassification(classificationId, subSm) {
             const real = (subSm.submenu || []).find((e) => e.isClassification && e.id === classificationId);
             if (real) return { cls: real, isVirtual: false };
@@ -2743,7 +2785,7 @@
         // re-targets every column currently inside it in one go (the
         // "move this whole group" case) rather than just the one row.
         function buildClassificationCtx(nodeKey, currentId, structuralId, subSm, bulkKeys) {
-            if (readOnly || grantMode) return null;
+            if (readOnly) return null;
             const options = availableClassificationsFor(subSm);
             // A column whose real home is "just loose" (structuralId null,
             // never inside any menu.json classification) needs an explicit
@@ -2866,7 +2908,7 @@
                     if (tableExpanded) expandedItems.delete(tableTreeKey);
                     else expandedItems.add(tableTreeKey);
                 },
-            }, computeNodeRollup(tableKey), null, ancestorLocked, null, null));
+            }, computeNodeRollup(tableKey), null, ancestorLocked, null, null, buildLevelBadgeCtx('tabla')));
             if (!tableExpanded) return;
             getEffectiveTableGroups(section, item, sm, subSm).forEach((group) => {
                 if (group.cls) {
@@ -2896,7 +2938,7 @@
                     if (iconsExpanded) expandedItems.delete(iconsTreeKey);
                     else expandedItems.add(iconsTreeKey);
                 },
-            }, computeNodeRollup(iconsKey), null, ancestorLocked, null, null));
+            }, computeNodeRollup(iconsKey), null, ancestorLocked, null, null, buildLevelBadgeCtx('icono')));
             if (!iconsExpanded) return;
             subSm.iconsSubmenu.forEach((icon) => {
                 const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
@@ -2913,7 +2955,7 @@
                     node: subSm,
                     iconId: icon.id,
                 } : null;
-                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, selfStateRollup(iconKey), null, ancestorLocked, null, previewInfo));
+                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, selfStateRollup(iconKey), null, ancestorLocked, null, previewInfo, buildLevelBadgeCtx('icono')));
             });
         }
 
@@ -2981,7 +3023,7 @@
             // (often much wider) available width on their own.
             const controls = document.createElement('div');
             controls.className = 'perm-tree-mstatus-header-controls';
-            controls.append(status, applyNestedStatusHeader, classificationHeader, platforms, costWeb, costApp, navigate);
+            controls.append(classificationHeader, status, applyNestedStatusHeader, platforms, costWeb, costApp, navigate);
             header.append(spacer, label, controls);
             return header;
         }
@@ -3435,7 +3477,7 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: rollupPlatformState(sectionLeafKeys, 'web'), app: rollupPlatformState(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, (dragAllowed && section.id !== 'main') ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo));
+                } : null, section.items.length ? { web: rollupPlatformState(sectionLeafKeys, 'web'), app: rollupPlatformState(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, (dragAllowed && section.id !== 'main') ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo, buildLevelBadgeCtx('departamento')));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
@@ -3469,7 +3511,7 @@
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: rollupPlatformState(itemLeafKeys, 'web'), app: rollupPlatformState(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo));
+                    } : null, hasSubmenu ? { web: rollupPlatformState(itemLeafKeys, 'web'), app: rollupPlatformState(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo, buildLevelBadgeCtx('area')));
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
                     // Apartado (Catálogos/Operaciones/...) only reorders
@@ -3496,7 +3538,7 @@
                             children: hasSubSubmenu ? sm.submenu.filter((s) => !s.standalone).map((subSm) => ({ id: subSm.id, label: t(subSm.labelKey, subSm.labelParams), icon: subSm.icon })) : [],
                         };
                         if (!hasSubSubmenu) {
-                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, selfStateRollup(smStateKey), null, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo));
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, selfStateRollup(smStateKey), null, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo, buildLevelBadgeCtx('apartado')));
                             return;
                         }
 
@@ -3509,7 +3551,7 @@
                                 if (smExpandedNow) expandedItems.delete(smKey);
                                 else expandedItems.add(smKey);
                             },
-                        }, { web: rollupPlatformState(smLeafKeys, 'web'), app: rollupPlatformState(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo));
+                        }, { web: rollupPlatformState(smLeafKeys, 'web'), app: rollupPlatformState(smLeafKeys, 'app') }, smLeafKeys, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo, buildLevelBadgeCtx('apartado')));
                         if (!smExpandedNow) return;
                         const subSmAncestorLocked = smAncestorLocked || nodeWebOff(smStateKey);
                         // Pantalla only reorders among its own apartado's
@@ -3546,7 +3588,7 @@
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
                                     else expandedItems.add(subDetailKey);
                                 },
-                            } : null, hasStatusChildren(key) ? computeNodeRollup(key) : selfStateRollup(key), null, subSmAncestorLocked, pantallaDragCtx, previewInfo));
+                            } : null, hasStatusChildren(key) ? computeNodeRollup(key) : selfStateRollup(key), null, subSmAncestorLocked, pantallaDragCtx, previewInfo, buildLevelBadgeCtx('pantalla')));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
                                 if (subSm.submenu && subSm.submenu.length
