@@ -47,6 +47,23 @@ function deviceIconSvg(platform, mark) {
 const CATALOG = window.SAAS_ADMIN_CATALOG;
 const CI_LABEL = window.SAAS_ADMIN_CONTROL_INTERNO_LABEL;
 
+// General's own real children -- Inicio/Tablero, the top-bar items outside
+// both category tabs (see Panel Admin's own bottom nav in AppAdminInicio.js
+// and Dashboard.js's buildSidebarData, which gives the admin/GEIPSA sidebar
+// this exact pair -- [home, dashboard, customerServiceItem, saasConfigItem],
+// no 'panel' for this role). Reuses menu.home/menu.dashboard's real labels
+// (same Spanish/English text, "Inicio"/"Tablero") since these are the same
+// navigation concepts, just tracked here under their own saas_master_status
+// ids instead of master_permission_status. Leaf-level only (no apartados),
+// same GENERAL_ITEM_IDS treatment PermissionTree.js gives them: never
+// draggable, no toggle/children of their own. 'saas-home' has no real
+// distinct page to jump to (menu.json itself gives 'home' href '#'), so it
+// gets no Navegar button rather than a dead one.
+const GENERAL_ITEMS = [
+    { itemId: 'saas-home', labelKey: 'menu.home', href: null },
+    { itemId: 'saas-board', labelKey: 'menu.dashboard', href: 'Inicio-en.html' },
+];
+
 function apartadoKey(screen, apartado) {
     return `${screen.itemId}::${apartado.id}`;
 }
@@ -430,20 +447,22 @@ function renderList() {
     listEl.innerHTML = '';
     listEl.appendChild(buildHeader());
 
-    // "General" -- never a real parent row: Servicio a Cliente/Configuración
-    // SaaS always render as their own top-level rows right below it
-    // regardless of anything here (confirmed with the user after an earlier
-    // version of this collapsed the whole tree away when this had a
-    // toggle). It IS a real row with its own stored Estatus/Web-App and a
-    // cascade over literally every leaf, though -- confirmed against the
-    // real Árbol de Permisos Maestro's own General row, which has both
-    // (visible there as a genuine, non-rollup "Inhabilitado" that its own
-    // children didn't share) -- a real kill-switch over the whole tree, not
-    // just a read-only summary.
-    const allLeafKeys = collectLeafKeysForScreens(CATALOG.flatMap((g) => g.screens));
+    // "General" -- a real row with its own stored Estatus/Web-App and a
+    // cascade over literally every leaf (confirmed against the real Árbol de
+    // Permisos Maestro's own General row, which has both, visible there as a
+    // genuine, non-rollup "Inhabilitado" that its own children didn't
+    // share) -- a real kill-switch over the whole tree, not just a read-only
+    // summary. Its OWN toggle only ever shows/hides GENERAL_ITEMS
+    // (Inicio/Tablero) below -- Servicio a Cliente/Configuración SaaS always
+    // render as their own top-level rows right after regardless of this
+    // toggle's state (confirmed with the user after an earlier version of
+    // this collapsed the whole tree away when General's toggle also gated
+    // the 2 groups).
+    const allLeafKeys = [...GENERAL_ITEMS.map((i) => i.itemId), ...collectLeafKeysForScreens(CATALOG.flatMap((g) => g.screens))];
     const generalRow = document.createElement('div');
     generalRow.className = 'perm-tree-row perm-tree-depth-0 saas-master-status-row-general';
     generalRow.appendChild(spacer());
+    generalRow.appendChild(toggleBtn('gen:main', !collapsed.has('gen:main')));
     generalRow.appendChild(rollupEl(computeRollup(allLeafKeys, 'web'), computeRollup(allLeafKeys, 'app')));
     generalRow.appendChild(labelEl(Dashboard.t('admin.saasMasterTreeGeneral')));
     generalRow.appendChild(countBadge(allLeafKeys.length));
@@ -454,6 +473,23 @@ function renderList() {
     // rows (not just Pantalla ones).
     generalRow.appendChild(buildControls('__general__', allLeafKeys, CATALOG[0].screens[0].href));
     listEl.appendChild(generalRow);
+
+    if (!collapsed.has('gen:main')) {
+        GENERAL_ITEMS.forEach((item) => {
+            const itemRow = document.createElement('div');
+            itemRow.className = 'perm-tree-row perm-tree-depth-1';
+            // No dragHandle/toggle -- never reorderable, no children of its
+            // own, same GENERAL_ITEM_IDS treatment the real tree gives
+            // Inicio/Panel/Tablero (spacer() keeps column alignment).
+            itemRow.appendChild(spacer());
+            itemRow.appendChild(spacer());
+            itemRow.appendChild(rollupEl(computeRollup([item.itemId], 'web'), computeRollup([item.itemId], 'app')));
+            itemRow.appendChild(labelEl(Dashboard.t(item.labelKey)));
+            itemRow.appendChild(countBadge(1));
+            itemRow.appendChild(buildControls(item.itemId, [], item.href));
+            listEl.appendChild(itemRow);
+        });
+    }
 
     orderedGroups().forEach((group) => {
         const groupLeafKeys = collectLeafKeysForScreens(group.screens);
