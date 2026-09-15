@@ -3689,20 +3689,24 @@ function ensureVisibilityPickerModal() {
     visibilityPickerModal.className = 'modal-overlay';
     visibilityPickerModal.hidden = true;
     visibilityPickerModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-vis-title">
-            <h3 id="data-table-vis-title">${t('main.columnVisibilityTitle')}</h3>
-            <p class="admin-hint">${t('main.columnVisibilityHint')}</p>
-            <div class="admin-form-actions" style="margin: 0.75rem 0 1rem;">
-                <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
-                <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
+        <div class="modal-panel data-table-vis-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-vis-title">
+            <div class="data-table-vis-fixed">
+                <h3 id="data-table-vis-title">${t('main.columnVisibilityTitle')}</h3>
+                <p class="admin-hint">${t('main.columnVisibilityHint')}</p>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
+                    <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
+                </div>
+                <div class="sector-icon-picker">
+                    <div class="sector-icon-picker-search">
+                        <i class="bx bx-search" aria-hidden="true"></i>
+                        <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
+                    </div>
+                    <div class="sector-icon-picker-chips" data-role="chips"></div>
+                    <p class="sector-icon-picker-count" data-role="count"></p>
+                </div>
             </div>
-            <div class="sector-icon-picker-search">
-                <i class="bx bx-search" aria-hidden="true"></i>
-                <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
-            </div>
-            <div class="sector-icon-picker-chips" data-role="chips"></div>
-            <p class="sector-icon-picker-count" data-role="count"></p>
-            <div class="admin-module-list" data-role="list"></div>
+            <div class="admin-module-list data-table-vis-list" data-role="list"></div>
         </div>
     `;
     document.body.appendChild(visibilityPickerModal);

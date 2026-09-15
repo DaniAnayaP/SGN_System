@@ -3584,6 +3584,30 @@ body.dark-mode .admin-save-status{
 .evidence-preview-panel{
     max-width: 40rem;
 }
+/* Mostrar/ocultar columnas -- confirmed live that with a search box + chip
+   row + count line added above a 20+ item list, the base .modal-panel's
+   single overflow-y:auto scrolled the title/Guardar/search/chips away with
+   the list instead of keeping them in view ("se ve todo amontonado... la
+   barra de desplazamiento solo debe mover las opciones"). Turns the panel
+   into a column with a fixed header block and only .admin-module-list
+   scrolling underneath it. */
+.data-table-vis-panel{
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.data-table-vis-fixed{
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+.data-table-vis-list{
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-top: 1rem;
+}
 /* "Reenviar" solicitud -- picking among jefe directo / homólogos / jefes
    alternos (see openCatalogRequestForwardModal in Dashboard.js). */
 .forward-picker-groups{
