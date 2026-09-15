@@ -2511,20 +2511,82 @@ const TABLE_GRANT_PATHS = {
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
 };
 
-// The 13 "Control Interno" system columns (see getSystemColumnsForRecord
-// below) sit one level deeper than a table's own columns in menu.json —
-// nested inside a classification group (id "class-control-interno")
-// instead of directly under the pantalla. getColumnGrantLevel/
-// canAuthorizeColumn need that extra segment only for these ids; every
-// other column keeps its existing (shallower) path.
-const SYSTEM_COLUMN_CLASSIFICATION = 'class-control-interno';
-const SYSTEM_COLUMN_IDS = new Set([
-    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
-    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
-    'colSysAnio', 'colSysSemana', 'colSysHora',
-]);
+// menu.json is the single source of truth for where a column actually
+// sits (loose directly under its pantalla, or nested one level deeper
+// inside a real classification like "class-control-interno"/"class-por-
+// definir"/"class-botones") -- this used to be a hand-maintained guess
+// (SYSTEM_COLUMN_IDS, hardcoding ONLY "class-control-interno" as a
+// possible wrapper), which silently broke Eliminar/Autorizar/Editar the
+// moment a column moved under any OTHER classification: the real grant
+// key PermissionTree.js's own cascadeTableColumns/tableColumnsCoverage
+// save always includes whichever classification the column is actually
+// nested under (confirmed live for colFleetDeleteAuth after it moved to
+// "class-por-definir" -- the saved grant path and this file's own check
+// had already silently diverged). Resolving it here the same way removes
+// this whole class of bug instead of re-hardcoding a second list that can
+// drift out of sync every time a column gets reclassified.
+const menuData = require('./public/data/menu.json');
+
+// Mirrors categoriesForArea/PermissionTree.js's own init() merge: an
+// área-specific override (menu.json's own areaOverrides, keyed
+// "sectionId/areaId") REPLACES one category's generic template array for
+// THAT área only; every other área/category keeps the shared generic
+// template (menuData.areaCategories). Needed so a pantalla built off the
+// generic template (e.g. Material Apoyo, same for every área) resolves
+// exactly like a pantalla that came from a real override.
+function categoryPantallasFor(sectionId, areaId, apartadoId) {
+    const overrides = menuData.areaOverrides[`${sectionId}/${areaId}`];
+    if (overrides && overrides[apartadoId] && overrides[apartadoId].length) return overrides[apartadoId];
+    const generic = menuData.areaCategories.find((cat) => cat.id === apartadoId);
+    return (generic && generic.submenu) || [];
+}
+
+// Walks a TABLE_GRANT_PATHS entry's own {sectionId, itemId, submenuPrefix}
+// down to the real Pantalla node in menu.json. 'main' items nest
+// statically (no área merge involved, e.g. btn-configuracion/btn-base-
+// datos/bd-respaldos); every other section resolves its first
+// submenuPrefix segment as an apartado (Catálogos/Operaciones/...) via
+// categoryPantallasFor above, then walks any remaining segments as plain
+// nested submenu ids.
+function findPantallaNode(sectionId, itemId, submenuPrefix) {
+    const segments = submenuPrefix.split('/');
+    let node;
+    let rest;
+    if (sectionId === 'main') {
+        const section = menuData.sections.find((s) => s.id === 'main');
+        node = section && section.items.find((i) => i.id === itemId);
+        rest = segments;
+    } else {
+        const [apartadoId, ...tail] = segments;
+        const pantallas = categoryPantallasFor(sectionId, itemId, apartadoId);
+        node = pantallas.find((p) => p.id === tail[0]);
+        rest = tail.slice(1);
+    }
+    for (const seg of rest) {
+        if (!node) return null;
+        node = (node.submenu || []).find((n) => n.id === seg);
+    }
+    return node || null;
+}
+
+// One lookup per distinct {sectionId, itemId, submenuPrefix} is enough --
+// menu.json's own structure never changes within a running process (a
+// fresh deploy is what actually picks up any edit to it).
+const pantallaNodeCache = new Map();
+function classificationFor(path, colKey) {
+    const cacheKey = `${path.sectionId}::${path.itemId}::${path.submenuPrefix}`;
+    let pantalla = pantallaNodeCache.get(cacheKey);
+    if (pantalla === undefined) {
+        pantalla = findPantallaNode(path.sectionId, path.itemId, path.submenuPrefix);
+        pantallaNodeCache.set(cacheKey, pantalla);
+    }
+    if (!pantalla) return null;
+    const cls = (pantalla.submenu || []).find((entry) => entry.isClassification && (entry.submenu || []).some((c) => c.id === colKey));
+    return cls ? cls.id : null;
+}
 function columnSubmenuBase(path, colKey) {
-    return SYSTEM_COLUMN_IDS.has(colKey) ? `${path.submenuPrefix}/${SYSTEM_COLUMN_CLASSIFICATION}/${colKey}` : `${path.submenuPrefix}/${colKey}`;
+    const cls = classificationFor(path, colKey);
+    return cls ? `${path.submenuPrefix}/${cls}/${colKey}` : `${path.submenuPrefix}/${colKey}`;
 }
 
 // No grant at all on a column behaves as 'solo-ver' (confirmed product
