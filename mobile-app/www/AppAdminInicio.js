@@ -4,13 +4,17 @@
 // lighter i18n loader as AppRoles.js/AppNuestrasUnidades.js (no Dashboard.js
 // here, just window.Dashboard.t as the one shim PermissionTree.js needs).
 //
-// Single page, 5 bottom tabs swap the content area in place (same pattern
-// AppInicio.html's own tabs already use) instead of separate pages per
-// section — only the Árbol de Permisos Maestro tab has a real screen behind
-// it today (ports Admin-ArbolMaestro.js's own load/save/confirm flow); the
-// other 4 are honest "Próximamente" placeholders, per the agreed incremental
-// rollout (Web already has these screens; the rest of the App port is
-// future work).
+// Single page, a small number of bottom tabs swap the content area in place
+// (same pattern AppInicio.html's own tabs already use) instead of separate
+// pages per section. Individual admin screens are NOT their own bottom tab
+// -- confirmed with the user this should mirror the client App's own
+// Catálogos/Administración pattern (see AppInicio.js's
+// renderCategoryScreens): one tab per CATEGORY (Servicio a Cliente,
+// Configuración SaaS), which shows that category's screens as a tile grid
+// when tapped, same "Próximamente" placeholder tiles the client's own
+// category screens already use for anything not built yet. Only Árbol de
+// Permisos Maestro ('tree') and Giros de Negocio ('sectors') have a real
+// screen behind them today (the rest of the App port is future work).
 // ---------------------------------------------------------------------------
 
 const SUPPORTED_LANGS = ['en', 'es'];
@@ -258,27 +262,55 @@ breadcrumbToggle.addEventListener('click', () => {
 });
 
 // --- Tabs / sections -------------------------------------------------------
-// Icon/label pairs reused both by the tab bar (already static markup in
-// AppAdminInicio.html) and by the Inicio tab's own shortcut tiles below --
-// kept in one place so the two never drift apart.
+// One bottom tab per CATEGORY (see the file's own top comment) -- tapping
+// it shows that category's real screens as a tile grid (renderCategorySection
+// below), same look Inicio's own tiles already use. Icon/label pairs here
+// double as both the tile's own content and (via ITEM_CATEGORY) the
+// breadcrumb label shown once a specific screen is open.
+const CATEGORY_ITEMS = {
+    customerService: [
+        { id: 'tree', icon: 'bx-sitemap', breadcrumbKey: 'menu.masterPermissionsTree' },
+        { id: 'sectors', icon: 'bx-briefcase-alt-2', breadcrumbKey: 'menu.businessSectorsAbbr1' },
+        { id: 'plans', icon: 'bx-package', breadcrumbKey: 'menu.plansRegistered' },
+        { id: 'clients', icon: 'bx-buildings', breadcrumbKey: 'menu.clientesRegistrados' },
+        { id: 'apps', icon: 'bx-grid-alt', breadcrumbKey: 'menu.ourApps' },
+    ],
+    saasConfig: [
+        { id: 'saas-tree', icon: 'bx-shield', breadcrumbKey: 'menu.saasMasterTree' },
+        { id: 'saas-costs', icon: 'bx-dollar-circle', breadcrumbKey: 'menu.moduleCosts' },
+        { id: 'saas-team', icon: 'bx-id-card', breadcrumbKey: 'menu.saasTeam' },
+        { id: 'saas-backups', icon: 'bx-cloud-upload', breadcrumbKey: 'menu.ourBackups' },
+        { id: 'saas-material', icon: 'bx-book-open', breadcrumbKey: 'menu.ourSupportMaterial' },
+    ],
+};
+const CATEGORY_TABS = [
+    { id: 'customerService', breadcrumbKey: 'menu.customerService' },
+    { id: 'saasConfig', breadcrumbKey: 'menu.saasConfig' },
+];
+// Reverse lookup: item id -> its category id. A screen reached by tapping a
+// tile inside a category no longer has a bottom tab of its own, so this is
+// what keeps the RIGHT category tab highlighted while viewing it (see
+// renderSection below) instead of every tab going dark.
+const ITEM_CATEGORY = {};
+Object.entries(CATEGORY_ITEMS).forEach(([catId, items]) => {
+    items.forEach((item) => { ITEM_CATEGORY[item.id] = catId; });
+});
+
+// Inicio's own loose shortcuts -- just Tablero and Holdings, confirmed with
+// the user neither belongs in either category above and Holdings doesn't
+// need its own bottom tab or category either, unlike everything else that
+// used to live directly in this grid.
 const HOME_SHORTCUTS = [
-    { id: 'board', icon: 'bx-bar-chart-alt-2', breadcrumbKey: 'home.tabBoard', group: 'top' },
-    { id: 'tree', icon: 'bx-sitemap', breadcrumbKey: 'menu.masterPermissionsTree', group: 'customerService' },
-    { id: 'sectors', icon: 'bx-briefcase-alt-2', breadcrumbKey: 'menu.businessSectorsAbbr1', group: 'customerService' },
-    { id: 'plans', icon: 'bx-package', breadcrumbKey: 'menu.plansRegistered', group: 'customerService' },
-    { id: 'clients', icon: 'bx-buildings', breadcrumbKey: 'menu.clientesRegistrados', group: 'customerService' },
-    { id: 'holdings', icon: 'bx-collection', breadcrumbKey: 'menu.holdingsTitle', group: 'other' },
+    { id: 'board', icon: 'bx-bar-chart-alt-2', breadcrumbKey: 'home.tabBoard' },
+    { id: 'holdings', icon: 'bx-collection', breadcrumbKey: 'menu.holdingsTitle' },
 ];
-// Same Servicio a Cliente split Dashboard.js's own sidebar uses (see
-// buildSidebarData there) -- 'top' renders with no label (Tablero always
-// led this grid), 'other' catches whatever doesn't fit customerService
-// (just Holdings today) instead of silently lumping it in either way.
-const HOME_GROUPS = [
-    { id: 'top', labelKey: null },
-    { id: 'customerService', labelKey: 'menu.customerService' },
-    { id: 'other', labelKey: 'admin.homeOthers' },
+
+const SECTIONS = [
+    { id: 'home', breadcrumbKey: 'home.tabHome' },
+    ...HOME_SHORTCUTS,
+    ...CATEGORY_TABS,
+    ...Object.values(CATEGORY_ITEMS).flat(),
 ];
-const SECTIONS = [{ id: 'home', breadcrumbKey: 'home.tabHome' }, ...HOME_SHORTCUTS];
 let activeSection = 'home';
 // Bumped every renderSection() call; loadMasterTree()'s own async chain
 // checks this before each contentEl write and bails out if the user has
@@ -303,6 +335,18 @@ function renderComingSoon() {
     contentEl.appendChild(empty);
 }
 
+// Builds one tile that jumps straight to renderSection(item.id) -- shared
+// by Inicio's own loose shortcuts and each category's own screen grid, so
+// both look and behave identically (same tile markup either way).
+function buildShortcutTile(item) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'home-tile';
+    tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${item.icon}" aria-hidden="true"></i></span><span>${t(item.breadcrumbKey)}</span>`;
+    tile.addEventListener('click', () => renderSection(item.id));
+    return tile;
+}
+
 // Inicio's own content -- a greeting-style shortcut grid (reuses AppInicio.
 // css's .home-tiles/.home-tile as-is, same "Accesos rápidos" look the
 // client App's own Inicio tab uses), no numbers yet by design -- those
@@ -313,37 +357,40 @@ function renderHomeHub() {
     title.className = 'home-section-title';
     title.textContent = t('home.quickAccess');
     contentEl.appendChild(title);
-    HOME_GROUPS.forEach((group) => {
-        const items = HOME_SHORTCUTS.filter((item) => item.group === group.id);
-        if (!items.length) return;
-        if (group.labelKey) {
-            const label = document.createElement('p');
-            label.className = 'home-section-sublabel';
-            label.textContent = t(group.labelKey);
-            contentEl.appendChild(label);
-        }
-        const grid = document.createElement('div');
-        grid.className = 'home-tiles';
-        items.forEach((item) => {
-            const tile = document.createElement('button');
-            tile.type = 'button';
-            tile.className = 'home-tile';
-            tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${item.icon}" aria-hidden="true"></i></span><span>${t(item.breadcrumbKey)}</span>`;
-            tile.addEventListener('click', () => document.getElementById(`admin-tab-${item.id}`)?.click());
-            grid.appendChild(tile);
-        });
-        contentEl.appendChild(grid);
-    });
+    const grid = document.createElement('div');
+    grid.className = 'home-tiles';
+    HOME_SHORTCUTS.forEach((item) => grid.appendChild(buildShortcutTile(item)));
+    contentEl.appendChild(grid);
+}
+
+// A category tab's own content -- same tile grid Inicio uses, just listing
+// that category's screens instead (see AppInicio.js's renderCategoryScreens
+// for the client-side equivalent this mirrors). Anything without a real
+// screen behind it yet still gets a real tile here (not hidden) -- tapping
+// it just lands on the same "Próximamente" placeholder renderComingSoon
+// already shows for a directly-tapped unbuilt section.
+function renderCategorySection(catId) {
+    contentEl.innerHTML = '';
+    const items = CATEGORY_ITEMS[catId] || [];
+    const grid = document.createElement('div');
+    grid.className = 'home-tiles';
+    items.forEach((item) => grid.appendChild(buildShortcutTile(item)));
+    contentEl.appendChild(grid);
 }
 
 function renderSection(id) {
     activeSection = id;
     renderToken += 1;
-    document.querySelectorAll('.home-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.section === id));
+    // A screen reached via a category tile (e.g. 'tree') has no bottom tab
+    // of its own anymore -- keep ITS category highlighted instead of every
+    // tab going dark (see ITEM_CATEGORY above).
+    const activeTabId = ITEM_CATEGORY[id] || id;
+    document.querySelectorAll('.home-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.section === activeTabId));
     updateBreadcrumb();
     if (id === 'tree') loadMasterTree(renderToken);
     else if (id === 'home') renderHomeHub();
     else if (id === 'sectors') loadSectorsSection(renderToken);
+    else if (CATEGORY_ITEMS[id]) renderCategorySection(id);
     else renderComingSoon();
 }
 document.querySelectorAll('.home-tab').forEach((tab) => {

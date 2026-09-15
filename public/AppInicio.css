@@ -532,18 +532,6 @@ body{
     color: var(--home-text-secondary);
     margin: 0 0 0.7rem;
 }
-/* Smaller sub-heading between stacked .home-tiles grids (see renderHomeHub
-   in AppAdminInicio.js) -- Panel Admin's own "Accesos rápidos" split into
-   Servicio a Cliente / Otros, same grouping Dashboard.js's sidebar uses. */
-.home-section-sublabel{
-    font-size: 0.66rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--home-text-muted);
-    margin: 0.9rem 0 0.5rem;
-}
-
 .home-tiles{
     display: grid;
     grid-template-columns: repeat(3, 1fr);
