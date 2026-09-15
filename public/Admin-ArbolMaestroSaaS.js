@@ -414,12 +414,16 @@ function renderList() {
     listEl.innerHTML = '';
     listEl.appendChild(buildHeader());
 
-    // "General" -- a permanent, non-collapsible summary card, never a real
-    // parent row: Servicio a Cliente / Configuración SaaS always render as
-    // their own top-level rows right below it regardless of anything here
-    // (confirmed with the user after this collapsed the whole tree away --
-    // same relationship this screen's original 3-row version had between
-    // its own General row and the 3 real rows under it).
+    // "General" -- never a real parent row: Servicio a Cliente/Configuración
+    // SaaS always render as their own top-level rows right below it
+    // regardless of anything here (confirmed with the user after an earlier
+    // version of this collapsed the whole tree away when this had a
+    // toggle). It IS a real row with its own stored Estatus/Web-App and a
+    // cascade over literally every leaf, though -- confirmed against the
+    // real Árbol de Permisos Maestro's own General row, which has both
+    // (visible there as a genuine, non-rollup "Inhabilitado" that its own
+    // children didn't share) -- a real kill-switch over the whole tree, not
+    // just a read-only summary.
     const allLeafKeys = collectLeafKeysForScreens(CATALOG.flatMap((g) => g.screens));
     const generalRow = document.createElement('div');
     generalRow.className = 'perm-tree-row perm-tree-depth-0 saas-master-status-row-general';
@@ -427,6 +431,7 @@ function renderList() {
     generalRow.appendChild(rollupEl(computeRollup(allLeafKeys, 'web'), computeRollup(allLeafKeys, 'app')));
     generalRow.appendChild(labelEl(Dashboard.t('admin.saasMasterTreeGeneral')));
     generalRow.appendChild(countBadge(allLeafKeys.length));
+    generalRow.appendChild(buildControls('__general__', allLeafKeys, null));
     listEl.appendChild(generalRow);
 
     orderedGroups().forEach((group) => {
@@ -442,6 +447,11 @@ function renderList() {
         groupRow.appendChild(rollupEl(computeRollup(groupLeafKeys, 'web'), computeRollup(groupLeafKeys, 'app')));
         groupRow.appendChild(labelEl(Dashboard.t(group.labelKey)));
         groupRow.appendChild(countBadge(groupLeafKeys.length));
+        // Confirmed against a real Departamento row (Comité Directivo) in
+        // Árbol de Permisos Maestro: every row gets its own Estatus/Web-App
+        // controls, not just a read-only rollup -- this row looked "empty"
+        // next to its own siblings without this.
+        groupRow.appendChild(buildControls(group.groupId, groupLeafKeys, null));
         listEl.appendChild(groupRow);
         if (collapsed.has(`g:${group.groupId}`)) return;
 
