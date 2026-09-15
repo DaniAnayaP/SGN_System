@@ -637,13 +637,14 @@ function buildSidebarData(data, role, activePage) {
         // propias en el sidebar, un ítem aquí sería redundante.
         { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', icon: 'bx-group', saasItemId: 'saas-clients' },
         { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', icon: 'bx-package', saasItemId: 'saas-plans' },
-    ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
-    const saasConfigSubmenu = [
         { id: 'admin-nuestras-apps', labelKey: 'menu.ourApps', href: 'Admin-NuestrasApps.html', icon: 'bx-grid-alt', saasItemId: 'saas-apps' },
         // Upstream of Nuestros Giros de Negocio -- a Giro's own default
         // access tree (sector_grants) will only be allowed to grant nodes
         // marked 'habilitado' here (deferred, not built yet), so it's
-        // listed right before it.
+        // listed right before it. Under Servicio a Cliente (not Config.
+        // SaaS) -- both this and Giro de Negocio directly shape what a
+        // client account ends up able to see, same as Nuestros Clientes/
+        // Planes above (corrected 2026-09-15, initially miscategorized).
         {
             id: 'admin-master-permissions', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html', icon: 'bx-sitemap',
             // Same ladder idea as admin-business-sectors below -- this label
@@ -660,6 +661,8 @@ function buildSidebarData(data, role, activePage) {
             // applySubmenuAbbreviations below).
             abbrKeys: ['menu.businessSectorsAbbr1', 'menu.businessSectorsAbbr2', 'menu.businessSectorsAbbr3', 'menu.businessSectorsAbbr4'],
         },
+    ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
+    const saasConfigSubmenu = [
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', icon: 'bx-dollar-circle', saasItemId: 'saas-module-costs' },
         { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html', icon: 'bx-id-card' },
         { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', icon: 'bx-cloud-upload', saasItemId: 'saas-backups' },
