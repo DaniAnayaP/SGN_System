@@ -50,6 +50,18 @@ jobs:
       - name: Sync web assets into the native app
         run: node mobile-app/sync-web-assets.js
 
+      # Stamps a version that's actually unique to THIS build into the
+      # Service Worker's own cache name -- confirmed live (2026-09-15) that
+      # leaving CACHE_VERSION as a hardcoded literal here defeats sw.js's
+      # own activate() cleanup (it only ever deletes caches whose name
+      # DIFFERS from the current one, so a name that never changes across
+      # builds never gets cleared, and the app keeps serving whatever
+      # first got cached, forever). This only touches the checked-out copy
+      # in this runner, never committed back -- the repo's own sw.js keeps
+      # its plain literal for local/manual testing.
+      - name: Stamp a unique Service Worker cache version
+        run: sed -i "s/const CACHE_VERSION = '[^']*';/const CACHE_VERSION = 'sgn-app-shell-${{ github.run_id }}-${{ github.run_attempt }}';/" mobile-app/www/sw.js
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

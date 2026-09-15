@@ -20,12 +20,20 @@
 //   the complexity for this phase (icons just don't render offline, which
 //   is an acceptable gap, not a broken screen).
 //
-// CACHE_VERSION must be bumped by hand whenever this file's own caching
-// behavior (or the precache list) changes -- the browser only re-checks
-// THIS file's bytes for updates, and a stale cache under the SAME version
-// name is reused forever otherwise. A version bump forces every client to
-// throw away its old cache and start clean on next activate.
-const CACHE_VERSION = 'sgn-app-shell-v1';
+// CACHE_VERSION -- confirmed live (2026-09-15) that a hardcoded constant
+// here defeats activate()'s own cleanup below: since the name never
+// changed across deploys, `keys.filter((key) => key !== CACHE_VERSION)`
+// always filtered out the ONE cache that ever existed, so it was never
+// actually cleared -- every update kept serving whatever got cached
+// under the first install, indefinitely (this is what made the App look
+// permanently stuck on old content, well past normal "one extra reload"
+// staleness). The native build (mobile-app/) now stamps this at CI time
+// (see .github/workflows/build-apk.yml) to a value that changes on every
+// build, so activate() actually has a new name to compare against and
+// finally clears the old cache. This literal fallback only matters for
+// the web-served copy (public/) and for local/manual testing -- bump it
+// by hand there when this file's own caching behavior changes.
+const CACHE_VERSION = 'sgn-app-shell-v2';
 const APP_SHELL_URLS = [
     'AppInicio.html',
     'AppInicio.css',
