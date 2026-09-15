@@ -2345,13 +2345,53 @@ body.dark-mode .perm-tree-gate-icon-blocked{
    a cramped 5rem -- a FIXED width (not auto-by-content) is what keeps every
    row's Estatus/Web·App columns aligned regardless of label length, same
    principle alignLabelColumnWidth achieves by measuring on the client tree. */
+/* Same dynamic-height trick Admin-ArbolMaestro.html already uses for its
+   own .master-tree-panel (see that rule below) -- confirmed live that a
+   fixed rem max-height here left the box a fixed size regardless of the
+   actual browser window, which then needed the WHOLE PAGE to scroll past
+   it on a shorter window, on top of the box's own internal scrollbar (two
+   scrollbars, neither matching the real one's behavior). This makes <main>
+   fill the viewport and never scroll itself, and the tree box grow/shrink
+   to fill whatever room is left below the subtitle/Guardar button,
+   scrolling only internally -- exactly Árbol de Permisos Maestro's own
+   layout, scoped to this page's own marker class so nothing else sharing
+   .admin-panel/.saas-master-status-list is affected. */
+body:has(.saas-master-tree-panel) main{
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    padding-bottom: 1rem;
+}
+.saas-master-tree-panel{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.saas-master-tree-panel .saas-master-status-list{
+    flex: 1;
+    min-height: 0;
+}
+/* Matches this page's own 0.4rem container padding -- the base rule's
+   -0.5rem offset/margin assumes .perm-tree's own 0.5rem padding, which
+   this page never uses (see .master-tree-panel's own -0.35rem override
+   just below for the same reasoning against ITS 0.35rem). */
+.saas-master-tree-panel .perm-tree-mstatus-header{
+    top: -0.4rem;
+    margin: -0.4rem -0.4rem 0.4rem;
+}
+.saas-master-tree-panel .admin-subtitle,
+.saas-master-tree-panel .admin-form-actions,
+.saas-master-tree-panel .admin-save-status{
+    flex-shrink: 0;
+}
 .saas-master-status-list{
     border: 1px solid var(--color-border);
     border-radius: 0.6rem;
     padding: 0.4rem;
     overflow-x: auto;
     overflow-y: auto;
-    max-height: 42rem;
     /* Positioning context for .perm-tree-nest-guide (absolutely positioned
        dashed lines, appended straight into this element by drawGuides in
        Admin-ArbolMaestroSaaS.js) -- same reasoning as .perm-tree's own

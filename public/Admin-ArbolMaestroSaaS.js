@@ -358,13 +358,23 @@ function drawGuides() {
             last = rows[j];
         }
         if (!last) return;
-        const toggleRect = toggle.getBoundingClientRect();
-        const lastRect = last.getBoundingClientRect();
+        // Anchored to THIS row's own drag handle when it has one, not the
+        // toggle -- confirmed live on the real Árbol de Permisos Maestro
+        // (PermissionTree.js's own drawNestGuides) that centering on the
+        // toggle instead puts the guide right on top of the NEXT level's
+        // own drag handle (grip+toggle together are roughly one whole
+        // indent step wide). Falls back to the toggle only when this row
+        // has no grip of its own (none of ours do currently, but matching
+        // the real fallback costs nothing and keeps this correct if that
+        // ever changes).
+        const anchor = row.querySelector(':scope > .perm-tree-drag-handle') || toggle;
+        const anchorRect = anchor.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
         const guide = document.createElement('div');
         guide.className = 'perm-tree-nest-guide';
-        guide.style.left = `${toggleRect.left - containerRect.left + toggleRect.width / 2 + listEl.scrollLeft}px`;
-        guide.style.top = `${toggleRect.bottom - containerRect.top + listEl.scrollTop}px`;
-        guide.style.height = `${Math.max(0, lastRect.top - toggleRect.bottom)}px`;
+        guide.style.left = `${anchorRect.left - containerRect.left - 4 + listEl.scrollLeft}px`;
+        guide.style.top = `${rowRect.bottom - containerRect.top + listEl.scrollTop}px`;
+        guide.style.height = `${Math.max(0, last.getBoundingClientRect().bottom - rowRect.bottom)}px`;
         listEl.appendChild(guide);
     });
 }
@@ -479,6 +489,8 @@ function renderList() {
                         onReorder: (fromId, toId) => { order.leavesByApartado[aKey] = reorderList(order.leavesByApartado[aKey] || buildLeaves(apartado).map((l) => l.suffix), fromId, toId); },
                     });
                     row.appendChild(dragHandle());
+                    row.appendChild(spacer());
+                    row.appendChild(rollupEl(computeRollup([key], 'web'), computeRollup([key], 'app')));
                     row.appendChild(labelEl(leaf.label));
                     row.appendChild(countBadge(1));
                     row.appendChild(buildControls(key, [], null));
