@@ -2645,18 +2645,34 @@
         // structural path, never the visual one). statusMode only.
         // nodeKey (keyOf's own output) -> {classificationId, classificationLabel}.
         let classificationOverrides = new Map();
-        // The 2 classifications every Pantalla can use even if menu.json
-        // never gave it one of its own -- "Por Definir Clasificación" for
+        // The 1 classification every Pantalla can use even if menu.json
+        // never gave it one of its own -- "Por Definir Clasificación", for
         // anything an admin explicitly wants pulled out of "just sitting
-        // loose", "Botones" for the real per-record action buttons
-        // (Historial de Cambios, Eliminar, ...) that never had a tree
-        // presence before. Both already have global i18n keys (reused, not
-        // duplicated) so no custom-string rendering path is needed for
-        // them specifically.
+        // loose". Already has a global i18n key (reused, not duplicated)
+        // so no custom-string rendering path is needed for it.
+        // "Botones" and "Acciones" (see FIXED_CLASSIFICATION_IDS below)
+        // used to live here too, but are NOT reassignable -- confirmed
+        // with the user: "si ya son botones, ya deben estar definidos en
+        // la categoría botones... solo deben estar en esa clasificación",
+        // same fixed treatment Iconos Personalización already had.
         const UNIVERSAL_CLASSIFICATIONS = [
             { id: 'class-por-definir', labelKey: 'menu.classPorDefinir' },
-            { id: 'class-botones', labelKey: 'menu.classBotones' },
         ];
+        // Real classifications that are still classifications (their own
+        // color from classificationColor, their own submenu in menu.json)
+        // but never appear in the reassignment picker in either direction
+        // -- "Botones" (now a sibling of Tabla, see renderStatusButtons)
+        // and "Acciones" (fixed, always first inside Tabla, see
+        // getEffectiveTableGroups) are actions, not data with a
+        // reassignable category of its own.
+        const FIXED_CLASSIFICATION_IDS = new Set(['class-botones', 'class-acciones']);
+        // Buttons/Acciones are pure actions, not data with a lifecycle --
+        // only Operar (can use it) and Autorizar (needs extra sign-off,
+        // e.g. a destructive one) apply; Editar/Eliminar as PERMISSION
+        // LEVELS never made sense stacked on a button already named
+        // "Eliminar" (confirmed with the user: "qué lógica da, eliminar
+        // un botón?").
+        const BUTTON_STATUS_LEVELS = [COLUMN_LEVELS.find((level) => level.id === 'ver-y-operar'), COLUMN_AUTHORIZE];
         // A classification's own color has to stay FIXED regardless of
         // which row is showing it (confirmed with the user: it must not
         // look like plain, unstyled text) -- Control Interno keeps the
@@ -2697,6 +2713,15 @@
             const badge = LEVEL_BADGES[level];
             return { readOnlyLabel: t(badge.labelKey), readOnlyColor: badge.color };
         }
+        // Same read-only-badge rendering as buildLevelBadgeCtx above, but
+        // for a FIXED classification (Botones/Acciones, see
+        // FIXED_CLASSIFICATION_IDS) instead of a structural level -- keeps
+        // classificationColor's own real color for that id (so "Botones"
+        // is still the same purple everywhere), just never a <select>.
+        function buildFixedClassificationCtx(classificationId, labelKey, labelParams) {
+            if (readOnly) return null;
+            return { readOnlyLabel: t(labelKey, labelParams), readOnlyColor: classificationColor(classificationId) };
+        }
         function resolveOverrideTargetClassification(classificationId, subSm) {
             const real = (subSm.submenu || []).find((e) => e.isClassification && e.id === classificationId);
             if (real) return { cls: real, isVirtual: false };
@@ -2705,12 +2730,14 @@
             return null;
         }
         // Every classification actually selectable for a Pantalla's own
-        // columns: its own real ones (menu.json) first, then the 2
-        // universal ones (skipped if this Pantalla happens to already have
-        // its own real classification using that same id, e.g. Nuestras
-        // Unidades' pilot screen already has a REAL "class-por-definir").
+        // columns: its own real ones (menu.json) first, then the universal
+        // ones (skipped if this Pantalla happens to already have its own
+        // real classification using that same id, e.g. Nuestras Unidades'
+        // pilot screen already has a REAL "class-por-definir"). Botones/
+        // Acciones are excluded even when real (FIXED_CLASSIFICATION_IDS)
+        // -- nothing reassigns into or out of them.
         function availableClassificationsFor(subSm) {
-            const real = (subSm.submenu || []).filter((e) => e.isClassification);
+            const real = (subSm.submenu || []).filter((e) => e.isClassification && !FIXED_CLASSIFICATION_IDS.has(e.id));
             const universal = UNIVERSAL_CLASSIFICATIONS.filter((u) => !real.some((r) => r.id === u.id));
             return [...real, ...universal];
         }
@@ -2735,6 +2762,10 @@
             }
             (subSm.submenu || []).forEach((entry) => {
                 if (entry.isClassification) {
+                    // "Botones" lives outside Tabla entirely now (see
+                    // renderStatusButtons) -- fixed, not one of Tabla's own
+                    // reassignable column categories.
+                    if (entry.id === 'class-botones') return;
                     looseRun = null;
                     const ownGroup = targetGroupFor(entry, false);
                     (entry.submenu || []).forEach((col) => {
@@ -2744,7 +2775,11 @@
                             ? resolveOverrideTargetClassification(override.classificationId, subSm)
                             : null;
                         const row = { col, base, structuralClsId: entry.id };
-                        if (resolved) targetGroupFor(resolved.cls, resolved.isVirtual).columns.push(row);
+                        // A stale override pointing at "class-botones" (no
+                        // longer offered by availableClassificationsFor,
+                        // see FIXED_CLASSIFICATION_IDS) falls back to this
+                        // column's own real group instead of vanishing.
+                        if (resolved && resolved.cls.id !== 'class-botones') targetGroupFor(resolved.cls, resolved.isVirtual).columns.push(row);
                         else ownGroup.columns.push(row);
                     });
                 } else {
@@ -2752,7 +2787,7 @@
                     const override = classificationOverrides.get(keyOf(section.id, item.id, base));
                     const resolved = override ? resolveOverrideTargetClassification(override.classificationId, subSm) : null;
                     const row = { col: entry, base, structuralClsId: null };
-                    if (resolved) {
+                    if (resolved && resolved.cls.id !== 'class-botones') {
                         looseRun = null;
                         targetGroupFor(resolved.cls, resolved.isVirtual).columns.push(row);
                     } else {
@@ -2761,7 +2796,13 @@
                     }
                 }
             });
-            return groups.filter((g) => g.columns.length);
+            const filtered = groups.filter((g) => g.columns.length);
+            // "Acciones" always leads Tabla's own groups when present --
+            // confirmed with the user: fixed, first, then the reassignable
+            // column categories (Control Interno, Nuestras Unidades...).
+            const accionesIdx = filtered.findIndex((g) => g.cls && g.cls.id === 'class-acciones');
+            if (accionesIdx > 0) filtered.unshift(filtered.splice(accionesIdx, 1)[0]);
+            return filtered;
         }
         // Writes (or, picking a column's own real classification again,
         // clears) one override and repaints -- renderStatusTree() is the
@@ -2812,6 +2853,11 @@
         }
 
         function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked, sm, subSm, cls, structuralClsId) {
+            // Botones/Acciones (FIXED_CLASSIFICATION_IDS) are actions, not
+            // data with a reassignable category or a 4-level lifecycle --
+            // this one flag drives every difference below (fixed badge
+            // instead of a <select>, no drag, 2 levels instead of 4).
+            const isFixedClassification = !!(cls && FIXED_CLASSIFICATION_IDS.has(cls.id));
             // Vista Previa here highlights this one column inside its own
             // real table (Web) / field list (App) -- gated on the OWNING
             // pantalla being built, same rule as the pantalla's own preview.
@@ -2828,8 +2874,10 @@
             // renderStatusTableColumns below) never drags, same as every
             // level above guards a group that genuinely has nothing else
             // in it (a Pantalla only ever has one or two standalone
-            // columns in practice).
-            const columnDragCtx = (cls && dragAllowed) ? {
+            // columns in practice). A fixed classification's own order
+            // comes from menu.json, never draggable either -- same as
+            // Iconos Personalización.
+            const columnDragCtx = (cls && dragAllowed && !isFixedClassification) ? {
                 kind: 'columna',
                 id: col.id,
                 scope: `${section.id}::${item.id}::${sm.id}::${subSm.id}::${cls.id}`,
@@ -2844,7 +2892,9 @@
             // hidden until its OWN chevron is opened, one column at a time.
             const colTreeKey = `col::${section.id}::${item.id}::${base}`;
             const colExpanded = expandedItems.has(colTreeKey);
-            const classificationCtx = buildClassificationCtx(colKey, cls ? cls.id : null, structuralClsId, subSm, null);
+            const classificationCtx = isFixedClassification
+                ? buildFixedClassificationCtx(cls.id, cls.labelKey, cls.labelParams)
+                : buildClassificationCtx(colKey, cls ? cls.id : null, structuralClsId, subSm, null);
             container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, colKey, {
                 expanded: colExpanded,
                 onToggle: () => {
@@ -2853,16 +2903,26 @@
                 },
             }, computeNodeRollup(colKey), null, ancestorLocked, columnDragCtx, previewInfo, classificationCtx));
             if (!colExpanded) return;
-            // Same 4 grant-levels the regular (non-statusMode) column row
-            // already offers (Ver y Operar/Editar/Autorizar/Eliminar, see
-            // COLUMN_STATUS_LEVELS above) -- each now gets its own
-            // independent Estatus/Web·App/$ cost row too, one level under
-            // the column itself. Never draggable, no preview of their own
+            // A real data column keeps its own 4 grant-levels (Ver y
+            // Operar/Editar/Autorizar/Eliminar, see COLUMN_STATUS_LEVELS);
+            // Botones/Acciones only ever offer Operar/Autorizar (see
+            // BUTTON_STATUS_LEVELS -- "qué lógica da, eliminar un botón?").
+            // Each now gets its own independent Estatus/Web·App/$ cost row
+            // too, one level under the column itself, and shows the SAME
+            // classification its own column row just showed above --
+            // never its own <select>, just a read-only echo (nothing to
+            // reassign one level at a time; the column above is the one
+            // real target). Never draggable, no preview of their own
             // (they're not a real screen/field, just a grant tier).
-            COLUMN_STATUS_LEVELS.forEach((level) => {
+            const levelClassificationCtx = isFixedClassification ? classificationCtx : (readOnly ? null : {
+                readOnlyLabel: cls ? t(cls.labelKey, cls.labelParams) : t('menu.classNone'),
+                readOnlyColor: classificationColor(cls ? cls.id : null),
+            });
+            const levels = isFixedClassification ? BUTTON_STATUS_LEVELS : COLUMN_STATUS_LEVELS;
+            levels.forEach((level) => {
                 const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
                 if (grantOrderMode && !subtreeHasGrant(levelKey)) return;
-                container.appendChild(statusRow(t(level.labelKey), depth + 1, levelKey, null, selfStateRollup(levelKey), null, ancestorLocked, null, null));
+                container.appendChild(statusRow(t(level.labelKey), depth + 1, levelKey, null, selfStateRollup(levelKey), null, ancestorLocked, null, null, levelClassificationCtx));
             });
         }
 
@@ -2876,13 +2936,17 @@
             // columns' 4 levels -- never draggable.
             const classKey = keyOf(section.id, item.id, classBase);
             const columns = effectiveColumns || (cls.submenu || []).map((col) => ({ col, base: `${classBase}/${col.id}`, structuralClsId: cls.id }));
-            // "Move this whole group" only offered on a REAL classification
-            // (isVirtual ones are just an aggregation of columns that came
-            // from all over the Pantalla -- there's no single coherent
-            // "home" to bulk-move together).
-            const classificationCtx = isVirtual ? null : buildClassificationCtx(
-                classKey, cls.id, cls.id, subSm, columns.map(({ base }) => keyOf(section.id, item.id, base)),
-            );
+            // "Move this whole group" only offered on a REAL, reassignable
+            // classification -- isVirtual ones are just an aggregation of
+            // columns that came from all over the Pantalla (nothing
+            // coherent to bulk-move together), and "Acciones" is fixed
+            // (FIXED_CLASSIFICATION_IDS) so it gets the same read-only
+            // badge treatment as its own columns below, never a <select>.
+            const classificationCtx = FIXED_CLASSIFICATION_IDS.has(cls.id)
+                ? buildFixedClassificationCtx(cls.id, cls.labelKey, cls.labelParams)
+                : (isVirtual ? null : buildClassificationCtx(
+                    classKey, cls.id, cls.id, subSm, columns.map(({ base }) => keyOf(section.id, item.id, base)),
+                ));
             container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, classKey, {
                 expanded: classExpanded,
                 onToggle: () => {
@@ -2895,6 +2959,39 @@
                 const colKey = keyOf(section.id, item.id, base);
                 if (grantOrderMode && !subtreeHasGrant(colKey)) return;
                 renderStatusColumn(container, section, item, base, col, 6, ancestorLocked, sm, subSm, cls, structuralClsId);
+            });
+        }
+
+        // "Botones" -- sibling of Tabla/Iconos Personalización now, not one
+        // of Tabla's own reassignable column categories (confirmed with
+        // the user: "si ya son botones, ya deben estar definidos en la
+        // categoría botones... solo deben estar en esa clasificación").
+        // Same shape as renderStatusIcons below (own fixed group row, only
+        // rendered when this Pantalla actually has real buttons), just
+        // reusing renderStatusColumn directly for each button -- passing
+        // the real class-botones node as `cls` is what makes
+        // renderStatusColumn's own FIXED_CLASSIFICATION_IDS check treat
+        // each button as fixed/2-level automatically, no separate render
+        // path needed.
+        function renderStatusButtons(container, section, item, sm, subSm, ancestorLocked) {
+            const botonesNode = (subSm.submenu || []).find((e) => e.isClassification && e.id === 'class-botones');
+            if (!botonesNode || !botonesNode.submenu || !botonesNode.submenu.length) return;
+            const buttonsTreeKey = `buttons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const buttonsExpanded = expandedItems.has(buttonsTreeKey);
+            const buttonsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${botonesNode.id}`);
+            container.appendChild(statusRow(t(botonesNode.labelKey, botonesNode.labelParams), 4, buttonsKey, {
+                expanded: buttonsExpanded,
+                onToggle: () => {
+                    if (buttonsExpanded) expandedItems.delete(buttonsTreeKey);
+                    else expandedItems.add(buttonsTreeKey);
+                },
+            }, computeNodeRollup(buttonsKey), null, ancestorLocked, null, null, buildFixedClassificationCtx(botonesNode.id, botonesNode.labelKey, botonesNode.labelParams)));
+            if (!buttonsExpanded) return;
+            botonesNode.submenu.forEach((btn) => {
+                const base = `${sm.id}/${subSm.id}/${botonesNode.id}/${btn.id}`;
+                const btnKey = keyOf(section.id, item.id, base);
+                if (grantOrderMode && !subtreeHasGrant(btnKey)) return;
+                renderStatusColumn(container, section, item, base, btn, 5, ancestorLocked, sm, subSm, botonesNode, botonesNode.id);
             });
         }
 
@@ -3061,6 +3158,13 @@
                     addChild(colKey, keyOf(sectionId, itemId, `${colBase}/${level.id}`));
                 });
             };
+            // Same idea, for a Botones/Acciones entry's own reduced 2
+            // levels (see BUTTON_STATUS_LEVELS).
+            const addButtonLevels = (colKey, sectionId, itemId, colBase) => {
+                BUTTON_STATUS_LEVELS.forEach((level) => {
+                    addChild(colKey, keyOf(sectionId, itemId, `${colBase}/${level.id}`));
+                });
+            };
             sectionsData.forEach((section) => {
                 const sectionKey = keyOf(section.id, null, null);
                 (section.items || []).forEach((item) => {
@@ -3081,6 +3185,23 @@
                             // Clasificación's own columns) nests under ITS
                             // key, not directly under the Pantalla's,
                             // exactly matching the real render tree.
+                            // "Botones" (see renderStatusButtons) is a
+                            // sibling of "Tabla X"/"Iconos Personalización"
+                            // now, not one of Tabla's own reassignable
+                            // categories -- each button nests under ITS
+                            // key, with BUTTON_STATUS_LEVELS underneath
+                            // instead of COLUMN_STATUS_LEVELS's 4.
+                            const botonesNode = (subSm.submenu || []).find((e) => e.isClassification && e.id === 'class-botones');
+                            if (botonesNode && botonesNode.submenu && botonesNode.submenu.length) {
+                                const buttonsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${botonesNode.id}`);
+                                addChild(subKey, buttonsKey);
+                                botonesNode.submenu.forEach((btn) => {
+                                    const btnBase = `${sm.id}/${subSm.id}/${botonesNode.id}/${btn.id}`;
+                                    const btnKey = keyOf(section.id, item.id, btnBase);
+                                    addChild(buttonsKey, btnKey);
+                                    addButtonLevels(btnKey, section.id, item.id, btnBase);
+                                });
+                            }
                             if (subSm.submenu && subSm.submenu.length) {
                                 const tableKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`);
                                 addChild(subKey, tableKey);
@@ -3089,20 +3210,24 @@
                                 // from the SAME function so rollups/count badges
                                 // can never disagree with what's on screen.
                                 getEffectiveTableGroups(section, item, sm, subSm).forEach((group) => {
+                                    // "Acciones" is fixed/2-level too, same as
+                                    // Botones above, just still inside Tabla
+                                    // (see FIXED_CLASSIFICATION_IDS).
+                                    const addLevels = (group.cls && FIXED_CLASSIFICATION_IDS.has(group.cls.id)) ? addButtonLevels : addColumnLevels;
                                     if (group.cls) {
                                         const clsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${group.cls.id}`);
                                         addChild(tableKey, clsKey);
                                         group.columns.forEach(({ base }) => {
                                             const colKey = keyOf(section.id, item.id, base);
                                             addChild(clsKey, colKey);
-                                            addColumnLevels(colKey, section.id, item.id, base);
+                                            addLevels(colKey, section.id, item.id, base);
                                         });
                                         return;
                                     }
                                     group.columns.forEach(({ base }) => {
                                         const colKey = keyOf(section.id, item.id, base);
                                         addChild(tableKey, colKey);
-                                        addColumnLevels(colKey, section.id, item.id, base);
+                                        addLevels(colKey, section.id, item.id, base);
                                     });
                                 });
                             }
@@ -3598,13 +3723,23 @@
                             } : null, hasStatusChildren(key) ? computeNodeRollup(key) : selfStateRollup(key), null, subSmAncestorLocked, pantallaDragCtx, previewInfo, buildLevelBadgeCtx('pantalla')));
                             if (subHasDetail && subDetailExpanded) {
                                 const detailAncestorLocked = subSmAncestorLocked || nodeWebOff(key);
-                                if (subSm.submenu && subSm.submenu.length
-                                    && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`)))) {
-                                    renderStatusTableColumns(treeRoot, section, item, sm, subSm, detailAncestorLocked);
+                                // Order matches the agreed screen shape --
+                                // Botones, Iconos Personalizados, Tabla,
+                                // always in that order, each an independent
+                                // sibling (see renderStatusButtons' own
+                                // comment for why Botones moved out of Tabla).
+                                const botonesNode = (subSm.submenu || []).find((e) => e.isClassification && e.id === 'class-botones');
+                                if (botonesNode && botonesNode.submenu && botonesNode.submenu.length
+                                    && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${botonesNode.id}`)))) {
+                                    renderStatusButtons(treeRoot, section, item, sm, subSm, detailAncestorLocked);
                                 }
                                 if (subSm.iconsSubmenu && subSm.iconsSubmenu.length
                                     && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`)))) {
                                     renderStatusIcons(treeRoot, section, item, sm, subSm, detailAncestorLocked);
+                                }
+                                if (subSm.submenu && subSm.submenu.length
+                                    && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`)))) {
+                                    renderStatusTableColumns(treeRoot, section, item, sm, subSm, detailAncestorLocked);
                                 }
                             }
                         });
