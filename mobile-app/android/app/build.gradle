@@ -16,7 +16,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Checked-in debug keystore (ci-debug.keystore, alias/passwords match the
+    // Android-standard debug key) instead of relying on the implicit
+    // $HOME/.android/debug.keystore -- that one is generated fresh per
+    // machine, so a CI runner's throwaway one would sign every build with a
+    // different key and break installing an update over a previous build.
+    // This exists to make the download from Login.html always installable
+    // as an update to the last one, not just a fresh install.
+    signingConfigs {
+        debug {
+            storeFile file('ci-debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

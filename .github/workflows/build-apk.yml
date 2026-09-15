@@ -1,0 +1,90 @@
+name: Build downloadable APK
+
+# Builds mobile-app/ into public/downloads/SGN-App.apk and commits the
+# result, so the icon on Login.html always has a current build without
+# anyone rebuilding it on their own machine. Runs in the cloud specifically
+# to avoid the local disk-space problems a prior manual Android Studio
+# build ran into.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'mobile-app/**'
+      - 'public/Login.html'
+      - 'public/Login.css'
+      - 'public/login.js'
+      - 'public/access-screen.js'
+      - 'public/AppConfig.js'
+      - 'public/ColorPalette.js'
+      - 'public/AppOfflineSync.js'
+      - 'public/PermissionTree.js'
+      - 'public/Admin.css'
+      - 'public/App*.html'
+      - 'public/App*.js'
+      - 'public/manifest.json'
+      - 'public/sw.js'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Refreshes the client-only App pages mobile-app/www copies from
+      # public/ (see mobile-app/sync-web-assets.js's own comment for why
+      # this list exists and what it deliberately excludes). Admin-only
+      # pages like AppAdminInicio.js live directly in mobile-app/www
+      # already and aren't touched by this step.
+      - name: Sync web assets into the native app
+        run: node mobile-app/sync-web-assets.js
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Capacitor CLI dependencies
+        working-directory: mobile-app
+        run: npm install
+
+      - name: Sync the Capacitor Android project
+        working-directory: mobile-app
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x mobile-app/android/gradlew
+
+      # Debug, not release: the project has never had a release signing
+      # config (confirmed -- no keystore/key.properties anywhere in the
+      # repo's history), every past "Publish rebuilt APK" commit shipped a
+      # debug build. app/build.gradle's debug signingConfig now points at
+      # the checked-in ci-debug.keystore instead of the implicit
+      # $HOME/.android/debug.keystore, so this always signs with the same
+      # key and installs cleanly as an update over the previous build.
+      - name: Build debug APK
+        working-directory: mobile-app/android
+        run: ./gradlew assembleDebug
+
+      - name: Publish APK to downloads
+        run: cp mobile-app/android/app/build/outputs/apk/debug/app-debug.apk public/downloads/SGN-App.apk
+
+      - name: Commit the updated APK
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/downloads/SGN-App.apk
+          if git diff --cached --quiet; then
+            echo "APK unchanged, nothing to commit."
+          else
+            git commit -m "Auto-rebuild downloadable APK [skip ci]"
+            git push
+          fi
