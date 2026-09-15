@@ -226,13 +226,27 @@ loginForm?.addEventListener('submit', async (event) => {
         // account's saved default Departamento/Área/Centro de Costos instead
         // of whatever's left over in localStorage from a previous session.
         sessionStorage.setItem('applyLoginDefaults', '1');
-        // Absolute, not relative -- this same login.js is also served under
-        // /mobile/Login.html (see server.js) for browser-testing the App
-        // without an Android build, and a relative redirect there resolved
-        // to /mobile/Inicio-en.html, which doesn't exist (confirmed live:
-        // 404). The dashboard only ever lives at the site root regardless
-        // of which prefix served the login page itself.
-        window.location.href = '/Inicio-en.html';
+        // This file is also bundled into the native app (mobile-app/www/) --
+        // access-screen.js takes over the whole login UI there and never
+        // lets this handler run, but a browser-tested /mobile/Login.html or
+        // a homescreen-installed PWA (no window.Capacitor, so access-
+        // screen.js bails out immediately) still reaches this exact code.
+        // '/Inicio-en.html' is an absolute, desktop-only path that doesn't
+        // exist in that bundle at all -- confirmed dead there. GEIPSA staff
+        // (role 'admin') need the separate Panel Admin shell regardless of
+        // which context served this page, same role check access-screen.js
+        // already does for its own two login paths.
+        let nextPage = '/Inicio-en.html';
+        if (window.Capacitor?.isNativePlatform?.()) {
+            try {
+                const meRes = await fetch(apiUrl('/api/me'), { credentials: 'include' });
+                const meData = meRes.ok ? await meRes.json() : null;
+                nextPage = meData?.user?.role === 'admin' ? 'AppAdminInicio.html' : 'AppInicio.html';
+            } catch {
+                nextPage = 'AppInicio.html';
+            }
+        }
+        window.location.href = nextPage;
     } catch (err) {
         console.error(err);
         showError(t('login.genericError'));

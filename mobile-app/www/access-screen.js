@@ -114,9 +114,22 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
     // moved: AppInicio.js's own fresh /api/me check still bounces back to
     // Login.html the moment the server gives a genuine, reliable 401.
     let hasSession = localStorage.getItem(HAD_SESSION_KEY) === '1';
+    // Role from THIS exact successful response, reused below by
+    // resolveHomeScreen() instead of firing a second /api/me — confirmed
+    // live (2026-09-15) that the second, independent fetch was the actual
+    // failure point: right at cold app start (fresh install, first
+    // launch) the network/TLS stack can still be warming up, so a call
+    // that raced moments after this already-successful one could come
+    // back rejected/failed on its own, silently defaulting an admin
+    // account to the client shell even though the session was perfectly
+    // valid the whole time (this one response proves it). Only ever read
+    // once, right after this fetch settles -- never re-checked later, so
+    // it can't itself go stale within this screen's short lifetime.
+    let cachedUser = null;
     if (sessionResult.status === 'fulfilled' && sessionResult.value.ok) {
         hasSession = true;
         localStorage.setItem(HAD_SESSION_KEY, '1');
+        try { cachedUser = (await sessionResult.value.json()).user || null; } catch { /* fall through to a fresh fetch in resolveHomeScreen */ }
     }
     const biometry = biometryResult.status === 'fulfilled' ? biometryResult.value : null;
 
@@ -229,13 +242,26 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
     // department/área gracefully while AppAdminInicio.html would be the
     // wrong screen entirely for an actual client account.
     async function resolveHomeScreen() {
-        try {
-            const res = await fetch(apiUrl('/api/me'), { credentials: 'include' });
-            if (!res.ok) return 'AppInicio.html';
-            const data = await res.json();
-            return data.user?.role === 'admin' ? 'AppAdminInicio.html' : 'AppInicio.html';
-        } catch {
-            return 'AppInicio.html';
+        // The biometric-resume path already has this from the successful
+        // /api/me at the top of initAccessScreen — reusing it instead of
+        // firing a second request is the actual fix (see cachedUser's own
+        // comment above); the password-login path below has no such
+        // earlier check, so it still needs a real fetch here.
+        if (cachedUser) return cachedUser.role === 'admin' ? 'AppAdminInicio.html' : 'AppInicio.html';
+        // One retry, not zero -- confirmed live that a single failed
+        // attempt right after a network-sensitive moment (cold app start,
+        // a login POST that just barely completed) can be transient; a
+        // real 401 (genuinely not logged in) still fails BOTH attempts
+        // and correctly falls through to the client default below.
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const res = await fetch(apiUrl('/api/me'), { credentials: 'include' });
+                if (!res.ok) return 'AppInicio.html';
+                const data = await res.json();
+                return data.user?.role === 'admin' ? 'AppAdminInicio.html' : 'AppInicio.html';
+            } catch {
+                if (attempt === 1) return 'AppInicio.html';
+            }
         }
     }
 
