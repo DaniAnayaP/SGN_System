@@ -758,18 +758,37 @@ function buildSidebarData(data, role, activePage) {
     const saasConfigSubmenuOrdered = applySaasSidebarOrder(saasConfigSubmenu, 'saasConfig', SAAS_CONFIG_SAAS_ORDER_IDS);
     const customerServiceItem = {
         id: 'admin-servicio-cliente', labelKey: 'menu.customerService', icon: 'bx-support', submenu: customerServiceSubmenuOrdered,
-        abbrKeys: ['menu.customerServiceAbbr1', 'menu.customerServiceAbbr2'],
+        abbrKeys: ['menu.customerServiceAbbr1', 'menu.customerServiceAbbr2'], saasGroupId: 'customerService',
     };
     const saasConfigItem = {
         id: 'admin-config-saas', labelKey: 'menu.saasConfig', icon: 'bx-cog', submenu: saasConfigSubmenuOrdered,
-        abbrKeys: ['menu.saasConfigAbbr1', 'menu.saasConfigAbbr2'],
+        abbrKeys: ['menu.saasConfigAbbr1', 'menu.saasConfigAbbr2'], saasGroupId: 'saasConfig',
     };
     if (role !== 'admin') return data;
 
     const mainSection = data.sections.find((s) => s.id === 'main');
     const home = mainSection?.items.find((i) => i.id === 'home');
     const dashboard = mainSection?.items.find((i) => i.id === 'dashboard');
-    return { ...data, sections: [{ id: 'main', items: [home, dashboard, customerServiceItem, saasConfigItem].filter(Boolean) }] };
+    // The 2 category dropdowns themselves are also reorderable in Árbol
+    // Maestro SaaS (order.groups) -- confirmed live this was STILL missed
+    // even after fixing each group's own internal screen order: dragging
+    // "Configuración SaaS" above "Servicio a Cliente" and saving left these
+    // two exactly where they always were. Same applySaasSidebarOrder logic,
+    // keyed by the group's own saasGroupId rather than a per-screen id.
+    const groupOrderIds = cachedSaasMasterOrder?.groups;
+    let orderedGroupItems = [customerServiceItem, saasConfigItem];
+    if (groupOrderIds && groupOrderIds.length) {
+        const byGroupId = new Map(orderedGroupItems.map((item) => [item.saasGroupId, item]));
+        const used = new Set();
+        const ordered = [];
+        groupOrderIds.forEach((groupId) => {
+            const item = byGroupId.get(groupId);
+            if (item && !used.has(item)) { ordered.push(item); used.add(item); }
+        });
+        orderedGroupItems.forEach((item) => { if (!used.has(item)) ordered.push(item); });
+        orderedGroupItems = ordered;
+    }
+    return { ...data, sections: [{ id: 'main', items: [home, dashboard, ...orderedGroupItems].filter(Boolean) }] };
 }
 
 // --- Department picker --------------------------------------------------------
