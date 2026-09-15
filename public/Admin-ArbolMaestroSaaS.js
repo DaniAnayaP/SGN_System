@@ -188,6 +188,7 @@ function toggleBtn(key, expanded) {
     btn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
     btn.addEventListener('click', () => {
         if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
+        persistCollapsed();
         renderList();
     });
     return btn;
