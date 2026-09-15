@@ -53,7 +53,12 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          # @capacitor/android's own build.gradle hardcodes
+          # sourceCompatibility/targetCompatibility to JavaVersion.VERSION_21
+          # (confirmed in mobile-app/node_modules/@capacitor/android/capacitor/
+          # build.gradle) -- javac fails with "invalid source release: 21"
+          # under any older JDK.
+          java-version: '21'
 
       - name: Install Capacitor CLI dependencies
         working-directory: mobile-app
