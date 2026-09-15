@@ -2350,6 +2350,15 @@ body.dark-mode .perm-tree-gate-icon-blocked{
     border-radius: 0.6rem;
     padding: 0.4rem;
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 42rem;
+    /* Positioning context for .perm-tree-nest-guide (absolutely positioned
+       dashed lines, appended straight into this element by drawGuides in
+       Admin-ArbolMaestroSaaS.js) -- same reasoning as .perm-tree's own
+       position:relative above. Also what lets .perm-tree-mstatus-header's
+       position:sticky actually stick to something bounded instead of the
+       whole page scrolling past it. */
+    position: relative;
 }
 .saas-master-status-list .perm-tree-row{
     min-width: max-content;

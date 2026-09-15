@@ -1,13 +1,13 @@
 // ---------------------------------------------------------------------------
 // "Árbol Maestro SaaS" -- GEIPSA-wide readiness status (Habilitado/
 // Inhabilitado/Construcción/Mejoras + Web/App) for the SaaS team's OWN
-// internal screens, now at FULL DEPTH (Grupo -> Pantalla -> Apartado/Tabla/
+// internal screens, at FULL DEPTH (Grupo -> Pantalla -> Apartado/Tabla/
 // Modal -> Columna/Acción) -- same structure and visual language as Árbol
 // de Permisos Maestro (PermissionTree.js statusMode), driven by
 // SaasAdminCatalog.js instead of data/menu.json. Reuses the same DB tables
 // (saas_master_status/saas_master_order) this screen already had as a flat
-// 3-row list -- now keyed by many more leaf ids (see buildLeafId), never
-// touches master_permission_status/master_permission_order.
+// 3-row list -- now keyed by many more leaf ids, never touches
+// master_permission_status/master_permission_order.
 //
 // Deliberately its own small renderer, not PermissionTree.js itself -- that
 // file's statusMode is tightly coupled to data/menu.json's own fetch/shape
@@ -19,7 +19,9 @@
 // No $ Web / $ App cost columns here (unlike the client tree) -- pricing
 // doesn't apply to GEIPSA's own internal tooling, only to what clients pay
 // for. Every other column (Estatus, Web/App checkboxes, aplicar-a-anidados,
-// count badge, drag-reorder, Navegar) matches the client tree exactly.
+// count badge, drag-reorder, Navegar, dashed nest guides) matches the
+// client tree, down to Columna/Acción level -- confirmed with the user this
+// needed to go deeper than Árbol de Permisos Maestro's own reorder scope.
 // ---------------------------------------------------------------------------
 
 const STATUS_OPTIONS = [
@@ -45,44 +47,37 @@ function deviceIconSvg(platform, mark) {
 const CATALOG = window.SAAS_ADMIN_CATALOG;
 const CI_LABEL = window.SAAS_ADMIN_CONTROL_INTERNO_LABEL;
 
-// Every leaf/apartado gets a stable id from its POSITION in the catalog
-// (screen -> apartado -> column/acción index) rather than a hand-typed
-// unique string per leaf -- ~150 leaves across 9 screens would otherwise
-// mean ~150 hand-kept-unique ids. Stable as long as SaasAdminCatalog.js's
-// own array order doesn't change once real statuses are saved in
-// production (reordering the CATALOG itself would silently move a saved
-// status onto the wrong leaf) -- append new leaves at the end, don't
-// reorder existing ones.
 function apartadoKey(screen, apartado) {
     return `${screen.itemId}::${apartado.id}`;
 }
-function columnKey(screen, apartado, idx) {
-    return `${apartadoKey(screen, apartado)}::c${idx}`;
+// Every column/acción/Control-Interno leaf gets a small stable suffix
+// ('c0','c1',...,'ci','a0',...) instead of a hand-typed unique string --
+// this suffix is what's actually stored in saas_master_status, so it must
+// never change once real statuses exist in production even if the leaf's
+// DISPLAY position later moves via drag-reorder (see leavesByApartado --
+// reordering only changes a separate order list, never these keys).
+function buildLeaves(apartado) {
+    const leaves = [];
+    (apartado.columnas || []).forEach((label, idx) => leaves.push({ suffix: `c${idx}`, label, kind: 'col' }));
+    if (apartado.controlInterno) leaves.push({ suffix: 'ci', label: CI_LABEL, kind: 'ci' });
+    (apartado.acciones || []).forEach((label, idx) => leaves.push({ suffix: `a${idx}`, label, kind: 'action' }));
+    return leaves;
 }
-function actionKey(screen, apartado, idx) {
-    return `${apartadoKey(screen, apartado)}::a${idx}`;
-}
-function ciKey(screen, apartado) {
-    return `${apartadoKey(screen, apartado)}::ci`;
+function leafKey(screen, apartado, leaf) {
+    return `${apartadoKey(screen, apartado)}::${leaf.suffix}`;
 }
 
-// Every leaf key that actually carries its own Estatus/Web-App state (used
-// for rollup computation and for the "aplicar a anidados" cascade) --
-// columns, actions and the bundled Control Interno node, NOT the apartado
-// container itself (static, like the client tree's own "Tabla <X>"
-// heading) and NOT the group/screen rows (their own rollup is computed
-// FROM these, never stored directly).
-function collectLeafKeys(scope) {
+function collectLeafKeysForScreens(screens) {
     const keys = [];
-    const screens = scope.screens || [scope.screen];
     for (const screen of screens) {
         for (const apartado of screen.apartados) {
-            (apartado.columnas || []).forEach((_, idx) => keys.push(columnKey(screen, apartado, idx)));
-            if (apartado.controlInterno) keys.push(ciKey(screen, apartado));
-            (apartado.acciones || []).forEach((_, idx) => keys.push(actionKey(screen, apartado, idx)));
+            buildLeaves(apartado).forEach((leaf) => keys.push(leafKey(screen, apartado, leaf)));
         }
     }
     return keys;
+}
+function collectLeafKeysForApartado(screen, apartado) {
+    return buildLeaves(apartado).map((leaf) => leafKey(screen, apartado, leaf));
 }
 
 const listEl = document.getElementById('saas-master-status-list');
@@ -90,11 +85,16 @@ const saveBtn = document.getElementById('saas-master-status-save');
 const errorEl = document.getElementById('saas-master-status-error');
 
 let statuses = [];
-// order: { groups: [groupId,...], screensByGroup: { groupId: [itemId,...] } }
-let order = { groups: CATALOG.map((g) => g.groupId), screensByGroup: {} };
+// order: { groups, screensByGroup: {groupId:[itemId]}, apartadosByScreen:
+// {itemId:[apartadoId]}, leavesByApartado: {"screenId::apartadoId":[suffix]} }
+let order = { groups: CATALOG.map((g) => g.groupId), screensByGroup: {}, apartadosByScreen: {}, leavesByApartado: {} };
 CATALOG.forEach((g) => { order.screensByGroup[g.groupId] = g.screens.map((s) => s.itemId); });
 let draggedId = null;
-const collapsed = new Set(); // keys currently collapsed (default: everything expanded except columns detail -- keep simple, everything expanded)
+// Only apartado/screen/group collapse state lives here -- "General" is a
+// permanent, non-collapsible summary card (see renderList), same
+// relationship it always had to the real rows in this screen's original
+// 3-row version, just now sitting above 2 groups instead of 3 screens.
+const collapsed = new Set();
 
 function getState(key) {
     return statuses.find((s) => s.itemId === key) || { itemId: key, status: 'habilitado', webEnabled: true, appEnabled: false };
@@ -102,9 +102,6 @@ function getState(key) {
 function setState(key, next) {
     statuses = statuses.filter((s) => s.itemId !== key);
     statuses.push({ itemId: key, ...next });
-}
-function cascadeState(keys, next) {
-    keys.forEach((key) => setState(key, { ...getState(key), ...next }));
 }
 
 function computeRollup(keys, platform) {
@@ -115,28 +112,51 @@ function computeRollup(keys, platform) {
     return 'partial';
 }
 
+function reorderList(list, fromId, toId) {
+    const next = list.filter((id) => id !== fromId);
+    next.splice(next.indexOf(toId), 0, fromId);
+    return next;
+}
 function orderedGroups() {
     return order.groups.map((id) => CATALOG.find((g) => g.groupId === id)).filter(Boolean);
 }
 function orderedScreens(group) {
-    const ids = order.screensByGroup[group.groupId] || group.screens.map((s) => s.itemId);
-    return ids.map((id) => group.screens.find((s) => s.itemId === id)).filter(Boolean);
+    const saved = (order.screensByGroup[group.groupId] || []).filter((id) => group.screens.some((s) => s.itemId === id));
+    const rest = group.screens.map((s) => s.itemId).filter((id) => !saved.includes(id));
+    return [...saved, ...rest].map((id) => group.screens.find((s) => s.itemId === id));
+}
+function orderedApartados(screen) {
+    const allIds = screen.apartados.map((a) => a.id);
+    const saved = (order.apartadosByScreen[screen.itemId] || []).filter((id) => allIds.includes(id));
+    const rest = allIds.filter((id) => !saved.includes(id));
+    return [...saved, ...rest].map((id) => screen.apartados.find((a) => a.id === id));
+}
+function orderedLeaves(screen, apartado) {
+    const all = buildLeaves(apartado);
+    const aKey = apartadoKey(screen, apartado);
+    const allSuffixes = all.map((l) => l.suffix);
+    const saved = (order.leavesByApartado[aKey] || []).filter((s) => allSuffixes.includes(s));
+    const rest = allSuffixes.filter((s) => !saved.includes(s));
+    const bySuffix = new Map(all.map((l) => [l.suffix, l]));
+    return [...saved, ...rest].map((s) => bySuffix.get(s));
 }
 
 function makeDraggable(el, { list, id, onReorder }) {
     el.classList.add('perm-tree-row-draggable');
     el.draggable = true;
-    el.addEventListener('dragstart', () => { draggedId = { list, id }; el.classList.add('perm-tree-row-dragging'); });
-    el.addEventListener('dragend', () => { draggedId = null; el.classList.remove('perm-tree-row-dragging'); });
+    el.addEventListener('dragstart', (e) => { draggedId = { list, id }; el.classList.add('perm-tree-row-dragging'); e.stopPropagation(); });
+    el.addEventListener('dragend', (e) => { draggedId = null; el.classList.remove('perm-tree-row-dragging'); e.stopPropagation(); });
     el.addEventListener('dragover', (e) => {
         if (!draggedId || draggedId.list !== list || draggedId.id === id) return;
         e.preventDefault();
+        e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
         el.classList.add('perm-tree-row-drop-target');
     });
-    el.addEventListener('dragleave', () => el.classList.remove('perm-tree-row-drop-target'));
+    el.addEventListener('dragleave', (e) => { el.classList.remove('perm-tree-row-drop-target'); e.stopPropagation(); });
     el.addEventListener('drop', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         el.classList.remove('perm-tree-row-drop-target');
         const from = draggedId;
         draggedId = null;
@@ -197,7 +217,6 @@ function labelEl(text) {
     el.title = text;
     return el;
 }
-
 function nestBtn(title, onClick) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -210,9 +229,10 @@ function nestBtn(title, onClick) {
 }
 
 // Full controls block (Estatus + aplicar-a-anidados + Web/App + Navegar) --
-// used by leaf rows (own key) and by group/screen rows (own key, computed
-// as the "set every descendant to this" cascade, same relationship
-// Departamento/Área have to their own Estatus in the real tree).
+// used by every real row (Grupo/Pantalla/Apartado/Columna/Acción) that
+// carries its own key, same as every row in Árbol de Permisos Maestro does
+// once it has one (see statusRow there) -- only "General" has no key/
+// controls of its own, it's a pure summary.
 function buildControls(key, descendantKeys, navigateHref) {
     const state = getState(key);
     const controls = document.createElement('div');
@@ -240,7 +260,7 @@ function buildControls(key, descendantKeys, navigateHref) {
     nestCell.className = 'perm-tree-mstatus-status-nest-cell';
     if (descendantKeys.length) {
         nestCell.appendChild(nestBtn('Aplicar Estatus a lo anidado', () => {
-            cascadeState(descendantKeys, { status: select.value });
+            descendantKeys.forEach((k) => setState(k, { ...getState(k), status: select.value }));
             renderList();
         }));
     }
@@ -313,31 +333,99 @@ function buildControls(key, descendantKeys, navigateHref) {
     return controls;
 }
 
+// Dashed vertical guides connecting an expanded row to the full block of
+// descendants directly under it -- same purely-decorative, computed-from-
+// real-positions idea as drawNestGuides in PermissionTree.js. Derived from
+// the depth classes already on each row rather than a separate parent-
+// child map: since rendering is depth-first, an expanded row's own
+// descendant block is exactly the run of immediately-following rows whose
+// depth is greater than its own, stopping at the first row that isn't.
+function drawGuides() {
+    listEl.querySelectorAll('.perm-tree-nest-guide').forEach((el) => el.remove());
+    const rows = Array.from(listEl.children).filter((el) => el.classList.contains('perm-tree-row'));
+    const containerRect = listEl.getBoundingClientRect();
+    const depthOf = (el) => {
+        const m = el.className.match(/perm-tree-depth-(\d+)/);
+        return m ? Number(m[1]) : -1;
+    };
+    rows.forEach((row, i) => {
+        const toggle = row.querySelector(':scope > .perm-tree-toggle[aria-expanded="true"]');
+        if (!toggle) return;
+        const depth = depthOf(row);
+        let last = null;
+        for (let j = i + 1; j < rows.length; j++) {
+            if (depthOf(rows[j]) <= depth) break;
+            last = rows[j];
+        }
+        if (!last) return;
+        const toggleRect = toggle.getBoundingClientRect();
+        const lastRect = last.getBoundingClientRect();
+        const guide = document.createElement('div');
+        guide.className = 'perm-tree-nest-guide';
+        guide.style.left = `${toggleRect.left - containerRect.left + toggleRect.width / 2 + listEl.scrollLeft}px`;
+        guide.style.top = `${toggleRect.bottom - containerRect.top + listEl.scrollTop}px`;
+        guide.style.height = `${Math.max(0, lastRect.top - toggleRect.bottom)}px`;
+        listEl.appendChild(guide);
+    });
+}
+
+function buildHeader() {
+    const header = document.createElement('div');
+    header.className = 'perm-tree-mstatus-header';
+    const spacerEl = document.createElement('span');
+    spacerEl.className = 'perm-tree-mstatus-header-spacer';
+    header.appendChild(spacerEl);
+    const labelHeader = document.createElement('span');
+    labelHeader.className = 'perm-tree-mstatus-header-label';
+    labelHeader.textContent = 'Pantalla / Apartado / Columna';
+    header.appendChild(labelHeader);
+    const controls = document.createElement('div');
+    controls.className = 'perm-tree-mstatus-header-controls';
+    const statusCol = document.createElement('span');
+    statusCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status';
+    statusCol.textContent = 'Estatus';
+    controls.appendChild(statusCol);
+    const nestCol = document.createElement('span');
+    nestCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status-nest';
+    controls.appendChild(nestCol);
+    const platformsCol = document.createElement('span');
+    platformsCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
+    platformsCol.textContent = 'Web · App';
+    controls.appendChild(platformsCol);
+    const navCol = document.createElement('span');
+    navCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-navigate';
+    navCol.innerHTML = '<i class="bx bx-link-external" aria-hidden="true"></i>';
+    controls.appendChild(navCol);
+    header.appendChild(controls);
+    return header;
+}
+
 function renderList() {
     listEl.innerHTML = '';
+    listEl.appendChild(buildHeader());
 
-    // General -- read-only rollup over every leaf in the whole catalog.
-    const allLeafKeys = collectLeafKeys({ screens: CATALOG.flatMap((g) => g.screens) });
+    // "General" -- a permanent, non-collapsible summary card, never a real
+    // parent row: Servicio a Cliente / Configuración SaaS always render as
+    // their own top-level rows right below it regardless of anything here
+    // (confirmed with the user after this collapsed the whole tree away --
+    // same relationship this screen's original 3-row version had between
+    // its own General row and the 3 real rows under it).
+    const allLeafKeys = collectLeafKeysForScreens(CATALOG.flatMap((g) => g.screens));
     const generalRow = document.createElement('div');
     generalRow.className = 'perm-tree-row perm-tree-depth-0 saas-master-status-row-general';
-    generalRow.appendChild(toggleBtn('__general__', !collapsed.has('__general__')));
+    generalRow.appendChild(spacer());
     generalRow.appendChild(rollupEl(computeRollup(allLeafKeys, 'web'), computeRollup(allLeafKeys, 'app')));
     generalRow.appendChild(labelEl(Dashboard.t('admin.saasMasterTreeGeneral')));
     generalRow.appendChild(countBadge(allLeafKeys.length));
     listEl.appendChild(generalRow);
-    if (collapsed.has('__general__')) { return; }
 
     orderedGroups().forEach((group) => {
-        const groupLeafKeys = collectLeafKeys({ screens: group.screens });
+        const groupLeafKeys = collectLeafKeysForScreens(group.screens);
         const groupRow = document.createElement('div');
         groupRow.className = 'perm-tree-row perm-tree-depth-0';
         makeDraggable(groupRow, {
             list: 'groups', id: group.groupId,
-            onReorder: (fromId, toId) => {
-                const next = order.groups.filter((id) => id !== fromId);
-                next.splice(next.indexOf(toId), 0, fromId);
-                order.groups = next;
-            },
+            onReorder: (fromId, toId) => { order.groups = reorderList(order.groups, fromId, toId); },
         });
         groupRow.appendChild(dragHandle());
         groupRow.appendChild(toggleBtn(`g:${group.groupId}`, !collapsed.has(`g:${group.groupId}`)));
@@ -348,17 +436,12 @@ function renderList() {
         if (collapsed.has(`g:${group.groupId}`)) return;
 
         orderedScreens(group).forEach((screen) => {
-            const screenLeafKeys = collectLeafKeys({ screens: [screen] });
+            const screenLeafKeys = collectLeafKeysForScreens([screen]);
             const screenRow = document.createElement('div');
             screenRow.className = 'perm-tree-row perm-tree-depth-1';
             makeDraggable(screenRow, {
                 list: `screens:${group.groupId}`, id: screen.itemId,
-                onReorder: (fromId, toId) => {
-                    const ids = order.screensByGroup[group.groupId];
-                    const next = ids.filter((id) => id !== fromId);
-                    next.splice(next.indexOf(toId), 0, fromId);
-                    order.screensByGroup[group.groupId] = next;
-                },
+                onReorder: (fromId, toId) => { order.screensByGroup[group.groupId] = reorderList(order.screensByGroup[group.groupId] || group.screens.map((s) => s.itemId), fromId, toId); },
             });
             screenRow.appendChild(dragHandle());
             screenRow.appendChild(toggleBtn(`s:${screen.itemId}`, !collapsed.has(`s:${screen.itemId}`)));
@@ -369,45 +452,34 @@ function renderList() {
             listEl.appendChild(screenRow);
             if (collapsed.has(`s:${screen.itemId}`)) return;
 
-            screen.apartados.forEach((apartado) => {
+            orderedApartados(screen).forEach((apartado) => {
                 const aKey = apartadoKey(screen, apartado);
-                const leafCount = (apartado.columnas ? apartado.columnas.length : 0) + (apartado.controlInterno ? 1 : 0) + (apartado.acciones ? apartado.acciones.length : 0);
+                const apLeafKeys = collectLeafKeysForApartado(screen, apartado);
                 const apRow = document.createElement('div');
-                apRow.className = 'perm-tree-row perm-tree-depth-2 perm-tree-row-static';
+                apRow.className = 'perm-tree-row perm-tree-depth-2';
+                makeDraggable(apRow, {
+                    list: `apartados:${screen.itemId}`, id: apartado.id,
+                    onReorder: (fromId, toId) => { order.apartadosByScreen[screen.itemId] = reorderList(order.apartadosByScreen[screen.itemId] || screen.apartados.map((a) => a.id), fromId, toId); },
+                });
+                apRow.appendChild(dragHandle());
                 apRow.appendChild(toggleBtn(`a:${aKey}`, !collapsed.has(`a:${aKey}`)));
+                apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
                 apRow.appendChild(labelEl(apartado.label));
-                apRow.appendChild(countBadge(leafCount));
+                apRow.appendChild(countBadge(apLeafKeys.length));
+                apRow.appendChild(buildControls(aKey, apLeafKeys, null));
                 listEl.appendChild(apRow);
                 if (collapsed.has(`a:${aKey}`)) return;
 
-                (apartado.columnas || []).forEach((colLabel, idx) => {
-                    const key = columnKey(screen, apartado, idx);
+                orderedLeaves(screen, apartado).forEach((leaf) => {
+                    const key = leafKey(screen, apartado, leaf);
                     const row = document.createElement('div');
-                    row.className = 'perm-tree-row perm-tree-depth-3';
-                    row.appendChild(spacer());
-                    row.appendChild(labelEl(colLabel));
-                    row.appendChild(countBadge(1));
-                    row.appendChild(buildControls(key, [], null));
-                    listEl.appendChild(row);
-                });
-
-                if (apartado.controlInterno) {
-                    const key = ciKey(screen, apartado);
-                    const row = document.createElement('div');
-                    row.className = 'perm-tree-row perm-tree-depth-3 perm-tree-row-classification';
-                    row.appendChild(spacer());
-                    row.appendChild(labelEl(CI_LABEL));
-                    row.appendChild(countBadge(13));
-                    row.appendChild(buildControls(key, [], null));
-                    listEl.appendChild(row);
-                }
-
-                (apartado.acciones || []).forEach((actLabel, idx) => {
-                    const key = actionKey(screen, apartado, idx);
-                    const row = document.createElement('div');
-                    row.className = 'perm-tree-row perm-tree-depth-3';
-                    row.appendChild(spacer());
-                    row.appendChild(labelEl(actLabel));
+                    row.className = `perm-tree-row perm-tree-depth-3${leaf.kind === 'ci' ? ' perm-tree-row-classification' : ''}`;
+                    makeDraggable(row, {
+                        list: `leaves:${aKey}`, id: leaf.suffix,
+                        onReorder: (fromId, toId) => { order.leavesByApartado[aKey] = reorderList(order.leavesByApartado[aKey] || buildLeaves(apartado).map((l) => l.suffix), fromId, toId); },
+                    });
+                    row.appendChild(dragHandle());
+                    row.appendChild(labelEl(leaf.label));
                     row.appendChild(countBadge(1));
                     row.appendChild(buildControls(key, [], null));
                     listEl.appendChild(row);
@@ -415,6 +487,15 @@ function renderList() {
             });
         });
     });
+
+    // setTimeout, not requestAnimationFrame -- rAF gets throttled/suspended
+    // on a backgrounded tab, which silently left every guide missing during
+    // live testing even though the exact same positioning logic worked fine
+    // when run by hand from the console right after. A 0ms timeout still
+    // waits for this paint to land (rows need real layout before
+    // getBoundingClientRect means anything) without depending on the tab
+    // actually being the visible/focused one.
+    setTimeout(drawGuides, 0);
 }
 
 async function load() {
@@ -427,12 +508,9 @@ async function load() {
         const statusData = await statusRes.json();
         const orderData = await orderRes.json();
         statuses = statusData.statuses || [];
-        // order payload shape: { groups, screensByGroup } -- same JSON blob
-        // saas_master_order already stores as ordered_items (one JSON array
-        // column), just carrying a richer shape than the old flat array.
         const saved = orderData.order;
         if (saved && typeof saved === 'object' && !Array.isArray(saved) && saved.groups) {
-            order = saved;
+            order = { groups: saved.groups || order.groups, screensByGroup: saved.screensByGroup || {}, apartadosByScreen: saved.apartadosByScreen || {}, leavesByApartado: saved.leavesByApartado || {} };
         }
         renderList();
     } catch {
@@ -473,6 +551,7 @@ saveBtn.addEventListener('click', async () => {
 });
 
 document.addEventListener('dashboard:language-changed', renderList);
+window.addEventListener('resize', () => setTimeout(drawGuides, 0));
 
 (async function init() {
     try {
