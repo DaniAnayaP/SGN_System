@@ -1998,6 +1998,20 @@
                     select.value = classificationCtx.currentId;
                     select.title = t('admin.masterTreeClassificationPicker');
                     select.setAttribute('aria-label', select.title);
+                    // Fixed color per classification (see classificationColor's
+                    // own comment) -- confirmed with the user this needed to
+                    // read as a real colored badge, not plain unstyled text.
+                    // Inline styles (not a CSS class per status, unlike the
+                    // Estatus select) since the palette is picked from an
+                    // open-ended set of classification ids, not 4 fixed values.
+                    const currentColor = classificationColor(classificationCtx.currentId);
+                    select.style.color = currentColor;
+                    select.style.borderColor = currentColor;
+                    select.style.backgroundColor = `color-mix(in srgb, ${currentColor} 14%, var(--color-bg))`;
+                    Array.from(select.options).forEach((optionEl) => {
+                        const optColor = classificationColor(optionEl.value);
+                        optionEl.style.color = optColor;
+                    });
                     select.addEventListener('click', (e) => e.stopPropagation());
                     select.addEventListener('change', () => classificationCtx.onPick(select.value));
                     classificationCell.appendChild(select);
@@ -2616,6 +2630,24 @@
             { id: 'class-por-definir', labelKey: 'menu.classPorDefinir' },
             { id: 'class-botones', labelKey: 'menu.classBotones' },
         ];
+        // A classification's own color has to stay FIXED regardless of
+        // which row is showing it (confirmed with the user: it must not
+        // look like plain, unstyled text) -- Control Interno keeps the
+        // same blue already established elsewhere (Leyenda de columnas);
+        // "sin clasificar" is neutral; every other classification (real or
+        // universal, however many a Pantalla ends up with) gets a stable
+        // color from this palette, picked deterministically from its own
+        // id so the SAME classification always lands on the SAME color
+        // everywhere it appears, with no per-classification registry to
+        // maintain by hand.
+        const CLASSIFICATION_COLOR_PALETTE = ['#3A4BC9', '#1E7E34', '#9A6B00', '#B3261E', '#0E7C86', '#6C4BA6'];
+        function classificationColor(id) {
+            if (!id) return 'var(--color-text-secondary)';
+            if (id === 'class-control-interno') return '#3A4BC9';
+            let hash = 0;
+            for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+            return CLASSIFICATION_COLOR_PALETTE[hash % CLASSIFICATION_COLOR_PALETTE.length];
+        }
         function resolveOverrideTargetClassification(classificationId, subSm) {
             const real = (subSm.submenu || []).find((e) => e.isClassification && e.id === classificationId);
             if (real) return { cls: real, isVirtual: false };
@@ -2910,18 +2942,19 @@
             const status = document.createElement('span');
             status.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status';
             status.textContent = t('admin.masterTreeColStatus');
-            // Icon-only, matches the navigate column's own convention --
-            // sits right after Estatus, same spot the "aplicar a anidados"
+            // Icon + visible label now (was icon-only) -- confirmed with
+            // the user a bare icon here wasn't identifiable on its own.
+            // Sits right after Estatus, same spot the "aplicar a anidados"
             // button itself renders on group rows (see statusRow).
             const applyNestedStatusHeader = document.createElement('span');
             applyNestedStatusHeader.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status-nest';
-            applyNestedStatusHeader.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+            applyNestedStatusHeader.innerHTML = `<i class="bx bx-copy" aria-hidden="true"></i> ${t('admin.masterTreeColApplyNested')}`;
             applyNestedStatusHeader.title = t('admin.masterTreeColApplyNested');
-            // Icon-only, matches applyNestedStatusHeader's own convention --
-            // see classificationCtx/buildClassificationCtx in statusRow.
+            // Icon + visible label -- see classificationCtx/
+            // buildClassificationCtx in statusRow.
             const classificationHeader = document.createElement('span');
             classificationHeader.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-class';
-            classificationHeader.innerHTML = '<i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>';
+            classificationHeader.innerHTML = `<i class="bx bx-purchase-tag-alt" aria-hidden="true"></i> ${t('admin.masterTreeColClassification')}`;
             classificationHeader.title = t('admin.masterTreeColClassification');
             const platforms = document.createElement('span');
             platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
@@ -2934,12 +2967,11 @@
             const costApp = document.createElement('span');
             costApp.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-cost';
             costApp.textContent = t('admin.masterTreeColCostApp');
-            // Icon-only header (matches the icon-only navigate button
-            // itself) -- a text label here would need its own place in the
-            // abbreviation ladder for no real benefit at this width.
+            // Icon + visible label now (was icon-only) -- confirmed with
+            // the user a bare icon here wasn't identifiable on its own.
             const navigate = document.createElement('span');
             navigate.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-navigate';
-            navigate.innerHTML = '<i class="bx bx-compass" aria-hidden="true"></i>';
+            navigate.innerHTML = `<i class="bx bx-compass" aria-hidden="true"></i> ${t('admin.masterTreeColNavigate')}`;
             navigate.title = t('admin.masterTreeColNavigate');
             // Wrapped together with margin-left:auto -- same trailing group
             // a row's own .perm-tree-mstatus-controls is (see statusRow),
