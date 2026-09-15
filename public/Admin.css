@@ -1404,6 +1404,13 @@ body.dark-mode .perm-tree-depth-2{
     font-size: 0.85rem;
     margin: -0.15rem 0;
 }
+/* "Accesos Generales" (see statusRow's spacerOnly dragCtx in
+   PermissionTree.js) -- an inert placeholder reserving the same width a
+   real drag handle takes, so this row still aligns under real, draggable
+   Áreas sharing its depth as direct siblings. Never meant to look grabbable. */
+.perm-tree-drag-handle-spacer{
+    cursor: default;
+}
 .perm-tree-row-draggable:hover .perm-tree-drag-handle{
     color: var(--color-text-primary);
 }

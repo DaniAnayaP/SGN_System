@@ -1822,7 +1822,19 @@
             // being a valid target). readOnly mode never gets
             // draggable="true" -- same guard every other editable control
             // in this file already respects.
-            if (dragCtx && !readOnly) {
+            if (dragCtx && dragCtx.spacerOnly) {
+                // Reserves the same leading width a real drag handle takes,
+                // without actually being one -- "Accesos Generales" (see
+                // renderStatusTree) sits at the same depth as real, always-
+                // draggable Áreas, as their direct sibling; without this its
+                // whole row visibly shifted ~1.3rem left, reading as if it
+                // sat one level shallower than it actually does (confirmed
+                // live: "no esta alineado a Área, sino a Departamento").
+                const spacer = document.createElement('span');
+                spacer.className = 'perm-tree-drag-handle perm-tree-drag-handle-spacer';
+                spacer.setAttribute('aria-hidden', 'true');
+                row.appendChild(spacer);
+            } else if (dragCtx && !readOnly) {
                 row.classList.add('perm-tree-row-draggable');
                 row.draggable = true;
                 const grip = document.createElement('span');
@@ -3649,7 +3661,7 @@
                             if (generalExpanded) expandedItems.delete(generalTreeKey);
                             else expandedItems.add(generalTreeKey);
                         },
-                    }, computeNodeRollup(generalKey), collectLeafStatusKeys(generalKey), itemAncestorLocked, null, null, buildLevelBadgeCtx('area')));
+                    }, computeNodeRollup(generalKey), collectLeafStatusKeys(generalKey), itemAncestorLocked, (dragAllowed && !readOnly) ? { spacerOnly: true } : null, null, buildLevelBadgeCtx('area')));
                     generalChildrenVisible = generalExpanded;
                 }
                 const generalAncestorLocked = generalKey ? (itemAncestorLocked || nodeWebOff(generalKey)) : itemAncestorLocked;
