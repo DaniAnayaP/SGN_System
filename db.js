@@ -1196,6 +1196,18 @@ db.exec(`
         updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- saas_master_order: this tree's own drag-to-reorder (see Árbol Maestro's
+    -- master_permission_order), just a single flat list instead of one row
+    -- per parent key -- there's only ever one level here (the 3 SaaS
+    -- screens themselves). One row total; ordered_items is a JSON array of
+    -- itemIds.
+    CREATE TABLE IF NOT EXISTS saas_master_order (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        ordered_items  TEXT NOT NULL,
+        updated_by     TEXT,
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS plan_changes (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         plan_id       INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
@@ -5545,6 +5557,23 @@ function setSaasMasterStatuses(rows, updatedBy) {
     return getSaasMasterStatuses();
 }
 
+function getSaasMasterOrder() {
+    const row = db.prepare('SELECT ordered_items FROM saas_master_order ORDER BY id DESC LIMIT 1').get();
+    if (!row) return [];
+    try {
+        const parsed = JSON.parse(row.ordered_items);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+function setSaasMasterOrder(orderedItems, updatedBy) {
+    const items = (orderedItems || []).filter((id) => SAAS_MASTER_STATUS_ITEMS.includes(id));
+    db.prepare('DELETE FROM saas_master_order').run();
+    db.prepare('INSERT INTO saas_master_order (ordered_items, updated_by) VALUES (?, ?)').run(JSON.stringify(items), updatedBy || '');
+    return getSaasMasterOrder();
+}
+
 function getPlanGrants(planId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM plan_grants WHERE plan_id = ?')
@@ -6462,6 +6491,8 @@ module.exports = {
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     SAAS_MASTER_STATUS_ITEMS,
+    getSaasMasterOrder,
+    setSaasMasterOrder,
     getMasterPermissionOrder,
     setMasterPermissionOrder,
     setMasterPermissionOrders,

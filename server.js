@@ -243,6 +243,8 @@ const {
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     SAAS_MASTER_STATUS_ITEMS,
+    getSaasMasterOrder,
+    setSaasMasterOrder,
     getMasterPermissionOrder,
     setMasterPermissionOrders,
     setSectorPermissionOrders,
@@ -2065,6 +2067,16 @@ app.put('/api/admin/saas-master-status', requireAuth, requireAdmin, (req, res) =
         }
     }
     res.json({ statuses: setSaasMasterStatuses(statuses, changedByLabel(req)) });
+});
+
+app.get('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) => {
+    res.json({ order: getSaasMasterOrder() });
+});
+
+app.put('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) => {
+    const { order } = req.body || {};
+    if (!Array.isArray(order)) return res.status(400).json({ message: 'order must be an array.' });
+    res.json({ order: setSaasMasterOrder(order, changedByLabel(req)) });
 });
 
 app.get('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, res) => {
