@@ -1706,6 +1706,14 @@ body.dark-mode .perm-tree-depth-2{
     padding: 0.25rem 0.7rem;
     font-size: 0.72rem;
     font-weight: 700;
+    /* Apartado's own row (.perm-tree-depth-2) sets text-transform:uppercase
+       on itself as a section-header cue -- a plain <span> like this one
+       inherits that (a <select> doesn't, browsers already reset it there),
+       which silently turned "Apartado" into "APARTADO" here even though
+       every other level's badge reads normally. This badge names a real
+       value (the row's own level or classification), never the row's own
+       decorative casing. */
+    text-transform: none;
 }
 /* Fixed column, matching perm-tree-mstatus-header-platforms's own width
    exactly -- see the comment in statusRow (PermissionTree.js) on why a
