@@ -628,15 +628,15 @@ function buildSidebarData(data, role, activePage) {
         // en Admin-Planes.js), que abre el mismo modal de Editar en modo
         // creación ("pantalla alterna") — nunca existieron como páginas
         // propias en el sidebar, un ítem aquí sería redundante.
-        { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', saasItemId: 'saas-clients' },
-        { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', saasItemId: 'saas-plans' },
-        { id: 'admin-nuestras-apps', labelKey: 'menu.ourApps', href: 'Admin-NuestrasApps.html', saasItemId: 'saas-apps' },
+        { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', icon: 'bx-group', saasItemId: 'saas-clients' },
+        { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', icon: 'bx-package', saasItemId: 'saas-plans' },
+        { id: 'admin-nuestras-apps', labelKey: 'menu.ourApps', href: 'Admin-NuestrasApps.html', icon: 'bx-grid-alt', saasItemId: 'saas-apps' },
         // Upstream of Nuestros Giros de Negocio -- a Giro's own default
         // access tree (sector_grants) will only be allowed to grant nodes
         // marked 'habilitado' here (deferred, not built yet), so it's
         // listed right before it.
         {
-            id: 'admin-master-permissions', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html',
+            id: 'admin-master-permissions', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html', icon: 'bx-sitemap',
             // Same ladder idea as admin-business-sectors below -- this label
             // used to ellipsize straight to "Árbol de Permisos Mae..." even
             // though "Árbol Permisos Mtro." fits the sidebar's own width on
@@ -644,17 +644,17 @@ function buildSidebarData(data, role, activePage) {
             abbrKeys: ['menu.masterPermissionsTreeAbbr1', 'menu.masterPermissionsTreeAbbr2', 'menu.masterPermissionsTreeAbbr3', 'menu.masterPermissionsTreeAbbr4'],
         },
         {
-            id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html',
+            id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html', icon: 'bx-briefcase',
             // Longest label in this dropdown -- steps down this ladder (in
             // order) until one fits the sidebar's fixed expanded width
             // instead of ellipsizing straight to "..." (see
             // applySubmenuAbbreviations below).
             abbrKeys: ['menu.businessSectorsAbbr1', 'menu.businessSectorsAbbr2', 'menu.businessSectorsAbbr3', 'menu.businessSectorsAbbr4'],
         },
-        { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', saasItemId: 'saas-module-costs' },
-        { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html' },
-        { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', saasItemId: 'saas-backups' },
-        { id: 'admin-material-apoyo', labelKey: 'menu.ourSupportMaterial', href: 'Admin-MaterialApoyo.html', saasItemId: 'saas-material-apoyo' },
+        { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', icon: 'bx-dollar-circle', saasItemId: 'saas-module-costs' },
+        { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html', icon: 'bx-id-card' },
+        { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', icon: 'bx-cloud-upload', saasItemId: 'saas-backups' },
+        { id: 'admin-material-apoyo', labelKey: 'menu.ourSupportMaterial', href: 'Admin-MaterialApoyo.html', icon: 'bx-book-open', saasItemId: 'saas-material-apoyo' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const adminItem = {
         id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings', submenu: adminSubmenu,
