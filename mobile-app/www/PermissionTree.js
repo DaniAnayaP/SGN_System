@@ -2026,13 +2026,20 @@
                 // cells above.
                 const statusNestCell = document.createElement('div');
                 statusNestCell.className = 'perm-tree-mstatus-status-nest-cell';
-                if (!readOnly && !grantMode && hasStatusChildren(key)) {
+                if (!readOnly && hasStatusChildren(key)) {
                     const statusNestBtn = document.createElement('button');
                     statusNestBtn.type = 'button';
                     statusNestBtn.className = 'perm-tree-mstatus-nest-btn';
                     statusNestBtn.title = t('admin.masterTreeApplyNestedStatus');
                     statusNestBtn.setAttribute('aria-label', statusNestBtn.title);
                     statusNestBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+                    // grantMode 'giro' -- Estatus itself is read-only reference
+                    // here (see statusCell above), so applying it to nested
+                    // rows has nothing real to do; shown disabled rather than
+                    // omitted so this cell doesn't read as an unexplained gap
+                    // on every single row, same "visible but disabled" call
+                    // already made for the classification select just above.
+                    statusNestBtn.disabled = !!grantMode;
                     statusNestBtn.addEventListener('click', () => applyNestedStatus(key));
                     statusNestCell.appendChild(statusNestBtn);
                 }

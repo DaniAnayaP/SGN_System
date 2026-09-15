@@ -2479,11 +2479,19 @@ body.dark-mode .perm-tree-mstatus-header{ background-color: #1f2030; }
     justify-content: center;
     cursor: pointer;
 }
-.perm-tree-mstatus-nest-btn:hover{
+.perm-tree-mstatus-nest-btn:hover:not(:disabled){
     color: var(--color-accent);
     border-color: var(--color-accent);
 }
 .perm-tree-mstatus-nest-btn i{ font-size: 0.75rem; }
+/* Giro de Negocio's Accesos Globales (grantMode 'giro') -- read-only
+   reference copy of this same button, same opacity/cursor treatment as
+   .perm-tree-mstatus-select:disabled just above, so this cell reads as
+   "not applicable here" instead of an unexplained empty gap. */
+.perm-tree-mstatus-nest-btn:disabled{
+    cursor: not-allowed;
+    opacity: 0.5;
+}
 body.dark-mode .perm-tree-mstatus-nest-btn{ background-color: #23242b; }
 
 /* Frees real width back to the row label on a narrow tree instead of
