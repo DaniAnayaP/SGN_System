@@ -486,7 +486,14 @@ function renderList() {
                 apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
                 apRow.appendChild(labelEl(apartado.label));
                 apRow.appendChild(countBadge(apLeafKeys.length));
-                apRow.appendChild(buildControls(aKey, apLeafKeys, null));
+                // Same href as the screen's own row, not null -- confirmed
+                // live that only the top screen row having a working
+                // Navegar button, with every Apartado/Columna underneath
+                // showing an empty cell, read as broken rather than
+                // intentional. Every row within a screen now jumps to that
+                // same screen (there's no separate URL for one of its own
+                // columns to navigate to).
+                apRow.appendChild(buildControls(aKey, apLeafKeys, screen.href));
                 listEl.appendChild(apRow);
                 if (collapsed.has(`a:${aKey}`)) return;
 
@@ -503,7 +510,7 @@ function renderList() {
                     row.appendChild(rollupEl(computeRollup([key], 'web'), computeRollup([key], 'app')));
                     row.appendChild(labelEl(leaf.label));
                     row.appendChild(countBadge(1));
-                    row.appendChild(buildControls(key, [], null));
+                    row.appendChild(buildControls(key, [], screen.href));
                     listEl.appendChild(row);
                 });
             });
