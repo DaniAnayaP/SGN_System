@@ -619,6 +619,77 @@ function hasSaasScreenAccess(activePage) {
     return hasSaasScreenGrant(itemId);
 }
 
+// Árbol Maestro SaaS's own reorder (saas_master_order, edited on
+// Admin-ArbolMaestroSaaS.html) used to only ever change that screen's own
+// tree display -- confirmed live that dragging "Giros de Negocio" above
+// "Árbol de Permisos Maestro" there and saving left the REAL sidebar below
+// untouched, exactly the "solo cambia el árbol, no la pantalla real" gap
+// the user has been explicit this whole effort must never happen. Fetched
+// once per session load, same pattern as loadSaasGrants above.
+let cachedSaasMasterOrder = null;
+async function loadSaasMasterOrder() {
+    try {
+        const res = await fetch(`${API_BASE}/admin/saas-master-order`, { credentials: 'include' });
+        if (!res.ok) { cachedSaasMasterOrder = null; return; }
+        const data = await res.json();
+        cachedSaasMasterOrder = data.order || null;
+    } catch {
+        cachedSaasMasterOrder = null;
+    }
+}
+// Maps a sidebar item's own `id` to the itemId SaasAdminCatalog.js (and so
+// saas_master_order.screensByGroup) actually uses -- the two namespaces
+// never lined up 1:1 (this sidebar predates that catalog). Admin-
+// ArbolMaestroSaaS.html itself has no entry here on purpose: it isn't one
+// of the catalog's own 9 screens (it's the tool that gates them), so it
+// keeps whatever fixed position it's coded at below instead of being
+// reordered.
+const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
+    'admin-clientes-registrados': 'saas-clients',
+    'admin-planes-registrados': 'saas-plans',
+    'admin-nuestras-apps': 'saas-apps',
+    'admin-master-permissions': 'saas-master-permissions-tree',
+    'admin-business-sectors': 'saas-business-sectors',
+};
+const SAAS_CONFIG_SAAS_ORDER_IDS = {
+    'admin-costos-modulos': 'saas-module-costs',
+    'admin-equipo-saas': 'saas-team',
+    'admin-nuestros-respaldos': 'saas-backups',
+    'admin-material-apoyo': 'saas-material-apoyo',
+};
+// Same "most specific wins, else keep original relative position" idea
+// PermissionTree.js's own applyOrder uses -- anything saas_master_order
+// doesn't mention (a pinned item with no catalog id, or a screen added
+// after the order was last saved) is never dropped, just left where it
+// already was.
+function applySaasSidebarOrder(items, groupId, idToCatalogItemId) {
+    const orderIds = cachedSaasMasterOrder?.screensByGroup?.[groupId];
+    if (!orderIds || !orderIds.length) return items;
+    // An item with no catalog id (Árbol Maestro SaaS's own pinned slot in
+    // Configuración SaaS) never takes part in the reorder -- confirmed live
+    // that treating it as merely "unmatched" (appended after everything
+    // else, same as applyOrder does elsewhere) silently dragged it from
+    // first to last instead of leaving it put. Split it out by its exact
+    // original index, reorder only the real catalog screens around it, then
+    // splice it back into that same index.
+    const reorderable = [];
+    const fixed = [];
+    items.forEach((item, index) => {
+        if (idToCatalogItemId[item.id]) reorderable.push(item);
+        else fixed.push({ index, item });
+    });
+    const byCatalogId = new Map(reorderable.map((item) => [idToCatalogItemId[item.id], item]));
+    const used = new Set();
+    const ordered = [];
+    orderIds.forEach((catId) => {
+        const item = byCatalogId.get(catId);
+        if (item && !used.has(item)) { ordered.push(item); used.add(item); }
+    });
+    reorderable.forEach((item) => { if (!used.has(item)) ordered.push(item); });
+    fixed.forEach(({ index, item }) => ordered.splice(Math.min(index, ordered.length), 0, item));
+    return ordered;
+}
+
 function buildSidebarData(data, role, activePage) {
     // Split in two (was one "Administración de Clientes" dropdown) --
     // Servicio a Cliente is working a real client account; Configuración
@@ -662,6 +733,7 @@ function buildSidebarData(data, role, activePage) {
             abbrKeys: ['menu.businessSectorsAbbr1', 'menu.businessSectorsAbbr2', 'menu.businessSectorsAbbr3', 'menu.businessSectorsAbbr4'],
         },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
+    const customerServiceSubmenuOrdered = applySaasSidebarOrder(customerServiceSubmenu, 'customerService', CUSTOMER_SERVICE_SAAS_ORDER_IDS);
     const saasConfigSubmenu = [
         // Upstream of Equipo SaaS/Nuestros Respaldos/Material de Apoyo below
         // -- same "readiness gate before per-person grants" relationship
@@ -683,12 +755,13 @@ function buildSidebarData(data, role, activePage) {
             abbrKeys: ['menu.ourSupportMaterialAbbr1', 'menu.ourSupportMaterialAbbr2', 'menu.ourSupportMaterialAbbr3'],
         },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
+    const saasConfigSubmenuOrdered = applySaasSidebarOrder(saasConfigSubmenu, 'saasConfig', SAAS_CONFIG_SAAS_ORDER_IDS);
     const customerServiceItem = {
-        id: 'admin-servicio-cliente', labelKey: 'menu.customerService', icon: 'bx-support', submenu: customerServiceSubmenu,
+        id: 'admin-servicio-cliente', labelKey: 'menu.customerService', icon: 'bx-support', submenu: customerServiceSubmenuOrdered,
         abbrKeys: ['menu.customerServiceAbbr1', 'menu.customerServiceAbbr2'],
     };
     const saasConfigItem = {
-        id: 'admin-config-saas', labelKey: 'menu.saasConfig', icon: 'bx-cog', submenu: saasConfigSubmenu,
+        id: 'admin-config-saas', labelKey: 'menu.saasConfig', icon: 'bx-cog', submenu: saasConfigSubmenuOrdered,
         abbrKeys: ['menu.saasConfigAbbr1', 'menu.saasConfigAbbr2'],
     };
     if (role !== 'admin') return data;
@@ -6128,7 +6201,7 @@ async function initDashboard({ activePage } = {}) {
         // grants (Equipo SaaS) before the sidebar renders, same reasoning
         // as loadBusinessProfile() above for client users, then block
         // direct URL access to a SaaS screen this admin isn't granted.
-        await loadSaasGrants();
+        await Promise.all([loadSaasGrants(), loadSaasMasterOrder()]);
         if (activePage && !hasSaasScreenAccess(activePage)) {
             window.location.replace('Inicio-en.html');
             return null;
