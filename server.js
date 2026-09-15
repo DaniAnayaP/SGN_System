@@ -24,6 +24,7 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
@@ -414,6 +415,32 @@ app.use(cookieParser());
 // session (the common case), while etag (on by default) handles proper
 // revalidation once it expires. Raise this once the UI stabilizes and/or
 // filenames get a cache-busting hash.
+// Login.html registers this at the root scope, so it controls every
+// desktop page on the site, not just the App shell it was originally built
+// for -- and its own fetch handler caches same-origin JS/CSS cache-first
+// (see sw.js's own comment). Confirmed live (2026-09-15) on
+// Admin-ArbolMaestroSaaS.html: a plain reload right after a real deploy
+// still served the PREVIOUS deploy's JS from that cache, because
+// sw.js on disk hardcodes CACHE_VERSION as a literal that's identical
+// across every deploy (mobile-app/'s own CI build sidesteps this by
+// sed-stamping a per-build value into ITS bundled copy before packaging --
+// see .github/workflows/build-apk.yml -- but nothing did the equivalent for
+// the web-served copy, since there's no separate "build" step for the
+// site itself). Serving sw.js through this route instead of
+// express.static below stamps a value that's unique per RUNNING PROCESS
+// (this restarts on every deploy) into the exact same spot, so
+// activate()'s own cache-cleanup finally has something to actually delete
+// after a deploy, matching what the App has had since that day.
+const SW_CACHE_VERSION = `sgn-app-shell-web-${process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_GIT_COMMIT_SHA || Date.now()}`;
+let swFileCache = null;
+app.get('/sw.js', (req, res) => {
+    if (!swFileCache) {
+        swFileCache = fs.readFileSync(path.join(PUBLIC_DIR, 'sw.js'), 'utf8')
+            .replace(/const CACHE_VERSION = '[^']*';/, `const CACHE_VERSION = '${SW_CACHE_VERSION}';`);
+    }
+    res.type('application/javascript').send(swFileCache);
+});
+
 app.use(express.static(PUBLIC_DIR, { maxAge: '1m' }));
 app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'Login.html')));
 
@@ -427,7 +454,17 @@ app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'Login.html')));
 // make is root-relative already, so it hits the real API regardless of
 // prefix and shares whatever sgn_session cookie the browser already has
 // from logging in at / -- no separate login needed here. Same short
-// maxAge as public/, same reasoning.
+// maxAge as public/, same reasoning. Same stale-cache-version fix as
+// /sw.js above, for the same reason -- this browser-tested copy is a real
+// fetch over HTTP too, not the native app's own bundled-and-CI-stamped one.
+let mobileSwFileCache = null;
+app.get('/mobile/sw.js', (req, res) => {
+    if (!mobileSwFileCache) {
+        mobileSwFileCache = fs.readFileSync(path.join(__dirname, 'mobile-app', 'www', 'sw.js'), 'utf8')
+            .replace(/const CACHE_VERSION = '[^']*';/, `const CACHE_VERSION = '${SW_CACHE_VERSION}';`);
+    }
+    res.type('application/javascript').send(mobileSwFileCache);
+});
 app.use('/mobile', express.static(path.join(__dirname, 'mobile-app', 'www'), { maxAge: '1m' }));
 
 // --- Rate limiting on auth routes -------------------------------------------
