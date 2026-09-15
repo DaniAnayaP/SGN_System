@@ -1174,6 +1174,28 @@ db.exec(`
         UNIQUE(section_id, item_id, submenu_id)
     );
 
+    -- saas_master_status: same idea as master_permission_status above, but
+    -- for GEIPSA's OWN internal SaaS screens (Equipo SaaS, Nuestros
+    -- Respaldos, Material de Apoyo) instead of the client-facing tree --
+    -- deliberately a separate table/screen (Árbol Maestro SaaS), never a
+    -- row added to master_permission_status itself, per explicit user
+    -- instruction not to touch that one. Flat (one row per itemId, the
+    -- same SAAS_PERMISSION_CATALOG namespace Admin-EquipoSaaS.js already
+    -- uses) instead of the {sectionId,itemId,submenuId} triple -- there's
+    -- no menu.json-driven depth here, just 3 fixed screens, same reasoning
+    -- Admin-EquipoSaaS.js's own tree gave for not reusing PermissionTree.js.
+    -- No row for an itemId means every column is at its default, same
+    -- "skip the default" convention as master_permission_status.
+    CREATE TABLE IF NOT EXISTS saas_master_status (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id      TEXT NOT NULL UNIQUE,
+        status       TEXT NOT NULL DEFAULT 'habilitado' CHECK (status IN ('habilitado','inhabilitado','construccion','mejoras')),
+        web_enabled  INTEGER NOT NULL DEFAULT 1,
+        app_enabled  INTEGER NOT NULL DEFAULT 0,
+        updated_by   TEXT,
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS plan_changes (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         plan_id       INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
@@ -5487,6 +5509,42 @@ function setMasterPermissionStatuses(rows, updatedBy) {
     return getMasterPermissionStatuses();
 }
 
+// saas_master_status pair -- same replace-the-whole-table shape as
+// getMasterPermissionStatuses/setMasterPermissionStatuses above, just
+// keyed by a flat itemId instead of the sectionId/itemId/submenuId triple
+// (see this table's own DDL comment for why). Reuses the same 4 status
+// values (checked at the DB layer via the CHECK constraint) and the same
+// web-on/app-off default.
+const SAAS_MASTER_STATUS_ITEMS = ['saas-team', 'saas-backups', 'saas-material-apoyo'];
+function getSaasMasterStatuses() {
+    return db
+        .prepare(`
+            SELECT item_id AS itemId, status, web_enabled AS webEnabled, app_enabled AS appEnabled
+            FROM saas_master_status
+        `)
+        .all()
+        .map((r) => ({ ...r, webEnabled: !!r.webEnabled, appEnabled: !!r.appEnabled }));
+}
+function setSaasMasterStatuses(rows, updatedBy) {
+    const replace = db.transaction((list) => {
+        db.prepare('DELETE FROM saas_master_status').run();
+        const insert = db.prepare(`
+            INSERT INTO saas_master_status (item_id, status, web_enabled, app_enabled, updated_by)
+            VALUES (@itemId, @status, @webEnabled, @appEnabled, @updatedBy)
+        `);
+        for (const r of list) {
+            if (!r || !SAAS_MASTER_STATUS_ITEMS.includes(r.itemId)) continue;
+            const status = r.status || 'habilitado';
+            const webEnabled = r.webEnabled !== false;
+            const appEnabled = r.appEnabled === true;
+            if (status === 'habilitado' && webEnabled && !appEnabled) continue;
+            insert.run({ itemId: r.itemId, status, webEnabled: webEnabled ? 1 : 0, appEnabled: appEnabled ? 1 : 0, updatedBy: updatedBy || '' });
+        }
+    });
+    replace(rows || []);
+    return getSaasMasterStatuses();
+}
+
 function getPlanGrants(planId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM plan_grants WHERE plan_id = ?')
@@ -6401,6 +6459,9 @@ module.exports = {
     setSectorGrants,
     getMasterPermissionStatuses,
     setMasterPermissionStatuses,
+    getSaasMasterStatuses,
+    setSaasMasterStatuses,
+    SAAS_MASTER_STATUS_ITEMS,
     getMasterPermissionOrder,
     setMasterPermissionOrder,
     setMasterPermissionOrders,

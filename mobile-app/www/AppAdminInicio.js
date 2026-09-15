@@ -262,12 +262,21 @@ breadcrumbToggle.addEventListener('click', () => {
 // AppAdminInicio.html) and by the Inicio tab's own shortcut tiles below --
 // kept in one place so the two never drift apart.
 const HOME_SHORTCUTS = [
-    { id: 'board', icon: 'bx-bar-chart-alt-2', breadcrumbKey: 'home.tabBoard' },
-    { id: 'tree', icon: 'bx-sitemap', breadcrumbKey: 'menu.masterPermissionsTree' },
-    { id: 'sectors', icon: 'bx-briefcase-alt-2', breadcrumbKey: 'menu.businessSectorsAbbr1' },
-    { id: 'plans', icon: 'bx-package', breadcrumbKey: 'menu.plansRegistered' },
-    { id: 'clients', icon: 'bx-buildings', breadcrumbKey: 'menu.clientesRegistrados' },
-    { id: 'holdings', icon: 'bx-collection', breadcrumbKey: 'menu.holdingsTitle' },
+    { id: 'board', icon: 'bx-bar-chart-alt-2', breadcrumbKey: 'home.tabBoard', group: 'top' },
+    { id: 'tree', icon: 'bx-sitemap', breadcrumbKey: 'menu.masterPermissionsTree', group: 'customerService' },
+    { id: 'sectors', icon: 'bx-briefcase-alt-2', breadcrumbKey: 'menu.businessSectorsAbbr1', group: 'customerService' },
+    { id: 'plans', icon: 'bx-package', breadcrumbKey: 'menu.plansRegistered', group: 'customerService' },
+    { id: 'clients', icon: 'bx-buildings', breadcrumbKey: 'menu.clientesRegistrados', group: 'customerService' },
+    { id: 'holdings', icon: 'bx-collection', breadcrumbKey: 'menu.holdingsTitle', group: 'other' },
+];
+// Same Servicio a Cliente split Dashboard.js's own sidebar uses (see
+// buildSidebarData there) -- 'top' renders with no label (Tablero always
+// led this grid), 'other' catches whatever doesn't fit customerService
+// (just Holdings today) instead of silently lumping it in either way.
+const HOME_GROUPS = [
+    { id: 'top', labelKey: null },
+    { id: 'customerService', labelKey: 'menu.customerService' },
+    { id: 'other', labelKey: 'admin.homeOthers' },
 ];
 const SECTIONS = [{ id: 'home', breadcrumbKey: 'home.tabHome' }, ...HOME_SHORTCUTS];
 let activeSection = 'home';
@@ -304,17 +313,27 @@ function renderHomeHub() {
     title.className = 'home-section-title';
     title.textContent = t('home.quickAccess');
     contentEl.appendChild(title);
-    const grid = document.createElement('div');
-    grid.className = 'home-tiles';
-    HOME_SHORTCUTS.forEach((item) => {
-        const tile = document.createElement('button');
-        tile.type = 'button';
-        tile.className = 'home-tile';
-        tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${item.icon}" aria-hidden="true"></i></span><span>${t(item.breadcrumbKey)}</span>`;
-        tile.addEventListener('click', () => document.getElementById(`admin-tab-${item.id}`)?.click());
-        grid.appendChild(tile);
+    HOME_GROUPS.forEach((group) => {
+        const items = HOME_SHORTCUTS.filter((item) => item.group === group.id);
+        if (!items.length) return;
+        if (group.labelKey) {
+            const label = document.createElement('p');
+            label.className = 'home-section-sublabel';
+            label.textContent = t(group.labelKey);
+            contentEl.appendChild(label);
+        }
+        const grid = document.createElement('div');
+        grid.className = 'home-tiles';
+        items.forEach((item) => {
+            const tile = document.createElement('button');
+            tile.type = 'button';
+            tile.className = 'home-tile';
+            tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${item.icon}" aria-hidden="true"></i></span><span>${t(item.breadcrumbKey)}</span>`;
+            tile.addEventListener('click', () => document.getElementById(`admin-tab-${item.id}`)?.click());
+            grid.appendChild(tile);
+        });
+        contentEl.appendChild(grid);
     });
-    contentEl.appendChild(grid);
 }
 
 function renderSection(id) {

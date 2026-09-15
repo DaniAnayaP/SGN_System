@@ -240,6 +240,9 @@ const {
     setSectorGrants,
     getMasterPermissionStatuses,
     setMasterPermissionStatuses,
+    getSaasMasterStatuses,
+    setSaasMasterStatuses,
+    SAAS_MASTER_STATUS_ITEMS,
     getMasterPermissionOrder,
     setMasterPermissionOrders,
     setSectorPermissionOrders,
@@ -2040,6 +2043,28 @@ app.put('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, 
         }
     }
     res.json({ statuses: setMasterPermissionStatuses(statuses, changedByLabel(req)) });
+});
+
+// Árbol Maestro SaaS -- same shape as master-permission-status above, but
+// for GEIPSA's own internal screens (see saas_master_status's own comment
+// in db.js for why this is a separate table/route rather than reusing
+// master_permission_status). Never touches that other table.
+app.get('/api/admin/saas-master-status', requireAuth, requireAdmin, (req, res) => {
+    res.json({ statuses: getSaasMasterStatuses() });
+});
+
+app.put('/api/admin/saas-master-status', requireAuth, requireAdmin, (req, res) => {
+    const { statuses } = req.body || {};
+    if (!Array.isArray(statuses)) return res.status(400).json({ message: 'statuses must be an array.' });
+    for (const s of statuses) {
+        if (!s || !SAAS_MASTER_STATUS_ITEMS.includes(s.itemId)) {
+            return res.status(400).json({ message: `each status needs an itemId in ${SAAS_MASTER_STATUS_ITEMS.join(', ')}.` });
+        }
+        if (!MASTER_PERMISSION_STATUS_VALUES.includes(s.status)) {
+            return res.status(400).json({ message: `status must be one of ${MASTER_PERMISSION_STATUS_VALUES.join(', ')}.` });
+        }
+    }
+    res.json({ statuses: setSaasMasterStatuses(statuses, changedByLabel(req)) });
 });
 
 app.get('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, res) => {

@@ -663,10 +663,25 @@ function buildSidebarData(data, role, activePage) {
         },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const saasConfigSubmenu = [
+        // Upstream of Equipo SaaS/Nuestros Respaldos/Material de Apoyo below
+        // -- same "readiness gate before per-person grants" relationship
+        // Árbol de Permisos Maestro has with Giro de Negocio, just for
+        // GEIPSA's own internal screens instead of the client-facing ones.
+        // Its own table (saas_master_status) -- never master_permission_status.
+        {
+            id: 'admin-saas-master-status', labelKey: 'menu.saasMasterTree', href: 'Admin-ArbolMaestroSaaS.html', icon: 'bx-shield',
+            abbrKeys: ['menu.saasMasterTreeAbbr1', 'menu.saasMasterTreeAbbr2'],
+        },
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', icon: 'bx-dollar-circle', saasItemId: 'saas-module-costs' },
         { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html', icon: 'bx-id-card' },
         { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', icon: 'bx-cloud-upload', saasItemId: 'saas-backups' },
-        { id: 'admin-material-apoyo', labelKey: 'menu.ourSupportMaterial', href: 'Admin-MaterialApoyo.html', icon: 'bx-book-open', saasItemId: 'saas-material-apoyo' },
+        {
+            id: 'admin-material-apoyo', labelKey: 'menu.ourSupportMaterial', href: 'Admin-MaterialApoyo.html', icon: 'bx-book-open', saasItemId: 'saas-material-apoyo',
+            // Same ladder idea as the other long labels in this sidebar --
+            // used to hard-ellipsize to "Nuestro Material de ..." instead of
+            // stepping down to something still readable.
+            abbrKeys: ['menu.ourSupportMaterialAbbr1', 'menu.ourSupportMaterialAbbr2', 'menu.ourSupportMaterialAbbr3'],
+        },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const customerServiceItem = {
         id: 'admin-servicio-cliente', labelKey: 'menu.customerService', icon: 'bx-support', submenu: customerServiceSubmenu,
