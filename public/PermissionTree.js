@@ -3167,9 +3167,21 @@
             };
             sectionsData.forEach((section) => {
                 const sectionKey = keyOf(section.id, null, null);
+                // Inicio/Panel/Tablero (GENERAL_ITEM_IDS) are Pantallas, not
+                // real Áreas -- sectionsData still injects them as plain
+                // item-level siblings of the real áreas (see generalItems in
+                // init()), so a synthetic "Accesos Generales" Área groups
+                // them here too, same reserved-segment idea as Tabla/Iconos/
+                // Botones (__general__ is never a real área id). 'main'
+                // keeps its own flat item list untouched -- it was never
+                // Departamento/Área structured to begin with.
+                const hasGeneralItems = section.id !== 'main' && (section.items || []).some((i) => GENERAL_ITEM_IDS.includes(i.id));
+                const generalKey = hasGeneralItems ? keyOf(section.id, '__general__', null) : null;
+                if (generalKey) addChild(sectionKey, generalKey);
                 (section.items || []).forEach((item) => {
                     const itemKey = keyOf(section.id, item.id, null);
-                    addChild(sectionKey, itemKey);
+                    if (generalKey && GENERAL_ITEM_IDS.includes(item.id)) addChild(generalKey, itemKey);
+                    else addChild(sectionKey, itemKey);
                     (item.submenu || []).forEach((sm) => {
                         const smKey = keyOf(section.id, item.id, sm.id);
                         addChild(itemKey, smKey);
@@ -3613,7 +3625,38 @@
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 
+                // Inicio/Panel/Tablero (GENERAL_ITEM_IDS) are Pantallas, not
+                // real Áreas -- sectionsData still injects them as plain
+                // item-level siblings of the real áreas (see generalItems in
+                // init()), which used to render them AT the Área slot,
+                // wrongly badged "Área" (confirmed with the user: "son
+                // pantallas, no son clasificación Área"). Grouped here under
+                // a synthetic "Accesos Generales" Área instead -- same
+                // reserved __general__ segment buildStatusChildrenMap uses,
+                // same rollup-only container pattern as Tabla/Iconos/Botones
+                // (no independent drag, just its own Estatus/Web·App like
+                // every other row). 'main' is untouched -- it was never
+                // Departamento/Área structured to begin with.
+                const hasGeneralItems = section.id !== 'main' && section.items.some((i) => GENERAL_ITEM_IDS.includes(i.id));
+                const generalKey = hasGeneralItems ? keyOf(section.id, '__general__', null) : null;
+                const generalTreeKey = `general::${section.id}`;
+                let generalChildrenVisible = false;
+                if (generalKey && !(grantOrderMode && !subtreeHasGrant(generalKey))) {
+                    const generalExpanded = expandedItems.has(generalTreeKey);
+                    treeRoot.appendChild(statusRow(t('sidebar.generalAccess'), 1, generalKey, {
+                        expanded: generalExpanded,
+                        onToggle: () => {
+                            if (generalExpanded) expandedItems.delete(generalTreeKey);
+                            else expandedItems.add(generalTreeKey);
+                        },
+                    }, computeNodeRollup(generalKey), collectLeafStatusKeys(generalKey), itemAncestorLocked, null, null, buildLevelBadgeCtx('area')));
+                    generalChildrenVisible = generalExpanded;
+                }
+                const generalAncestorLocked = generalKey ? (itemAncestorLocked || nodeWebOff(generalKey)) : itemAncestorLocked;
+
                 section.items.forEach((item) => {
+                    const isGeneralItem = !!generalKey && GENERAL_ITEM_IDS.includes(item.id);
+                    if (isGeneralItem && !generalChildrenVisible) return;
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
                     const itemKey = `${section.id}::${item.id}`;
                     const itemExpanded = expandedItems.has(itemKey);
@@ -3637,15 +3680,16 @@
                         icon: item.icon,
                         children: hasSubmenu ? item.submenu.map((sm) => ({ id: sm.id, label: t(sm.labelKey, sm.labelParams), icon: sm.icon })) : [],
                     };
-                    treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), 1, itemStateKey, hasSubmenu ? {
+                    const itemOwnAncestorLocked = isGeneralItem ? generalAncestorLocked : itemAncestorLocked;
+                    treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), isGeneralItem ? 2 : 1, itemStateKey, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => {
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: rollupPlatformState(itemLeafKeys, 'web'), app: rollupPlatformState(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo, buildLevelBadgeCtx('area')));
+                    } : null, hasSubmenu ? { web: rollupPlatformState(itemLeafKeys, 'web'), app: rollupPlatformState(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemOwnAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo, buildLevelBadgeCtx(isGeneralItem ? 'pantalla' : 'area')));
                     if (!hasSubmenu || !itemExpanded) return;
-                    const smAncestorLocked = itemAncestorLocked || nodeWebOff(itemStateKey);
+                    const smAncestorLocked = itemOwnAncestorLocked || nodeWebOff(itemStateKey);
                     // Apartado (Catálogos/Operaciones/...) only reorders
                     // among its own área's siblings -- same isRealArea
                     // guard as Área itself, since a non-área item (Inicio/

@@ -68,6 +68,7 @@
       "certifications": "CERT"
     },
     "area": "Área",
+    "generalAccess": "Accesos Generales",
     "costCenters": "Centros de Costo",
     "costCentersAll": "Todos los centros de costo",
     "costCentersAllCount": "Todos ({count})",
