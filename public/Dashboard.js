@@ -3367,7 +3367,7 @@ let pinPickerOtherList = null;
 let pinPickerLimitMsg = null;
 let pinPickerState = null; // { tableId, pinnedOrder: [key,...] }
 
-function buildColumnPickerRow(key, label, { pinned = null } = {}) {
+function buildColumnPickerRow(key, label, { pinned = null, dotColor = undefined, dotTitle = '' } = {}) {
     const row = document.createElement('div');
     row.className = 'admin-module-row';
     row.dataset.col = key;
@@ -3383,7 +3383,18 @@ function buildColumnPickerRow(key, label, { pinned = null } = {}) {
             row.appendChild(handle);
         }
     }
-    name.textContent = label;
+    // Visibility picker only (pinned picker never passes this) -- a small
+    // color dot naming which classification this column belongs to, same
+    // colors COLUMN_GROUP_META already gives the real "Leyenda de columnas"
+    // modal, so this isn't a second, inconsistent palette.
+    if (dotColor !== undefined) {
+        const dot = document.createElement('span');
+        dot.className = 'data-table-col-dot';
+        dot.style.backgroundColor = dotColor;
+        if (dotTitle) dot.title = dotTitle;
+        name.appendChild(dot);
+    }
+    name.appendChild(document.createTextNode(label));
     row.appendChild(name);
     const toggle = document.createElement('label');
     toggle.className = 'admin-switch';
@@ -3659,7 +3670,18 @@ async function removeFieldRule(id) {
 
 let visibilityPickerModal = null;
 let visibilityPickerList = null;
-let visibilityPickerState = null; // { tableId, hiddenSet: Set<key> }
+let visibilityPickerChips = null;
+let visibilityPickerSearch = null;
+let visibilityPickerCount = null;
+let visibilityPickerState = null; // { tableId, hiddenSet: Set<key>, query: string, activeGroupKey: string|null }
+
+// A column's own dot color -- COLUMN_GROUP_META's real swatch when it
+// carries a classification (state.groupKeys), var(--color-border) (neutral,
+// "sin clasificar") otherwise. Defined once, shared by the chip row and
+// every column row so the two always agree on which color means what.
+function columnGroupColor(groupKey) {
+    return groupKey && COLUMN_GROUP_META[groupKey] ? COLUMN_GROUP_META[groupKey].swatch : 'var(--color-border)';
+}
 
 function ensureVisibilityPickerModal() {
     if (visibilityPickerModal) return;
@@ -3667,18 +3689,27 @@ function ensureVisibilityPickerModal() {
     visibilityPickerModal.className = 'modal-overlay';
     visibilityPickerModal.hidden = true;
     visibilityPickerModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 24rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-vis-title">
+        <div class="modal-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-vis-title">
             <h3 id="data-table-vis-title">${t('main.columnVisibilityTitle')}</h3>
             <p class="admin-hint">${t('main.columnVisibilityHint')}</p>
-            <div class="admin-module-list" data-role="list"></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+            <div class="admin-form-actions" style="margin: 0.75rem 0 1rem;">
                 <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
                 <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
             </div>
+            <div class="sector-icon-picker-search">
+                <i class="bx bx-search" aria-hidden="true"></i>
+                <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
+            </div>
+            <div class="sector-icon-picker-chips" data-role="chips"></div>
+            <p class="sector-icon-picker-count" data-role="count"></p>
+            <div class="admin-module-list" data-role="list"></div>
         </div>
     `;
     document.body.appendChild(visibilityPickerModal);
     visibilityPickerList = visibilityPickerModal.querySelector('[data-role="list"]');
+    visibilityPickerChips = visibilityPickerModal.querySelector('[data-role="chips"]');
+    visibilityPickerSearch = visibilityPickerModal.querySelector('[data-role="search"]');
+    visibilityPickerCount = visibilityPickerModal.querySelector('[data-role="count"]');
     const close = () => { visibilityPickerModal.hidden = true; visibilityPickerState = null; };
     visibilityPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
     visibilityPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
@@ -3691,15 +3722,89 @@ function ensureVisibilityPickerModal() {
         }
         close();
     });
+    visibilityPickerSearch.addEventListener('input', () => {
+        visibilityPickerState.query = visibilityPickerSearch.value;
+        renderVisibilityPickerChips();
+        renderVisibilityPickerList();
+    });
     wireModalDismiss(visibilityPickerModal, close);
+}
+
+// Same interaction model as BusinessSectorIcons.js's own icon picker: chips
+// filter by classification, but typing in the search box always looks
+// across every column regardless of the active chip (confirmed there --
+// someone searching shouldn't get an empty grid just because an unrelated
+// chip was still selected from a moment ago).
+function visiblePickerColumns(state) {
+    const q = visibilityPickerState.query.trim().toLowerCase();
+    if (q) return state.columnKeys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q));
+    const groupKey = visibilityPickerState.activeGroupKey;
+    return groupKey ? state.columnKeys.filter((k) => state.groupKeys.get(k) === groupKey) : state.columnKeys;
+}
+
+function renderVisibilityPickerChips() {
+    const state = dataTableColumnState.get(visibilityPickerState.tableId);
+    if (!state) return;
+    visibilityPickerChips.innerHTML = '';
+    // Only classifications actually present on THIS table get a chip (same
+    // as the column legend) -- a table with none just shows no chip row.
+    const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
+    if (!presentGroupKeys.length) return;
+    const allChip = document.createElement('button');
+    allChip.type = 'button';
+    allChip.className = 'sector-icon-picker-chip' + (visibilityPickerState.activeGroupKey ? '' : ' active');
+    allChip.textContent = t('main.columnFilterAll');
+    allChip.addEventListener('click', () => {
+        visibilityPickerState.activeGroupKey = null;
+        visibilityPickerState.query = '';
+        visibilityPickerSearch.value = '';
+        renderVisibilityPickerChips();
+        renderVisibilityPickerList();
+    });
+    visibilityPickerChips.appendChild(allChip);
+    presentGroupKeys.forEach((groupKey) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'sector-icon-picker-chip' + (visibilityPickerState.activeGroupKey === groupKey ? ' active' : '');
+        const dot = document.createElement('span');
+        dot.className = 'data-table-col-dot data-table-col-dot-chip';
+        dot.style.backgroundColor = columnGroupColor(groupKey);
+        chip.appendChild(dot);
+        chip.appendChild(document.createTextNode(t(groupKey)));
+        chip.addEventListener('click', () => {
+            visibilityPickerState.activeGroupKey = visibilityPickerState.activeGroupKey === groupKey ? null : groupKey;
+            visibilityPickerState.query = '';
+            visibilityPickerSearch.value = '';
+            renderVisibilityPickerChips();
+            renderVisibilityPickerList();
+        });
+        visibilityPickerChips.appendChild(chip);
+    });
 }
 
 function renderVisibilityPickerList() {
     const state = dataTableColumnState.get(visibilityPickerState.tableId);
     if (!state) return;
     visibilityPickerList.innerHTML = '';
-    state.columnKeys.forEach((key) => {
-        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key);
+    const keys = visiblePickerColumns(state);
+    visibilityPickerCount.textContent = t('main.columnFilterCount', {
+        count: String(keys.length), total: String(state.columnKeys.length),
+        scope: visibilityPickerState.query.trim()
+            ? `"${visibilityPickerState.query.trim()}"`
+            : (visibilityPickerState.activeGroupKey ? t(visibilityPickerState.activeGroupKey) : t('main.columnFilterAll')),
+    });
+    if (!keys.length) {
+        const empty = document.createElement('p');
+        empty.className = 'sector-icon-picker-empty';
+        empty.textContent = t('main.columnFilterNoResults', { query: visibilityPickerState.query.trim() });
+        visibilityPickerList.appendChild(empty);
+        return;
+    }
+    keys.forEach((key) => {
+        const groupKey = state.groupKeys.get(key);
+        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, {
+            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? t(groupKey) : '',
+        });
         input.checked = !visibilityPickerState.hiddenSet.has(key);
         input.addEventListener('change', async () => {
             // Never allow hiding the last remaining visible column.
@@ -3729,7 +3834,9 @@ function openVisibilityPicker(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
     ensureVisibilityPickerModal();
-    visibilityPickerState = { tableId, hiddenSet: new Set(state.config.hidden) };
+    visibilityPickerState = { tableId, hiddenSet: new Set(state.config.hidden), query: '', activeGroupKey: null };
+    visibilityPickerSearch.value = '';
+    renderVisibilityPickerChips();
     renderVisibilityPickerList();
     visibilityPickerModal.hidden = false;
 }

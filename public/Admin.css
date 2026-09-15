@@ -291,6 +291,7 @@
     mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
 }
 .sector-icon-picker-chip{
+    display: inline-flex; align-items: center; gap: 0.35rem;
     flex: none; border: 1px solid var(--color-border); border-radius: 999px;
     background-color: var(--color-bg); color: var(--color-text-secondary);
     font-size: 0.74rem; font-weight: 600; padding: 0.32rem 0.7rem; cursor: pointer;
@@ -3316,6 +3317,18 @@ body.dark-mode .status-card-hab .mini-self-match{ color: #7fd99a; }
     color: var(--color-text-primary);
     font-weight: 500;
 }
+/* Column-visibility picker only -- one dot per row/chip naming that
+   column's own classification, same colors COLUMN_GROUP_META already gives
+   the real "Leyenda de columnas" modal (see columnGroupColor in
+   Dashboard.js). A border keeps the paler swatches (Control Interno)
+   visible against the row's own background instead of blending into it. */
+.data-table-col-dot{
+    display: inline-block; vertical-align: middle;
+    width: 0.55rem; height: 0.55rem; border-radius: 50%;
+    border: 1px solid var(--color-border);
+    margin-right: 0.45rem;
+}
+.data-table-col-dot-chip{ margin-right: 0; }
 
 /* Reglas de Orden de Llenado (Dashboard.js: openFieldRulesModal) -- one
    card per gate column, listing every dependent field it unlocks as a
