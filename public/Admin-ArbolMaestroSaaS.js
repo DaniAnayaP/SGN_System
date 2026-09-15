@@ -261,6 +261,7 @@ function buildControls(key, descendantKeys, navigateHref) {
         const optionEl = document.createElement('option');
         optionEl.value = opt.value;
         optionEl.textContent = Dashboard.t(opt.labelKey);
+        optionEl.className = `perm-tree-mstatus-select-${opt.value}`;
         select.appendChild(optionEl);
     });
     select.value = state.status;
