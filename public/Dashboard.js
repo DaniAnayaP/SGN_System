@@ -620,7 +620,14 @@ function hasSaasScreenAccess(activePage) {
 }
 
 function buildSidebarData(data, role, activePage) {
-    const adminSubmenu = [
+    // Split in two (was one "Administración de Clientes" dropdown) --
+    // Servicio a Cliente is working a real client account; Configuración
+    // SaaS is the platform/product catalog and GEIPSA's own internal
+    // operation, neither of which depends on which client you're looking
+    // at. Explicit product decision (2026-09-14) even though this sidebar
+    // was originally built "deliberately minimal" (one dropdown only) --
+    // see this function's git history for that original reasoning.
+    const customerServiceSubmenu = [
         // "+ Agregar Cliente Nuevo" y "+ Agregar Plan Nuevo" no tienen
         // entrada propia aquí — Nuestros Clientes y Nuestros Planes tienen
         // su propio botón "+ Agregar ... Nuevo" en el toolbar de su tabla
@@ -630,6 +637,8 @@ function buildSidebarData(data, role, activePage) {
         // propias en el sidebar, un ítem aquí sería redundante.
         { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', icon: 'bx-group', saasItemId: 'saas-clients' },
         { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', icon: 'bx-package', saasItemId: 'saas-plans' },
+    ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
+    const saasConfigSubmenu = [
         { id: 'admin-nuestras-apps', labelKey: 'menu.ourApps', href: 'Admin-NuestrasApps.html', icon: 'bx-grid-alt', saasItemId: 'saas-apps' },
         // Upstream of Nuestros Giros de Negocio -- a Giro's own default
         // access tree (sector_grants) will only be allowed to grant nodes
@@ -656,18 +665,20 @@ function buildSidebarData(data, role, activePage) {
         { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', icon: 'bx-cloud-upload', saasItemId: 'saas-backups' },
         { id: 'admin-material-apoyo', labelKey: 'menu.ourSupportMaterial', href: 'Admin-MaterialApoyo.html', icon: 'bx-book-open', saasItemId: 'saas-material-apoyo' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
-    const adminItem = {
-        id: 'admin-saas', labelKey: 'menu.clientAdmin', icon: 'bx-buildings', submenu: adminSubmenu,
-        // Same ladder idea as this dropdown's own items -- "Administración
-        // de Clientes" used to ellipsize on the toggle button itself.
-        abbrKeys: ['menu.clientAdminAbbr1', 'menu.clientAdminAbbr2', 'menu.clientAdminAbbr3'],
+    const customerServiceItem = {
+        id: 'admin-servicio-cliente', labelKey: 'menu.customerService', icon: 'bx-support', submenu: customerServiceSubmenu,
+        abbrKeys: ['menu.customerServiceAbbr1', 'menu.customerServiceAbbr2'],
+    };
+    const saasConfigItem = {
+        id: 'admin-config-saas', labelKey: 'menu.saasConfig', icon: 'bx-cog', submenu: saasConfigSubmenu,
+        abbrKeys: ['menu.saasConfigAbbr1', 'menu.saasConfigAbbr2'],
     };
     if (role !== 'admin') return data;
 
     const mainSection = data.sections.find((s) => s.id === 'main');
     const home = mainSection?.items.find((i) => i.id === 'home');
     const dashboard = mainSection?.items.find((i) => i.id === 'dashboard');
-    return { ...data, sections: [{ id: 'main', items: [home, dashboard, adminItem].filter(Boolean) }] };
+    return { ...data, sections: [{ id: 'main', items: [home, dashboard, customerServiceItem, saasConfigItem].filter(Boolean) }] };
 }
 
 // --- Department picker --------------------------------------------------------
