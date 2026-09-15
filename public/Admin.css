@@ -2335,35 +2335,27 @@ body.dark-mode .perm-tree-gate-icon-blocked{
     cursor: not-allowed;
     opacity: 0.5;
 }
-/* Admin-ArbolMaestroSaaS.html only -- a flat 3-row list (see this page's
-   own comment for why it isn't PermissionTree.js), reusing statusMode's
-   row/select/badge classes directly. .perm-tree-mstatus-label's own width
-   normally comes from alignLabelColumnWidth's canvas measurement (see its
-   own comment above); this page never runs that, so it'd otherwise fall
-   back to a cramped 5rem and ellipsize every label here. */
+/* Admin-ArbolMaestroSaaS.html -- full-depth tree (Grupo -> Pantalla ->
+   Apartado/Tabla/Modal -> Columna/Acción, see SaasAdminCatalog.js), reusing
+   statusMode's row/select/badge classes directly (its own small renderer,
+   not PermissionTree.js -- see Admin-ArbolMaestroSaaS.js's own comment for
+   why). .perm-tree-mstatus-label's own width normally comes from
+   alignLabelColumnWidth's canvas measurement (see its own comment above);
+   this page never runs that, so it's fixed here instead of falling back to
+   a cramped 5rem -- a FIXED width (not auto-by-content) is what keeps every
+   row's Estatus/Web·App columns aligned regardless of label length, same
+   principle alignLabelColumnWidth achieves by measuring on the client tree. */
 .saas-master-status-list{
     border: 1px solid var(--color-border);
     border-radius: 0.6rem;
-    overflow: hidden;
+    padding: 0.4rem;
+    overflow-x: auto;
 }
-.saas-master-status-row{
-    padding: 0.7rem 0.9rem;
-    border-radius: 0;
+.saas-master-status-list .perm-tree-row{
+    min-width: max-content;
 }
-.saas-master-status-row + .saas-master-status-row{
-    border-top: 1px solid var(--color-border);
-}
-.saas-master-status-row .perm-tree-mstatus-label{
-    width: auto;
-    min-width: 10rem;
-    flex: 1;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
-    font-weight: 600;
-}
-.saas-master-status-row .perm-tree-mstatus-controls{
-    margin-left: auto;
+.saas-master-status-list .perm-tree-mstatus-label{
+    width: 16rem;
 }
 .saas-master-status-row-general{
     background: var(--color-bg);

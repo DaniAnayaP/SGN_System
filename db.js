@@ -1175,17 +1175,19 @@ db.exec(`
     );
 
     -- saas_master_status: same idea as master_permission_status above, but
-    -- for GEIPSA's OWN internal SaaS screens (Equipo SaaS, Nuestros
-    -- Respaldos, Material de Apoyo) instead of the client-facing tree --
-    -- deliberately a separate table/screen (Árbol Maestro SaaS), never a
-    -- row added to master_permission_status itself, per explicit user
-    -- instruction not to touch that one. Flat (one row per itemId, the
-    -- same SAAS_PERMISSION_CATALOG namespace Admin-EquipoSaaS.js already
-    -- uses) instead of the {sectionId,itemId,submenuId} triple -- there's
-    -- no menu.json-driven depth here, just 3 fixed screens, same reasoning
-    -- Admin-EquipoSaaS.js's own tree gave for not reusing PermissionTree.js.
-    -- No row for an itemId means every column is at its default, same
-    -- "skip the default" convention as master_permission_status.
+    -- for GEIPSA's OWN internal SaaS screens (the full catalog in
+    -- SaasAdminCatalog.js -- Grupo -> Pantalla -> Apartado/Tabla/Modal ->
+    -- Columna/Acción) instead of the client-facing tree -- deliberately a
+    -- separate table/screen (Árbol Maestro SaaS), never a row added to
+    -- master_permission_status itself, per explicit user instruction not to
+    -- touch that one. Flat (one row per itemId, a compound
+    -- "screen::apartado::leaf" key -- see Admin-ArbolMaestroSaaS.js's own
+    -- apartadoKey/columnKey/actionKey) instead of the
+    -- {sectionId,itemId,submenuId} triple -- this catalog is hardcoded in
+    -- JS rather than fetched from a menu.json-shaped endpoint, so there's
+    -- no separate section/submenu id to split out. No row for an itemId
+    -- means every column is at its default, same "skip the default"
+    -- convention as master_permission_status.
     CREATE TABLE IF NOT EXISTS saas_master_status (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
         item_id      TEXT NOT NULL UNIQUE,
@@ -1197,10 +1199,11 @@ db.exec(`
     );
 
     -- saas_master_order: this tree's own drag-to-reorder (see Árbol Maestro's
-    -- master_permission_order), just a single flat list instead of one row
-    -- per parent key -- there's only ever one level here (the 3 SaaS
-    -- screens themselves). One row total; ordered_items is a JSON array of
-    -- itemIds.
+    -- master_permission_order). One row total; ordered_items is a JSON
+    -- object ({groups, screensByGroup}, see Admin-ArbolMaestroSaaS.js) --
+    -- was a flat array of itemIds back when this was a 3-row list, kept as
+    -- a single opaque TEXT blob either way so this table's own shape never
+    -- had to change, just how the JS on both ends reads/writes it.
     CREATE TABLE IF NOT EXISTS saas_master_order (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
         ordered_items  TEXT NOT NULL,
@@ -5526,8 +5529,11 @@ function setMasterPermissionStatuses(rows, updatedBy) {
 // keyed by a flat itemId instead of the sectionId/itemId/submenuId triple
 // (see this table's own DDL comment for why). Reuses the same 4 status
 // values (checked at the DB layer via the CHECK constraint) and the same
-// web-on/app-off default.
-const SAAS_MASTER_STATUS_ITEMS = ['saas-team', 'saas-backups', 'saas-material-apoyo'];
+// web-on/app-off default. No whitelist against SaasAdminCatalog.js's own
+// keys here -- that catalog is admin-only, GEIPSA-controlled JS (not user
+// input), same trust boundary every other statusMode-backed table in this
+// file already relies on (master_permission_status doesn't re-validate
+// menu.json ids at this layer either).
 function getSaasMasterStatuses() {
     return db
         .prepare(`
@@ -5545,7 +5551,7 @@ function setSaasMasterStatuses(rows, updatedBy) {
             VALUES (@itemId, @status, @webEnabled, @appEnabled, @updatedBy)
         `);
         for (const r of list) {
-            if (!r || !SAAS_MASTER_STATUS_ITEMS.includes(r.itemId)) continue;
+            if (!r || !r.itemId) continue;
             const status = r.status || 'habilitado';
             const webEnabled = r.webEnabled !== false;
             const appEnabled = r.appEnabled === true;
@@ -5559,18 +5565,16 @@ function setSaasMasterStatuses(rows, updatedBy) {
 
 function getSaasMasterOrder() {
     const row = db.prepare('SELECT ordered_items FROM saas_master_order ORDER BY id DESC LIMIT 1').get();
-    if (!row) return [];
+    if (!row) return null;
     try {
-        const parsed = JSON.parse(row.ordered_items);
-        return Array.isArray(parsed) ? parsed : [];
+        return JSON.parse(row.ordered_items);
     } catch {
-        return [];
+        return null;
     }
 }
-function setSaasMasterOrder(orderedItems, updatedBy) {
-    const items = (orderedItems || []).filter((id) => SAAS_MASTER_STATUS_ITEMS.includes(id));
+function setSaasMasterOrder(order, updatedBy) {
     db.prepare('DELETE FROM saas_master_order').run();
-    db.prepare('INSERT INTO saas_master_order (ordered_items, updated_by) VALUES (?, ?)').run(JSON.stringify(items), updatedBy || '');
+    db.prepare('INSERT INTO saas_master_order (ordered_items, updated_by) VALUES (?, ?)').run(JSON.stringify(order || null), updatedBy || '');
     return getSaasMasterOrder();
 }
 
@@ -6490,7 +6494,6 @@ module.exports = {
     setMasterPermissionStatuses,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
-    SAAS_MASTER_STATUS_ITEMS,
     getSaasMasterOrder,
     setSaasMasterOrder,
     getMasterPermissionOrder,

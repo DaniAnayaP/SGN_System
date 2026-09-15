@@ -242,7 +242,6 @@ const {
     setMasterPermissionStatuses,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
-    SAAS_MASTER_STATUS_ITEMS,
     getSaasMasterOrder,
     setSaasMasterOrder,
     getMasterPermissionOrder,
@@ -2059,8 +2058,8 @@ app.put('/api/admin/saas-master-status', requireAuth, requireAdmin, (req, res) =
     const { statuses } = req.body || {};
     if (!Array.isArray(statuses)) return res.status(400).json({ message: 'statuses must be an array.' });
     for (const s of statuses) {
-        if (!s || !SAAS_MASTER_STATUS_ITEMS.includes(s.itemId)) {
-            return res.status(400).json({ message: `each status needs an itemId in ${SAAS_MASTER_STATUS_ITEMS.join(', ')}.` });
+        if (!s || typeof s.itemId !== 'string' || !s.itemId) {
+            return res.status(400).json({ message: 'each status needs a non-empty string itemId.' });
         }
         if (!MASTER_PERMISSION_STATUS_VALUES.includes(s.status)) {
             return res.status(400).json({ message: `status must be one of ${MASTER_PERMISSION_STATUS_VALUES.join(', ')}.` });
@@ -2073,9 +2072,14 @@ app.get('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) =>
     res.json({ order: getSaasMasterOrder() });
 });
 
+// order is an opaque {groups, screensByGroup} blob (see
+// Admin-ArbolMaestroSaaS.js) -- this route doesn't need to understand its
+// shape, same as every other admin-only order/preferences blob in this file.
 app.put('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) => {
     const { order } = req.body || {};
-    if (!Array.isArray(order)) return res.status(400).json({ message: 'order must be an array.' });
+    if (!order || typeof order !== 'object' || Array.isArray(order)) {
+        return res.status(400).json({ message: 'order must be an object.' });
+    }
     res.json({ order: setSaasMasterOrder(order, changedByLabel(req)) });
 });
 
