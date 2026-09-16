@@ -1692,6 +1692,46 @@ body.dark-mode .perm-tree-depth-2{
     font-weight: 600;
     text-overflow: ellipsis;
 }
+/* "+ Crear nueva clasificación..." inline UI (see
+   renderClassificationCreateUI in PermissionTree.js) -- replaces the
+   select above, in the same cell, while naming a new one. Allowed to
+   overflow its own 9rem cell (z-index above neighboring rows) since it
+   only ever shows for the one row actively being edited. */
+.perm-tree-mstatus-class-create{
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    position: relative;
+    z-index: 1;
+}
+.perm-tree-mstatus-class-create-input{
+    width: 8rem;
+    min-width: 0;
+    border: 1px solid var(--color-accent, #1a73e8);
+    border-radius: 0.35rem;
+    padding: 0.22rem 0.4rem;
+    font: inherit;
+    font-size: 0.72rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+}
+.perm-tree-mstatus-class-create-btn{
+    width: 1.4rem;
+    height: 1.4rem;
+    flex-shrink: 0;
+    border-radius: 0.35rem;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface-alt, #f2f2f5);
+    color: #2c8f4a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.perm-tree-mstatus-class-create-btn:hover{ border-color: currentColor; }
+.perm-tree-mstatus-class-create-btn i{ font-size: 0.8rem; }
+.perm-tree-mstatus-class-create-btn-cancel{ color: var(--color-text-secondary); }
+body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
 /* Structural level badge (Departamento/Área/Apartado/Pantalla/Tabla/
    Ícono) -- see buildLevelBadgeCtx in PermissionTree.js. Plain text, not
    a <select>: nothing to pick here, this only names what the row IS. */

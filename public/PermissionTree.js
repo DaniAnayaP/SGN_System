@@ -1793,6 +1793,50 @@
         // why a pantalla's own Tabla was never a grant leaf either); their
         // columns/icons underneath each still get their own row.
         // -------------------------------------------------------------
+        // "+ Crear nueva clasificación..." (see CREATE_CLASSIFICATION_VALUE)
+        // -- swaps the classification <select> for a plain text input +
+        // confirm/cancel, right inside the same cell. Cancel/Escape just
+        // re-renders the whole tree (discards this transient UI, same
+        // "just call renderStatusTree again" pattern every other change in
+        // this file already uses) rather than trying to rebuild the select
+        // by hand.
+        function renderClassificationCreateUI(cell, ctx) {
+            cell.innerHTML = '';
+            const wrap = document.createElement('div');
+            wrap.className = 'perm-tree-mstatus-class-create';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'perm-tree-mstatus-class-create-input';
+            input.placeholder = t('admin.masterTreeClassificationCreatePlaceholder');
+            const confirmBtn = document.createElement('button');
+            confirmBtn.type = 'button';
+            confirmBtn.className = 'perm-tree-mstatus-class-create-btn';
+            confirmBtn.title = t('admin.masterTreeClassificationCreateConfirm');
+            confirmBtn.setAttribute('aria-label', confirmBtn.title);
+            confirmBtn.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'perm-tree-mstatus-class-create-btn perm-tree-mstatus-class-create-btn-cancel';
+            cancelBtn.title = t('admin.cancel');
+            cancelBtn.setAttribute('aria-label', cancelBtn.title);
+            cancelBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+            wrap.append(input, confirmBtn, cancelBtn);
+            cell.appendChild(wrap);
+            wrap.addEventListener('click', (e) => e.stopPropagation());
+            input.focus();
+            const confirm = () => {
+                const name = input.value.trim();
+                if (!name) { input.focus(); return; }
+                ctx.onCreate(name);
+            };
+            confirmBtn.addEventListener('click', confirm);
+            cancelBtn.addEventListener('click', () => renderStatusTree());
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') confirm();
+                if (e.key === 'Escape') renderStatusTree();
+            });
+        }
+
         function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, previewInfo, classificationCtx) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
@@ -2002,6 +2046,17 @@
                         optionEl.textContent = classificationCtx.currentId || t('menu.classNone');
                         select.appendChild(optionEl);
                     }
+                    // Lets an admin add a classification menu.json never
+                    // named ahead of time (confirmed with the user: "en la
+                    // lista desplegable no me aparece... debe tener una
+                    // opción... que diga crear") -- picking it swaps this
+                    // same select for a plain text input (see
+                    // renderClassificationCreateUI) instead of calling
+                    // onPick directly, see the change listener below.
+                    const createOptionEl = document.createElement('option');
+                    createOptionEl.value = CREATE_CLASSIFICATION_VALUE;
+                    createOptionEl.textContent = t('admin.masterTreeClassificationCreateOption');
+                    select.appendChild(createOptionEl);
                     select.value = classificationCtx.currentId;
                     select.title = t('admin.masterTreeClassificationPicker');
                     select.setAttribute('aria-label', select.title);
@@ -2016,11 +2071,17 @@
                     select.style.borderColor = currentColor;
                     select.style.backgroundColor = `color-mix(in srgb, ${currentColor} 14%, var(--color-bg))`;
                     Array.from(select.options).forEach((optionEl) => {
-                        const optColor = classificationColor(optionEl.value);
-                        optionEl.style.color = optColor;
+                        // The create option names an action, not a real
+                        // classification -- never hash it into the same
+                        // color palette real ones get.
+                        optionEl.style.color = optionEl.value === CREATE_CLASSIFICATION_VALUE
+                            ? 'var(--color-text-secondary)' : classificationColor(optionEl.value);
                     });
                     select.addEventListener('click', (e) => e.stopPropagation());
-                    select.addEventListener('change', () => classificationCtx.onPick(select.value));
+                    select.addEventListener('change', () => {
+                        if (select.value === CREATE_CLASSIFICATION_VALUE) renderClassificationCreateUI(classificationCell, classificationCtx);
+                        else classificationCtx.onPick(select.value);
+                    });
                     classificationCell.appendChild(select);
                 }
                 controls.appendChild(classificationCell);
@@ -2700,6 +2761,11 @@
         // getEffectiveTableGroups) are actions, not data with a
         // reassignable category of its own.
         const FIXED_CLASSIFICATION_IDS = new Set(['class-botones', 'class-acciones']);
+        // Sentinel <option> value for "+ Crear nueva clasificación..." in
+        // any column's own classification <select> (see statusRow) --
+        // never a real classification id, just a signal to swap the select
+        // for the inline create UI instead of calling onPick.
+        const CREATE_CLASSIFICATION_VALUE = '__create-classification__';
         // Buttons/Acciones are pure actions, not data with a lifecycle --
         // only Operar (can use it) and Autorizar (needs extra sign-off,
         // e.g. a destructive one) apply; Editar/Eliminar as PERMISSION
@@ -2748,10 +2814,14 @@
             return { readOnlyLabel: t(badge.labelKey), readOnlyColor: badge.color };
         }
         // Same read-only-badge rendering as buildLevelBadgeCtx above, but
-        // for a FIXED classification (Botones/Acciones, see
-        // FIXED_CLASSIFICATION_IDS) instead of a structural level -- keeps
+        // for a FIXED classification instead of a structural level -- keeps
         // classificationColor's own real color for that id (so "Botones"
-        // is still the same purple everywhere), just never a <select>.
+        // or "Control Interno" is still the same color everywhere), just
+        // never a <select>. Used for EVERY classification's own group row
+        // now (see renderStatusClassification -- "la clasificación no
+        // debería cambiar de clasificación"), not just Botones/Acciones'
+        // (FIXED_CLASSIFICATION_IDS is still what gates a classification's
+        // own COLUMNS between this and a real reassignable select).
         function buildFixedClassificationCtx(classificationId, labelKey, labelParams) {
             if (readOnly) return null;
             return { readOnlyLabel: t(labelKey, labelParams), readOnlyColor: classificationColor(classificationId) };
@@ -2761,19 +2831,65 @@
             if (real) return { cls: real, isVirtual: false };
             const universal = UNIVERSAL_CLASSIFICATIONS.find((u) => u.id === classificationId);
             if (universal) return { cls: universal, isVirtual: true };
+            // A custom, admin-created classification (see the "+ Crear
+            // nueva clasificación" option in the select below) has no
+            // menu.json presence at all -- recover its display name from
+            // any override that already references it (every override
+            // pointing at a custom id carries its own copy of the label,
+            // see buildClassificationCtx's own onPick/onCreate, so this
+            // works even if the specific column that first created it
+            // later gets reverted).
+            const customEntry = Array.from(classificationOverrides.values())
+                .find((o) => o.classificationId === classificationId && o.classificationLabel);
+            if (customEntry) return { cls: { id: classificationId, labelKey: customEntry.classificationLabel }, isVirtual: true };
             return null;
         }
         // Every classification actually selectable for a Pantalla's own
-        // columns: its own real ones (menu.json) first, then the universal
-        // ones (skipped if this Pantalla happens to already have its own
-        // real classification using that same id, e.g. Nuestras Unidades'
-        // pilot screen already has a REAL "class-por-definir"). Botones/
-        // Acciones are excluded even when real (FIXED_CLASSIFICATION_IDS)
-        // -- nothing reassigns into or out of them.
+        // columns: its own real ones (menu.json) first, the universal ones
+        // (skipped if this Pantalla happens to already have its own real
+        // classification using that same id, e.g. Nuestras Unidades'
+        // pilot screen already has a REAL "class-por-definir"), then any
+        // CUSTOM classification an admin already created for THIS Pantalla
+        // -- scoped by its own generated id always starting with
+        // "custom-<subSm.id>-" (see generateCustomClassificationId), so
+        // scanning the full override list here can never surface one
+        // screen's custom classification as an option on another's.
+        // Botones/Acciones are excluded even when real
+        // (FIXED_CLASSIFICATION_IDS) -- nothing reassigns into or out of
+        // them.
         function availableClassificationsFor(subSm) {
             const real = (subSm.submenu || []).filter((e) => e.isClassification && !FIXED_CLASSIFICATION_IDS.has(e.id));
             const universal = UNIVERSAL_CLASSIFICATIONS.filter((u) => !real.some((r) => r.id === u.id));
-            return [...real, ...universal];
+            const customPrefix = `custom-${subSm.id}-`;
+            const seenCustom = new Set();
+            const custom = [];
+            classificationOverrides.forEach((o) => {
+                if (o.classificationLabel && o.classificationId.startsWith(customPrefix) && !seenCustom.has(o.classificationId)) {
+                    seenCustom.add(o.classificationId);
+                    custom.push({ id: o.classificationId, labelKey: o.classificationLabel, isCustom: true });
+                }
+            });
+            return [...real, ...universal, ...custom];
+        }
+        // Turns a freely-typed name into a stable id scoped to THIS
+        // Pantalla (the "custom-<subSm.id>-" prefix is exactly what
+        // availableClassificationsFor scans for) -- disambiguated with a
+        // numeric suffix only in the unlikely case two different names on
+        // the same Pantalla happen to slugify to the same thing.
+        function generateCustomClassificationId(subSm, name) {
+            const slug = name
+                .toLowerCase()
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'clasificacion';
+            const base = `custom-${subSm.id}-${slug}`;
+            let id = base;
+            let n = 2;
+            while (Array.from(classificationOverrides.values()).some((o) => o.classificationId === id && o.classificationLabel && o.classificationLabel !== name)) {
+                id = `${base}-${n}`;
+                n += 1;
+            }
+            return id;
         }
         // Single source of truth for "what actually renders under this
         // Tabla row" -- shared by renderStatusTableColumns (the DOM) and
@@ -2842,16 +2958,16 @@
         // clears) one override and repaints -- renderStatusTree() is the
         // same "just call it again" pattern every other change here
         // already uses (toggle, reorder, aplicar-a-anidados, ...).
-        async function saveClassificationOverride(nodeKey, classificationId) {
+        async function saveClassificationOverride(nodeKey, classificationId, classificationLabel) {
             try {
                 const res = await fetch('/api/admin/master-permission-classifications', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ nodeKey, classificationId }),
+                    body: JSON.stringify({ nodeKey, classificationId, classificationLabel: classificationLabel || null }),
                 });
                 if (!res.ok) throw new Error('save failed');
-                if (classificationId) classificationOverrides.set(nodeKey, { classificationId, classificationLabel: null });
+                if (classificationId) classificationOverrides.set(nodeKey, { classificationId, classificationLabel: classificationLabel || null });
                 else classificationOverrides.delete(nodeKey);
                 renderStatusTree();
             } catch {
@@ -2863,10 +2979,10 @@
         // classificationCtx passed into statusRow -- see its own "class
         // cell" below. `structuralId` is what a pick equal to it reverts
         // to (deletes the override instead of writing a same-as-default
-        // one); `bulkKeys`, only set on a classification GROUP's own row,
-        // re-targets every column currently inside it in one go (the
-        // "move this whole group" case) rather than just the one row.
-        function buildClassificationCtx(nodeKey, currentId, structuralId, subSm, bulkKeys) {
+        // one). Never called for a classification's own group row anymore
+        // (see renderStatusClassification -- that row is always fixed
+        // now), only for an individual column/acción.
+        function buildClassificationCtx(nodeKey, currentId, structuralId, subSm) {
             if (readOnly) return null;
             const options = availableClassificationsFor(subSm);
             // A column whose real home is "just loose" (structuralId null,
@@ -2880,8 +2996,23 @@
                 currentId: currentId === null ? '' : currentId,
                 options,
                 onPick: (newId) => {
-                    const targetKeys = bulkKeys && bulkKeys.length ? bulkKeys : [nodeKey];
-                    targetKeys.forEach((k) => saveClassificationOverride(k, newId === normalizedStructuralId ? null : newId));
+                    // A custom classification's own label travels WITH
+                    // every override that points at it (not just the one
+                    // that first created it) -- see
+                    // resolveOverrideTargetClassification's own comment on
+                    // why that keeps its name recoverable no matter which
+                    // column(s) still reference it later.
+                    const picked = options.find((o) => o.id === newId);
+                    const label = picked && picked.isCustom ? t(picked.labelKey) : null;
+                    saveClassificationOverride(nodeKey, newId === normalizedStructuralId ? null : newId, label);
+                },
+                // "+ Crear nueva clasificación..." (see the select below) --
+                // a fresh id scoped to this Pantalla, saved as this
+                // column's own override exactly like picking any other
+                // classification would.
+                onCreate: (name) => {
+                    const id = generateCustomClassificationId(subSm, name);
+                    saveClassificationOverride(nodeKey, id, name);
                 },
             };
         }
@@ -2928,7 +3059,7 @@
             const colExpanded = expandedItems.has(colTreeKey);
             const classificationCtx = isFixedClassification
                 ? buildFixedClassificationCtx(cls.id, cls.labelKey, cls.labelParams)
-                : buildClassificationCtx(colKey, cls ? cls.id : null, structuralClsId, subSm, null);
+                : buildClassificationCtx(colKey, cls ? cls.id : null, structuralClsId, subSm);
             container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, colKey, {
                 expanded: colExpanded,
                 onToggle: () => {
@@ -2970,17 +3101,14 @@
             // columns' 4 levels -- never draggable.
             const classKey = keyOf(section.id, item.id, classBase);
             const columns = effectiveColumns || (cls.submenu || []).map((col) => ({ col, base: `${classBase}/${col.id}`, structuralClsId: cls.id }));
-            // "Move this whole group" only offered on a REAL, reassignable
-            // classification -- isVirtual ones are just an aggregation of
-            // columns that came from all over the Pantalla (nothing
-            // coherent to bulk-move together), and "Acciones" is fixed
-            // (FIXED_CLASSIFICATION_IDS) so it gets the same read-only
-            // badge treatment as its own columns below, never a <select>.
-            const classificationCtx = FIXED_CLASSIFICATION_IDS.has(cls.id)
-                ? buildFixedClassificationCtx(cls.id, cls.labelKey, cls.labelParams)
-                : (isVirtual ? null : buildClassificationCtx(
-                    classKey, cls.id, cls.id, subSm, columns.map(({ base }) => keyOf(section.id, item.id, base)),
-                ));
+            // A classification's own row never offers a reassignment
+            // select, real or virtual, custom or built-in -- confirmed
+            // with the user: "la clasificación no debería cambiar de
+            // clasificación" (Control Interno IS a classification, moving
+            // it into another one doesn't mean anything). Its own COLUMNS
+            // stay fully reassignable (see renderStatusColumn) -- only the
+            // group heading itself is fixed.
+            const classificationCtx = buildFixedClassificationCtx(cls.id, cls.labelKey, cls.labelParams);
             container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, classKey, {
                 expanded: classExpanded,
                 onToggle: () => {
