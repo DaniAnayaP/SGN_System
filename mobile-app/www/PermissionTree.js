@@ -1866,19 +1866,7 @@
             // being a valid target). readOnly mode never gets
             // draggable="true" -- same guard every other editable control
             // in this file already respects.
-            if (dragCtx && dragCtx.spacerOnly) {
-                // Reserves the same leading width a real drag handle takes,
-                // without actually being one -- "Accesos Generales" (see
-                // renderStatusTree) sits at the same depth as real, always-
-                // draggable Áreas, as their direct sibling; without this its
-                // whole row visibly shifted ~1.3rem left, reading as if it
-                // sat one level shallower than it actually does (confirmed
-                // live: "no esta alineado a Área, sino a Departamento").
-                const spacer = document.createElement('span');
-                spacer.className = 'perm-tree-drag-handle perm-tree-drag-handle-spacer';
-                spacer.setAttribute('aria-hidden', 'true');
-                row.appendChild(spacer);
-            } else if (dragCtx && !readOnly) {
+            if (dragCtx && !readOnly) {
                 row.classList.add('perm-tree-row-draggable');
                 row.draggable = true;
                 const grip = document.createElement('span');
@@ -1917,6 +1905,24 @@
                     if (!wasValid) return;
                     if (dragCtx.onDrop(draggedId, dragCtx.id)) renderStatusTree();
                 });
+            } else if (dragAllowed && !readOnly) {
+                // Reserves the same leading width a real drag handle takes,
+                // without actually being one -- ANY row with no dragCtx of
+                // its own (Tabla/Iconos/Botones/Clasificación's own group
+                // row, a fixed classification's column, "Accesos
+                // Generales", ...) still sits in a tree where drag exists
+                // in general, one level under something that usually DOES
+                // have a real grip. Without this its whole row visibly
+                // shifts ~1.3rem left, reading as one level shallower than
+                // it actually is (confirmed live, more than once: first
+                // for "Accesos Generales" next to real Áreas, then again
+                // for Botones/Iconos/Tabla sitting right under their own
+                // Pantalla -- same root cause every time, so it's handled
+                // once here instead of one call site at a time).
+                const spacer = document.createElement('span');
+                spacer.className = 'perm-tree-drag-handle perm-tree-drag-handle-spacer';
+                spacer.setAttribute('aria-hidden', 'true');
+                row.appendChild(spacer);
             }
             if (toggle) {
                 const btn = document.createElement('button');
@@ -3811,7 +3817,7 @@
                             if (generalExpanded) expandedItems.delete(generalTreeKey);
                             else expandedItems.add(generalTreeKey);
                         },
-                    }, computeNodeRollup(generalKey), collectLeafStatusKeys(generalKey), itemAncestorLocked, (dragAllowed && !readOnly) ? { spacerOnly: true } : null, null, buildLevelBadgeCtx('area')));
+                    }, computeNodeRollup(generalKey), collectLeafStatusKeys(generalKey), itemAncestorLocked, null, null, buildLevelBadgeCtx('area')));
                     generalChildrenVisible = generalExpanded;
                 }
                 const generalAncestorLocked = generalKey ? (itemAncestorLocked || nodeWebOff(generalKey)) : itemAncestorLocked;
