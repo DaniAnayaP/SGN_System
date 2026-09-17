@@ -1215,6 +1215,30 @@ db.exec(`
         updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Append-only audit trail for the master tree's own "Cambios" column
+    -- (one entry per actual value change, never overwritten) -- unlike
+    -- every table above, which only ever keeps the CURRENT value plus its
+    -- last editor. node_key is the same keyOf() string every other master-
+    -- tree table already uses, EXCEPT for a classification's own color
+    -- (see setClassificationColor), which isn't scoped to one row's
+    -- node_key at all (the same color applies to every row that
+    -- classification appears on) -- those entries use the synthetic key
+    -- "classification::<classificationId>" instead, and
+    -- getMasterPermissionChangeLog merges both when a classification's own
+    -- group row asks for its history (see openHistoryDialog in
+    -- PermissionTree.js, which is the only caller that ever passes a
+    -- classificationId).
+    CREATE TABLE IF NOT EXISTS master_permission_change_log (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_key     TEXT NOT NULL,
+        field        TEXT NOT NULL,
+        old_value    TEXT,
+        new_value    TEXT,
+        changed_by   TEXT,
+        changed_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_master_permission_change_log_node ON master_permission_change_log(node_key);
+
     -- saas_master_status: same idea as master_permission_status above, but
     -- for GEIPSA's OWN internal SaaS screens (the full catalog in
     -- SaasAdminCatalog.js -- Grupo -> Pantalla -> Apartado/Tabla/Modal ->
@@ -5620,7 +5644,20 @@ function getMasterPermissionStatuses() {
         .all()
         .map((r) => ({ ...r, webEnabled: !!r.webEnabled, appEnabled: !!r.appEnabled }));
 }
+// PermissionTree.js's own keyOf() -- duplicated here (not imported, this
+// file has no access to that browser-side module) just to build the SAME
+// string master_permission_change_log's node_key already uses everywhere
+// else, so a whole-table Guardar and a single-row picker log under
+// identical keys for the same node.
+function masterTreeNodeKey(sectionId, itemId, submenuId) {
+    return `${sectionId}::${itemId || ''}::${submenuId || ''}`;
+}
 function setMasterPermissionStatuses(rows, updatedBy) {
+    // Diffed against the BEFORE snapshot once, up front -- Guardar replaces
+    // the whole table in one shot (unlike the color/classification pickers'
+    // own single-row upserts), so this is the only place a bulk save's
+    // individual per-node changes can still be told apart for the log.
+    const before = new Map(getMasterPermissionStatuses().map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r]));
     const replace = db.transaction((list) => {
         db.prepare('DELETE FROM master_permission_status').run();
         const insert = db.prepare(`
@@ -5643,7 +5680,18 @@ function setMasterPermissionStatuses(rows, updatedBy) {
         }
     });
     replace(rows || []);
-    return getMasterPermissionStatuses();
+    const after = getMasterPermissionStatuses();
+    const afterMap = new Map(after.map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r]));
+    const allKeys = new Set([...before.keys(), ...afterMap.keys()]);
+    const DEFAULT_ROW = { status: 'habilitado', webEnabled: true, appEnabled: false };
+    for (const k of allKeys) {
+        const b = before.get(k) || DEFAULT_ROW;
+        const a = afterMap.get(k) || DEFAULT_ROW;
+        if (b.status !== a.status) logMasterPermissionChange(k, 'estatus', b.status, a.status, updatedBy);
+        if (b.webEnabled !== a.webEnabled) logMasterPermissionChange(k, 'web', b.webEnabled, a.webEnabled, updatedBy);
+        if (b.appEnabled !== a.appEnabled) logMasterPermissionChange(k, 'app', b.appEnabled, a.appEnabled, updatedBy);
+    }
+    return after;
 }
 
 // Purely visual reclassification overrides (see this table's own DDL
@@ -5660,6 +5708,7 @@ function getMasterPermissionClassificationOverrides() {
         .all();
 }
 function setMasterPermissionClassificationOverride(nodeKey, classificationId, classificationLabel, updatedBy) {
+    const before = db.prepare('SELECT classification_id AS classificationId, classification_label AS classificationLabel FROM master_permission_classification_overrides WHERE node_key = ?').get(nodeKey);
     db.prepare(`
         INSERT INTO master_permission_classification_overrides (node_key, classification_id, classification_label, updated_by)
         VALUES (@nodeKey, @classificationId, @classificationLabel, @updatedBy)
@@ -5669,13 +5718,18 @@ function setMasterPermissionClassificationOverride(nodeKey, classificationId, cl
             updated_by = excluded.updated_by,
             updated_at = datetime('now')
     `).run({ nodeKey, classificationId, classificationLabel: classificationLabel || null, updatedBy: updatedBy || '' });
+    const beforeLabel = before ? (before.classificationLabel || before.classificationId) : null;
+    const afterLabel = classificationLabel || classificationId;
+    if (beforeLabel !== afterLabel) logMasterPermissionChange(nodeKey, 'clasificacion', beforeLabel, afterLabel, updatedBy);
     return { nodeKey, classificationId, classificationLabel: classificationLabel || null };
 }
 // Reverting a column back to its real structural classification -- just
 // removes the exception row, same "no row = default" convention as every
 // other override table here.
-function deleteMasterPermissionClassificationOverride(nodeKey) {
+function deleteMasterPermissionClassificationOverride(nodeKey, updatedBy) {
+    const before = db.prepare('SELECT classification_id AS classificationId, classification_label AS classificationLabel FROM master_permission_classification_overrides WHERE node_key = ?').get(nodeKey);
     db.prepare('DELETE FROM master_permission_classification_overrides WHERE node_key = ?').run(nodeKey);
+    if (before) logMasterPermissionChange(nodeKey, 'clasificacion', before.classificationLabel || before.classificationId, null, updatedBy);
 }
 
 // A classification's color is stored as a literal "#rrggbb" hex string --
@@ -5688,6 +5742,7 @@ function getClassificationColors() {
     return db.prepare('SELECT classification_id AS classificationId, color FROM master_permission_classification_colors').all();
 }
 function setClassificationColor(classificationId, color, updatedBy) {
+    const before = db.prepare('SELECT color FROM master_permission_classification_colors WHERE classification_id = ?').get(classificationId);
     db.prepare(`
         INSERT INTO master_permission_classification_colors (classification_id, color, updated_by)
         VALUES (@classificationId, @color, @updatedBy)
@@ -5696,7 +5751,38 @@ function setClassificationColor(classificationId, color, updatedBy) {
             updated_by = excluded.updated_by,
             updated_at = datetime('now')
     `).run({ classificationId, color, updatedBy: updatedBy || '' });
+    if (!before || before.color !== color) {
+        logMasterPermissionChange(`classification::${classificationId}`, 'color', before ? before.color : null, color, updatedBy);
+    }
     return { classificationId, color };
+}
+// Generic append -- see master_permission_change_log's own DDL comment for
+// the node_key convention (including the "classification::<id>" synthetic
+// form). oldValue/newValue are stored verbatim as text; PermissionTree.js's
+// own openHistoryDialog knows how to format each `field` value back into
+// something readable, this file never interprets them.
+function logMasterPermissionChange(nodeKey, field, oldValue, newValue, changedBy) {
+    db.prepare(`
+        INSERT INTO master_permission_change_log (node_key, field, old_value, new_value, changed_by)
+        VALUES (?, ?, ?, ?, ?)
+    `).run(nodeKey, field, oldValue == null ? null : String(oldValue), newValue == null ? null : String(newValue), changedBy || '');
+}
+// classificationId is optional -- passed only when nodeKey is itself a
+// classification's own group row, so its history also picks up that
+// classification's color changes (logged under the separate
+// "classification::<id>" key above, since a color is shared by every row
+// that classification appears on, not scoped to this one row).
+function getMasterPermissionChangeLog(nodeKey, classificationId) {
+    const stmt = db.prepare(`
+        SELECT field, old_value AS oldValue, new_value AS newValue, changed_by AS changedBy, changed_at AS changedAt
+        FROM master_permission_change_log
+        WHERE node_key = ?
+        ORDER BY id DESC
+    `);
+    const rows = stmt.all(nodeKey);
+    if (classificationId) rows.push(...stmt.all(`classification::${classificationId}`));
+    rows.sort((a, b) => (a.changedAt < b.changedAt ? 1 : (a.changedAt > b.changedAt ? -1 : 0)));
+    return rows;
 }
 
 // Every column of one table (tableKey, same key TABLE_GRANT_PATHS already
@@ -6742,6 +6828,7 @@ module.exports = {
     getClassificationColors,
     setClassificationColor,
     getEffectiveColumnClassifications,
+    getMasterPermissionChangeLog,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     getSaasMasterOrder,

@@ -2041,6 +2041,21 @@ body.dark-mode .perm-tree-color-popover{ background-color: #23242b; }
    guesswork, is what keeps it aligned under its own header regardless of
    content length or window size. */
 .perm-tree-mstatus-navigate-cell{ flex-shrink: 0; width: 4.5rem; display: flex; align-items: center; justify-content: center; }
+/* "Cambios" -- see historyCell/openHistoryDialog in PermissionTree.js.
+   Same fixed-column reasoning as navigate-cell right above it. */
+.perm-tree-mstatus-history-cell{ flex-shrink: 0; width: 4.5rem; display: flex; align-items: center; justify-content: center; }
+/* Inline swatch next to a hex value in the "Cambios" dialog's own Cambio
+   column (see formatHistoryChange) -- deliberately tiny, this is a plain
+   text table cell, not a picker. */
+.perm-tree-history-swatch{
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    vertical-align: -1px;
+    margin-right: 0.3rem;
+}
 
 /* Vista Previa (see openPreviewModal in PermissionTree.js) -- built with
    its own dedicated classes rather than reusing Web's .modal-overlay/
@@ -2732,6 +2747,7 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
 .perm-tree-mstatus-header-platforms{ width: 13rem; }
 .perm-tree-mstatus-header-cost{ width: 6.5rem; }
 .perm-tree-mstatus-header-navigate{ width: 4.5rem; line-height: 1.2; }
+.perm-tree-mstatus-header-history{ width: 4.5rem; line-height: 1.2; }
 /* Wraps the Estatus + Web·App header columns together, flush against the
    header's own right edge -- see perm-tree-mstatus-controls (the row's
    equivalent) for why margin-left:auto here instead of just trusting a

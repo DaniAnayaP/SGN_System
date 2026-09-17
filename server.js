@@ -247,6 +247,7 @@ const {
     getClassificationColors,
     setClassificationColor,
     getEffectiveColumnClassifications,
+    getMasterPermissionChangeLog,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     getSaasMasterOrder,
@@ -2108,7 +2109,7 @@ app.put('/api/admin/master-permission-classifications', requireAuth, requireAdmi
     // An empty/null classificationId means "put this column back under its
     // own real structural classification" -- just remove the exception row.
     if (!classificationId) {
-        deleteMasterPermissionClassificationOverride(nodeKey);
+        deleteMasterPermissionClassificationOverride(nodeKey, changedByLabel(req));
         return res.json({ override: null });
     }
     if (typeof classificationId !== 'string') {
@@ -2149,6 +2150,19 @@ app.get('/api/business/table-classifications', requireAuth, (req, res) => {
     const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';
     if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
     res.json({ columns: getEffectiveColumnClassifications(tableKey) });
+});
+
+// Árbol de Permisos Maestro's own "Cambios" column (see
+// master_permission_change_log's DDL comment in db.js) -- admin-only, same
+// as every other master-tree write route, since this is reading THEIR own
+// edit history. classificationId is optional: pass it only when nodeKey is
+// a classification's own group row, so the merged result also includes
+// that classification's color changes.
+app.get('/api/admin/master-permission-change-log', requireAuth, requireAdmin, (req, res) => {
+    const nodeKey = typeof req.query.nodeKey === 'string' ? req.query.nodeKey : '';
+    if (!nodeKey) return res.status(400).json({ message: 'nodeKey is required.' });
+    const classificationId = typeof req.query.classificationId === 'string' && req.query.classificationId ? req.query.classificationId : null;
+    res.json({ entries: getMasterPermissionChangeLog(nodeKey, classificationId) });
 });
 
 // Árbol Maestro SaaS -- same shape as master-permission-status above, but

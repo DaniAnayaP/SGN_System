@@ -2246,6 +2246,24 @@
                 });
                 navigateCell.appendChild(navigateBtn);
                 controls.appendChild(navigateCell);
+                // "Cambios" -- every row's own audit trail (Estatus/Web/
+                // App from this same key, plus a classification's own
+                // color changes when classificationCtx names one, see
+                // openHistoryDialog). Reuses navigateBtn's exact button
+                // look, same reasoning as that one reusing nest-btn's.
+                const historyCell = document.createElement('div');
+                historyCell.className = 'perm-tree-mstatus-history-cell';
+                const historyBtn = document.createElement('button');
+                historyBtn.type = 'button';
+                historyBtn.className = 'perm-tree-mstatus-nest-btn';
+                historyBtn.title = t('main.changeHistory');
+                historyBtn.setAttribute('aria-label', t('main.changeHistory'));
+                historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+                historyBtn.addEventListener('click', () => {
+                    openHistoryDialog(key, classificationCtx?.classificationId || null, labelText);
+                });
+                historyCell.appendChild(historyBtn);
+                controls.appendChild(historyCell);
                 row.appendChild(controls);
             }
             return row;
@@ -3240,6 +3258,115 @@
             colorDialogEl.querySelector('[data-tab="std"]').click();
             colorDialogEl.hidden = false;
         }
+        // "Cambios" dialog (every row's own audit trail, see the
+        // .perm-tree-mstatus-history-cell button in statusRow) -- same
+        // lazy-singleton-modal convention as ensureColorDialog above, but
+        // reuses the app-wide generic .admin-table/.admin-table-wrap shape
+        // Dashboard.js's own ensureChangeHistoryModal already established
+        // (same 6 columns: Fecha/Usuario/Registro/Cambio/Solicitó/
+        // Autorizó) instead of inventing a new table style for one more
+        // history view.
+        let historyDialogEl = null;
+        function formatHistoryFieldName(field) {
+            if (field === 'estatus') return t('admin.masterTreeHistoryFieldStatus');
+            if (field === 'web') return t('admin.masterTreePlatformWeb');
+            if (field === 'app') return t('admin.masterTreePlatformApp');
+            if (field === 'clasificacion') return t('admin.masterTreeHistoryFieldClassification');
+            if (field === 'color') return t('admin.masterTreeHistoryFieldColor');
+            return field;
+        }
+        function formatHistoryChange(entry) {
+            const bool = (v) => (v === 'true' ? t('main.filterActive') : t('main.filterInactive'));
+            const statusLabel = (v) => {
+                const key = v ? `admin.masterTreeStatus${v.charAt(0).toUpperCase()}${v.slice(1)}` : '';
+                const label = key ? t(key) : '';
+                return label && label !== key ? label : (v || t('menu.classNone'));
+            };
+            const none = t('menu.classNone');
+            if (entry.field === 'estatus') return `${statusLabel(entry.oldValue)} → ${statusLabel(entry.newValue)}`;
+            if (entry.field === 'web' || entry.field === 'app') return `${bool(entry.oldValue)} → ${bool(entry.newValue)}`;
+            if (entry.field === 'color') {
+                // "—" here, never menu.classNone's "Por clasificar" -- that
+                // string means "not classified", not "no color chosen
+                // yet", and would misleadingly imply the classification
+                // ITSELF changed rather than just its paint.
+                const sw = (hex) => (hex ? `<span class="perm-tree-history-swatch" style="background:${hex}"></span>${hex}` : '—');
+                return `${sw(entry.oldValue)} → ${sw(entry.newValue)}`;
+            }
+            return `${entry.oldValue || none} → ${entry.newValue || none}`;
+        }
+        function ensureHistoryDialog() {
+            if (historyDialogEl) return;
+            historyDialogEl = document.createElement('div');
+            historyDialogEl.className = 'modal-overlay';
+            historyDialogEl.hidden = true;
+            historyDialogEl.innerHTML = `
+                <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="perm-tree-history-title">
+                    <h3 id="perm-tree-history-title" data-role="title"></h3>
+                    <div class="admin-table-wrap">
+                        <table class="admin-table">
+                            <thead><tr>
+                                <th>${t('main.changeHistoryDate')}</th>
+                                <th>${t('main.changeHistoryUser')}</th>
+                                <th>${t('main.changeHistoryRecord')}</th>
+                                <th>${t('main.changeHistoryChange')}</th>
+                                <th>${t('main.changeHistoryRequestedBy')}</th>
+                                <th>${t('main.changeHistoryAuthorizedBy')}</th>
+                            </tr></thead>
+                            <tbody data-role="list"></tbody>
+                        </table>
+                    </div>
+                    <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                        <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(historyDialogEl);
+            const close = () => { historyDialogEl.hidden = true; };
+            historyDialogEl.querySelector('[data-role="close"]').addEventListener('click', close);
+            historyDialogEl.addEventListener('click', (event) => { if (event.target === historyDialogEl) close(); });
+            document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !historyDialogEl.hidden) close(); });
+        }
+        async function openHistoryDialog(nodeKey, classificationId, label) {
+            ensureHistoryDialog();
+            historyDialogEl.querySelector('[data-role="title"]').textContent = `${t('main.changeHistory')} — ${label}`;
+            const list = historyDialogEl.querySelector('[data-role="list"]');
+            list.innerHTML = `<tr><td colspan="6">${t('admin.loading')}</td></tr>`;
+            historyDialogEl.hidden = false;
+            try {
+                const params = new URLSearchParams({ nodeKey });
+                if (classificationId) params.set('classificationId', classificationId);
+                const res = await fetch(`/api/admin/master-permission-change-log?${params}`, { credentials: 'include' });
+                if (!res.ok) throw new Error('load failed');
+                const data = await res.json();
+                const entries = data.entries || [];
+                list.innerHTML = '';
+                if (!entries.length) {
+                    list.innerHTML = `<tr><td colspan="6">${t('main.changeHistoryEmpty')}</td></tr>`;
+                    return;
+                }
+                entries.forEach((entry) => {
+                    const tr = document.createElement('tr');
+                    const cells = [
+                        entry.changedAt || '',
+                        entry.changedBy || '',
+                        formatHistoryFieldName(entry.field),
+                        formatHistoryChange(entry),
+                        entry.changedBy || '',
+                        entry.changedBy || '',
+                    ];
+                    cells.forEach((value, i) => {
+                        const td = document.createElement('td');
+                        if (i === 3) td.innerHTML = value;
+                        else td.textContent = value;
+                        tr.appendChild(td);
+                    });
+                    list.appendChild(tr);
+                });
+            } catch {
+                list.innerHTML = `<tr><td colspan="6">${t('admin.loadError')}</td></tr>`;
+            }
+        }
         // Structural levels (Departamento/Área/Apartado/Pantalla/Tabla/
         // Ícono) never had anything in the Clasificación column at all --
         // confirmed live that reads as broken ("no me gusta que la fila
@@ -3735,6 +3862,13 @@
             navigate.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-navigate';
             navigate.innerHTML = `<i class="bx bx-compass" aria-hidden="true"></i> ${t('admin.masterTreeColNavigate')}`;
             navigate.title = t('admin.masterTreeColNavigate');
+            // "Cambios" -- see openHistoryDialog/the historyCell in
+            // statusRow. Same icon+label header treatment as every other
+            // column here.
+            const history = document.createElement('span');
+            history.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-history';
+            history.innerHTML = `<i class="bx bx-history" aria-hidden="true"></i> ${t('admin.masterTreeColHistory')}`;
+            history.title = t('admin.masterTreeColHistory');
             // Wrapped together with margin-left:auto -- same trailing group
             // a row's own .perm-tree-mstatus-controls is (see statusRow),
             // so both end up flush against the SAME right edge regardless
@@ -3743,7 +3877,7 @@
             // (often much wider) available width on their own.
             const controls = document.createElement('div');
             controls.className = 'perm-tree-mstatus-header-controls';
-            controls.append(classificationHeader, status, applyNestedStatusHeader, platforms, costWeb, costApp, navigate);
+            controls.append(classificationHeader, status, applyNestedStatusHeader, platforms, costWeb, costApp, navigate, history);
             header.append(spacer, label, controls);
             return header;
         }
