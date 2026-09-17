@@ -2772,7 +2772,16 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
 /* Same --perm-tree-label-col-width as a row's own label -- must match
    exactly for the header to stay aligned with wherever Estatus/Web·App
    actually start on each row (see alignLabelColumnWidth). */
-.perm-tree-mstatus-header-label{ flex: 0 0 auto; width: var(--perm-tree-label-col-width, 5rem); }
+.perm-tree-mstatus-header-label{ flex: 0 0 auto; width: var(--perm-tree-label-col-width, 5rem); display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+/* Title for the count badge (see .perm-tree-mstatus-count-badge) -- a
+   bare number with no label above it read as "le falta el título de la
+   columna" (confirmed live, 2026-09-17). Right-aligned inside the SAME
+   header-label box the main "Pantalla / Función" text sits in (not a
+   separate header column) so it lands exactly where each row's own count
+   badge does -- that shared box is already sized to put a row's badge
+   flush against its right edge (see alignLabelColumnWidth's own comment),
+   so no extra width math is needed here. */
+.perm-tree-mstatus-header-count{ flex-shrink: 0; color: var(--color-text-secondary); font-weight: 600; }
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
 .perm-tree-mstatus-header-status{ width: var(--perm-tree-status-col-width, 9.5rem); }
 .perm-tree-mstatus-header-platforms{ width: 13rem; }

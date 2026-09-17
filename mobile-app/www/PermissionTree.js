@@ -3906,7 +3906,18 @@
             spacer.className = 'perm-tree-mstatus-header-spacer';
             const label = document.createElement('span');
             label.className = 'perm-tree-mstatus-header-label';
-            label.textContent = t('admin.masterTreeColScreen');
+            const labelText = document.createElement('span');
+            labelText.textContent = t('admin.masterTreeColScreen');
+            // Title for the count badge (see statusRow's own countBadge) --
+            // sits inside the SAME box as the main label, right-aligned via
+            // this element's own flex justify-content, so it lands exactly
+            // where each row's own badge does without needing a separate
+            // header column or any extra width math (confirmed live:
+            // "le falta el título de la columna").
+            const labelCount = document.createElement('span');
+            labelCount.className = 'perm-tree-mstatus-header-count';
+            labelCount.textContent = t('admin.masterTreeColCount');
+            label.append(labelText, labelCount);
             const status = document.createElement('span');
             status.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status';
             status.textContent = t('admin.masterTreeColStatus');
@@ -4450,7 +4461,17 @@
                         if (sectionExpanded) expandedSections.delete(section.id);
                         else expandedSections.add(section.id);
                     },
-                } : null, section.items.length ? { web: rollupPlatformState(sectionLeafKeys, 'web'), app: rollupPlatformState(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, (dragAllowed && section.id !== 'main') ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo, buildLevelBadgeCtx('departamento')));
+                } : null, section.items.length ? { web: rollupPlatformState(sectionLeafKeys, 'web'), app: rollupPlatformState(sectionLeafKeys, 'app') } : selfStateRollup(sectionStateKey), sectionLeafKeys, false, (dragAllowed && section.id !== 'main') ? { kind: 'department', id: section.id, scope: null, onDrop: reorderDepartments } : null, deptPreviewInfo,
+                    // "General" (section.id 'main') isn't really a
+                    // Departamento like the others -- it's the whole app
+                    // shell (Inicio/Panel/Tablero/Mensajes/...), so its own
+                    // badge reads "Estructura Web" instead of the generic
+                    // per-level label every real Departamento gets
+                    // (confirmed live, 2026-09-17). Same departamento color,
+                    // just a different name for this one row.
+                    section.id === 'main'
+                        ? { readOnlyLabel: t('admin.masterTreeGeneralClassification'), readOnlyColor: LEVEL_BADGES.departamento.color }
+                        : buildLevelBadgeCtx('departamento')));
                 if (!sectionExpanded) return;
                 const itemAncestorLocked = nodeWebOff(sectionStateKey);
 

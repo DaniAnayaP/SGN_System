@@ -47,20 +47,21 @@ function deviceIconSvg(platform, mark) {
 const CATALOG = window.SAAS_ADMIN_CATALOG;
 const CI_LABEL = window.SAAS_ADMIN_CONTROL_INTERNO_LABEL;
 
-// General's own real children -- Inicio/Tablero, the top-bar items outside
-// both category tabs (see Panel Admin's own bottom nav in AppAdminInicio.js
-// and Dashboard.js's buildSidebarData, which gives the admin/GEIPSA sidebar
-// this exact pair -- [home, dashboard, customerServiceItem, saasConfigItem],
-// no 'panel' for this role). Reuses menu.home/menu.dashboard's real labels
-// (same Spanish/English text, "Inicio"/"Tablero") since these are the same
+// General's own real children -- Inicio/Panel/Tablero, the same trio the
+// client tree itself shows under Comité Directivo > Accesos Generales
+// (confirmed live against it, 2026-09-17: "Los inicio - Tableros - panel
+// deben de ir como generales"). Reuses menu.home/menu.panel/menu.dashboard's
+// real labels (same Spanish/English text) since these are the same
 // navigation concepts, just tracked here under their own saas_master_status
 // ids instead of master_permission_status. Leaf-level only (no apartados),
 // same GENERAL_ITEM_IDS treatment PermissionTree.js gives them: never
-// draggable, no toggle/children of their own. 'saas-home' has no real
-// distinct page to jump to (menu.json itself gives 'home' href '#'), so it
-// gets no Navegar button rather than a dead one.
+// draggable, no toggle/children of their own. 'saas-home'/'saas-panel' have
+// no real distinct page to jump to for this role (same reasoning
+// menu.json's own 'home' entry has href '#'), so they get no Navegar
+// button rather than a dead one.
 const GENERAL_ITEMS = [
     { itemId: 'saas-home', labelKey: 'menu.home', href: null },
+    { itemId: 'saas-panel', labelKey: 'menu.panel', href: null },
     { itemId: 'saas-board', labelKey: 'menu.dashboard', href: 'Inicio-en.html' },
 ];
 
@@ -94,6 +95,11 @@ const CLASSIFICATION_COLOR_PALETTE = ['#3A4BC9', '#1E7E34', '#9A6B00', '#B3261E'
 // tree's own LEVEL_BADGES.
 const SAAS_LEVEL_BADGES = {
     grupo: { labelKey: 'admin.masterTreeLevelGrupo', color: '#6C4BA6' },
+    // Same "Área" concept/label/color the client tree already uses for
+    // Accesos Generales (see GENERAL_ITEM_IDS/sidebar.generalAccess in
+    // PermissionTree.js) -- reused verbatim rather than inventing a
+    // SaaS-specific synonym, since it's the exact same navigation concept.
+    area: { labelKey: 'sidebar.area', color: '#0E7C86' },
     pantalla: { labelKey: 'main.colSysPantalla', color: '#3A4BC9' },
     apartado: { labelKey: 'admin.masterTreeLevelApartado', color: '#9A6B00' },
 };
@@ -1194,32 +1200,53 @@ function buildHeader() {
     header.appendChild(spacerEl);
     const labelHeader = document.createElement('span');
     labelHeader.className = 'perm-tree-mstatus-header-label';
-    labelHeader.textContent = 'Pantalla / Apartado / Columna';
+    const labelHeaderText = document.createElement('span');
+    labelHeaderText.textContent = 'Pantalla / Apartado / Columna';
+    // Title for the count badge (see countBadge above) -- same treatment
+    // as the client tree's own header, right-aligned inside this same box.
+    const labelHeaderCount = document.createElement('span');
+    labelHeaderCount.className = 'perm-tree-mstatus-header-count';
+    labelHeaderCount.textContent = Dashboard.t('admin.masterTreeColCount');
+    labelHeader.append(labelHeaderText, labelHeaderCount);
     header.appendChild(labelHeader);
     const controls = document.createElement('div');
     controls.className = 'perm-tree-mstatus-header-controls';
+    // Icon + visible label on every column, same treatment
+    // buildStatusTreeHeader gives the client tree's own header (confirmed
+    // live: a bare/empty header column read as "incompleto" next to it --
+    // the nest column in particular had no icon OR label at all before
+    // this fix). Icons match whatever each column's own row-level button
+    // already uses on THIS screen (bx-copy for aplicar-a-anidados,
+    // bx-link-external for Navegar, bx-history for Cambios -- see
+    // nestBtn/buildControls above), not necessarily the client tree's own
+    // icon choice where the two screens' row buttons already differ.
     const classCol = document.createElement('span');
     classCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-class';
-    classCol.textContent = Dashboard.t('admin.masterTreeColClassification');
+    classCol.innerHTML = `<i class="bx bx-purchase-tag-alt" aria-hidden="true"></i> ${Dashboard.t('admin.masterTreeColClassification')}`;
+    classCol.title = Dashboard.t('admin.masterTreeColClassification');
     controls.appendChild(classCol);
     const statusCol = document.createElement('span');
     statusCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status';
-    statusCol.textContent = 'Estatus';
+    statusCol.textContent = Dashboard.t('admin.masterTreeColStatus');
     controls.appendChild(statusCol);
     const nestCol = document.createElement('span');
     nestCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status-nest';
+    nestCol.innerHTML = `<i class="bx bx-copy" aria-hidden="true"></i> ${Dashboard.t('admin.masterTreeColApplyNested')}`;
+    nestCol.title = Dashboard.t('admin.masterTreeColApplyNested');
     controls.appendChild(nestCol);
     const platformsCol = document.createElement('span');
     platformsCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
-    platformsCol.textContent = 'Web · App';
+    platformsCol.textContent = Dashboard.t('admin.masterTreeColPlatforms');
     controls.appendChild(platformsCol);
     const navCol = document.createElement('span');
     navCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-navigate';
-    navCol.innerHTML = '<i class="bx bx-link-external" aria-hidden="true"></i>';
+    navCol.innerHTML = `<i class="bx bx-link-external" aria-hidden="true"></i> ${Dashboard.t('admin.masterTreeColNavigate')}`;
+    navCol.title = Dashboard.t('admin.masterTreeColNavigate');
     controls.appendChild(navCol);
     const historyCol = document.createElement('span');
     historyCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-history';
-    historyCol.textContent = Dashboard.t('admin.masterTreeColHistory');
+    historyCol.innerHTML = `<i class="bx bx-history" aria-hidden="true"></i> ${Dashboard.t('admin.masterTreeColHistory')}`;
+    historyCol.title = Dashboard.t('admin.masterTreeColHistory');
     controls.appendChild(historyCol);
     header.appendChild(controls);
     return header;
@@ -1253,24 +1280,44 @@ function renderList() {
     // the user every row needs a real, clickable Navegar button, same as
     // the real Árbol de Permisos Maestro gives its own Departamento-level
     // rows (not just Pantalla ones).
-    generalRow.appendChild(buildControls('__general__', allLeafKeys, CATALOG[0].screens[0].href, null, Dashboard.t('admin.saasMasterTreeGeneral')));
+    generalRow.appendChild(buildControls('__general__', allLeafKeys, CATALOG[0].screens[0].href, buildLevelBadgeCtx('grupo'), Dashboard.t('admin.saasMasterTreeGeneral')));
     listEl.appendChild(generalRow);
 
     if (!collapsed.has('gen:main')) {
-        GENERAL_ITEMS.forEach((item) => {
-            const itemRow = document.createElement('div');
-            itemRow.className = 'perm-tree-row perm-tree-depth-1';
-            // No dragHandle/toggle -- never reorderable, no children of its
-            // own, same GENERAL_ITEM_IDS treatment the real tree gives
-            // Inicio/Panel/Tablero (spacer() keeps column alignment).
-            itemRow.appendChild(spacer());
-            itemRow.appendChild(spacer());
-            itemRow.appendChild(rollupEl(computeRollup([item.itemId], 'web'), computeRollup([item.itemId], 'app')));
-            itemRow.appendChild(labelEl(Dashboard.t(item.labelKey)));
-            itemRow.appendChild(countBadge(1));
-            itemRow.appendChild(buildControls(item.itemId, [], item.href, null, Dashboard.t(item.labelKey)));
-            listEl.appendChild(itemRow);
-        });
+        // "Accesos Generales" -- its own separate group nested under
+        // General (not General itself, which stays the whole-tree kill
+        // switch), holding just Inicio/Panel/Tablero, mirroring the exact
+        // grouping the client tree already gives these same 3 items via
+        // GENERAL_ITEM_IDS/sidebar.generalAccess (confirmed live,
+        // 2026-09-17: "deben ser un anidado de accesos generales").
+        const gaLeafKeys = GENERAL_ITEMS.map((i) => i.itemId);
+        const gaRow = document.createElement('div');
+        gaRow.className = 'perm-tree-row perm-tree-depth-1';
+        gaRow.appendChild(spacer());
+        gaRow.appendChild(toggleBtn('ga:main', !collapsed.has('ga:main')));
+        gaRow.appendChild(rollupEl(computeRollup(gaLeafKeys, 'web'), computeRollup(gaLeafKeys, 'app')));
+        gaRow.appendChild(labelEl(Dashboard.t('sidebar.generalAccess')));
+        gaRow.appendChild(countBadge(gaLeafKeys.length));
+        gaRow.appendChild(buildControls('ga:main', gaLeafKeys, GENERAL_ITEMS.find((i) => i.href)?.href || null, buildLevelBadgeCtx('area'), Dashboard.t('sidebar.generalAccess')));
+        listEl.appendChild(gaRow);
+
+        if (!collapsed.has('ga:main')) {
+            GENERAL_ITEMS.forEach((item) => {
+                const itemRow = document.createElement('div');
+                itemRow.className = 'perm-tree-row perm-tree-depth-2';
+                // No dragHandle/toggle -- never reorderable, no children of
+                // its own, same GENERAL_ITEM_IDS treatment the real tree
+                // gives Inicio/Panel/Tablero (spacer() keeps column
+                // alignment).
+                itemRow.appendChild(spacer());
+                itemRow.appendChild(spacer());
+                itemRow.appendChild(rollupEl(computeRollup([item.itemId], 'web'), computeRollup([item.itemId], 'app')));
+                itemRow.appendChild(labelEl(Dashboard.t(item.labelKey)));
+                itemRow.appendChild(countBadge(1));
+                itemRow.appendChild(buildControls(item.itemId, [], item.href, buildLevelBadgeCtx('pantalla'), Dashboard.t(item.labelKey)));
+                listEl.appendChild(itemRow);
+            });
+        }
     }
 
     orderedGroups().forEach((group) => {
