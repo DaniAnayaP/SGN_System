@@ -2771,17 +2771,29 @@
         // actually editing and every existing caller would otherwise need
         // updating for a 4th positional argument.
         let classificationColors = new Map();
-        // 8-color quick-swatch palette -- the hex itself is what's actually
-        // stored/sent to the server now (see saveClassificationColor), not
-        // an id, so an admin can also pick any other color entirely via
-        // "Más colores..." (see openColorDialog) without this list needing
-        // to grow or stay in sync with anything server-side.
-        const CLASSIFICATION_COLORS = [
-            { id: 'purple', hex: '#7f77dd' }, { id: 'teal', hex: '#1d9e75' },
-            { id: 'coral', hex: '#d85a30' }, { id: 'pink', hex: '#d4537e' },
-            { id: 'blue', hex: '#378add' }, { id: 'green', hex: '#639922' },
-            { id: 'amber', hex: '#ba7517' }, { id: 'gray', hex: '#888780' },
+        // 8 color families (light to dark, index 3 is each family's own
+        // "base" swatch) behind the quick popover's "Colores del tema" grid
+        // and "Colores estándar" row -- the hex itself is what's actually
+        // stored/sent to the server (see saveClassificationColor), not an
+        // id, so an admin can also pick any other color entirely via "Más
+        // colores..." (see openColorDialog) without this list needing to
+        // grow or stay in sync with anything server-side.
+        const CLASSIFICATION_COLOR_FAMILIES = [
+            { id: 'purple', shades: ['#EEEDFE', '#CECBF6', '#AFA9EC', '#7F77DD', '#534AB7', '#3C3489'] },
+            { id: 'teal', shades: ['#E1F5EE', '#9FE1CB', '#5DCAA5', '#1D9E75', '#0F6E56', '#085041'] },
+            { id: 'coral', shades: ['#FAECE7', '#F5C4B3', '#F0997B', '#D85A30', '#993C1D', '#712B13'] },
+            { id: 'pink', shades: ['#FBEAF0', '#F4C0D1', '#ED93B1', '#D4537E', '#993556', '#72243E'] },
+            { id: 'blue', shades: ['#E6F1FB', '#B5D4F4', '#85B7EB', '#378ADD', '#185FA5', '#0C447C'] },
+            { id: 'green', shades: ['#EAF3DE', '#C0DD97', '#97C459', '#639922', '#3B6D11', '#27500A'] },
+            { id: 'amber', shades: ['#FAEEDA', '#FAC775', '#EF9F27', '#BA7517', '#854F0B', '#633806'] },
+            { id: 'gray', shades: ['#F1EFE8', '#D3D1C7', '#B4B2A9', '#888780', '#5F5E5A', '#444441'] },
         ];
+        // Most-recently-accepted hexes, newest first -- capped, deduped,
+        // populated from every accept path (quick swatches, theme/standard
+        // grids, and the Más colores dialog, see saveClassificationColor)
+        // so "Colores recientes" reflects the same history regardless of
+        // which control was actually used.
+        const recentColors = [];
         // The 1 classification every Pantalla can use even if menu.json
         // never gave it one of its own -- "Por Definir Clasificación", for
         // anything an admin explicitly wants pulled out of "just sitting
@@ -2857,6 +2869,10 @@
                 });
                 if (!res.ok) throw new Error('save failed');
                 classificationColors.set(classificationId, hex);
+                const existingIdx = recentColors.indexOf(hex);
+                if (existingIdx !== -1) recentColors.splice(existingIdx, 1);
+                recentColors.unshift(hex);
+                if (recentColors.length > 8) recentColors.length = 8;
                 renderStatusTree();
             } catch {
                 const message = t('admin.saveError');
@@ -2877,26 +2893,60 @@
             closeColorPicker();
             const popover = document.createElement('div');
             popover.className = 'perm-tree-color-popover';
-            CLASSIFICATION_COLORS.forEach((c) => {
+            const currentHex = classificationColors.get(classificationId);
+            const addSection = (labelKey) => {
+                const label = document.createElement('div');
+                label.className = 'perm-tree-color-section-label';
+                label.textContent = t(labelKey);
+                popover.appendChild(label);
+            };
+            const addSwatch = (container, hex, small) => {
                 const swatch = document.createElement('button');
                 swatch.type = 'button';
-                swatch.className = 'perm-tree-color-swatch';
-                swatch.style.backgroundColor = c.hex;
-                swatch.setAttribute('aria-label', t(`admin.masterTreeColor_${c.id}`));
-                if (classificationColors.get(classificationId) === c.hex) {
+                swatch.className = small ? 'perm-tree-color-swatch perm-tree-color-swatch-sm' : 'perm-tree-color-swatch';
+                swatch.style.backgroundColor = hex;
+                swatch.setAttribute('aria-label', hex);
+                if (currentHex === hex) {
                     swatch.classList.add('perm-tree-color-swatch-selected');
                     swatch.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
                 }
                 swatch.addEventListener('click', (event) => {
                     event.stopPropagation();
                     closeColorPicker();
-                    saveClassificationColor(classificationId, c.hex);
+                    saveClassificationColor(classificationId, hex);
                 });
-                popover.appendChild(swatch);
-            });
+                container.appendChild(swatch);
+            };
+            // "Colores del tema" -- one column per family, light (top) to
+            // dark (bottom), same shape as Office's own theme-colors grid.
+            addSection('admin.masterTreeColorThemeColors');
+            const themeGrid = document.createElement('div');
+            themeGrid.className = 'perm-tree-color-theme-grid';
+            for (let row = 0; row < 6; row += 1) {
+                CLASSIFICATION_COLOR_FAMILIES.forEach((family) => addSwatch(themeGrid, family.shades[row], true));
+            }
+            popover.appendChild(themeGrid);
+            // "Colores estándar" -- each family's own base swatch (shades[3],
+            // the same hex CLASSIFICATION_COLOR_FAMILIES used to expose as a
+            // flat 8-color list before this grid existed), one flat row.
+            addSection('admin.masterTreeColorStandard');
+            const standardRow = document.createElement('div');
+            standardRow.className = 'perm-tree-color-standard-row';
+            CLASSIFICATION_COLOR_FAMILIES.forEach((family) => addSwatch(standardRow, family.shades[3], false));
+            popover.appendChild(standardRow);
+            // "Colores recientes" -- only once something's actually been
+            // accepted (quick swatch, either grid above, or the Más colores
+            // dialog all feed the same list, see saveClassificationColor).
+            if (recentColors.length) {
+                addSection('admin.masterTreeColorRecent');
+                const recentRow = document.createElement('div');
+                recentRow.className = 'perm-tree-color-standard-row';
+                recentColors.forEach((hex) => addSwatch(recentRow, hex, false));
+                popover.appendChild(recentRow);
+            }
             // Free-form colorimetry (Estándar hex mosaic + Personalizado
-            // saturation/matiz picker), for anything the 8 quick swatches
-            // above don't cover -- see ensureColorDialog/openColorDialog.
+            // saturation/matiz picker), for anything the swatches above
+            // don't cover -- see ensureColorDialog/openColorDialog.
             const moreBtn = document.createElement('button');
             moreBtn.type = 'button';
             moreBtn.className = 'perm-tree-color-more-btn';
@@ -2940,22 +2990,26 @@
             const toHex = (n) => Math.max(0, Math.min(255, Math.round((n + m) * 255))).toString(16).padStart(2, '0');
             return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
         }
-        // Inverse of hsvToHex, hue component only -- so opening
-        // Personalizado on an already-colored classification starts the
-        // saturation/matiz square and strip at the color's OWN hue instead
-        // of always resetting to the same default blue.
-        function hexToHue(hex) {
-            const r = parseInt(hex.slice(1, 3), 16) / 255;
-            const g = parseInt(hex.slice(3, 5), 16) / 255;
-            const b = parseInt(hex.slice(5, 7), 16) / 255;
+        function hexToRgb(hex) {
+            return { r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16) };
+        }
+        // Inverse of hsvToHex -- so opening Personalizado on an
+        // already-colored classification starts the saturation/matiz
+        // square, its marker, and the hue strip all at the color's OWN
+        // values instead of always resetting to the same default blue.
+        function hexToHsv(hex) {
+            const { r: r255, g: g255, b: b255 } = hexToRgb(hex);
+            const r = r255 / 255; const g = g255 / 255; const b = b255 / 255;
             const max = Math.max(r, g, b); const min = Math.min(r, g, b); const d = max - min;
-            if (d === 0) return 0;
-            let h;
-            if (max === r) h = ((g - b) / d) % 6;
-            else if (max === g) h = ((b - r) / d) + 2;
-            else h = ((r - g) / d) + 4;
-            h *= 60;
-            return h < 0 ? h + 360 : h;
+            let h = 0;
+            if (d !== 0) {
+                if (max === r) h = ((g - b) / d) % 6;
+                else if (max === g) h = ((b - r) / d) + 2;
+                else h = ((r - g) / d) + 4;
+                h *= 60;
+                if (h < 0) h += 360;
+            }
+            return { h, s: max === 0 ? 0 : d / max, v: max };
         }
         function ensureColorDialog() {
             if (colorDialogEl) return;
@@ -2975,13 +3029,26 @@
                     </div>
                     <div class="perm-tree-color-tab-panel" data-panel="custom" hidden>
                         <div class="perm-tree-color-sv-row">
-                            <canvas data-role="sv-canvas" width="220" height="150" class="perm-tree-color-sv-canvas"></canvas>
+                            <div class="perm-tree-color-sv-wrap">
+                                <canvas data-role="sv-canvas" width="220" height="150" class="perm-tree-color-sv-canvas"></canvas>
+                                <div class="perm-tree-color-sv-marker" data-role="sv-marker"></div>
+                            </div>
                             <div class="perm-tree-color-hue-wrap">
                                 <div class="perm-tree-color-hue-strip" data-role="hue-strip"></div>
                                 <div class="perm-tree-color-hue-arrow" data-role="hue-arrow"></div>
                             </div>
                         </div>
-                        <div class="perm-tree-color-hex-row">
+                        <div class="perm-tree-color-model-row">
+                            <label>${t('admin.masterTreeColorModel')}</label>
+                            <select disabled><option>RGB</option></select>
+                        </div>
+                        <div class="perm-tree-color-rgb-grid">
+                            <label>${t('admin.masterTreeColorRed')}</label>
+                            <input type="number" min="0" max="255" data-role="rgb-r" class="perm-tree-color-rgb-input">
+                            <label>${t('admin.masterTreeColorGreen')}</label>
+                            <input type="number" min="0" max="255" data-role="rgb-g" class="perm-tree-color-rgb-input">
+                            <label>${t('admin.masterTreeColorBlue')}</label>
+                            <input type="number" min="0" max="255" data-role="rgb-b" class="perm-tree-color-rgb-input">
                             <label>${t('admin.masterTreeColorHex')}</label>
                             <input type="text" data-role="hex-input" class="perm-tree-color-hex-input">
                         </div>
@@ -3037,14 +3104,18 @@
                 if (colorDialogState) colorDialogState.pickedHex = hex;
                 previewMain.style.backgroundColor = hex;
             };
-            const rowCounts = [5, 6, 7, 8, 7, 6, 5];
-            const centerRow = 3;
+            // Denser/wider than a first pass -- confirmed live against the
+            // user's own reference screenshot ("tiene más variedad de
+            // colores, haz que sea igual") that a 7-row mosaic read as too
+            // sparse next to Windows' own ~13-across one.
+            const rowCounts = [9, 10, 11, 12, 13, 12, 11, 10, 9];
+            const centerRow = 4;
             rowCounts.forEach((count, rowIdx) => {
                 const row = document.createElement('div');
                 row.className = 'perm-tree-color-mosaic-row-cells';
                 for (let i = 0; i < count; i += 1) {
                     const dx = i - count / 2; const dy = rowIdx - centerRow;
-                    const dist = Math.sqrt((dx * dx * 0.85) + (dy * dy)) / 4.2;
+                    const dist = Math.sqrt((dx * dx * 0.85) + (dy * dy)) / 6.8;
                     const angle = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
                     const hex = hsvToHex(angle, Math.min(1, dist), 1 - Math.min(0.55, dist * 0.25));
                     const cell = document.createElement('button');
@@ -3071,13 +3142,28 @@
             }
 
             // Personalizado: saturation (x) / value (y) square for the
-            // currently selected hue, hue itself picked from the strip.
+            // currently selected hue, hue itself picked from the strip --
+            // both draggable (mousedown then mousemove, not just a single
+            // click -- confirmed live: "la flechita no me deja subir ni
+            // bajar" when this was click-only), each with its own visible
+            // marker so it's clear exactly which point is selected
+            // (confirmed live: "en esta parte, me debe marcar que color
+            // queda" -- same crosshair Windows' own dialog has). Rojo/
+            // Verde/Azul spin inputs are a second, equally-live way to
+            // reach the same color, same "Modelo de color: RGB" section
+            // the user's own reference screenshot shows.
             const canvas = panel.querySelector('[data-role="sv-canvas"]');
             const ctx = canvas.getContext('2d');
+            const svMarker = panel.querySelector('[data-role="sv-marker"]');
             const hueStrip = panel.querySelector('[data-role="hue-strip"]');
             const hueArrow = panel.querySelector('[data-role="hue-arrow"]');
             const hexInput = panel.querySelector('[data-role="hex-input"]');
+            const rgbR = panel.querySelector('[data-role="rgb-r"]');
+            const rgbG = panel.querySelector('[data-role="rgb-g"]');
+            const rgbB = panel.querySelector('[data-role="rgb-b"]');
             let hue = 252;
+            let sat = 1;
+            let val = 1;
             function drawSvCanvas() {
                 const w = canvas.width; const h = canvas.height;
                 const satGrad = ctx.createLinearGradient(0, 0, w, 0);
@@ -3091,31 +3177,55 @@
                 ctx.fillStyle = valGrad;
                 ctx.fillRect(0, 0, w, h);
             }
-            canvas.addEventListener('click', (event) => {
-                const rect = canvas.getBoundingClientRect();
-                const x = (event.clientX - rect.left) / rect.width;
-                const y = (event.clientY - rect.top) / rect.height;
-                const hex = hsvToHex(hue, Math.min(1, Math.max(0, x)), 1 - Math.min(1, Math.max(0, y)));
-                hexInput.value = hex;
+            // Single source of truth for "the color just changed" --
+            // updates every other control (marker, hue arrow when it
+            // moved, hex, RGB, both previews) so no matter which control
+            // the admin just used, the rest immediately agree with it.
+            function applyHsv(h, s, v, skip) {
+                hue = h; sat = s; val = v;
+                const hex = hsvToHex(h, s, v);
+                if (skip !== 'marker') { svMarker.style.left = `${s * 100}%`; svMarker.style.top = `${(1 - v) * 100}%`; }
+                if (skip !== 'hue') { hueArrow.style.top = `${(h / 360) * 100}%`; drawSvCanvas(); }
+                if (skip !== 'hex') hexInput.value = hex;
+                if (skip !== 'rgb') { const rgb = hexToRgb(hex); rgbR.value = rgb.r; rgbG.value = rgb.g; rgbB.value = rgb.b; }
                 setPicked(hex);
+            }
+            function dragHandler(el, onMove) {
+                let dragging = false;
+                const move = (event) => { if (dragging) onMove(event); };
+                el.addEventListener('mousedown', (event) => { dragging = true; onMove(event); });
+                document.addEventListener('mousemove', move);
+                document.addEventListener('mouseup', () => { dragging = false; });
+            }
+            dragHandler(canvas, (event) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+                const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+                applyHsv(hue, x, 1 - y, 'hue');
             });
-            hueStrip.addEventListener('click', (event) => {
+            dragHandler(hueStrip, (event) => {
                 const rect = hueStrip.getBoundingClientRect();
-                const y = (event.clientY - rect.top) / rect.height;
-                hue = Math.min(1, Math.max(0, y)) * 360;
-                hueArrow.style.top = `${y * 100}%`;
-                drawSvCanvas();
+                const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+                applyHsv(y * 360, sat, val, null);
             });
             hexInput.addEventListener('input', () => {
-                if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) setPicked(hexInput.value);
+                if (!/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) return;
+                const hsv = hexToHsv(hexInput.value);
+                applyHsv(hsv.h, hsv.s, hsv.v, 'hex');
+            });
+            [rgbR, rgbG, rgbB].forEach((input) => {
+                input.addEventListener('input', () => {
+                    const clamp = (n) => Math.max(0, Math.min(255, Math.round(Number(n) || 0)));
+                    const hex = `#${[clamp(rgbR.value), clamp(rgbG.value), clamp(rgbB.value)].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+                    const hsv = hexToHsv(hex);
+                    applyHsv(hsv.h, hsv.s, hsv.v, 'rgb');
+                });
             });
             colorDialogEl.__setInitialHex = (hex) => {
-                hexInput.value = hex;
                 previewMain.style.backgroundColor = hex;
                 previewCurrent.style.backgroundColor = hex;
-                hue = hexToHue(hex);
-                hueArrow.style.top = `${(hue / 360) * 100}%`;
-                drawSvCanvas();
+                const hsv = hexToHsv(hex);
+                applyHsv(hsv.h, hsv.s, hsv.v, null);
             };
         }
         // "Actual" (previewCurrent, set once here) never changes while the
