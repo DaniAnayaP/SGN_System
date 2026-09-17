@@ -1898,8 +1898,15 @@ body.dark-mode .perm-tree-color-popover{ background-color: #23242b; }
     background-color: var(--color-bg);
 }
 .perm-tree-color-sv-row{ display: flex; gap: 0.6rem; }
-.perm-tree-color-sv-wrap{ position: relative; width: 220px; height: 150px; }
-.perm-tree-color-sv-canvas{ width: 220px; height: 150px; border-radius: 0.5rem; cursor: crosshair; display: block; }
+/* flex:1 + max-width (a ceiling, not a floor) + aspect-ratio -- confirmed
+   live this needed to actually SHRINK on a narrow phone screen ("siento
+   que aquí veo muchos espacios vacíos") instead of forcing a fixed
+   220x150 that overflowed the dialog sideways there; the hue strip next
+   to it (flex-shrink:0, no height of its own) stretches to match
+   whatever height this ends up at via the row's own default
+   align-items:stretch. */
+.perm-tree-color-sv-wrap{ position: relative; flex: 1; min-width: 0; max-width: 220px; aspect-ratio: 22 / 15; }
+.perm-tree-color-sv-canvas{ width: 100%; height: 100%; border-radius: 0.5rem; cursor: crosshair; display: block; }
 /* Crosshair marking exactly which point is selected -- confirmed live
    this was missing entirely ("en esta parte, me debe marcar que color
    queda"). pointer-events:none so it never steals a drag from the canvas
@@ -1915,7 +1922,7 @@ body.dark-mode .perm-tree-color-popover{ background-color: #23242b; }
     transform: translate(-50%, -50%);
     pointer-events: none;
 }
-.perm-tree-color-hue-wrap{ position: relative; width: 1.2rem; height: 150px; }
+.perm-tree-color-hue-wrap{ position: relative; width: 1.2rem; flex-shrink: 0; align-self: stretch; }
 .perm-tree-color-hue-strip{
     width: 100%;
     height: 100%;
@@ -1959,7 +1966,9 @@ body.dark-mode .perm-tree-color-popover{ background-color: #23242b; }
 .perm-tree-color-rgb-grid label{ font-size: 0.72rem; color: var(--color-text-secondary); }
 .perm-tree-color-rgb-input,
 .perm-tree-color-hex-input{
-    width: 6rem;
+    width: 100%;
+    max-width: 6rem;
+    box-sizing: border-box;
     border: 1px solid var(--color-border);
     border-radius: 0.35rem;
     padding: 0.3rem 0.5rem;
@@ -1972,6 +1981,8 @@ body.dark-mode .perm-tree-color-popover{ background-color: #23242b; }
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
+    flex-wrap: wrap;
+    row-gap: 0.7rem;
     margin-top: 1rem;
 }
 /* Fixed column, matching perm-tree-mstatus-header-platforms's own width
