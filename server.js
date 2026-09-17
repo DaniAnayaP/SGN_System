@@ -246,6 +246,7 @@ const {
     deleteMasterPermissionClassificationOverride,
     getClassificationColors,
     setClassificationColor,
+    setClassificationTextColor,
     getEffectiveColumnClassifications,
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
@@ -2129,9 +2130,19 @@ app.get('/api/admin/master-permission-classification-colors', requireAuth, requi
     res.json({ colors: getClassificationColors() });
 });
 app.put('/api/admin/master-permission-classification-colors', requireAuth, requireAdmin, (req, res) => {
-    const { classificationId, color } = req.body || {};
+    const { classificationId, color, textColor } = req.body || {};
     if (typeof classificationId !== 'string' || !classificationId) {
         return res.status(400).json({ message: 'classificationId is required.' });
+    }
+    // textColor recolors only the classification badge's TEXT (see the "A"
+    // picker button in PermissionTree.js), independent of the dot/
+    // background `color` below -- mutually exclusive per request, same one-
+    // field-at-a-time shape the rest of this route already had.
+    if (textColor !== undefined) {
+        if (typeof textColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(textColor)) {
+            return res.status(400).json({ message: 'textColor must be a hex color like #7f77dd.' });
+        }
+        return res.json({ textColor: setClassificationTextColor(classificationId, textColor, changedByLabel(req)) });
     }
     // Free-form now (see Más Colores in PermissionTree.js) -- any real hex
     // color is valid, not just the 8 quick-swatch presets.

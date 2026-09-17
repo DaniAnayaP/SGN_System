@@ -2023,14 +2023,18 @@
                     const badge = document.createElement('span');
                     badge.className = 'perm-tree-mstatus-class-badge';
                     badge.textContent = classificationCtx.readOnlyLabel;
-                    badge.style.color = classificationCtx.readOnlyColor;
+                    // The label's own color falls back to the dot color
+                    // whenever no independent text color was ever chosen
+                    // (see the "A" button below) -- same look as before
+                    // that picker existed.
+                    badge.style.color = classificationTextColor(classificationCtx.classificationId) || classificationCtx.readOnlyColor;
                     badge.style.borderColor = classificationCtx.readOnlyColor;
                     badge.style.backgroundColor = `color-mix(in srgb, ${classificationCtx.readOnlyColor} 14%, var(--color-bg))`;
                     classificationCell.appendChild(badge);
                     // Only a real classification's own group row carries
                     // classificationId (see buildFixedClassificationCtx) --
                     // a structural level badge (Departamento, Tabla, ...)
-                    // has no color of its own to pick, so gets no button.
+                    // has no color of its own to pick, so gets no buttons.
                     if (classificationCtx.classificationId && !grantMode) {
                         const colorBtn = document.createElement('button');
                         colorBtn.type = 'button';
@@ -2041,9 +2045,27 @@
                         colorBtn.style.borderColor = classificationCtx.readOnlyColor;
                         colorBtn.addEventListener('click', (event) => {
                             event.stopPropagation();
-                            openColorPicker(colorBtn, classificationCtx.classificationId);
+                            openColorPicker(colorBtn, classificationCtx.classificationId, 'dot');
                         });
                         classificationCell.appendChild(colorBtn);
+                        // Independent picker for the badge's own TEXT color
+                        // (see classificationTextColor) -- same trigger/
+                        // popover/dialog machinery as colorBtn above, just
+                        // aimed at a separate value (kind: 'text').
+                        const textColorBtn = document.createElement('button');
+                        textColorBtn.type = 'button';
+                        textColorBtn.className = 'perm-tree-text-color-picker-btn';
+                        textColorBtn.setAttribute('aria-label', t('admin.masterTreeChooseTextColor'));
+                        const textHex = classificationTextColor(classificationCtx.classificationId) || classificationCtx.readOnlyColor;
+                        textColorBtn.innerHTML = 'A<span class="perm-tree-text-color-picker-bar" aria-hidden="true"></span>';
+                        textColorBtn.style.color = textHex;
+                        textColorBtn.style.borderColor = textHex;
+                        textColorBtn.querySelector('.perm-tree-text-color-picker-bar').style.backgroundColor = textHex;
+                        textColorBtn.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            openColorPicker(textColorBtn, classificationCtx.classificationId, 'text');
+                        });
+                        classificationCell.appendChild(textColorBtn);
                     }
                 } else if (classificationCtx) {
                     const select = document.createElement('select');
@@ -2789,6 +2811,15 @@
         // actually editing and every existing caller would otherwise need
         // updating for a 4th positional argument.
         let classificationColors = new Map();
+        // Same shape as classificationColors above, but for the badge's
+        // TEXT color -- an independent choice from the dot/background one
+        // (see the "A" picker button in statusRow), self-fetched alongside
+        // it since both live on the same server row (see
+        // master_permission_classification_colors' own DDL comment).
+        // Absent here means "no text color chosen yet", which
+        // classificationTextColor falls back from to the dot color, same
+        // look as before this picker existed.
+        let classificationTextColors = new Map();
         // 8 color families (light to dark, index 3 is each family's own
         // "base" swatch) behind the quick popover's "Colores del tema" grid
         // and "Colores estándar" row -- the hex itself is what's actually
@@ -2812,6 +2843,10 @@
         // so "Colores recientes" reflects the same history regardless of
         // which control was actually used.
         const recentColors = [];
+        // Same convention as recentColors above, kept as its own list since
+        // a text color and a dot color picked around the same time aren't
+        // otherwise related (see saveClassificationColor's `kind` param).
+        const recentTextColors = [];
         // The 1 classification every Pantalla can use even if menu.json
         // never gave it one of its own -- "Por Definir Clasificación", for
         // anything an admin explicitly wants pulled out of "just sitting
@@ -2872,6 +2907,15 @@
             for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
             return CLASSIFICATION_COLOR_PALETTE[hash % CLASSIFICATION_COLOR_PALETTE.length];
         }
+        // An admin-chosen TEXT color, independent of the dot/background one
+        // above -- returns null (never a fallback color itself) when none
+        // was chosen, so every caller falls back to classificationColor(id)
+        // and a classification never touched by this picker still looks
+        // exactly like it did before this feature existed.
+        function classificationTextColor(id) {
+            if (!id) return null;
+            return classificationTextColors.get(id) || null;
+        }
         // A generic "no se pudo guardar" toast (the previous behavior here)
         // reads as a mystery every time it's actually just a lapsed
         // session -- confirmed live: "cuando cambio el color... me arroja
@@ -2894,20 +2938,28 @@
         // fetch-then-render-again shape as saveClassificationOverride below.
         // hex is a full "#rrggbb" string now (not one of a fixed id list --
         // see openColorDialog's Más colores flow), sent/stored verbatim.
-        async function saveClassificationColor(classificationId, hex) {
+        // kind picks which of the two independent colors this call is for
+        // (see the "A" text-color picker button in statusRow) -- 'dot' (the
+        // pill's dot/background, the original and default) or 'text' (the
+        // pill's own label color).
+        async function saveClassificationColor(classificationId, hex, kind = 'dot') {
+            const isText = kind === 'text';
             try {
+                const body = isText ? { classificationId, textColor: hex } : { classificationId, color: hex };
                 const res = await fetch('/api/admin/master-permission-classification-colors', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ classificationId, color: hex }),
+                    body: JSON.stringify(body),
                 });
                 if (!res.ok) throw new SaveFailedError(res.status);
-                classificationColors.set(classificationId, hex);
-                const existingIdx = recentColors.indexOf(hex);
-                if (existingIdx !== -1) recentColors.splice(existingIdx, 1);
-                recentColors.unshift(hex);
-                if (recentColors.length > 8) recentColors.length = 8;
+                const targetMap = isText ? classificationTextColors : classificationColors;
+                const recentList = isText ? recentTextColors : recentColors;
+                targetMap.set(classificationId, hex);
+                const existingIdx = recentList.indexOf(hex);
+                if (existingIdx !== -1) recentList.splice(existingIdx, 1);
+                recentList.unshift(hex);
+                if (recentList.length > 8) recentList.length = 8;
                 renderStatusTree();
             } catch (err) {
                 const message = describeSaveFailure(err);
@@ -2924,11 +2976,14 @@
         function closeColorPicker() {
             if (openColorPickerCleanup) { openColorPickerCleanup(); openColorPickerCleanup = null; }
         }
-        function openColorPicker(anchorBtn, classificationId) {
+        function openColorPicker(anchorBtn, classificationId, kind = 'dot') {
             closeColorPicker();
+            const isText = kind === 'text';
+            const colorMap = isText ? classificationTextColors : classificationColors;
+            const recentList = isText ? recentTextColors : recentColors;
             const popover = document.createElement('div');
             popover.className = 'perm-tree-color-popover';
-            const currentHex = classificationColors.get(classificationId);
+            const currentHex = colorMap.get(classificationId);
             const addSection = (labelKey) => {
                 const label = document.createElement('div');
                 label.className = 'perm-tree-color-section-label';
@@ -2948,7 +3003,7 @@
                 swatch.addEventListener('click', (event) => {
                     event.stopPropagation();
                     closeColorPicker();
-                    saveClassificationColor(classificationId, hex);
+                    saveClassificationColor(classificationId, hex, kind);
                 });
                 container.appendChild(swatch);
             };
@@ -2972,11 +3027,11 @@
             // "Colores recientes" -- only once something's actually been
             // accepted (quick swatch, either grid above, or the Más colores
             // dialog all feed the same list, see saveClassificationColor).
-            if (recentColors.length) {
+            if (recentList.length) {
                 addSection('admin.masterTreeColorRecent');
                 const recentRow = document.createElement('div');
                 recentRow.className = 'perm-tree-color-standard-row';
-                recentColors.forEach((hex) => addSwatch(recentRow, hex, false));
+                recentList.forEach((hex) => addSwatch(recentRow, hex, false));
                 popover.appendChild(recentRow);
             }
             // Free-form colorimetry (Estándar hex mosaic + Personalizado
@@ -2989,7 +3044,7 @@
             moreBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
                 closeColorPicker();
-                openColorDialog(classificationId);
+                openColorDialog(classificationId, kind);
             });
             popover.appendChild(moreBtn);
             anchorBtn.parentElement.appendChild(popover);
@@ -3016,7 +3071,7 @@
         // and only call saveClassificationColor on Aceptar, so Cancelar or
         // the backdrop/Escape genuinely discards whatever was previewed.
         let colorDialogEl = null;
-        let colorDialogState = null; // { classificationId, pickedHex }
+        let colorDialogState = null; // { classificationId, pickedHex, kind }
         function hsvToHex(h, s, v) {
             const c = v * s; const x = c * (1 - Math.abs(((h / 60) % 2) - 1)); const m = v - c;
             let r = 0; let g = 0; let b = 0;
@@ -3123,9 +3178,9 @@
             document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !colorDialogEl.hidden) close(); });
             colorDialogEl.querySelector('[data-role="accept"]').addEventListener('click', () => {
                 if (!colorDialogState) return;
-                const { classificationId, pickedHex } = colorDialogState;
+                const { classificationId, pickedHex, kind } = colorDialogState;
                 close();
-                saveClassificationColor(classificationId, pickedHex);
+                saveClassificationColor(classificationId, pickedHex, kind);
             });
 
             // Estándar: a hexagon honeycomb, hue by angle around the
@@ -3267,10 +3322,16 @@
         // dialog is open, unlike "Nuevo" (previewMain, live from every
         // click) -- Cancelar/Escape/backdrop genuinely discard the preview
         // since only Aceptar ever calls saveClassificationColor.
-        function openColorDialog(classificationId) {
+        function openColorDialog(classificationId, kind = 'dot') {
             ensureColorDialog();
-            const currentHex = classificationColor(classificationId);
-            colorDialogState = { classificationId, pickedHex: currentHex };
+            const isText = kind === 'text';
+            // Text color has no automatic fallback of its own -- reopening
+            // "Más colores" on a classification whose text was never
+            // recolored starts from the dot color it currently LOOKS like
+            // (see classificationTextColor), same as the badge itself does.
+            const currentHex = isText ? (classificationTextColor(classificationId) || classificationColor(classificationId)) : classificationColor(classificationId);
+            colorDialogState = { classificationId, pickedHex: currentHex, kind };
+            colorDialogEl.querySelector('#perm-tree-color-dialog-title').textContent = t(isText ? 'admin.masterTreeChooseTextColor' : 'admin.masterTreeChooseColor');
             colorDialogEl.__setInitialHex(currentHex);
             colorDialogEl.querySelector('[data-tab="std"]').click();
             colorDialogEl.hidden = false;
@@ -3290,6 +3351,7 @@
             if (field === 'app') return t('admin.masterTreePlatformApp');
             if (field === 'clasificacion') return t('admin.masterTreeHistoryFieldClassification');
             if (field === 'color') return t('admin.masterTreeHistoryFieldColor');
+            if (field === 'textColor') return t('admin.masterTreeHistoryFieldTextColor');
             return field;
         }
         function formatHistoryChange(entry) {
@@ -3302,7 +3364,7 @@
             const none = t('menu.classNone');
             if (entry.field === 'estatus') return `${statusLabel(entry.oldValue)} → ${statusLabel(entry.newValue)}`;
             if (entry.field === 'web' || entry.field === 'app') return `${bool(entry.oldValue)} → ${bool(entry.newValue)}`;
-            if (entry.field === 'color') {
+            if (entry.field === 'color' || entry.field === 'textColor') {
                 // "—" here, never menu.classNone's "Por clasificar" -- that
                 // string means "not classified", not "no color chosen
                 // yet", and would misleadingly imply the classification
@@ -5030,6 +5092,7 @@
                     // (neutral fallback in the badge CSS) rather than
                     // blocking the tree from rendering at all.
                     classificationColors = new Map();
+                    classificationTextColors = new Map();
                     if (!readOnly) {
                         try {
                             const colorsRes = await fetch('/api/admin/master-permission-classification-colors', { credentials: 'include' });
@@ -5037,6 +5100,7 @@
                                 const colorsData = await colorsRes.json();
                                 (colorsData.colors || []).forEach((c) => {
                                     if (c && c.classificationId && c.color) classificationColors.set(c.classificationId, c.color);
+                                    if (c && c.classificationId && c.textColor) classificationTextColors.set(c.classificationId, c.textColor);
                                 });
                             }
                         } catch {

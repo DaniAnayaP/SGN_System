@@ -1673,14 +1673,14 @@ body.dark-mode .perm-tree-depth-2{
    other column's own width. */
 .perm-tree-mstatus-class-cell{
     flex-shrink: 0;
-    width: 9rem;
+    width: 10.6rem;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.35rem;
     position: relative;
 }
-.perm-tree-mstatus-header-class{ width: 9rem; }
+.perm-tree-mstatus-header-class{ width: 10.6rem; }
 .perm-tree-mstatus-class-select{
     width: 100%;
     max-width: 9rem;
@@ -1775,6 +1775,37 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
 }
 .perm-tree-color-picker-btn i{ font-size: 0.8rem; }
 .perm-tree-color-picker-btn:hover{ filter: brightness(1.1); }
+/* Independent trigger for the badge's own TEXT color (see the "A" button
+   in statusRow) -- same size/shape as the dot picker above so the two sit
+   evenly side by side; the underline bar (not the glyph's own fill) is
+   what actually swatches the current color, mirroring how a real text-
+   color picker (e.g. a word processor's "A" button) shows its color. */
+.perm-tree-text-color-picker-btn{
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    border: 1px solid;
+    background-color: var(--color-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    padding: 0;
+}
+.perm-tree-text-color-picker-btn:hover{ filter: brightness(1.1); }
+.perm-tree-text-color-picker-bar{
+    position: absolute;
+    left: 0.3rem;
+    right: 0.3rem;
+    bottom: 0.3rem;
+    height: 0.14rem;
+    border-radius: 0.1rem;
+}
 /* Swatch grid, anchored to the classification cell (position:relative
    above) right under the picker button -- z-index above every row/nest
    guide/sticky header so it never renders clipped or behind a

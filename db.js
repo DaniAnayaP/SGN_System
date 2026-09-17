@@ -1880,6 +1880,16 @@ if (masterPermissionStatusColumns.length && !masterPermissionStatusColumns.some(
     `);
 }
 
+// text_color added after master_permission_classification_colors already
+// shipped once -- the badge's TEXT color (see the "A" picker button in
+// PermissionTree.js) picked independently of this same row's own `color`
+// (the dot/background), so a classification can e.g. keep a light dot but
+// a dark, readable label instead of the two always matching.
+const classificationColorColumns = db.prepare('PRAGMA table_info(master_permission_classification_colors)').all();
+if (classificationColorColumns.length && !classificationColorColumns.some((c) => c.name === 'text_color')) {
+    db.exec('ALTER TABLE master_permission_classification_colors ADD COLUMN text_color TEXT');
+}
+
 // abbreviation added after job_positions already shipped once.
 const jobPositionColumns = db.prepare('PRAGMA table_info(job_positions)').all();
 if (!jobPositionColumns.some((c) => c.name === 'abbreviation')) {
@@ -5739,7 +5749,7 @@ function deleteMasterPermissionClassificationOverride(nodeKey, updatedBy) {
 // value beyond validating its shape (see the hex regex check in
 // server.js's PUT route) -- it's just stored and handed back verbatim.
 function getClassificationColors() {
-    return db.prepare('SELECT classification_id AS classificationId, color FROM master_permission_classification_colors').all();
+    return db.prepare('SELECT classification_id AS classificationId, color, text_color AS textColor FROM master_permission_classification_colors').all();
 }
 function setClassificationColor(classificationId, color, updatedBy) {
     const before = db.prepare('SELECT color FROM master_permission_classification_colors WHERE classification_id = ?').get(classificationId);
@@ -5755,6 +5765,29 @@ function setClassificationColor(classificationId, color, updatedBy) {
         logMasterPermissionChange(`classification::${classificationId}`, 'color', before ? before.color : null, color, updatedBy);
     }
     return { classificationId, color };
+}
+// Independent of the dot/background color above -- a classification's
+// badge TEXT can be recolored on its own (see the "A" picker button in
+// PermissionTree.js), so this is its own column on the same row rather
+// than a second table, kept in sync the same upsert-and-log way. `color`
+// is NOT NULL, so a text color chosen before any dot color exists yet
+// seeds it with '' -- falsy, which PermissionTree.js's own color-map
+// loader already treats as "no dot color chosen" (see init()), so this
+// never paints a dot that was never actually picked.
+function setClassificationTextColor(classificationId, textColor, updatedBy) {
+    const before = db.prepare('SELECT text_color AS textColor FROM master_permission_classification_colors WHERE classification_id = ?').get(classificationId);
+    db.prepare(`
+        INSERT INTO master_permission_classification_colors (classification_id, color, text_color, updated_by)
+        VALUES (@classificationId, '', @textColor, @updatedBy)
+        ON CONFLICT(classification_id) DO UPDATE SET
+            text_color = excluded.text_color,
+            updated_by = excluded.updated_by,
+            updated_at = datetime('now')
+    `).run({ classificationId, textColor, updatedBy: updatedBy || '' });
+    if (!before || before.textColor !== textColor) {
+        logMasterPermissionChange(`classification::${classificationId}`, 'textColor', before ? before.textColor : null, textColor, updatedBy);
+    }
+    return { classificationId, textColor };
 }
 // Generic append -- see master_permission_change_log's own DDL comment for
 // the node_key convention (including the "classification::<id>" synthetic
@@ -6827,6 +6860,7 @@ module.exports = {
     deleteMasterPermissionClassificationOverride,
     getClassificationColors,
     setClassificationColor,
+    setClassificationTextColor,
     getEffectiveColumnClassifications,
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
