@@ -4012,10 +4012,14 @@
                 // item-level siblings of the real áreas (see generalItems in
                 // init()), so a synthetic "Accesos Generales" Área groups
                 // them here too, same reserved-segment idea as Tabla/Iconos/
-                // Botones (__general__ is never a real área id). 'main'
-                // keeps its own flat item list untouched -- it was never
-                // Departamento/Área structured to begin with.
-                const hasGeneralItems = section.id !== 'main' && (section.items || []).some((i) => GENERAL_ITEM_IDS.includes(i.id));
+                // Botones (__general__ is never a real área id). Applies to
+                // 'main' too now (confirmed live, 2026-09-17: "General ->
+                // Accesos generales -> inicio, panel, tablero") -- it used
+                // to keep its own flat item list untouched since it was
+                // never Departamento/Área structured to begin with, but
+                // Inicio/Panel/Tablero specifically still deserve the same
+                // grouping every other section's copy of them gets.
+                const hasGeneralItems = (section.items || []).some((i) => GENERAL_ITEM_IDS.includes(i.id));
                 const generalKey = hasGeneralItems ? keyOf(section.id, '__general__', null) : null;
                 if (generalKey) addChild(sectionKey, generalKey);
                 (section.items || []).forEach((item) => {
@@ -4485,9 +4489,11 @@
                 // reserved __general__ segment buildStatusChildrenMap uses,
                 // same rollup-only container pattern as Tabla/Iconos/Botones
                 // (no independent drag, just its own Estatus/Web·App like
-                // every other row). 'main' is untouched -- it was never
-                // Departamento/Área structured to begin with.
-                const hasGeneralItems = section.id !== 'main' && section.items.some((i) => GENERAL_ITEM_IDS.includes(i.id));
+                // every other row). Applies to 'main' too now (confirmed
+                // live, 2026-09-17) -- see buildStatusChildrenMap's own
+                // comment on the identical condition for why the earlier
+                // 'main' exclusion no longer holds.
+                const hasGeneralItems = section.items.some((i) => GENERAL_ITEM_IDS.includes(i.id));
                 const generalKey = hasGeneralItems ? keyOf(section.id, '__general__', null) : null;
                 const generalTreeKey = `general::${section.id}`;
                 let generalChildrenVisible = false;
