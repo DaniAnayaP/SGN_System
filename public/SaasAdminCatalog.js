@@ -22,8 +22,6 @@
 // equivocada).
 // ---------------------------------------------------------------------------
 
-const CONTROL_INTERNO_LABEL = 'Columnas de Control Interno';
-
 function tablaApartado(id, columnas, acciones) {
     return { id, label: 'Tabla principal', columnas, controlInterno: true, acciones };
 }

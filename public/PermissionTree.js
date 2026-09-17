@@ -2145,20 +2145,22 @@
                 // cells above.
                 const statusNestCell = document.createElement('div');
                 statusNestCell.className = 'perm-tree-mstatus-status-nest-cell';
-                if (!readOnly && hasStatusChildren(key)) {
+                if (!readOnly) {
                     const statusNestBtn = document.createElement('button');
                     statusNestBtn.type = 'button';
                     statusNestBtn.className = 'perm-tree-mstatus-nest-btn';
                     statusNestBtn.title = t('admin.masterTreeApplyNestedStatus');
                     statusNestBtn.setAttribute('aria-label', statusNestBtn.title);
                     statusNestBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
-                    // grantMode 'giro' -- Estatus itself is read-only reference
-                    // here (see statusCell above), so applying it to nested
-                    // rows has nothing real to do; shown disabled rather than
-                    // omitted so this cell doesn't read as an unexplained gap
-                    // on every single row, same "visible but disabled" call
-                    // already made for the classification select just above.
-                    statusNestBtn.disabled = !!grantMode;
+                    // Disabled (never omitted) whenever there's nothing to
+                    // cascade to (a true leaf) or grantMode 'giro' makes
+                    // Estatus itself a read-only reference here -- an empty
+                    // cell on every leaf row read as a visual gap/broken
+                    // control (confirmed live, 2026-09-17: "visualmente no
+                    // debe de haber espacios vacíos entre filas"), same
+                    // "visible but disabled" call already made for the
+                    // classification select just above.
+                    statusNestBtn.disabled = !hasStatusChildren(key) || !!grantMode;
                     statusNestBtn.addEventListener('click', () => applyNestedStatus(key));
                     statusNestCell.appendChild(statusNestBtn);
                 }
@@ -2747,22 +2749,25 @@
             renderStatusTree();
         }
 
-        // Checkbox + its "apply to nested" button, side by side -- the
-        // button only renders on group rows that actually have leaves
-        // underneath (leafKeys is only passed for Departamento/Área rows,
-        // see renderStatusTree); a leaf row like "Inicio" gets just the
-        // checkbox, nothing to apply anything to.
+        // Checkbox + its "apply to nested" button, side by side -- disabled
+        // (never omitted) on a leaf row like "Inicio" (leafKeys not passed,
+        // or passed empty) with nothing underneath to cascade to, same
+        // "visible but disabled" convention as statusNestCell just above --
+        // an empty cell on every leaf row read as a visual gap (confirmed
+        // live, 2026-09-17: "visualmente no debe de haber espacios vacíos
+        // entre filas").
         function buildPlatformGroup(key, platform, leafKeys, ancestorLocked) {
             const group = document.createElement('div');
             group.className = 'perm-tree-mstatus-platform-group';
             group.appendChild(buildPlatformCheckbox(key, platform, ancestorLocked));
-            if (!readOnly && leafKeys && leafKeys.length) {
+            if (!readOnly) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'perm-tree-mstatus-nest-btn';
                 btn.title = t(platform === 'web' ? 'admin.masterTreeApplyNestedWeb' : 'admin.masterTreeApplyNestedApp');
                 btn.setAttribute('aria-label', btn.title);
                 btn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
+                btn.disabled = !leafKeys || !leafKeys.length;
                 btn.addEventListener('click', () => applyNestedPlatform(leafKeys, key, platform));
                 group.appendChild(btn);
             }

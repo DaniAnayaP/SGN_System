@@ -2741,6 +2741,12 @@ body:has(.saas-master-tree-panel) main{
     display: flex;
     flex-direction: column;
     min-height: 0;
+    /* Same 0.5rem the client tree's own .master-tree-subview uses, so the
+       subtitle sits right under the table instead of the browser's own
+       default <p> margin plus admin-subtitle's 1.25rem stacking on top of
+       it (confirmed live, 2026-09-17, "4 veces": "este espacio es mucho,
+       debe ser lo mínimo"). */
+    gap: 0.5rem;
 }
 .saas-master-tree-panel .saas-master-status-list{
     flex: 1;
@@ -2758,6 +2764,7 @@ body:has(.saas-master-tree-panel) main{
 .saas-master-tree-panel .admin-form-actions,
 .saas-master-tree-panel .admin-save-status{
     flex-shrink: 0;
+    margin: 0;
 }
 .saas-master-status-list{
     border: 1px solid var(--color-border);
