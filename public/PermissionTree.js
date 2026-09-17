@@ -2509,26 +2509,25 @@
             // Small buffer so the longest row's own badge doesn't sit
             // flush against the next column's edge.
             const target = Math.ceil(maxRightEdge) + 8;
-            treeRoot.style.setProperty('--perm-tree-label-col-width', `${target}px`);
             // Every row's OWN cumulative width up to the end of its badge
             // (label + gap + count badge, see `trailing` above) is now the
             // SAME constant (target) regardless of its own leading content
             // (toggle+rollup+drag-handle, whatever it has) or its own
             // badge's digit count -- that's the whole point of giving each
-            // one its OWN inline label width below. So the header needs NO
-            // leading spacer of its own to match: its label already gets
-            // that same `target` width (via the CSS var above, and it has
-            // no badge of its own, so trailing is simply 0 there), so
-            // spacer 0 already lines its own end-of-label (and therefore
-            // its Estatus/Web·App columns) up with every row's. A non-zero
-            // spacer (this used to hardcode 4.3rem, a guess at a depth-0
-            // row's own leading width) just makes the header's own total
-            // width that much WIDER than any row's, pushing its columns
-            // measurably right of the row's own -- confirmed live
-            // ("columnas desalineadas") once grantMode's rows (no drag
-            // handle at all) made the guess visibly wrong, though the same
-            // drift already existed for statusMode too, at a smaller,
-            // easier-to-miss scale.
+            // one its OWN inline label width below. The header's OWN label
+            // has a leading offset of its own too, though (its left padding
+            // plus the flex `gap` landing right after its zero-width
+            // spacer) -- exactly the same kind of thing a row's own
+            // toggle/rollup/drag-handle produces -- so it needs the same
+            // offsetLeft subtraction a row's label gets below, not the bare
+            // `target`: giving the header's label the full `target` width
+            // on top of its own nonzero leading offset made the header
+            // that much WIDER than any row, pushing its columns measurably
+            // right of the row's own (confirmed live: "columnas
+            // desalineadas" / "el titulo no centrado").
+            const headerLabel = treeRoot.querySelector('.perm-tree-mstatus-header-label');
+            const headerOffsetLeft = headerLabel ? headerLabel.getBoundingClientRect().left - treeLeft : 0;
+            treeRoot.style.setProperty('--perm-tree-label-col-width', `${Math.max(0, target - headerOffsetLeft)}px`);
             measured.forEach(({ label, offsetLeft, trailing }) => {
                 label.style.width = `${Math.max(0, target - offsetLeft - trailing)}px`;
             });
