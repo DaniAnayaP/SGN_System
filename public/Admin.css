@@ -2776,20 +2776,15 @@ body:has(.saas-master-tree-panel) main{
 .saas-master-status-list .perm-tree-row{
     min-width: max-content;
 }
-.saas-master-status-list .perm-tree-mstatus-label{
-    width: 16rem;
-}
-/* The header's own label cell is a DIFFERENT class from a row's
-   (perm-tree-mstatus-header-label, not perm-tree-mstatus-label) -- confirmed
-   live that only overriding the row class above left the header one at its
-   default ~5rem fallback, wrapping "Pantalla / Apartado / Columna" onto 3
-   narrow lines and leaving a huge empty gap before Estatus (the header's
-   own controls still flush right via margin-left:auto against the FULL
-   tree width, not against this narrow label). Matches the row override so
-   both line up under the same column. */
-.saas-master-status-list .perm-tree-mstatus-header-label{
-    width: 16rem;
-}
+/* This page's own label/count-badge column is now measured and aligned
+   dynamically by alignLabelColumnWidth in Admin-ArbolMaestroSaaS.js --
+   same --perm-tree-label-col-width custom property + per-row inline width
+   the client tree's own identical function sets, ported here since a
+   fixed 16rem (the previous approach) put every row's count badge at a
+   DIFFERENT x position once depth varied (confirmed live, 2026-09-17:
+   "esto todavía se ve desalineado" comparing directly against the client
+   tree). No CSS override needed anymore -- the base .perm-tree-mstatus-label/
+   .perm-tree-mstatus-header-label rules already read that same variable. */
 .saas-master-status-row-general{
     background: var(--color-bg);
 }

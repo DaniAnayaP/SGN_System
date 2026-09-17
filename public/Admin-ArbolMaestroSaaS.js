@@ -1192,6 +1192,48 @@ function drawGuides() {
     });
 }
 
+// Sets --perm-tree-label-col-width (read by .perm-tree-mstatus-label and
+// .perm-tree-mstatus-header-label) to the widest CURRENTLY VISIBLE row
+// label's own natural width, then gives every row its OWN inline width so
+// its label+count-badge combo ends at the SAME x regardless of that row's
+// own depth/leading icons -- verbatim port of PermissionTree.js's own
+// alignLabelColumnWidth (see its own comment there for the full
+// reasoning). This screen used to just fix the label column at 16rem,
+// which put a deeper row's count badge measurably right of a shallower
+// one's (confirmed live, 2026-09-17, comparing directly against the
+// client tree: "todavía se ve desalineado").
+let saasMeasureCtx = null;
+function measureTextWidth(text, font) {
+    if (!saasMeasureCtx) saasMeasureCtx = document.createElement('canvas').getContext('2d');
+    saasMeasureCtx.font = font;
+    return saasMeasureCtx.measureText(text).width;
+}
+function alignLabelColumnWidth() {
+    const labels = listEl.querySelectorAll('.perm-tree-mstatus-label');
+    if (!labels.length) return;
+    const treeLeft = listEl.getBoundingClientRect().left;
+    let maxRightEdge = 0;
+    const measured = [];
+    labels.forEach((label) => {
+        const labelRect = label.getBoundingClientRect();
+        const offsetLeft = labelRect.left - treeLeft;
+        const font = getComputedStyle(label).font;
+        const badge = label.nextElementSibling && label.nextElementSibling.classList.contains('perm-tree-mstatus-count-badge')
+            ? label.nextElementSibling : null;
+        const trailing = badge ? badge.getBoundingClientRect().right - labelRect.right : 0;
+        const rightEdge = offsetLeft + measureTextWidth(label.textContent, font) + trailing;
+        if (rightEdge > maxRightEdge) maxRightEdge = rightEdge;
+        measured.push({ label, offsetLeft, trailing });
+    });
+    const target = Math.ceil(maxRightEdge) + 8;
+    const headerLabel = listEl.querySelector('.perm-tree-mstatus-header-label');
+    const headerOffsetLeft = headerLabel ? headerLabel.getBoundingClientRect().left - treeLeft : 0;
+    listEl.style.setProperty('--perm-tree-label-col-width', `${Math.max(0, target - headerOffsetLeft)}px`);
+    measured.forEach(({ label, offsetLeft, trailing }) => {
+        label.style.width = `${Math.max(0, target - offsetLeft - trailing)}px`;
+    });
+}
+
 function buildHeader() {
     const header = document.createElement('div');
     header.className = 'perm-tree-mstatus-header';
@@ -1280,7 +1322,11 @@ function renderList() {
     // the user every row needs a real, clickable Navegar button, same as
     // the real Árbol de Permisos Maestro gives its own Departamento-level
     // rows (not just Pantalla ones).
-    generalRow.appendChild(buildControls('__general__', allLeafKeys, CATALOG[0].screens[0].href, buildLevelBadgeCtx('grupo'), Dashboard.t('admin.saasMasterTreeGeneral')));
+    // Same "Estructura Web" special-case the client tree's own General row
+    // gets (reused key, not a SaaS-specific synonym) -- General here is
+    // likewise the whole app shell, not a real Grupo like Servicio a
+    // Cliente/Config. SaaS (confirmed live, 2026-09-17).
+    generalRow.appendChild(buildControls('__general__', allLeafKeys, CATALOG[0].screens[0].href, { readOnlyLabel: Dashboard.t('admin.masterTreeGeneralClassification'), readOnlyColor: SAAS_LEVEL_BADGES.grupo.color }, Dashboard.t('admin.saasMasterTreeGeneral')));
     listEl.appendChild(generalRow);
 
     if (!collapsed.has('gen:main')) {
@@ -1470,6 +1516,8 @@ function renderList() {
             });
         });
     });
+
+    alignLabelColumnWidth();
 
     // setTimeout, not requestAnimationFrame -- rAF gets throttled/suspended
     // on a backgrounded tab, which silently left every guide missing during
