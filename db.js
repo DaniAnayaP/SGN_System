@@ -1295,6 +1295,57 @@ db.exec(`
         UNIQUE(user_id, category_id)
     );
 
+    -- saas_classification_overrides / saas_classification_colors /
+    -- saas_master_change_log: Árbol Maestro SaaS's own Clasificación +
+    -- color + Cambios system (Admin-ArbolMaestroSaaS.js), mirroring the
+    -- client tree's master_permission_classification_overrides /
+    -- master_permission_classification_colors / master_permission_change_log
+    -- one-for-one -- but in a completely separate id namespace
+    -- ("saas-class-*" node_key/classification_id values), so a color or
+    -- reclassification picked on this screen can never affect (or be
+    -- affected by) the real Árbol de Permisos Maestro, deliberately, same
+    -- reason this whole screen has its own standalone renderer instead of
+    -- reusing PermissionTree.js. node_key here is this screen's own flat
+    -- leafKey()-style string (see Admin-ArbolMaestroSaaS.js), never the
+    -- client tree's masterTreeNodeKey() triple.
+    CREATE TABLE IF NOT EXISTS saas_classification_overrides (
+        id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_key               TEXT NOT NULL UNIQUE,
+        classification_id      TEXT NOT NULL,
+        classification_label   TEXT,
+        updated_by             TEXT,
+        updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- One dot + text color per SaaS classification id, shared by every
+    -- Apartado that classification appears under. text_color ships from
+    -- day one (unlike master_permission_classification_colors, which
+    -- needed a later ALTER TABLE, since this table is new).
+    CREATE TABLE IF NOT EXISTS saas_classification_colors (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        classification_id  TEXT NOT NULL UNIQUE,
+        color              TEXT NOT NULL,
+        text_color         TEXT,
+        updated_by         TEXT,
+        updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- This screen's own "Cambios" audit trail -- append-only, same shape
+    -- and same "classification::<classificationId>" synthetic node_key
+    -- convention (for a classification's shared color/textColor changes)
+    -- as master_permission_change_log. Also receives estatus/web/app
+    -- diffs from setSaasMasterStatuses.
+    CREATE TABLE IF NOT EXISTS saas_master_change_log (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_key     TEXT NOT NULL,
+        field        TEXT NOT NULL,
+        old_value    TEXT,
+        new_value    TEXT,
+        changed_by   TEXT,
+        changed_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_master_change_log_node ON saas_master_change_log(node_key);
+
     CREATE TABLE IF NOT EXISTS plan_changes (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         plan_id       INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
@@ -5883,6 +5934,12 @@ function getSaasMasterStatuses() {
         .map((r) => ({ ...r, webEnabled: !!r.webEnabled, appEnabled: !!r.appEnabled }));
 }
 function setSaasMasterStatuses(rows, updatedBy) {
+    // Same before/after-diff-and-log shape as setMasterPermissionStatuses
+    // (this screen's own Guardar also replaces the whole table in one
+    // shot) -- keyed by the flat itemId directly, no compound-key builder
+    // needed here since this table was never a {sectionId,itemId,submenuId}
+    // triple to begin with.
+    const before = new Map(getSaasMasterStatuses().map((r) => [r.itemId, r]));
     const replace = db.transaction((list) => {
         db.prepare('DELETE FROM saas_master_status').run();
         const insert = db.prepare(`
@@ -5899,7 +5956,18 @@ function setSaasMasterStatuses(rows, updatedBy) {
         }
     });
     replace(rows || []);
-    return getSaasMasterStatuses();
+    const after = getSaasMasterStatuses();
+    const afterMap = new Map(after.map((r) => [r.itemId, r]));
+    const allKeys = new Set([...before.keys(), ...afterMap.keys()]);
+    const DEFAULT_ROW = { status: 'habilitado', webEnabled: true, appEnabled: false };
+    for (const k of allKeys) {
+        const b = before.get(k) || DEFAULT_ROW;
+        const a = afterMap.get(k) || DEFAULT_ROW;
+        if (b.status !== a.status) logSaasMasterChange(k, 'estatus', b.status, a.status, updatedBy);
+        if (b.webEnabled !== a.webEnabled) logSaasMasterChange(k, 'web', b.webEnabled, a.webEnabled, updatedBy);
+        if (b.appEnabled !== a.appEnabled) logSaasMasterChange(k, 'app', b.appEnabled, a.appEnabled, updatedBy);
+    }
+    return after;
 }
 
 function getSaasMasterOrder() {
@@ -5915,6 +5983,96 @@ function setSaasMasterOrder(order, updatedBy) {
     db.prepare('DELETE FROM saas_master_order').run();
     db.prepare('INSERT INTO saas_master_order (ordered_items, updated_by) VALUES (?, ?)').run(JSON.stringify(order || null), updatedBy || '');
     return getSaasMasterOrder();
+}
+
+// Árbol Maestro SaaS's own Clasificación + color + Cambios system -- see
+// saas_classification_overrides/saas_classification_colors/
+// saas_master_change_log's own DDL comment for why these are a completely
+// separate namespace from the client tree's equivalents, not a reuse.
+// Same one-row-at-a-time upsert/delete shape as
+// getMasterPermissionClassificationOverrides/setMasterPermissionClassificationOverride
+// above (never a whole-table replace).
+function getSaasClassificationOverrides() {
+    return db
+        .prepare(`
+            SELECT node_key AS nodeKey, classification_id AS classificationId, classification_label AS classificationLabel
+            FROM saas_classification_overrides
+        `)
+        .all();
+}
+function setSaasClassificationOverride(nodeKey, classificationId, classificationLabel, updatedBy) {
+    const before = db.prepare('SELECT classification_id AS classificationId, classification_label AS classificationLabel FROM saas_classification_overrides WHERE node_key = ?').get(nodeKey);
+    db.prepare(`
+        INSERT INTO saas_classification_overrides (node_key, classification_id, classification_label, updated_by)
+        VALUES (@nodeKey, @classificationId, @classificationLabel, @updatedBy)
+        ON CONFLICT(node_key) DO UPDATE SET
+            classification_id = excluded.classification_id,
+            classification_label = excluded.classification_label,
+            updated_by = excluded.updated_by,
+            updated_at = datetime('now')
+    `).run({ nodeKey, classificationId, classificationLabel: classificationLabel || null, updatedBy: updatedBy || '' });
+    const beforeLabel = before ? (before.classificationLabel || before.classificationId) : null;
+    const afterLabel = classificationLabel || classificationId;
+    if (beforeLabel !== afterLabel) logSaasMasterChange(nodeKey, 'clasificacion', beforeLabel, afterLabel, updatedBy);
+    return { nodeKey, classificationId, classificationLabel: classificationLabel || null };
+}
+function deleteSaasClassificationOverride(nodeKey, updatedBy) {
+    const before = db.prepare('SELECT classification_id AS classificationId, classification_label AS classificationLabel FROM saas_classification_overrides WHERE node_key = ?').get(nodeKey);
+    db.prepare('DELETE FROM saas_classification_overrides WHERE node_key = ?').run(nodeKey);
+    if (before) logSaasMasterChange(nodeKey, 'clasificacion', before.classificationLabel || before.classificationId, null, updatedBy);
+}
+
+function getSaasClassificationColors() {
+    return db.prepare('SELECT classification_id AS classificationId, color, text_color AS textColor FROM saas_classification_colors').all();
+}
+function setSaasClassificationColor(classificationId, color, updatedBy) {
+    const before = db.prepare('SELECT color FROM saas_classification_colors WHERE classification_id = ?').get(classificationId);
+    db.prepare(`
+        INSERT INTO saas_classification_colors (classification_id, color, updated_by)
+        VALUES (@classificationId, @color, @updatedBy)
+        ON CONFLICT(classification_id) DO UPDATE SET
+            color = excluded.color,
+            updated_by = excluded.updated_by,
+            updated_at = datetime('now')
+    `).run({ classificationId, color, updatedBy: updatedBy || '' });
+    if (!before || before.color !== color) {
+        logSaasMasterChange(`classification::${classificationId}`, 'color', before ? before.color : null, color, updatedBy);
+    }
+    return { classificationId, color };
+}
+function setSaasClassificationTextColor(classificationId, textColor, updatedBy) {
+    const before = db.prepare('SELECT text_color AS textColor FROM saas_classification_colors WHERE classification_id = ?').get(classificationId);
+    db.prepare(`
+        INSERT INTO saas_classification_colors (classification_id, color, text_color, updated_by)
+        VALUES (@classificationId, '', @textColor, @updatedBy)
+        ON CONFLICT(classification_id) DO UPDATE SET
+            text_color = excluded.text_color,
+            updated_by = excluded.updated_by,
+            updated_at = datetime('now')
+    `).run({ classificationId, textColor, updatedBy: updatedBy || '' });
+    if (!before || before.textColor !== textColor) {
+        logSaasMasterChange(`classification::${classificationId}`, 'textColor', before ? before.textColor : null, textColor, updatedBy);
+    }
+    return { classificationId, textColor };
+}
+
+function logSaasMasterChange(nodeKey, field, oldValue, newValue, changedBy) {
+    db.prepare(`
+        INSERT INTO saas_master_change_log (node_key, field, old_value, new_value, changed_by)
+        VALUES (?, ?, ?, ?, ?)
+    `).run(nodeKey, field, oldValue == null ? null : String(oldValue), newValue == null ? null : String(newValue), changedBy || '');
+}
+function getSaasMasterChangeLog(nodeKey, classificationId) {
+    const stmt = db.prepare(`
+        SELECT field, old_value AS oldValue, new_value AS newValue, changed_by AS changedBy, changed_at AS changedAt
+        FROM saas_master_change_log
+        WHERE node_key = ?
+        ORDER BY id DESC
+    `);
+    const rows = stmt.all(nodeKey);
+    if (classificationId) rows.push(...stmt.all(`classification::${classificationId}`));
+    rows.sort((a, b) => (a.changedAt < b.changedAt ? 1 : (a.changedAt > b.changedAt ? -1 : 0)));
+    return rows;
 }
 
 // saas_personal_order -- one row per (user, category), never touched by
@@ -6869,6 +7027,13 @@ module.exports = {
     setSaasMasterOrder,
     getSaasPersonalOrder,
     setSaasPersonalOrder,
+    getSaasClassificationOverrides,
+    setSaasClassificationOverride,
+    deleteSaasClassificationOverride,
+    getSaasClassificationColors,
+    setSaasClassificationColor,
+    setSaasClassificationTextColor,
+    getSaasMasterChangeLog,
     getMasterPermissionOrder,
     setMasterPermissionOrder,
     setMasterPermissionOrders,

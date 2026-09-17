@@ -253,6 +253,13 @@ const {
     setSaasMasterStatuses,
     getSaasMasterOrder,
     setSaasMasterOrder,
+    getSaasClassificationOverrides,
+    setSaasClassificationOverride,
+    deleteSaasClassificationOverride,
+    getSaasClassificationColors,
+    setSaasClassificationColor,
+    setSaasClassificationTextColor,
+    getSaasMasterChangeLog,
     getSaasPersonalOrder,
     setSaasPersonalOrder,
     getMasterPermissionOrder,
@@ -2211,6 +2218,59 @@ app.put('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) =>
         return res.status(400).json({ message: 'order must be an object.' });
     }
     res.json({ order: setSaasMasterOrder(order, changedByLabel(req)) });
+});
+
+// Árbol Maestro SaaS's own Clasificación + color + Cambios routes -- same
+// shape as their master-permission-* equivalents above, but against the
+// completely separate saas_classification_*/saas_master_change_log tables
+// (see those tables' own DDL comments in db.js for why this screen never
+// shares state with the real Árbol de Permisos Maestro).
+app.get('/api/admin/saas-classification-overrides', requireAuth, requireAdmin, (req, res) => {
+    res.json({ overrides: getSaasClassificationOverrides() });
+});
+app.put('/api/admin/saas-classification-overrides', requireAuth, requireAdmin, (req, res) => {
+    const { nodeKey, classificationId, classificationLabel } = req.body || {};
+    if (typeof nodeKey !== 'string' || !nodeKey) {
+        return res.status(400).json({ message: 'nodeKey is required.' });
+    }
+    if (!classificationId) {
+        deleteSaasClassificationOverride(nodeKey, changedByLabel(req));
+        return res.json({ override: null });
+    }
+    if (typeof classificationId !== 'string') {
+        return res.status(400).json({ message: 'classificationId must be a string.' });
+    }
+    if (classificationLabel !== undefined && classificationLabel !== null && typeof classificationLabel !== 'string') {
+        return res.status(400).json({ message: 'classificationLabel must be a string.' });
+    }
+    res.json({ override: setSaasClassificationOverride(nodeKey, classificationId, classificationLabel, changedByLabel(req)) });
+});
+
+app.get('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (req, res) => {
+    res.json({ colors: getSaasClassificationColors() });
+});
+app.put('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (req, res) => {
+    const { classificationId, color, textColor } = req.body || {};
+    if (typeof classificationId !== 'string' || !classificationId) {
+        return res.status(400).json({ message: 'classificationId is required.' });
+    }
+    if (textColor !== undefined) {
+        if (typeof textColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(textColor)) {
+            return res.status(400).json({ message: 'textColor must be a hex color like #7f77dd.' });
+        }
+        return res.json({ textColor: setSaasClassificationTextColor(classificationId, textColor, changedByLabel(req)) });
+    }
+    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+        return res.status(400).json({ message: 'color must be a hex color like #7f77dd.' });
+    }
+    res.json({ color: setSaasClassificationColor(classificationId, color, changedByLabel(req)) });
+});
+
+app.get('/api/admin/saas-master-change-log', requireAuth, requireAdmin, (req, res) => {
+    const nodeKey = typeof req.query.nodeKey === 'string' ? req.query.nodeKey : '';
+    if (!nodeKey) return res.status(400).json({ message: 'nodeKey is required.' });
+    const classificationId = typeof req.query.classificationId === 'string' && req.query.classificationId ? req.query.classificationId : null;
+    res.json({ entries: getSaasMasterChangeLog(nodeKey, classificationId) });
 });
 
 // Self-service, not admin-only in the "manage everyone" sense -- any Panel
