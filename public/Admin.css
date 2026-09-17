@@ -2553,6 +2553,17 @@ body.dark-mode .perm-tree-color-popover{ background-color: #23242b; }
     border-color: var(--color-accent);
     color: #fff;
 }
+/* Admin-ArbolMaestroSaaS.js's own Web/App toggle is a plain clickable
+   span, not a real checkbox (predates this session) -- its "on" state
+   was never actually styled, so every icon looked identically unfilled
+   regardless of state (confirmed live, 2026-09-17: "el color al
+   seleccionar no es el mismo que el de árbol maestro de cliente"). Same
+   "on" look as the client tree's own checked state above. */
+.perm-tree-mstatus-device-on .perm-tree-mstatus-device-box{
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+}
 .perm-tree-mstatus-device:has(input:disabled) .perm-tree-mstatus-device-box{
     opacity: 0.4;
 }
