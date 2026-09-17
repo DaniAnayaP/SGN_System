@@ -1357,12 +1357,38 @@ function renderList() {
                 }
 
                 // Every other leaf (columna/acción) groups by its effective
-                // classification -- always "Por Definir Clasificación"
-                // unless reassigned (see getEffectiveApartadoGroups),
-                // mirroring the client tree's own Tabla -> Clasificación ->
-                // Columna nesting one level deeper than this screen had
-                // before this feature existed.
-                getEffectiveApartadoGroups(screen, apartado).forEach((clsGroup) => {
+                // classification -- but "Por Definir Clasificación" itself
+                // never gets a heading row: on this screen (unlike the
+                // client tree) it's not a handful of stray leftovers, it's
+                // EVERY leaf until an admin actually reclassifies one, so
+                // wrapping it in a collapsible group just repeated the
+                // same label on every single line underneath for no
+                // benefit (confirmed live: "se ven filas vacías, no
+                // clasificadas, desordenadas"). Those leaves render flat,
+                // at their original depth, each still individually
+                // reassignable via its own select -- only a REAL
+                // classification (a custom one an admin created for this
+                // Apartado) earns a group heading below.
+                const apartadoGroups = getEffectiveApartadoGroups(screen, apartado);
+                const porDefinirGroup = apartadoGroups.find((g) => g.classificationId === SAAS_CLASS_POR_DEFINIR_ID);
+                (porDefinirGroup ? porDefinirGroup.leaves : []).forEach((leaf) => {
+                    const key = leafKey(screen, apartado, leaf);
+                    const row = document.createElement('div');
+                    row.className = 'perm-tree-row perm-tree-depth-3';
+                    makeDraggable(row, {
+                        list: `leaves:${aKey}:${SAAS_CLASS_POR_DEFINIR_ID}`, id: leaf.suffix,
+                        onReorder: (fromId, toId) => { order.leavesByApartado[aKey] = reorderList(order.leavesByApartado[aKey] || buildLeaves(apartado).map((l) => l.suffix), fromId, toId); },
+                    });
+                    row.appendChild(dragHandle());
+                    row.appendChild(spacer());
+                    row.appendChild(rollupEl(computeRollup([key], 'web'), computeRollup([key], 'app')));
+                    row.appendChild(labelEl(leaf.label));
+                    row.appendChild(countBadge(1));
+                    row.appendChild(buildControls(key, [], screen.href, buildClassificationCtx(key, SAAS_CLASS_POR_DEFINIR_ID, screen, apartado), leaf.label));
+                    listEl.appendChild(row);
+                });
+
+                apartadoGroups.filter((g) => g.classificationId !== SAAS_CLASS_POR_DEFINIR_ID).forEach((clsGroup) => {
                     const groupKey = `${aKey}::class::${clsGroup.classificationId}`;
                     const groupLeafKeys2 = clsGroup.leaves.map((leaf) => leafKey(screen, apartado, leaf));
                     const groupLabelKey = resolveSaasClassificationLabel(clsGroup.classificationId);
