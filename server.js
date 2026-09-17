@@ -244,6 +244,10 @@ const {
     getMasterPermissionClassificationOverrides,
     setMasterPermissionClassificationOverride,
     deleteMasterPermissionClassificationOverride,
+    getClassificationColors,
+    setClassificationColor,
+    getEffectiveColumnClassifications,
+    CLASSIFICATION_COLOR_HEX,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     getSaasMasterOrder,
@@ -2115,6 +2119,35 @@ app.put('/api/admin/master-permission-classifications', requireAuth, requireAdmi
         return res.status(400).json({ message: 'classificationLabel must be a string.' });
     }
     res.json({ override: setMasterPermissionClassificationOverride(nodeKey, classificationId, classificationLabel, changedByLabel(req)) });
+});
+
+// One color per classification (real or custom), shared by every column
+// reclassified into it -- see master_permission_classification_colors' own
+// DDL comment in db.js. Same one-row-at-a-time shape as the overrides
+// route above.
+app.get('/api/admin/master-permission-classification-colors', requireAuth, requireAdmin, (req, res) => {
+    res.json({ colors: getClassificationColors() });
+});
+app.put('/api/admin/master-permission-classification-colors', requireAuth, requireAdmin, (req, res) => {
+    const { classificationId, color } = req.body || {};
+    if (typeof classificationId !== 'string' || !classificationId) {
+        return res.status(400).json({ message: 'classificationId is required.' });
+    }
+    if (!Object.prototype.hasOwnProperty.call(CLASSIFICATION_COLOR_HEX, color)) {
+        return res.status(400).json({ message: `color must be one of ${Object.keys(CLASSIFICATION_COLOR_HEX).join(', ')}.` });
+    }
+    res.json({ color: setClassificationColor(classificationId, color, changedByLabel(req)) });
+});
+
+// Read-only, any logged-in user (not admin-only like the routes above) --
+// this is what lets a real data table's own column legend/band colors
+// follow whatever an admin set in Árbol de Permisos Maestro, instead of
+// that reclassification staying purely cosmetic to the permission tree.
+// tableKey is the same key Dashboard.js's own TABLE_GRANT_PATHS uses.
+app.get('/api/business/table-classifications', requireAuth, (req, res) => {
+    const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';
+    if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
+    res.json({ columns: getEffectiveColumnClassifications(tableKey) });
 });
 
 // Árbol Maestro SaaS -- same shape as master-permission-status above, but

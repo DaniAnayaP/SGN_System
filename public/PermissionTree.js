@@ -2027,6 +2027,24 @@
                     badge.style.borderColor = classificationCtx.readOnlyColor;
                     badge.style.backgroundColor = `color-mix(in srgb, ${classificationCtx.readOnlyColor} 14%, var(--color-bg))`;
                     classificationCell.appendChild(badge);
+                    // Only a real classification's own group row carries
+                    // classificationId (see buildFixedClassificationCtx) --
+                    // a structural level badge (Departamento, Tabla, ...)
+                    // has no color of its own to pick, so gets no button.
+                    if (classificationCtx.classificationId && !grantMode) {
+                        const colorBtn = document.createElement('button');
+                        colorBtn.type = 'button';
+                        colorBtn.className = 'perm-tree-color-picker-btn';
+                        colorBtn.setAttribute('aria-label', t('admin.masterTreeChooseColor'));
+                        colorBtn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
+                        colorBtn.style.color = classificationCtx.readOnlyColor;
+                        colorBtn.style.borderColor = classificationCtx.readOnlyColor;
+                        colorBtn.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            openColorPicker(colorBtn, classificationCtx.classificationId);
+                        });
+                        classificationCell.appendChild(colorBtn);
+                    }
                 } else if (classificationCtx) {
                     const select = document.createElement('select');
                     select.className = 'perm-tree-mstatus-class-select';
@@ -2745,6 +2763,26 @@
         // structural path, never the visual one). statusMode only.
         // nodeKey (keyOf's own output) -> {classificationId, classificationLabel}.
         let classificationOverrides = new Map();
+        // classificationId -> colorId (one of CLASSIFICATION_COLORS below),
+        // shared by a classification's own group row and every column
+        // reclassified into it -- self-fetched here (statusMode only, see
+        // init()) rather than threaded through as another init() argument,
+        // since it's orthogonal to the grants/costs/overrides this tree is
+        // actually editing and every existing caller would otherwise need
+        // updating for a 4th positional argument.
+        let classificationColors = new Map();
+        // 8-color palette an admin can paint a classification with -- id is
+        // what's actually stored/sent to the server, hex is this file's own
+        // rendering-only concern (Dashboard.js's real data tables get the
+        // hex straight from the server instead, see
+        // getEffectiveColumnClassifications in db.js, so this list only
+        // ever needs to stay in sync with CLASSIFICATION_COLOR_HEX there).
+        const CLASSIFICATION_COLORS = [
+            { id: 'purple', hex: '#7f77dd' }, { id: 'teal', hex: '#1d9e75' },
+            { id: 'coral', hex: '#d85a30' }, { id: 'pink', hex: '#d4537e' },
+            { id: 'blue', hex: '#378add' }, { id: 'green', hex: '#639922' },
+            { id: 'amber', hex: '#ba7517' }, { id: 'gray', hex: '#888780' },
+        ];
         // The 1 classification every Pantalla can use even if menu.json
         // never gave it one of its own -- "Por Definir Clasificación", for
         // anything an admin explicitly wants pulled out of "just sitting
@@ -2791,10 +2829,79 @@
         const CLASSIFICATION_COLOR_PALETTE = ['#3A4BC9', '#1E7E34', '#9A6B00', '#B3261E', '#0E7C86', '#6C4BA6'];
         function classificationColor(id) {
             if (!id) return 'var(--color-text-secondary)';
+            // An admin-chosen color (see classificationColors/
+            // CLASSIFICATION_COLORS above) always wins over the automatic
+            // ones below -- those only exist so a classification never
+            // touched by the picker still reads as something other than
+            // plain text.
+            const chosen = classificationColors.get(id);
+            const chosenHex = chosen && CLASSIFICATION_COLORS.find((c) => c.id === chosen);
+            if (chosenHex) return chosenHex.hex;
             if (id === 'class-control-interno') return '#3A4BC9';
             let hash = 0;
             for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
             return CLASSIFICATION_COLOR_PALETTE[hash % CLASSIFICATION_COLOR_PALETTE.length];
+        }
+        // Saves (or, picking the same color twice, leaves as) one
+        // classification's admin-chosen color and repaints -- same
+        // fetch-then-render-again shape as saveClassificationOverride below.
+        async function saveClassificationColor(classificationId, colorId) {
+            try {
+                const res = await fetch('/api/admin/master-permission-classification-colors', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ classificationId, color: colorId }),
+                });
+                if (!res.ok) throw new Error('save failed');
+                classificationColors.set(classificationId, colorId);
+                renderStatusTree();
+            } catch {
+                const message = t('admin.saveError');
+                if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'error');
+                else if (typeof window.showToast === 'function') window.showToast(message);
+            }
+        }
+        // Closed by the next click anywhere else (capture-phase, so it
+        // beats the swatch buttons' own bubbling click) or Escape -- same
+        // dismiss convention as every modal in this file (wireModalDismiss
+        // in Dashboard.js), just lighter-weight since this is an inline
+        // popover, not a full overlay.
+        let openColorPickerCleanup = null;
+        function closeColorPicker() {
+            if (openColorPickerCleanup) { openColorPickerCleanup(); openColorPickerCleanup = null; }
+        }
+        function openColorPicker(anchorBtn, classificationId) {
+            closeColorPicker();
+            const popover = document.createElement('div');
+            popover.className = 'perm-tree-color-popover';
+            CLASSIFICATION_COLORS.forEach((c) => {
+                const swatch = document.createElement('button');
+                swatch.type = 'button';
+                swatch.className = 'perm-tree-color-swatch';
+                swatch.style.backgroundColor = c.hex;
+                swatch.setAttribute('aria-label', t(`admin.masterTreeColor_${c.id}`));
+                if (classificationColors.get(classificationId) === c.id) {
+                    swatch.classList.add('perm-tree-color-swatch-selected');
+                    swatch.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+                }
+                swatch.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    closeColorPicker();
+                    saveClassificationColor(classificationId, c.id);
+                });
+                popover.appendChild(swatch);
+            });
+            anchorBtn.parentElement.appendChild(popover);
+            const onDocClick = () => closeColorPicker();
+            const onKey = (event) => { if (event.key === 'Escape') closeColorPicker(); };
+            document.addEventListener('click', onDocClick, true);
+            document.addEventListener('keydown', onKey);
+            openColorPickerCleanup = () => {
+                popover.remove();
+                document.removeEventListener('click', onDocClick, true);
+                document.removeEventListener('keydown', onKey);
+            };
         }
         // Structural levels (Departamento/Área/Apartado/Pantalla/Tabla/
         // Ícono) never had anything in the Clasificación column at all --
@@ -2829,7 +2936,12 @@
         // own COLUMNS between this and a real reassignable select).
         function buildFixedClassificationCtx(classificationId, labelKey, labelParams) {
             if (readOnly) return null;
-            return { readOnlyLabel: t(labelKey, labelParams), readOnlyColor: classificationColor(classificationId) };
+            // classificationId here (absent on buildLevelBadgeCtx's own
+            // return) is what tells the badge-rendering code below to add
+            // the color-picker button -- a structural level (Departamento,
+            // Tabla, ...) isn't a classification and has no color of its
+            // own to pick.
+            return { readOnlyLabel: t(labelKey, labelParams), readOnlyColor: classificationColor(classificationId), classificationId };
         }
         function resolveOverrideTargetClassification(classificationId, subSm) {
             const real = (subSm.submenu || []).find((e) => e.isClassification && e.id === classificationId);
@@ -4423,6 +4535,26 @@
                         if (!o || !o.nodeKey || !o.classificationId) return;
                         classificationOverrides.set(o.nodeKey, { classificationId: o.classificationId, classificationLabel: o.classificationLabel || null });
                     });
+                    // Self-fetched (not readOnly, since a read-only status
+                    // tree -- e.g. Giro's future "réplica" -- has nowhere to
+                    // show a picker and no reason to pay for this round
+                    // trip). Failure just leaves every pill uncolored
+                    // (neutral fallback in the badge CSS) rather than
+                    // blocking the tree from rendering at all.
+                    classificationColors = new Map();
+                    if (!readOnly) {
+                        try {
+                            const colorsRes = await fetch('/api/admin/master-permission-classification-colors', { credentials: 'include' });
+                            if (colorsRes.ok) {
+                                const colorsData = await colorsRes.json();
+                                (colorsData.colors || []).forEach((c) => {
+                                    if (c && c.classificationId && c.color) classificationColors.set(c.classificationId, c.color);
+                                });
+                            }
+                        } catch {
+                            // offline/transient -- see comment above.
+                        }
+                    }
                     // Baseline starts identical to what was just loaded --
                     // nothing is "pending" right after opening the screen,
                     // only once you start actually changing something.

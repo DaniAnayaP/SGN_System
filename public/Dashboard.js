@@ -3207,7 +3207,13 @@ function initDataTableColumns(wrapper, index) {
     // matters: table band (data-group-table) renders above classification
     // band (data-group) — insertBefore(..., headerRow) twice, table band
     // second, so it ends up first.
-    const wantsClassificationBand = groupKeys.size > 0 || wrapper.dataset.forceClassificationBand === '1';
+    // Also true for any table TABLE_GRANT_PATHS knows about, even one with
+    // no classified column in its own static HTML yet -- a column with no
+    // classification today can still be reclassified into one later from
+    // Árbol de Permisos Maestro (see refreshTableClassifications below),
+    // and the band row needs to already exist for that to have somewhere
+    // to render into once it does.
+    const wantsClassificationBand = groupKeys.size > 0 || wrapper.dataset.forceClassificationBand === '1' || !!TABLE_GRANT_PATHS[tableId];
     const wantsTableBand = groupTableKeys.size > 0;
     if (wantsClassificationBand || wantsTableBand) {
         const headerRow = getHeaderRow(table);
@@ -3251,6 +3257,12 @@ function initDataTableColumns(wrapper, index) {
     observeTableBody(table, tableId);
     attachFieldLockGuard(wrapper, tableId);
     loadFieldFillRules(tableId);
+    // Fire-and-forget -- this function is synchronous (called from a
+    // ResizeObserver callback, see its own comment above) and the table
+    // already rendered correctly with whatever classification/color its
+    // static HTML carries; this only ever ADDS an Árbol de Permisos
+    // Maestro reclassification/color on top, once the round trip resolves.
+    refreshTableClassifications(tableId);
 }
 
 // Shared by both band rows (see renderColumnGroupBand below): collapses
@@ -3294,7 +3306,7 @@ function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state) {
         const th = document.createElement('th');
         th.colSpan = s.span;
         if (s.groupKey) {
-            th.textContent = t(s.groupKey);
+            th.textContent = resolveGroupLabel(s.groupKey);
             th.className = 'data-table-group-band-cell';
             th.dataset.groupKey = s.groupKey;
         } else if (allUngrouped && emptyLabelKey) {
@@ -3675,11 +3687,64 @@ let visibilityPickerSearch = null;
 let visibilityPickerCount = null;
 let visibilityPickerState = null; // { tableId, hiddenSet: Set<key>, query: string, activeGroupKey: string|null }
 
-// A column's own dot color -- COLUMN_GROUP_META's real swatch when it
-// carries a classification (state.groupKeys), var(--color-border) (neutral,
-// "sin clasificar") otherwise. Defined once, shared by the chip row and
-// every column row so the two always agree on which color means what.
+// classificationId -> {label, color}, populated by refreshTableClassifications
+// below from GET /api/business/table-classifications -- global (not
+// per-table) since a classification's own label/color is the same
+// everywhere it's used, exactly like Árbol de Permisos Maestro's own
+// classificationColors. A groupKey not in here yet (static, never
+// reclassified/colored, or the fetch hasn't resolved yet) falls back to
+// treating it as a labelKey (resolveGroupLabel) or COLUMN_GROUP_META
+// (columnGroupColor) -- both preserve today's exact behavior when there is
+// no Árbol de Permisos Maestro override to apply.
+const classificationMetaById = new Map();
+const tableClassificationsCache = new Map();
+function fetchTableClassifications(tableKey) {
+    if (tableClassificationsCache.has(tableKey)) return tableClassificationsCache.get(tableKey);
+    const promise = fetch(`/api/business/table-classifications?tableKey=${encodeURIComponent(tableKey)}`, { credentials: 'include' })
+        .then((res) => (res.ok ? res.json() : { columns: {} }))
+        .catch(() => ({ columns: {} }));
+    tableClassificationsCache.set(tableKey, promise);
+    return promise;
+}
+// A column's group identity (state.groupKeys' own values) starts out as
+// whatever labelKey its static data-group attribute carries; once this
+// resolves, every column this table actually has server-side
+// classification info for switches to its real classificationId instead
+// (structural or Árbol de Permisos Maestro-reclassified, the server
+// already resolved which) -- keeps every OTHER function here (fillBandRow,
+// columnGroupColor, the visibility picker) unaware of which "namespace" a
+// groupKey happens to be in, since resolveGroupLabel/columnGroupColor
+// check classificationMetaById first either way.
+async function refreshTableClassifications(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || !TABLE_GRANT_PATHS[tableId]) return;
+    const data = await fetchTableClassifications(tableId);
+    const cols = data.columns || {};
+    let changed = false;
+    state.columnKeys.forEach((key) => {
+        const info = cols[key];
+        if (!info || !info.classificationId) return;
+        const label = info.label || t(info.labelKey, info.labelParams || {});
+        classificationMetaById.set(info.classificationId, { label, color: info.color || null });
+        if (state.groupKeys.get(key) !== info.classificationId) changed = true;
+        state.groupKeys.set(key, info.classificationId);
+    });
+    if (changed) renderColumnGroupBand(tableId);
+}
+function resolveGroupLabel(groupKey) {
+    if (!groupKey) return '';
+    const meta = classificationMetaById.get(groupKey);
+    return meta ? meta.label : t(groupKey);
+}
+// A column's own dot color -- an Árbol de Permisos Maestro admin-chosen
+// color first, COLUMN_GROUP_META's static swatch when it carries a
+// classification never explicitly colored (state.groupKeys), var(--color-
+// border) (neutral, "sin clasificar") otherwise. Defined once, shared by
+// the chip row and every column row so the two always agree on which
+// color means what.
 function columnGroupColor(groupKey) {
+    const meta = groupKey && classificationMetaById.get(groupKey);
+    if (meta && meta.color) return meta.color;
     return groupKey && COLUMN_GROUP_META[groupKey] ? COLUMN_GROUP_META[groupKey].swatch : 'var(--color-border)';
 }
 
@@ -3774,7 +3839,7 @@ function renderVisibilityPickerChips() {
         dot.className = 'data-table-col-dot data-table-col-dot-chip';
         dot.style.backgroundColor = columnGroupColor(groupKey);
         chip.appendChild(dot);
-        chip.appendChild(document.createTextNode(t(groupKey)));
+        chip.appendChild(document.createTextNode(resolveGroupLabel(groupKey)));
         chip.addEventListener('click', () => {
             visibilityPickerState.activeGroupKey = visibilityPickerState.activeGroupKey === groupKey ? null : groupKey;
             visibilityPickerState.query = '';
@@ -3795,7 +3860,7 @@ function renderVisibilityPickerList() {
         count: String(keys.length), total: String(state.columnKeys.length),
         scope: visibilityPickerState.query.trim()
             ? `"${visibilityPickerState.query.trim()}"`
-            : (visibilityPickerState.activeGroupKey ? t(visibilityPickerState.activeGroupKey) : t('main.columnFilterAll')),
+            : (visibilityPickerState.activeGroupKey ? resolveGroupLabel(visibilityPickerState.activeGroupKey) : t('main.columnFilterAll')),
     });
     if (!keys.length) {
         const empty = document.createElement('p');
@@ -3807,7 +3872,7 @@ function renderVisibilityPickerList() {
     keys.forEach((key) => {
         const groupKey = state.groupKeys.get(key);
         const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, {
-            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? t(groupKey) : '',
+            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : '',
         });
         input.checked = !visibilityPickerState.hiddenSet.has(key);
         input.addEventListener('change', async () => {
@@ -4000,12 +4065,16 @@ function openColumnLegend(tableId) {
     columnLegendList.appendChild(buildLegendRow('#2c8f4a', t('main.rowEditableName'), t('main.rowEditableLegend')));
     const state = dataTableColumnState.get(tableId);
     const seenGroups = new Set();
-    (state?.groupKeys ? Array.from(state.groupKeys.values()) : []).forEach((groupLabelKey) => {
-        if (seenGroups.has(groupLabelKey)) return;
-        seenGroups.add(groupLabelKey);
-        const meta = COLUMN_GROUP_META[groupLabelKey];
-        if (!meta) return;
-        columnLegendList.appendChild(buildLegendRow(meta.swatch, t(groupLabelKey), t(meta.descKey)));
+    // Every classification actually present on this table, not just the 3
+    // hardcoded in COLUMN_GROUP_META (Control Interno, the 2 report-column
+    // bands) -- a real or custom classification with only an Árbol de
+    // Permisos Maestro-chosen color/label used to be silently left out of
+    // this legend entirely.
+    (state?.groupKeys ? Array.from(state.groupKeys.values()) : []).forEach((groupKey) => {
+        if (!groupKey || seenGroups.has(groupKey)) return;
+        seenGroups.add(groupKey);
+        const desc = COLUMN_GROUP_META[groupKey] ? t(COLUMN_GROUP_META[groupKey].descKey) : '';
+        columnLegendList.appendChild(buildLegendRow(columnGroupColor(groupKey), resolveGroupLabel(groupKey), desc));
     });
 }
 

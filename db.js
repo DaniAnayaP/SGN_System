@@ -1197,6 +1197,24 @@ db.exec(`
         updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- One color per CLASSIFICATION (not per column/node like the overrides
+    -- table above) -- every column reclassified into the same
+    -- classification, plus that classification's own group row, all share
+    -- one dot/pill color. classification_id is either a real menu.json id
+    -- (e.g. "class-control-interno") or a custom one (see
+    -- generateCustomClassificationId in PermissionTree.js) -- both share
+    -- this same table since a color is equally meaningful for either kind.
+    -- Absent here means "no admin-chosen color yet", which the reader
+    -- (columnGroupColor in Dashboard.js) falls back to a neutral gray for,
+    -- same "only store the exceptions" convention as every table above.
+    CREATE TABLE IF NOT EXISTS master_permission_classification_colors (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        classification_id  TEXT NOT NULL UNIQUE,
+        color              TEXT NOT NULL,
+        updated_by         TEXT,
+        updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- saas_master_status: same idea as master_permission_status above, but
     -- for GEIPSA's OWN internal SaaS screens (the full catalog in
     -- SaasAdminCatalog.js -- Grupo -> Pantalla -> Apartado/Tabla/Modal ->
@@ -5660,6 +5678,75 @@ function deleteMasterPermissionClassificationOverride(nodeKey) {
     db.prepare('DELETE FROM master_permission_classification_overrides WHERE node_key = ?').run(nodeKey);
 }
 
+// The 8-color palette every classification (real or custom) picks from --
+// one canonical source so the admin picker (PermissionTree.js keeps its
+// own copy of these same 8 {id,hex} pairs for rendering the swatches) and
+// this file's own validation/hex-resolution never drift apart on which
+// ids are valid.
+const CLASSIFICATION_COLOR_HEX = {
+    purple: '#7f77dd', teal: '#1d9e75', coral: '#d85a30', pink: '#d4537e',
+    blue: '#378add', green: '#639922', amber: '#ba7517', gray: '#888780',
+};
+function getClassificationColors() {
+    return db.prepare('SELECT classification_id AS classificationId, color FROM master_permission_classification_colors').all();
+}
+function setClassificationColor(classificationId, color, updatedBy) {
+    db.prepare(`
+        INSERT INTO master_permission_classification_colors (classification_id, color, updated_by)
+        VALUES (@classificationId, @color, @updatedBy)
+        ON CONFLICT(classification_id) DO UPDATE SET
+            color = excluded.color,
+            updated_by = excluded.updated_by,
+            updated_at = datetime('now')
+    `).run({ classificationId, color, updatedBy: updatedBy || '' });
+    return { classificationId, color };
+}
+
+// Every column of one table (tableKey, same key TABLE_GRANT_PATHS already
+// uses for grant checks), with its EFFECTIVE classification -- an
+// override if one was saved for that exact column, else its real
+// structural classification from menu.json -- and that classification's
+// admin-chosen color (resolved to a hex the caller can paint directly).
+// This is what lets a reclassification made in Árbol de Permisos Maestro
+// actually change how the real data table groups/colors that column,
+// instead of staying purely cosmetic to the permission tree itself (see
+// master_permission_classification_overrides' own DDL comment above for
+// the history of why it didn't, until now).
+function getEffectiveColumnClassifications(tableKey) {
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return {};
+    const pantalla = findPantallaNode(path.sectionId, path.itemId, path.submenuPrefix);
+    if (!pantalla) return {};
+    const columnIds = [];
+    (pantalla.submenu || []).forEach((entry) => {
+        if (entry.isClassification) (entry.submenu || []).forEach((col) => columnIds.push(col.id));
+        else if (entry.id) columnIds.push(entry.id);
+    });
+    if (!columnIds.length) return {};
+    const overridesByKey = new Map(getMasterPermissionClassificationOverrides().map((o) => [o.nodeKey, o]));
+    const colors = new Map(getClassificationColors().map((c) => [c.classificationId, c.color]));
+    const classificationNode = (id) => (pantalla.submenu || []).find((e) => e.isClassification && e.id === id) || null;
+    const result = {};
+    columnIds.forEach((colId) => {
+        const base = columnSubmenuBase(path, colId);
+        const nodeKey = `${path.sectionId}::${path.itemId}::${base}`;
+        const structuralId = classificationFor(path, colId);
+        const override = overridesByKey.get(nodeKey);
+        const classificationId = override ? override.classificationId : structuralId;
+        if (!classificationId) return;
+        const node = classificationNode(classificationId);
+        const color = colors.get(classificationId);
+        result[colId] = {
+            classificationId,
+            labelKey: node ? node.labelKey : null,
+            labelParams: (node && node.labelParams) || null,
+            label: node ? null : (override && override.classificationLabel) || null,
+            color: color ? (CLASSIFICATION_COLOR_HEX[color] || null) : null,
+        };
+    });
+    return result;
+}
+
 // saas_master_status pair -- same replace-the-whole-table shape as
 // getMasterPermissionStatuses/setMasterPermissionStatuses above, just
 // keyed by a flat itemId instead of the sectionId/itemId/submenuId triple
@@ -6655,6 +6742,10 @@ module.exports = {
     getMasterPermissionClassificationOverrides,
     setMasterPermissionClassificationOverride,
     deleteMasterPermissionClassificationOverride,
+    getClassificationColors,
+    setClassificationColor,
+    getEffectiveColumnClassifications,
+    CLASSIFICATION_COLOR_HEX,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     getSaasMasterOrder,
