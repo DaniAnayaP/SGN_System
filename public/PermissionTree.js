@@ -2771,12 +2771,11 @@
         // actually editing and every existing caller would otherwise need
         // updating for a 4th positional argument.
         let classificationColors = new Map();
-        // 8-color palette an admin can paint a classification with -- id is
-        // what's actually stored/sent to the server, hex is this file's own
-        // rendering-only concern (Dashboard.js's real data tables get the
-        // hex straight from the server instead, see
-        // getEffectiveColumnClassifications in db.js, so this list only
-        // ever needs to stay in sync with CLASSIFICATION_COLOR_HEX there).
+        // 8-color quick-swatch palette -- the hex itself is what's actually
+        // stored/sent to the server now (see saveClassificationColor), not
+        // an id, so an admin can also pick any other color entirely via
+        // "Más colores..." (see openColorDialog) without this list needing
+        // to grow or stay in sync with anything server-side.
         const CLASSIFICATION_COLORS = [
             { id: 'purple', hex: '#7f77dd' }, { id: 'teal', hex: '#1d9e75' },
             { id: 'coral', hex: '#d85a30' }, { id: 'pink', hex: '#d4537e' },
@@ -2829,14 +2828,15 @@
         const CLASSIFICATION_COLOR_PALETTE = ['#3A4BC9', '#1E7E34', '#9A6B00', '#B3261E', '#0E7C86', '#6C4BA6'];
         function classificationColor(id) {
             if (!id) return 'var(--color-text-secondary)';
-            // An admin-chosen color (see classificationColors/
-            // CLASSIFICATION_COLORS above) always wins over the automatic
-            // ones below -- those only exist so a classification never
-            // touched by the picker still reads as something other than
-            // plain text.
+            // An admin-chosen color (see classificationColors above --
+            // values are hex strings, either one of CLASSIFICATION_COLORS'
+            // own quick swatches or a fully custom one from the Más
+            // colores dialog, see openColorDialog) always wins over the
+            // automatic ones below -- those only exist so a classification
+            // never touched by the picker still reads as something other
+            // than plain text.
             const chosen = classificationColors.get(id);
-            const chosenHex = chosen && CLASSIFICATION_COLORS.find((c) => c.id === chosen);
-            if (chosenHex) return chosenHex.hex;
+            if (chosen) return chosen;
             if (id === 'class-control-interno') return '#3A4BC9';
             let hash = 0;
             for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
@@ -2845,16 +2845,18 @@
         // Saves (or, picking the same color twice, leaves as) one
         // classification's admin-chosen color and repaints -- same
         // fetch-then-render-again shape as saveClassificationOverride below.
-        async function saveClassificationColor(classificationId, colorId) {
+        // hex is a full "#rrggbb" string now (not one of a fixed id list --
+        // see openColorDialog's Más colores flow), sent/stored verbatim.
+        async function saveClassificationColor(classificationId, hex) {
             try {
                 const res = await fetch('/api/admin/master-permission-classification-colors', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ classificationId, color: colorId }),
+                    body: JSON.stringify({ classificationId, color: hex }),
                 });
                 if (!res.ok) throw new Error('save failed');
-                classificationColors.set(classificationId, colorId);
+                classificationColors.set(classificationId, hex);
                 renderStatusTree();
             } catch {
                 const message = t('admin.saveError');
@@ -2881,17 +2883,30 @@
                 swatch.className = 'perm-tree-color-swatch';
                 swatch.style.backgroundColor = c.hex;
                 swatch.setAttribute('aria-label', t(`admin.masterTreeColor_${c.id}`));
-                if (classificationColors.get(classificationId) === c.id) {
+                if (classificationColors.get(classificationId) === c.hex) {
                     swatch.classList.add('perm-tree-color-swatch-selected');
                     swatch.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
                 }
                 swatch.addEventListener('click', (event) => {
                     event.stopPropagation();
                     closeColorPicker();
-                    saveClassificationColor(classificationId, c.id);
+                    saveClassificationColor(classificationId, c.hex);
                 });
                 popover.appendChild(swatch);
             });
+            // Free-form colorimetry (Estándar hex mosaic + Personalizado
+            // saturation/matiz picker), for anything the 8 quick swatches
+            // above don't cover -- see ensureColorDialog/openColorDialog.
+            const moreBtn = document.createElement('button');
+            moreBtn.type = 'button';
+            moreBtn.className = 'perm-tree-color-more-btn';
+            moreBtn.textContent = t('admin.masterTreeMoreColors');
+            moreBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                closeColorPicker();
+                openColorDialog(classificationId);
+            });
+            popover.appendChild(moreBtn);
             anchorBtn.parentElement.appendChild(popover);
             const onDocClick = () => closeColorPicker();
             const onKey = (event) => { if (event.key === 'Escape') closeColorPicker(); };
@@ -2902,6 +2917,218 @@
                 document.removeEventListener('click', onDocClick, true);
                 document.removeEventListener('keydown', onKey);
             };
+        }
+        // Full colorimetry dialog ("Más colores..." from the quick popover
+        // above) -- built once and reused for every classification (state
+        // resets per open), same lazy-singleton-modal convention as
+        // Dashboard.js's own ensureColumnLegendModal/ensureVisibilityPickerModal.
+        // Two tabs: Estándar (a hexagon mosaic, hue by angle/saturation by
+        // distance from center, same shape as Windows' own "More Colors"
+        // dialog -- confirmed against the user's own screenshot of it) and
+        // Personalizado (a saturation/value square for the current hue,
+        // hue picked from the vertical strip beside it, plus a raw hex
+        // field for typing an exact value). Both share one "Nuevo" swatch
+        // and only call saveClassificationColor on Aceptar, so Cancelar or
+        // the backdrop/Escape genuinely discards whatever was previewed.
+        let colorDialogEl = null;
+        let colorDialogState = null; // { classificationId, pickedHex }
+        function hsvToHex(h, s, v) {
+            const c = v * s; const x = c * (1 - Math.abs(((h / 60) % 2) - 1)); const m = v - c;
+            let r = 0; let g = 0; let b = 0;
+            if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+            else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+            const toHex = (n) => Math.max(0, Math.min(255, Math.round((n + m) * 255))).toString(16).padStart(2, '0');
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        }
+        // Inverse of hsvToHex, hue component only -- so opening
+        // Personalizado on an already-colored classification starts the
+        // saturation/matiz square and strip at the color's OWN hue instead
+        // of always resetting to the same default blue.
+        function hexToHue(hex) {
+            const r = parseInt(hex.slice(1, 3), 16) / 255;
+            const g = parseInt(hex.slice(3, 5), 16) / 255;
+            const b = parseInt(hex.slice(5, 7), 16) / 255;
+            const max = Math.max(r, g, b); const min = Math.min(r, g, b); const d = max - min;
+            if (d === 0) return 0;
+            let h;
+            if (max === r) h = ((g - b) / d) % 6;
+            else if (max === g) h = ((b - r) / d) + 2;
+            else h = ((r - g) / d) + 4;
+            h *= 60;
+            return h < 0 ? h + 360 : h;
+        }
+        function ensureColorDialog() {
+            if (colorDialogEl) return;
+            colorDialogEl = document.createElement('div');
+            colorDialogEl.className = 'modal-overlay';
+            colorDialogEl.hidden = true;
+            colorDialogEl.innerHTML = `
+                <div class="modal-panel perm-tree-color-dialog" role="dialog" aria-modal="true" aria-labelledby="perm-tree-color-dialog-title">
+                    <h3 id="perm-tree-color-dialog-title">${t('admin.masterTreeChooseColor')}</h3>
+                    <div class="perm-tree-color-tabs">
+                        <button type="button" class="perm-tree-color-tab perm-tree-color-tab-active" data-tab="std">${t('admin.masterTreeColorTabStandard')}</button>
+                        <button type="button" class="perm-tree-color-tab" data-tab="custom">${t('admin.masterTreeColorTabCustom')}</button>
+                    </div>
+                    <div class="perm-tree-color-tab-panel" data-panel="std">
+                        <div class="perm-tree-color-mosaic" data-role="mosaic"></div>
+                        <div class="perm-tree-color-gray-row" data-role="gray-row"></div>
+                    </div>
+                    <div class="perm-tree-color-tab-panel" data-panel="custom" hidden>
+                        <div class="perm-tree-color-sv-row">
+                            <canvas data-role="sv-canvas" width="220" height="150" class="perm-tree-color-sv-canvas"></canvas>
+                            <div class="perm-tree-color-hue-wrap">
+                                <div class="perm-tree-color-hue-strip" data-role="hue-strip"></div>
+                                <div class="perm-tree-color-hue-arrow" data-role="hue-arrow"></div>
+                            </div>
+                        </div>
+                        <div class="perm-tree-color-hex-row">
+                            <label>${t('admin.masterTreeColorHex')}</label>
+                            <input type="text" data-role="hex-input" class="perm-tree-color-hex-input">
+                        </div>
+                    </div>
+                    <div class="perm-tree-color-dialog-footer">
+                        <div style="display:flex; gap:0.7rem;">
+                            <div class="perm-tree-color-preview-col">
+                                <div class="perm-tree-color-preview-label">${t('admin.masterTreeColorNew')}</div>
+                                <div class="perm-tree-color-preview-swatch" data-role="preview-main"></div>
+                            </div>
+                            <div class="perm-tree-color-preview-col">
+                                <div class="perm-tree-color-preview-label">${t('admin.masterTreeColorCurrent')}</div>
+                                <div class="perm-tree-color-preview-swatch" data-role="preview-current"></div>
+                            </div>
+                        </div>
+                        <div class="admin-form-actions">
+                            <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
+                            <button type="button" class="btn" data-role="accept">${t('admin.confirmAccept')}</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(colorDialogEl);
+            const panel = colorDialogEl.querySelector('.perm-tree-color-dialog');
+            const tabs = Array.from(colorDialogEl.querySelectorAll('.perm-tree-color-tab'));
+            const panels = Array.from(colorDialogEl.querySelectorAll('.perm-tree-color-tab-panel'));
+            tabs.forEach((tab) => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach((t2) => t2.classList.toggle('perm-tree-color-tab-active', t2 === tab));
+                    panels.forEach((p) => { p.hidden = p.dataset.panel !== tab.dataset.tab; });
+                    if (tab.dataset.tab === 'custom') drawSvCanvas();
+                });
+            });
+            const close = () => { colorDialogEl.hidden = true; colorDialogState = null; };
+            colorDialogEl.querySelector('[data-role="cancel"]').addEventListener('click', close);
+            colorDialogEl.addEventListener('click', (event) => { if (event.target === colorDialogEl) close(); });
+            document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !colorDialogEl.hidden) close(); });
+            colorDialogEl.querySelector('[data-role="accept"]').addEventListener('click', () => {
+                if (!colorDialogState) return;
+                const { classificationId, pickedHex } = colorDialogState;
+                close();
+                saveClassificationColor(classificationId, pickedHex);
+            });
+
+            // Estándar: a hexagon honeycomb, hue by angle around the
+            // center and saturation by distance from it -- same layout as
+            // Windows' own "Colores estándar" tab.
+            const mosaic = panel.querySelector('[data-role="mosaic"]');
+            const previewMain = panel.querySelector('[data-role="preview-main"]');
+            const previewCurrent = panel.querySelector('[data-role="preview-current"]');
+            const hexClip = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
+            const setPicked = (hex) => {
+                if (colorDialogState) colorDialogState.pickedHex = hex;
+                previewMain.style.backgroundColor = hex;
+            };
+            const rowCounts = [5, 6, 7, 8, 7, 6, 5];
+            const centerRow = 3;
+            rowCounts.forEach((count, rowIdx) => {
+                const row = document.createElement('div');
+                row.className = 'perm-tree-color-mosaic-row-cells';
+                for (let i = 0; i < count; i += 1) {
+                    const dx = i - count / 2; const dy = rowIdx - centerRow;
+                    const dist = Math.sqrt((dx * dx * 0.85) + (dy * dy)) / 4.2;
+                    const angle = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+                    const hex = hsvToHex(angle, Math.min(1, dist), 1 - Math.min(0.55, dist * 0.25));
+                    const cell = document.createElement('button');
+                    cell.type = 'button';
+                    cell.className = 'perm-tree-color-hex-cell';
+                    cell.style.backgroundColor = hex;
+                    cell.style.clipPath = hexClip;
+                    cell.addEventListener('click', () => setPicked(hex));
+                    row.appendChild(cell);
+                }
+                mosaic.appendChild(row);
+            });
+            const grayRow = panel.querySelector('[data-role="gray-row"]');
+            for (let g = 0; g < 9; g += 1) {
+                const v = Math.round(255 - (g * (255 / 8)));
+                const hex = hsvToHex(0, 0, v / 255);
+                const cell = document.createElement('button');
+                cell.type = 'button';
+                cell.className = 'perm-tree-color-hex-cell perm-tree-color-hex-cell-sm';
+                cell.style.backgroundColor = hex;
+                cell.style.clipPath = hexClip;
+                cell.addEventListener('click', () => setPicked(hex));
+                grayRow.appendChild(cell);
+            }
+
+            // Personalizado: saturation (x) / value (y) square for the
+            // currently selected hue, hue itself picked from the strip.
+            const canvas = panel.querySelector('[data-role="sv-canvas"]');
+            const ctx = canvas.getContext('2d');
+            const hueStrip = panel.querySelector('[data-role="hue-strip"]');
+            const hueArrow = panel.querySelector('[data-role="hue-arrow"]');
+            const hexInput = panel.querySelector('[data-role="hex-input"]');
+            let hue = 252;
+            function drawSvCanvas() {
+                const w = canvas.width; const h = canvas.height;
+                const satGrad = ctx.createLinearGradient(0, 0, w, 0);
+                satGrad.addColorStop(0, '#fff');
+                satGrad.addColorStop(1, hsvToHex(hue, 1, 1));
+                ctx.fillStyle = satGrad;
+                ctx.fillRect(0, 0, w, h);
+                const valGrad = ctx.createLinearGradient(0, 0, 0, h);
+                valGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                valGrad.addColorStop(1, '#000');
+                ctx.fillStyle = valGrad;
+                ctx.fillRect(0, 0, w, h);
+            }
+            canvas.addEventListener('click', (event) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = (event.clientX - rect.left) / rect.width;
+                const y = (event.clientY - rect.top) / rect.height;
+                const hex = hsvToHex(hue, Math.min(1, Math.max(0, x)), 1 - Math.min(1, Math.max(0, y)));
+                hexInput.value = hex;
+                setPicked(hex);
+            });
+            hueStrip.addEventListener('click', (event) => {
+                const rect = hueStrip.getBoundingClientRect();
+                const y = (event.clientY - rect.top) / rect.height;
+                hue = Math.min(1, Math.max(0, y)) * 360;
+                hueArrow.style.top = `${y * 100}%`;
+                drawSvCanvas();
+            });
+            hexInput.addEventListener('input', () => {
+                if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) setPicked(hexInput.value);
+            });
+            colorDialogEl.__setInitialHex = (hex) => {
+                hexInput.value = hex;
+                previewMain.style.backgroundColor = hex;
+                previewCurrent.style.backgroundColor = hex;
+                hue = hexToHue(hex);
+                hueArrow.style.top = `${(hue / 360) * 100}%`;
+                drawSvCanvas();
+            };
+        }
+        // "Actual" (previewCurrent, set once here) never changes while the
+        // dialog is open, unlike "Nuevo" (previewMain, live from every
+        // click) -- Cancelar/Escape/backdrop genuinely discard the preview
+        // since only Aceptar ever calls saveClassificationColor.
+        function openColorDialog(classificationId) {
+            ensureColorDialog();
+            const currentHex = classificationColor(classificationId);
+            colorDialogState = { classificationId, pickedHex: currentHex };
+            colorDialogEl.__setInitialHex(currentHex);
+            colorDialogEl.querySelector('[data-tab="std"]').click();
+            colorDialogEl.hidden = false;
         }
         // Structural levels (Departamento/Área/Apartado/Pantalla/Tabla/
         // Ícono) never had anything in the Clasificación column at all --

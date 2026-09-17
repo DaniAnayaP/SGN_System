@@ -5678,15 +5678,12 @@ function deleteMasterPermissionClassificationOverride(nodeKey) {
     db.prepare('DELETE FROM master_permission_classification_overrides WHERE node_key = ?').run(nodeKey);
 }
 
-// The 8-color palette every classification (real or custom) picks from --
-// one canonical source so the admin picker (PermissionTree.js keeps its
-// own copy of these same 8 {id,hex} pairs for rendering the swatches) and
-// this file's own validation/hex-resolution never drift apart on which
-// ids are valid.
-const CLASSIFICATION_COLOR_HEX = {
-    purple: '#7f77dd', teal: '#1d9e75', coral: '#d85a30', pink: '#d4537e',
-    blue: '#378add', green: '#639922', amber: '#ba7517', gray: '#888780',
-};
+// A classification's color is stored as a literal "#rrggbb" hex string --
+// PermissionTree.js's 8 quick swatches send one of their own fixed hexes,
+// but the Más Colores dialog (hexagon mosaic / saturation-matiz picker)
+// lets an admin send any hex at all, so this file never interprets the
+// value beyond validating its shape (see the hex regex check in
+// server.js's PUT route) -- it's just stored and handed back verbatim.
 function getClassificationColors() {
     return db.prepare('SELECT classification_id AS classificationId, color FROM master_permission_classification_colors').all();
 }
@@ -5741,7 +5738,7 @@ function getEffectiveColumnClassifications(tableKey) {
             labelKey: node ? node.labelKey : null,
             labelParams: (node && node.labelParams) || null,
             label: node ? null : (override && override.classificationLabel) || null,
-            color: color ? (CLASSIFICATION_COLOR_HEX[color] || null) : null,
+            color: color || null,
         };
     });
     return result;
@@ -6745,7 +6742,6 @@ module.exports = {
     getClassificationColors,
     setClassificationColor,
     getEffectiveColumnClassifications,
-    CLASSIFICATION_COLOR_HEX,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     getSaasMasterOrder,

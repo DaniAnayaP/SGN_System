@@ -1807,7 +1807,110 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
     padding: 0;
 }
 .perm-tree-color-swatch-selected{ border-color: var(--color-text-primary); }
+/* Spans the full 4-column swatch grid instead of becoming a cramped 9th
+   cell -- opens the free-form dialog below for anything the 8 quick
+   swatches don't cover. */
+.perm-tree-color-more-btn{
+    grid-column: 1 / -1;
+    margin-top: 0.3rem;
+    padding-top: 0.5rem;
+    border: none;
+    border-top: 1px solid var(--color-border);
+    background: none;
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--color-accent, #1a73e8);
+    cursor: pointer;
+}
 body.dark-mode .perm-tree-color-popover{ background-color: #23242b; }
+/* "Más colores..." dialog -- Estándar (hexagon mosaic) and Personalizado
+   (saturation/matiz picker) tabs, see ensureColorDialog in
+   PermissionTree.js. Reuses .modal-overlay/.modal-panel for the
+   backdrop/panel chrome every other dialog in the app already uses. */
+.perm-tree-color-dialog{ max-width: 26rem; }
+.perm-tree-color-tabs{
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--color-border);
+    margin: 0.75rem 0 1rem;
+}
+.perm-tree-color-tab{
+    border: none;
+    background: none;
+    padding: 0.5rem 0.25rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+.perm-tree-color-tab-active{
+    color: var(--color-accent, #1a73e8);
+    border-bottom-color: var(--color-accent, #1a73e8);
+}
+.perm-tree-color-mosaic-row{ display: flex; gap: 0.9rem; }
+.perm-tree-color-mosaic{ display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.perm-tree-color-mosaic-row-cells{ display: flex; gap: 1px; margin-top: -0.35rem; }
+.perm-tree-color-gray-row{ display: flex; gap: 1px; margin-top: 0.4rem; }
+.perm-tree-color-hex-cell{
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+}
+.perm-tree-color-hex-cell-sm{ width: 1.3rem; height: 1.3rem; }
+.perm-tree-color-preview-col{ display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; }
+.perm-tree-color-preview-label{ font-size: 0.68rem; color: var(--color-text-secondary); margin-bottom: 0.3rem; }
+.perm-tree-color-preview-swatch{
+    width: 3.4rem;
+    height: 2.5rem;
+    border-radius: 0.35rem;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+}
+.perm-tree-color-sv-row{ display: flex; gap: 0.6rem; }
+.perm-tree-color-sv-canvas{ width: 220px; height: 150px; border-radius: 0.5rem; cursor: crosshair; }
+.perm-tree-color-hue-wrap{ position: relative; width: 1.2rem; height: 150px; }
+.perm-tree-color-hue-strip{
+    width: 100%;
+    height: 100%;
+    border-radius: 0.35rem;
+    background: linear-gradient(to bottom, red, yellow, lime, cyan, blue, magenta, red);
+    cursor: ns-resize;
+}
+.perm-tree-color-hue-arrow{
+    position: absolute;
+    left: -0.25rem;
+    top: 0;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid var(--color-text-primary);
+    transform: translateY(-50%);
+}
+.perm-tree-color-hex-row{ display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
+.perm-tree-color-hex-row label{ font-size: 0.72rem; color: var(--color-text-secondary); }
+.perm-tree-color-hex-input{
+    flex: 1;
+    border: 1px solid var(--color-border);
+    border-radius: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.78rem;
+    font-family: monospace;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+}
+.perm-tree-color-dialog-footer{
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-top: 1rem;
+}
 /* Fixed column, matching perm-tree-mstatus-header-platforms's own width
    exactly -- see the comment in statusRow (PermissionTree.js) on why a
    real matching-width column (not margin-left:auto flush-right) is what

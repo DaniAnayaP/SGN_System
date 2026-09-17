@@ -247,7 +247,6 @@ const {
     getClassificationColors,
     setClassificationColor,
     getEffectiveColumnClassifications,
-    CLASSIFICATION_COLOR_HEX,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
     getSaasMasterOrder,
@@ -2133,8 +2132,10 @@ app.put('/api/admin/master-permission-classification-colors', requireAuth, requi
     if (typeof classificationId !== 'string' || !classificationId) {
         return res.status(400).json({ message: 'classificationId is required.' });
     }
-    if (!Object.prototype.hasOwnProperty.call(CLASSIFICATION_COLOR_HEX, color)) {
-        return res.status(400).json({ message: `color must be one of ${Object.keys(CLASSIFICATION_COLOR_HEX).join(', ')}.` });
+    // Free-form now (see Más Colores in PermissionTree.js) -- any real hex
+    // color is valid, not just the 8 quick-swatch presets.
+    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+        return res.status(400).json({ message: 'color must be a hex color like #7f77dd.' });
     }
     res.json({ color: setClassificationColor(classificationId, color, changedByLabel(req)) });
 });
