@@ -338,6 +338,7 @@
     "requiredFields": "Company name, contact name and email are required.",
     "loadError": "Couldn't load data. Please try again.",
     "saveError": "Error saving, please try again.",
+    "sessionExpiredError": "Your session expired. Sign in again and try once more.",
     "homeOthers": "Other",
     "loading": "Loading...",
     "costCenterRequiredForRecord": "Select a Cost Center before saving — it's a Control Interno column and must be filled in from creation.",

@@ -2872,6 +2872,23 @@
             for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
             return CLASSIFICATION_COLOR_PALETTE[hash % CLASSIFICATION_COLOR_PALETTE.length];
         }
+        // A generic "no se pudo guardar" toast (the previous behavior here)
+        // reads as a mystery every time it's actually just a lapsed
+        // session -- confirmed live: "cuando cambio el color... me arroja
+        // la alerta de no se guardó el cambio" turned out to be exactly
+        // this (this file has no shared 401 handling anywhere else either
+        // -- this is scoped to the two save paths this session touched,
+        // not a fix for every fetch in here). SaveFailedError carries the
+        // real HTTP status through the catch block so the toast can tell
+        // "you got signed out" apart from an actual server/validation
+        // failure instead of treating both identically.
+        class SaveFailedError extends Error {
+            constructor(status) { super(`save failed (${status})`); this.status = status; }
+        }
+        function describeSaveFailure(err) {
+            if (err instanceof SaveFailedError && err.status === 401) return t('admin.sessionExpiredError');
+            return t('admin.saveError');
+        }
         // Saves (or, picking the same color twice, leaves as) one
         // classification's admin-chosen color and repaints -- same
         // fetch-then-render-again shape as saveClassificationOverride below.
@@ -2885,15 +2902,15 @@
                     credentials: 'include',
                     body: JSON.stringify({ classificationId, color: hex }),
                 });
-                if (!res.ok) throw new Error('save failed');
+                if (!res.ok) throw new SaveFailedError(res.status);
                 classificationColors.set(classificationId, hex);
                 const existingIdx = recentColors.indexOf(hex);
                 if (existingIdx !== -1) recentColors.splice(existingIdx, 1);
                 recentColors.unshift(hex);
                 if (recentColors.length > 8) recentColors.length = 8;
                 renderStatusTree();
-            } catch {
-                const message = t('admin.saveError');
+            } catch (err) {
+                const message = describeSaveFailure(err);
                 if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'error');
                 else if (typeof window.showToast === 'function') window.showToast(message);
             }
@@ -3547,12 +3564,12 @@
                     credentials: 'include',
                     body: JSON.stringify({ nodeKey, classificationId, classificationLabel: classificationLabel || null }),
                 });
-                if (!res.ok) throw new Error('save failed');
+                if (!res.ok) throw new SaveFailedError(res.status);
                 if (classificationId) classificationOverrides.set(nodeKey, { classificationId, classificationLabel: classificationLabel || null });
                 else classificationOverrides.delete(nodeKey);
                 renderStatusTree();
-            } catch {
-                const message = t('admin.saveError');
+            } catch (err) {
+                const message = describeSaveFailure(err);
                 if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'error');
                 else if (typeof window.showToast === 'function') window.showToast(message);
             }

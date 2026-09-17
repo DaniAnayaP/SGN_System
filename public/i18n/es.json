@@ -347,6 +347,7 @@
     "requiredFields": "Nombre de empresa, contacto y correo son obligatorios.",
     "loadError": "No se pudo cargar la información. Intenta de nuevo.",
     "saveError": "Error al guardar, vuelve a intentar.",
+    "sessionExpiredError": "Tu sesión expiró. Vuelve a iniciar sesión e intenta de nuevo.",
     "loading": "Cargando...",
     "costCenterRequiredForRecord": "Selecciona un Centro de Costos antes de guardar — es una columna de Control Interno y debe quedar llena desde la creación.",
     "clientSaved": "Cliente guardado.",
