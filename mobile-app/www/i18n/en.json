@@ -491,6 +491,8 @@
     "costsEditNoPermission": "You don't have permission to edit access-permissions costs.",
     "planActivateOnlyRevision": "Only a plan In Review can be activated.",
     "saasTeamSubtitle": "Manage the GEIPSA staff accounts that can access this control panel.",
+    "saasMasterTreeSubtitle": "Set the overall readiness (Enabled/Disabled/In progress/Improving, Web/App) for the SaaS team's own internal screens -- separate from Árbol de Permisos Maestro, which only controls what clients get.",
+    "saasMasterTreeGeneral": "General",
     "backupsSubtitle": "Every evidence photo or document saved in the system, with a file name that identifies it on its own.",
     "changesSubtitle": "Every change logged across every screen, concentrated in one place.",
     "backupsClientLabel": "Client",

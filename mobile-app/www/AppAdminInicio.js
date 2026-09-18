@@ -527,6 +527,7 @@ function renderSection(id) {
     document.querySelectorAll('.home-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.section === activeTabId));
     updateBreadcrumb();
     if (id === 'tree') loadMasterTree(renderToken);
+    else if (id === 'saas-tree') loadSaasMasterTree(renderToken);
     else if (id === 'home') renderHomeHub();
     else if (id === 'sectors') loadSectorsSection(renderToken);
     else if (CATEGORY_ITEMS[id]) renderCategorySection(id);
@@ -1235,6 +1236,22 @@ async function loadMasterTree(token) {
         error.textContent = t('admin.loadError');
         contentEl.appendChild(error);
     }
+}
+
+// --- Árbol Maestro SaaS -- GEIPSA-internal readiness tree (own file,
+// Admin-ArbolMaestroSaaS.js, mirroring public/Admin-ArbolMaestroSaaS.js).
+// Much thinner than loadMasterTree above: no Árbol/Resumen toggle, no
+// currency bar, no confirm-diff sheet -- the desktop SaaS screen never had
+// any of those either. window.SaasMasterTree.render(container) does
+// everything else (fetch, build header/rows/Guardar, wire events) since
+// that file is its own self-contained factory, not a shared instance API
+// like PermissionTree.js's own create().
+function loadSaasMasterTree(token) {
+    contentEl.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'admin-master-tree';
+    contentEl.appendChild(wrap);
+    window.SaasMasterTree.render(wrap);
 }
 
 // --- Giros de Negocio -- ports Admin-BusinessSectors.js's own screen into

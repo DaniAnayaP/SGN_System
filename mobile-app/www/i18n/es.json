@@ -491,6 +491,8 @@
     "costsEditNoPermission": "No tienes permiso para editar costos de accesos-permisos.",
     "planActivateOnlyRevision": "Solo un plan en Revisión puede activarse.",
     "saasTeamSubtitle": "Administra las cuentas del staff de GEIPSA que pueden entrar a este panel de control.",
+    "saasMasterTreeSubtitle": "Define el estatus general (Habilitado/Inhabilitado/En construcción/En mejoras, Web/App) de las pantallas internas del propio equipo SaaS -- separado del Árbol de Permisos Maestro, que solo controla lo que reciben los clientes.",
+    "saasMasterTreeGeneral": "General",
     "backupsSubtitle": "Cada foto o documento de evidencia guardado en el sistema, con un nombre de archivo que se explica solo.",
     "changesSubtitle": "Cada cambio registrado en cualquier pantalla, concentrado en un solo lugar.",
     "backupsClientLabel": "Cliente",
