@@ -82,6 +82,23 @@ const SAAS_CLASS_POR_DEFINIR_ID = 'saas-class-por-definir';
 // categories), same "si ya son botones, ya deben estar en esa
 // clasificación" reasoning the client tree already applied to class-botones.
 const SAAS_CLASS_BOTONES_ID = 'saas-class-botones';
+// Same universal data-table toolbar every real Tabla in this app shares
+// (the same Dashboard.js table component, client-facing or SaaS-internal
+// alike) -- same ids/labelKeys menu.json's own "iconsSubmenu" already
+// lists for a real client-facing table (see e.g. public/data/menu.json
+// around line 311). Applies to any apartado.controlInterno Tabla here
+// too, same as CONTROL_INTERNO_COLUMNS does, since it's the identical
+// shared component either way.
+const ICON_PERSONALIZATION_ITEMS = [
+    { id: 'iconZoomOut', labelKey: 'main.decreaseFontSize' },
+    { id: 'iconZoomIn', labelKey: 'main.increaseFontSize' },
+    { id: 'iconPin', labelKey: 'main.pinColumns' },
+    { id: 'iconVisibility', labelKey: 'main.columnVisibility' },
+    { id: 'iconHistory', labelKey: 'main.changeHistory' },
+    { id: 'iconLegend', labelKey: 'main.columnLegendBtn' },
+    { id: 'iconFilter', labelKey: 'main.filterToggle' },
+    { id: 'iconFilterClear', labelKey: 'main.filterClearBtn' },
+];
 const CREATE_CLASSIFICATION_VALUE = '__create-classification__';
 const CLASSIFICATION_COLOR_FAMILIES = [
     { id: 'purple', shades: ['#EEEDFE', '#CECBF6', '#AFA9EC', '#7F77DD', '#534AB7', '#3C3489'] },
@@ -116,6 +133,13 @@ const SAAS_LEVEL_BADGES = {
     // Modal apartado, which stays "Apartado" (confirmed live, 2026-09-17:
     // "porque en una tabla dice apartado?").
     tabla: { labelKey: 'main.tablePrefix', color: '#5C6079' },
+    // Same as the client tree's own LEVEL_BADGES.icono -- "Iconos
+    // Personalización" is a plain structural level (fixed red badge, no
+    // color pickers), not a real reassignable classification like
+    // Botones, same as PermissionTree.js's renderStatusIcons already
+    // treats it (buildLevelBadgeCtx('icono'), never
+    // buildFixedClassificationCtx).
+    icono: { labelKey: 'admin.masterTreeLevelIcono', color: '#B3261E' },
 };
 // The real 13 Control Interno columns every "class-control-interno" block
 // in menu.json already lists (same ids/labelKeys, e.g.
@@ -1586,6 +1610,47 @@ function renderList() {
                     if (!collapsed.has(`cls:${botonesKey}`)) {
                         actionLeaves.forEach((leaf) => {
                             renderLeafWithLevels(screen, apartado, leaf, 3, aKey, null, botonesCtx, leaf.label);
+                        });
+                    }
+                }
+
+                // "Iconos Personalización" -- another sibling of this
+                // apartado's own Tabla row, right after Botones (confirmed
+                // live, 2026-09-17, against the same real branch:
+                // Botones/Iconos Personalización/Tabla Carga Combustible,
+                // in that order). A plain structural level (fixed red
+                // badge, no color pickers, no reassignment, no further
+                // sub-levels) -- same treatment PermissionTree.js's own
+                // renderStatusIcons gives it, never a real classification
+                // like Botones. Only rendered for a real Tabla
+                // (apartado.controlInterno), same gate Control Interno
+                // itself uses -- this toolbar belongs to the shared data-
+                // table component, not to a Modal.
+                if (apartado.controlInterno) {
+                    const iconLeafKeys = ICON_PERSONALIZATION_ITEMS.map((icon) => `${aKey}::icon-${icon.id}`);
+                    const iconsKey = `${aKey}::icons`;
+                    const iconsCtx = buildLevelBadgeCtx('icono');
+                    const iconsRow = document.createElement('div');
+                    iconsRow.className = 'perm-tree-row perm-tree-depth-2';
+                    iconsRow.appendChild(spacer());
+                    iconsRow.appendChild(toggleBtn(`cls:${iconsKey}`, !collapsed.has(`cls:${iconsKey}`)));
+                    iconsRow.appendChild(rollupEl(computeRollup(iconLeafKeys, 'web'), computeRollup(iconLeafKeys, 'app')));
+                    iconsRow.appendChild(labelEl(Dashboard.t('menu.iconsPersonalization')));
+                    iconsRow.appendChild(countBadge(iconLeafKeys.length));
+                    iconsRow.appendChild(buildControls(iconsKey, iconLeafKeys, screen.href, iconsCtx, Dashboard.t('menu.iconsPersonalization')));
+                    listEl.appendChild(iconsRow);
+                    if (!collapsed.has(`cls:${iconsKey}`)) {
+                        ICON_PERSONALIZATION_ITEMS.forEach((icon) => {
+                            const iconKey = `${aKey}::icon-${icon.id}`;
+                            const iconRow = document.createElement('div');
+                            iconRow.className = 'perm-tree-row perm-tree-depth-3';
+                            iconRow.appendChild(spacer());
+                            iconRow.appendChild(spacer());
+                            iconRow.appendChild(rollupEl(computeRollup([iconKey], 'web'), computeRollup([iconKey], 'app')));
+                            iconRow.appendChild(labelEl(Dashboard.t(icon.labelKey)));
+                            iconRow.appendChild(countBadge(1));
+                            iconRow.appendChild(buildControls(iconKey, [], screen.href, iconsCtx, Dashboard.t(icon.labelKey)));
+                            listEl.appendChild(iconRow);
                         });
                     }
                 }
