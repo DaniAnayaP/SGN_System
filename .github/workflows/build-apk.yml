@@ -9,6 +9,16 @@ on:
   workflow_dispatch: {}
   push:
     branches: [main]
+    # This list must cover every source path mobile-app/sync-web-assets.js
+    # reads from public/ (its own FILES array) -- confirmed live (2026-09-18)
+    # that it had silently drifted out of sync with that array: an
+    # AppInicio.css-only push matched none of these patterns (App*.html/
+    # App*.js covered the other 2 file types per App screen, but no App*.css
+    # entry existed), so the workflow never ran and the compiled APK kept
+    # shipping a stale AppInicio.css for 2 pushes in a row before anyone
+    # noticed. Also added the 3 other same-shaped gaps found alongside it
+    # (menu.json, the 2 i18n files, the manifest icon) rather than patching
+    # only the one that actually got hit this time.
     paths:
       - 'mobile-app/**'
       - 'public/Login.html'
@@ -22,8 +32,12 @@ on:
       - 'public/Admin.css'
       - 'public/App*.html'
       - 'public/App*.js'
+      - 'public/App*.css'
       - 'public/manifest.json'
       - 'public/sw.js'
+      - 'public/data/menu.json'
+      - 'public/i18n/**'
+      - 'public/icons/icon-512.png'
       - '.github/workflows/build-apk.yml'
 
 permissions:
