@@ -707,17 +707,23 @@ body{
     max-width: 18rem;
 }
 
-/* space-between rather than flex-start: on a wide viewport (tablet, or
-   this App's own browser preview) the tabs spread evenly across the full
-   width instead of bunching at the left with empty space after Material
-   Apoyo. No breakpoint needed -- once the tabs' own natural width (each
-   flex-shrink: 0) exceeds the bar's width, space-between has no extra room
-   to distribute, so they fall back to sitting packed left and scrolling
-   (overflow-x: auto below), exactly like a real phone already did. */
+/* space-evenly rather than flex-start: on a wide viewport (tablet, or
+   this App's own browser preview) the tabs spread across the full width
+   instead of bunching at the left with empty space after Material Apoyo --
+   and unlike space-between, the outer gaps (before Inicio, after the last
+   tab) match the gaps between tabs instead of leaving Inicio/the last tab
+   pinned flush against the bar's own side padding ("se ven tan a la
+   orilla"). No breakpoint needed for the "shrinks as the bar narrows" half
+   either -- it's the same flex distribution either way, just spread over
+   5 gaps instead of 3, so it already tightens on its own as the container
+   narrows. Once the tabs' own natural width (each flex-shrink: 0) exceeds
+   the bar's width, space-evenly has no extra room to distribute, so they
+   fall back to sitting packed left and scrolling (overflow-x: auto below),
+   exactly like a real phone already did. */
 .home-tabbar{
     margin-top: auto;
     display: flex;
-    justify-content: space-between;
+    justify-content: space-evenly;
     gap: 0;
     overflow-x: auto;
     scrollbar-width: none;
