@@ -532,6 +532,7 @@ function renderSection(id) {
     else if (id === 'sectors') loadSectorsSection(renderToken);
     else if (id === 'saas-team') loadEquipoSaasSection(renderToken);
     else if (id === 'saas-costs') loadCostosSection(renderToken);
+    else if (id === 'plans') loadPlansSection(renderToken);
     else if (CATEGORY_ITEMS[id]) renderCategorySection(id);
     else renderComingSoon();
 }
@@ -2458,6 +2459,413 @@ async function renderCostTree(plan) {
             }
         });
         contentEl.appendChild(saveBtn);
+    } catch {
+        hint.textContent = t('admin.loadError');
+    }
+}
+
+// --- Nuestros Planes -- ports Admin-Planes.js's own screen: the plan/
+// package catalog (create/edit/activate/delete) plus each plan's OWN access
+// tree via PermissionCostTree.js (mode:'grantReadonlyCost' -- interactive
+// checkboxes like the client tree, but each row also shows that plan's own
+// read-only price next to it, sourced from Costo Accesos-Permisos). Same
+// list/form/tree sub-view dispatcher shape the sections above use, plus a
+// locked/dev-mode distinction (a plan's definition+tree freeze for good the
+// first time it's Activado -- isPlanHardLocked mirrors Admin-Planes.js's own
+// isHardLocked exactly, honoring the server's dev-mode relax the same way).
+// Registro de Cambios and the 13 read-only Control Interno columns are NOT
+// ported -- same "out of scope for the árbol gap, no shared history dialog
+// yet" reasoning Costo Accesos-Permisos's own port already gave.
+let plansList = [];
+let plansDevModeOverride = false;
+let plansBusinessSectors = [];
+let plansSubView = { mode: 'list' };
+let expandedPlanId = null;
+let planTreeInstance = null;
+
+function isPlanHardLocked(plan) {
+    return plan.locked && !plansDevModeOverride;
+}
+function planBusinessSectorName(id) {
+    return plansBusinessSectors.find((s) => s.id === id)?.name || '';
+}
+
+async function loadPlansSection(token) {
+    plansSubView = { mode: 'list' };
+    expandedPlanId = null;
+    contentEl.innerHTML = '';
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+    try {
+        const [plansRes, sectorsRes] = await Promise.all([
+            fetch(apiUrl('/api/admin/plans'), { credentials: 'include' }),
+            fetch(apiUrl('/api/admin/business-sectors'), { credentials: 'include' }),
+        ]);
+        if (token !== renderToken) return;
+        if (!plansRes.ok) throw new Error('load failed');
+        const plansData = await plansRes.json();
+        plansList = plansData.plans || [];
+        plansDevModeOverride = !!plansData.devModeOverride;
+        plansBusinessSectors = sectorsRes.ok ? (await sectorsRes.json()).sectors || [] : [];
+        renderPlansSubView();
+    } catch {
+        if (token !== renderToken) return;
+        contentEl.innerHTML = '';
+        const error = document.createElement('p');
+        error.className = 'home-carga-empty-note';
+        error.textContent = t('admin.loadError');
+        contentEl.appendChild(error);
+    }
+}
+
+function renderPlansSubView() {
+    if (activeSection !== 'plans') return;
+    contentEl.innerHTML = '';
+    if (plansSubView.mode === 'tree') renderPlanTree(plansSubView.plan);
+    else if (plansSubView.mode === 'form') renderPlanForm(plansSubView.plan);
+    else renderPlansList();
+}
+
+async function patchPlanFieldMobile(plan, patch) {
+    try {
+        const res = await fetch(apiUrl(`/api/admin/plans/${plan.id}`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const { plan: updated } = await res.json();
+        plansList = plansList.map((p) => (p.id === updated.id ? updated : p));
+    } catch {
+        showToast(t('admin.saveError'));
+    }
+    renderPlansSubView();
+}
+
+async function activatePlanMobile(plan) {
+    if (!(await simpleConfirm(t('admin.planActivateConfirm')))) return;
+    try {
+        const res = await fetch(apiUrl(`/api/admin/plans/${plan.id}/activate`), { method: 'POST', credentials: 'include' });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            showToast(body.message || t('admin.saveError'));
+            return;
+        }
+        const { plan: updated } = await res.json();
+        plansList = plansList.map((p) => (p.id === updated.id ? updated : p));
+        showToast(t('main.changeSaved'));
+        renderPlansSubView();
+    } catch {
+        showToast(t('admin.saveError'));
+    }
+}
+
+async function removePlanMobile(plan) {
+    if (!(await simpleConfirm(t('admin.confirmDeletePlan')))) return;
+    try {
+        const res = await fetch(apiUrl(`/api/admin/plans/${plan.id}`), { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) throw new Error('delete failed');
+        plansList = plansList.filter((p) => p.id !== plan.id);
+        if (expandedPlanId === plan.id) expandedPlanId = null;
+        renderPlansSubView();
+    } catch {
+        showToast(t('admin.saveError'));
+    }
+}
+
+function renderPlansList() {
+    const list = document.createElement('div');
+    if (!plansList.length) {
+        const empty = document.createElement('p');
+        empty.className = 'home-carga-empty-note';
+        empty.textContent = t('admin.noPlans');
+        list.appendChild(empty);
+    }
+    plansList.forEach((plan) => {
+        const isOpen = expandedPlanId === plan.id;
+        const card = document.createElement('div');
+        card.className = 'home-carga-active-card' + (isOpen ? ' open' : '');
+
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'home-carga-active-row';
+        const statusLabel = t(!plan.locked ? 'admin.planStatusRevision' : (plan.status === 'inactive' ? 'admin.planStatusInactive' : 'admin.planStatusActive'));
+        const sectorName = planBusinessSectorName(plan.businessSectorId);
+        row.innerHTML = `
+            <span class="home-carga-active-row-icon"><i class="bx bx-package" aria-hidden="true"></i></span>
+            <span class="home-carga-active-row-label">
+                <p>${plan.name}</p>
+                <span>${sectorName ? sectorName + ' · ' : ''}${formatMoney(plan.accessPermissionsCost, plan.currency)} · ${statusLabel}</span>
+            </span>
+            <i class="bx bx-chevron-right home-carga-active-row-caret" aria-hidden="true"></i>
+        `;
+        row.addEventListener('click', () => {
+            expandedPlanId = isOpen ? null : plan.id;
+            renderPlansSubView();
+        });
+        card.appendChild(row);
+
+        if (isOpen) {
+            if (plan.description) {
+                const desc = document.createElement('p');
+                desc.className = 'home-carga-active-card-desc';
+                desc.textContent = plan.description;
+                card.appendChild(desc);
+            }
+            const grid = document.createElement('div');
+            grid.className = 'home-tiles home-carga-active-card-actions';
+            const actions = [
+                { icon: 'bx-shield', label: t('admin.planTreeTitle'), onClick: () => { expandedPlanId = plan.id; plansSubView = { mode: 'tree', plan }; renderPlansSubView(); } },
+            ];
+            if (!isPlanHardLocked(plan)) {
+                actions.push({ icon: 'bx-edit', label: t('admin.edit'), onClick: () => { expandedPlanId = plan.id; plansSubView = { mode: 'form', plan }; renderPlansSubView(); } });
+            }
+            if (!plan.locked) {
+                actions.push({ icon: 'bx-check-shield', label: t('admin.planActivate'), onClick: () => activatePlanMobile(plan) });
+            }
+            actions.push({ icon: 'bx-trash', label: t('admin.delete'), onClick: () => removePlanMobile(plan), danger: true });
+            actions.forEach((a) => {
+                const tile = document.createElement('button');
+                tile.type = 'button';
+                tile.className = 'home-tile' + (a.danger ? ' danger' : '');
+                tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${a.icon}" aria-hidden="true"></i></span><span>${a.label}</span>`;
+                tile.addEventListener('click', a.onClick);
+                grid.appendChild(tile);
+            });
+            card.appendChild(grid);
+        }
+
+        list.appendChild(card);
+    });
+    contentEl.appendChild(list);
+
+    const newBtn = document.createElement('button');
+    newBtn.type = 'button';
+    newBtn.className = 'home-carga-new-btn';
+    newBtn.style.marginTop = '1rem';
+    newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('menu.addPlanNew')}</span>`;
+    newBtn.addEventListener('click', () => { plansSubView = { mode: 'form', plan: null }; renderPlansSubView(); });
+    contentEl.appendChild(newBtn);
+}
+
+function renderPlanForm(plan) {
+    const isEdit = !!plan;
+    contentEl.appendChild(subViewBackHeader(isEdit ? t('admin.planEditTitle') : t('menu.addPlanNew'), null, () => {
+        if (isEdit) expandedPlanId = plan.id;
+        plansSubView = { mode: 'list' };
+        renderPlansSubView();
+    }));
+
+    const makeField = (labelText, type) => {
+        const label = document.createElement('p');
+        label.className = 'home-carga-empty-note';
+        label.style.cssText = 'text-align:left; padding:0; display:block; margin-bottom:0.3rem;';
+        label.textContent = labelText;
+        const input = document.createElement('input');
+        input.type = type;
+        input.style.cssText = 'width:100%; padding:0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); margin-bottom:0.8rem; font:inherit;';
+        contentEl.append(label, input);
+        return input;
+    };
+    const nameInput = makeField(t('admin.planName'), 'text');
+    nameInput.value = (plan && plan.name) || '';
+    const descInput = makeField(t('admin.planDescription'), 'text');
+    descInput.value = (plan && plan.description) || '';
+
+    const sectorLabel = document.createElement('p');
+    sectorLabel.className = 'home-carga-empty-note';
+    sectorLabel.style.cssText = 'text-align:left; padding:0; display:block; margin-bottom:0.3rem;';
+    sectorLabel.textContent = t('admin.planBusinessSector');
+    const sectorSelect = document.createElement('select');
+    sectorSelect.style.cssText = 'width:100%; padding:0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); margin-bottom:0.8rem; font:inherit;';
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = t('admin.planBusinessSectorNone');
+    sectorSelect.appendChild(noneOpt);
+    plansBusinessSectors.forEach((sector) => {
+        const opt = document.createElement('option');
+        opt.value = String(sector.id);
+        opt.textContent = sector.name;
+        sectorSelect.appendChild(opt);
+    });
+    sectorSelect.value = plan && plan.businessSectorId ? String(plan.businessSectorId) : '';
+    contentEl.append(sectorLabel, sectorSelect);
+
+    let createdAtInput = null;
+    let createdByInput = null;
+    let endDateInput = null;
+    let costCentersLimitInput = null;
+    if (isEdit) {
+        createdAtInput = makeField(t('admin.planCreatedAt'), 'date');
+        createdAtInput.value = plan.created_at ? plan.created_at.slice(0, 10) : '';
+        createdByInput = makeField(t('admin.planCreatedBy'), 'text');
+        createdByInput.value = plan.createdBy || '';
+        endDateInput = makeField(t('admin.planEndDate'), 'date');
+        endDateInput.value = plan.endDate || '';
+        costCentersLimitInput = makeField(t('admin.costCentersLimit'), 'number');
+        costCentersLimitInput.value = plan.costCentersLimit || 0;
+    }
+
+    const errorEl = document.createElement('p');
+    errorEl.className = 'home-carga-empty-note';
+    errorEl.style.color = 'var(--home-danger)';
+    errorEl.hidden = true;
+    contentEl.appendChild(errorEl);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'home-carga-new-btn';
+    saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+    saveBtn.addEventListener('click', async () => {
+        const name = nameInput.value.trim();
+        if (!name) {
+            errorEl.textContent = t('admin.requiredFields');
+            errorEl.hidden = false;
+            return;
+        }
+        errorEl.hidden = true;
+        saveBtn.disabled = true;
+        const payload = {
+            name,
+            description: descInput.value.trim(),
+            businessSectorId: sectorSelect.value ? Number(sectorSelect.value) : null,
+            costCentersLimit: isEdit ? Math.max(0, parseInt(costCentersLimitInput.value, 10) || 0) : 0,
+            createdAt: isEdit ? (createdAtInput.value || null) : null,
+            createdBy: isEdit ? createdByInput.value.trim() : '',
+            endDate: isEdit ? (endDateInput.value || null) : null,
+        };
+        try {
+            const res = await fetch(apiUrl(isEdit ? `/api/admin/plans/${plan.id}` : '/api/admin/plans'), {
+                method: isEdit ? 'PATCH' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                errorEl.textContent = body.message === 'A plan with that name already exists.' ? t('admin.planNameExists') : (body.message || t('admin.saveError'));
+                errorEl.hidden = false;
+                return;
+            }
+            if (isEdit) {
+                const { plan: updated } = await res.json();
+                plansList = plansList.map((p) => (p.id === updated.id ? updated : p));
+                expandedPlanId = updated.id;
+            } else {
+                const plansRes = await fetch(apiUrl('/api/admin/plans'), { credentials: 'include' });
+                if (plansRes.ok) plansList = (await plansRes.json()).plans || [];
+            }
+            showToast(t(isEdit ? 'main.changeSaved' : 'main.recordSaved'));
+            plansSubView = { mode: 'list' };
+            renderPlansSubView();
+        } catch {
+            errorEl.textContent = t('admin.saveError');
+            errorEl.hidden = false;
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+    contentEl.appendChild(saveBtn);
+}
+
+async function renderPlanTree(plan) {
+    const locked = isPlanHardLocked(plan);
+    contentEl.appendChild(subViewBackHeader(`${t('admin.planTreeTitle')} — ${plan.name}`, null, () => {
+        expandedPlanId = plan.id;
+        plansSubView = { mode: 'list' };
+        renderPlansSubView();
+    }));
+
+    if (plan.locked) {
+        const lockedNote = document.createElement('p');
+        lockedNote.className = 'home-carga-empty-note';
+        lockedNote.style.cssText = 'text-align:left; padding:0; margin-bottom:0.6rem;';
+        lockedNote.textContent = t(locked ? 'admin.planTreeLockedActive' : 'admin.planLockedDevNote');
+        contentEl.appendChild(lockedNote);
+    }
+
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+
+    try {
+        const [grantsRes, costsRes] = await Promise.all([
+            fetch(apiUrl(`/api/admin/plans/${plan.id}/grants`), { credentials: 'include' }),
+            fetch(apiUrl(`/api/admin/plans/${plan.id}/permission-costs`), { credentials: 'include' }),
+        ]);
+        if (!grantsRes.ok || !costsRes.ok) throw new Error('load failed');
+        const grantsData = await grantsRes.json();
+        const costsData = await costsRes.json();
+        hint.remove();
+
+        const treeWrap = document.createElement('div');
+        treeWrap.className = 'admin-master-tree perm-tree';
+        if (locked) treeWrap.classList.add('perm-tree-view-only');
+        contentEl.appendChild(treeWrap);
+        planTreeInstance = window.PermissionCostTree.create(treeWrap, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN' });
+        await planTreeInstance.init(grantsData.grants || [], costsData.costs || [], null, grantsData.sectorGrants || []);
+
+        const appBtnRow = document.createElement('div');
+        appBtnRow.style.cssText = 'display:flex; flex-direction:column; gap:0.5rem; margin:0.7rem 0;';
+        const equalizeBtn = document.createElement('button');
+        equalizeBtn.type = 'button';
+        equalizeBtn.className = 'home-carga-secondary-btn';
+        equalizeBtn.textContent = t('main.appEqualizeAll');
+        equalizeBtn.disabled = locked;
+        equalizeBtn.addEventListener('click', () => planTreeInstance?.equalizeAllAppToWeb());
+        const fillMissingBtn = document.createElement('button');
+        fillMissingBtn.type = 'button';
+        fillMissingBtn.className = 'home-carga-secondary-btn';
+        fillMissingBtn.textContent = t('main.appFillMissingAll');
+        fillMissingBtn.disabled = locked;
+        fillMissingBtn.addEventListener('click', () => planTreeInstance?.fillAllMissingAppToWeb());
+        appBtnRow.append(equalizeBtn, fillMissingBtn);
+        contentEl.appendChild(appBtnRow);
+
+        const errorEl = document.createElement('p');
+        errorEl.className = 'home-carga-empty-note';
+        errorEl.style.color = 'var(--home-danger)';
+        errorEl.hidden = true;
+        contentEl.appendChild(errorEl);
+
+        if (!locked) {
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.className = 'home-carga-new-btn';
+            saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+            saveBtn.addEventListener('click', async () => {
+                if (!planTreeInstance) return;
+                saveBtn.disabled = true;
+                errorEl.hidden = true;
+                try {
+                    const saveRes = await fetch(apiUrl(`/api/admin/plans/${plan.id}/grants`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ grants: planTreeInstance.getGrants() }),
+                    });
+                    if (!saveRes.ok) {
+                        const body = await saveRes.json().catch(() => ({}));
+                        errorEl.textContent = body.message || t('admin.saveError');
+                        errorEl.hidden = false;
+                        return;
+                    }
+                    const plansRes = await fetch(apiUrl('/api/admin/plans'), { credentials: 'include' });
+                    if (plansRes.ok) plansList = (await plansRes.json()).plans || [];
+                    showToast(t('main.changeSaved'));
+                } catch {
+                    errorEl.textContent = t('admin.saveError');
+                    errorEl.hidden = false;
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            });
+            contentEl.appendChild(saveBtn);
+        }
     } catch {
         hint.textContent = t('admin.loadError');
     }
