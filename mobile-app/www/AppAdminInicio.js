@@ -30,8 +30,14 @@ function t(key, params = {}) {
 // for the same shim) and, since Árbol Maestro's "aplicar Estatus a
 // anidados" button needs a yes/no answer before overwriting a whole
 // subtree, confirm (see simpleConfirm below -- this App's own bottom-sheet
-// equivalent of Dashboard.js's confirmDialog on Web).
-window.Dashboard = { t, confirm: simpleConfirm };
+// equivalent of Dashboard.js's confirmDialog on Web). formatCurrency is
+// PermissionCostTree.js's own extra dependency (its read-only cost spans,
+// clientTricolor/grantReadonlyCost modes -- costEdit never hits this,
+// hence it went unnoticed through 2 earlier ports that happened to only
+// test against zero-cost data) -- formatMoney (declared further down,
+// hoisted) is byte-for-byte the same formula Dashboard.js's own
+// formatCurrency uses on Web.
+window.Dashboard = { t, confirm: simpleConfirm, formatCurrency: (amount, currency) => formatMoney(amount, currency) };
 
 // Same singleton-overlay idea as Dashboard.js's ensureConfirmModal/
 // confirmDialog, just built from this App's own bottom-sheet vocabulary
@@ -533,6 +539,7 @@ function renderSection(id) {
     else if (id === 'saas-team') loadEquipoSaasSection(renderToken);
     else if (id === 'saas-costs') loadCostosSection(renderToken);
     else if (id === 'plans') loadPlansSection(renderToken);
+    else if (id === 'clients') loadClientsSection(renderToken);
     else if (CATEGORY_ITEMS[id]) renderCategorySection(id);
     else renderComingSoon();
 }
@@ -2866,6 +2873,326 @@ async function renderPlanTree(plan) {
             });
             contentEl.appendChild(saveBtn);
         }
+    } catch {
+        hint.textContent = t('admin.loadError');
+    }
+}
+
+// --- Nuestros Clientes -- ports the 3 REAL trees off Admin-SaaS.js's own
+// screen (Acceso Administrador read-only, Permisos Contratados read-only
+// tricolor, + Permisos Adicionales interactive tricolor with a live cost
+// total) into this shell. Deliberately NOT the rest of that screen --
+// client creation/editing, contract documents, color picker, activar/
+// desactivar, toggle app, reset-test-client, and the Cambios de Anexos
+// history modal are all out of scope, same "close the árbol gap, not the
+// whole screen" line the other 3 ports already drew (no shared history
+// dialog to hang Anexos off of either). The list below is read-only on
+// purpose: pick a client, open one of its 3 trees.
+let clientsList = [];
+let clientsSubView = { mode: 'list' };
+let expandedClientId = null;
+let plansForClients = [];
+let adicionalesTreeInstance = null;
+let adicionalesClientId = null;
+let adicionalesCurrency = 'MXN';
+
+function clientStatusLabel(status) {
+    return t('admin.status' + status.charAt(0).toUpperCase() + status.slice(1));
+}
+// Currency always comes from the client's own PLAN (looked up by name --
+// client.plan is the plan's name string, not its id, same as Web's own
+// lookup), never a client-level field -- confirmed against Admin-SaaS.js's
+// own openPermisosContratadosModal/openPermisosAdicionalesModal.
+function clientPlanCurrency(client) {
+    const plan = client.plan ? plansForClients.find((p) => p.name === client.plan) : null;
+    return plan?.currency || 'MXN';
+}
+async function loadClientPlanCostsMobile(client) {
+    const plan = client.plan ? plansForClients.find((p) => p.name === client.plan) : null;
+    if (!plan) return [];
+    try {
+        const res = await fetch(apiUrl(`/api/admin/plans/${plan.id}/permission-costs`), { credentials: 'include' });
+        if (!res.ok) return [];
+        return (await res.json()).costs || [];
+    } catch {
+        return [];
+    }
+}
+
+async function loadClientsSection(token) {
+    clientsSubView = { mode: 'list' };
+    expandedClientId = null;
+    contentEl.innerHTML = '';
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+    try {
+        const [clientsRes, plansRes] = await Promise.all([
+            fetch(apiUrl('/api/admin/clients'), { credentials: 'include' }),
+            fetch(apiUrl('/api/admin/plans'), { credentials: 'include' }),
+        ]);
+        if (token !== renderToken) return;
+        if (!clientsRes.ok) throw new Error('load failed');
+        clientsList = (await clientsRes.json()).clients || [];
+        plansForClients = plansRes.ok ? (await plansRes.json()).plans || [] : [];
+        renderClientsSubView();
+    } catch {
+        if (token !== renderToken) return;
+        contentEl.innerHTML = '';
+        const error = document.createElement('p');
+        error.className = 'home-carga-empty-note';
+        error.textContent = t('admin.loadError');
+        contentEl.appendChild(error);
+    }
+}
+
+function renderClientsSubView() {
+    if (activeSection !== 'clients') return;
+    contentEl.innerHTML = '';
+    if (clientsSubView.mode === 'adminAccess') renderClientAdminAccessTree(clientsSubView.client);
+    else if (clientsSubView.mode === 'contratados') renderClientContratadosTree(clientsSubView.client);
+    else if (clientsSubView.mode === 'adicionales') renderClientAdicionalesTree(clientsSubView.client);
+    else renderClientsList();
+}
+
+function renderClientsList() {
+    const list = document.createElement('div');
+    if (!clientsList.length) {
+        const empty = document.createElement('p');
+        empty.className = 'home-carga-empty-note';
+        empty.textContent = t('admin.noClients');
+        list.appendChild(empty);
+    }
+    clientsList.forEach((client) => {
+        const isOpen = expandedClientId === client.id;
+        const card = document.createElement('div');
+        card.className = 'home-carga-active-card' + (isOpen ? ' open' : '');
+
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'home-carga-active-row';
+        const name = client.company_name || client.razon_social || '—';
+        const statusText = client.status ? clientStatusLabel(client.status) : '—';
+        row.innerHTML = `
+            <span class="home-carga-active-row-icon"><i class="bx bx-buildings" aria-hidden="true"></i></span>
+            <span class="home-carga-active-row-label">
+                <p>${name}</p>
+                <span>${client.rfc || '—'} · ${client.plan || '—'} · ${statusText}</span>
+            </span>
+            <i class="bx bx-chevron-right home-carga-active-row-caret" aria-hidden="true"></i>
+        `;
+        row.addEventListener('click', () => {
+            expandedClientId = isOpen ? null : client.id;
+            renderClientsSubView();
+        });
+        card.appendChild(row);
+
+        if (isOpen) {
+            const grid = document.createElement('div');
+            grid.className = 'home-tiles home-carga-active-card-actions';
+            const actions = [
+                {
+                    icon: 'bx-key',
+                    label: t('admin.adminAccessTitle'),
+                    disabled: !client.adminUsername,
+                    onClick: () => { clientsSubView = { mode: 'adminAccess', client }; renderClientsSubView(); },
+                },
+                { icon: 'bx-sitemap', label: t('admin.permisosContratadosTitle'), onClick: () => { clientsSubView = { mode: 'contratados', client }; renderClientsSubView(); } },
+                { icon: 'bx-plus', label: t('admin.permisosAdicionalesTitle'), onClick: () => { clientsSubView = { mode: 'adicionales', client }; renderClientsSubView(); } },
+            ];
+            actions.forEach((a) => {
+                const tile = document.createElement('button');
+                tile.type = 'button';
+                tile.className = 'home-tile';
+                tile.disabled = !!a.disabled;
+                tile.title = a.disabled ? t('admin.adminAccessNoAdminYet') : '';
+                tile.innerHTML = `<span class="home-tile-icon"><i class="bx ${a.icon}" aria-hidden="true"></i></span><span>${a.label}</span>`;
+                if (!a.disabled) tile.addEventListener('click', a.onClick);
+                grid.appendChild(tile);
+            });
+            card.appendChild(grid);
+        }
+
+        list.appendChild(card);
+    });
+    contentEl.appendChild(list);
+}
+
+// "Acceso Administrador" -- read-only PermissionTree.js (not the Cost
+// fork): init([]) is intentional, not a bug -- in readOnly mode the tree
+// derives habilitado/bloqueado purely from enabledModuleKeys/costCenters,
+// never from a real grant set (see PermissionTree.js's own readOnly path).
+async function renderClientAdminAccessTree(client) {
+    contentEl.appendChild(subViewBackHeader(`${t('admin.adminAccessTitle')} — ${client.company_name || client.razon_social}`, null, () => {
+        clientsSubView = { mode: 'list' };
+        renderClientsSubView();
+    }));
+
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+
+    try {
+        const [modulesRes, costCentersRes] = await Promise.all([
+            fetch(apiUrl(`/api/admin/clients/${client.id}/modules`), { credentials: 'include' }),
+            fetch(apiUrl(`/api/admin/clients/${client.id}/cost-centers`), { credentials: 'include' }),
+        ]);
+        if (!modulesRes.ok || !costCentersRes.ok) throw new Error('load failed');
+        const modulesData = await modulesRes.json();
+        const costCentersData = await costCentersRes.json();
+        const enabledModuleKeys = (modulesData.modules || []).filter((m) => m.enabled).map((m) => m.key);
+        hint.remove();
+
+        const treeWrap = document.createElement('div');
+        treeWrap.className = 'admin-master-tree perm-tree';
+        contentEl.appendChild(treeWrap);
+        const tree = window.PermissionTree.create(treeWrap, {
+            readOnly: true,
+            enabledModuleKeys,
+            costCenters: costCentersData.costCenters || [],
+        });
+        await tree.init([]);
+    } catch {
+        hint.textContent = t('admin.loadError');
+    }
+}
+
+// "Ver árbol" = Permisos Contratados -- read-only tricolor (green = plan,
+// yellow = sold extra, red = not contracted). No save action, same as Web.
+async function renderClientContratadosTree(client) {
+    contentEl.appendChild(subViewBackHeader(`${t('admin.permisosContratadosTitle')} — ${client.company_name || client.razon_social}`, null, () => {
+        clientsSubView = { mode: 'list' };
+        renderClientsSubView();
+    }));
+
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+
+    try {
+        const [grantsRes, costs] = await Promise.all([
+            fetch(apiUrl(`/api/admin/clients/${client.id}/permission-grants`), { credentials: 'include' }),
+            loadClientPlanCostsMobile(client),
+        ]);
+        if (!grantsRes.ok) throw new Error('load failed');
+        const { grants, planGrants } = await grantsRes.json();
+        hint.remove();
+
+        const treeWrap = document.createElement('div');
+        treeWrap.className = 'admin-master-tree perm-tree';
+        contentEl.appendChild(treeWrap);
+        const tree = window.PermissionCostTree.create(treeWrap, {
+            mode: 'clientTricolor', interactive: false, currency: clientPlanCurrency(client),
+        });
+        await tree.init(planGrants || [], costs, grants || []);
+    } catch {
+        hint.textContent = t('admin.loadError');
+    }
+}
+
+// "+ Permisos Adicionales" -- interactive tricolor, red boxes toggle a
+// pending addition instead of saving immediately. The running total is
+// NOT polled -- same convention as Web: one click listener on the whole
+// tree container, deferred one tick (setTimeout 0) since
+// PermissionCostTree.js's own checkbox handler synchronously tears down
+// and rebuilds its DOM inside that same click event, so reading
+// getAdditionalCostTotal() before that finishes would read stale state.
+async function renderClientAdicionalesTree(client) {
+    contentEl.appendChild(subViewBackHeader(`${t('admin.permisosAdicionalesTitle')} — ${client.company_name || client.razon_social}`, null, () => {
+        adicionalesTreeInstance = null;
+        adicionalesClientId = null;
+        clientsSubView = { mode: 'list' };
+        renderClientsSubView();
+    }));
+
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+
+    try {
+        const [grantsRes, costs] = await Promise.all([
+            fetch(apiUrl(`/api/admin/clients/${client.id}/permission-grants`), { credentials: 'include' }),
+            loadClientPlanCostsMobile(client),
+        ]);
+        if (!grantsRes.ok) throw new Error('load failed');
+        const { grants, planGrants } = await grantsRes.json();
+        hint.remove();
+
+        adicionalesClientId = client.id;
+        adicionalesCurrency = clientPlanCurrency(client);
+
+        const totalEl = document.createElement('p');
+        totalEl.style.cssText = 'font-weight:600; margin:0 0 0.6rem;';
+        contentEl.appendChild(totalEl);
+
+        const updateAdicionalesTotalMobile = () => {
+            setTimeout(() => {
+                if (!adicionalesTreeInstance) return;
+                const total = adicionalesTreeInstance.getAdditionalCostTotal();
+                totalEl.textContent = t('admin.additionalsPermissionsPreview', { amount: formatMoney(total, adicionalesCurrency) });
+            }, 0);
+        };
+
+        const treeWrap = document.createElement('div');
+        treeWrap.className = 'admin-master-tree perm-tree';
+        contentEl.appendChild(treeWrap);
+        adicionalesTreeInstance = window.PermissionCostTree.create(treeWrap, {
+            mode: 'clientTricolor', interactive: true, currency: adicionalesCurrency,
+        });
+        await adicionalesTreeInstance.init(planGrants || [], costs, grants || []);
+        updateAdicionalesTotalMobile();
+        treeWrap.addEventListener('click', updateAdicionalesTotalMobile);
+
+        const errorEl = document.createElement('p');
+        errorEl.className = 'home-carga-empty-note';
+        errorEl.style.color = 'var(--home-danger)';
+        errorEl.hidden = true;
+        contentEl.appendChild(errorEl);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'home-carga-new-btn';
+        saveBtn.style.marginTop = '0.7rem';
+        saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+        saveBtn.addEventListener('click', async () => {
+            if (!adicionalesTreeInstance || !adicionalesClientId) return;
+            const total = adicionalesTreeInstance.getAdditionalCostTotal();
+            const confirmed = await simpleConfirm(t('admin.additionalsConfirmMessage', { amount: formatMoney(total, adicionalesCurrency) }));
+            if (!confirmed) return;
+            saveBtn.disabled = true;
+            errorEl.hidden = true;
+            try {
+                const res = await fetch(apiUrl(`/api/admin/clients/${adicionalesClientId}/permission-grants`), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ grants: adicionalesTreeInstance.getClientGrants() }),
+                });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    errorEl.textContent = body.message || t('admin.saveError');
+                    errorEl.hidden = false;
+                    return;
+                }
+                const clientsRes = await fetch(apiUrl('/api/admin/clients'), { credentials: 'include' });
+                if (clientsRes.ok) clientsList = (await clientsRes.json()).clients || [];
+                showToast(t('main.changeSaved'));
+                adicionalesTreeInstance = null;
+                adicionalesClientId = null;
+                clientsSubView = { mode: 'list' };
+                renderClientsSubView();
+            } catch {
+                errorEl.textContent = t('admin.saveError');
+                errorEl.hidden = false;
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+        contentEl.appendChild(saveBtn);
     } catch {
         hint.textContent = t('admin.loadError');
     }
