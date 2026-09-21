@@ -531,6 +531,7 @@ function renderSection(id) {
     else if (id === 'home') renderHomeHub();
     else if (id === 'sectors') loadSectorsSection(renderToken);
     else if (id === 'saas-team') loadEquipoSaasSection(renderToken);
+    else if (id === 'saas-costs') loadCostosSection(renderToken);
     else if (CATEGORY_ITEMS[id]) renderCategorySection(id);
     else renderComingSoon();
 }
@@ -2230,6 +2231,225 @@ async function renderEquipoSaasTree(user) {
                     return;
                 }
                 showToast(t('main.changeSaved'));
+            } catch {
+                errorEl.textContent = t('admin.saveError');
+                errorEl.hidden = false;
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+        contentEl.appendChild(saveBtn);
+    } catch {
+        hint.textContent = t('admin.loadError');
+    }
+}
+
+// --- Costo Accesos-Permisos -- ports Admin-CostosModulos.js's own screen:
+// one row per plan (same /api/admin/plans as Nuestros Planes) with an
+// always-editable "Costo Por Centro de Costos" number and an "Árbol de
+// Costo" button opening a PermissionCostTree.js tree (mode:'costEdit' --
+// every node priced independently, no checkboxes at all, since pricing
+// doesn't depend on whether anything is granted in any particular plan).
+// Registro de Cambios (the Cambios icon Web's own table row has) is NOT
+// ported here -- out of scope for closing the mobile árbol gap specifically,
+// and this shell has nothing to hang a shared change-history dialog off of
+// yet (Web's own is Dashboard.js's ensurePlanHistoryModal, GEIPSA-plan-
+// scoped, a bigger separate piece of shared infrastructure).
+function formatMoney(amount, currency) {
+    const symbol = currency === 'USD' ? 'US$' : '$';
+    return `${symbol}${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+let costPlansList = [];
+let costsSubView = { mode: 'list' };
+let expandedCostPlanId = null;
+let costTreeInstance = null;
+
+async function loadCostosSection(token) {
+    costsSubView = { mode: 'list' };
+    expandedCostPlanId = null;
+    contentEl.innerHTML = '';
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+    try {
+        const res = await fetch(apiUrl('/api/admin/plans'), { credentials: 'include' });
+        if (token !== renderToken) return;
+        if (!res.ok) throw new Error('load failed');
+        costPlansList = (await res.json()).plans || [];
+        renderCostosSubView();
+    } catch {
+        if (token !== renderToken) return;
+        contentEl.innerHTML = '';
+        const error = document.createElement('p');
+        error.className = 'home-carga-empty-note';
+        error.textContent = t('admin.loadError');
+        contentEl.appendChild(error);
+    }
+}
+
+function renderCostosSubView() {
+    if (activeSection !== 'saas-costs') return;
+    contentEl.innerHTML = '';
+    if (costsSubView.mode === 'tree') renderCostTree(costsSubView.plan);
+    else renderCostosList();
+}
+
+async function patchCostPlanField(plan, patch) {
+    try {
+        const res = await fetch(apiUrl(`/api/admin/plans/${plan.id}`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error('save failed');
+        const { plan: updated } = await res.json();
+        costPlansList = costPlansList.map((p) => (p.id === updated.id ? updated : p));
+    } catch {
+        showToast(t('admin.saveError'));
+    }
+    renderCostosSubView();
+}
+
+function renderCostosList() {
+    const list = document.createElement('div');
+    if (!costPlansList.length) {
+        const empty = document.createElement('p');
+        empty.className = 'home-carga-empty-note';
+        empty.textContent = t('admin.noPlans');
+        list.appendChild(empty);
+    }
+    costPlansList.forEach((plan) => {
+        const isOpen = expandedCostPlanId === plan.id;
+        const card = document.createElement('div');
+        card.className = 'home-carga-active-card' + (isOpen ? ' open' : '');
+
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'home-carga-active-row';
+        const statusLabel = t(!plan.locked ? 'admin.planStatusRevision' : (plan.status === 'inactive' ? 'admin.planStatusInactive' : 'admin.planStatusActive'));
+        row.innerHTML = `
+            <span class="home-carga-active-row-icon"><i class="bx bx-purchase-tag-alt" aria-hidden="true"></i></span>
+            <span class="home-carga-active-row-label">
+                <p>${plan.name}</p>
+                <span>${formatMoney(plan.accessPermissionsCost, plan.currency)} · ${statusLabel}</span>
+            </span>
+            <i class="bx bx-chevron-right home-carga-active-row-caret" aria-hidden="true"></i>
+        `;
+        row.addEventListener('click', () => {
+            expandedCostPlanId = isOpen ? null : plan.id;
+            renderCostosSubView();
+        });
+        card.appendChild(row);
+
+        if (isOpen) {
+            const ccLabel = document.createElement('p');
+            ccLabel.className = 'home-carga-empty-note';
+            ccLabel.style.cssText = 'text-align:left; padding:0.6rem 0.85rem 0.2rem; margin:0;';
+            ccLabel.textContent = t('admin.costPerCostCenterColumn');
+            card.appendChild(ccLabel);
+
+            const ccInput = document.createElement('input');
+            ccInput.type = 'number';
+            ccInput.min = '0';
+            ccInput.step = '0.01';
+            ccInput.value = plan.costPerCostCenter || '';
+            ccInput.style.cssText = 'width:calc(100% - 1.7rem); margin:0 0.85rem 0.7rem; padding:0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); font:inherit;';
+            ccInput.addEventListener('change', () => {
+                patchCostPlanField(plan, { costPerCostCenter: Math.max(0, Number(ccInput.value) || 0) });
+            });
+            card.appendChild(ccInput);
+
+            const grid = document.createElement('div');
+            grid.className = 'home-tiles home-carga-active-card-actions';
+            const tile = document.createElement('button');
+            tile.type = 'button';
+            tile.className = 'home-tile';
+            tile.innerHTML = `<span class="home-tile-icon"><i class="bx bx-sitemap" aria-hidden="true"></i></span><span>${t('admin.accessPermCostColumn')}</span>`;
+            tile.addEventListener('click', () => { costsSubView = { mode: 'tree', plan }; renderCostosSubView(); });
+            grid.appendChild(tile);
+            card.appendChild(grid);
+        }
+
+        list.appendChild(card);
+    });
+    contentEl.appendChild(list);
+}
+
+async function renderCostTree(plan) {
+    contentEl.appendChild(subViewBackHeader(`${t('admin.accessPermCostColumn')} — ${plan.name}`, null, () => {
+        expandedCostPlanId = plan.id;
+        costsSubView = { mode: 'list' };
+        renderCostosSubView();
+    }));
+
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+
+    try {
+        const res = await fetch(apiUrl(`/api/admin/plans/${plan.id}/permission-costs`), { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        hint.remove();
+
+        const currencyRow = document.createElement('div');
+        currencyRow.style.cssText = 'display:flex; align-items:center; gap:0.6rem; margin-bottom:0.7rem;';
+        const currencyLabel = document.createElement('label');
+        currencyLabel.textContent = t('admin.planCurrency');
+        currencyLabel.style.cssText = 'font-size:0.75rem; color:var(--home-text-muted);';
+        const currencySelect = document.createElement('select');
+        currencySelect.style.cssText = 'padding:0.4rem 0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); font:inherit;';
+        ['MXN', 'USD'].forEach((cur) => {
+            const opt = document.createElement('option');
+            opt.value = cur;
+            opt.textContent = cur;
+            currencySelect.appendChild(opt);
+        });
+        currencySelect.value = data.currency || plan.currency || 'MXN';
+        currencyRow.append(currencyLabel, currencySelect);
+        contentEl.appendChild(currencyRow);
+
+        const treeWrap = document.createElement('div');
+        treeWrap.className = 'admin-master-tree perm-tree';
+        contentEl.appendChild(treeWrap);
+        costTreeInstance = window.PermissionCostTree.create(treeWrap, { mode: 'costEdit', currency: currencySelect.value });
+        await costTreeInstance.init([], data.costs || []);
+
+        const errorEl = document.createElement('p');
+        errorEl.className = 'home-carga-empty-note';
+        errorEl.style.color = 'var(--home-danger)';
+        errorEl.hidden = true;
+        contentEl.appendChild(errorEl);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'home-carga-new-btn';
+        saveBtn.style.marginTop = '0.7rem';
+        saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+        saveBtn.addEventListener('click', async () => {
+            if (!costTreeInstance) return;
+            saveBtn.disabled = true;
+            errorEl.hidden = true;
+            try {
+                const saveRes = await fetch(apiUrl(`/api/admin/plans/${plan.id}/permission-costs`), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ costs: costTreeInstance.getCosts(), currency: currencySelect.value }),
+                });
+                if (!saveRes.ok) {
+                    const body = await saveRes.json().catch(() => ({}));
+                    errorEl.textContent = body.message || t('admin.saveError');
+                    errorEl.hidden = false;
+                    return;
+                }
+                const { plan: updated } = await saveRes.json();
+                costPlansList = costPlansList.map((p) => (p.id === updated.id ? updated : p));
+                showToast(t('admin.accessPermCostsSaved'));
             } catch {
                 errorEl.textContent = t('admin.saveError');
                 errorEl.hidden = false;
