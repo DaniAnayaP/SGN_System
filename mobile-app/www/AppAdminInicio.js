@@ -530,6 +530,7 @@ function renderSection(id) {
     else if (id === 'saas-tree') loadSaasMasterTree(renderToken);
     else if (id === 'home') renderHomeHub();
     else if (id === 'sectors') loadSectorsSection(renderToken);
+    else if (id === 'saas-team') loadEquipoSaasSection(renderToken);
     else if (CATEGORY_ITEMS[id]) renderCategorySection(id);
     else renderComingSoon();
 }
@@ -1907,6 +1908,339 @@ function renderSectorOrder(sector) {
         }
     });
     contentEl.appendChild(saveBtn);
+}
+
+// --- Equipo SaaS -- ports Admin-EquipoSaaS.js's own screen into this shell:
+// a list of GEIPSA staff accounts (role='admin') with a small, purpose-built
+// 2-level access tree per account -- deliberately NOT PermissionTree.js,
+// same "3 flat screens" reasoning Admin-EquipoSaaS.js's own header comment
+// gives (a department/área/apartado/pantalla/columna component would be
+// massive overkill here) -- plus a "+ Nuevo Admin SaaS" creation form. Same
+// list/form/tree sub-view dispatcher shape loadSectorsSection above uses,
+// just missing the history/order modes (this screen has neither on Web).
+const SAAS_TEAM_PERMISSION_CATALOG = [
+    {
+        itemId: 'saas-clients', labelKey: 'menu.clientesRegistrados',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
+            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
+            { subItemId: 'activar', labelKey: 'admin.saasActionActivate' },
+            { subItemId: 'reset', labelKey: 'admin.saasActionReset' },
+        ],
+    },
+    {
+        itemId: 'saas-plans', labelKey: 'menu.plansRegistered',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
+            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
+            { subItemId: 'activate', labelKey: 'admin.saasActionActivate' },
+        ],
+    },
+    {
+        itemId: 'saas-module-costs', labelKey: 'menu.moduleCosts',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
+        ],
+    },
+    {
+        itemId: 'saas-apps', labelKey: 'menu.ourApps',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
+            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
+        ],
+    },
+    {
+        itemId: 'saas-backups', labelKey: 'menu.ourBackups',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'descargar', labelKey: 'admin.saasActionDownload' },
+        ],
+    },
+    {
+        itemId: 'saas-material-apoyo', labelKey: 'menu.ourSupportMaterial',
+        actions: [
+            { subItemId: null, labelKey: 'admin.saasActionView' },
+            { subItemId: 'subir', labelKey: 'admin.saasActionUpload' },
+        ],
+    },
+];
+
+let equipoSaasUsers = [];
+let equipoSaasSubView = { mode: 'list' };
+let equipoSaasTreeGrants = [];
+let equipoSaasExpandedScreens = new Set();
+let equipoSaasTreeListEl = null;
+
+function equipoSaasHasGrant(itemId, subItemId) {
+    return equipoSaasTreeGrants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : !g.subItemId));
+}
+function equipoSaasSetGrant(itemId, subItemId, checked) {
+    equipoSaasTreeGrants = equipoSaasTreeGrants.filter((g) => !(g.itemId === itemId && (subItemId ? g.subItemId === subItemId : !g.subItemId)));
+    if (checked) equipoSaasTreeGrants.push({ itemId, subItemId: subItemId || null });
+}
+
+async function loadEquipoSaasSection(token) {
+    equipoSaasSubView = { mode: 'list' };
+    contentEl.innerHTML = '';
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+    try {
+        const res = await fetch(apiUrl('/api/admin/saas-users'), { credentials: 'include' });
+        if (token !== renderToken) return;
+        if (!res.ok) throw new Error('load failed');
+        equipoSaasUsers = (await res.json()).users || [];
+        renderEquipoSaasSubView();
+    } catch {
+        if (token !== renderToken) return;
+        contentEl.innerHTML = '';
+        const error = document.createElement('p');
+        error.className = 'home-carga-empty-note';
+        error.textContent = t('admin.loadError');
+        contentEl.appendChild(error);
+    }
+}
+
+function renderEquipoSaasSubView() {
+    if (activeSection !== 'saas-team') return;
+    contentEl.innerHTML = '';
+    if (equipoSaasSubView.mode === 'list') renderEquipoSaasList();
+    else if (equipoSaasSubView.mode === 'form') renderEquipoSaasForm();
+    else if (equipoSaasSubView.mode === 'tree') renderEquipoSaasTree(equipoSaasSubView.user);
+}
+
+function renderEquipoSaasList() {
+    const list = document.createElement('div');
+    if (!equipoSaasUsers.length) {
+        const empty = document.createElement('p');
+        empty.className = 'home-carga-empty-note';
+        empty.textContent = t('admin.noSaasUsers');
+        list.appendChild(empty);
+    }
+    equipoSaasUsers.forEach((user) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'home-carga-active-row';
+        row.innerHTML = `
+            <span class="home-carga-active-row-icon"><i class="bx bx-shield" aria-hidden="true"></i></span>
+            <span class="home-carga-active-row-label">
+                <p>${user.name}</p>
+                <span>${user.username} · ${user.email}</span>
+            </span>
+            <i class="bx bx-chevron-right home-carga-active-row-caret" aria-hidden="true"></i>
+        `;
+        row.addEventListener('click', () => {
+            equipoSaasSubView = { mode: 'tree', user };
+            renderEquipoSaasSubView();
+        });
+        list.appendChild(row);
+    });
+    contentEl.appendChild(list);
+
+    const newBtn = document.createElement('button');
+    newBtn.type = 'button';
+    newBtn.className = 'home-carga-new-btn';
+    newBtn.style.marginTop = '1rem';
+    newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('admin.saasUserNewTitle')}</span>`;
+    newBtn.addEventListener('click', () => { equipoSaasSubView = { mode: 'form' }; renderEquipoSaasSubView(); });
+    contentEl.appendChild(newBtn);
+}
+
+function renderEquipoSaasForm() {
+    contentEl.appendChild(subViewBackHeader(t('admin.saasUserNewTitle'), null, () => {
+        equipoSaasSubView = { mode: 'list' };
+        renderEquipoSaasSubView();
+    }));
+
+    const makeField = (labelText, type) => {
+        const label = document.createElement('p');
+        label.className = 'home-carga-empty-note';
+        label.style.cssText = 'text-align:left; padding:0; display:block; margin-bottom:0.3rem;';
+        label.textContent = labelText;
+        const input = document.createElement('input');
+        input.type = type;
+        input.style.cssText = 'width:100%; padding:0.6rem; border-radius:0.5rem; border:1px solid var(--home-divider); margin-bottom:0.8rem; font:inherit;';
+        contentEl.append(label, input);
+        return input;
+    };
+    const nameInput = makeField(t('admin.saasUserName'), 'text');
+    const usernameInput = makeField(t('business.username'), 'text');
+    const emailInput = makeField(t('admin.saasUserEmail'), 'email');
+    const passwordInput = makeField(t('business.password'), 'password');
+
+    const errorEl = document.createElement('p');
+    errorEl.className = 'home-carga-empty-note';
+    errorEl.style.color = 'var(--home-danger)';
+    errorEl.hidden = true;
+    contentEl.appendChild(errorEl);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'home-carga-new-btn';
+    saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+    saveBtn.addEventListener('click', async () => {
+        const name = nameInput.value.trim();
+        const username = usernameInput.value.trim();
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+        if (!name || !username || !email || !password || password.length < 8) {
+            errorEl.textContent = t('admin.requiredFields');
+            errorEl.hidden = false;
+            return;
+        }
+        errorEl.hidden = true;
+        saveBtn.disabled = true;
+        try {
+            const res = await fetch(apiUrl('/api/admin/saas-users'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name, username, email, password }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                errorEl.textContent = body.message || t('admin.saveError');
+                errorEl.hidden = false;
+                return;
+            }
+            const { user } = await res.json();
+            equipoSaasUsers = [...equipoSaasUsers, user];
+            showToast(t('main.recordSaved'));
+            equipoSaasSubView = { mode: 'list' };
+            renderEquipoSaasSubView();
+        } catch {
+            errorEl.textContent = t('admin.saveError');
+            errorEl.hidden = false;
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+    contentEl.appendChild(saveBtn);
+}
+
+function equipoSaasTreeRow(labelText, depth, toggle, checked, indeterminate, onChange) {
+    const row = document.createElement('div');
+    row.className = `perm-tree-row perm-tree-depth-${depth}`;
+
+    if (toggle) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'perm-tree-toggle';
+        btn.setAttribute('aria-expanded', String(toggle.expanded));
+        btn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
+        btn.addEventListener('click', () => { toggle.onToggle(); renderEquipoSaasTreeList(); });
+        row.appendChild(btn);
+    } else {
+        const spacer = document.createElement('span');
+        spacer.className = 'perm-tree-toggle-spacer';
+        row.appendChild(spacer);
+    }
+
+    const label = document.createElement('label');
+    label.className = 'perm-tree-check';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = checked;
+    input.indeterminate = !!indeterminate;
+    input.addEventListener('change', () => { onChange(input.checked); renderEquipoSaasTreeList(); });
+    const span = document.createElement('span');
+    span.textContent = labelText;
+    label.append(input, span);
+    row.appendChild(label);
+
+    return row;
+}
+
+function renderEquipoSaasTreeList() {
+    equipoSaasTreeListEl.innerHTML = '';
+    SAAS_TEAM_PERMISSION_CATALOG.forEach((screen) => {
+        const subItemIds = screen.actions.map((a) => a.subItemId);
+        const checkedCount = subItemIds.filter((subItemId) => equipoSaasHasGrant(screen.itemId, subItemId)).length;
+        const expanded = equipoSaasExpandedScreens.has(screen.itemId);
+        equipoSaasTreeListEl.appendChild(equipoSaasTreeRow(
+            t(screen.labelKey), 0,
+            { expanded, onToggle: () => (expanded ? equipoSaasExpandedScreens.delete(screen.itemId) : equipoSaasExpandedScreens.add(screen.itemId)) },
+            checkedCount === subItemIds.length, checkedCount > 0 && checkedCount < subItemIds.length,
+            (checked) => subItemIds.forEach((subItemId) => equipoSaasSetGrant(screen.itemId, subItemId, checked)),
+        ));
+        if (!expanded) return;
+        screen.actions.forEach((action) => {
+            equipoSaasTreeListEl.appendChild(equipoSaasTreeRow(
+                t(action.labelKey), 1, null,
+                equipoSaasHasGrant(screen.itemId, action.subItemId), false,
+                (checked) => equipoSaasSetGrant(screen.itemId, action.subItemId, checked),
+            ));
+        });
+    });
+}
+
+async function renderEquipoSaasTree(user) {
+    contentEl.appendChild(subViewBackHeader(`${t('admin.saasTreeTitle')} — ${user.name}`, null, () => {
+        equipoSaasSubView = { mode: 'list' };
+        renderEquipoSaasSubView();
+    }));
+
+    const hint = document.createElement('p');
+    hint.className = 'home-carga-empty-note';
+    hint.textContent = t('admin.loading') || '...';
+    contentEl.appendChild(hint);
+
+    try {
+        const res = await fetch(apiUrl(`/api/admin/saas-users/${user.id}/grants`), { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        equipoSaasTreeGrants = (await res.json()).grants || [];
+        equipoSaasExpandedScreens = new Set();
+        hint.remove();
+
+        equipoSaasTreeListEl = document.createElement('div');
+        equipoSaasTreeListEl.className = 'admin-master-tree perm-tree';
+        contentEl.appendChild(equipoSaasTreeListEl);
+        renderEquipoSaasTreeList();
+
+        const errorEl = document.createElement('p');
+        errorEl.className = 'home-carga-empty-note';
+        errorEl.style.color = 'var(--home-danger)';
+        errorEl.hidden = true;
+        contentEl.appendChild(errorEl);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'home-carga-new-btn';
+        saveBtn.style.marginTop = '0.7rem';
+        saveBtn.innerHTML = `<i class="bx bx-check" aria-hidden="true"></i><span>${t('admin.save')}</span>`;
+        saveBtn.addEventListener('click', async () => {
+            saveBtn.disabled = true;
+            errorEl.hidden = true;
+            try {
+                const saveRes = await fetch(apiUrl(`/api/admin/saas-users/${user.id}/grants`), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ grants: equipoSaasTreeGrants }),
+                });
+                if (!saveRes.ok) {
+                    const body = await saveRes.json().catch(() => ({}));
+                    errorEl.textContent = body.message || t('admin.saveError');
+                    errorEl.hidden = false;
+                    return;
+                }
+                showToast(t('main.changeSaved'));
+            } catch {
+                errorEl.textContent = t('admin.saveError');
+                errorEl.hidden = false;
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+        contentEl.appendChild(saveBtn);
+    } catch {
+        hint.textContent = t('admin.loadError');
+    }
 }
 
 (async function init() {
