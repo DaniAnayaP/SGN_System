@@ -44,10 +44,10 @@ window.SAAS_ADMIN_CATALOG = [
                         '+ Nuevo Cliente', 'Acceso Administrador', '+ Permisos Adicionales', 'Editar',
                         'Activar/Desactivar', 'Toggle APP', 'Reiniciar cliente de prueba',
                     ]),
-                    { id: 'modal-permisos', label: 'Modal: Permisos Contratados / Adicionales', acciones: ['Ver árbol', 'Editar árbol'] },
-                    { id: 'modal-anexos', label: 'Modal: Cambios de Anexos', columnas: ['Módulo', 'Acción', 'Solicitado por', 'Fecha solicitud', 'Fecha cambio', 'Duración contratada'] },
-                    { id: 'modal-color', label: 'Modal: Color Institucional', acciones: ['Editar color'] },
-                    { id: 'modal-admin-access', label: 'Modal: Acceso Administrador (solo lectura)', acciones: ['Ver'] },
+                    { id: 'modal-permisos', label: 'Modal: Permisos Contratados / Adicionales', acciones: ['Ver árbol', 'Editar árbol'], nestUnder: { host: 'tabla', column: 'Permisos contratados' } },
+                    { id: 'modal-anexos', label: 'Modal: Cambios de Anexos', columnas: ['Módulo', 'Acción', 'Solicitado por', 'Fecha solicitud', 'Fecha cambio', 'Duración contratada'], nestUnder: { host: 'tabla', column: 'Cambios de anexos' } },
+                    { id: 'modal-color', label: 'Modal: Color Institucional', acciones: ['Editar color'], nestUnder: { host: 'tabla', column: 'Color institucional' } },
+                    { id: 'modal-admin-access', label: 'Modal: Acceso Administrador (solo lectura)', acciones: ['Ver'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
                 ],
             },
             {
@@ -59,7 +59,7 @@ window.SAAS_ADMIN_CATALOG = [
                     ], [
                         '+ Nuevo Plan', 'Árbol de acceso', 'Registro de Cambios', 'Editar', 'Activar', 'Eliminar',
                     ]),
-                    { id: 'modal-arbol-plan', label: 'Modal: Árbol de Plan (accesos + costo)', acciones: ['Ver árbol', 'Editar árbol', 'Igualar visibilidad APP', 'Agregar visibilidad APP faltante'] },
+                    { id: 'modal-arbol-plan', label: 'Modal: Árbol de Plan (accesos + costo)', acciones: ['Ver árbol', 'Editar árbol', 'Igualar visibilidad APP', 'Agregar visibilidad APP faltante'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
                 ],
             },
             {
@@ -81,8 +81,8 @@ window.SAAS_ADMIN_CATALOG = [
                 apartados: [
                     tablaApartado('tabla', ['Icono', 'Nombre del giro', 'Tipo de giro', 'Descripción', 'Permisos asignados', 'Status', 'Creado por', 'Fecha de creación'],
                         ['+ Crear Giro', 'Accesos Globales', 'Reorden Personalizado', 'Vista Previa', 'Editar', 'Registro de Cambios', 'Activar/Desactivar']),
-                    { id: 'modal-tipo-giro', label: 'Modal: Tipo de Giro', acciones: ['Crear/editar tipo'] },
-                    { id: 'modal-permisos-asignados', label: 'Modal: Permisos Asignados (solo lectura)', acciones: ['Ver resumen'] },
+                    { id: 'modal-tipo-giro', label: 'Modal: Tipo de Giro', acciones: ['Crear/editar tipo'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    { id: 'modal-permisos-asignados', label: 'Modal: Permisos Asignados (solo lectura)', acciones: ['Ver resumen'], nestUnder: { host: 'tabla', column: 'Permisos asignados' } },
                 ],
             },
         ],
@@ -106,12 +106,12 @@ window.SAAS_ADMIN_CATALOG = [
                     // pantalla por Apartado en vez de una sola fila con el
                     // texto embarrado -- confirmado con el usuario que cada
                     // acción debe ir en su propia fila, no agrupada.
-                    { id: 'modal-acceso-clientes', label: 'Modal: Acceso de cuenta → Nuestros Clientes', acciones: ['Ver', 'Editar', 'Crear', 'Activar/Desactivar', 'Reset'] },
-                    { id: 'modal-acceso-planes', label: 'Modal: Acceso de cuenta → Nuestros Planes', acciones: ['Ver', 'Editar', 'Crear', 'Activar/Desactivar'] },
-                    { id: 'modal-acceso-costos', label: 'Modal: Acceso de cuenta → Costos de Módulos', acciones: ['Ver', 'Editar'] },
-                    { id: 'modal-acceso-apps', label: 'Modal: Acceso de cuenta → Nuestras Apps', acciones: ['Ver', 'Editar', 'Crear'] },
-                    { id: 'modal-acceso-respaldos', label: 'Modal: Acceso de cuenta → Nuestros Respaldos', acciones: ['Ver', 'Descargar'] },
-                    { id: 'modal-acceso-apoyo', label: 'Modal: Acceso de cuenta → Material de Apoyo', acciones: ['Ver', 'Subir'] },
+                    { id: 'modal-acceso-clientes', label: 'Modal: Acceso de cuenta → Nuestros Clientes', acciones: ['Ver', 'Editar', 'Crear', 'Activar/Desactivar', 'Reset'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    { id: 'modal-acceso-planes', label: 'Modal: Acceso de cuenta → Nuestros Planes', acciones: ['Ver', 'Editar', 'Crear', 'Activar/Desactivar'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    { id: 'modal-acceso-costos', label: 'Modal: Acceso de cuenta → Costos de Módulos', acciones: ['Ver', 'Editar'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    { id: 'modal-acceso-apps', label: 'Modal: Acceso de cuenta → Nuestras Apps', acciones: ['Ver', 'Editar', 'Crear'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    { id: 'modal-acceso-respaldos', label: 'Modal: Acceso de cuenta → Nuestros Respaldos', acciones: ['Ver', 'Descargar'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    { id: 'modal-acceso-apoyo', label: 'Modal: Acceso de cuenta → Material de Apoyo', acciones: ['Ver', 'Subir'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
                 ],
             },
             {

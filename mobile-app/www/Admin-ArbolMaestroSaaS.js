@@ -244,8 +244,50 @@ function collectLeafKeysForScreens(screens) {
     }
     return keys;
 }
+// Apartados nested under THIS one via their own nestUnder.host (see
+// SaasAdminCatalog.js's own modal-* entries, e.g. "Modal: Color
+// Institucional" nesting under Nuestros Clientes' Tabla -- confirmed live,
+// 2026-09-23, against a real screenshot: a modal only ever pops up FROM a
+// column/action that already exists in the table, so it renders nested
+// under that trigger instead of as a flat sibling apartado).
+function nestedChildrenOf(screen, apartado) {
+    return screen.apartados.filter((a) => a.nestUnder && a.nestUnder.host === apartado.id);
+}
+// Recurses into nested children so a host's own count badge/rollup/
+// "aplicar a lo anidado" cascade covers its nested modals too -- same
+// "a nested row's Estatus rolls up into its parent" expectation every
+// other level of this tree already has.
 function collectLeafKeysForApartado(screen, apartado) {
-    return buildLeaves(apartado).map((leaf) => leafKey(screen, apartado, leaf));
+    const own = buildLeaves(apartado).map((leaf) => leafKey(screen, apartado, leaf));
+    const nested = nestedChildrenOf(screen, apartado).flatMap((child) => collectLeafKeysForApartado(screen, child));
+    return [...own, ...nested];
+}
+// Nested children of `apartado`, grouped by which of ITS OWN columnas they
+// pop up from (nestUnder.column, matched by exact label) -- consumed while
+// rendering that column's own leaf row, see renderLeafWithLevels's
+// `nestedApartados` param.
+function buildNestedByColumn(screen, apartado) {
+    const map = new Map();
+    nestedChildrenOf(screen, apartado).forEach((child) => {
+        if (!child.nestUnder.column) return;
+        const arr = map.get(child.nestUnder.column) || [];
+        arr.push(child);
+        map.set(child.nestUnder.column, arr);
+    });
+    return map;
+}
+// Nested children with no real column to hang off of (nestUnder.classification
+// instead) -- these render as plain members of that classification group
+// (e.g. "Acciones"), right alongside its regular columna/acción leaves.
+function buildNestedByClassification(screen, apartado) {
+    const map = new Map();
+    nestedChildrenOf(screen, apartado).forEach((child) => {
+        if (!child.nestUnder.classification) return;
+        const arr = map.get(child.nestUnder.classification) || [];
+        arr.push(child);
+        map.set(child.nestUnder.classification, arr);
+    });
+    return map;
 }
 
 let listEl;
@@ -1384,8 +1426,11 @@ function leafToggleBtn(key, expanded) {
 // this leaf currently belongs to (null for Control Interno's own fixed
 // members, which never reorder) -- reused as-is for the drag `list`
 // scope, same convention every other leaf loop here already has.
-function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, classificationCtx, label) {
+function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, classificationCtx, label, nestedApartados) {
     const key = leafKey(screen, apartado, leaf);
+    const nested = nestedApartados || [];
+    const nestedKeys = nested.flatMap((na) => collectLeafKeysForApartado(screen, na));
+    const rollupKeys = [key, ...nestedKeys];
     const levels = leaf.kind === 'action' ? LEAF_ACTION_LEVELS : LEAF_COLUMN_LEVELS;
     const leafTreeKey = `leaf:${key}`;
     const leafExpanded = expandedLeaves.has(leafTreeKey);
@@ -1401,11 +1446,14 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
         row.appendChild(spacer());
     }
     row.appendChild(leafToggleBtn(leafTreeKey, leafExpanded));
-    row.appendChild(rollupEl(computeRollup([key], 'web'), computeRollup([key], 'app')));
+    row.appendChild(rollupEl(computeRollup(rollupKeys, 'web'), computeRollup(rollupKeys, 'app')));
     row.appendChild(labelEl(leaf.label));
-    row.appendChild(countBadge(1));
-    row.appendChild(buildControls(key, [], screen.href, classificationCtx, label));
+    row.appendChild(countBadge(1 + nestedKeys.length));
+    row.appendChild(buildControls(key, nestedKeys, screen.href, classificationCtx, label));
     listEl.appendChild(row);
+    if (nested.length) {
+        nested.forEach((childApartado) => renderApartadoNode(screen, childApartado, depth + 1, { draggable: false }));
+    }
     if (!leafExpanded) return;
     // Read-only echo of the SAME classification this column's own row just
     // showed -- never its own picker/select (nothing to reassign one
@@ -1427,6 +1475,165 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
         levelRow.appendChild(countBadge(1));
         levelRow.appendChild(buildControls(levelKey, [], null, echoCtx, levelLabel));
         listEl.appendChild(levelRow);
+    });
+}
+
+// One Apartado's own row (a real Tabla, or a plain Modal-only apartado),
+// plus -- once its own chevron is opened -- its Control Interno block and
+// classification groups. Recursive: a "modal-*" apartado nested under one
+// of ITS HOST's own columns/classification (see SaasAdminCatalog.js's own
+// nestUnder, e.g. "Modal: Color Institucional" nesting under Nuestros
+// Clientes' Tabla -- confirmed live, 2026-09-23: a modal always pops up
+// FROM a column/action that already exists in the table, so it renders
+// nested under that trigger instead of as a flat sibling apartado) renders
+// through this exact same function, one level deeper and non-draggable --
+// same rendering either way, only its position/reorderability differ.
+function renderApartadoNode(screen, apartado, depth, opts) {
+    const draggable = !!(opts && opts.draggable);
+    const aKey = apartadoKey(screen, apartado);
+
+    // "Iconos Personalización" -- only a real Tabla (apartado.controlInterno)
+    // ever gets this sibling (see the original comment this was lifted
+    // from); no nested modal apartado is ever controlInterno, so this never
+    // fires for one.
+    if (apartado.controlInterno) {
+        const iconLeafKeys = ICON_PERSONALIZATION_ITEMS.map((icon) => `${aKey}::icon-${icon.id}`);
+        const iconsKey = `${aKey}::icons`;
+        const iconsCtx = buildLevelBadgeCtx('icono');
+        const iconsRow = document.createElement('div');
+        iconsRow.className = `perm-tree-row perm-tree-depth-${depth}`;
+        iconsRow.appendChild(spacer());
+        iconsRow.appendChild(toggleBtn(`cls:${iconsKey}`, !collapsed.has(`cls:${iconsKey}`)));
+        iconsRow.appendChild(rollupEl(computeRollup(iconLeafKeys, 'web'), computeRollup(iconLeafKeys, 'app')));
+        iconsRow.appendChild(labelEl(t('menu.iconsPersonalization')));
+        iconsRow.appendChild(countBadge(iconLeafKeys.length));
+        iconsRow.appendChild(buildControls(iconsKey, iconLeafKeys, screen.href, iconsCtx, t('menu.iconsPersonalization')));
+        listEl.appendChild(iconsRow);
+        if (!collapsed.has(`cls:${iconsKey}`)) {
+            ICON_PERSONALIZATION_ITEMS.forEach((icon) => {
+                const iconKey = `${aKey}::icon-${icon.id}`;
+                const iconRow = document.createElement('div');
+                iconRow.className = `perm-tree-row perm-tree-depth-${depth + 1}`;
+                iconRow.appendChild(spacer());
+                iconRow.appendChild(spacer());
+                iconRow.appendChild(rollupEl(computeRollup([iconKey], 'web'), computeRollup([iconKey], 'app')));
+                iconRow.appendChild(labelEl(t(icon.labelKey)));
+                iconRow.appendChild(countBadge(1));
+                iconRow.appendChild(buildControls(iconKey, [], screen.href, iconsCtx, t(icon.labelKey)));
+                listEl.appendChild(iconRow);
+            });
+        }
+    }
+
+    const apLeafKeys = collectLeafKeysForApartado(screen, apartado);
+    const apRow = document.createElement('div');
+    apRow.className = `perm-tree-row perm-tree-depth-${depth}`;
+    if (draggable) {
+        makeDraggable(apRow, {
+            list: `apartados:${screen.itemId}`, id: apartado.id,
+            onReorder: (fromId, toId) => { order.apartadosByScreen[screen.itemId] = reorderList(order.apartadosByScreen[screen.itemId] || screen.apartados.map((a) => a.id), fromId, toId); },
+        });
+        apRow.appendChild(dragHandle());
+    } else {
+        apRow.appendChild(spacer());
+    }
+    apRow.appendChild(toggleBtn(`a:${aKey}`, !collapsed.has(`a:${aKey}`)));
+    apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
+    apRow.appendChild(labelEl(apartado.label));
+    apRow.appendChild(countBadge(apLeafKeys.length));
+    // Same href as the screen's own row, not null -- confirmed live that
+    // only the top screen row having a working Navegar button, with every
+    // Apartado/Columna underneath showing an empty cell, read as broken
+    // rather than intentional. Every row within a screen now jumps to that
+    // same screen (there's no separate URL for one of its own columns to
+    // navigate to).
+    apRow.appendChild(buildControls(aKey, apLeafKeys, screen.href, buildLevelBadgeCtx(apartado.controlInterno ? 'tabla' : 'apartado'), apartado.label));
+    listEl.appendChild(apRow);
+    if (collapsed.has(`a:${aKey}`)) return;
+
+    // Control Interno -- a real classification group like any other
+    // (toggle + color pickers), holding the 13 real system columns
+    // (CONTROL_INTERNO_COLUMNS) as members instead of one opaque
+    // placeholder leaf.
+    if (apartado.controlInterno) {
+        const ciLeaves = buildLeaves(apartado).filter((l) => l.kind === 'ci');
+        const ciLeafKeys = ciLeaves.map((l) => leafKey(screen, apartado, l));
+        const ciGroupKey = `${aKey}::class::${SAAS_CLASS_CONTROL_INTERNO_ID}`;
+        const ciCtx = buildFixedClassificationCtx(SAAS_CLASS_CONTROL_INTERNO_ID, 'menu.classControlInterno');
+        const ciRow = document.createElement('div');
+        ciRow.className = `perm-tree-row perm-tree-depth-${depth + 1} perm-tree-row-classification`;
+        ciRow.appendChild(spacer());
+        ciRow.appendChild(toggleBtn(`cls:${ciGroupKey}`, !collapsed.has(`cls:${ciGroupKey}`)));
+        ciRow.appendChild(rollupEl(computeRollup(ciLeafKeys, 'web'), computeRollup(ciLeafKeys, 'app')));
+        ciRow.appendChild(labelEl(t('menu.classControlInterno')));
+        ciRow.appendChild(countBadge(ciLeafKeys.length));
+        ciRow.appendChild(buildControls(ciGroupKey, ciLeafKeys, screen.href, ciCtx, t('menu.classControlInterno')));
+        listEl.appendChild(ciRow);
+        if (!collapsed.has(`cls:${ciGroupKey}`)) {
+            ciLeaves.forEach((leaf) => {
+                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, null, ciCtx, leaf.label);
+            });
+        }
+    }
+
+    // Nested children (modal-* apartados whose nestUnder.host is THIS
+    // apartado's own id, see SaasAdminCatalog.js) -- grouped by which real
+    // column pops them up (nestUnder.column) vs. which classification they
+    // fall into when no column applies (nestUnder.classification, e.g. a
+    // modal opened from a generic per-row action button rather than from
+    // one of this Tabla's own named columns).
+    const nestedByColumn = buildNestedByColumn(screen, apartado);
+    const nestedByClassification = buildNestedByClassification(screen, apartado);
+
+    // Every other leaf (columna/acción) groups by its effective
+    // classification -- but "Por Definir Clasificación" itself never gets a
+    // heading row: on this screen it's not a handful of stray leftovers,
+    // it's EVERY leaf until an admin actually reclassifies one, so wrapping
+    // it in a collapsible group just repeated the same label on every
+    // single line underneath for no benefit. Those leaves render flat, at
+    // their original depth, each still individually reassignable via its
+    // own select -- only a REAL classification (a custom one, or one that
+    // has a nested modal of its own, see below) earns a group heading.
+    const apartadoGroups = getEffectiveApartadoGroups(screen, apartado);
+    // A classification with nothing but a nested modal (no real
+    // columna/acción of its own reclassified into it yet) still needs its
+    // own heading row to hang that modal off of --
+    // getEffectiveApartadoGroups only ever returns groups that already
+    // have a real leaf.
+    nestedByClassification.forEach((_, classificationId) => {
+        if (!apartadoGroups.some((g) => g.classificationId === classificationId)) {
+            apartadoGroups.push({ classificationId, leaves: [] });
+        }
+    });
+
+    const porDefinirGroup = apartadoGroups.find((g) => g.classificationId === SAAS_CLASS_POR_DEFINIR_ID);
+    (porDefinirGroup ? porDefinirGroup.leaves : []).forEach((leaf) => {
+        const key = leafKey(screen, apartado, leaf);
+        renderLeafWithLevels(screen, apartado, leaf, depth + 1, aKey, SAAS_CLASS_POR_DEFINIR_ID, buildClassificationCtx(key, SAAS_CLASS_POR_DEFINIR_ID, screen, apartado), leaf.label, nestedByColumn.get(leaf.label));
+    });
+
+    apartadoGroups.filter((g) => g.classificationId !== SAAS_CLASS_POR_DEFINIR_ID).forEach((clsGroup) => {
+        const groupKey = `${aKey}::class::${clsGroup.classificationId}`;
+        const nestedForGroup = nestedByClassification.get(clsGroup.classificationId) || [];
+        const groupLeafKeys2 = clsGroup.leaves.map((leaf) => leafKey(screen, apartado, leaf))
+            .concat(nestedForGroup.flatMap((na) => collectLeafKeysForApartado(screen, na)));
+        const groupLabelKey = resolveSaasClassificationLabel(clsGroup.classificationId);
+        const clsRow = document.createElement('div');
+        clsRow.className = `perm-tree-row perm-tree-depth-${depth + 1} perm-tree-row-classification`;
+        clsRow.appendChild(spacer());
+        clsRow.appendChild(toggleBtn(`cls:${groupKey}`, !collapsed.has(`cls:${groupKey}`)));
+        clsRow.appendChild(rollupEl(computeRollup(groupLeafKeys2, 'web'), computeRollup(groupLeafKeys2, 'app')));
+        clsRow.appendChild(labelEl(t(groupLabelKey)));
+        clsRow.appendChild(countBadge(groupLeafKeys2.length));
+        clsRow.appendChild(buildControls(groupKey, groupLeafKeys2, screen.href, buildFixedClassificationCtx(clsGroup.classificationId, groupLabelKey), t(groupLabelKey)));
+        listEl.appendChild(clsRow);
+        if (collapsed.has(`cls:${groupKey}`)) return;
+
+        clsGroup.leaves.forEach((leaf) => {
+            const key = leafKey(screen, apartado, leaf);
+            renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, clsGroup.classificationId, buildClassificationCtx(key, clsGroup.classificationId, screen, apartado), leaf.label, nestedByColumn.get(leaf.label));
+        });
+        nestedForGroup.forEach((childApartado) => renderApartadoNode(screen, childApartado, depth + 2, { draggable: false }));
     });
 }
 
@@ -1648,140 +1855,8 @@ function renderList() {
                 }
             }
 
-            screenApartados.forEach((apartado) => {
-                const aKey = apartadoKey(screen, apartado);
-
-                // "Iconos Personalización" -- another sibling of this
-                // apartado's own Tabla row, right after Botones (confirmed
-                // live, 2026-09-17, against the same real branch:
-                // Botones/Iconos Personalización/Tabla Carga Combustible,
-                // in that order). A plain structural level (fixed red
-                // badge, no color pickers, no reassignment, no further
-                // sub-levels) -- same treatment PermissionTree.js's own
-                // renderStatusIcons gives it, never a real classification
-                // like Botones. Only rendered for a real Tabla
-                // (apartado.controlInterno), same gate Control Interno
-                // itself uses -- this toolbar belongs to the shared data-
-                // table component, not to a Modal.
-                if (apartado.controlInterno) {
-                    const iconLeafKeys = ICON_PERSONALIZATION_ITEMS.map((icon) => `${aKey}::icon-${icon.id}`);
-                    const iconsKey = `${aKey}::icons`;
-                    const iconsCtx = buildLevelBadgeCtx('icono');
-                    const iconsRow = document.createElement('div');
-                    iconsRow.className = 'perm-tree-row perm-tree-depth-2';
-                    iconsRow.appendChild(spacer());
-                    iconsRow.appendChild(toggleBtn(`cls:${iconsKey}`, !collapsed.has(`cls:${iconsKey}`)));
-                    iconsRow.appendChild(rollupEl(computeRollup(iconLeafKeys, 'web'), computeRollup(iconLeafKeys, 'app')));
-                    iconsRow.appendChild(labelEl(t('menu.iconsPersonalization')));
-                    iconsRow.appendChild(countBadge(iconLeafKeys.length));
-                    iconsRow.appendChild(buildControls(iconsKey, iconLeafKeys, screen.href, iconsCtx, t('menu.iconsPersonalization')));
-                    listEl.appendChild(iconsRow);
-                    if (!collapsed.has(`cls:${iconsKey}`)) {
-                        ICON_PERSONALIZATION_ITEMS.forEach((icon) => {
-                            const iconKey = `${aKey}::icon-${icon.id}`;
-                            const iconRow = document.createElement('div');
-                            iconRow.className = 'perm-tree-row perm-tree-depth-3';
-                            iconRow.appendChild(spacer());
-                            iconRow.appendChild(spacer());
-                            iconRow.appendChild(rollupEl(computeRollup([iconKey], 'web'), computeRollup([iconKey], 'app')));
-                            iconRow.appendChild(labelEl(t(icon.labelKey)));
-                            iconRow.appendChild(countBadge(1));
-                            iconRow.appendChild(buildControls(iconKey, [], screen.href, iconsCtx, t(icon.labelKey)));
-                            listEl.appendChild(iconRow);
-                        });
-                    }
-                }
-
-                const apLeafKeys = collectLeafKeysForApartado(screen, apartado);
-                const apRow = document.createElement('div');
-                apRow.className = 'perm-tree-row perm-tree-depth-2';
-                makeDraggable(apRow, {
-                    list: `apartados:${screen.itemId}`, id: apartado.id,
-                    onReorder: (fromId, toId) => { order.apartadosByScreen[screen.itemId] = reorderList(order.apartadosByScreen[screen.itemId] || screen.apartados.map((a) => a.id), fromId, toId); },
-                });
-                apRow.appendChild(dragHandle());
-                apRow.appendChild(toggleBtn(`a:${aKey}`, !collapsed.has(`a:${aKey}`)));
-                apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
-                apRow.appendChild(labelEl(apartado.label));
-                apRow.appendChild(countBadge(apLeafKeys.length));
-                // Same href as the screen's own row, not null -- confirmed
-                // live that only the top screen row having a working
-                // Navegar button, with every Apartado/Columna underneath
-                // showing an empty cell, read as broken rather than
-                // intentional. Every row within a screen now jumps to that
-                // same screen (there's no separate URL for one of its own
-                // columns to navigate to).
-                apRow.appendChild(buildControls(aKey, apLeafKeys, screen.href, buildLevelBadgeCtx(apartado.controlInterno ? 'tabla' : 'apartado'), apartado.label));
-                listEl.appendChild(apRow);
-                if (collapsed.has(`a:${aKey}`)) return;
-
-                // Control Interno -- a real classification group like any
-                // other (toggle + color pickers), holding the 13 real
-                // system columns (CONTROL_INTERNO_COLUMNS) as members
-                // instead of one opaque placeholder leaf (confirmed live,
-                // 2026-09-17: "las columnas no están anidadas a la
-                // clasificación de columnas").
-                if (apartado.controlInterno) {
-                    const ciLeaves = buildLeaves(apartado).filter((l) => l.kind === 'ci');
-                    const ciLeafKeys = ciLeaves.map((l) => leafKey(screen, apartado, l));
-                    const ciGroupKey = `${aKey}::class::${SAAS_CLASS_CONTROL_INTERNO_ID}`;
-                    const ciCtx = buildFixedClassificationCtx(SAAS_CLASS_CONTROL_INTERNO_ID, 'menu.classControlInterno');
-                    const ciRow = document.createElement('div');
-                    ciRow.className = 'perm-tree-row perm-tree-depth-3 perm-tree-row-classification';
-                    ciRow.appendChild(spacer());
-                    ciRow.appendChild(toggleBtn(`cls:${ciGroupKey}`, !collapsed.has(`cls:${ciGroupKey}`)));
-                    ciRow.appendChild(rollupEl(computeRollup(ciLeafKeys, 'web'), computeRollup(ciLeafKeys, 'app')));
-                    ciRow.appendChild(labelEl(t('menu.classControlInterno')));
-                    ciRow.appendChild(countBadge(ciLeafKeys.length));
-                    ciRow.appendChild(buildControls(ciGroupKey, ciLeafKeys, screen.href, ciCtx, t('menu.classControlInterno')));
-                    listEl.appendChild(ciRow);
-                    if (!collapsed.has(`cls:${ciGroupKey}`)) {
-                        ciLeaves.forEach((leaf) => {
-                            renderLeafWithLevels(screen, apartado, leaf, 4, aKey, null, ciCtx, leaf.label);
-                        });
-                    }
-                }
-
-                // Every other leaf (columna/acción) groups by its effective
-                // classification -- but "Por Definir Clasificación" itself
-                // never gets a heading row: on this screen (unlike the
-                // client tree) it's not a handful of stray leftovers, it's
-                // EVERY leaf until an admin actually reclassifies one, so
-                // wrapping it in a collapsible group just repeated the
-                // same label on every single line underneath for no
-                // benefit (confirmed live: "se ven filas vacías, no
-                // clasificadas, desordenadas"). Those leaves render flat,
-                // at their original depth, each still individually
-                // reassignable via its own select -- only a REAL
-                // classification (a custom one an admin created for this
-                // Apartado) earns a group heading below.
-                const apartadoGroups = getEffectiveApartadoGroups(screen, apartado);
-                const porDefinirGroup = apartadoGroups.find((g) => g.classificationId === SAAS_CLASS_POR_DEFINIR_ID);
-                (porDefinirGroup ? porDefinirGroup.leaves : []).forEach((leaf) => {
-                    const key = leafKey(screen, apartado, leaf);
-                    renderLeafWithLevels(screen, apartado, leaf, 3, aKey, SAAS_CLASS_POR_DEFINIR_ID, buildClassificationCtx(key, SAAS_CLASS_POR_DEFINIR_ID, screen, apartado), leaf.label);
-                });
-
-                apartadoGroups.filter((g) => g.classificationId !== SAAS_CLASS_POR_DEFINIR_ID).forEach((clsGroup) => {
-                    const groupKey = `${aKey}::class::${clsGroup.classificationId}`;
-                    const groupLeafKeys2 = clsGroup.leaves.map((leaf) => leafKey(screen, apartado, leaf));
-                    const groupLabelKey = resolveSaasClassificationLabel(clsGroup.classificationId);
-                    const clsRow = document.createElement('div');
-                    clsRow.className = 'perm-tree-row perm-tree-depth-3 perm-tree-row-classification';
-                    clsRow.appendChild(spacer());
-                    clsRow.appendChild(toggleBtn(`cls:${groupKey}`, !collapsed.has(`cls:${groupKey}`)));
-                    clsRow.appendChild(rollupEl(computeRollup(groupLeafKeys2, 'web'), computeRollup(groupLeafKeys2, 'app')));
-                    clsRow.appendChild(labelEl(t(groupLabelKey)));
-                    clsRow.appendChild(countBadge(groupLeafKeys2.length));
-                    clsRow.appendChild(buildControls(groupKey, groupLeafKeys2, screen.href, buildFixedClassificationCtx(clsGroup.classificationId, groupLabelKey), t(groupLabelKey)));
-                    listEl.appendChild(clsRow);
-                    if (collapsed.has(`cls:${groupKey}`)) return;
-
-                    clsGroup.leaves.forEach((leaf) => {
-                        const key = leafKey(screen, apartado, leaf);
-                        renderLeafWithLevels(screen, apartado, leaf, 4, aKey, clsGroup.classificationId, buildClassificationCtx(key, clsGroup.classificationId, screen, apartado), leaf.label);
-                    });
-                });
+            screenApartados.filter((apartado) => !apartado.nestUnder).forEach((apartado) => {
+                renderApartadoNode(screen, apartado, 2, { draggable: true });
             });
         });
     });
