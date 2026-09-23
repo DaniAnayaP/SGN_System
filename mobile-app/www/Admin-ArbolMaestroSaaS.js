@@ -83,6 +83,14 @@ const SAAS_CLASS_POR_DEFINIR_ID = 'saas-class-por-definir';
 // categories), same "si ya son botones, ya deben estar en esa
 // clasificación" reasoning the client tree already applied to class-botones.
 const SAAS_CLASS_BOTONES_ID = 'saas-class-botones';
+// Unlike Botones/Control Interno, "Acciones" is NOT fixed -- confirmed
+// live: an admin assigns it to a table's own columns by hand, one at a
+// time, exactly like any custom classification (e.g. "Carga Operador"),
+// it just always shows up as a standing option instead of needing to be
+// typed/created first. Same id namespace as the rest of this screen's own
+// fixed classifications, but treated as a plain pickable option in
+// availableSaasClassificationsFor below, not excluded from the picker.
+const SAAS_CLASS_ACCIONES_ID = 'saas-class-acciones';
 // Same universal data-table toolbar every real Tabla in this app shares
 // (the same Dashboard.js table component, client-facing or SaaS-internal
 // alike) -- same ids/labelKeys menu.json's own "iconsSubmenu" already
@@ -901,6 +909,7 @@ function buildFixedClassificationCtx(classificationId, labelKey) {
 function resolveSaasClassificationLabel(classificationId) {
     if (classificationId === SAAS_CLASS_CONTROL_INTERNO_ID) return 'menu.classControlInterno';
     if (classificationId === SAAS_CLASS_POR_DEFINIR_ID) return 'menu.classPorDefinir';
+    if (classificationId === SAAS_CLASS_ACCIONES_ID) return 'menu.classAcciones';
     const customEntry = Array.from(classificationOverrides.values())
         .find((o) => o.classificationId === classificationId && o.classificationLabel);
     return customEntry ? customEntry.classificationLabel : 'menu.classPorDefinir';
@@ -936,6 +945,10 @@ function generateSaasCustomClassificationId(screen, apartado, name) {
 function availableSaasClassificationsFor(screen, apartado) {
     const options = [{ id: SAAS_CLASS_POR_DEFINIR_ID, labelKey: 'menu.classPorDefinir' }];
     if (apartado.controlInterno) options.push({ id: SAAS_CLASS_CONTROL_INTERNO_ID, labelKey: 'menu.classControlInterno' });
+    // Standing option, not tied to controlInterno like Control Interno
+    // above -- any table's own columns can have real per-row action
+    // buttons worth pulling into their own group, confirmed live.
+    options.push({ id: SAAS_CLASS_ACCIONES_ID, labelKey: 'menu.classAcciones' });
     const customPrefix = `saas-class-custom-${apartadoSlug(apartadoKey(screen, apartado))}-`;
     const seenCustom = new Set();
     classificationOverrides.forEach((o) => {
@@ -1592,38 +1605,51 @@ function renderList() {
             listEl.appendChild(screenRow);
             if (collapsed.has(`s:${screen.itemId}`)) return;
 
-            orderedApartados(screen).forEach((apartado) => {
-                const aKey = apartadoKey(screen, apartado);
+            const screenApartados = orderedApartados(screen);
 
-                // "Botones" -- a sibling of this apartado's own Tabla row,
-                // not one of its reassignable column categories, same
-                // fixed/2-level treatment class-botones gets in the client
-                // tree (confirmed live, 2026-09-17, against a real branch:
-                // Carga Combustible[Pantalla] has Botones(3)/Iconos
-                // Personalización(8)/Tabla Carga Combustible(127) as 3
-                // SIBLING rows -- "no veo la clasificación de las tablas
-                // en el saas: Botones, iconos, Tablas"). Rendered first,
-                // only when this apartado actually has real acciones.
-                if (apartado.acciones && apartado.acciones.length) {
-                    const actionLeaves = buildActionLeaves(apartado);
-                    const actionLeafKeys = actionLeaves.map((l) => leafKey(screen, apartado, l));
-                    const botonesKey = `${aKey}::botones`;
-                    const botonesCtx = buildFixedClassificationCtx(SAAS_CLASS_BOTONES_ID, 'menu.classBotones');
-                    const botonesRow = document.createElement('div');
-                    botonesRow.className = 'perm-tree-row perm-tree-depth-2 perm-tree-row-classification';
-                    botonesRow.appendChild(spacer());
-                    botonesRow.appendChild(toggleBtn(`cls:${botonesKey}`, !collapsed.has(`cls:${botonesKey}`)));
-                    botonesRow.appendChild(rollupEl(computeRollup(actionLeafKeys, 'web'), computeRollup(actionLeafKeys, 'app')));
-                    botonesRow.appendChild(labelEl(t('menu.classBotones')));
-                    botonesRow.appendChild(countBadge(actionLeafKeys.length));
-                    botonesRow.appendChild(buildControls(botonesKey, actionLeafKeys, screen.href, botonesCtx, t('menu.classBotones')));
-                    listEl.appendChild(botonesRow);
-                    if (!collapsed.has(`cls:${botonesKey}`)) {
-                        actionLeaves.forEach((leaf) => {
-                            renderLeafWithLevels(screen, apartado, leaf, 3, aKey, null, botonesCtx, leaf.label);
-                        });
-                    }
+            // "Botones" -- ONE sibling per PANTALLA, not per apartado. Most
+            // screens split their real UI into a main Tabla plus several
+            // "modal-*" entries (see SaasAdminCatalog.js -- one entry per
+            // popup dialog the screen opens, e.g. Nuestros Clientes has 4:
+            // Permisos Contratados/Adicionales, Cambios de Anexos, Color
+            // Institucional, Acceso Administrador), and several of those
+            // modals carry their own acciones array. This used to render
+            // one "Botones" row PER apartado that had acciones, so a
+            // screen with 4 such modals showed 4 separate "Botones" rows
+            // in a column -- confirmed live: "porque aparecen 2 opciones
+            // de botones, en una pantalla?". A screen's buttons are one
+            // concept regardless of which internal modal they live in, so
+            // every apartado's acciones combine into ONE group here, keyed
+            // by the SCREEN itself (not any one apartado) -- each leaf's
+            // own key still comes from ITS OWN apartado (leafKey), so
+            // already-saved Estatus stays valid unchanged.
+            const screenActionEntries = screenApartados.flatMap((apartado) => (
+                apartado.acciones && apartado.acciones.length
+                    ? buildActionLeaves(apartado).map((leaf) => ({ apartado, leaf }))
+                    : []
+            ));
+            if (screenActionEntries.length) {
+                const actionLeafKeys = screenActionEntries.map(({ apartado, leaf }) => leafKey(screen, apartado, leaf));
+                const botonesKey = `${screen.itemId}::botones`;
+                const botonesCtx = buildFixedClassificationCtx(SAAS_CLASS_BOTONES_ID, 'menu.classBotones');
+                const botonesRow = document.createElement('div');
+                botonesRow.className = 'perm-tree-row perm-tree-depth-2 perm-tree-row-classification';
+                botonesRow.appendChild(spacer());
+                botonesRow.appendChild(toggleBtn(`cls:${botonesKey}`, !collapsed.has(`cls:${botonesKey}`)));
+                botonesRow.appendChild(rollupEl(computeRollup(actionLeafKeys, 'web'), computeRollup(actionLeafKeys, 'app')));
+                botonesRow.appendChild(labelEl(t('menu.classBotones')));
+                botonesRow.appendChild(countBadge(actionLeafKeys.length));
+                botonesRow.appendChild(buildControls(botonesKey, actionLeafKeys, screen.href, botonesCtx, t('menu.classBotones')));
+                listEl.appendChild(botonesRow);
+                if (!collapsed.has(`cls:${botonesKey}`)) {
+                    screenActionEntries.forEach(({ apartado, leaf }) => {
+                        renderLeafWithLevels(screen, apartado, leaf, 3, apartadoKey(screen, apartado), null, botonesCtx, leaf.label);
+                    });
                 }
+            }
+
+            screenApartados.forEach((apartado) => {
+                const aKey = apartadoKey(screen, apartado);
 
                 // "Iconos Personalización" -- another sibling of this
                 // apartado's own Tabla row, right after Botones (confirmed

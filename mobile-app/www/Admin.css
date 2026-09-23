@@ -2782,6 +2782,17 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
    flush against its right edge (see alignLabelColumnWidth's own comment),
    so no extra width math is needed here. */
 .perm-tree-mstatus-header-count{ flex-shrink: 0; color: var(--color-text-secondary); font-weight: 600; }
+/* .perm-tree-depth-2 (shared, Admin-ArbolMaestro's own rule) uppercases
+   its own row label as the client tree's "Apartado" section-header cue --
+   the SaaS tree's shallower hierarchy puts Botones/Iconos Personalización/
+   Tabla on that same depth number by coincidence and inherited it
+   unintentionally. Cancel it here, scoped to the SaaS tree's own list only
+   -- the client tree's real Apartado rows still need it. Mirrors the same
+   fix in public/Admin.css. */
+.saas-master-status-list .perm-tree-depth-2{
+    text-transform: none;
+    letter-spacing: normal;
+}
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
 .perm-tree-mstatus-header-status{ width: var(--perm-tree-status-col-width, 9.5rem); }
 .perm-tree-mstatus-header-platforms{ width: 13rem; }

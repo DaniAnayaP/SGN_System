@@ -2794,6 +2794,18 @@ body:has(.saas-master-tree-panel) main{
 .saas-master-status-list .perm-tree-row{
     min-width: max-content;
 }
+/* .perm-tree-depth-2 (shared, base rule above) uppercases its own row
+   label as the client tree's own "Apartado" section-header cue -- this
+   page's hierarchy is shallower (Apartado/Pantalla/[Botones|Ícono|Tabla]),
+   so Botones/Iconos Personalización/Tabla land on that same depth number
+   by coincidence and inherited the client tree's Apartado-only styling
+   unintentionally (confirmed live: "veo palabras mayúsculas (BOTONES), no
+   la combinación de mayúscula y minúscula"). Cancel it here, scoped to
+   this page only -- the client tree's own Apartado rows still need it. */
+.saas-master-status-list .perm-tree-depth-2{
+    text-transform: none;
+    letter-spacing: normal;
+}
 /* This page's own label/count-badge column is now measured and aligned
    dynamically by alignLabelColumnWidth in Admin-ArbolMaestroSaaS.js --
    same --perm-tree-label-col-width custom property + per-row inline width

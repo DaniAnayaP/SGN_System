@@ -2852,27 +2852,27 @@
         // a text color and a dot color picked around the same time aren't
         // otherwise related (see saveClassificationColor's `kind` param).
         const recentTextColors = [];
-        // The 1 classification every Pantalla can use even if menu.json
-        // never gave it one of its own -- "Por Definir Clasificación", for
+        // The 2 classifications every Pantalla can use even if menu.json
+        // never gave it one of its own. "Por Definir Clasificación" is for
         // anything an admin explicitly wants pulled out of "just sitting
-        // loose". Already has a global i18n key (reused, not duplicated)
-        // so no custom-string rendering path is needed for it.
-        // "Botones" and "Acciones" (see FIXED_CLASSIFICATION_IDS below)
-        // used to live here too, but are NOT reassignable -- confirmed
-        // with the user: "si ya son botones, ya deben estar definidos en
-        // la categoría botones... solo deben estar en esa clasificación",
-        // same fixed treatment Iconos Personalización already had.
+        // loose". "Acciones" used to be fixed/excluded here too (like
+        // Botones still is, see FIXED_CLASSIFICATION_IDS below) but is now
+        // a standing, always-offered option instead -- confirmed live: an
+        // admin assigns it to a table's own columns by hand, one at a
+        // time, exactly like any custom classification, it just doesn't
+        // need to be typed/created first. Both already have a global i18n
+        // key (reused, not duplicated) so no custom-string rendering path
+        // is needed for either.
         const UNIVERSAL_CLASSIFICATIONS = [
             { id: 'class-por-definir', labelKey: 'menu.classPorDefinir' },
+            { id: 'class-acciones', labelKey: 'menu.classAcciones' },
         ];
         // Real classifications that are still classifications (their own
         // color from classificationColor, their own submenu in menu.json)
         // but never appear in the reassignment picker in either direction
-        // -- "Botones" (now a sibling of Tabla, see renderStatusButtons)
-        // and "Acciones" (fixed, always first inside Tabla, see
-        // getEffectiveTableGroups) are actions, not data with a
-        // reassignable category of its own.
-        const FIXED_CLASSIFICATION_IDS = new Set(['class-botones', 'class-acciones']);
+        // -- "Botones" (a sibling of Tabla, see renderStatusButtons) is an
+        // action, not data with a reassignable category of its own.
+        const FIXED_CLASSIFICATION_IDS = new Set(['class-botones']);
         // Sentinel <option> value for "+ Crear nueva clasificación..." in
         // any column's own classification <select> (see statusRow) --
         // never a real classification id, just a signal to swap the select
@@ -3479,7 +3479,7 @@
         // or "Control Interno" is still the same color everywhere), just
         // never a <select>. Used for EVERY classification's own group row
         // now (see renderStatusClassification -- "la clasificación no
-        // debería cambiar de clasificación"), not just Botones/Acciones'
+        // debería cambiar de clasificación"), not just Botones'
         // (FIXED_CLASSIFICATION_IDS is still what gates a classification's
         // own COLUMNS between this and a real reassignable select).
         function buildFixedClassificationCtx(classificationId, labelKey, labelParams) {
@@ -3519,9 +3519,9 @@
         // "custom-<subSm.id>-" (see generateCustomClassificationId), so
         // scanning the full override list here can never surface one
         // screen's custom classification as an option on another's.
-        // Botones/Acciones are excluded even when real
-        // (FIXED_CLASSIFICATION_IDS) -- nothing reassigns into or out of
-        // them.
+        // Botones is excluded even when real (FIXED_CLASSIFICATION_IDS)
+        // -- nothing reassigns into or out of it. Acciones is a normal
+        // reassignable option now (see UNIVERSAL_CLASSIFICATIONS above).
         function availableClassificationsFor(subSm) {
             const real = (subSm.submenu || []).filter((e) => e.isClassification && !FIXED_CLASSIFICATION_IDS.has(e.id));
             const universal = UNIVERSAL_CLASSIFICATIONS.filter((u) => !real.some((r) => r.id === u.id));
@@ -3611,13 +3611,7 @@
                     }
                 }
             });
-            const filtered = groups.filter((g) => g.columns.length);
-            // "Acciones" always leads Tabla's own groups when present --
-            // confirmed with the user: fixed, first, then the reassignable
-            // column categories (Control Interno, Nuestras Unidades...).
-            const accionesIdx = filtered.findIndex((g) => g.cls && g.cls.id === 'class-acciones');
-            if (accionesIdx > 0) filtered.unshift(filtered.splice(accionesIdx, 1)[0]);
-            return filtered;
+            return groups.filter((g) => g.columns.length);
         }
         // Writes (or, picking a column's own real classification again,
         // clears) one override and repaints -- renderStatusTree() is the
@@ -3683,10 +3677,12 @@
         }
 
         function renderStatusColumn(container, section, item, base, col, depth, ancestorLocked, sm, subSm, cls, structuralClsId) {
-            // Botones/Acciones (FIXED_CLASSIFICATION_IDS) are actions, not
-            // data with a reassignable category or a 4-level lifecycle --
-            // this one flag drives every difference below (fixed badge
-            // instead of a <select>, no drag, 2 levels instead of 4).
+            // Botones (FIXED_CLASSIFICATION_IDS) is an action, not data
+            // with a reassignable category or a 4-level lifecycle -- this
+            // one flag drives every difference below (fixed badge instead
+            // of a <select>, no drag, 2 levels instead of 4). Acciones no
+            // longer gets this treatment -- it's a normal reassignable
+            // classification now, same as any custom one.
             const isFixedClassification = !!(cls && FIXED_CLASSIFICATION_IDS.has(cls.id));
             // Vista Previa here highlights this one column inside its own
             // real table (Web) / field list (App) -- gated on the OWNING
@@ -3735,8 +3731,10 @@
             if (!colExpanded) return;
             // A real data column keeps its own 4 grant-levels (Ver y
             // Operar/Editar/Autorizar/Eliminar, see COLUMN_STATUS_LEVELS);
-            // Botones/Acciones only ever offer Operar/Autorizar (see
+            // Botones only offers Operar/Autorizar (see
             // BUTTON_STATUS_LEVELS -- "qué lógica da, eliminar un botón?").
+            // Acciones' own columns get the full 4 levels now, same as any
+            // other reassignable classification.
             // Each now gets its own independent Estatus/Web·App/$ cost row
             // too, one level under the column itself, and shows the SAME
             // classification its own column row just showed above --
@@ -4003,8 +4001,8 @@
                     addChild(colKey, keyOf(sectionId, itemId, `${colBase}/${level.id}`));
                 });
             };
-            // Same idea, for a Botones/Acciones entry's own reduced 2
-            // levels (see BUTTON_STATUS_LEVELS).
+            // Same idea, for a Botones entry's own reduced 2 levels (see
+            // BUTTON_STATUS_LEVELS).
             const addButtonLevels = (colKey, sectionId, itemId, colBase) => {
                 BUTTON_STATUS_LEVELS.forEach((level) => {
                     addChild(colKey, keyOf(sectionId, itemId, `${colBase}/${level.id}`));
@@ -4071,9 +4069,9 @@
                                 // from the SAME function so rollups/count badges
                                 // can never disagree with what's on screen.
                                 getEffectiveTableGroups(section, item, sm, subSm).forEach((group) => {
-                                    // "Acciones" is fixed/2-level too, same as
-                                    // Botones above, just still inside Tabla
-                                    // (see FIXED_CLASSIFICATION_IDS).
+                                    // Only Botones itself stays fixed/2-level
+                                    // here (see FIXED_CLASSIFICATION_IDS) --
+                                    // Acciones is a normal 4-level group now.
                                     const addLevels = (group.cls && FIXED_CLASSIFICATION_IDS.has(group.cls.id)) ? addButtonLevels : addColumnLevels;
                                     if (group.cls) {
                                         const clsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${group.cls.id}`);
