@@ -1525,57 +1525,6 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         }
     }
 
-    const apLeafKeys = collectLeafKeysForApartado(screen, apartado);
-    const apRow = document.createElement('div');
-    apRow.className = `perm-tree-row perm-tree-depth-${depth}`;
-    if (draggable) {
-        makeDraggable(apRow, {
-            list: `apartados:${screen.itemId}`, id: apartado.id,
-            onReorder: (fromId, toId) => { order.apartadosByScreen[screen.itemId] = reorderList(order.apartadosByScreen[screen.itemId] || screen.apartados.map((a) => a.id), fromId, toId); },
-        });
-        apRow.appendChild(dragHandle());
-    } else {
-        apRow.appendChild(spacer());
-    }
-    apRow.appendChild(toggleBtn(`a:${aKey}`, !collapsed.has(`a:${aKey}`)));
-    apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
-    apRow.appendChild(labelEl(apartado.label));
-    apRow.appendChild(countBadge(apLeafKeys.length));
-    // Same href as the screen's own row, not null -- confirmed live that
-    // only the top screen row having a working Navegar button, with every
-    // Apartado/Columna underneath showing an empty cell, read as broken
-    // rather than intentional. Every row within a screen now jumps to that
-    // same screen (there's no separate URL for one of its own columns to
-    // navigate to).
-    apRow.appendChild(buildControls(aKey, apLeafKeys, screen.href, buildLevelBadgeCtx(apartado.controlInterno ? 'tabla' : 'apartado'), apartado.label));
-    listEl.appendChild(apRow);
-    if (collapsed.has(`a:${aKey}`)) return;
-
-    // Control Interno -- a real classification group like any other
-    // (toggle + color pickers), holding the 13 real system columns
-    // (CONTROL_INTERNO_COLUMNS) as members instead of one opaque
-    // placeholder leaf.
-    if (apartado.controlInterno) {
-        const ciLeaves = buildLeaves(apartado).filter((l) => l.kind === 'ci');
-        const ciLeafKeys = ciLeaves.map((l) => leafKey(screen, apartado, l));
-        const ciGroupKey = `${aKey}::class::${SAAS_CLASS_CONTROL_INTERNO_ID}`;
-        const ciCtx = buildFixedClassificationCtx(SAAS_CLASS_CONTROL_INTERNO_ID, 'menu.classControlInterno');
-        const ciRow = document.createElement('div');
-        ciRow.className = `perm-tree-row perm-tree-depth-${depth + 1} perm-tree-row-classification`;
-        ciRow.appendChild(spacer());
-        ciRow.appendChild(toggleBtn(`cls:${ciGroupKey}`, !collapsed.has(`cls:${ciGroupKey}`)));
-        ciRow.appendChild(rollupEl(computeRollup(ciLeafKeys, 'web'), computeRollup(ciLeafKeys, 'app')));
-        ciRow.appendChild(labelEl(t('menu.classControlInterno')));
-        ciRow.appendChild(countBadge(ciLeafKeys.length));
-        ciRow.appendChild(buildControls(ciGroupKey, ciLeafKeys, screen.href, ciCtx, t('menu.classControlInterno')));
-        listEl.appendChild(ciRow);
-        if (!collapsed.has(`cls:${ciGroupKey}`)) {
-            ciLeaves.forEach((leaf) => {
-                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, null, ciCtx, leaf.label);
-            });
-        }
-    }
-
     // Nested children (modal-* apartados whose nestUnder.host is THIS
     // apartado's own id, see SaasAdminCatalog.js) -- grouped by which real
     // column pops them up (nestUnder.column) vs. which classification they
@@ -1605,6 +1554,66 @@ function renderApartadoNode(screen, apartado, depth, opts) {
             apartadoGroups.push({ classificationId, leaves: [] });
         }
     });
+    // A "modal-*" apartado with nothing but acciones (its acciones already
+    // live in the screen's own Botones row, see buildActionLeaves/
+    // screenActionEntries) has NOTHING of its own to show once opened --
+    // giving it a chevron anyway rendered a control that visibly did
+    // nothing when clicked (confirmed live, 2026-09-23: "el modal no
+    // contrae nada"). Only a real Tabla, or a modal that itself has
+    // columnas (e.g. "Modal: Cambios de Anexos") or a nested child of its
+    // own, gets an expand toggle at all.
+    const hasOwnBody = apartado.controlInterno || apartadoGroups.some((g) => g.leaves.length > 0) || nestedByColumn.size > 0 || nestedByClassification.size > 0;
+
+    const apLeafKeys = collectLeafKeysForApartado(screen, apartado);
+    const apRow = document.createElement('div');
+    apRow.className = `perm-tree-row perm-tree-depth-${depth}`;
+    if (draggable) {
+        makeDraggable(apRow, {
+            list: `apartados:${screen.itemId}`, id: apartado.id,
+            onReorder: (fromId, toId) => { order.apartadosByScreen[screen.itemId] = reorderList(order.apartadosByScreen[screen.itemId] || screen.apartados.map((a) => a.id), fromId, toId); },
+        });
+        apRow.appendChild(dragHandle());
+    } else {
+        apRow.appendChild(spacer());
+    }
+    apRow.appendChild(hasOwnBody ? toggleBtn(`a:${aKey}`, !collapsed.has(`a:${aKey}`)) : spacer());
+    apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
+    apRow.appendChild(labelEl(apartado.label));
+    apRow.appendChild(countBadge(apLeafKeys.length));
+    // Same href as the screen's own row, not null -- confirmed live that
+    // only the top screen row having a working Navegar button, with every
+    // Apartado/Columna underneath showing an empty cell, read as broken
+    // rather than intentional. Every row within a screen now jumps to that
+    // same screen (there's no separate URL for one of its own columns to
+    // navigate to).
+    apRow.appendChild(buildControls(aKey, apLeafKeys, screen.href, buildLevelBadgeCtx(apartado.controlInterno ? 'tabla' : 'apartado'), apartado.label));
+    listEl.appendChild(apRow);
+    if (!hasOwnBody || collapsed.has(`a:${aKey}`)) return;
+
+    // Control Interno -- a real classification group like any other
+    // (toggle + color pickers), holding the 13 real system columns
+    // (CONTROL_INTERNO_COLUMNS) as members instead of one opaque
+    // placeholder leaf.
+    if (apartado.controlInterno) {
+        const ciLeaves = buildLeaves(apartado).filter((l) => l.kind === 'ci');
+        const ciLeafKeys = ciLeaves.map((l) => leafKey(screen, apartado, l));
+        const ciGroupKey = `${aKey}::class::${SAAS_CLASS_CONTROL_INTERNO_ID}`;
+        const ciCtx = buildFixedClassificationCtx(SAAS_CLASS_CONTROL_INTERNO_ID, 'menu.classControlInterno');
+        const ciRow = document.createElement('div');
+        ciRow.className = `perm-tree-row perm-tree-depth-${depth + 1} perm-tree-row-classification`;
+        ciRow.appendChild(spacer());
+        ciRow.appendChild(toggleBtn(`cls:${ciGroupKey}`, !collapsed.has(`cls:${ciGroupKey}`)));
+        ciRow.appendChild(rollupEl(computeRollup(ciLeafKeys, 'web'), computeRollup(ciLeafKeys, 'app')));
+        ciRow.appendChild(labelEl(t('menu.classControlInterno')));
+        ciRow.appendChild(countBadge(ciLeafKeys.length));
+        ciRow.appendChild(buildControls(ciGroupKey, ciLeafKeys, screen.href, ciCtx, t('menu.classControlInterno')));
+        listEl.appendChild(ciRow);
+        if (!collapsed.has(`cls:${ciGroupKey}`)) {
+            ciLeaves.forEach((leaf) => {
+                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, null, ciCtx, leaf.label);
+            });
+        }
+    }
 
     const porDefinirGroup = apartadoGroups.find((g) => g.classificationId === SAAS_CLASS_POR_DEFINIR_ID);
     (porDefinirGroup ? porDefinirGroup.leaves : []).forEach((leaf) => {
