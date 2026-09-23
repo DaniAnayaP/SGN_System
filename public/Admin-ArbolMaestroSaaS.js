@@ -1444,10 +1444,10 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
     row.appendChild(countBadge(1 + nestedKeys.length));
     row.appendChild(buildControls(key, nestedKeys, screen.href, classificationCtx, label));
     listEl.appendChild(row);
+    if (!leafExpanded) return;
     if (nested.length) {
         nested.forEach((childApartado) => renderApartadoNode(screen, childApartado, depth + 1, { draggable: false }));
     }
-    if (!leafExpanded) return;
     // Read-only echo of the SAME classification this column's own row just
     // showed -- never its own picker/select (nothing to reassign one
     // level down), same convention the client tree's own
