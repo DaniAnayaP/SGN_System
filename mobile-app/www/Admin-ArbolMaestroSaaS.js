@@ -1427,7 +1427,11 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
                 event.stopPropagation();
                 openClassificationColorPanel(colorTriggerBtn, classificationCtx.classificationId, 'dot');
             });
-            classBadge.appendChild(colorTriggerBtn);
+            // Before the label, not after it -- same spot the leaf columns'
+            // own pill gives its trigger (see buildLeafColorGroup), so the
+            // icon sits at the start of every Clasificación pill on this
+            // screen (confirmed live, 2026-09-24).
+            classBadge.insertBefore(colorTriggerBtn, labelSpan);
         } else {
             classBadge.textContent = classificationCtx.readOnlyLabel;
         }

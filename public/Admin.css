@@ -1863,7 +1863,9 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
     align-items: center;
     gap: 0.3rem;
     overflow: visible;
-    padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+    /* Trigger icon comes FIRST (see buildControls/statusRow), so the tighter
+       side is the left one now. */
+    padding: 0.2rem 0.6rem 0.2rem 0.3rem;
 }
 .perm-tree-mstatus-class-badge-label{
     flex: 1 1 auto;

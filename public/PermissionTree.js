@@ -2066,7 +2066,12 @@
                             event.stopPropagation();
                             openClassificationColorPanel(colorTriggerBtn, classificationCtx.classificationId, 'dot');
                         });
-                        badge.appendChild(colorTriggerBtn);
+                        // Before the label, not after it -- same spot the leaf
+                        // columns' own pill gives its trigger (see
+                        // buildLeafColorGroup), so the icon sits at the start
+                        // of every Clasificación pill (confirmed live,
+                        // 2026-09-24).
+                        badge.insertBefore(colorTriggerBtn, labelSpan);
                     } else {
                         badge.textContent = classificationCtx.readOnlyLabel;
                     }
