@@ -2117,9 +2117,18 @@
                     // Estatus select) since the palette is picked from an
                     // open-ended set of classification ids, not 4 fixed values.
                     const currentColor = classificationColor(classificationCtx.currentId);
-                    select.style.color = currentColor;
-                    select.style.borderColor = currentColor;
-                    select.style.backgroundColor = `color-mix(in srgb, ${currentColor} 14%, var(--color-bg))`;
+                    // With the color trigger (everything but grantMode),
+                    // the pill's chrome lives on a wrapper around the
+                    // <select> instead of on the select itself, so the
+                    // trigger can sit INSIDE the pill (see Admin.css's
+                    // .perm-tree-mstatus-class-select-wrap) -- a <select>
+                    // can't contain a button. grantMode keeps the bare,
+                    // self-styled select (no trigger there).
+                    const selectWrap = grantMode ? null : document.createElement('div');
+                    const pillEl = selectWrap || select;
+                    pillEl.style.color = currentColor;
+                    pillEl.style.borderColor = currentColor;
+                    pillEl.style.backgroundColor = `color-mix(in srgb, ${currentColor} 14%, var(--color-bg))`;
                     Array.from(select.options).forEach((optionEl) => {
                         // The create option names an action, not a real
                         // classification -- never hash it into the same
@@ -2144,11 +2153,13 @@
                     // grantMode -- Accesos Globales is a read-only reference
                     // view, same reason the classification header's own
                     // color buttons are hidden there too.
-                    if (!grantMode) {
-                        const selectWrap = document.createElement('div');
+                    if (selectWrap) {
                         selectWrap.className = 'perm-tree-mstatus-class-select-wrap';
+                        // Trigger first in DOM order so tab order matches
+                        // the visual one (icon at the pill's start, then
+                        // the <select>).
+                        selectWrap.appendChild(buildLeafColorGroup(key, labelText));
                         selectWrap.appendChild(select);
-                        selectWrap.appendChild(buildLeafColorGroup(key));
                         classificationCell.appendChild(selectWrap);
                     } else {
                         classificationCell.appendChild(select);
@@ -3050,7 +3061,7 @@
         // panel (Control Interno/Acciones/Por Definir/custom) and the leaf-
         // column panel -- a header skips the "esta columna"/"anidados" tabs
         // below (it has one color pair, not two) but shares this same row.
-        function appendColorKindRow(panel, colorId, kind, onChange) {
+        function appendColorKindRow(panel, colorId, kind, onChange, view) {
             const row = document.createElement('div');
             row.className = 'perm-tree-color-kind-row';
             const dotHex = classificationColor(colorId);
@@ -3072,7 +3083,72 @@
             };
             row.appendChild(makeBtn('dot', dotHex, '<i class="bx bx-palette" aria-hidden="true"></i>', 'admin.masterTreeColumnColorFill'));
             row.appendChild(makeBtn('text', textHex, 'A', 'admin.masterTreeColumnColorText'));
+            // Eye ("Ver") -- only the leaf-column panel passes `view` ({on,
+            // onToggle}); a classification header's color is its own
+            // label's, not a column's, so there is nothing to preview
+            // there. It only shows/hides the example (see
+            // appendColorExample), it never saves anything.
+            if (view) {
+                const col = document.createElement('div');
+                col.className = 'perm-tree-color-kind-col perm-tree-color-kind-col-view';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `perm-tree-color-view-btn${view.on ? ' perm-tree-color-view-btn-active' : ''}`;
+                btn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
+                btn.title = t('admin.masterTreeColorViewToggle');
+                btn.setAttribute('aria-label', btn.title);
+                btn.setAttribute('aria-pressed', view.on ? 'true' : 'false');
+                btn.addEventListener('click', (event) => { event.stopPropagation(); view.onToggle(); });
+                const cap = document.createElement('span');
+                cap.className = 'perm-tree-color-kind-cap';
+                cap.textContent = t('admin.masterTreeColorViewCap');
+                col.append(btn, cap);
+                row.appendChild(col);
+            }
             panel.appendChild(row);
+        }
+        // Example shown by the eye: a tiny table with this column's 4
+        // stored colors applied at once (own pair -> its header, nested
+        // pair -> its cells) next to an uncolored neighbor column for
+        // contrast -- what the operational screen will eventually render
+        // for it once colors are authorized there. Sample data only; unset
+        // halves fall back to the table's neutral look.
+        function appendColorExample(panel, ownId, nestedId, columnLabel) {
+            const paint = (el, id) => {
+                const bg = classificationColors.get(id);
+                const text = classificationTextColors.get(id);
+                if (bg) el.style.backgroundColor = bg;
+                if (text) el.style.color = text;
+            };
+            const wrap = document.createElement('div');
+            wrap.className = 'perm-tree-color-example';
+            const head = document.createElement('div');
+            head.className = 'perm-tree-color-example-head';
+            const title = document.createElement('span');
+            title.textContent = t('admin.masterTreeColorExampleTitle');
+            const colName = document.createElement('span');
+            colName.className = 'perm-tree-color-example-col';
+            colName.textContent = `${t('admin.masterTreeColorExampleColumn')} ${columnLabel}`;
+            head.append(title, colName);
+            const table = document.createElement('table');
+            table.className = 'perm-tree-color-example-table';
+            const headRow = table.insertRow();
+            const neighborHead = document.createElement('th');
+            neighborHead.textContent = t('admin.masterTreeColorExampleNeighbor');
+            const ownHead = document.createElement('th');
+            ownHead.textContent = columnLabel;
+            paint(ownHead, ownId);
+            headRow.append(neighborHead, ownHead);
+            for (let i = 1; i <= 3; i += 1) {
+                const bodyRow = table.insertRow();
+                bodyRow.insertCell().textContent = String(411 + i).padStart(4, '0');
+                const ownCell = bodyRow.insertCell();
+                ownCell.className = 'perm-tree-color-example-own';
+                ownCell.textContent = `${t('admin.masterTreeColorExampleSample')} ${i}`;
+                paint(ownCell, nestedId);
+            }
+            wrap.append(head, table);
+            panel.appendChild(wrap);
         }
         // "Esta columna"/"Filas anidadas" tabs -- which of the two
         // independent colors a columna/acción leaf carries (its own row vs.
@@ -3206,20 +3282,26 @@
         // the 2 targets) on top of the same Fondo/Letra toggle + palette.
         // Re-anchors onto the SAME leaf's own trigger (found by its stable
         // key) after every pick.
-        function openLeafColorPanel(anchorBtn, ownId, nestedId, leafKey, initialTarget, initialKind) {
+        function openLeafColorPanel(anchorBtn, ownId, nestedId, leafKey, columnLabel, initialTarget, initialKind, initialView) {
             closeColorPanel();
             let target = initialTarget || 'own';
             let kind = initialKind || 'dot';
+            // Eye state lives here (not saved anywhere): off when the panel
+            // first opens, and carried through the re-anchor after each
+            // pick so choosing a color doesn't collapse the example you're
+            // watching.
+            let viewOn = !!initialView;
             const panel = document.createElement('div');
             panel.className = 'perm-tree-color-popover';
             function currentId() { return target === 'own' ? ownId : nestedId; }
             function render() {
                 panel.innerHTML = '';
                 appendColorTargetTabs(panel, target, (targetValue) => { target = targetValue; render(); });
-                appendColorKindRow(panel, currentId(), kind, (k) => { kind = k; render(); });
+                appendColorKindRow(panel, currentId(), kind, (k) => { kind = k; render(); }, { on: viewOn, onToggle: () => { viewOn = !viewOn; render(); } });
+                if (viewOn) appendColorExample(panel, ownId, nestedId, columnLabel);
                 appendColorPalette(panel, currentId(), kind, () => {
                     const fresh = document.querySelector(`[data-leaf-color-key="${CSS.escape(leafKey)}"]`);
-                    if (fresh) openLeafColorPanel(fresh, ownId, nestedId, leafKey, target, kind);
+                    if (fresh) openLeafColorPanel(fresh, ownId, nestedId, leafKey, columnLabel, target, kind, viewOn);
                 });
             }
             render();
@@ -3229,7 +3311,7 @@
         // .perm-tree-mstatus-class-select-wrap branch in statusRow) -- opens
         // openLeafColorPanel's own consolidated panel instead of exposing
         // every one of the 2 stored colors as its own icon inline.
-        function buildLeafColorGroup(key) {
+        function buildLeafColorGroup(key, label) {
             const ownId = `col-own:${key}`;
             const nestedId = `col-nested:${key}`;
             const group = document.createElement('div');
@@ -3243,7 +3325,7 @@
             trigger.setAttribute('aria-label', trigger.title);
             trigger.addEventListener('click', (event) => {
                 event.stopPropagation();
-                openLeafColorPanel(trigger, ownId, nestedId, key);
+                openLeafColorPanel(trigger, ownId, nestedId, key, label);
             });
             group.appendChild(trigger);
             return group;

@@ -269,6 +269,35 @@ function collectLeafKeysForApartado(screen, apartado) {
     const nested = nestedChildrenOf(screen, apartado).flatMap((child) => collectLeafKeysForApartado(screen, child));
     return [...own, ...nested];
 }
+// What the count badge shows (never the key lists above, which stay the
+// source of truth for rollups/cascades): a nested modal counts for at least
+// 1 even when it has no leaves of its own -- most modals only carry acciones,
+// which live in the screen's Botones row instead, so summing keys alone left
+// a host showing "1" with 6 modals hanging off it (confirmed live,
+// 2026-09-24). Each level sums what its own children display, so a parent is
+// never smaller than what it contains.
+function nestedChildItemCount(screen, child) {
+    return Math.max(1, buildLeaves(child).length + nestedItemCount(screen, child));
+}
+function nestedItemCount(screen, apartado) {
+    return nestedChildrenOf(screen, apartado).reduce((sum, child) => sum + nestedChildItemCount(screen, child), 0);
+}
+function apartadoItemCount(screen, apartado) {
+    return buildLeaves(apartado).length + nestedItemCount(screen, apartado);
+}
+// Only top-level apartados: the nested ones are already summed into their host.
+function screensItemCount(screens) {
+    return screens.reduce((sum, screen) => sum + screen.apartados
+        .filter((apartado) => !apartado.nestUnder)
+        .reduce((s, apartado) => s + apartadoItemCount(screen, apartado), 0), 0);
+}
+// One classification group: its own leaves (plus whatever modals pop up from
+// each of them) and the modals hanging off the classification itself.
+function groupItemCount(screen, leaves, nestedByColumn, nestedApartados) {
+    const hosted = (nestedApartados || []).reduce((sum, na) => sum + nestedChildItemCount(screen, na), 0);
+    return leaves.reduce((sum, leaf) => sum + 1 + (nestedByColumn.get(leaf.label) || [])
+        .reduce((s, na) => s + nestedChildItemCount(screen, na), 0), hosted);
+}
 // Nested children of `apartado`, grouped by which of ITS OWN columnas they
 // pop up from (nestUnder.column, matched by exact label) -- consumed while
 // rendering that column's own leaf row, see renderLeafWithLevels's
@@ -554,7 +583,7 @@ function closeColorPanel() {
 // "en clasificación de columnas, ahí solo lo de fondo y letra y los
 // colores del tema" (a header skips the Encabezado/Filas tabs below,
 // since it has one color pair, not two, but shares this same row).
-function appendColorKindRow(panel, colorId, kind, onChange) {
+function appendColorKindRow(panel, colorId, kind, onChange, view) {
     const row = document.createElement('div');
     row.className = 'perm-tree-color-kind-row';
     const dotHex = classificationColor(colorId);
@@ -576,7 +605,70 @@ function appendColorKindRow(panel, colorId, kind, onChange) {
     };
     row.appendChild(makeBtn('dot', dotHex, '<i class="bx bx-palette" aria-hidden="true"></i>', 'admin.masterTreeColumnColorFill'));
     row.appendChild(makeBtn('text', textHex, 'A', 'admin.masterTreeColumnColorText'));
+    // Eye ("Ver") -- only the leaf-column panel passes `view` ({on,
+    // onToggle}); a classification header's color is its own label's, not a
+    // column's, so there is nothing to preview there. It only shows/hides
+    // the example (see appendColorExample), it never saves anything.
+    if (view) {
+        const col = document.createElement('div');
+        col.className = 'perm-tree-color-kind-col perm-tree-color-kind-col-view';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `perm-tree-color-view-btn${view.on ? ' perm-tree-color-view-btn-active' : ''}`;
+        btn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
+        btn.title = t('admin.masterTreeColorViewToggle');
+        btn.setAttribute('aria-label', btn.title);
+        btn.setAttribute('aria-pressed', view.on ? 'true' : 'false');
+        btn.addEventListener('click', (event) => { event.stopPropagation(); view.onToggle(); });
+        const cap = document.createElement('span');
+        cap.className = 'perm-tree-color-kind-cap';
+        cap.textContent = t('admin.masterTreeColorViewCap');
+        col.append(btn, cap);
+        row.appendChild(col);
+    }
     panel.appendChild(row);
+}
+// Example shown by the eye: a tiny table with this column's 4 stored colors
+// applied at once (own pair -> its header, nested pair -> its cells) next to
+// an uncolored neighbor column for contrast -- what the operational screen
+// will eventually render for it once colors are authorized there. Sample
+// data only; unset halves fall back to the table's neutral look.
+function appendColorExample(panel, ownId, nestedId, columnLabel) {
+    const paint = (el, id) => {
+        const bg = classificationColors.get(id);
+        const text = classificationTextColors.get(id);
+        if (bg) el.style.backgroundColor = bg;
+        if (text) el.style.color = text;
+    };
+    const wrap = document.createElement('div');
+    wrap.className = 'perm-tree-color-example';
+    const head = document.createElement('div');
+    head.className = 'perm-tree-color-example-head';
+    const title = document.createElement('span');
+    title.textContent = t('admin.masterTreeColorExampleTitle');
+    const colName = document.createElement('span');
+    colName.className = 'perm-tree-color-example-col';
+    colName.textContent = `${t('admin.masterTreeColorExampleColumn')} ${columnLabel}`;
+    head.append(title, colName);
+    const table = document.createElement('table');
+    table.className = 'perm-tree-color-example-table';
+    const headRow = table.insertRow();
+    const neighborHead = document.createElement('th');
+    neighborHead.textContent = t('admin.masterTreeColorExampleNeighbor');
+    const ownHead = document.createElement('th');
+    ownHead.textContent = columnLabel;
+    paint(ownHead, ownId);
+    headRow.append(neighborHead, ownHead);
+    for (let i = 1; i <= 3; i += 1) {
+        const bodyRow = table.insertRow();
+        bodyRow.insertCell().textContent = String(411 + i).padStart(4, '0');
+        const ownCell = bodyRow.insertCell();
+        ownCell.className = 'perm-tree-color-example-own';
+        ownCell.textContent = `${t('admin.masterTreeColorExampleSample')} ${i}`;
+        paint(ownCell, nestedId);
+    }
+    wrap.append(head, table);
+    panel.appendChild(wrap);
 }
 // Encabezado/Filas tabs -- which of the two independent colors a columna/
 // acción leaf carries (its own row vs. everything nested under it). Only
@@ -703,20 +795,25 @@ function openClassificationColorPanel(anchorBtn, classificationId, initialKind) 
 // Columna/acción leaf -- Encabezado/Filas tabs (which of the 4 targets)
 // on top of the same Fondo/Letra toggle + palette. Re-anchors onto the
 // SAME leaf's own trigger (found by its stable key) after every pick.
-function openLeafColorPanel(anchorBtn, ownId, nestedId, leafKey, initialTarget, initialKind) {
+function openLeafColorPanel(anchorBtn, ownId, nestedId, leafKey, columnLabel, initialTarget, initialKind, initialView) {
     closeColorPanel();
     let target = initialTarget || 'own';
     let kind = initialKind || 'dot';
+    // Eye state lives here (not saved anywhere): off when the panel first
+    // opens, and carried through the re-anchor after each pick so choosing a
+    // color doesn't collapse the example you're watching.
+    let viewOn = !!initialView;
     const panel = document.createElement('div');
     panel.className = 'perm-tree-color-popover';
     function currentId() { return target === 'own' ? ownId : nestedId; }
     function render() {
         panel.innerHTML = '';
         appendColorTargetTabs(panel, target, (t2) => { target = t2; render(); });
-        appendColorKindRow(panel, currentId(), kind, (k) => { kind = k; render(); });
+        appendColorKindRow(panel, currentId(), kind, (k) => { kind = k; render(); }, { on: viewOn, onToggle: () => { viewOn = !viewOn; render(); } });
+        if (viewOn) appendColorExample(panel, ownId, nestedId, columnLabel);
         appendColorPalette(panel, currentId(), kind, () => {
             const fresh = document.querySelector(`[data-leaf-color-key="${CSS.escape(leafKey)}"]`);
-            if (fresh) openLeafColorPanel(fresh, ownId, nestedId, leafKey, target, kind);
+            if (fresh) openLeafColorPanel(fresh, ownId, nestedId, leafKey, columnLabel, target, kind, viewOn);
         });
     }
     render();
@@ -1246,7 +1343,7 @@ function renderClassificationCreateUI(cell, ctx) {
 // every color picker in this screen already has, all in one panel -- see
 // that function's own comment for why (confirmed live, 2026-09-24, across
 // several rounds: single icon, one panel, no separate menu-then-popover).
-function buildLeafColorGroup(key) {
+function buildLeafColorGroup(key, label) {
     const ownId = `col-own:${key}`;
     const nestedId = `col-nested:${key}`;
     const group = document.createElement('div');
@@ -1260,7 +1357,7 @@ function buildLeafColorGroup(key) {
     trigger.setAttribute('aria-label', trigger.title);
     trigger.addEventListener('click', (event) => {
         event.stopPropagation();
-        openLeafColorPanel(trigger, ownId, nestedId, key);
+        openLeafColorPanel(trigger, ownId, nestedId, key, label);
     });
     group.appendChild(trigger);
     return group;
@@ -1312,7 +1409,6 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
             labelSpan.textContent = classificationCtx.readOnlyLabel;
             classBadge.appendChild(labelSpan);
 
-            const colorBtn = document.createElement('button');
             // One trigger, not two -- clicking it opens the same panel
             // that already lets you pick Fondo/Letra inside, so showing
             // both icons on the badge itself was just showing the same
@@ -1361,9 +1457,13 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         classSelect.title = t('admin.masterTreeClassificationPicker');
         classSelect.setAttribute('aria-label', classSelect.title);
         const currentColor = classificationColor(classificationCtx.currentId);
-        classSelect.style.color = currentColor;
-        classSelect.style.borderColor = currentColor;
-        classSelect.style.backgroundColor = `color-mix(in srgb, ${currentColor} 14%, var(--color-bg))`;
+        // The pill's chrome (border/fill/text color) lives on selectWrap,
+        // not on the <select> itself -- the color trigger sits INSIDE the
+        // pill (see Admin.css's .perm-tree-mstatus-class-select-wrap), and
+        // a <select> can't contain a button.
+        selectWrap.style.color = currentColor;
+        selectWrap.style.borderColor = currentColor;
+        selectWrap.style.backgroundColor = `color-mix(in srgb, ${currentColor} 14%, var(--color-bg))`;
         Array.from(classSelect.options).forEach((optionEl) => {
             optionEl.style.color = optionEl.value === CREATE_CLASSIFICATION_VALUE
                 ? 'var(--color-text-secondary)' : classificationColor(optionEl.value);
@@ -1373,8 +1473,10 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
             if (classSelect.value === CREATE_CLASSIFICATION_VALUE) renderClassificationCreateUI(classificationCell, classificationCtx);
             else classificationCtx.onPick(classSelect.value);
         });
+        // Trigger first in DOM order so tab order matches the visual one
+        // (icon at the pill's start, then the <select>).
+        selectWrap.appendChild(buildLeafColorGroup(key, label));
         selectWrap.appendChild(classSelect);
-        selectWrap.appendChild(buildLeafColorGroup(key));
         classificationCell.appendChild(selectWrap);
     }
     controls.appendChild(classificationCell);
@@ -1633,7 +1735,7 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
     row.appendChild(rollupEl(computeRollup(rollupKeys, 'web'), computeRollup(rollupKeys, 'app')));
     const labelElNode = labelEl(leaf.label);
     row.appendChild(labelElNode);
-    row.appendChild(countBadge(1 + nestedKeys.length));
+    row.appendChild(countBadge(1 + nested.reduce((sum, na) => sum + nestedChildItemCount(screen, na), 0)));
     row.appendChild(buildControls(key, nestedKeys, screen.href, classificationCtx, label));
     listEl.appendChild(row);
     // This leaf's own "esta columna" override (col-own:key, see
@@ -1806,7 +1908,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
     apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
     const apLabelNode = labelEl(apartado.label);
     apRow.appendChild(apLabelNode);
-    apRow.appendChild(countBadge(apLeafKeys.length));
+    apRow.appendChild(countBadge(apartadoItemCount(screen, apartado)));
     // Same href as the screen's own row, not null -- confirmed live that
     // only the top screen row having a working Navegar button, with every
     // Apartado/Columna underneath showing an empty cell, read as broken
@@ -1846,7 +1948,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         ciRow.appendChild(rollupEl(computeRollup(ciLeafKeys, 'web'), computeRollup(ciLeafKeys, 'app')));
         const ciLabelNode = labelEl(t('menu.classControlInterno'));
         ciRow.appendChild(ciLabelNode);
-        ciRow.appendChild(countBadge(ciLeafKeys.length));
+        ciRow.appendChild(countBadge(groupItemCount(screen, ciLeaves, nestedByColumn, null)));
         ciRow.appendChild(buildControls(ciGroupKey, ciLeafKeys, screen.href, ciCtx, t('menu.classControlInterno')));
         if (nestedTint) {
             if (nestedTint.bg) ciRow.style.backgroundColor = nestedTint.bg;
@@ -1887,7 +1989,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         clsRow.appendChild(rollupEl(computeRollup(groupLeafKeys2, 'web'), computeRollup(groupLeafKeys2, 'app')));
         const clsLabelNode = labelEl(t(groupLabelKey));
         clsRow.appendChild(clsLabelNode);
-        clsRow.appendChild(countBadge(groupLeafKeys2.length));
+        clsRow.appendChild(countBadge(groupItemCount(screen, clsGroup.leaves, nestedByColumn, nestedForGroup)));
         clsRow.appendChild(buildControls(groupKey, groupLeafKeys2, screen.href, buildFixedClassificationCtx(clsGroup.classificationId, groupLabelKey), t(groupLabelKey)));
         if (nestedTint) {
             if (nestedTint.bg) clsRow.style.backgroundColor = nestedTint.bg;
@@ -1990,7 +2092,7 @@ function renderList() {
     generalRow.appendChild(toggleBtn('gen:main', !collapsed.has('gen:main')));
     generalRow.appendChild(rollupEl(computeRollup(allLeafKeys, 'web'), computeRollup(allLeafKeys, 'app')));
     generalRow.appendChild(labelEl(t('admin.saasMasterTreeGeneral')));
-    generalRow.appendChild(countBadge(allLeafKeys.length));
+    generalRow.appendChild(countBadge(GENERAL_ITEMS.length + screensItemCount(CATALOG.flatMap((g) => g.screens))));
     // Points at the very first screen overall -- General spans every
     // screen, so there's no single natural destination, but confirmed with
     // the user every row needs a real, clickable Navegar button, same as
@@ -2052,7 +2154,7 @@ function renderList() {
         groupRow.appendChild(toggleBtn(`g:${group.groupId}`, !collapsed.has(`g:${group.groupId}`)));
         groupRow.appendChild(rollupEl(computeRollup(groupLeafKeys, 'web'), computeRollup(groupLeafKeys, 'app')));
         groupRow.appendChild(labelEl(t(group.labelKey)));
-        groupRow.appendChild(countBadge(groupLeafKeys.length));
+        groupRow.appendChild(countBadge(screensItemCount(group.screens)));
         // Confirmed against a real Departamento row (Comité Directivo) in
         // Árbol de Permisos Maestro: every row gets its own Estatus/Web-App
         // controls AND a working Navegar button, not just a read-only
@@ -2074,7 +2176,7 @@ function renderList() {
             screenRow.appendChild(toggleBtn(`s:${screen.itemId}`, !collapsed.has(`s:${screen.itemId}`)));
             screenRow.appendChild(rollupEl(computeRollup(screenLeafKeys, 'web'), computeRollup(screenLeafKeys, 'app')));
             screenRow.appendChild(labelEl(t(screen.labelKey)));
-            screenRow.appendChild(countBadge(screenLeafKeys.length));
+            screenRow.appendChild(countBadge(screensItemCount([screen])));
             screenRow.appendChild(buildControls(screen.itemId, screenLeafKeys, screen.href, buildLevelBadgeCtx('pantalla'), t(screen.labelKey)));
             listEl.appendChild(screenRow);
             if (collapsed.has(`s:${screen.itemId}`)) return;

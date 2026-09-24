@@ -1704,23 +1704,47 @@ body.dark-mode .perm-tree-depth-2{
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-/* Wraps a plain leaf's own reassignment <select> together with its "esta
-   columna"/"anidados" mini color-icon group (see buildLeafColorGroup in
-   Admin-ArbolMaestroSaaS.js) as one flex row filling this fixed-width
-   cell, same "one row, one shared width" idea
-   .perm-tree-mstatus-class-badge-with-actions already uses for a group
-   header's own label+icons pill -- the <select> itself shrinks to
-   min-content-safe via flex so the icon group never gets pushed out. */
+/* A plain leaf's reassignment control -- ONE pill (border/fill/text all
+   from the classification's own color, set inline on this wrapper) with the
+   color trigger icon INSIDE it, at its start, and the <select> filling the
+   rest (confirmed live, 2026-09-24: "que el icono vaya dentro del botón",
+   option B). A <select> can't contain a button, so the pill's chrome lives
+   on this wrapper and the select is transparent inside it, its left
+   padding reserving the icon's spot. Used by both Admin-ArbolMaestroSaaS.js
+   and PermissionTree.js (buildLeafColorGroup). */
 .perm-tree-mstatus-class-select-wrap{
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 0.3rem;
     width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background-color: var(--color-bg);
+    color: var(--color-text-secondary);
+}
+.perm-tree-mstatus-class-select-wrap:focus-within{
+    box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent);
 }
 .perm-tree-mstatus-class-select-wrap .perm-tree-mstatus-class-select{
     flex: 1 1 auto;
     min-width: 0;
     width: auto;
+    border: 0;
+    outline: none;
+    background-color: transparent;
+    color: inherit;
+    padding-left: 1.8rem;
+}
+.perm-tree-mstatus-class-select-wrap .perm-tree-mstatus-class-select option{
+    background-color: var(--color-bg);
+}
+.perm-tree-mstatus-class-select-wrap .perm-tree-mini-color-trigger{
+    position: absolute;
+    left: 0.4rem;
+    top: 50%;
+    margin-top: -0.525rem;
+    z-index: 1;
 }
 /* The leaf-level color group -- a single trigger icon (same
    currentColor-dashed visual language as perm-tree-color-picker-btn
@@ -1730,9 +1754,12 @@ body.dark-mode .perm-tree-depth-2{
    icon inline -- confirmed live, 2026-09-24, across several rounds: one
    icon, one panel, nothing floats open a second time. */
 .perm-tree-mstatus-leaf-color-group{
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
+    /* Zero-size anchor: the trigger is absolutely positioned inside the
+       pill (see above) and the color panel appended next to it positions
+       against the pill itself. */
+    flex: 0 0 0;
+    width: 0;
+    height: 0;
 }
 .perm-tree-mini-color-btn{
     flex-shrink: 0;
@@ -1916,6 +1943,7 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
     flex-direction: column;
     width: 13.5rem;
     background-color: var(--color-bg);
+    color: var(--color-text-primary);
     border: 1px solid var(--color-border);
     border-radius: 0.6rem;
     padding: 0.7rem;
@@ -1993,6 +2021,85 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
     font-weight: 600;
     color: var(--color-text-muted, var(--color-text-secondary));
 }
+/* Eye ("Ver") -- a VIEW switch that only shows/hides the example below, not
+   a third color target, so it gets a plain solid outline instead of the
+   dashed color-icon look and sits apart at the end of the Fondo/Letra row
+   (confirmed live, 2026-09-24). */
+.perm-tree-color-kind-col-view{ margin-left: auto; }
+.perm-tree-color-view-btn{
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 50%;
+    border: 1.5px solid var(--color-border-strong, var(--color-border));
+    background-color: transparent;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.95rem;
+}
+.perm-tree-color-view-btn:hover{ color: var(--color-text-primary); }
+.perm-tree-color-view-btn-active{
+    border-color: var(--color-accent, #1D3A63);
+    color: var(--color-accent, #1D3A63);
+    background-color: color-mix(in srgb, var(--color-accent, #1D3A63) 12%, var(--color-bg));
+}
+/* Example table shown by the eye -- a neutral neighbor column beside the
+   column being edited, so the colored header/cells read against something
+   uncolored. Purely visual, nothing in it saves anything. */
+.perm-tree-color-example{
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px dashed var(--color-border);
+}
+.perm-tree-color-example-head{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-text-muted, var(--color-text-secondary));
+}
+.perm-tree-color-example-col{
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.perm-tree-color-example-table{
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.66rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.perm-tree-color-example-table th,
+.perm-tree-color-example-table td{
+    padding: 0.28rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.perm-tree-color-example-table th{ font-weight: 700; background-color: var(--color-bg-muted, color-mix(in srgb, var(--color-text-secondary) 8%, var(--color-bg))); }
+.perm-tree-color-example-table tr:last-child td{ border-bottom: 0; }
+.perm-tree-color-example-table th:first-child,
+.perm-tree-color-example-table td:first-child{ width: 32%; }
+.perm-tree-color-example-table td.perm-tree-color-example-own{ font-weight: 600; }
 .perm-tree-color-section-label{
     font-size: 0.66rem;
     font-weight: 700;
