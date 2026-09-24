@@ -1137,16 +1137,24 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
     if (classificationCtx && classificationCtx.readOnlyLabel !== undefined) {
         const classBadge = document.createElement('span');
         classBadge.className = 'perm-tree-mstatus-class-badge';
-        classBadge.textContent = classificationCtx.readOnlyLabel;
         classBadge.style.color = classificationTextColor(classificationCtx.classificationId) || classificationCtx.readOnlyColor;
         classBadge.style.borderColor = classificationCtx.readOnlyColor;
         classBadge.style.backgroundColor = `color-mix(in srgb, ${classificationCtx.readOnlyColor} 14%, var(--color-bg))`;
-        classificationCell.appendChild(classBadge);
         // Only a real classification's own group row carries
         // classificationId (see buildFixedClassificationCtx) -- a
         // structural level badge (Grupo/Pantalla/Apartado) isn't a
-        // classification and has no color of its own to pick.
+        // classification and has no color of its own to pick. When it IS
+        // one, the two picker buttons live INSIDE this same pill (as its
+        // own children, via the -with-actions modifier) instead of as
+        // separate siblings trailing after it -- one border/background/
+        // fixed width for the whole thing, see Admin.css.
         if (classificationCtx.classificationId) {
+            classBadge.classList.add('perm-tree-mstatus-class-badge-with-actions');
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'perm-tree-mstatus-class-badge-label';
+            labelSpan.textContent = classificationCtx.readOnlyLabel;
+            classBadge.appendChild(labelSpan);
+
             const colorBtn = document.createElement('button');
             colorBtn.type = 'button';
             colorBtn.className = 'perm-tree-color-picker-btn';
@@ -1158,7 +1166,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
                 event.stopPropagation();
                 openColorPicker(colorBtn, classificationCtx.classificationId, 'dot');
             });
-            classificationCell.appendChild(colorBtn);
+            classBadge.appendChild(colorBtn);
             const textColorBtn = document.createElement('button');
             textColorBtn.type = 'button';
             textColorBtn.className = 'perm-tree-text-color-picker-btn';
@@ -1172,8 +1180,11 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
                 event.stopPropagation();
                 openColorPicker(textColorBtn, classificationCtx.classificationId, 'text');
             });
-            classificationCell.appendChild(textColorBtn);
+            classBadge.appendChild(textColorBtn);
+        } else {
+            classBadge.textContent = classificationCtx.readOnlyLabel;
         }
+        classificationCell.appendChild(classBadge);
     } else if (classificationCtx) {
         const classSelect = document.createElement('select');
         classSelect.className = 'perm-tree-mstatus-class-select';

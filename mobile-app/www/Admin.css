@@ -1682,7 +1682,7 @@ body.dark-mode .perm-tree-depth-2{
 .perm-tree-mstatus-header-class{ width: 10.6rem; }
 .perm-tree-mstatus-class-select{
     width: 100%;
-    max-width: 9rem;
+    box-sizing: border-box;
     border: 1px solid var(--color-border);
     border-radius: 999px;
     padding: 0.25rem 0.5rem;
@@ -1691,7 +1691,9 @@ body.dark-mode .perm-tree-depth-2{
     font: inherit;
     font-size: 0.72rem;
     font-weight: 600;
+    overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 /* "+ Crear nueva clasificación..." inline UI (see
    renderClassificationCreateUI in PermissionTree.js) -- replaces the
@@ -1738,10 +1740,12 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
    a <select>: nothing to pick here, this only names what the row IS. */
 .perm-tree-mstatus-class-badge{
     display: inline-block;
-    max-width: 9rem;
+    width: 100%;
+    box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: center;
     border: 1px solid;
     border-radius: 999px;
     padding: 0.25rem 0.7rem;
@@ -1756,24 +1760,57 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
        decorative casing. */
     text-transform: none;
 }
-/* Color-picker trigger next to a real classification's own badge (see
-   buildFixedClassificationCtx's classificationId in PermissionTree.js) --
-   sized to sit comfortably beside the pill without pushing the 9rem cell
-   much wider than it already tolerates for a long label. */
+/* Only when a real classification's own group row carries its two color-
+   picker buttons (see buildControls in Admin-ArbolMaestroSaaS.js) -- the
+   label + both icon buttons live INSIDE this same pill so it keeps ONE
+   border/background/width instead of the buttons trailing after it as
+   separate elements. overflow:visible here (overriding the plain badge's
+   own overflow:hidden above) is load-bearing: openColorPicker appends its
+   popover as anchorBtn's own sibling, i.e. as a DOM child of THIS badge
+   now that the buttons live here -- an ancestor with overflow:hidden
+   between an absolutely-positioned element and its containing block
+   clips it even though the containing block itself (the classification
+   cell, still position:relative) is unaffected. The label keeps its own
+   truncation below instead of relying on this outer pill's overflow. */
+.perm-tree-mstatus-class-badge-with-actions{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    overflow: visible;
+    padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+}
+.perm-tree-mstatus-class-badge-label{
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+/* Color-picker trigger, now one of the two small dashed circles living
+   INSIDE the classification badge itself (see
+   .perm-tree-mstatus-class-badge-with-actions above) -- border is
+   currentColor (JS sets .style.color/.borderColor to the same hex, see
+   buildControls) so it always follows whatever classification color it
+   belongs to, dashed + a faint tint of that same color (rather than the
+   badge's own solid fill/border) so it still reads as a control, not a
+   second copy of the pill's own swatch. */
 .perm-tree-color-picker-btn{
     flex-shrink: 0;
     width: 1.5rem;
     height: 1.5rem;
     border-radius: 50%;
-    border: 1px solid;
-    background-color: var(--color-bg);
+    border: 1.5px dashed currentColor;
+    background-color: color-mix(in srgb, currentColor 10%, var(--color-bg));
+    opacity: 0.85;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
 }
 .perm-tree-color-picker-btn i{ font-size: 0.8rem; }
-.perm-tree-color-picker-btn:hover{ filter: brightness(1.1); }
+.perm-tree-color-picker-btn:hover{ opacity: 1; background-color: color-mix(in srgb, currentColor 18%, var(--color-bg)); }
 /* Independent trigger for the badge's own TEXT color (see the "A" button
    in statusRow) -- same size/shape as the dot picker above so the two sit
    evenly side by side; the underline bar (not the glyph's own fill) is
@@ -1784,8 +1821,9 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
     width: 1.5rem;
     height: 1.5rem;
     border-radius: 50%;
-    border: 1px solid;
-    background-color: var(--color-bg);
+    border: 1.5px dashed currentColor;
+    background-color: color-mix(in srgb, currentColor 10%, var(--color-bg));
+    opacity: 0.85;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1795,8 +1833,9 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
     font-weight: 800;
     line-height: 1;
     padding: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
 }
-.perm-tree-text-color-picker-btn:hover{ filter: brightness(1.1); }
+.perm-tree-text-color-picker-btn:hover{ opacity: 1; background-color: color-mix(in srgb, currentColor 18%, var(--color-bg)); }
 .perm-tree-text-color-picker-bar{
     position: absolute;
     left: 0.3rem;
