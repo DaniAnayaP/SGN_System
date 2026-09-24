@@ -1053,6 +1053,13 @@ function getEffectiveApartadoGroups(screen, apartado) {
         const key = leafKey(screen, apartado, leaf);
         const override = classificationOverrides.get(key);
         const classificationId = override ? override.classificationId : SAAS_CLASS_POR_DEFINIR_ID;
+        // A regular columna/acción reassigned to Control Interno merges
+        // into the apartado's own fixed CI block instead (see the
+        // ciLeaves/reassignedCiLeaves split in renderApartadoNode) --
+        // grouping it here too produced a SECOND "Control Interno" heading
+        // on the same Tabla (confirmed live, 2026-09-24: "ahora hay 2
+        // clasificaciones de control interno en tabla principal").
+        if (classificationId === SAAS_CLASS_CONTROL_INTERNO_ID) return;
         let g = groupById.get(classificationId);
         if (!g) { g = { classificationId, leaves: [] }; groupById.set(classificationId, g); groups.push(g); }
         g.leaves.push(leaf);
@@ -1593,9 +1600,18 @@ function renderApartadoNode(screen, apartado, depth, opts) {
     // Control Interno -- a real classification group like any other
     // (toggle + color pickers), holding the 13 real system columns
     // (CONTROL_INTERNO_COLUMNS) as members instead of one opaque
-    // placeholder leaf.
+    // placeholder leaf. A regular columna/acción an admin manually
+    // reassigned to Control Interno (via its own <select>, same as
+    // reassigning to Acciones or a custom classification) merges in here
+    // too -- fixedCiLeaves stay read-only/non-draggable like always,
+    // reassignedCiLeaves keep their own real reassignment <select> (an
+    // admin can still move one back out to Por Definir/Acciones later),
+    // scoped to their own drag group so they only reorder among themselves.
     if (apartado.controlInterno) {
-        const ciLeaves = buildLeaves(apartado).filter((l) => l.kind === 'ci');
+        const fixedCiLeaves = buildLeaves(apartado).filter((l) => l.kind === 'ci');
+        const reassignedCiLeaves = buildLeaves(apartado).filter((l) => l.kind !== 'ci'
+            && classificationOverrides.get(leafKey(screen, apartado, l))?.classificationId === SAAS_CLASS_CONTROL_INTERNO_ID);
+        const ciLeaves = [...fixedCiLeaves, ...reassignedCiLeaves];
         const ciLeafKeys = ciLeaves.map((l) => leafKey(screen, apartado, l));
         const ciGroupKey = `${aKey}::class::${SAAS_CLASS_CONTROL_INTERNO_ID}`;
         const ciCtx = buildFixedClassificationCtx(SAAS_CLASS_CONTROL_INTERNO_ID, 'menu.classControlInterno');
@@ -1609,8 +1625,12 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         ciRow.appendChild(buildControls(ciGroupKey, ciLeafKeys, screen.href, ciCtx, t('menu.classControlInterno')));
         listEl.appendChild(ciRow);
         if (!collapsed.has(`cls:${ciGroupKey}`)) {
-            ciLeaves.forEach((leaf) => {
-                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, null, ciCtx, leaf.label);
+            fixedCiLeaves.forEach((leaf) => {
+                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, null, ciCtx, leaf.label, nestedByColumn.get(leaf.label));
+            });
+            reassignedCiLeaves.forEach((leaf) => {
+                const key = leafKey(screen, apartado, leaf);
+                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, SAAS_CLASS_CONTROL_INTERNO_ID, buildClassificationCtx(key, SAAS_CLASS_CONTROL_INTERNO_ID, screen, apartado), leaf.label, nestedByColumn.get(leaf.label));
             });
         }
     }
