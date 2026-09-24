@@ -69,9 +69,11 @@ window.SAAS_ADMIN_CATALOG = [
                         'Nombre del plan', 'Descripción', 'Giro de negocio', 'Fecha de creación', 'Creado por',
                         'Límite centros de costo', 'Costo accesos/permisos', 'Total por centro de costo', 'Fecha fin', 'Status', 'Bloqueado',
                     ], [
-                        '+ Nuevo Plan', 'Árbol de acceso', 'Registro de Cambios', 'Editar', 'Activar', 'Eliminar',
+                        '+ Nuevo Plan',
+                    ], [
+                        'Árbol de acceso', 'Registro de Cambios', 'Editar', 'Activar', 'Eliminar',
                     ]),
-                    { id: 'modal-arbol-plan', label: 'Modal: Árbol de Plan (accesos + costo)', acciones: ['Ver árbol', 'Editar árbol', 'Igualar visibilidad APP', 'Agregar visibilidad APP faltante'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    { id: 'modal-arbol-plan', label: 'Modal: Árbol de Plan (accesos + costo)', acciones: ['Ver árbol', 'Editar árbol', 'Igualar visibilidad APP', 'Agregar visibilidad APP faltante'], nestUnder: { host: 'tabla', column: 'Árbol de acceso' } },
                 ],
             },
             {
@@ -92,7 +94,8 @@ window.SAAS_ADMIN_CATALOG = [
                 itemId: 'saas-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html',
                 apartados: [
                     tablaApartado('tabla', ['Icono', 'Nombre del giro', 'Tipo de giro', 'Descripción', 'Permisos asignados', 'Status', 'Creado por', 'Fecha de creación'],
-                        ['+ Crear Giro', 'Accesos Globales', 'Reorden Personalizado', 'Vista Previa', 'Editar', 'Registro de Cambios', 'Activar/Desactivar']),
+                        ['+ Crear Giro'],
+                        ['Accesos Globales', 'Reorden Personalizado', 'Vista Previa', 'Editar', 'Registro de Cambios', 'Activar/Desactivar']),
                     { id: 'modal-tipo-giro', label: 'Modal: Tipo de Giro', acciones: ['Crear/editar tipo'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
                     { id: 'modal-permisos-asignados', label: 'Modal: Permisos Asignados (solo lectura)', acciones: ['Ver resumen'], nestUnder: { host: 'tabla', column: 'Permisos asignados' } },
                 ],
@@ -112,18 +115,21 @@ window.SAAS_ADMIN_CATALOG = [
             {
                 itemId: 'saas-team', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html',
                 apartados: [
-                    { id: 'tabla', label: 'Tabla principal', columnas: ['Username', 'Nombre', 'Email', 'Fecha de creación'], acciones: ['+ Nuevo Admin SaaS', 'Acceso de esta cuenta'] },
+                    { id: 'tabla', label: 'Tabla principal', columnas: ['Username', 'Nombre', 'Email', 'Fecha de creación'], acciones: ['+ Nuevo Admin SaaS'], tableActions: ['Acceso de esta cuenta'] },
                     // Modal: Acceso de la cuenta -- un árbol propio (ver
                     // SAAS_PERMISSION_CATALOG en Admin-EquipoSaaS.js), una
                     // pantalla por Apartado en vez de una sola fila con el
                     // texto embarrado -- confirmado con el usuario que cada
-                    // acción debe ir en su propia fila, no agrupada.
-                    { id: 'modal-acceso-clientes', label: 'Modal: Acceso de cuenta → Nuestros Clientes', acciones: ['Ver', 'Editar', 'Crear', 'Activar/Desactivar', 'Reset'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
-                    { id: 'modal-acceso-planes', label: 'Modal: Acceso de cuenta → Nuestros Planes', acciones: ['Ver', 'Editar', 'Crear', 'Activar/Desactivar'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
-                    { id: 'modal-acceso-costos', label: 'Modal: Acceso de cuenta → Costos de Módulos', acciones: ['Ver', 'Editar'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
-                    { id: 'modal-acceso-apps', label: 'Modal: Acceso de cuenta → Nuestras Apps', acciones: ['Ver', 'Editar', 'Crear'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
-                    { id: 'modal-acceso-respaldos', label: 'Modal: Acceso de cuenta → Nuestros Respaldos', acciones: ['Ver', 'Descargar'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
-                    { id: 'modal-acceso-apoyo', label: 'Modal: Acceso de cuenta → Material de Apoyo', acciones: ['Ver', 'Subir'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    // acción debe ir en su propia fila, no agrupada. Los 6
+                    // anidan bajo el ícono real "Acceso de esta cuenta"
+                    // (ahora su propia fila en Acciones) en vez de flotar
+                    // sueltos bajo la clasificación en general.
+                    { id: 'modal-acceso-clientes', label: 'Modal: Acceso de cuenta → Nuestros Clientes', acciones: ['Ver', 'Editar', 'Crear', 'Activar/Desactivar', 'Reset'], nestUnder: { host: 'tabla', column: 'Acceso de esta cuenta' } },
+                    { id: 'modal-acceso-planes', label: 'Modal: Acceso de cuenta → Nuestros Planes', acciones: ['Ver', 'Editar', 'Crear', 'Activar/Desactivar'], nestUnder: { host: 'tabla', column: 'Acceso de esta cuenta' } },
+                    { id: 'modal-acceso-costos', label: 'Modal: Acceso de cuenta → Costos de Módulos', acciones: ['Ver', 'Editar'], nestUnder: { host: 'tabla', column: 'Acceso de esta cuenta' } },
+                    { id: 'modal-acceso-apps', label: 'Modal: Acceso de cuenta → Nuestras Apps', acciones: ['Ver', 'Editar', 'Crear'], nestUnder: { host: 'tabla', column: 'Acceso de esta cuenta' } },
+                    { id: 'modal-acceso-respaldos', label: 'Modal: Acceso de cuenta → Nuestros Respaldos', acciones: ['Ver', 'Descargar'], nestUnder: { host: 'tabla', column: 'Acceso de esta cuenta' } },
+                    { id: 'modal-acceso-apoyo', label: 'Modal: Acceso de cuenta → Material de Apoyo', acciones: ['Ver', 'Subir'], nestUnder: { host: 'tabla', column: 'Acceso de esta cuenta' } },
                 ],
             },
             {
