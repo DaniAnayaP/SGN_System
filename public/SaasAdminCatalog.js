@@ -22,8 +22,18 @@
 // equivocada).
 // ---------------------------------------------------------------------------
 
-function tablaApartado(id, columnas, acciones) {
-    return { id, label: 'Tabla principal', columnas, controlInterno: true, acciones };
+// tableActions -- unlike `acciones` (real screen-level buttons, e.g. "+
+// Nuevo Cliente", which combine into the screen's own single "Botones"
+// row), these are the generic PER-ROW action icons every real Tabla shows
+// in its own unnamed trailing actions column (e.g. Editar/Activar-
+// Desactivar) -- confirmed live, 2026-09-24, against the real per-row icon
+// strip on Admin-SaaS.html: "cómo activaré cada ícono al usuario?" -- an
+// admin needs to enable/disable each one individually, not as one bundled
+// Botones group. Rendered as ordinary leaves (kind: 'table-action') that
+// default into the "Acciones" classification instead of "Por Definir",
+// same 2-level Ver-y-Operar/Autorizar grant as any other acción.
+function tablaApartado(id, columnas, acciones, tableActions) {
+    return { id, label: 'Tabla principal', columnas, controlInterno: true, acciones, tableActions };
 }
 
 window.SAAS_ADMIN_CATALOG = [
@@ -41,13 +51,15 @@ window.SAAS_ADMIN_CATALOG = [
                         'Centros de costo', 'Centros de costo contratados', 'Cambios de anexos', 'Fecha registro de contrato',
                         'Fin de contrato', 'Plazo de contrato', 'Permisos contratados', 'Pago por adicionales', 'Username', 'Status',
                     ], [
-                        '+ Nuevo Cliente', 'Acceso Administrador', '+ Permisos Adicionales', 'Editar',
+                        '+ Nuevo Cliente',
+                    ], [
+                        'Acceso Administrador', '+ Permisos Adicionales', 'Editar',
                         'Activar/Desactivar', 'Toggle APP', 'Reiniciar cliente de prueba',
                     ]),
                     { id: 'modal-permisos', label: 'Modal: Permisos Contratados / Adicionales', acciones: ['Ver árbol', 'Editar árbol'], nestUnder: { host: 'tabla', column: 'Permisos contratados' } },
                     { id: 'modal-anexos', label: 'Modal: Cambios de Anexos', columnas: ['Módulo', 'Acción', 'Solicitado por', 'Fecha solicitud', 'Fecha cambio', 'Duración contratada'], nestUnder: { host: 'tabla', column: 'Cambios de anexos' } },
                     { id: 'modal-color', label: 'Modal: Color Institucional', acciones: ['Editar color'], nestUnder: { host: 'tabla', column: 'Color institucional' } },
-                    { id: 'modal-admin-access', label: 'Modal: Acceso Administrador (solo lectura)', acciones: ['Ver'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
+                    { id: 'modal-admin-access', label: 'Modal: Acceso Administrador (solo lectura)', acciones: ['Ver'], nestUnder: { host: 'tabla', column: 'Acceso Administrador' } },
                 ],
             },
             {

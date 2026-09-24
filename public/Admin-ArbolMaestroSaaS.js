@@ -207,6 +207,13 @@ function apartadoKey(screen, apartado) {
 function buildLeaves(apartado) {
     const leaves = [];
     (apartado.columnas || []).forEach((label, idx) => leaves.push({ suffix: `c${idx}`, label, kind: 'col' }));
+    // Per-row action icons (see SaasAdminCatalog.js's own tableActions
+    // comment) -- unlike `acciones` below, these ARE this apartado's own
+    // leaves: individually gate-able, defaulting into the "Acciones"
+    // classification (see getEffectiveApartadoGroups) instead of "Por
+    // Definir". Own 'ta' suffix namespace, never collides with a columna's
+    // 'c'/CI's 'ci-'/a hoisted acción's 'a' suffix.
+    (apartado.tableActions || []).forEach((label, idx) => leaves.push({ suffix: `ta${idx}`, label, kind: 'table-action' }));
     // The real 13 Control Interno columns (see CONTROL_INTERNO_COLUMNS),
     // not one opaque stand-in leaf -- suffix keyed by the column's own
     // stable id (not position) since these 13 are the same everywhere,
@@ -1051,7 +1058,12 @@ function getEffectiveApartadoGroups(screen, apartado) {
     nonCiLeaves.forEach((leaf) => {
         const key = leafKey(screen, apartado, leaf);
         const override = classificationOverrides.get(key);
-        const classificationId = override ? override.classificationId : SAAS_CLASS_POR_DEFINIR_ID;
+        // A per-row action icon (kind 'table-action') defaults into
+        // Acciones instead of Por Definir -- it's inherently an action, no
+        // reason to make an admin manually reclassify every one of them
+        // the first time they open a screen.
+        const defaultClassificationId = leaf.kind === 'table-action' ? SAAS_CLASS_ACCIONES_ID : SAAS_CLASS_POR_DEFINIR_ID;
+        const classificationId = override ? override.classificationId : defaultClassificationId;
         // A regular columna/acción reassigned to Control Interno merges
         // into the apartado's own fixed CI block instead (see the
         // ciLeaves/reassignedCiLeaves split in renderApartadoNode) --
@@ -1431,7 +1443,7 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
     const nested = nestedApartados || [];
     const nestedKeys = nested.flatMap((na) => collectLeafKeysForApartado(screen, na));
     const rollupKeys = [key, ...nestedKeys];
-    const levels = leaf.kind === 'action' ? LEAF_ACTION_LEVELS : LEAF_COLUMN_LEVELS;
+    const levels = (leaf.kind === 'action' || leaf.kind === 'table-action') ? LEAF_ACTION_LEVELS : LEAF_COLUMN_LEVELS;
     const leafTreeKey = `leaf:${key}`;
     const leafExpanded = expandedLeaves.has(leafTreeKey);
     const row = document.createElement('div');
