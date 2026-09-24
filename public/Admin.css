@@ -1722,29 +1722,17 @@ body.dark-mode .perm-tree-depth-2{
     min-width: 0;
     width: auto;
 }
-/* The leaf-level color group itself -- 4 tiny dashed-circle icons, same
-   currentColor-dashed visual language as perm-tree-color-picker-btn/
-   perm-tree-text-color-picker-btn above (just smaller, to still fit next
-   to the select in this same fixed-width cell), grouped 2+2 by a thin
-   divider: [own dot, own text] | [nested dot, nested text]. This grouping
-   alone is what reads as "esta columna" vs. "anidados" to the admin --
-   deliberately not a second click-to-reveal layer (see the header
-   comment on buildLeafColorGroup): reusing the SAME openColorPicker
-   popover as every other color control on this screen, just pointed at
-   this leaf's own synthetic col-own:/col-nested: ids, was confirmed
-   simpler and lower-risk than inventing a new reveal interaction. */
+/* The leaf-level color group -- a single trigger icon (same
+   currentColor-dashed visual language as perm-tree-color-picker-btn
+   above) that opens openLeafColorPanel's own consolidated panel
+   (Encabezado/Filas tabs + Fondo/Letra toggle + the palette, all in one
+   view) instead of exposing every one of the 4 stored colors as its own
+   icon inline -- confirmed live, 2026-09-24, across several rounds: one
+   icon, one panel, nothing floats open a second time. */
 .perm-tree-mstatus-leaf-color-group{
     display: flex;
     align-items: center;
-    gap: 0.15rem;
     flex-shrink: 0;
-}
-.perm-tree-mstatus-leaf-color-divider{
-    width: 1px;
-    height: 0.9rem;
-    background-color: var(--color-border);
-    flex-shrink: 0;
-    margin: 0 0.05rem;
 }
 .perm-tree-mini-color-btn{
     flex-shrink: 0;
@@ -1932,6 +1920,78 @@ body.dark-mode .perm-tree-mstatus-class-create-btn{ background-color: #23242b; }
     border-radius: 0.6rem;
     padding: 0.7rem;
     box-shadow: 0 8px 20px rgba(20, 20, 40, 0.16);
+}
+/* Encabezado/Filas -- only the leaf-column panel (openLeafColorPanel)
+   renders this row; a classification header's panel has no such split.
+   Deliberately a different shape (rectangular pill tabs) from the round
+   dashed Fondo/Letra icons below, so the two rows never read as the same
+   kind of control -- confirmed live, 2026-09-24: "parece que el fondo y
+   letra es igual a encabezado y filas". */
+.perm-tree-color-target-tabs{
+    display: flex;
+    gap: 0.3rem;
+    margin-bottom: 0.6rem;
+}
+.perm-tree-color-target-tab{
+    flex: 1;
+    text-align: center;
+    font: inherit;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.28rem 0.4rem;
+    border-radius: 7px;
+    border: 1.5px solid var(--color-border-strong, var(--color-border));
+    background-color: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.perm-tree-color-target-tab-active{
+    border-color: var(--color-accent, #1D3A63);
+    color: var(--color-accent, #1D3A63);
+    background-color: color-mix(in srgb, var(--color-accent, #1D3A63) 12%, var(--color-bg));
+}
+/* Fondo/Letra -- reuses the same round dashed-circle language as every
+   other color-picker trigger on this screen; the active one gets a solid
+   border + ring so it's clearly the one the palette below is editing. */
+.perm-tree-color-kind-row{
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px dashed var(--color-border);
+}
+.perm-tree-color-kind-col{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+}
+.perm-tree-color-kind-btn{
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 50%;
+    border: 1.5px dashed currentColor;
+    background-color: color-mix(in srgb, currentColor 10%, var(--color-bg));
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 800;
+    transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.perm-tree-color-kind-btn i{ font-size: 0.75rem; }
+.perm-tree-color-kind-btn:hover{ opacity: 0.85; }
+.perm-tree-color-kind-btn-active{
+    opacity: 1;
+    border-style: solid;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+}
+.perm-tree-color-kind-cap{
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--color-text-muted, var(--color-text-secondary));
 }
 .perm-tree-color-section-label{
     font-size: 0.66rem;

@@ -541,27 +541,77 @@ async function saveSaasClassificationColor(classificationId, hex, kind = 'dot') 
 }
 // Closed by the next click anywhere else (capture-phase) or Escape -- same
 // dismiss convention as PermissionTree.js's own openColorPicker.
-let openColorPickerCleanup = null;
-function closeColorPicker() {
-    if (openColorPickerCleanup) { openColorPickerCleanup(); openColorPickerCleanup = null; }
+let openColorPanelCleanup = null;
+function closeColorPanel() {
+    if (openColorPanelCleanup) { openColorPanelCleanup(); openColorPanelCleanup = null; }
 }
-// Quick popover (Colores del tema / Colores estándar / Colores recientes +
-// "Más colores...") -- verbatim adaptation of PermissionTree.js's own
-// openColorPicker, `t(` swapped for `Dashboard.t(` and pointed at this
-// screen's own save function.
-function openColorPicker(anchorBtn, classificationId, kind = 'dot') {
-    closeColorPicker();
+// Fondo/Letra toggle -- the same dashed-circle glyphs used everywhere in
+// this screen, doubling as a switch: click one to pick which of the two
+// (dot vs text) the palette underneath edits, without closing the panel.
+// Shared by the classification-header panel (Control Interno/Acciones/Por
+// Definir/custom) and the leaf-column panel -- confirmed live, 2026-09-24:
+// "en clasificación de columnas, ahí solo lo de fondo y letra y los
+// colores del tema" (a header skips the Encabezado/Filas tabs below,
+// since it has one color pair, not two, but shares this same row).
+function appendColorKindRow(panel, colorId, kind, onChange) {
+    const row = document.createElement('div');
+    row.className = 'perm-tree-color-kind-row';
+    const dotHex = classificationColor(colorId);
+    const textHex = classificationTextColor(colorId) || classificationColor(colorId);
+    const makeBtn = (kindValue, hex, glyphHtml, labelKey) => {
+        const col = document.createElement('div');
+        col.className = 'perm-tree-color-kind-col';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `perm-tree-color-kind-btn${kind === kindValue ? ' perm-tree-color-kind-btn-active' : ''}`;
+        btn.style.color = hex;
+        btn.innerHTML = glyphHtml;
+        btn.addEventListener('click', (event) => { event.stopPropagation(); onChange(kindValue); });
+        const cap = document.createElement('span');
+        cap.className = 'perm-tree-color-kind-cap';
+        cap.textContent = Dashboard.t(labelKey);
+        col.append(btn, cap);
+        return col;
+    };
+    row.appendChild(makeBtn('dot', dotHex, '<i class="bx bx-palette" aria-hidden="true"></i>', 'admin.masterTreeColumnColorFill'));
+    row.appendChild(makeBtn('text', textHex, 'A', 'admin.masterTreeColumnColorText'));
+    panel.appendChild(row);
+}
+// Encabezado/Filas tabs -- which of the two independent colors a columna/
+// acción leaf carries (its own row vs. everything nested under it). Only
+// the leaf panel uses this; a classification header has no such split.
+function appendColorTargetTabs(panel, target, onChange) {
+    const row = document.createElement('div');
+    row.className = 'perm-tree-color-target-tabs';
+    const makeTab = (value, labelKey) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `perm-tree-color-target-tab${target === value ? ' perm-tree-color-target-tab-active' : ''}`;
+        btn.textContent = Dashboard.t(labelKey);
+        btn.addEventListener('click', (event) => { event.stopPropagation(); onChange(value); });
+        row.appendChild(btn);
+    };
+    makeTab('own', 'admin.masterTreeColumnColorOwnGroup');
+    makeTab('nested', 'admin.masterTreeColumnColorNestedGroup');
+    panel.appendChild(row);
+}
+// The palette itself (Colores del tema / Estándar / Recientes / Más
+// colores...) -- unchanged from what this screen already had, just
+// factored out so both panels below render the exact same thing, never
+// two copies drifting apart. Never changes based on which target/kind is
+// selected -- confirmed live: "jamás dije que modificaba los colores del
+// tema". `onPick` re-renders the calling panel once the save (and the
+// renderList() it triggers) resolves, instead of closing the panel.
+function appendColorPalette(panel, colorId, kind, onPick) {
     const isText = kind === 'text';
     const colorMap = isText ? classificationTextColors : classificationColors;
     const recentList = isText ? recentTextColors : recentColors;
-    const popover = document.createElement('div');
-    popover.className = 'perm-tree-color-popover';
-    const currentHex = colorMap.get(classificationId);
+    const currentHex = colorMap.get(colorId);
     const addSection = (labelKey) => {
         const label = document.createElement('div');
         label.className = 'perm-tree-color-section-label';
         label.textContent = Dashboard.t(labelKey);
-        popover.appendChild(label);
+        panel.appendChild(label);
     };
     const addSwatch = (container, hex, small) => {
         const swatch = document.createElement('button');
@@ -575,8 +625,7 @@ function openColorPicker(anchorBtn, classificationId, kind = 'dot') {
         }
         swatch.addEventListener('click', (event) => {
             event.stopPropagation();
-            closeColorPicker();
-            saveSaasClassificationColor(classificationId, hex, kind);
+            saveSaasClassificationColor(colorId, hex, kind).then(() => onPick && onPick());
         });
         container.appendChild(swatch);
     };
@@ -586,18 +635,18 @@ function openColorPicker(anchorBtn, classificationId, kind = 'dot') {
     for (let row = 0; row < 6; row += 1) {
         CLASSIFICATION_COLOR_FAMILIES.forEach((family) => addSwatch(themeGrid, family.shades[row], true));
     }
-    popover.appendChild(themeGrid);
+    panel.appendChild(themeGrid);
     addSection('admin.masterTreeColorStandard');
     const standardRow = document.createElement('div');
     standardRow.className = 'perm-tree-color-standard-row';
     CLASSIFICATION_COLOR_FAMILIES.forEach((family) => addSwatch(standardRow, family.shades[3], false));
-    popover.appendChild(standardRow);
+    panel.appendChild(standardRow);
     if (recentList.length) {
         addSection('admin.masterTreeColorRecent');
         const recentRow = document.createElement('div');
         recentRow.className = 'perm-tree-color-standard-row';
         recentList.forEach((hex) => addSwatch(recentRow, hex, false));
-        popover.appendChild(recentRow);
+        panel.appendChild(recentRow);
     }
     const moreBtn = document.createElement('button');
     moreBtn.type = 'button';
@@ -605,20 +654,72 @@ function openColorPicker(anchorBtn, classificationId, kind = 'dot') {
     moreBtn.textContent = Dashboard.t('admin.masterTreeMoreColors');
     moreBtn.addEventListener('click', (event) => {
         event.stopPropagation();
-        closeColorPicker();
-        openColorDialog(classificationId, kind);
+        closeColorPanel();
+        openColorDialog(colorId, kind);
     });
-    popover.appendChild(moreBtn);
-    anchorBtn.parentElement.appendChild(popover);
-    const onDocClick = () => closeColorPicker();
-    const onKey = (event) => { if (event.key === 'Escape') closeColorPicker(); };
+    panel.appendChild(moreBtn);
+}
+function anchorColorPanel(panel, anchorBtn) {
+    anchorBtn.parentElement.appendChild(panel);
+    // Must check containment, not just rely on stopPropagation() inside the
+    // panel's own buttons -- this listener runs on the CAPTURE phase, which
+    // fires before ANY bubble-phase handler (including stopPropagation
+    // calls) on a descendant ever gets a chance to run, so a plain
+    // "any click closes it" callback closed the panel on every click
+    // inside it too (confirmed live, 2026-09-24: switching the Fondo/Letra
+    // or Encabezado/Filas toggle silently closed the panel instead of
+    // switching).
+    const onDocClick = (event) => { if (!panel.contains(event.target)) closeColorPanel(); };
+    const onKey = (event) => { if (event.key === 'Escape') closeColorPanel(); };
     document.addEventListener('click', onDocClick, true);
     document.addEventListener('keydown', onKey);
-    openColorPickerCleanup = () => {
-        popover.remove();
+    openColorPanelCleanup = () => {
+        panel.remove();
         document.removeEventListener('click', onDocClick, true);
         document.removeEventListener('keydown', onKey);
     };
+}
+// Classification header (Control Interno/Acciones/Por Definir/custom) --
+// just the Fondo/Letra toggle + the palette, no Encabezado/Filas tabs.
+// Re-anchors onto the SAME classification's own trigger after every pick,
+// since saving triggers a full renderList() that tears down the old one.
+function openClassificationColorPanel(anchorBtn, classificationId, initialKind) {
+    closeColorPanel();
+    let kind = initialKind || 'dot';
+    const panel = document.createElement('div');
+    panel.className = 'perm-tree-color-popover';
+    function render() {
+        panel.innerHTML = '';
+        appendColorKindRow(panel, classificationId, kind, (k) => { kind = k; render(); });
+        appendColorPalette(panel, classificationId, kind, () => {
+            const fresh = document.querySelector(`[data-class-color-key="${CSS.escape(classificationId)}"]`);
+            if (fresh) openClassificationColorPanel(fresh, classificationId, kind);
+        });
+    }
+    render();
+    anchorColorPanel(panel, anchorBtn);
+}
+// Columna/acción leaf -- Encabezado/Filas tabs (which of the 4 targets)
+// on top of the same Fondo/Letra toggle + palette. Re-anchors onto the
+// SAME leaf's own trigger (found by its stable key) after every pick.
+function openLeafColorPanel(anchorBtn, ownId, nestedId, leafKey, initialTarget, initialKind) {
+    closeColorPanel();
+    let target = initialTarget || 'own';
+    let kind = initialKind || 'dot';
+    const panel = document.createElement('div');
+    panel.className = 'perm-tree-color-popover';
+    function currentId() { return target === 'own' ? ownId : nestedId; }
+    function render() {
+        panel.innerHTML = '';
+        appendColorTargetTabs(panel, target, (t) => { target = t; render(); });
+        appendColorKindRow(panel, currentId(), kind, (k) => { kind = k; render(); });
+        appendColorPalette(panel, currentId(), kind, () => {
+            const fresh = document.querySelector(`[data-leaf-color-key="${CSS.escape(leafKey)}"]`);
+            if (fresh) openLeafColorPanel(fresh, ownId, nestedId, leafKey, target, kind);
+        });
+    }
+    render();
+    anchorColorPanel(panel, anchorBtn);
 }
 // Full colorimetry dialog ("Más colores...") -- verbatim adaptation of
 // PermissionTree.js's own ensureColorDialog/openColorDialog/hsvToHex/
@@ -1139,45 +1240,28 @@ function renderClassificationCreateUI(cell, ctx) {
 // color overrides -- "esta columna" (col-own:<key>) and "anidados"
 // (col-nested:<key>), independent of whichever real classification it
 // currently belongs to (its group heading keeps its OWN separate color,
-// untouched by this). Reuses the exact same openColorPicker popover the
-// classification-header pills above already have, just pointed at these
-// synthetic ids. Rendered as 4 small dashed-circle icons (own dot, own
-// text, a divider, nested dot, nested text) instead of 2 letter badges
-// that each reveal a pair on click -- fewer moving parts to wire up, same
-// dashed-circle visual language as the pill's own two icons, and the
-// divider alone already reads as "two groups" without a second click
-// layer or a brand-new widget.
+// untouched by this). One trigger icon opens `openLeafColorPanel`, which
+// shows the Encabezado/Filas tabs + Fondo/Letra toggle + the same palette
+// every color picker in this screen already has, all in one panel -- see
+// that function's own comment for why (confirmed live, 2026-09-24, across
+// several rounds: single icon, one panel, no separate menu-then-popover).
 function buildLeafColorGroup(key) {
     const ownId = `col-own:${key}`;
     const nestedId = `col-nested:${key}`;
     const group = document.createElement('div');
     group.className = 'perm-tree-mstatus-leaf-color-group';
-    const makeBtn = (colorId, kind, title) => {
-        const isText = kind === 'text';
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'perm-tree-mini-color-btn';
-        const hex = isText ? (classificationTextColor(colorId) || classificationColor(colorId)) : classificationColor(colorId);
-        btn.style.color = hex;
-        btn.style.borderColor = hex;
-        if (isText) btn.textContent = 'A';
-        else btn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
-        btn.title = title;
-        btn.setAttribute('aria-label', title);
-        btn.addEventListener('click', (event) => {
-            event.stopPropagation();
-            openColorPicker(btn, colorId, kind);
-        });
-        return btn;
-    };
-    group.appendChild(makeBtn(ownId, 'dot', 'Color de fondo — esta columna'));
-    group.appendChild(makeBtn(ownId, 'text', 'Color de texto — esta columna'));
-    const divider = document.createElement('span');
-    divider.className = 'perm-tree-mstatus-leaf-color-divider';
-    divider.setAttribute('aria-hidden', 'true');
-    group.appendChild(divider);
-    group.appendChild(makeBtn(nestedId, 'dot', 'Color de fondo — anidados'));
-    group.appendChild(makeBtn(nestedId, 'text', 'Color de texto — anidados'));
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'perm-tree-mini-color-btn perm-tree-mini-color-trigger';
+    trigger.dataset.leafColorKey = key;
+    trigger.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
+    trigger.title = Dashboard.t('admin.masterTreeColumnColorMenu');
+    trigger.setAttribute('aria-label', trigger.title);
+    trigger.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openLeafColorPanel(trigger, ownId, nestedId, key);
+    });
+    group.appendChild(trigger);
     return group;
 }
 
@@ -1230,18 +1314,20 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
             const colorBtn = document.createElement('button');
             colorBtn.type = 'button';
             colorBtn.className = 'perm-tree-color-picker-btn';
+            colorBtn.dataset.classColorKey = classificationCtx.classificationId;
             colorBtn.setAttribute('aria-label', Dashboard.t('admin.masterTreeChooseColor'));
             colorBtn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
             colorBtn.style.color = classificationCtx.readOnlyColor;
             colorBtn.style.borderColor = classificationCtx.readOnlyColor;
             colorBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
-                openColorPicker(colorBtn, classificationCtx.classificationId, 'dot');
+                openClassificationColorPanel(colorBtn, classificationCtx.classificationId, 'dot');
             });
             classBadge.appendChild(colorBtn);
             const textColorBtn = document.createElement('button');
             textColorBtn.type = 'button';
             textColorBtn.className = 'perm-tree-text-color-picker-btn';
+            textColorBtn.dataset.classColorKey = classificationCtx.classificationId;
             textColorBtn.setAttribute('aria-label', Dashboard.t('admin.masterTreeChooseTextColor'));
             const textHex = classificationTextColor(classificationCtx.classificationId) || classificationCtx.readOnlyColor;
             textColorBtn.innerHTML = 'A<span class="perm-tree-text-color-picker-bar" aria-hidden="true"></span>';
@@ -1250,7 +1336,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
             textColorBtn.querySelector('.perm-tree-text-color-picker-bar').style.backgroundColor = textHex;
             textColorBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
-                openColorPicker(textColorBtn, classificationCtx.classificationId, 'text');
+                openClassificationColorPanel(textColorBtn, classificationCtx.classificationId, 'text');
             });
             classBadge.appendChild(textColorBtn);
         } else {
