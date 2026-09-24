@@ -1628,13 +1628,17 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         }
     }
 
+    // "Por Definir" now gets the same heading row as any other
+    // classification (toggle + color pickers) instead of rendering its
+    // members flat -- confirmed live, 2026-09-24: mixing a real group
+    // heading (Control Interno) with unheaded leaves at the same depth
+    // made the hierarchy unclear. Always rendered first among the groups
+    // below, matching where it already sat visually.
     const porDefinirGroup = apartadoGroups.find((g) => g.classificationId === SAAS_CLASS_POR_DEFINIR_ID);
-    (porDefinirGroup ? porDefinirGroup.leaves : []).forEach((leaf) => {
-        const key = leafKey(screen, apartado, leaf);
-        renderLeafWithLevels(screen, apartado, leaf, depth + 1, aKey, SAAS_CLASS_POR_DEFINIR_ID, buildClassificationCtx(key, SAAS_CLASS_POR_DEFINIR_ID, screen, apartado), leaf.label, nestedByColumn.get(leaf.label));
-    });
+    const otherGroups = apartadoGroups.filter((g) => g.classificationId !== SAAS_CLASS_POR_DEFINIR_ID);
+    const orderedApartadoGroups = porDefinirGroup ? [porDefinirGroup, ...otherGroups] : otherGroups;
 
-    apartadoGroups.filter((g) => g.classificationId !== SAAS_CLASS_POR_DEFINIR_ID).forEach((clsGroup) => {
+    orderedApartadoGroups.forEach((clsGroup) => {
         const groupKey = `${aKey}::class::${clsGroup.classificationId}`;
         const nestedForGroup = nestedByClassification.get(clsGroup.classificationId) || [];
         const groupLeafKeys2 = clsGroup.leaves.map((leaf) => leafKey(screen, apartado, leaf))
