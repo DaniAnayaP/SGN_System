@@ -5865,7 +5865,25 @@ function getMasterPermissionChangeLog(nodeKey, classificationId) {
     `);
     const rows = stmt.all(nodeKey);
     if (classificationId) rows.push(...stmt.all(`classification::${classificationId}`));
+    rows.push(...getColumnColorChangeRows(stmt, nodeKey));
     rows.sort((a, b) => (a.changedAt < b.changedAt ? 1 : (a.changedAt > b.changedAt ? -1 : 0)));
+    return rows;
+}
+// A columna/acción row's own Encabezado/Filas colors (see buildLeafColorGroup
+// in PermissionTree.js/Admin-ArbolMaestroSaaS.js) are stored under the
+// synthetic classification ids "col-own:<nodeKey>"/"col-nested:<nodeKey>", so
+// their changes are logged under "classification::col-own:<nodeKey>"/
+// "classification::col-nested:<nodeKey>" -- keys neither the row's own
+// nodeKey lookup nor its real classification's ever matches, which left that
+// row's Cambios dialog empty after a color change (confirmed live,
+// 2026-09-24). Returned with the field prefixed by which pair it was
+// ("own.color", "nested.textColor", ...) so the dialog can tell Encabezado
+// from Filas. Shared by both trees' change-log readers.
+function getColumnColorChangeRows(stmt, nodeKey) {
+    const rows = [];
+    [['col-own', 'own'], ['col-nested', 'nested']].forEach(([idPrefix, scope]) => {
+        stmt.all(`classification::${idPrefix}:${nodeKey}`).forEach((row) => rows.push({ ...row, field: `${scope}.${row.field}` }));
+    });
     return rows;
 }
 
@@ -6071,6 +6089,7 @@ function getSaasMasterChangeLog(nodeKey, classificationId) {
     `);
     const rows = stmt.all(nodeKey);
     if (classificationId) rows.push(...stmt.all(`classification::${classificationId}`));
+    rows.push(...getColumnColorChangeRows(stmt, nodeKey));
     rows.sort((a, b) => (a.changedAt < b.changedAt ? 1 : (a.changedAt > b.changedAt ? -1 : 0)));
     return rows;
 }

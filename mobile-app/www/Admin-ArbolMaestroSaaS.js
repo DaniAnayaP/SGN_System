@@ -1067,6 +1067,15 @@ function formatHistoryFieldName(field) {
     if (field === 'clasificacion') return t('admin.masterTreeHistoryFieldClassification');
     if (field === 'color') return t('admin.masterTreeHistoryFieldColor');
     if (field === 'textColor') return t('admin.masterTreeHistoryFieldTextColor');
+    // A columna/acción row's own color pairs, "own"/"nested" prefixed by the
+    // server (see getColumnColorChangeRows in db.js): Encabezado vs Filas,
+    // then which of its two colors (fondo/letra) changed.
+    const scoped = /^(own|nested)\.(color|textColor)$/.exec(field);
+    if (scoped) {
+        const group = t(scoped[1] === 'own' ? 'admin.masterTreeColumnColorOwnGroup' : 'admin.masterTreeColumnColorNestedGroup');
+        const kind = t(scoped[2] === 'color' ? 'admin.masterTreeColumnColorFill' : 'admin.masterTreeColumnColorText');
+        return `${group} · ${kind}`;
+    }
     return field;
 }
 function formatHistoryChange(entry) {
@@ -1079,7 +1088,7 @@ function formatHistoryChange(entry) {
     const none = t('menu.classNone');
     if (entry.field === 'estatus') return `${statusLabel(entry.oldValue)} → ${statusLabel(entry.newValue)}`;
     if (entry.field === 'web' || entry.field === 'app') return `${bool(entry.oldValue)} → ${bool(entry.newValue)}`;
-    if (entry.field === 'color' || entry.field === 'textColor') {
+    if (/(^|\.)(color|textColor)$/.test(entry.field)) {
         const sw = (hex) => (hex ? `<span class="perm-tree-history-swatch" style="background:${hex}"></span>${hex}` : '—');
         return `${sw(entry.oldValue)} → ${sw(entry.newValue)}`;
     }
