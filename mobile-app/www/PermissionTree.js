@@ -1837,7 +1837,7 @@
             });
         }
 
-        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, previewInfo, classificationCtx) {
+        function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, previewInfo, classificationCtx, tint) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             // Drag-to-reorder -- Árbol Maestro only. dragCtx is
@@ -2022,7 +2022,6 @@
                     // to pick, this just names what the row IS.
                     const badge = document.createElement('span');
                     badge.className = 'perm-tree-mstatus-class-badge';
-                    badge.textContent = classificationCtx.readOnlyLabel;
                     // The label's own color falls back to the dot color
                     // whenever no independent text color was ever chosen
                     // (see the "A" button below) -- same look as before
@@ -2030,43 +2029,48 @@
                     badge.style.color = classificationTextColor(classificationCtx.classificationId) || classificationCtx.readOnlyColor;
                     badge.style.borderColor = classificationCtx.readOnlyColor;
                     badge.style.backgroundColor = `color-mix(in srgb, ${classificationCtx.readOnlyColor} 14%, var(--color-bg))`;
-                    classificationCell.appendChild(badge);
                     // Only a real classification's own group row carries
                     // classificationId (see buildFixedClassificationCtx) --
                     // a structural level badge (Departamento, Tabla, ...)
                     // has no color of its own to pick, so gets no buttons.
-                    if (classificationCtx.classificationId && !grantMode) {
-                        const colorBtn = document.createElement('button');
-                        colorBtn.type = 'button';
-                        colorBtn.className = 'perm-tree-color-picker-btn';
-                        colorBtn.setAttribute('aria-label', t('admin.masterTreeChooseColor'));
-                        colorBtn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
-                        colorBtn.style.color = classificationCtx.readOnlyColor;
-                        colorBtn.style.borderColor = classificationCtx.readOnlyColor;
-                        colorBtn.addEventListener('click', (event) => {
+                    // Botones (FIXED_CLASSIFICATION_IDS) is excluded even
+                    // though it carries a classificationId -- confirmed live,
+                    // 2026-09-24 (same call made in Admin-ArbolMaestroSaaS.js):
+                    // color customization is for classifications that group
+                    // real COLUMNS (Control Interno, Acciones, Por Definir,
+                    // custom) and for columns themselves, not for the Botones
+                    // action-button grouping.
+                    if (classificationCtx.classificationId && !grantMode && !FIXED_CLASSIFICATION_IDS.has(classificationCtx.classificationId)) {
+                        badge.classList.add('perm-tree-mstatus-class-badge-with-actions');
+                        const labelSpan = document.createElement('span');
+                        labelSpan.className = 'perm-tree-mstatus-class-badge-label';
+                        labelSpan.textContent = classificationCtx.readOnlyLabel;
+                        badge.appendChild(labelSpan);
+                        // One trigger, not two -- clicking it opens the same
+                        // panel that already lets you pick Fondo/Letra
+                        // inside, so showing both icons on the badge itself
+                        // was just showing the same choice twice (confirmed
+                        // live, 2026-09-24: "por qué tengo los mismos
+                        // iconos si hacen lo mismo?"). Matches the leaf
+                        // column trigger's own single-icon treatment
+                        // (buildLeafColorGroup).
+                        const colorTriggerBtn = document.createElement('button');
+                        colorTriggerBtn.type = 'button';
+                        colorTriggerBtn.className = 'perm-tree-color-picker-btn';
+                        colorTriggerBtn.dataset.classColorKey = classificationCtx.classificationId;
+                        colorTriggerBtn.setAttribute('aria-label', t('admin.masterTreeColumnColorMenu'));
+                        colorTriggerBtn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
+                        colorTriggerBtn.style.color = classificationCtx.readOnlyColor;
+                        colorTriggerBtn.style.borderColor = classificationCtx.readOnlyColor;
+                        colorTriggerBtn.addEventListener('click', (event) => {
                             event.stopPropagation();
-                            openColorPicker(colorBtn, classificationCtx.classificationId, 'dot');
+                            openClassificationColorPanel(colorTriggerBtn, classificationCtx.classificationId, 'dot');
                         });
-                        classificationCell.appendChild(colorBtn);
-                        // Independent picker for the badge's own TEXT color
-                        // (see classificationTextColor) -- same trigger/
-                        // popover/dialog machinery as colorBtn above, just
-                        // aimed at a separate value (kind: 'text').
-                        const textColorBtn = document.createElement('button');
-                        textColorBtn.type = 'button';
-                        textColorBtn.className = 'perm-tree-text-color-picker-btn';
-                        textColorBtn.setAttribute('aria-label', t('admin.masterTreeChooseTextColor'));
-                        const textHex = classificationTextColor(classificationCtx.classificationId) || classificationCtx.readOnlyColor;
-                        textColorBtn.innerHTML = 'A<span class="perm-tree-text-color-picker-bar" aria-hidden="true"></span>';
-                        textColorBtn.style.color = textHex;
-                        textColorBtn.style.borderColor = textHex;
-                        textColorBtn.querySelector('.perm-tree-text-color-picker-bar').style.backgroundColor = textHex;
-                        textColorBtn.addEventListener('click', (event) => {
-                            event.stopPropagation();
-                            openColorPicker(textColorBtn, classificationCtx.classificationId, 'text');
-                        });
-                        classificationCell.appendChild(textColorBtn);
+                        badge.appendChild(colorTriggerBtn);
+                    } else {
+                        badge.textContent = classificationCtx.readOnlyLabel;
                     }
+                    classificationCell.appendChild(badge);
                 } else if (classificationCtx) {
                     const select = document.createElement('select');
                     select.className = 'perm-tree-mstatus-class-select';
@@ -2128,7 +2132,27 @@
                         if (select.value === CREATE_CLASSIFICATION_VALUE) renderClassificationCreateUI(classificationCell, classificationCtx);
                         else classificationCtx.onPick(select.value);
                     });
-                    classificationCell.appendChild(select);
+                    // A plain reassignable columna/acción leaf gets its own
+                    // pair of color overrides too (see buildLeafColorGroup)
+                    // -- "esta columna"/"anidados", independent of whichever
+                    // real classification it currently belongs to (the
+                    // classification's own group heading above keeps its
+                    // OWN separate color, untouched by this). Wrapped
+                    // together with the <select> in one flex row (see
+                    // .perm-tree-mstatus-class-select-wrap in Admin.css) so
+                    // both fit in this cell's fixed width. Hidden in
+                    // grantMode -- Accesos Globales is a read-only reference
+                    // view, same reason the classification header's own
+                    // color buttons are hidden there too.
+                    if (!grantMode) {
+                        const selectWrap = document.createElement('div');
+                        selectWrap.className = 'perm-tree-mstatus-class-select-wrap';
+                        selectWrap.appendChild(select);
+                        selectWrap.appendChild(buildLeafColorGroup(key));
+                        classificationCell.appendChild(selectWrap);
+                    } else {
+                        classificationCell.appendChild(select);
+                    }
                 }
                 controls.appendChild(classificationCell);
                 const statusCell = document.createElement('div');
@@ -2289,6 +2313,18 @@
                 historyCell.appendChild(historyBtn);
                 controls.appendChild(historyCell);
                 row.appendChild(controls);
+            }
+            // A plain leaf's own "esta columna" color override (see
+            // ownColorTint/nestedColorTint, buildLeafColorGroup) -- applied
+            // here, once, so every caller (a column's own row, and its own
+            // grant-level sub-rows) gets it for free just by passing `tint`,
+            // instead of every render* function reaching into row/label
+            // itself. Never set for a row with no override (tint null),
+            // same "leave it exactly as before this feature existed" rule
+            // the classification badge's own color follows.
+            if (tint) {
+                if (tint.bg) row.style.backgroundColor = tint.bg;
+                if (tint.text) label.style.color = tint.text;
             }
             return row;
         }
@@ -2921,6 +2957,33 @@
             if (!id) return null;
             return classificationTextColors.get(id) || null;
         }
+        // A plain reassignable columna/acción leaf's own pair of color
+        // overrides -- "esta columna" (col-own:<key>) and "anidados"
+        // (col-nested:<key>), independent of whichever real classification
+        // it currently belongs to (its group heading keeps its OWN separate
+        // color, untouched by this). key is the same colKey (keyOf's own
+        // output) every other master-tree table already scopes a column's
+        // real data to -- these two are synthetic ids in the SAME
+        // classificationColors/classificationTextColors maps every real
+        // classification's own color already lives in (see
+        // master_permission_classification_colors' own DDL comment in
+        // db.js), so no new storage/table/route is needed: classificationColor's
+        // hash fallback and saveClassificationColor's free-form
+        // classificationId both already work unchanged for these. Returns
+        // {bg,text} only when at least one half was actually chosen, else
+        // null, so callers can tell "nothing set here" apart from "only a
+        // text color was chosen" without extra truthiness juggling at every
+        // call site (see statusRow's own `tint` param).
+        function ownColorTint(key) {
+            const bg = classificationColors.get(`col-own:${key}`);
+            const text = classificationTextColors.get(`col-own:${key}`);
+            return (bg || text) ? { bg, text } : null;
+        }
+        function nestedColorTint(key) {
+            const bg = classificationColors.get(`col-nested:${key}`);
+            const text = classificationTextColors.get(`col-nested:${key}`);
+            return (bg || text) ? { bg, text } : null;
+        }
         // A generic "no se pudo guardar" toast (the previous behavior here)
         // reads as a mystery every time it's actually just a lapsed
         // session -- confirmed live: "cuando cambio el color... me arroja
@@ -2972,28 +3035,83 @@
                 else if (typeof window.showToast === 'function') window.showToast(message);
             }
         }
-        // Closed by the next click anywhere else (capture-phase, so it
-        // beats the swatch buttons' own bubbling click) or Escape -- same
-        // dismiss convention as every modal in this file (wireModalDismiss
-        // in Dashboard.js), just lighter-weight since this is an inline
-        // popover, not a full overlay.
-        let openColorPickerCleanup = null;
-        function closeColorPicker() {
-            if (openColorPickerCleanup) { openColorPickerCleanup(); openColorPickerCleanup = null; }
+        // Closed by the next click anywhere else or Escape -- same dismiss
+        // convention as every modal in this file (wireModalDismiss in
+        // Dashboard.js), just lighter-weight since this is an inline panel,
+        // not a full overlay.
+        let openColorPanelCleanup = null;
+        function closeColorPanel() {
+            if (openColorPanelCleanup) { openColorPanelCleanup(); openColorPanelCleanup = null; }
         }
-        function openColorPicker(anchorBtn, classificationId, kind = 'dot') {
-            closeColorPicker();
+        // Fondo/Letra toggle -- the same dashed-circle glyphs used
+        // elsewhere on this screen, doubling as a switch: click one to pick
+        // which of the two (dot vs text) the palette underneath edits,
+        // without closing the panel. Shared by the classification-header
+        // panel (Control Interno/Acciones/Por Definir/custom) and the leaf-
+        // column panel -- a header skips the "esta columna"/"anidados" tabs
+        // below (it has one color pair, not two) but shares this same row.
+        function appendColorKindRow(panel, colorId, kind, onChange) {
+            const row = document.createElement('div');
+            row.className = 'perm-tree-color-kind-row';
+            const dotHex = classificationColor(colorId);
+            const textHex = classificationTextColor(colorId) || classificationColor(colorId);
+            const makeBtn = (kindValue, hex, glyphHtml, labelKey) => {
+                const col = document.createElement('div');
+                col.className = 'perm-tree-color-kind-col';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `perm-tree-color-kind-btn${kind === kindValue ? ' perm-tree-color-kind-btn-active' : ''}`;
+                btn.style.color = hex;
+                btn.innerHTML = glyphHtml;
+                btn.addEventListener('click', (event) => { event.stopPropagation(); onChange(kindValue); });
+                const cap = document.createElement('span');
+                cap.className = 'perm-tree-color-kind-cap';
+                cap.textContent = t(labelKey);
+                col.append(btn, cap);
+                return col;
+            };
+            row.appendChild(makeBtn('dot', dotHex, '<i class="bx bx-palette" aria-hidden="true"></i>', 'admin.masterTreeColumnColorFill'));
+            row.appendChild(makeBtn('text', textHex, 'A', 'admin.masterTreeColumnColorText'));
+            panel.appendChild(row);
+        }
+        // "Esta columna"/"Filas anidadas" tabs -- which of the two
+        // independent colors a columna/acción leaf carries (its own row vs.
+        // everything nested under it). Only the leaf panel uses this; a
+        // classification header has no such split.
+        function appendColorTargetTabs(panel, target, onChange) {
+            const row = document.createElement('div');
+            row.className = 'perm-tree-color-target-tabs';
+            const makeTab = (value, labelKey) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `perm-tree-color-target-tab${target === value ? ' perm-tree-color-target-tab-active' : ''}`;
+                btn.textContent = t(labelKey);
+                btn.addEventListener('click', (event) => { event.stopPropagation(); onChange(value); });
+                row.appendChild(btn);
+            };
+            makeTab('own', 'admin.masterTreeColumnColorOwnGroup');
+            makeTab('nested', 'admin.masterTreeColumnColorNestedGroup');
+            panel.appendChild(row);
+        }
+        // The palette itself (Colores del tema / Estándar / Recientes / Más
+        // colores...) -- unchanged from what this screen already had, just
+        // factored out so both panels below render the exact same thing,
+        // never two copies drifting apart. Never changes based on which
+        // target/kind is selected -- confirmed with the user this feature
+        // must never touch the theme palette's own colors/layout/behavior.
+        // `onPick` re-renders the calling panel once the save (and the
+        // renderStatusTree() it triggers) resolves, instead of closing the
+        // panel.
+        function appendColorPalette(panel, colorId, kind, onPick) {
             const isText = kind === 'text';
             const colorMap = isText ? classificationTextColors : classificationColors;
             const recentList = isText ? recentTextColors : recentColors;
-            const popover = document.createElement('div');
-            popover.className = 'perm-tree-color-popover';
-            const currentHex = colorMap.get(classificationId);
+            const currentHex = colorMap.get(colorId);
             const addSection = (labelKey) => {
                 const label = document.createElement('div');
                 label.className = 'perm-tree-color-section-label';
                 label.textContent = t(labelKey);
-                popover.appendChild(label);
+                panel.appendChild(label);
             };
             const addSwatch = (container, hex, small) => {
                 const swatch = document.createElement('button');
@@ -3007,61 +3125,128 @@
                 }
                 swatch.addEventListener('click', (event) => {
                     event.stopPropagation();
-                    closeColorPicker();
-                    saveClassificationColor(classificationId, hex, kind);
+                    saveClassificationColor(colorId, hex, kind).then(() => onPick && onPick());
                 });
                 container.appendChild(swatch);
             };
-            // "Colores del tema" -- one column per family, light (top) to
-            // dark (bottom), same shape as Office's own theme-colors grid.
             addSection('admin.masterTreeColorThemeColors');
             const themeGrid = document.createElement('div');
             themeGrid.className = 'perm-tree-color-theme-grid';
             for (let row = 0; row < 6; row += 1) {
                 CLASSIFICATION_COLOR_FAMILIES.forEach((family) => addSwatch(themeGrid, family.shades[row], true));
             }
-            popover.appendChild(themeGrid);
-            // "Colores estándar" -- each family's own base swatch (shades[3],
-            // the same hex CLASSIFICATION_COLOR_FAMILIES used to expose as a
-            // flat 8-color list before this grid existed), one flat row.
+            panel.appendChild(themeGrid);
             addSection('admin.masterTreeColorStandard');
             const standardRow = document.createElement('div');
             standardRow.className = 'perm-tree-color-standard-row';
             CLASSIFICATION_COLOR_FAMILIES.forEach((family) => addSwatch(standardRow, family.shades[3], false));
-            popover.appendChild(standardRow);
-            // "Colores recientes" -- only once something's actually been
-            // accepted (quick swatch, either grid above, or the Más colores
-            // dialog all feed the same list, see saveClassificationColor).
+            panel.appendChild(standardRow);
             if (recentList.length) {
                 addSection('admin.masterTreeColorRecent');
                 const recentRow = document.createElement('div');
                 recentRow.className = 'perm-tree-color-standard-row';
                 recentList.forEach((hex) => addSwatch(recentRow, hex, false));
-                popover.appendChild(recentRow);
+                panel.appendChild(recentRow);
             }
-            // Free-form colorimetry (Estándar hex mosaic + Personalizado
-            // saturation/matiz picker), for anything the swatches above
-            // don't cover -- see ensureColorDialog/openColorDialog.
             const moreBtn = document.createElement('button');
             moreBtn.type = 'button';
             moreBtn.className = 'perm-tree-color-more-btn';
             moreBtn.textContent = t('admin.masterTreeMoreColors');
             moreBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
-                closeColorPicker();
-                openColorDialog(classificationId, kind);
+                closeColorPanel();
+                openColorDialog(colorId, kind);
             });
-            popover.appendChild(moreBtn);
-            anchorBtn.parentElement.appendChild(popover);
-            const onDocClick = () => closeColorPicker();
-            const onKey = (event) => { if (event.key === 'Escape') closeColorPicker(); };
+            panel.appendChild(moreBtn);
+        }
+        function anchorColorPanel(panel, anchorBtn) {
+            anchorBtn.parentElement.appendChild(panel);
+            // Must check containment, not just rely on stopPropagation()
+            // inside the panel's own buttons -- this listener runs on the
+            // CAPTURE phase, which fires before ANY bubble-phase handler
+            // (including stopPropagation calls) on a descendant ever gets a
+            // chance to run, so a plain "any click closes it" callback (the
+            // shape the old openColorPicker's onDocClick used) would close
+            // the panel on every click inside it too, including the new
+            // Fondo/Letra and "esta columna"/"anidados" toggles this panel
+            // adds -- confirmed against exactly this bug in
+            // Admin-ArbolMaestroSaaS.js's own color panel before its fix.
+            const onDocClick = (event) => { if (!panel.contains(event.target)) closeColorPanel(); };
+            const onKey = (event) => { if (event.key === 'Escape') closeColorPanel(); };
             document.addEventListener('click', onDocClick, true);
             document.addEventListener('keydown', onKey);
-            openColorPickerCleanup = () => {
-                popover.remove();
+            openColorPanelCleanup = () => {
+                panel.remove();
                 document.removeEventListener('click', onDocClick, true);
                 document.removeEventListener('keydown', onKey);
             };
+        }
+        // Classification header (Control Interno/Acciones/Por Definir/
+        // custom) -- just the Fondo/Letra toggle + the palette, no "esta
+        // columna"/"anidados" tabs. Re-anchors onto the SAME classification's
+        // own trigger after every pick, since saving triggers a full
+        // renderStatusTree() that tears down the old one.
+        function openClassificationColorPanel(anchorBtn, classificationId, initialKind) {
+            closeColorPanel();
+            let kind = initialKind || 'dot';
+            const panel = document.createElement('div');
+            panel.className = 'perm-tree-color-popover';
+            function render() {
+                panel.innerHTML = '';
+                appendColorKindRow(panel, classificationId, kind, (k) => { kind = k; render(); });
+                appendColorPalette(panel, classificationId, kind, () => {
+                    const fresh = document.querySelector(`[data-class-color-key="${CSS.escape(classificationId)}"]`);
+                    if (fresh) openClassificationColorPanel(fresh, classificationId, kind);
+                });
+            }
+            render();
+            anchorColorPanel(panel, anchorBtn);
+        }
+        // Columna/acción leaf -- "esta columna"/"anidados" tabs (which of
+        // the 2 targets) on top of the same Fondo/Letra toggle + palette.
+        // Re-anchors onto the SAME leaf's own trigger (found by its stable
+        // key) after every pick.
+        function openLeafColorPanel(anchorBtn, ownId, nestedId, leafKey, initialTarget, initialKind) {
+            closeColorPanel();
+            let target = initialTarget || 'own';
+            let kind = initialKind || 'dot';
+            const panel = document.createElement('div');
+            panel.className = 'perm-tree-color-popover';
+            function currentId() { return target === 'own' ? ownId : nestedId; }
+            function render() {
+                panel.innerHTML = '';
+                appendColorTargetTabs(panel, target, (targetValue) => { target = targetValue; render(); });
+                appendColorKindRow(panel, currentId(), kind, (k) => { kind = k; render(); });
+                appendColorPalette(panel, currentId(), kind, () => {
+                    const fresh = document.querySelector(`[data-leaf-color-key="${CSS.escape(leafKey)}"]`);
+                    if (fresh) openLeafColorPanel(fresh, ownId, nestedId, leafKey, target, kind);
+                });
+            }
+            render();
+            anchorColorPanel(panel, anchorBtn);
+        }
+        // The single trigger icon a plain reassignable leaf gets (see the
+        // .perm-tree-mstatus-class-select-wrap branch in statusRow) -- opens
+        // openLeafColorPanel's own consolidated panel instead of exposing
+        // every one of the 2 stored colors as its own icon inline.
+        function buildLeafColorGroup(key) {
+            const ownId = `col-own:${key}`;
+            const nestedId = `col-nested:${key}`;
+            const group = document.createElement('div');
+            group.className = 'perm-tree-mstatus-leaf-color-group';
+            const trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'perm-tree-mini-color-btn perm-tree-mini-color-trigger';
+            trigger.dataset.leafColorKey = key;
+            trigger.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
+            trigger.title = t('admin.masterTreeColumnColorMenu');
+            trigger.setAttribute('aria-label', trigger.title);
+            trigger.addEventListener('click', (event) => {
+                event.stopPropagation();
+                openLeafColorPanel(trigger, ownId, nestedId, key);
+            });
+            group.appendChild(trigger);
+            return group;
         }
         // Full colorimetry dialog ("Más colores..." from the quick popover
         // above) -- built once and reused for every classification (state
@@ -3721,13 +3906,20 @@
             const classificationCtx = isFixedClassification
                 ? buildFixedClassificationCtx(cls.id, cls.labelKey, cls.labelParams)
                 : buildClassificationCtx(colKey, cls ? cls.id : null, structuralClsId, subSm);
+            // This column's own "esta columna" override (see
+            // ownColorTint/buildLeafColorGroup) always wins on THIS row --
+            // it's a single-row color, never cascaded. A fixed-classification
+            // column (Botones) never has one (no leaf trigger ever renders
+            // for it, see the classificationCtx branch in statusRow), so
+            // this is always null there.
+            const ownTint = ownColorTint(colKey);
             container.appendChild(statusRow(t(col.labelKey, col.labelParams), depth, colKey, {
                 expanded: colExpanded,
                 onToggle: () => {
                     if (colExpanded) expandedItems.delete(colTreeKey);
                     else expandedItems.add(colTreeKey);
                 },
-            }, computeNodeRollup(colKey), null, ancestorLocked, columnDragCtx, previewInfo, classificationCtx));
+            }, computeNodeRollup(colKey), null, ancestorLocked, columnDragCtx, previewInfo, classificationCtx, ownTint));
             if (!colExpanded) return;
             // A real data column keeps its own 4 grant-levels (Ver y
             // Operar/Editar/Autorizar/Eliminar, see COLUMN_STATUS_LEVELS);
@@ -3747,10 +3939,18 @@
                 readOnlyColor: classificationColor(cls ? cls.id : null),
             });
             const levels = isFixedClassification ? BUTTON_STATUS_LEVELS : COLUMN_STATUS_LEVELS;
+            // This column's own "anidados" override -- applies to every one
+            // of its own grant-level sub-rows below (Ver y Operar/Editar/
+            // Autorizar/Eliminar, or Operar/Autorizar for a fixed one). A
+            // columna/acción leaf here has no further nested child rows of
+            // its own the way Admin-ArbolMaestroSaaS.js's columns can (no
+            // modal apartado concept in the real client tree), so the
+            // cascade stops at these -- there's nothing deeper to reach.
+            const nestedTint = nestedColorTint(colKey);
             levels.forEach((level) => {
                 const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
                 if (grantOrderMode && !subtreeHasGrant(levelKey)) return;
-                container.appendChild(statusRow(t(level.labelKey), depth + 1, levelKey, null, selfStateRollup(levelKey), null, ancestorLocked, null, null, levelClassificationCtx));
+                container.appendChild(statusRow(t(level.labelKey), depth + 1, levelKey, null, selfStateRollup(levelKey), null, ancestorLocked, null, null, levelClassificationCtx, nestedTint));
             });
         }
 

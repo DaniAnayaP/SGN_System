@@ -1311,34 +1311,25 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
             labelSpan.textContent = classificationCtx.readOnlyLabel;
             classBadge.appendChild(labelSpan);
 
-            const colorBtn = document.createElement('button');
-            colorBtn.type = 'button';
-            colorBtn.className = 'perm-tree-color-picker-btn';
-            colorBtn.dataset.classColorKey = classificationCtx.classificationId;
-            colorBtn.setAttribute('aria-label', Dashboard.t('admin.masterTreeChooseColor'));
-            colorBtn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
-            colorBtn.style.color = classificationCtx.readOnlyColor;
-            colorBtn.style.borderColor = classificationCtx.readOnlyColor;
-            colorBtn.addEventListener('click', (event) => {
+            // One trigger, not two -- clicking it opens the same panel
+            // that already lets you pick Fondo/Letra inside, so showing
+            // both icons on the badge itself was just showing the same
+            // choice twice (confirmed live, 2026-09-24: "por qué tengo
+            // los mismos iconos si hacen lo mismo?"). Matches the leaf
+            // column trigger's own single-icon treatment (buildLeafColorGroup).
+            const colorTriggerBtn = document.createElement('button');
+            colorTriggerBtn.type = 'button';
+            colorTriggerBtn.className = 'perm-tree-color-picker-btn';
+            colorTriggerBtn.dataset.classColorKey = classificationCtx.classificationId;
+            colorTriggerBtn.setAttribute('aria-label', Dashboard.t('admin.masterTreeColumnColorMenu'));
+            colorTriggerBtn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
+            colorTriggerBtn.style.color = classificationCtx.readOnlyColor;
+            colorTriggerBtn.style.borderColor = classificationCtx.readOnlyColor;
+            colorTriggerBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
-                openClassificationColorPanel(colorBtn, classificationCtx.classificationId, 'dot');
+                openClassificationColorPanel(colorTriggerBtn, classificationCtx.classificationId, 'dot');
             });
-            classBadge.appendChild(colorBtn);
-            const textColorBtn = document.createElement('button');
-            textColorBtn.type = 'button';
-            textColorBtn.className = 'perm-tree-text-color-picker-btn';
-            textColorBtn.dataset.classColorKey = classificationCtx.classificationId;
-            textColorBtn.setAttribute('aria-label', Dashboard.t('admin.masterTreeChooseTextColor'));
-            const textHex = classificationTextColor(classificationCtx.classificationId) || classificationCtx.readOnlyColor;
-            textColorBtn.innerHTML = 'A<span class="perm-tree-text-color-picker-bar" aria-hidden="true"></span>';
-            textColorBtn.style.color = textHex;
-            textColorBtn.style.borderColor = textHex;
-            textColorBtn.querySelector('.perm-tree-text-color-picker-bar').style.backgroundColor = textHex;
-            textColorBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                openClassificationColorPanel(textColorBtn, classificationCtx.classificationId, 'text');
-            });
-            classBadge.appendChild(textColorBtn);
+            classBadge.appendChild(colorTriggerBtn);
         } else {
             classBadge.textContent = classificationCtx.readOnlyLabel;
         }
