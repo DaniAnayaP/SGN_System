@@ -496,6 +496,27 @@ function classificationTextColor(id) {
     if (!id) return null;
     return classificationTextColors.get(id) || null;
 }
+// A plain reassignable leaf's own two independent color pairs (see the
+// header comment on buildLeafColorGroup below, near buildControls) --
+// "col-own:<key>"/"col-nested:<key>" synthetic ids in the SAME
+// classificationColors/classificationTextColors maps every real
+// classification's own color already lives in, so no new storage is
+// needed (classificationColor's hash fallback and
+// saveSaasClassificationColor's free-form id both already work
+// unchanged for these). Returns {bg,text} only when at least one half
+// was actually chosen, else null, so callers can tell "nothing set here"
+// apart from "only a text color was chosen" without extra truthiness
+// juggling at every call site.
+function ownColorTint(key) {
+    const bg = classificationColors.get(`col-own:${key}`);
+    const text = classificationTextColors.get(`col-own:${key}`);
+    return (bg || text) ? { bg, text } : null;
+}
+function nestedColorTint(key) {
+    const bg = classificationColors.get(`col-nested:${key}`);
+    const text = classificationTextColors.get(`col-nested:${key}`);
+    return (bg || text) ? { bg, text } : null;
+}
 async function saveSaasClassificationColor(classificationId, hex, kind = 'dot') {
     const isText = kind === 'text';
     try {
@@ -1115,6 +1136,52 @@ function renderClassificationCreateUI(cell, ctx) {
     });
 }
 
+// A plain reassignable columna/acción/table-action leaf's own pair of
+// color overrides -- "esta columna" (col-own:<key>) and "anidados"
+// (col-nested:<key>), independent of whichever real classification it
+// currently belongs to (its group heading keeps its OWN separate color,
+// untouched by this). Reuses the exact same openColorPicker popover the
+// classification-header pills above already have, just pointed at these
+// synthetic ids. Rendered as 4 small dashed-circle icons (own dot, own
+// text, a divider, nested dot, nested text) instead of 2 letter badges
+// that each reveal a pair on click -- fewer moving parts to wire up, same
+// dashed-circle visual language as the pill's own two icons, and the
+// divider alone already reads as "two groups" without a second click
+// layer or a brand-new widget.
+function buildLeafColorGroup(key) {
+    const ownId = `col-own:${key}`;
+    const nestedId = `col-nested:${key}`;
+    const group = document.createElement('div');
+    group.className = 'perm-tree-mstatus-leaf-color-group';
+    const makeBtn = (colorId, kind, title) => {
+        const isText = kind === 'text';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'perm-tree-mini-color-btn';
+        const hex = isText ? (classificationTextColor(colorId) || classificationColor(colorId)) : classificationColor(colorId);
+        btn.style.color = hex;
+        btn.style.borderColor = hex;
+        if (isText) btn.textContent = 'A';
+        else btn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openColorPicker(btn, colorId, kind);
+        });
+        return btn;
+    };
+    group.appendChild(makeBtn(ownId, 'dot', 'Color de fondo — esta columna'));
+    group.appendChild(makeBtn(ownId, 'text', 'Color de texto — esta columna'));
+    const divider = document.createElement('span');
+    divider.className = 'perm-tree-mstatus-leaf-color-divider';
+    divider.setAttribute('aria-hidden', 'true');
+    group.appendChild(divider);
+    group.appendChild(makeBtn(nestedId, 'dot', 'Color de fondo — anidados'));
+    group.appendChild(makeBtn(nestedId, 'text', 'Color de texto — anidados'));
+    return group;
+}
+
 // Full controls block (Clasificación + Estatus + aplicar-a-anidados +
 // Web/App + Navegar + Cambios) -- used by every real row (Grupo/Pantalla/
 // Apartado/classification-group/Columna/Acción) that carries its own key,
@@ -1148,8 +1215,13 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         // one, the two picker buttons live INSIDE this same pill (as its
         // own children, via the -with-actions modifier) instead of as
         // separate siblings trailing after it -- one border/background/
-        // fixed width for the whole thing, see Admin.css.
-        if (classificationCtx.classificationId) {
+        // fixed width for the whole thing, see Admin.css. Botones is
+        // excluded even though it carries a classificationId (kept for the
+        // Cambios/history dialog) -- confirmed live, 2026-09-24: color
+        // customization is for classifications that group real COLUMNS
+        // (Control Interno, Acciones, Por Definir, custom) and for
+        // columns themselves, not for the Botones action-button grouping.
+        if (classificationCtx.classificationId && classificationCtx.classificationId !== SAAS_CLASS_BOTONES_ID) {
             classBadge.classList.add('perm-tree-mstatus-class-badge-with-actions');
             const labelSpan = document.createElement('span');
             labelSpan.className = 'perm-tree-mstatus-class-badge-label';
@@ -1187,6 +1259,8 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         }
         classificationCell.appendChild(classBadge);
     } else if (classificationCtx) {
+        const selectWrap = document.createElement('div');
+        selectWrap.className = 'perm-tree-mstatus-class-select-wrap';
         const classSelect = document.createElement('select');
         classSelect.className = 'perm-tree-mstatus-class-select';
         classificationCtx.options.forEach((opt) => {
@@ -1221,7 +1295,9 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
             if (classSelect.value === CREATE_CLASSIFICATION_VALUE) renderClassificationCreateUI(classificationCell, classificationCtx);
             else classificationCtx.onPick(classSelect.value);
         });
-        classificationCell.appendChild(classSelect);
+        selectWrap.appendChild(classSelect);
+        selectWrap.appendChild(buildLeafColorGroup(key));
+        classificationCell.appendChild(selectWrap);
     }
     controls.appendChild(classificationCell);
 
@@ -1456,7 +1532,7 @@ function leafToggleBtn(key, expanded) {
 // this leaf currently belongs to (null for Control Interno's own fixed
 // members, which never reorder) -- reused as-is for the drag `list`
 // scope, same convention every other leaf loop here already has.
-function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, classificationCtx, label, nestedApartados) {
+function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, classificationCtx, label, nestedApartados, nestedTint) {
     const key = leafKey(screen, apartado, leaf);
     const nested = nestedApartados || [];
     const nestedKeys = nested.flatMap((na) => collectLeafKeysForApartado(screen, na));
@@ -1477,13 +1553,33 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
     }
     row.appendChild(leafToggleBtn(leafTreeKey, leafExpanded));
     row.appendChild(rollupEl(computeRollup(rollupKeys, 'web'), computeRollup(rollupKeys, 'app')));
-    row.appendChild(labelEl(leaf.label));
+    const labelElNode = labelEl(leaf.label);
+    row.appendChild(labelElNode);
     row.appendChild(countBadge(1 + nestedKeys.length));
     row.appendChild(buildControls(key, nestedKeys, screen.href, classificationCtx, label));
     listEl.appendChild(row);
+    // This leaf's own "esta columna" override (col-own:key, see
+    // buildLeafColorGroup) always wins on THIS row -- it's a single-row
+    // color, never cascaded. Falling back to the incoming nestedTint (an
+    // ANCESTOR's own "anidados" pick) when this leaf has no own override,
+    // since this row is itself one of that ancestor's descendants. A
+    // "anidados" override set on THIS SAME leaf (below) never colors this
+    // row -- only what hangs off it.
+    const ownTint = ownColorTint(key);
+    const rowTint = ownTint || nestedTint || null;
+    if (rowTint) {
+        if (rowTint.bg) row.style.backgroundColor = rowTint.bg;
+        if (rowTint.text) labelElNode.style.color = rowTint.text;
+    }
     if (!leafExpanded) return;
+    // This leaf's own "anidados" override, else whatever nestedTint it
+    // itself inherited from further up -- an explicit override on THIS
+    // leaf always wins over one inherited from an ancestor, and either
+    // way it's what now applies to everything rendered under it (its own
+    // permission sub-levels below, and its nested modal apartado, if any).
+    const ownNestedTint = nestedColorTint(key) || nestedTint || null;
     if (nested.length) {
-        nested.forEach((childApartado) => renderApartadoNode(screen, childApartado, depth + 1, { draggable: false }));
+        nested.forEach((childApartado) => renderApartadoNode(screen, childApartado, depth + 1, { draggable: false, nestedTint: ownNestedTint }));
     }
     // Read-only echo of the SAME classification this column's own row just
     // showed -- never its own picker/select (nothing to reassign one
@@ -1501,9 +1597,14 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
         levelRow.appendChild(spacer());
         levelRow.appendChild(spacer());
         levelRow.appendChild(rollupEl(computeRollup([levelKey], 'web'), computeRollup([levelKey], 'app')));
-        levelRow.appendChild(labelEl(levelLabel));
+        const levelLabelNode = labelEl(levelLabel);
+        levelRow.appendChild(levelLabelNode);
         levelRow.appendChild(countBadge(1));
         levelRow.appendChild(buildControls(levelKey, [], null, echoCtx, levelLabel));
+        if (ownNestedTint) {
+            if (ownNestedTint.bg) levelRow.style.backgroundColor = ownNestedTint.bg;
+            if (ownNestedTint.text) levelLabelNode.style.color = ownNestedTint.text;
+        }
         listEl.appendChild(levelRow);
     });
 }
@@ -1520,6 +1621,13 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
 // same rendering either way, only its position/reorderability differ.
 function renderApartadoNode(screen, apartado, depth, opts) {
     const draggable = !!(opts && opts.draggable);
+    // Tint inherited from an ancestor leaf's own "anidados" pick (see
+    // ownNestedTint in renderLeafWithLevels) -- this whole apartado is one
+    // of that leaf's descendants when set, so it (and everything it in
+    // turn renders below) picks it up too, all the way down until a
+    // deeper node's own col-own/col-nested override takes over for just
+    // its own sub-branch.
+    const nestedTint = (opts && opts.nestedTint) || null;
     const aKey = apartadoKey(screen, apartado);
 
     // "Iconos Personalización" -- only a real Tabla (apartado.controlInterno)
@@ -1535,9 +1643,14 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         iconsRow.appendChild(spacer());
         iconsRow.appendChild(toggleBtn(`cls:${iconsKey}`, !collapsed.has(`cls:${iconsKey}`)));
         iconsRow.appendChild(rollupEl(computeRollup(iconLeafKeys, 'web'), computeRollup(iconLeafKeys, 'app')));
-        iconsRow.appendChild(labelEl(t('menu.iconsPersonalization')));
+        const iconsLabelNode = labelEl(t('menu.iconsPersonalization'));
+        iconsRow.appendChild(iconsLabelNode);
         iconsRow.appendChild(countBadge(iconLeafKeys.length));
         iconsRow.appendChild(buildControls(iconsKey, iconLeafKeys, screen.href, iconsCtx, t('menu.iconsPersonalization')));
+        if (nestedTint) {
+            if (nestedTint.bg) iconsRow.style.backgroundColor = nestedTint.bg;
+            if (nestedTint.text) iconsLabelNode.style.color = nestedTint.text;
+        }
         listEl.appendChild(iconsRow);
         if (!collapsed.has(`cls:${iconsKey}`)) {
             ICON_PERSONALIZATION_ITEMS.forEach((icon) => {
@@ -1547,9 +1660,14 @@ function renderApartadoNode(screen, apartado, depth, opts) {
                 iconRow.appendChild(spacer());
                 iconRow.appendChild(spacer());
                 iconRow.appendChild(rollupEl(computeRollup([iconKey], 'web'), computeRollup([iconKey], 'app')));
-                iconRow.appendChild(labelEl(t(icon.labelKey)));
+                const iconLabelNode = labelEl(t(icon.labelKey));
+                iconRow.appendChild(iconLabelNode);
                 iconRow.appendChild(countBadge(1));
                 iconRow.appendChild(buildControls(iconKey, [], screen.href, iconsCtx, t(icon.labelKey)));
+                if (nestedTint) {
+                    if (nestedTint.bg) iconRow.style.backgroundColor = nestedTint.bg;
+                    if (nestedTint.text) iconLabelNode.style.color = nestedTint.text;
+                }
                 listEl.appendChild(iconRow);
             });
         }
@@ -1608,7 +1726,8 @@ function renderApartadoNode(screen, apartado, depth, opts) {
     }
     apRow.appendChild(hasOwnBody ? toggleBtn(`a:${aKey}`, !collapsed.has(`a:${aKey}`)) : spacer());
     apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
-    apRow.appendChild(labelEl(apartado.label));
+    const apLabelNode = labelEl(apartado.label);
+    apRow.appendChild(apLabelNode);
     apRow.appendChild(countBadge(apLeafKeys.length));
     // Same href as the screen's own row, not null -- confirmed live that
     // only the top screen row having a working Navegar button, with every
@@ -1617,6 +1736,10 @@ function renderApartadoNode(screen, apartado, depth, opts) {
     // same screen (there's no separate URL for one of its own columns to
     // navigate to).
     apRow.appendChild(buildControls(aKey, apLeafKeys, screen.href, buildLevelBadgeCtx(apartado.controlInterno ? 'tabla' : 'apartado'), apartado.label));
+    if (nestedTint) {
+        if (nestedTint.bg) apRow.style.backgroundColor = nestedTint.bg;
+        if (nestedTint.text) apLabelNode.style.color = nestedTint.text;
+    }
     listEl.appendChild(apRow);
     if (!hasOwnBody || collapsed.has(`a:${aKey}`)) return;
 
@@ -1643,17 +1766,22 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         ciRow.appendChild(spacer());
         ciRow.appendChild(toggleBtn(`cls:${ciGroupKey}`, !collapsed.has(`cls:${ciGroupKey}`)));
         ciRow.appendChild(rollupEl(computeRollup(ciLeafKeys, 'web'), computeRollup(ciLeafKeys, 'app')));
-        ciRow.appendChild(labelEl(t('menu.classControlInterno')));
+        const ciLabelNode = labelEl(t('menu.classControlInterno'));
+        ciRow.appendChild(ciLabelNode);
         ciRow.appendChild(countBadge(ciLeafKeys.length));
         ciRow.appendChild(buildControls(ciGroupKey, ciLeafKeys, screen.href, ciCtx, t('menu.classControlInterno')));
+        if (nestedTint) {
+            if (nestedTint.bg) ciRow.style.backgroundColor = nestedTint.bg;
+            if (nestedTint.text) ciLabelNode.style.color = nestedTint.text;
+        }
         listEl.appendChild(ciRow);
         if (!collapsed.has(`cls:${ciGroupKey}`)) {
             fixedCiLeaves.forEach((leaf) => {
-                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, null, ciCtx, leaf.label, nestedByColumn.get(leaf.label));
+                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, null, ciCtx, leaf.label, nestedByColumn.get(leaf.label), nestedTint);
             });
             reassignedCiLeaves.forEach((leaf) => {
                 const key = leafKey(screen, apartado, leaf);
-                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, SAAS_CLASS_CONTROL_INTERNO_ID, buildClassificationCtx(key, SAAS_CLASS_CONTROL_INTERNO_ID, screen, apartado), leaf.label, nestedByColumn.get(leaf.label));
+                renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, SAAS_CLASS_CONTROL_INTERNO_ID, buildClassificationCtx(key, SAAS_CLASS_CONTROL_INTERNO_ID, screen, apartado), leaf.label, nestedByColumn.get(leaf.label), nestedTint);
             });
         }
     }
@@ -1679,17 +1807,22 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         clsRow.appendChild(spacer());
         clsRow.appendChild(toggleBtn(`cls:${groupKey}`, !collapsed.has(`cls:${groupKey}`)));
         clsRow.appendChild(rollupEl(computeRollup(groupLeafKeys2, 'web'), computeRollup(groupLeafKeys2, 'app')));
-        clsRow.appendChild(labelEl(t(groupLabelKey)));
+        const clsLabelNode = labelEl(t(groupLabelKey));
+        clsRow.appendChild(clsLabelNode);
         clsRow.appendChild(countBadge(groupLeafKeys2.length));
         clsRow.appendChild(buildControls(groupKey, groupLeafKeys2, screen.href, buildFixedClassificationCtx(clsGroup.classificationId, groupLabelKey), t(groupLabelKey)));
+        if (nestedTint) {
+            if (nestedTint.bg) clsRow.style.backgroundColor = nestedTint.bg;
+            if (nestedTint.text) clsLabelNode.style.color = nestedTint.text;
+        }
         listEl.appendChild(clsRow);
         if (collapsed.has(`cls:${groupKey}`)) return;
 
         clsGroup.leaves.forEach((leaf) => {
             const key = leafKey(screen, apartado, leaf);
-            renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, clsGroup.classificationId, buildClassificationCtx(key, clsGroup.classificationId, screen, apartado), leaf.label, nestedByColumn.get(leaf.label));
+            renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, clsGroup.classificationId, buildClassificationCtx(key, clsGroup.classificationId, screen, apartado), leaf.label, nestedByColumn.get(leaf.label), nestedTint);
         });
-        nestedForGroup.forEach((childApartado) => renderApartadoNode(screen, childApartado, depth + 2, { draggable: false }));
+        nestedForGroup.forEach((childApartado) => renderApartadoNode(screen, childApartado, depth + 2, { draggable: false, nestedTint }));
     });
 }
 

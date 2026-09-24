@@ -1673,14 +1673,22 @@ body.dark-mode .perm-tree-depth-2{
    other column's own width. */
 .perm-tree-mstatus-class-cell{
     flex-shrink: 0;
-    width: 10.6rem;
+    /* Widened from 10.6rem (this cell's original width, still what every
+       read-only structural/classification badge above renders at) to fit
+       a plain leaf's own extra "esta columna"/"anidados" mini color-icon
+       group (see perm-tree-mstatus-class-select-wrap below) alongside its
+       reassignment <select> without either one getting cramped -- kept as
+       ONE shared width constant so every row in this column still lines
+       up, badges included, same "no ragged widths" rule this cell already
+       followed at 10.6rem. */
+    width: 13.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.35rem;
     position: relative;
 }
-.perm-tree-mstatus-header-class{ width: 10.6rem; }
+.perm-tree-mstatus-header-class{ width: 13.5rem; }
 .perm-tree-mstatus-class-select{
     width: 100%;
     box-sizing: border-box;
@@ -1696,6 +1704,68 @@ body.dark-mode .perm-tree-depth-2{
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Wraps a plain leaf's own reassignment <select> together with its "esta
+   columna"/"anidados" mini color-icon group (see buildLeafColorGroup in
+   Admin-ArbolMaestroSaaS.js) as one flex row filling this fixed-width
+   cell, same "one row, one shared width" idea
+   .perm-tree-mstatus-class-badge-with-actions already uses for a group
+   header's own label+icons pill -- the <select> itself shrinks to
+   min-content-safe via flex so the icon group never gets pushed out. */
+.perm-tree-mstatus-class-select-wrap{
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+}
+.perm-tree-mstatus-class-select-wrap .perm-tree-mstatus-class-select{
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+}
+/* The leaf-level color group itself -- 4 tiny dashed-circle icons, same
+   currentColor-dashed visual language as perm-tree-color-picker-btn/
+   perm-tree-text-color-picker-btn above (just smaller, to still fit next
+   to the select in this same fixed-width cell), grouped 2+2 by a thin
+   divider: [own dot, own text] | [nested dot, nested text]. This grouping
+   alone is what reads as "esta columna" vs. "anidados" to the admin --
+   deliberately not a second click-to-reveal layer (see the header
+   comment on buildLeafColorGroup): reusing the SAME openColorPicker
+   popover as every other color control on this screen, just pointed at
+   this leaf's own synthetic col-own:/col-nested: ids, was confirmed
+   simpler and lower-risk than inventing a new reveal interaction. */
+.perm-tree-mstatus-leaf-color-group{
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+}
+.perm-tree-mstatus-leaf-color-divider{
+    width: 1px;
+    height: 0.9rem;
+    background-color: var(--color-border);
+    flex-shrink: 0;
+    margin: 0 0.05rem;
+}
+.perm-tree-mini-color-btn{
+    flex-shrink: 0;
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    border: 1.5px dashed currentColor;
+    background-color: color-mix(in srgb, currentColor 10%, var(--color-bg));
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.55rem;
+    font-weight: 800;
+    line-height: 1;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.perm-tree-mini-color-btn i{ font-size: 0.5rem; }
+.perm-tree-mini-color-btn:hover{ opacity: 1; background-color: color-mix(in srgb, currentColor 20%, var(--color-bg)); }
 /* "+ Crear nueva clasificación..." inline UI (see
    renderClassificationCreateUI in PermissionTree.js) -- replaces the
    select above, in the same cell, while naming a new one. Allowed to
