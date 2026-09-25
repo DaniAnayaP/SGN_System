@@ -3066,6 +3066,13 @@
         // panel (Control Interno/Acciones/Por Definir/custom) and the leaf-
         // column panel -- a header skips the "esta columna"/"anidados" tabs
         // below (it has one color pair, not two) but shares this same row.
+        // Perceived brightness (0-255) of a "#rrggbb" -- decides which neutral keeps a
+        // Fondo/Letra icon legible whatever color it currently stands for.
+        function colorBrightness(hex) {
+            const n = parseInt(String(hex).slice(1), 16);
+            if (Number.isNaN(n)) return 128;
+            return (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
+        }
         function appendColorKindRow(panel, colorId, kind, onChange, view) {
             const row = document.createElement('div');
             row.className = 'perm-tree-color-kind-row';
@@ -3077,7 +3084,19 @@
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = `perm-tree-color-kind-btn${kind === kindValue ? ' perm-tree-color-kind-btn-active' : ''}`;
-                btn.style.color = hex;
+                // The icon shows the REAL color it stands for (the fill for Fondo,
+                // the glyph for Letra) without ever disappearing: the contour is a
+                // darker mix of it, and the glyph/backdrop flip to a neutral that
+                // contrasts with it -- a very light green used to render the whole
+                // icon as near-white on white (confirmed live, 2026-09-24).
+                btn.style.borderColor = `color-mix(in srgb, ${hex} 35%, var(--color-text-secondary))`;
+                if (kindValue === 'dot') {
+                    btn.style.backgroundColor = hex;
+                    btn.style.color = colorBrightness(hex) > 140 ? '#3a3f52' : '#ffffff';
+                } else {
+                    btn.style.color = hex;
+                    btn.style.backgroundColor = colorBrightness(hex) > 170 ? '#3a3f52' : '#f3f4f8';
+                }
                 btn.innerHTML = glyphHtml;
                 btn.addEventListener('click', (event) => { event.stopPropagation(); onChange(kindValue); });
                 const cap = document.createElement('span');
@@ -3241,7 +3260,27 @@
             panel.appendChild(moreBtn);
         }
         function anchorColorPanel(panel, anchorBtn) {
-            anchorBtn.parentElement.appendChild(panel);
+            // Portaled to <body> and placed with position:fixed instead of nested
+            // beside the trigger: the tree list scrolls and clips its content, so a
+            // panel opened near the bottom edge came out cut off until you scrolled
+            // (confirmed live, 2026-09-24). Opens under the pill (right-aligned to
+            // it), flips above when there is more room there, and is always clamped
+            // inside the viewport. Returns `place` so a render that changes the
+            // panel's height (the eye) can re-place it.
+            const host = anchorBtn.closest('.perm-tree-mstatus-class-cell') || anchorBtn.parentElement;
+            document.body.appendChild(panel);
+            function place() {
+                const r = host.getBoundingClientRect();
+                const w = panel.offsetWidth;
+                const h = panel.offsetHeight;
+                const margin = 8;
+                const below = window.innerHeight - r.bottom - margin;
+                const above = r.top - margin;
+                const top = (below >= h || below >= above) ? r.bottom + 4 : r.top - h - 4;
+                panel.style.top = `${Math.max(margin, Math.min(top, window.innerHeight - h - margin))}px`;
+                panel.style.left = `${Math.max(margin, Math.min(r.right - w, window.innerWidth - w - margin))}px`;
+            }
+            place();
             // Must check containment, not just rely on stopPropagation()
             // inside the panel's own buttons -- this listener runs on the
             // CAPTURE phase, which fires before ANY bubble-phase handler
@@ -3254,13 +3293,20 @@
             // Admin-ArbolMaestroSaaS.js's own color panel before its fix.
             const onDocClick = (event) => { if (!panel.contains(event.target)) closeColorPanel(); };
             const onKey = (event) => { if (event.key === 'Escape') closeColorPanel(); };
+            // The tree scrolls (and the window can resize) while the panel is open:
+            // keep it attached to its pill.
+            window.addEventListener('resize', place);
+            document.addEventListener('scroll', place, true);
             document.addEventListener('click', onDocClick, true);
             document.addEventListener('keydown', onKey);
             openColorPanelCleanup = () => {
                 panel.remove();
+                window.removeEventListener('resize', place);
+                document.removeEventListener('scroll', place, true);
                 document.removeEventListener('click', onDocClick, true);
                 document.removeEventListener('keydown', onKey);
             };
+            return place;
         }
         // Classification header (Control Interno/Acciones/Por Definir/
         // custom) -- just the Fondo/Letra toggle + the palette, no "esta
@@ -3272,6 +3318,7 @@
             let kind = initialKind || 'dot';
             const panel = document.createElement('div');
             panel.className = 'perm-tree-color-popover';
+            let place = null;
             function render() {
                 panel.innerHTML = '';
                 appendColorKindRow(panel, classificationId, kind, (k) => { kind = k; render(); });
@@ -3279,9 +3326,10 @@
                     const fresh = document.querySelector(`[data-class-color-key="${CSS.escape(classificationId)}"]`);
                     if (fresh) openClassificationColorPanel(fresh, classificationId, kind);
                 });
+                if (place) place();
             }
             render();
-            anchorColorPanel(panel, anchorBtn);
+            place = anchorColorPanel(panel, anchorBtn);
         }
         // Columna/acción leaf -- "esta columna"/"anidados" tabs (which of
         // the 2 targets) on top of the same Fondo/Letra toggle + palette.
@@ -3299,6 +3347,7 @@
             const panel = document.createElement('div');
             panel.className = 'perm-tree-color-popover';
             function currentId() { return target === 'own' ? ownId : nestedId; }
+            let place = null;
             function render() {
                 panel.innerHTML = '';
                 appendColorTargetTabs(panel, target, (targetValue) => { target = targetValue; render(); });
@@ -3308,9 +3357,10 @@
                     const fresh = document.querySelector(`[data-leaf-color-key="${CSS.escape(leafKey)}"]`);
                     if (fresh) openLeafColorPanel(fresh, ownId, nestedId, leafKey, columnLabel, target, kind, viewOn);
                 });
+                if (place) place();
             }
             render();
-            anchorColorPanel(panel, anchorBtn);
+            place = anchorColorPanel(panel, anchorBtn);
         }
         // The single trigger icon a plain reassignable leaf gets (see the
         // .perm-tree-mstatus-class-select-wrap branch in statusRow) -- opens
