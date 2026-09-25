@@ -3051,6 +3051,23 @@
                 else if (typeof window.showToast === 'function') window.showToast(message);
             }
         }
+        // "Restablecer" -- removes ONE stored color (fill or letter) of this id
+        // so it goes back to "none chosen" (see clearColorRow in db.js), then
+        // repaints.
+        async function resetClassificationColor(classificationId, kind = 'dot') {
+            const isText = kind === 'text';
+            try {
+                const params = new URLSearchParams({ classificationId, kind: isText ? 'text' : 'dot' });
+                const res = await fetch(`/api/admin/master-permission-classification-colors?${params}`, { method: 'DELETE', credentials: 'include' });
+                if (!res.ok) throw new SaveFailedError(res.status);
+                (isText ? classificationTextColors : classificationColors).delete(classificationId);
+                renderStatusTree();
+            } catch (err) {
+                const message = describeSaveFailure(err);
+                if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'error');
+                else if (typeof window.showToast === 'function') window.showToast(message);
+            }
+        }
         // Closed by the next click anywhere else or Escape -- same dismiss
         // convention as every modal in this file (wireModalDismiss in
         // Dashboard.js), just lighter-weight since this is an inline panel,
@@ -3257,7 +3274,24 @@
                 closeColorPanel();
                 openColorDialog(colorId, kind);
             });
-            panel.appendChild(moreBtn);
+            // Footer: "Más colores..." on the left, "Restablecer" on the right --
+            // clears the ONE color this palette is editing (fill or letter of the
+            // selected target) back to "none chosen"; disabled when nothing is saved.
+            const footer = document.createElement('div');
+            footer.className = 'perm-tree-color-footer';
+            const resetBtn = document.createElement('button');
+            resetBtn.type = 'button';
+            resetBtn.className = 'perm-tree-color-reset-btn';
+            resetBtn.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
+            resetBtn.appendChild(document.createTextNode(t('admin.masterTreeColorReset')));
+            resetBtn.title = t('admin.masterTreeColorResetHint');
+            resetBtn.disabled = !currentHex;
+            resetBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                resetClassificationColor(colorId, kind).then(() => onPick && onPick());
+            });
+            footer.append(moreBtn, resetBtn);
+            panel.appendChild(footer);
         }
         function anchorColorPanel(panel, anchorBtn) {
             // Portaled to <body> and placed with position:fixed instead of nested

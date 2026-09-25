@@ -5840,6 +5840,33 @@ function setClassificationTextColor(classificationId, textColor, updatedBy) {
     }
     return { classificationId, textColor };
 }
+// "Restablecer" -- drops ONE of a classification's two colors (kind 'dot' =
+// the fill/`color`, 'text' = `text_color`) back to "nothing chosen", same "no
+// row = default" convention as every other override table here: `color` is
+// NOT NULL, so an unset dot color is '' (falsy, which both trees' loaders
+// already read as "none"), and the row itself is deleted once neither color
+// is left. Logged like any other change ("<old> -> —"). Shared by the column
+// Encabezado/Filas ids ("col-own:<key>"/"col-nested:<key>") and by real
+// classifications, exactly like the setters above. `table` is only ever one
+// of the two constants below, never user input.
+function clearColorRow(table, classificationId, kind, updatedBy, logFn) {
+    const isText = kind === 'text';
+    const row = db.prepare(`SELECT color, text_color AS textColor FROM ${table} WHERE classification_id = ?`).get(classificationId);
+    if (!row) return false;
+    const before = isText ? row.textColor : row.color;
+    if (!before) return false;
+    db.prepare(`UPDATE ${table} SET ${isText ? 'text_color = NULL' : "color = ''"}, updated_by = ?, updated_at = datetime('now') WHERE classification_id = ?`)
+        .run(updatedBy || '', classificationId);
+    const after = db.prepare(`SELECT color, text_color AS textColor FROM ${table} WHERE classification_id = ?`).get(classificationId);
+    if (after && !after.color && !after.textColor) {
+        db.prepare(`DELETE FROM ${table} WHERE classification_id = ?`).run(classificationId);
+    }
+    logFn(`classification::${classificationId}`, isText ? 'textColor' : 'color', before, null, updatedBy);
+    return true;
+}
+function clearClassificationColor(classificationId, kind, updatedBy) {
+    return clearColorRow('master_permission_classification_colors', classificationId, kind, updatedBy, logMasterPermissionChange);
+}
 // Generic append -- see master_permission_change_log's own DDL comment for
 // the node_key convention (including the "classification::<id>" synthetic
 // form). oldValue/newValue are stored verbatim as text; PermissionTree.js's
@@ -6072,6 +6099,11 @@ function setSaasClassificationTextColor(classificationId, textColor, updatedBy) 
         logSaasMasterChange(`classification::${classificationId}`, 'textColor', before ? before.textColor : null, textColor, updatedBy);
     }
     return { classificationId, textColor };
+}
+// Same "Restablecer" as clearClassificationColor above, for this screen's own
+// table/log.
+function clearSaasClassificationColor(classificationId, kind, updatedBy) {
+    return clearColorRow('saas_classification_colors', classificationId, kind, updatedBy, logSaasMasterChange);
 }
 
 function logSaasMasterChange(nodeKey, field, oldValue, newValue, changedBy) {
@@ -7038,6 +7070,7 @@ module.exports = {
     getClassificationColors,
     setClassificationColor,
     setClassificationTextColor,
+    clearClassificationColor,
     getEffectiveColumnClassifications,
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
@@ -7052,6 +7085,7 @@ module.exports = {
     getSaasClassificationColors,
     setSaasClassificationColor,
     setSaasClassificationTextColor,
+    clearSaasClassificationColor,
     getSaasMasterChangeLog,
     getMasterPermissionOrder,
     setMasterPermissionOrder,

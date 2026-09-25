@@ -64,6 +64,30 @@ const GENERAL_ITEMS = [
     { itemId: 'saas-board', labelKey: 'menu.dashboard', href: 'Inicio-en.html' },
 ];
 
+// "Iconos de Navegación" -- the icons of the top bar every SaaS page shares
+// (Mensajes/Notificaciones/Marcadores/Configuración/Datos de usuario/Datos
+// del negocio in the static .top-bar-actions markup, plus the Chatbot and
+// Tamaño del sistema buttons Dashboard.js injects), confirmed live,
+// 2026-09-25: "debe haber un apartado dentro de Accesos Generales... donde se
+// desplieguen esos iconos de la parte superior". They are shell-level, not
+// per-screen, so they sit under General -> Accesos Generales next to
+// Inicio/Panel/Tablero instead of in each screen's own "Iconos
+// Personalización" (that one is the data-table toolbar). Same labels the
+// client tree's own General buttons use (main.*), tracked under their own
+// saas_master_status ids like GENERAL_ITEMS above. Configuración stays ONE
+// row for now (its dropdown items could become rows of their own later).
+const NAV_ICONS_KEY = 'saas-nav-icons';
+const NAV_ICON_ITEMS = [
+    { itemId: 'saas-nav-messages', labelKey: 'main.messages' },
+    { itemId: 'saas-nav-chatbot', labelKey: 'main.chatbot' },
+    { itemId: 'saas-nav-notifications', labelKey: 'main.notifications' },
+    { itemId: 'saas-nav-bookmarks', labelKey: 'main.bookmarks' },
+    { itemId: 'saas-nav-ui-scale', labelKey: 'main.uiScale' },
+    { itemId: 'saas-nav-settings', labelKey: 'main.settings' },
+    { itemId: 'saas-nav-user', labelKey: 'main.userInfo' },
+    { itemId: 'saas-nav-business', labelKey: 'main.businessProfile' },
+];
+
 // Clasificación + color + Cambios -- same system PermissionTree.js's
 // statusMode has for the client tree, duplicated here (not shared/
 // imported) on purpose: this file is deliberately its own standalone
@@ -562,6 +586,20 @@ async function saveSaasClassificationColor(classificationId, hex, kind = 'dot') 
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
+// "Restablecer" -- removes ONE stored color (fill or letter) of this id so it
+// goes back to "none chosen" (see clearColorRow in db.js), then repaints.
+async function resetSaasClassificationColor(classificationId, kind = 'dot') {
+    const isText = kind === 'text';
+    try {
+        const params = new URLSearchParams({ classificationId, kind: isText ? 'text' : 'dot' });
+        const res = await fetch(`/api/admin/saas-classification-colors?${params}`, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) throw new Error('reset failed');
+        (isText ? classificationTextColors : classificationColors).delete(classificationId);
+        renderList();
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
 // Closed by the next click anywhere else (capture-phase) or Escape -- same
 // dismiss convention as PermissionTree.js's own openColorPicker.
 let openColorPanelCleanup = null;
@@ -762,7 +800,24 @@ function appendColorPalette(panel, colorId, kind, onPick) {
         closeColorPanel();
         openColorDialog(colorId, kind);
     });
-    panel.appendChild(moreBtn);
+    // Footer: "Más colores..." on the left, "Restablecer" on the right --
+    // clears the ONE color this palette is editing (fill or letter of the
+    // selected target) back to "none chosen"; disabled when nothing is saved.
+    const footer = document.createElement('div');
+    footer.className = 'perm-tree-color-footer';
+    const resetBtn = document.createElement('button');
+    resetBtn.type = 'button';
+    resetBtn.className = 'perm-tree-color-reset-btn';
+    resetBtn.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
+    resetBtn.appendChild(document.createTextNode(Dashboard.t('admin.masterTreeColorReset')));
+    resetBtn.title = Dashboard.t('admin.masterTreeColorResetHint');
+    resetBtn.disabled = !currentHex;
+    resetBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        resetSaasClassificationColor(colorId, kind).then(() => onPick && onPick());
+    });
+    footer.append(moreBtn, resetBtn);
+    panel.appendChild(footer);
 }
 function anchorColorPanel(panel, anchorBtn) {
     // Portaled to <body> and placed with position:fixed instead of nested
@@ -2131,14 +2186,14 @@ function renderList() {
     // toggle's state (confirmed with the user after an earlier version of
     // this collapsed the whole tree away when General's toggle also gated
     // the 2 groups).
-    const allLeafKeys = [...GENERAL_ITEMS.map((i) => i.itemId), ...collectLeafKeysForScreens(CATALOG.flatMap((g) => g.screens))];
+    const allLeafKeys = [...GENERAL_ITEMS.map((i) => i.itemId), ...NAV_ICON_ITEMS.map((i) => i.itemId), ...collectLeafKeysForScreens(CATALOG.flatMap((g) => g.screens))];
     const generalRow = document.createElement('div');
     generalRow.className = 'perm-tree-row perm-tree-depth-0 saas-master-status-row-general';
     generalRow.appendChild(spacer());
     generalRow.appendChild(toggleBtn('gen:main', isExpanded('gen:main')));
     generalRow.appendChild(rollupEl(computeRollup(allLeafKeys, 'web'), computeRollup(allLeafKeys, 'app')));
     generalRow.appendChild(labelEl(Dashboard.t('admin.saasMasterTreeGeneral')));
-    generalRow.appendChild(countBadge(GENERAL_ITEMS.length + screensItemCount(CATALOG.flatMap((g) => g.screens))));
+    generalRow.appendChild(countBadge(GENERAL_ITEMS.length + NAV_ICON_ITEMS.length + screensItemCount(CATALOG.flatMap((g) => g.screens))));
     // Points at the very first screen overall -- General spans every
     // screen, so there's no single natural destination, but confirmed with
     // the user every row needs a real, clickable Navegar button, same as
@@ -2158,7 +2213,7 @@ function renderList() {
         // grouping the client tree already gives these same 3 items via
         // GENERAL_ITEM_IDS/sidebar.generalAccess (confirmed live,
         // 2026-09-17: "deben ser un anidado de accesos generales").
-        const gaLeafKeys = GENERAL_ITEMS.map((i) => i.itemId);
+        const gaLeafKeys = [...GENERAL_ITEMS.map((i) => i.itemId), ...NAV_ICON_ITEMS.map((i) => i.itemId)];
         const gaRow = document.createElement('div');
         gaRow.className = 'perm-tree-row perm-tree-depth-1';
         gaRow.appendChild(spacer());
@@ -2185,6 +2240,36 @@ function renderList() {
                 itemRow.appendChild(buildControls(item.itemId, [], item.href, buildLevelBadgeCtx('pantalla'), Dashboard.t(item.labelKey)));
                 listEl.appendChild(itemRow);
             });
+
+            // "Iconos de Navegación" -- one apartado row (own toggle, closed
+            // until opened like every other row) with the top bar's icons
+            // as leaves: each its own Estatus + Web/App, no Navegar (an icon
+            // has no page of its own to jump to), same "Ícono" level badge
+            // the per-screen "Iconos Personalización" uses.
+            const navKeys = NAV_ICON_ITEMS.map((i) => i.itemId);
+            const navCtx = buildLevelBadgeCtx('icono');
+            const navRow = document.createElement('div');
+            navRow.className = 'perm-tree-row perm-tree-depth-2';
+            navRow.appendChild(spacer());
+            navRow.appendChild(toggleBtn(`cls:${NAV_ICONS_KEY}`, isExpanded(`cls:${NAV_ICONS_KEY}`)));
+            navRow.appendChild(rollupEl(computeRollup(navKeys, 'web'), computeRollup(navKeys, 'app')));
+            navRow.appendChild(labelEl(Dashboard.t('menu.navIcons')));
+            navRow.appendChild(countBadge(navKeys.length));
+            navRow.appendChild(buildControls(NAV_ICONS_KEY, navKeys, null, navCtx, Dashboard.t('menu.navIcons')));
+            listEl.appendChild(navRow);
+            if (isExpanded(`cls:${NAV_ICONS_KEY}`)) {
+                NAV_ICON_ITEMS.forEach((icon) => {
+                    const navIconRow = document.createElement('div');
+                    navIconRow.className = 'perm-tree-row perm-tree-depth-3';
+                    navIconRow.appendChild(spacer());
+                    navIconRow.appendChild(spacer());
+                    navIconRow.appendChild(rollupEl(computeRollup([icon.itemId], 'web'), computeRollup([icon.itemId], 'app')));
+                    navIconRow.appendChild(labelEl(Dashboard.t(icon.labelKey)));
+                    navIconRow.appendChild(countBadge(1));
+                    navIconRow.appendChild(buildControls(icon.itemId, [], null, navCtx, Dashboard.t(icon.labelKey)));
+                    listEl.appendChild(navIconRow);
+                });
+            }
         }
     }
 

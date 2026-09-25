@@ -247,6 +247,7 @@ const {
     getClassificationColors,
     setClassificationColor,
     setClassificationTextColor,
+    clearClassificationColor,
     getEffectiveColumnClassifications,
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
@@ -259,6 +260,7 @@ const {
     getSaasClassificationColors,
     setSaasClassificationColor,
     setSaasClassificationTextColor,
+    clearSaasClassificationColor,
     getSaasMasterChangeLog,
     getSaasPersonalOrder,
     setSaasPersonalOrder,
@@ -2158,6 +2160,17 @@ app.put('/api/admin/master-permission-classification-colors', requireAuth, requi
     }
     res.json({ color: setClassificationColor(classificationId, color, changedByLabel(req)) });
 });
+// "Restablecer" -- clears ONE of a classification's (or a column's own
+// "col-own:"/"col-nested:") two colors back to "nothing chosen"; kind is
+// 'dot' (fill) or 'text'. Never an error when there was nothing saved:
+// `cleared` just says whether anything actually changed.
+app.delete('/api/admin/master-permission-classification-colors', requireAuth, requireAdmin, (req, res) => {
+    const classificationId = typeof req.query.classificationId === 'string' ? req.query.classificationId : '';
+    const kind = req.query.kind;
+    if (!classificationId) return res.status(400).json({ message: 'classificationId is required.' });
+    if (kind !== 'dot' && kind !== 'text') return res.status(400).json({ message: "kind must be 'dot' or 'text'." });
+    res.json({ cleared: clearClassificationColor(classificationId, kind, changedByLabel(req)) });
+});
 
 // Read-only, any logged-in user (not admin-only like the routes above) --
 // this is what lets a real data table's own column legend/band colors
@@ -2264,6 +2277,15 @@ app.put('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (req
         return res.status(400).json({ message: 'color must be a hex color like #7f77dd.' });
     }
     res.json({ color: setSaasClassificationColor(classificationId, color, changedByLabel(req)) });
+});
+// "Restablecer" -- same as master-permission-classification-colors' DELETE
+// above, against this screen's own table/log.
+app.delete('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (req, res) => {
+    const classificationId = typeof req.query.classificationId === 'string' ? req.query.classificationId : '';
+    const kind = req.query.kind;
+    if (!classificationId) return res.status(400).json({ message: 'classificationId is required.' });
+    if (kind !== 'dot' && kind !== 'text') return res.status(400).json({ message: "kind must be 'dot' or 'text'." });
+    res.json({ cleared: clearSaasClassificationColor(classificationId, kind, changedByLabel(req)) });
 });
 
 app.get('/api/admin/saas-master-change-log', requireAuth, requireAdmin, (req, res) => {
