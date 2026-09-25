@@ -188,11 +188,10 @@ const LEAF_ACTION_LEVELS = [
 // A leaf's own sub-levels stay collapsed until its OWN chevron opens --
 // same "one column at a time" convention colTreeKey/expandedItems already
 // enforces on the client tree (confirmed there: dumping every column's 4
-// levels open at once was confirmed unusable). Deliberately its own Set,
-// opposite polarity from `collapsed` above (opt-IN expand, not opt-out
-// collapse) and never persisted to localStorage, matching the client
-// tree's own expandedItems (column-level expand state resets on reload
-// there too).
+// levels open at once was confirmed unusable). Deliberately its own Set from
+// `expandedRows` below (that one tracks apartado/screen/group rows; this one
+// each column's own sub-levels), both opt-IN and never persisted to
+// localStorage, matching the client tree's own expandedItems.
 let expandedLeaves = new Set();
 
 function apartadoKey(screen, apartado) {
@@ -348,21 +347,17 @@ let draggedId = null;
 // permanent, non-collapsible summary card (see renderList), same
 // relationship it always had to the real rows in this screen's original
 // 3-row version, just now sitting above 2 groups instead of 3 screens.
-// Persisted to localStorage (this browser only, never sent to the server
-// -- it's not real data, just where you left the tree) -- confirmed live
-// that without this, collapsing everything and then reloading (e.g. right
-// after Guardar, to double check the save landed) silently threw all of
-// it back open, since this Set previously lived in memory only.
-const COLLAPSED_STORAGE_KEY = 'saasMasterTreeCollapsed';
-let collapsed;
-try {
-    collapsed = new Set(JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) || '[]'));
-} catch {
-    collapsed = new Set();
-}
-function persistCollapsed() {
-    try { localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsed])); } catch { /* private/blocked storage -- collapse state just won't survive a reload */ }
-}
+// Opt-IN: a row is collapsed until its key is in this Set (same polarity as
+// expandedLeaves above) and it is never persisted, so the tree ALWAYS opens
+// collapsed, exactly like the client tree does (confirmed live, 2026-09-24:
+// "que abra contraído"). It used to be opt-out and saved to localStorage so a
+// reload (e.g. right after Guardar) kept where you left the tree; that is gone
+// by request. It is still remembered within the session, so a re-render (a
+// save, a reorder, a color pick) never folds the rows you had open.
+let expandedRows = new Set();
+function isExpanded(key) { return expandedRows.has(key); }
+// The old persisted state would otherwise sit in localStorage forever.
+try { localStorage.removeItem('saasMasterTreeCollapsed'); } catch { /* storage blocked -- nothing to clean */ }
 
 function getState(key) {
     return statuses.find((s) => s.itemId === key) || { itemId: key, status: 'habilitado', webEnabled: true, appEnabled: false };
@@ -441,8 +436,7 @@ function toggleBtn(key, expanded) {
     btn.setAttribute('aria-expanded', String(expanded));
     btn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
     btn.addEventListener('click', () => {
-        if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
-        persistCollapsed();
+        if (expandedRows.has(key)) expandedRows.delete(key); else expandedRows.add(key);
         renderList();
     });
     return btn;
@@ -1827,7 +1821,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         const iconsRow = document.createElement('div');
         iconsRow.className = `perm-tree-row perm-tree-depth-${depth}`;
         iconsRow.appendChild(spacer());
-        iconsRow.appendChild(toggleBtn(`cls:${iconsKey}`, !collapsed.has(`cls:${iconsKey}`)));
+        iconsRow.appendChild(toggleBtn(`cls:${iconsKey}`, isExpanded(`cls:${iconsKey}`)));
         iconsRow.appendChild(rollupEl(computeRollup(iconLeafKeys, 'web'), computeRollup(iconLeafKeys, 'app')));
         const iconsLabelNode = labelEl(Dashboard.t('menu.iconsPersonalization'));
         iconsRow.appendChild(iconsLabelNode);
@@ -1838,7 +1832,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
             if (nestedTint.text) iconsLabelNode.style.color = nestedTint.text;
         }
         listEl.appendChild(iconsRow);
-        if (!collapsed.has(`cls:${iconsKey}`)) {
+        if (isExpanded(`cls:${iconsKey}`)) {
             ICON_PERSONALIZATION_ITEMS.forEach((icon) => {
                 const iconKey = `${aKey}::icon-${icon.id}`;
                 const iconRow = document.createElement('div');
@@ -1910,7 +1904,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
     } else {
         apRow.appendChild(spacer());
     }
-    apRow.appendChild(hasOwnBody ? toggleBtn(`a:${aKey}`, !collapsed.has(`a:${aKey}`)) : spacer());
+    apRow.appendChild(hasOwnBody ? toggleBtn(`a:${aKey}`, isExpanded(`a:${aKey}`)) : spacer());
     apRow.appendChild(rollupEl(computeRollup(apLeafKeys, 'web'), computeRollup(apLeafKeys, 'app')));
     const apLabelNode = labelEl(apartado.label);
     apRow.appendChild(apLabelNode);
@@ -1927,7 +1921,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         if (nestedTint.text) apLabelNode.style.color = nestedTint.text;
     }
     listEl.appendChild(apRow);
-    if (!hasOwnBody || collapsed.has(`a:${aKey}`)) return;
+    if (!hasOwnBody || !isExpanded(`a:${aKey}`)) return;
 
     // Control Interno -- a real classification group like any other
     // (toggle + color pickers), holding the 13 real system columns
@@ -1950,7 +1944,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         const ciRow = document.createElement('div');
         ciRow.className = `perm-tree-row perm-tree-depth-${depth + 1} perm-tree-row-classification`;
         ciRow.appendChild(spacer());
-        ciRow.appendChild(toggleBtn(`cls:${ciGroupKey}`, !collapsed.has(`cls:${ciGroupKey}`)));
+        ciRow.appendChild(toggleBtn(`cls:${ciGroupKey}`, isExpanded(`cls:${ciGroupKey}`)));
         ciRow.appendChild(rollupEl(computeRollup(ciLeafKeys, 'web'), computeRollup(ciLeafKeys, 'app')));
         const ciLabelNode = labelEl(Dashboard.t('menu.classControlInterno'));
         ciRow.appendChild(ciLabelNode);
@@ -1961,7 +1955,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
             if (nestedTint.text) ciLabelNode.style.color = nestedTint.text;
         }
         listEl.appendChild(ciRow);
-        if (!collapsed.has(`cls:${ciGroupKey}`)) {
+        if (isExpanded(`cls:${ciGroupKey}`)) {
             fixedCiLeaves.forEach((leaf) => {
                 renderLeafWithLevels(screen, apartado, leaf, depth + 2, aKey, null, ciCtx, leaf.label, nestedByColumn.get(leaf.label), nestedTint);
             });
@@ -1991,7 +1985,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         const clsRow = document.createElement('div');
         clsRow.className = `perm-tree-row perm-tree-depth-${depth + 1} perm-tree-row-classification`;
         clsRow.appendChild(spacer());
-        clsRow.appendChild(toggleBtn(`cls:${groupKey}`, !collapsed.has(`cls:${groupKey}`)));
+        clsRow.appendChild(toggleBtn(`cls:${groupKey}`, isExpanded(`cls:${groupKey}`)));
         clsRow.appendChild(rollupEl(computeRollup(groupLeafKeys2, 'web'), computeRollup(groupLeafKeys2, 'app')));
         const clsLabelNode = labelEl(Dashboard.t(groupLabelKey));
         clsRow.appendChild(clsLabelNode);
@@ -2002,7 +1996,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
             if (nestedTint.text) clsLabelNode.style.color = nestedTint.text;
         }
         listEl.appendChild(clsRow);
-        if (collapsed.has(`cls:${groupKey}`)) return;
+        if (!isExpanded(`cls:${groupKey}`)) return;
 
         clsGroup.leaves.forEach((leaf) => {
             const key = leafKey(screen, apartado, leaf);
@@ -2091,7 +2085,7 @@ function renderList() {
     const generalRow = document.createElement('div');
     generalRow.className = 'perm-tree-row perm-tree-depth-0 saas-master-status-row-general';
     generalRow.appendChild(spacer());
-    generalRow.appendChild(toggleBtn('gen:main', !collapsed.has('gen:main')));
+    generalRow.appendChild(toggleBtn('gen:main', isExpanded('gen:main')));
     generalRow.appendChild(rollupEl(computeRollup(allLeafKeys, 'web'), computeRollup(allLeafKeys, 'app')));
     generalRow.appendChild(labelEl(Dashboard.t('admin.saasMasterTreeGeneral')));
     generalRow.appendChild(countBadge(GENERAL_ITEMS.length + screensItemCount(CATALOG.flatMap((g) => g.screens))));
@@ -2107,7 +2101,7 @@ function renderList() {
     generalRow.appendChild(buildControls('__general__', allLeafKeys, CATALOG[0].screens[0].href, { readOnlyLabel: Dashboard.t('admin.masterTreeGeneralClassification'), readOnlyColor: SAAS_LEVEL_BADGES.apartado.color }, Dashboard.t('admin.saasMasterTreeGeneral')));
     listEl.appendChild(generalRow);
 
-    if (!collapsed.has('gen:main')) {
+    if (isExpanded('gen:main')) {
         // "Accesos Generales" -- its own separate group nested under
         // General (not General itself, which stays the whole-tree kill
         // switch), holding just Inicio/Panel/Tablero, mirroring the exact
@@ -2118,14 +2112,14 @@ function renderList() {
         const gaRow = document.createElement('div');
         gaRow.className = 'perm-tree-row perm-tree-depth-1';
         gaRow.appendChild(spacer());
-        gaRow.appendChild(toggleBtn('ga:main', !collapsed.has('ga:main')));
+        gaRow.appendChild(toggleBtn('ga:main', isExpanded('ga:main')));
         gaRow.appendChild(rollupEl(computeRollup(gaLeafKeys, 'web'), computeRollup(gaLeafKeys, 'app')));
         gaRow.appendChild(labelEl(Dashboard.t('sidebar.generalAccess')));
         gaRow.appendChild(countBadge(gaLeafKeys.length));
         gaRow.appendChild(buildControls('ga:main', gaLeafKeys, GENERAL_ITEMS.find((i) => i.href)?.href || null, buildLevelBadgeCtx('apartado'), Dashboard.t('sidebar.generalAccess')));
         listEl.appendChild(gaRow);
 
-        if (!collapsed.has('ga:main')) {
+        if (isExpanded('ga:main')) {
             GENERAL_ITEMS.forEach((item) => {
                 const itemRow = document.createElement('div');
                 itemRow.className = 'perm-tree-row perm-tree-depth-2';
@@ -2153,7 +2147,7 @@ function renderList() {
             onReorder: (fromId, toId) => { order.groups = reorderList(order.groups, fromId, toId); },
         });
         groupRow.appendChild(dragHandle());
-        groupRow.appendChild(toggleBtn(`g:${group.groupId}`, !collapsed.has(`g:${group.groupId}`)));
+        groupRow.appendChild(toggleBtn(`g:${group.groupId}`, isExpanded(`g:${group.groupId}`)));
         groupRow.appendChild(rollupEl(computeRollup(groupLeafKeys, 'web'), computeRollup(groupLeafKeys, 'app')));
         groupRow.appendChild(labelEl(Dashboard.t(group.labelKey)));
         groupRow.appendChild(countBadge(screensItemCount(group.screens)));
@@ -2164,7 +2158,7 @@ function renderList() {
         // first-screen fallback General uses just above.
         groupRow.appendChild(buildControls(group.groupId, groupLeafKeys, group.screens[0].href, buildLevelBadgeCtx('apartado'), Dashboard.t(group.labelKey)));
         listEl.appendChild(groupRow);
-        if (collapsed.has(`g:${group.groupId}`)) return;
+        if (!isExpanded(`g:${group.groupId}`)) return;
 
         orderedScreens(group).forEach((screen) => {
             const screenLeafKeys = collectLeafKeysForScreens([screen]);
@@ -2175,13 +2169,13 @@ function renderList() {
                 onReorder: (fromId, toId) => { order.screensByGroup[group.groupId] = reorderList(order.screensByGroup[group.groupId] || group.screens.map((s) => s.itemId), fromId, toId); },
             });
             screenRow.appendChild(dragHandle());
-            screenRow.appendChild(toggleBtn(`s:${screen.itemId}`, !collapsed.has(`s:${screen.itemId}`)));
+            screenRow.appendChild(toggleBtn(`s:${screen.itemId}`, isExpanded(`s:${screen.itemId}`)));
             screenRow.appendChild(rollupEl(computeRollup(screenLeafKeys, 'web'), computeRollup(screenLeafKeys, 'app')));
             screenRow.appendChild(labelEl(Dashboard.t(screen.labelKey)));
             screenRow.appendChild(countBadge(screensItemCount([screen])));
             screenRow.appendChild(buildControls(screen.itemId, screenLeafKeys, screen.href, buildLevelBadgeCtx('pantalla'), Dashboard.t(screen.labelKey)));
             listEl.appendChild(screenRow);
-            if (collapsed.has(`s:${screen.itemId}`)) return;
+            if (!isExpanded(`s:${screen.itemId}`)) return;
 
             const screenApartados = orderedApartados(screen);
 
@@ -2213,13 +2207,13 @@ function renderList() {
                 const botonesRow = document.createElement('div');
                 botonesRow.className = 'perm-tree-row perm-tree-depth-2 perm-tree-row-classification';
                 botonesRow.appendChild(spacer());
-                botonesRow.appendChild(toggleBtn(`cls:${botonesKey}`, !collapsed.has(`cls:${botonesKey}`)));
+                botonesRow.appendChild(toggleBtn(`cls:${botonesKey}`, isExpanded(`cls:${botonesKey}`)));
                 botonesRow.appendChild(rollupEl(computeRollup(actionLeafKeys, 'web'), computeRollup(actionLeafKeys, 'app')));
                 botonesRow.appendChild(labelEl(Dashboard.t('menu.classBotones')));
                 botonesRow.appendChild(countBadge(actionLeafKeys.length));
                 botonesRow.appendChild(buildControls(botonesKey, actionLeafKeys, screen.href, botonesCtx, Dashboard.t('menu.classBotones')));
                 listEl.appendChild(botonesRow);
-                if (!collapsed.has(`cls:${botonesKey}`)) {
+                if (isExpanded(`cls:${botonesKey}`)) {
                     screenActionEntries.forEach(({ apartado, leaf }) => {
                         renderLeafWithLevels(screen, apartado, leaf, 3, apartadoKey(screen, apartado), null, botonesCtx, leaf.label);
                     });
