@@ -1303,6 +1303,32 @@ body.dark-mode .perm-dot-bad{ background-color: #e0a3a3; }
     font-size: 0.68rem;
     color: var(--color-text-secondary);
 }
+/* Only reached today by "Configuración" nested under the client tree's own
+   "Iconos de Navegación" (see NAV_ICON_ITEM_IDS/depthOffset in
+   PermissionTree.js) -- Negocio Inteligente's own Control Interno columns
+   land here, one level deeper than the ordinary depth-7 leaf-level row
+   above. Same 1.5rem-per-level formula as every rule above. */
+.perm-tree-depth-8{
+    padding-left: 12rem;
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+}
+.perm-tree-depth-9{
+    padding-left: 13.5rem;
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+}
+/* Inicio/Panel/Tablero and "Iconos de Navegación" (PermissionTree.js) share
+   depth-2 with a real Apartado header, but they're Pantallas/a plain
+   container, not Apartados -- depth-2's own uppercase treatment (just
+   below) never applied to them correctly (confirmed live, 2026-09-27:
+   "porque aparecen en mayúscula inicio, panel y tablero?"). Placed after
+   .perm-tree-depth-2 so it wins on source order; both are single-class
+   selectors of the same specificity. */
+.perm-tree-row-plain-case{
+    text-transform: none;
+    letter-spacing: normal;
+}
 body.dark-mode .perm-tree-depth-1{
     color: #B9D2F2;
 }

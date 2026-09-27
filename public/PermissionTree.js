@@ -141,6 +141,20 @@
     // navigation rather than a Giro/Plan-facing "Área", so never
     // draggable/reorderable (see isRealArea in renderStatusTree).
     const GENERAL_ITEM_IDS = ['home', 'panel', 'dashboard'];
+    // Top-bar buttons (Mensajes/Chatbot/Notificaciones/Marcadores/
+    // Configuración/Datos de Usuario/Datos de Usuario del Negocio) -- 'main'
+    // section items that used to render as flat top-level "Área" rows
+    // alongside Accesos Generales. Nested one level deeper now, under their
+    // own "Iconos de Navegación" container inside Accesos Generales, next to
+    // Inicio/Panel/Tablero -- same real position Admin-ArbolMaestroSaaS.js's
+    // own "Iconos de Navegación" apartado already has (confirmed live,
+    // 2026-09-27: "Sí, agrúpalo así"). Only 'btn-configuracion' has a real
+    // submenu of its own (Idioma/Estilo/.../Negocio Inteligente, down to
+    // Control Interno's own columns) -- see depthOffset in renderStatusTree
+    // for how that nested content shifts down with it. Same itemId/leaf keys
+    // as before, only where they render moves, so no already-saved grant/
+    // status is lost.
+    const NAV_ICON_ITEM_IDS = ['btn-mensajes', 'btn-chatbot', 'btn-notificaciones', 'btn-marcadores', 'btn-configuracion', 'btn-datos-usuario', 'btn-datos-usuario-negocio'];
 
     // Reorders `list` (in place) to match `orderIds` as closely as
     // possible: anything named in orderIds comes first, in that order;
@@ -4135,7 +4149,7 @@
             });
         }
 
-        function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked, effectiveColumns, isVirtual) {
+        function renderStatusClassification(container, section, item, sm, subSm, cls, ancestorLocked, effectiveColumns, isVirtual, depthOffset = 0) {
             const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
@@ -4153,7 +4167,7 @@
             // stay fully reassignable (see renderStatusColumn) -- only the
             // group heading itself is fixed.
             const classificationCtx = buildFixedClassificationCtx(cls.id, cls.labelKey, cls.labelParams);
-            container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5, classKey, {
+            container.appendChild(statusRow(t(cls.labelKey, cls.labelParams), 5 + depthOffset, classKey, {
                 expanded: classExpanded,
                 onToggle: () => {
                     if (classExpanded) expandedItems.delete(classTreeKey);
@@ -4164,7 +4178,7 @@
             columns.forEach(({ col, base, structuralClsId }) => {
                 const colKey = keyOf(section.id, item.id, base);
                 if (grantOrderMode && !subtreeHasGrant(colKey)) return;
-                renderStatusColumn(container, section, item, base, col, 6, ancestorLocked, sm, subSm, cls, structuralClsId);
+                renderStatusColumn(container, section, item, base, col, 6 + depthOffset, ancestorLocked, sm, subSm, cls, structuralClsId);
             });
         }
 
@@ -4179,13 +4193,13 @@
         // renderStatusColumn's own FIXED_CLASSIFICATION_IDS check treat
         // each button as fixed/2-level automatically, no separate render
         // path needed.
-        function renderStatusButtons(container, section, item, sm, subSm, ancestorLocked) {
+        function renderStatusButtons(container, section, item, sm, subSm, ancestorLocked, depthOffset = 0) {
             const botonesNode = (subSm.submenu || []).find((e) => e.isClassification && e.id === 'class-botones');
             if (!botonesNode || !botonesNode.submenu || !botonesNode.submenu.length) return;
             const buttonsTreeKey = `buttons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const buttonsExpanded = expandedItems.has(buttonsTreeKey);
             const buttonsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${botonesNode.id}`);
-            container.appendChild(statusRow(t(botonesNode.labelKey, botonesNode.labelParams), 4, buttonsKey, {
+            container.appendChild(statusRow(t(botonesNode.labelKey, botonesNode.labelParams), 4 + depthOffset, buttonsKey, {
                 expanded: buttonsExpanded,
                 onToggle: () => {
                     if (buttonsExpanded) expandedItems.delete(buttonsTreeKey);
@@ -4197,11 +4211,11 @@
                 const base = `${sm.id}/${subSm.id}/${botonesNode.id}/${btn.id}`;
                 const btnKey = keyOf(section.id, item.id, base);
                 if (grantOrderMode && !subtreeHasGrant(btnKey)) return;
-                renderStatusColumn(container, section, item, base, btn, 5, ancestorLocked, sm, subSm, botonesNode, botonesNode.id);
+                renderStatusColumn(container, section, item, base, btn, 5 + depthOffset, ancestorLocked, sm, subSm, botonesNode, botonesNode.id);
             });
         }
 
-        function renderStatusTableColumns(container, section, item, sm, subSm, ancestorLocked) {
+        function renderStatusTableColumns(container, section, item, sm, subSm, ancestorLocked, depthOffset = 0) {
             const tableTreeKey = `table::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const tableExpanded = expandedItems.has(tableTreeKey);
             // Own independent Estatus, separate from its own Pantalla's
@@ -4212,7 +4226,7 @@
             // exactly this row (see resolveNodeLabel/buildStatusChildrenMap,
             // which both special-case it back to this same subSm).
             const tableKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`);
-            container.appendChild(statusRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4, tableKey, {
+            container.appendChild(statusRow(`${t('main.tablePrefix')} ${t(subSm.labelKey, subSm.labelParams)}`, 4 + depthOffset, tableKey, {
                 expanded: tableExpanded,
                 onToggle: () => {
                     if (tableExpanded) expandedItems.delete(tableTreeKey);
@@ -4222,18 +4236,18 @@
             if (!tableExpanded) return;
             getEffectiveTableGroups(section, item, sm, subSm).forEach((group) => {
                 if (group.cls) {
-                    renderStatusClassification(container, section, item, sm, subSm, group.cls, ancestorLocked, group.columns, group.isVirtual);
+                    renderStatusClassification(container, section, item, sm, subSm, group.cls, ancestorLocked, group.columns, group.isVirtual, depthOffset);
                     return;
                 }
                 group.columns.forEach(({ col: entry, base, structuralClsId }) => {
                     const entryKey = keyOf(section.id, item.id, base);
                     if (grantOrderMode && !subtreeHasGrant(entryKey)) return;
-                    renderStatusColumn(container, section, item, base, entry, 5, ancestorLocked, sm, subSm, null, structuralClsId);
+                    renderStatusColumn(container, section, item, base, entry, 5 + depthOffset, ancestorLocked, sm, subSm, null, structuralClsId);
                 });
             });
         }
 
-        function renderStatusIcons(container, section, item, sm, subSm, ancestorLocked) {
+        function renderStatusIcons(container, section, item, sm, subSm, ancestorLocked, depthOffset = 0) {
             const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
             const iconsExpanded = expandedItems.has(iconsTreeKey);
             // Own independent Estatus AND its own real $ Web/$ App, same as
@@ -4242,7 +4256,7 @@
             // reserved segment, never a real icon id, same idea as "Tabla
             // X"'s own __table__.
             const iconsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`);
-            container.appendChild(statusRow(t('menu.iconsPersonalization'), 4, iconsKey, {
+            container.appendChild(statusRow(t('menu.iconsPersonalization'), 4 + depthOffset, iconsKey, {
                 expanded: iconsExpanded,
                 onToggle: () => {
                     if (iconsExpanded) expandedItems.delete(iconsTreeKey);
@@ -4265,7 +4279,7 @@
                     node: subSm,
                     iconId: icon.id,
                 } : null;
-                container.appendChild(statusRow(t(icon.labelKey), 5, iconKey, null, selfStateRollup(iconKey), null, ancestorLocked, null, previewInfo, buildLevelBadgeCtx('icono')));
+                container.appendChild(statusRow(t(icon.labelKey), 5 + depthOffset, iconKey, null, selfStateRollup(iconKey), null, ancestorLocked, null, previewInfo, buildLevelBadgeCtx('icono')));
             });
         }
 
@@ -4406,9 +4420,16 @@
                 const hasGeneralItems = (section.items || []).some((i) => GENERAL_ITEM_IDS.includes(i.id));
                 const generalKey = hasGeneralItems ? keyOf(section.id, '__general__', null) : null;
                 if (generalKey) addChild(sectionKey, generalKey);
+                // "Iconos de Navegación" -- same synthetic-container idea as
+                // Accesos Generales itself, one level under it (see
+                // NAV_ICON_ITEM_IDS above).
+                const hasNavIconItems = generalKey && (section.items || []).some((i) => NAV_ICON_ITEM_IDS.includes(i.id));
+                const navIconsKey = hasNavIconItems ? keyOf(section.id, '__nav_icons__', null) : null;
+                if (navIconsKey) addChild(generalKey, navIconsKey);
                 (section.items || []).forEach((item) => {
                     const itemKey = keyOf(section.id, item.id, null);
                     if (generalKey && GENERAL_ITEM_IDS.includes(item.id)) addChild(generalKey, itemKey);
+                    else if (navIconsKey && NAV_ICON_ITEM_IDS.includes(item.id)) addChild(navIconsKey, itemKey);
                     else addChild(sectionKey, itemKey);
                     (item.submenu || []).forEach((sm) => {
                         const smKey = keyOf(section.id, item.id, sm.id);
@@ -4894,9 +4915,42 @@
                 }
                 const generalAncestorLocked = generalKey ? (itemAncestorLocked || nodeWebOff(generalKey)) : itemAncestorLocked;
 
+                // "Iconos de Navegación" -- the shell's own top-bar buttons
+                // (NAV_ICON_ITEM_IDS), grouped one level deeper inside
+                // Accesos Generales instead of as their own flat "Área" rows
+                // (confirmed live, 2026-09-27: "Sí, agrúpalo así"). Same
+                // rollup-only container shape as generalKey right above --
+                // its own key never carries a status of its own, only the
+                // combined rollup of whichever of these buttons this
+                // section actually has.
+                const hasNavIconItems = !!generalKey && section.items.some((i) => NAV_ICON_ITEM_IDS.includes(i.id));
+                const navIconsKey = hasNavIconItems ? keyOf(section.id, '__nav_icons__', null) : null;
+                const navIconsTreeKey = `nav-icons::${section.id}`;
+                let navIconsChildrenVisible = false;
+                if (navIconsKey && generalChildrenVisible && !(grantOrderMode && !subtreeHasGrant(navIconsKey))) {
+                    const navIconsExpanded = expandedItems.has(navIconsTreeKey);
+                    const navIconsRow = statusRow(t('menu.navIcons'), 2, navIconsKey, {
+                        expanded: navIconsExpanded,
+                        onToggle: () => {
+                            if (navIconsExpanded) expandedItems.delete(navIconsTreeKey);
+                            else expandedItems.add(navIconsTreeKey);
+                        },
+                    }, computeNodeRollup(navIconsKey), collectLeafStatusKeys(navIconsKey), generalAncestorLocked, null, null, buildLevelBadgeCtx('icono'));
+                    // A plain container (like Accesos Generales itself), not
+                    // a real Apartado -- exempt from depth-2's own uppercase
+                    // treatment (see the same exemption on Inicio/Panel/
+                    // Tablero below).
+                    navIconsRow.classList.add('perm-tree-row-plain-case');
+                    treeRoot.appendChild(navIconsRow);
+                    navIconsChildrenVisible = navIconsExpanded;
+                }
+                const navIconsAncestorLocked = navIconsKey ? (generalAncestorLocked || nodeWebOff(navIconsKey)) : generalAncestorLocked;
+
                 section.items.forEach((item) => {
                     const isGeneralItem = !!generalKey && GENERAL_ITEM_IDS.includes(item.id);
+                    const isNavIconItem = !!navIconsKey && NAV_ICON_ITEM_IDS.includes(item.id);
                     if (isGeneralItem && !generalChildrenVisible) return;
+                    if (isNavIconItem && !navIconsChildrenVisible) return;
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
                     const itemKey = `${section.id}::${item.id}`;
                     const itemExpanded = expandedItems.has(itemKey);
@@ -4920,14 +4974,33 @@
                         icon: item.icon,
                         children: hasSubmenu ? item.submenu.map((sm) => ({ id: sm.id, label: t(sm.labelKey, sm.labelParams), icon: sm.icon })) : [],
                     };
-                    const itemOwnAncestorLocked = isGeneralItem ? generalAncestorLocked : itemAncestorLocked;
-                    treeRoot.appendChild(statusRow(t(item.labelKey, item.labelParams), isGeneralItem ? 2 : 1, itemStateKey, hasSubmenu ? {
+                    const itemOwnAncestorLocked = isGeneralItem ? generalAncestorLocked : (isNavIconItem ? navIconsAncestorLocked : itemAncestorLocked);
+                    // Nav-icon items sit one level deeper than an ordinary
+                    // main-section button (inside Iconos de Navegación,
+                    // itself inside Accesos Generales) -- depthOffset is how
+                    // much every one of ITS OWN descendants (only
+                    // 'btn-configuracion' actually has any) must shift down
+                    // by too, so a deeply nested row (e.g. Negocio
+                    // Inteligente's own Control Interno columns) never ends
+                    // up drawn shallower than its own parent.
+                    const itemDepth = isNavIconItem ? 3 : (isGeneralItem ? 2 : 1);
+                    const depthOffset = itemDepth - 1;
+                    const itemRow = statusRow(t(item.labelKey, item.labelParams), itemDepth, itemStateKey, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => {
                             if (itemExpanded) expandedItems.delete(itemKey);
                             else expandedItems.add(itemKey);
                         },
-                    } : null, hasSubmenu ? { web: rollupPlatformState(itemLeafKeys, 'web'), app: rollupPlatformState(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemOwnAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo, buildLevelBadgeCtx(isGeneralItem ? 'pantalla' : 'area')));
+                    } : null, hasSubmenu ? { web: rollupPlatformState(itemLeafKeys, 'web'), app: rollupPlatformState(itemLeafKeys, 'app') } : selfStateRollup(itemStateKey), itemLeafKeys, itemOwnAncestorLocked, isRealArea ? { kind: 'area', id: item.id, scope: section.id, onDrop: (draggedId, targetId) => reorderAreas(section.id, draggedId, targetId) } : null, areaPreviewInfo, buildLevelBadgeCtx(isNavIconItem ? 'icono' : (isGeneralItem ? 'pantalla' : 'area')));
+                    // Inicio/Panel/Tablero land on depth-2, the same slot a
+                    // real Apartado uses -- they're Pantallas, not Apartados,
+                    // so depth-2's own uppercase treatment shouldn't apply to
+                    // them (confirmed live, 2026-09-27: "porque aparecen en
+                    // mayúscula inicio, panel y tablero?"). Nav-icon items
+                    // sit at depth-3, which was never uppercased to begin
+                    // with, so they need no exemption of their own.
+                    if (isGeneralItem) itemRow.classList.add('perm-tree-row-plain-case');
+                    treeRoot.appendChild(itemRow);
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemOwnAncestorLocked || nodeWebOff(itemStateKey);
                     // Apartado (Catálogos/Operaciones/...) only reorders
@@ -4935,6 +5008,8 @@
                     // guard as Área itself, since a non-área item (Inicio/
                     // Panel/Tablero) never has real apartado children here.
                     const apartadoScope = `${section.id}::${item.id}`;
+                    const smDepth = itemDepth + 1;
+                    const subSmDepth = itemDepth + 2;
 
                     item.submenu.forEach((sm) => {
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
@@ -4954,14 +5029,14 @@
                             children: hasSubSubmenu ? sm.submenu.filter((s) => !s.standalone).map((subSm) => ({ id: subSm.id, label: t(subSm.labelKey, subSm.labelParams), icon: subSm.icon })) : [],
                         };
                         if (!hasSubSubmenu) {
-                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, null, selfStateRollup(smStateKey), null, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo, buildLevelBadgeCtx('apartado')));
+                            treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), smDepth, smStateKey, null, selfStateRollup(smStateKey), null, smAncestorLocked, apartadoDragCtx, apartadoPreviewInfo, buildLevelBadgeCtx('apartado')));
                             return;
                         }
 
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
                         const smExpandedNow = expandedItems.has(smKey);
                         const smLeafKeys = leafKeysUnderSm(section, item, sm);
-                        treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), 2, smStateKey, {
+                        treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), smDepth, smStateKey, {
                             expanded: smExpandedNow,
                             onToggle: () => {
                                 if (smExpandedNow) expandedItems.delete(smKey);
@@ -4998,7 +5073,7 @@
                                 icon: subSm.icon,
                                 node: subSm,
                             };
-                            treeRoot.appendChild(statusRow(t(subSm.labelKey, subSm.labelParams), 3, key, subHasDetail ? {
+                            treeRoot.appendChild(statusRow(t(subSm.labelKey, subSm.labelParams), subSmDepth, key, subHasDetail ? {
                                 expanded: subDetailExpanded,
                                 onToggle: () => {
                                     if (subDetailExpanded) expandedItems.delete(subDetailKey);
@@ -5015,15 +5090,15 @@
                                 const botonesNode = (subSm.submenu || []).find((e) => e.isClassification && e.id === 'class-botones');
                                 if (botonesNode && botonesNode.submenu && botonesNode.submenu.length
                                     && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${botonesNode.id}`)))) {
-                                    renderStatusButtons(treeRoot, section, item, sm, subSm, detailAncestorLocked);
+                                    renderStatusButtons(treeRoot, section, item, sm, subSm, detailAncestorLocked, depthOffset);
                                 }
                                 if (subSm.iconsSubmenu && subSm.iconsSubmenu.length
                                     && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`)))) {
-                                    renderStatusIcons(treeRoot, section, item, sm, subSm, detailAncestorLocked);
+                                    renderStatusIcons(treeRoot, section, item, sm, subSm, detailAncestorLocked, depthOffset);
                                 }
                                 if (subSm.submenu && subSm.submenu.length
                                     && (!grantOrderMode || subtreeHasGrant(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__table__`)))) {
-                                    renderStatusTableColumns(treeRoot, section, item, sm, subSm, detailAncestorLocked);
+                                    renderStatusTableColumns(treeRoot, section, item, sm, subSm, detailAncestorLocked, depthOffset);
                                 }
                             }
                         });
