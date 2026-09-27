@@ -87,6 +87,71 @@ const NAV_ICON_ITEMS = [
     { itemId: 'saas-nav-user', labelKey: 'main.userInfo' },
     { itemId: 'saas-nav-business', labelKey: 'main.businessProfile' },
 ];
+// "Configuración" (saas-nav-settings) is the one nav icon with real content
+// behind it -- confirmed live, 2026-09-27: "todo el detalle, igual que el
+// cliente" -- matching the client tree's own real menu.json structure (see
+// PermissionTree.js's own btn-configuracion submenu) exactly, down to
+// Negocio Inteligente's real Control Interno columns. Modeled as its own
+// tiny synthetic "screen" (NAV_ICONS_SCREEN) purely so the EXISTING nestUnder/
+// buildNestedByColumn/renderApartadoNode machinery every real "Modal: ..."
+// apartado already uses can be reused unchanged for this one leaf's own
+// subtree -- collectLeafKeysForApartado/renderApartadoNode only ever need
+// `screen.itemId` (for stable storage keys) and `screen.apartados` (for
+// nestUnder.host lookups), so a fake screen with no real href/CATALOG entry
+// works identically to a real one. Never added to CATALOG -- it must never
+// show up as its own row anywhere else (sidebar, Servicio a
+// Cliente/Configuración SaaS groups).
+const NAV_ICONS_SCREEN_ID = 'saas-nav-icons';
+const NAV_CONFIG_APARTADOS = [
+    { id: 'modal-config', label: 'Modal: Opciones de Configuración', columnas: [
+        'Idioma', 'Estilo', 'Tamaño del sistema', 'Administración del Negocio',
+        'Configuración de Botones', 'Base de Datos', 'Negocio Inteligente',
+        'Reglas de Orden de Llenado', 'Vista de pantallas', 'Otros',
+    ] },
+    { id: 'modal-idioma', label: 'Modal: Idioma', columnas: ['Inglés', 'Español'], nestUnder: { host: 'modal-config', column: 'Idioma' } },
+    { id: 'modal-estilo', label: 'Modal: Estilo', columnas: ['Claro', 'Oscuro', 'Institucional', 'Futurista'], nestUnder: { host: 'modal-config', column: 'Estilo' } },
+    { id: 'modal-admin-negocio', label: 'Modal: Administración del Negocio', columnas: [
+        'Servicio Contratado', 'Expansiones', 'Configuración del Negocio', 'Datos del Cliente',
+        'Roles', 'Usuarios', 'Próximas Actualizaciones', 'Sesiones de Capacitación',
+    ], nestUnder: { host: 'modal-config', column: 'Administración del Negocio' } },
+    { id: 'modal-servicio-contratado', label: 'Modal: Servicio Contratado', columnas: ['Nuestros Centros de Costo', 'Mi Acceso Contratado'], nestUnder: { host: 'modal-admin-negocio', column: 'Servicio Contratado' } },
+    { id: 'modal-centros-costo', label: 'Modal: Nuestros Centros de Costo', columnas: ['Código', 'Nombre', 'Responsable', 'Descripción'], nestUnder: { host: 'modal-servicio-contratado', column: 'Nuestros Centros de Costo' } },
+    { id: 'modal-roles', label: 'Modal: Roles', columnas: ['Nombre del puesto', 'Abreviación del puesto', 'Estatus del puesto'], nestUnder: { host: 'modal-admin-negocio', column: 'Roles' } },
+    { id: 'modal-config-botones', label: 'Modal: Configuración de Botones', columnas: ['Botón Salir', 'Departamento', 'Área', 'Centros de Costo'], nestUnder: { host: 'modal-config', column: 'Configuración de Botones' } },
+    { id: 'modal-base-datos', label: 'Modal: Base de Datos', columnas: [
+        'Base de datos de la empresa', 'Nuestros Respaldos', 'Base de Datos de Nuestros Cambios', 'Base de Datos de Solicitudes',
+    ], nestUnder: { host: 'modal-config', column: 'Base de Datos' } },
+    { id: 'modal-bd-respaldos', label: 'Modal: Nuestros Respaldos', columnas: ['Acceso a Respaldos'], nestUnder: { host: 'modal-base-datos', column: 'Nuestros Respaldos' } },
+    { id: 'modal-bd-cambios', label: 'Modal: Base de Datos de Nuestros Cambios', columnas: ['Acceso a Cambios'], nestUnder: { host: 'modal-base-datos', column: 'Base de Datos de Nuestros Cambios' } },
+    { id: 'modal-bd-solicitudes', label: 'Modal: Base de Datos de Solicitudes', columnas: ['Acceso a Solicitudes'], nestUnder: { host: 'modal-base-datos', column: 'Base de Datos de Solicitudes' } },
+    { id: 'modal-negocio-inteligente', label: 'Modal: Negocio Inteligente', columnas: ['Transacciones de Negocio Inteligente', 'Reportes Programados'], nestUnder: { host: 'modal-config', column: 'Negocio Inteligente' } },
+    // These 3 are REAL embedded tables (real Control Interno + extra
+    // columns in menu.json), not modals -- controlInterno:true gives them
+    // the same 13 fixed columns + "Iconos Personalización" every real
+    // Tabla in this catalog already gets. "Tabla " prefix (same
+    // main.tablePrefix wording the client tree's own renderStatusTableColumns
+    // uses for the identical situation), not "Modal:" -- otherwise the
+    // nested row reads with the EXACT same label as the column that hosts
+    // it (confirmed live, 2026-09-27: two consecutive "Transacciones de
+    // Negocio Inteligente" rows read as a mistake, not real content).
+    {
+        id: 'modal-ni-transacciones', label: 'Tabla Transacciones de Negocio Inteligente', columnas: ['Autorización de Reportes'],
+        controlInterno: true, nestUnder: { host: 'modal-negocio-inteligente', column: 'Transacciones de Negocio Inteligente' },
+    },
+    {
+        id: 'modal-ni-reportes-programados', label: 'Tabla Reportes Programados', columnas: [
+            'Nombre del reporte', 'Creado por', 'Autorizado por', 'Fecha de creación',
+            'Fecha de término', 'Método de entrega', 'Destinatarios',
+        ],
+        controlInterno: true, nestUnder: { host: 'modal-negocio-inteligente', column: 'Reportes Programados' },
+    },
+    {
+        id: 'modal-reglas-orden', label: 'Tabla Reglas de Orden de Llenado', columnas: ['Autorización de reglas de campo'],
+        controlInterno: true, nestUnder: { host: 'modal-config', column: 'Reglas de Orden de Llenado' },
+    },
+];
+const NAV_ICONS_SCREEN = { itemId: NAV_ICONS_SCREEN_ID, href: null, apartados: NAV_CONFIG_APARTADOS };
+const MODAL_CONFIG_APARTADO = NAV_CONFIG_APARTADOS[0];
 
 // Clasificación + color + Cambios -- same system PermissionTree.js's
 // statusMode has for the client tree, duplicated here (not shared/
@@ -2186,14 +2251,16 @@ function renderList() {
     // toggle's state (confirmed with the user after an earlier version of
     // this collapsed the whole tree away when General's toggle also gated
     // the 2 groups).
-    const allLeafKeys = [...GENERAL_ITEMS.map((i) => i.itemId), ...NAV_ICON_ITEMS.map((i) => i.itemId), ...collectLeafKeysForScreens(CATALOG.flatMap((g) => g.screens))];
+    const navConfigLeafKeys = collectLeafKeysForApartado(NAV_ICONS_SCREEN, MODAL_CONFIG_APARTADO);
+    const navConfigItemCount = apartadoItemCount(NAV_ICONS_SCREEN, MODAL_CONFIG_APARTADO);
+    const allLeafKeys = [...GENERAL_ITEMS.map((i) => i.itemId), ...NAV_ICON_ITEMS.map((i) => i.itemId), ...navConfigLeafKeys, ...collectLeafKeysForScreens(CATALOG.flatMap((g) => g.screens))];
     const generalRow = document.createElement('div');
     generalRow.className = 'perm-tree-row perm-tree-depth-0 saas-master-status-row-general';
     generalRow.appendChild(spacer());
     generalRow.appendChild(toggleBtn('gen:main', isExpanded('gen:main')));
     generalRow.appendChild(rollupEl(computeRollup(allLeafKeys, 'web'), computeRollup(allLeafKeys, 'app')));
     generalRow.appendChild(labelEl(Dashboard.t('admin.saasMasterTreeGeneral')));
-    generalRow.appendChild(countBadge(GENERAL_ITEMS.length + NAV_ICON_ITEMS.length + screensItemCount(CATALOG.flatMap((g) => g.screens))));
+    generalRow.appendChild(countBadge(GENERAL_ITEMS.length + NAV_ICON_ITEMS.length + navConfigItemCount + screensItemCount(CATALOG.flatMap((g) => g.screens))));
     // Points at the very first screen overall -- General spans every
     // screen, so there's no single natural destination, but confirmed with
     // the user every row needs a real, clickable Navegar button, same as
@@ -2213,7 +2280,7 @@ function renderList() {
         // grouping the client tree already gives these same 3 items via
         // GENERAL_ITEM_IDS/sidebar.generalAccess (confirmed live,
         // 2026-09-17: "deben ser un anidado de accesos generales").
-        const gaLeafKeys = [...GENERAL_ITEMS.map((i) => i.itemId), ...NAV_ICON_ITEMS.map((i) => i.itemId)];
+        const gaLeafKeys = [...GENERAL_ITEMS.map((i) => i.itemId), ...NAV_ICON_ITEMS.map((i) => i.itemId), ...navConfigLeafKeys];
         const gaRow = document.createElement('div');
         gaRow.className = 'perm-tree-row perm-tree-depth-1';
         gaRow.appendChild(spacer());
@@ -2246,7 +2313,7 @@ function renderList() {
             // as leaves: each its own Estatus + Web/App, no Navegar (an icon
             // has no page of its own to jump to), same "Ícono" level badge
             // the per-screen "Iconos Personalización" uses.
-            const navKeys = NAV_ICON_ITEMS.map((i) => i.itemId);
+            const navKeys = [...NAV_ICON_ITEMS.map((i) => i.itemId), ...navConfigLeafKeys];
             const navCtx = buildLevelBadgeCtx('icono');
             const navRow = document.createElement('div');
             navRow.className = 'perm-tree-row perm-tree-depth-2';
@@ -2254,20 +2321,45 @@ function renderList() {
             navRow.appendChild(toggleBtn(`cls:${NAV_ICONS_KEY}`, isExpanded(`cls:${NAV_ICONS_KEY}`)));
             navRow.appendChild(rollupEl(computeRollup(navKeys, 'web'), computeRollup(navKeys, 'app')));
             navRow.appendChild(labelEl(Dashboard.t('menu.navIcons')));
-            navRow.appendChild(countBadge(navKeys.length));
+            navRow.appendChild(countBadge(NAV_ICON_ITEMS.length + navConfigItemCount));
             navRow.appendChild(buildControls(NAV_ICONS_KEY, navKeys, null, navCtx, Dashboard.t('menu.navIcons')));
             listEl.appendChild(navRow);
             if (isExpanded(`cls:${NAV_ICONS_KEY}`)) {
                 NAV_ICON_ITEMS.forEach((icon) => {
+                    // "Configuración" is the one icon with real content
+                    // behind it (see NAV_CONFIG_APARTADOS/MODAL_CONFIG_APARTADO
+                    // above) -- same leaf-with-nested-content shape every
+                    // real column's own "Modal: ..." nesting already uses
+                    // (leafToggleBtn/expandedLeaves, own rollup covering the
+                    // nested keys, renderApartadoNode for the nested subtree
+                    // once opened), just hand-wired to this ONE icon instead
+                    // of resolved through nestUnder/buildNestedByColumn
+                    // (nothing else here is a real apartado column to attach
+                    // nestUnder to).
+                    const isConfig = icon.itemId === 'saas-nav-settings';
                     const navIconRow = document.createElement('div');
                     navIconRow.className = 'perm-tree-row perm-tree-depth-3';
                     navIconRow.appendChild(spacer());
-                    navIconRow.appendChild(spacer());
-                    navIconRow.appendChild(rollupEl(computeRollup([icon.itemId], 'web'), computeRollup([icon.itemId], 'app')));
+                    if (isConfig) {
+                        const leafTreeKey = `leaf:${icon.itemId}`;
+                        // expandedLeaves, not isExpanded/expandedRows -- this
+                        // is the SAME "show my own nested content" Set every
+                        // other leafToggleBtn in this file already reads
+                        // (renderLeafWithLevels's own leafExpanded), not the
+                        // opt-in apartado/screen-row Set isExpanded() checks.
+                        navIconRow.appendChild(leafToggleBtn(leafTreeKey, expandedLeaves.has(leafTreeKey)));
+                    } else {
+                        navIconRow.appendChild(spacer());
+                    }
+                    const rollupKeys = isConfig ? [icon.itemId, ...navConfigLeafKeys] : [icon.itemId];
+                    navIconRow.appendChild(rollupEl(computeRollup(rollupKeys, 'web'), computeRollup(rollupKeys, 'app')));
                     navIconRow.appendChild(labelEl(Dashboard.t(icon.labelKey)));
-                    navIconRow.appendChild(countBadge(1));
-                    navIconRow.appendChild(buildControls(icon.itemId, [], null, navCtx, Dashboard.t(icon.labelKey)));
+                    navIconRow.appendChild(countBadge(isConfig ? 1 + navConfigItemCount : 1));
+                    navIconRow.appendChild(buildControls(icon.itemId, isConfig ? navConfigLeafKeys : [], null, navCtx, Dashboard.t(icon.labelKey)));
                     listEl.appendChild(navIconRow);
+                    if (isConfig && expandedLeaves.has(`leaf:${icon.itemId}`)) {
+                        renderApartadoNode(NAV_ICONS_SCREEN, MODAL_CONFIG_APARTADO, 4, { draggable: false });
+                    }
                 });
             }
         }
