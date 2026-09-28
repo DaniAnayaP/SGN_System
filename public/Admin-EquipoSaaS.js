@@ -367,7 +367,7 @@ function ensureSaasChangesModal() {
     saasChangesModal.innerHTML = `
         <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="saas-user-history-title">
             <h3 id="saas-user-history-title"></h3>
-            <div class="admin-table-wrap">
+            <div class="admin-table-wrap saas-changes-table-wrap">
                 <table class="admin-table">
                     <thead>
                         <tr>${headerCells}</tr>

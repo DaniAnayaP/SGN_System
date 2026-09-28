@@ -2729,10 +2729,30 @@
        needs the same position:relative + padding-left th.data-table-col-
        sortable already gives a real .data-table header, without pulling in
        the sort-arrow spacing that class also carries. Confirmed visually
-       with the user, 2026-09-28, before building this. */
+       with the user, 2026-09-28, before building this; padding bumped to
+       2.3rem (from 1.7rem) the same day -- .admin-table th's own bold
+       (font-weight:600) header text sits noticeably wider than .data-table's
+       regular-weight one, so the same 1.7rem left the funnel icon crowding
+       the first letter. Sticky, so scrolling the modal's own content moves
+       the ROWS under a fixed header, not the header itself off-screen --
+       confirmed live, 2026-09-28: "lo desplazante debe ser las filas, no el
+       encabezado". */
     .saas-changes-th{
-        position: relative;
-        padding-left: 1.7rem;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding-left: 2.3rem;
+        background: var(--color-surface);
+    }
+    /* The scroll container itself -- a sticky <th> only sticks within
+       whatever actually scrolls, so this needs its OWN bounded height +
+       overflow-y instead of leaving the whole .modal-panel (title included)
+       as the one scrolling region. Scoped to this one modal (not the shared
+       .admin-table-wrap other change-history dialogs also use) so nothing
+       else's layout changes. */
+    .saas-changes-table-wrap{
+        max-height: 22rem;
+        overflow-y: auto;
     }
     /* Set by applyColumnValueFilters — independent from (and composes
        additively with) each page's own `tr.hidden`, see that function's own
