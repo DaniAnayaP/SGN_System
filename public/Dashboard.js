@@ -4633,10 +4633,16 @@ function renderAlertRow(alert) {
     row.innerHTML = `
         <div class="notifications-item-meta">#${alert.seq} · ${formatNotificationDate(alert.created_at)}</div>
         <div class="notifications-item-desc">
-            <b>${alert.acting_user_label}</b>, ${t('main.notificationAttemptedChangePrefix')}
+            <b data-role="actor"></b>, ${t('main.notificationAttemptedChangePrefix')}
             <b>${t(alert.field_key)} / ${t(alert.screen_key)}</b>, ${t('main.notificationAttemptedChangeSuffix')}
         </div>
     `;
+    // alert.acting_user_label is free text (a user's own display name) --
+    // set via textContent, never interpolated into innerHTML (same
+    // convention as openForwardPicker's requestedName/categoryLabel above).
+    // Confirmed live, 2026-09-28: this was a real stored-XSS sink -- see the
+    // same fix on renderRequestRow/renderNotificationRow below.
+    row.querySelector('[data-role="actor"]').textContent = alert.acting_user_label;
     return row;
 }
 
@@ -4647,13 +4653,23 @@ function renderRequestRow(change, { showOutcome = false } = {}) {
     row.className = `notifications-item${showOutcome && !change.seen_at ? ' notifications-item-unseen' : ''}`;
     const tableLabel = t(PENDING_CHANGE_TABLE_LABELS[change.table_key] || change.table_key);
     const outcome = showOutcome
-        ? `<div class="notifications-item-meta">${t(change.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected')} — ${change.resolved_by || '—'} · ${formatNotificationDate(change.resolved_at)}</div>`
+        ? `<div class="notifications-item-meta">${t(change.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected')} — <span data-role="resolved-by"></span> · ${formatNotificationDate(change.resolved_at)}</div>`
         : '';
     row.innerHTML = `
-        <div class="notifications-item-meta">${tableLabel} · ${change.record_label || '—'}</div>
-        <div class="notifications-item-desc">${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"</div>
+        <div class="notifications-item-meta">${tableLabel} · <span data-role="record-label"></span></div>
+        <div class="notifications-item-desc">${t(change.field_key)}: "<span data-role="old-value"></span>" → "<span data-role="new-value"></span>"</div>
         ${outcome}
     `;
+    // record_label/old_value/new_value/resolved_by are free text a regular
+    // user typed into a business field -- set via textContent, never
+    // interpolated into innerHTML. Confirmed live, 2026-09-28: this was a
+    // real stored-XSS-to-privilege-escalation path (a low-privilege user's
+    // crafted field value would execute in the client-admin's browser when
+    // they review this same queue).
+    row.querySelector('[data-role="record-label"]').textContent = change.record_label || '—';
+    row.querySelector('[data-role="old-value"]').textContent = change.old_value || '—';
+    row.querySelector('[data-role="new-value"]').textContent = change.new_value || '—';
+    if (showOutcome) row.querySelector('[data-role="resolved-by"]').textContent = change.resolved_by || '—';
     return row;
 }
 
@@ -4662,14 +4678,22 @@ function renderNotificationRow(change) {
     row.className = 'notifications-item';
     const tableLabel = t(PENDING_CHANGE_TABLE_LABELS[change.table_key] || change.table_key);
     row.innerHTML = `
-        <div class="notifications-item-meta">${tableLabel} · ${change.record_label || '—'}</div>
-        <div class="notifications-item-desc">${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"</div>
-        <div class="notifications-item-meta">${t('main.changeHistoryRequestedBy')}: ${change.requested_by || '—'}</div>
+        <div class="notifications-item-meta">${tableLabel} · <span data-role="record-label"></span></div>
+        <div class="notifications-item-desc">${t(change.field_key)}: "<span data-role="old-value"></span>" → "<span data-role="new-value"></span>"</div>
+        <div class="notifications-item-meta">${t('main.changeHistoryRequestedBy')}: <span data-role="requested-by"></span></div>
         <div class="notifications-item-actions">
             <button type="button" class="btn btn-secondary" data-action="reject">${t('main.notificationReject')}</button>
             <button type="button" class="btn" data-action="approve">${t('main.notificationApprove')}</button>
         </div>
     `;
+    // record_label/old_value/new_value/requested_by are free text -- same
+    // stored-XSS fix as renderRequestRow above (this is the queue a
+    // client-admin actually approves/rejects from, so it's the highest-
+    // value target of the three).
+    row.querySelector('[data-role="record-label"]').textContent = change.record_label || '—';
+    row.querySelector('[data-role="old-value"]').textContent = change.old_value || '—';
+    row.querySelector('[data-role="new-value"]').textContent = change.new_value || '—';
+    row.querySelector('[data-role="requested-by"]').textContent = change.requested_by || '—';
     row.querySelector('[data-action="approve"]').addEventListener('click', () => resolvePendingNotification(change.id, 'approve', row));
     row.querySelector('[data-action="reject"]').addEventListener('click', () => resolvePendingNotification(change.id, 'reject', row));
     return row;

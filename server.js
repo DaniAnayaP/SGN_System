@@ -5165,8 +5165,14 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
 // auto-created account (see createHrWorker) ever gets generated, shown
 // once in the response, same one-time-credentials convention as
 // activating a client (see applyClientLifecycle).
-app.post('/api/business/hr-workers/:id/activate-user', requireAuth, async (req, res) => {
-    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+// requireClientAdmin (not just requireAuth): issuing a real, usable
+// password for someone else's account is an administrative action, not a
+// data edit subject to the per-column grant/pending-approval workflow --
+// confirmed live, 2026-09-28, as part of the security review's medium
+// findings (this route and resend-credentials-email below had no gate
+// beyond "same client" at all, meaning any logged-in employee could mint
+// login credentials for any coworker at their own client).
+app.post('/api/business/hr-workers/:id/activate-user', requireAuth, requireClientAdmin, async (req, res) => {
     const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
     const generated = await activateHrWorkerUser(req.params.id, req.user.clientId, req.user.isTestAccount);
@@ -5193,8 +5199,14 @@ app.post('/api/business/hr-workers/:id/activate-user', requireAuth, async (req, 
 // the browser's own memory from the activate-user response above, so this
 // just resends the SAME username/password, nowhere to look it up again
 // server-side.
-app.post('/api/business/hr-workers/:id/resend-credentials-email', requireAuth, async (req, res) => {
-    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+// requireClientAdmin -- same reasoning as activate-user above (security
+// review, 2026-09-28): resending real login credentials, verbatim, to a
+// coworker's personal email is an administrative action. The
+// username/password still have to come from the request body (see the
+// comment above this route -- the plaintext password is never persisted
+// server-side, only its hash), but at least now only a client admin can
+// trigger the send.
+app.post('/api/business/hr-workers/:id/resend-credentials-email', requireAuth, requireClientAdmin, async (req, res) => {
     const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
     const { username, password } = req.body || {};
