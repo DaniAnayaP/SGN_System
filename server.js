@@ -476,8 +476,23 @@ function issueCsrfCookie(res) {
 // Bearer-token client, if one is ever added) isn't exposed to CSRF in the
 // first place, since forging a header the browser doesn't attach on its own
 // is exactly what CSRF can't do.
+// CRITICAL FIX, 2026-09-28 (found during local testing right after
+// shipping): gating on "does an sgn_session cookie exist" instead of "is the
+// caller actually authenticated" was a real self-lockout bug. A cookie can
+// be PRESENT but expired/invalid (the normal state 8h after any login, or
+// simply a leftover from before this feature existed) -- requireAuth would
+// reject it with 401 later, but requireCsrf ran FIRST and, seeing a cookie
+// at all, demanded a token nobody logging back in could possibly have yet
+// (the only way to get one is to log in successfully, or call
+// /api/auth/csrf-token, which itself requires requireAuth to already pass --
+// a true deadlock, not just a rough edge). Fix: explicitly exempt the 3 auth
+// bootstrap routes by path, the same way login/register were already exempt
+// in spirit (no session to forge yet) -- never gate the routes whose entire
+// job is to establish or tear down that session in the first place.
+const CSRF_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/register', '/api/auth/logout']);
 function requireCsrf(req, res, next) {
     if (CSRF_SAFE_METHODS.has(req.method)) return next();
+    if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
     if (!req.cookies?.sgn_session) return next();
     const cookieToken = req.cookies?.[CSRF_COOKIE];
     const headerToken = req.headers[CSRF_HEADER];
