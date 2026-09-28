@@ -634,6 +634,8 @@
     "masterTreeStatusMejoras": "En mejoras",
     "masterTreeStatusMejorasShort": "Mejoras",
     "masterTreeStatusMejorasIcon": "⬆",
+    "visibleStatusesLabel": "¿Qué Estatus puede ver?",
+    "visibleStatusesHint": "Lo que no esté encendido aquí queda invisible para esta persona, aunque tenga el permiso arriba. Solo el Usuario de Pruebas necesita los 4.",
     "masterTreePlatformWeb": "Web",
     "masterTreePlatformApp": "App",
     "masterTreeOn": "Activado",

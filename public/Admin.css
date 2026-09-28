@@ -3143,6 +3143,61 @@ body.dark-mode .perm-tree-mstatus-select-inhabilitado{ background-color: #332020
 body.dark-mode .perm-tree-mstatus-select-construccion{ background-color: #3a2e10; color: #f0c463; }
 body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; color: #8fb8ea; }
 
+/* "¿Qué Estatus puede ver?" chip row -- see VisibleStatusesChips.js. Same 4
+   colors as .perm-tree-mstatus-select-* right above (this IS that same
+   Estatus vocabulary, just answering "who sees it" instead of "what is
+   it"), styled as toggle chips instead of a <select> since several can be
+   active at once. */
+.visible-statuses-field{
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--color-border);
+}
+.visible-statuses-label{
+    margin: 0 0 0.15rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+.visible-statuses-row{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.visible-status-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 1.4rem;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    opacity: 0.45;
+    filter: grayscale(0.5);
+}
+.visible-status-chip.active{
+    opacity: 1;
+    filter: none;
+    border-color: currentColor;
+}
+.visible-status-dot{
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: currentColor;
+}
+.visible-status-chip-ok{ background-color: #e3f6e8; color: #1e7e34; }
+.visible-status-chip-off{ background-color: #f2e9e9; color: #8a4b4b; }
+.visible-status-chip-build{ background-color: #fff2d9; color: #9a6b00; }
+.visible-status-chip-improve{ background-color: #eaf1fb; color: #2c5aa0; }
+body.dark-mode .visible-status-chip-ok{ background-color: #1c3324; color: #7fd99a; }
+body.dark-mode .visible-status-chip-off{ background-color: #332020; color: #e0a3a3; }
+body.dark-mode .visible-status-chip-build{ background-color: #3a2e10; color: #f0c463; }
+body.dark-mode .visible-status-chip-improve{ background-color: #1e2a3a; color: #8fb8ea; }
+
 /* Persistent column header for statusMode (see buildStatusTreeHeader) --
    sticks to the top of .perm-tree's own scroll container (overflow-y:auto
    set there) so the tree reads as a real table even mid-scroll. Bleeds

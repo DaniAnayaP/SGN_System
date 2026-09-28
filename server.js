@@ -241,6 +241,9 @@ const {
     setSectorGrants,
     getMasterPermissionStatuses,
     setMasterPermissionStatuses,
+    getUserVisibleStatuses,
+    setUserVisibleStatuses,
+    ALL_ESTATUS_VALUES,
     getMasterPermissionClassificationOverrides,
     setMasterPermissionClassificationOverride,
     deleteMasterPermissionClassificationOverride,
@@ -252,6 +255,7 @@ const {
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
+    getSaasStatusOverrides,
     getSaasMasterOrder,
     setSaasMasterOrder,
     getSaasClassificationOverrides,
@@ -2414,7 +2418,10 @@ function validateSaasGrants(grants) {
 }
 
 app.get('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res) => {
-    res.json({ grants: getSaasUserGrants(req.params.id) });
+    // visibleStatuses rides along here too -- the "¿Qué Estatus puede ver?"
+    // chips live in this same edit-access modal (confirmed live,
+    // 2026-09-27: "Sí, ahí mismo en el modal"), so both load in one trip.
+    res.json({ grants: getSaasUserGrants(req.params.id), visibleStatuses: getUserVisibleStatuses(req.params.id) });
 });
 
 app.put('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res) => {
@@ -2424,12 +2431,31 @@ app.put('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res
     res.json({ grants: setSaasUserGrants(req.params.id, grants) });
 });
 
+// Which of habilitado/inhabilitado/construccion/mejoras this GEIPSA/SaaS
+// staff account is allowed to see anything under (see visible_statuses'
+// own migration comment in db.js) — every real staff account starts at
+// just habilitado; USUARIO_PRUEBAS and any other account an admin widens
+// see the rest too. Same shape as the client-side route below.
+app.put('/api/admin/saas-users/:id/visible-statuses', requireAuth, requireAdmin, (req, res) => {
+    const { statuses } = req.body || {};
+    if (!Array.isArray(statuses) || statuses.some((s) => !ALL_ESTATUS_VALUES.includes(s))) {
+        return res.status(400).json({ message: `statuses must be an array of: ${ALL_ESTATUS_VALUES.join(', ')}.` });
+    }
+    res.json({ visibleStatuses: setUserVisibleStatuses(req.params.id, statuses) });
+});
+
 // The current admin's own SaaS grants — used by Dashboard.js to filter the
 // sidebar/block direct URLs, and by Nuestros Planes to decide whether to
 // even show the Activar button. Not client-scoped (this is a role='admin'
-// account, never has a clientId).
+// account, never has a clientId). visibleStatuses/saasStatusOverrides let
+// Dashboard.js resolve the Estatus gate the same way business-profile does
+// for the client-facing sidebar (see getUserBusinessProfileById in db.js).
 app.get('/api/me/saas-grants', requireAuth, requireAdmin, (req, res) => {
-    res.json({ grants: getSaasUserGrants(req.user.sub) });
+    res.json({
+        grants: getSaasUserGrants(req.user.sub),
+        visibleStatuses: getUserVisibleStatuses(req.user.sub),
+        saasStatusOverrides: getSaasStatusOverrides(),
+    });
 });
 
 // --- Business admin: users, profiles, and permission grants ------------------
@@ -2546,8 +2572,14 @@ app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     // gets by default from their own Puesto de Trabajo (see Roles) --
     // surfaced here too so "Permisos Activados" (read-only) can show the
     // full effective picture (Puesto + adicionales) without a second round
-    // trip.
-    res.json({ grants: getUserGrants(req.params.id), jobPositionGrants: getUserJobPositionGrants(req.params.id) });
+    // trip. visibleStatuses is the "¿Qué Estatus puede ver?" chips this
+    // same modal now also edits (confirmed live, 2026-09-27: "Sí, ahí
+    // mismo en el modal").
+    res.json({
+        grants: getUserGrants(req.params.id),
+        jobPositionGrants: getUserJobPositionGrants(req.params.id),
+        visibleStatuses: getUserVisibleStatuses(req.params.id),
+    });
 });
 
 app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
@@ -2558,6 +2590,24 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
     res.json({ grants: setUserGrants(req.params.id, grants) });
+});
+
+// Which of habilitado/inhabilitado/construccion/mejoras this business user
+// is allowed to see anything under (see visible_statuses' own migration
+// comment in db.js) -- every real user starts at just habilitado; only the
+// client's own Usuario de Pruebas (Cuenta de Capacitación,
+// provisionTrainingAccount) sees the rest by default. Same
+// is_client_admin exclusion as the grants route above -- that account's
+// own access (Usuario de Pruebas included) is managed from GEIPSA.
+app.put('/api/business/users/:id/visible-statuses', requireAuth, requireClientAdmin, (req, res) => {
+    const user = getUserById(req.params.id, req.user.clientId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
+    const { statuses } = req.body || {};
+    if (!Array.isArray(statuses) || statuses.some((s) => !ALL_ESTATUS_VALUES.includes(s))) {
+        return res.status(400).json({ message: `statuses must be an array of: ${ALL_ESTATUS_VALUES.join(', ')}.` });
+    }
+    res.json({ visibleStatuses: setUserVisibleStatuses(req.params.id, statuses) });
 });
 
 // "Reestablecer Rol" -- wipes this user's Permisos Adicionales entirely, so

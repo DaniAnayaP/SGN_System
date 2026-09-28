@@ -82,14 +82,21 @@ activePermsModal.addEventListener('click', (event) => { if (event.target === act
 const grantAccessModal = document.getElementById('grant-access-modal');
 const grantAccessSubtitle = document.getElementById('grant-access-subtitle');
 const grantAccessContainer = document.getElementById('grant-access-container');
+const grantAccessVisibleStatuses = document.getElementById('grant-access-visible-statuses');
 const grantAccessError = document.getElementById('grant-access-error');
 const grantAccessSaveBtn = document.getElementById('grant-access-save');
+// Tracks the chip row's current selection between renders -- VisibleStatusesChips
+// itself is stateless (see its own onChange callback), this is just where
+// that state actually lives while the modal is open, same role activeUserId
+// plays for which user it's open for.
+let pendingVisibleStatuses = ['habilitado'];
 
 async function openGrantAccessModal(user) {
     activeUserId = user.id;
     grantAccessSubtitle.textContent = `${user.name} (${user.username})`;
     grantAccessError.hidden = true;
     grantAccessContainer.innerHTML = '';
+    grantAccessVisibleStatuses.innerHTML = '';
     grantAccessModal.hidden = false;
     try {
         const res = await fetch(`/api/business/users/${user.id}/grants`, { credentials: 'include' });
@@ -103,6 +110,8 @@ async function openGrantAccessModal(user) {
         // offered a módulo their own client hasn't contracted.
         grantTree = window.PermissionCostTree.create(grantAccessContainer, { mode: 'clientTricolor', interactive: true, allowedSectionIds, columnLevels: true });
         await grantTree.init(data.jobPositionGrants || [], [], data.grants || []);
+        pendingVisibleStatuses = data.visibleStatuses && data.visibleStatuses.length ? data.visibleStatuses : ['habilitado'];
+        window.VisibleStatusesChips.render(grantAccessVisibleStatuses, pendingVisibleStatuses, (next) => { pendingVisibleStatuses = next; });
     } catch {
         grantAccessError.textContent = Dashboard.t('admin.loadError');
         grantAccessError.hidden = false;
@@ -122,13 +131,25 @@ grantAccessSaveBtn.addEventListener('click', async () => {
     if (!activeUserId || !grantTree) return;
     grantAccessSaveBtn.disabled = true;
     try {
-        const res = await fetch(`/api/business/users/${activeUserId}/grants`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ grants: grantTree.getClientGrants() }),
-        });
-        if (!res.ok) throw new Error('save failed');
+        // Both saved together under this one Guardar (confirmed live,
+        // 2026-09-27: "Sí, ahí mismo en el modal") -- 2 independent rows
+        // server-side (user_grants vs. users.visible_statuses), but one
+        // save action from here.
+        const [grantsRes, statusesRes] = await Promise.all([
+            fetch(`/api/business/users/${activeUserId}/grants`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ grants: grantTree.getClientGrants() }),
+            }),
+            fetch(`/api/business/users/${activeUserId}/visible-statuses`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ statuses: pendingVisibleStatuses }),
+            }),
+        ]);
+        if (!grantsRes.ok || !statusesRes.ok) throw new Error('save failed');
         closeGrantAccessModal();
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
     } catch {

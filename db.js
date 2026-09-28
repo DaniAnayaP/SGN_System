@@ -1777,6 +1777,24 @@ function ensureColumn(table, column, definition) {
 // already have the column by then, or better-sqlite3 throws immediately
 // and the whole server fails to start.
 ensureColumn('users', 'is_test_account', 'INTEGER NOT NULL DEFAULT 0');
+// Which of the 4 Árbol de Permisos Maestro / Árbol Maestro SaaS Estatus
+// values this user is allowed to see anything under (comma-separated, e.g.
+// 'habilitado' or 'habilitado,inhabilitado,construccion,mejoras') -- every
+// REAL user defaults to just 'habilitado' (confirmed live, 2026-09-27:
+// "solo si está habilitado, lo podrán ver usuarios reales"), while a
+// Usuario de Pruebas (see is_test_account, USUARIO_PRUEBAS, and
+// provisionTrainingAccount's own Pruebas_<Abreviatura> accounts) gets all
+// 4. This is deliberately its own per-user setting, not hardcoded to
+// is_test_account, per the user's own follow-up: "a cada usuario, se le
+// puede agregar cual de los 4 estatus pueda ver... puede tener uno o los
+// 4" -- any account can be widened or narrowed independently later from
+// its own settings screen. See getUserVisibleStatuses/setUserVisibleStatuses
+// and ALL_ESTATUS_VALUES below.
+ensureColumn('users', 'visible_statuses', "TEXT NOT NULL DEFAULT 'habilitado'");
+// Same 4 values as master_permission_status/saas_master_status's own CHECK
+// constraint (kept as one shared list here instead of typing the 4 strings
+// out again at each call site).
+const ALL_ESTATUS_VALUES = ['habilitado', 'inhabilitado', 'construccion', 'mejoras'];
 ensureColumn('clients', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('clients', 'training_user_id', 'INTEGER REFERENCES users(id)');
 ensureColumn('business_sectors', 'status', "TEXT NOT NULL DEFAULT 'active'");
@@ -2076,6 +2094,72 @@ if (userCount === 0) {
     console.log('[db] Seeded demo user admin/admin (first run only).');
 }
 
+// --- One-time seed: the SaaS/GEIPSA-side "Usuario de Pruebas" ----------------
+// The client side already has one training account per client (see
+// provisionTrainingAccount below); the SaaS/GEIPSA-internal side (Árbol
+// Maestro SaaS, Config. SaaS) had no equivalent until now (confirmed live,
+// 2026-09-27: "Por default todos los clientes deben tener un usuario de
+// pruebas... así como en el SaaS"). Exactly one such account, username
+// literally "USUARIO_PRUEBAS" per the user's own naming choice, role
+// 'admin' like any other GEIPSA staff account, is_test_account = 1 so the
+// coming Estatus gate (habilitado/inhabilitado/construccion/mejoras) knows
+// to exempt it. Zero saas_user_grants rows on a fresh account already means
+// "sees everything" (see hasSaasGrant's own `if (!grants.length) return
+// true`), so no grants need seeding here. Idempotent by username, same as
+// the admin/admin seed above, so this only ever inserts once per database.
+if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get('USUARIO_PRUEBAS')) {
+    db.prepare(`
+        INSERT INTO users (username, email, password_hash, name, role, is_test_account, visible_statuses)
+        VALUES (@username, @email, @passwordHash, @name, @role, 1, @visibleStatuses)
+    `).run({
+        username: 'USUARIO_PRUEBAS',
+        email: 'usuario_pruebas@sgn.invalid',
+        passwordHash: hashPasswordSync(generateRandomPassword()),
+        name: 'Usuario de Pruebas',
+        role: 'admin',
+        visibleStatuses: ALL_ESTATUS_VALUES.join(','),
+    });
+    console.log('[db] Seeded SaaS-side USUARIO_PRUEBAS test account (first run only) — set its password from Config. SaaS > Usuarios before relying on it.');
+}
+
+// --- One-time backfill: rename any training account provisioned before the
+// "Pruebas_<Abreviatura>" convention above existed (it used to be
+// "Pruebas<ApodoEmpresa>", no underscore, sourced from company_nickname
+// instead of company_abbreviation) — confirmed live, 2026-09-27, the same
+// message that set the naming rule. Only renames the username (and its
+// placeholder @example.invalid email, which is derived from it and never
+// shown to anyone); the account's id, password and every record it already
+// created keep working unchanged. Runs every startup but is a no-op once
+// every training account already matches, so it costs nothing long-term.
+{
+    const trainingAccounts = db.prepare(`
+        SELECT clients.id AS clientId, clients.company_name AS companyName,
+               clients.company_abbreviation AS companyAbbreviation,
+               users.id AS userId, users.username AS username
+        FROM clients JOIN users ON users.id = clients.training_user_id
+        WHERE clients.training_user_id IS NOT NULL
+    `).all();
+    trainingAccounts.forEach((row) => {
+        const abbrSource = (row.companyAbbreviation || '').trim() || generateClientAbbreviation(row.companyName);
+        const abbrSlug = abbrSource.replace(/[^a-zA-Z0-9]/g, '') || generateClientAbbreviation(row.companyName);
+        const wanted = `Pruebas_${abbrSlug}`;
+        if (row.username === wanted) return;
+        const finalUsername = generateUniqueUsername(wanted);
+        db.prepare('UPDATE users SET username = ?, email = ? WHERE id = ?')
+            .run(finalUsername, `${finalUsername.toLowerCase()}@example.invalid`, row.userId);
+        console.log(`[db] Renamed training account "${row.username}" -> "${finalUsername}" (${row.companyName}).`);
+    });
+}
+
+// --- One-time backfill: widen visible_statuses for every already-existing
+// is_test_account to all 4 -- covers training accounts (and USUARIO_PRUEBAS
+// itself, though that one's own seed above already sets it) provisioned
+// before the visible_statuses column existed, which would otherwise sit at
+// its default ('habilitado' only) despite being a test account. No-op once
+// every test account already has all 4.
+db.prepare(`UPDATE users SET visible_statuses = ? WHERE is_test_account = 1 AND visible_statuses != ?`)
+    .run(ALL_ESTATUS_VALUES.join(','), ALL_ESTATUS_VALUES.join(','));
+
 // --- Query helpers: users -----------------------------------------------------
 function findUserByUsername(username) {
     return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
@@ -2087,13 +2171,21 @@ function usernameOrEmailExists(username, email) {
         .get(username, email);
 }
 
+// A Usuario de Pruebas is born seeing all 4 Estatus values (see
+// visible_statuses' own migration comment above) -- everyone else starts
+// at just 'habilitado', same as any other real account, adjustable later
+// per-user via setUserVisibleStatuses.
 function createUser({ username, email, passwordHash, name, clientId = null, isClientAdmin = false, role = 'user', active = true, isTestAccount = false }) {
     const result = db
         .prepare(`
-            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin, role, active, is_test_account)
-            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin, @role, @active, @isTestAccount)
+            INSERT INTO users (username, email, password_hash, name, client_id, is_client_admin, role, active, is_test_account, visible_statuses)
+            VALUES (@username, @email, @passwordHash, @name, @clientId, @isClientAdmin, @role, @active, @isTestAccount, @visibleStatuses)
         `)
-        .run({ username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0, role, active: active ? 1 : 0, isTestAccount: isTestAccount ? 1 : 0 });
+        .run({
+            username, email, passwordHash, name, clientId, isClientAdmin: isClientAdmin ? 1 : 0, role, active: active ? 1 : 0,
+            isTestAccount: isTestAccount ? 1 : 0,
+            visibleStatuses: isTestAccount ? ALL_ESTATUS_VALUES.join(',') : 'habilitado',
+        });
     return db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
 }
 
@@ -2181,14 +2273,19 @@ async function activateClient(clientId) {
 }
 
 // Same auto-provisioning shape as activateClient just above, for the
-// per-client "Pruebas<ApodoEmpresa>" training account (see the is_test_data
+// per-client "Pruebas_<Abreviatura>" training account (see the is_test_data
 // migration block near the top of this file) — a real, fully unrestricted
 // client-admin account (isClientAdmin: true, zero grants -> unrestricted,
 // see isUnrestrictedClientAdmin) whose every write lands with
 // is_test_data = 1, so it can be used freely for capacitación without ever
-// touching the client's real records. Uses company_nickname (Apodo Empresa)
-// per the user's own naming choice; falls back to the same abbreviation
-// activateClient uses when a client has no nickname set.
+// touching the client's real records. This is also the account real users'
+// Estatus gate (habilitado/inhabilitado/construccion/mejoras) never applies
+// to (see isTestAccount below) — the one place still allowed to see a node
+// that isn't fully released yet. Uses company_abbreviation ("Abrev Empresa")
+// per the user's own naming rule (confirmed live, 2026-09-27:
+// "Pruebas_'Abreviatura de la empresa'"), falling back to the same
+// generated abbreviation activateClient uses when a client has no
+// abbreviation set.
 async function provisionTrainingAccount(clientId) {
     const client = getClientById(clientId);
     if (!client) throw new Error('Client not found.');
@@ -2199,9 +2296,9 @@ async function provisionTrainingAccount(clientId) {
         return { user, generatedPassword: null };
     }
 
-    const nickname = (client.company_nickname || '').trim() || generateClientAbbreviation(client.company_name);
-    const nicknameSlug = nickname.replace(/[^a-zA-Z0-9]/g, '') || generateClientAbbreviation(client.company_name);
-    const username = generateUniqueUsername(`Pruebas${nicknameSlug}`);
+    const abbrSource = (client.company_abbreviation || '').trim() || generateClientAbbreviation(client.company_name);
+    const abbrSlug = abbrSource.replace(/[^a-zA-Z0-9]/g, '') || generateClientAbbreviation(client.company_name);
+    const username = generateUniqueUsername(`Pruebas_${abbrSlug}`);
     const password = generateRandomPassword();
     const email = `${username.toLowerCase()}@example.invalid`;
     const passwordHash = await hashPassword(password);
@@ -5713,6 +5810,78 @@ function getMasterPermissionStatuses() {
 function masterTreeNodeKey(sectionId, itemId, submenuId) {
     return `${sectionId}::${itemId || ''}::${submenuId || ''}`;
 }
+
+// --- Estatus visibility gate (Árbol de Permisos Maestro side) ---------------
+// Whether a real user (anyone whose visible_statuses doesn't include every
+// value) may see a given {sectionId,itemId,submenuId} node -- confirmed
+// live, 2026-09-27: "si estamos construyendo todavía una pantalla, opción,
+// icono, lo que sea y está en estatus inhabilitado, en construcción o en
+// mejoras, no los podrán ver usuarios reales". Deliberately mirrors
+// PermissionTree.js's own buildGiroGateBlockMap cascade (a non-habilitado
+// ancestor blocks everything under it, broadest match wins, a narrower
+// node's own status never overrides a blocked ancestor) so this new
+// end-user gate reads the same way admins already see it behave on the
+// Giro/Accesos Globales screen -- just applied to every real user instead
+// of only to what a GEIPSA admin can newly grant a Giro. Only the status
+// axis; web_enabled/app_enabled stay a separate, already-existing concept
+// this does not fold in.
+//
+// Only NON-habilitado rows are kept here -- 'habilitado' is always the
+// implicit default for anything nobody ever touched (see PermissionTree.js's
+// own statusMap pruning, which never even stores a plain 'habilitado' row),
+// so a node with no explicit row anywhere in its ancestor chain is simply
+// habilitado. This keeps the map tiny (only ever as big as what an admin
+// has actually flagged away from habilitado) and answers "does ANYTHING
+// in the whole tree currently block anyone" in one query.
+function getMasterStatusOverrides() {
+    return getMasterPermissionStatuses()
+        .filter((r) => r.status !== 'habilitado')
+        .map((r) => ({ sectionId: r.sectionId, itemId: r.itemId, submenuId: r.submenuId, status: r.status }));
+}
+// Broadest-to-narrowest walk: Departamento, then Área/Item, then each
+// "/"-nested level of submenuId in turn (a leaf's own submenuId can encode
+// several nested levels at once, e.g. "apartado/pantalla/columna/nivel" --
+// see keyOf/leafKeysUnder in PermissionTree.js) -- returns the FIRST
+// explicit non-habilitado status found, since a blocked ancestor is never
+// overridden by a narrower node's own status (same rule
+// buildGiroGateBlockMap's own `parentWeb.blocked ? parentWeb.by : ...`
+// already encodes). 'habilitado' when nothing in the chain has ever been
+// touched.
+function resolveMasterNodeStatus(sectionId, itemId, submenuId, overridesByKey) {
+    if (!overridesByKey.size) return 'habilitado';
+    const deptStatus = overridesByKey.get(masterTreeNodeKey(sectionId, null, null));
+    if (deptStatus) return deptStatus;
+    if (itemId) {
+        const itemStatus = overridesByKey.get(masterTreeNodeKey(sectionId, itemId, null));
+        if (itemStatus) return itemStatus;
+    }
+    if (submenuId) {
+        const parts = String(submenuId).split('/');
+        for (let i = 1; i <= parts.length; i += 1) {
+            const partial = overridesByKey.get(masterTreeNodeKey(sectionId, itemId, parts.slice(0, i).join('/')));
+            if (partial) return partial;
+        }
+    }
+    return 'habilitado';
+}
+function buildMasterStatusOverrideMap(overrides) {
+    return new Map(overrides.map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r.status]));
+}
+
+// --- Per-user Estatus visibility ------------------------------------------
+function getUserVisibleStatuses(userId) {
+    const row = db.prepare('SELECT visible_statuses FROM users WHERE id = ?').get(userId);
+    const raw = ((row && row.visible_statuses) || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const valid = raw.filter((s) => ALL_ESTATUS_VALUES.includes(s));
+    return valid.length ? valid : ['habilitado'];
+}
+function setUserVisibleStatuses(userId, statuses) {
+    const clean = ALL_ESTATUS_VALUES.filter((s) => Array.isArray(statuses) && statuses.includes(s));
+    const value = (clean.length ? clean : ['habilitado']).join(',');
+    db.prepare('UPDATE users SET visible_statuses = ? WHERE id = ?').run(value, userId);
+    return value.split(',');
+}
+
 function setMasterPermissionStatuses(rows, updatedBy) {
     // Diffed against the BEFORE snapshot once, up front -- Guardar replaces
     // the whole table in one shot (unlike the color/classification pickers'
@@ -5978,6 +6147,28 @@ function getSaasMasterStatuses() {
         .all()
         .map((r) => ({ ...r, webEnabled: !!r.webEnabled, appEnabled: !!r.appEnabled }));
 }
+// Same Estatus visibility gate as resolveMasterNodeStatus above, mirrored
+// for the SaaS/GEIPSA-internal tree's own flat, "::"-nested item_id keys
+// (see apartadoKey/leafKey in Admin-ArbolMaestroSaaS.js -- no empty-segment
+// ambiguity to worry about here, unlike the client tree's
+// sectionId::itemId::submenuId triple, since every segment of a SaaS key is
+// always a real, non-empty id).
+function getSaasStatusOverrides() {
+    return getSaasMasterStatuses()
+        .filter((r) => r.status !== 'habilitado')
+        .map((r) => ({ itemId: r.itemId, status: r.status }));
+}
+function resolveSaasNodeStatus(itemId, overrides) {
+    if (!overrides.length) return 'habilitado';
+    const parts = String(itemId).split('::');
+    for (let i = 1; i <= parts.length; i += 1) {
+        const prefix = parts.slice(0, i).join('::');
+        const hit = overrides.find((r) => r.itemId === prefix);
+        if (hit) return hit.status;
+    }
+    return 'habilitado';
+}
+
 function setSaasMasterStatuses(rows, updatedBy) {
     // Same before/after-diff-and-log shape as setMasterPermissionStatuses
     // (this screen's own Guardar also replaces the whole table in one
@@ -6715,6 +6906,15 @@ function getUserBusinessProfileById(id) {
         profileNames: jobPosition ? [jobPosition.name] : [],
         effectiveGrants,
         grantsCount: effectiveGrants.length,
+        // Estatus visibility gate (see resolveMasterNodeStatus's own
+        // comment) -- visibleStatuses is THIS user's own allowlist,
+        // masterStatusOverrides is the small "what's currently NOT
+        // habilitado anywhere in the tree" list Dashboard.js/AppInicio.js
+        // need to resolve any given screen's effective status client-side
+        // (needed even for the unrestricted-client-admin bypass, which has
+        // no grants list of its own to filter).
+        visibleStatuses: getUserVisibleStatuses(id),
+        masterStatusOverrides: getMasterStatusOverrides(),
     };
 }
 
@@ -7064,6 +7264,12 @@ module.exports = {
     setSectorGrants,
     getMasterPermissionStatuses,
     setMasterPermissionStatuses,
+    getMasterStatusOverrides,
+    resolveMasterNodeStatus,
+    buildMasterStatusOverrideMap,
+    getUserVisibleStatuses,
+    setUserVisibleStatuses,
+    ALL_ESTATUS_VALUES,
     getMasterPermissionClassificationOverrides,
     setMasterPermissionClassificationOverride,
     deleteMasterPermissionClassificationOverride,
@@ -7075,6 +7281,8 @@ module.exports = {
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
+    getSaasStatusOverrides,
+    resolveSaasNodeStatus,
     getSaasMasterOrder,
     setSaasMasterOrder,
     getSaasPersonalOrder,

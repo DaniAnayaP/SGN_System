@@ -32,10 +32,14 @@ const newFormCancel = document.getElementById('saas-user-form-cancel');
 
 const treeModal = document.getElementById('saas-user-tree-modal');
 const treeList = document.getElementById('saas-user-tree-list');
+const treeVisibleStatuses = document.getElementById('saas-user-tree-visible-statuses');
 const treeError = document.getElementById('saas-user-tree-error');
 const treeSaveBtn = document.getElementById('saas-user-tree-save');
 const treeCloseBtn = document.getElementById('saas-user-tree-close');
 const treeSaveStatus = document.getElementById('saas-user-tree-save-status');
+// Same role as Business-Usuarios.js's own pendingVisibleStatuses -- where
+// the chip row's current selection lives while this modal is open.
+let pendingVisibleStatuses = ['habilitado'];
 
 let saasUsers = [];
 let selectedUserId = null;
@@ -350,8 +354,10 @@ async function openTreeModal(user) {
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         treeGrants = data.grants || [];
+        pendingVisibleStatuses = data.visibleStatuses && data.visibleStatuses.length ? data.visibleStatuses : ['habilitado'];
         expandedScreens = new Set();
         renderTreeList();
+        window.VisibleStatusesChips.render(treeVisibleStatuses, pendingVisibleStatuses, (next) => { pendingVisibleStatuses = next; });
         treeModal.hidden = false;
     } catch {
         Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
@@ -368,14 +374,25 @@ treeSaveBtn.addEventListener('click', async () => {
     treeSaveBtn.disabled = true;
     clearError(treeError);
     try {
-        const res = await fetch(`/api/admin/saas-users/${selectedUserId}/grants`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ grants: treeGrants }),
-        });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
+        // Same one-Guardar-saves-both idea as Business-Usuarios.js's own
+        // grant-access-save (confirmed live, 2026-09-27: "Sí, ahí mismo en
+        // el modal").
+        const [grantsRes, statusesRes] = await Promise.all([
+            fetch(`/api/admin/saas-users/${selectedUserId}/grants`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ grants: treeGrants }),
+            }),
+            fetch(`/api/admin/saas-users/${selectedUserId}/visible-statuses`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ statuses: pendingVisibleStatuses }),
+            }),
+        ]);
+        if (!grantsRes.ok || !statusesRes.ok) {
+            const body = await (!grantsRes.ok ? grantsRes : statusesRes).json().catch(() => ({}));
             showError(treeError, body.message || Dashboard.t('admin.saveError'));
             return;
         }

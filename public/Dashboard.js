@@ -588,17 +588,43 @@ async function loadMenu() {
 // starts with no rows here) isn't accidentally locked out of its own
 // screens the moment this ships.
 let cachedSaasGrants = null;
+// Estatus visibility gate, SaaS side -- same idea as
+// resolveMasterNodeStatus/isEstatusVisible above, mirrored against
+// saas_master_status's own flat "::"-nested item_id keys instead of the
+// client tree's {sectionId,itemId,submenuId} triple (see
+// resolveSaasNodeStatus's own comment in db.js -- no empty-segment
+// ambiguity here, every segment of a SaaS key is always a real id).
+let cachedSaasVisibleStatuses = null;
+let cachedSaasStatusOverrides = null;
 async function loadSaasGrants() {
     try {
         const res = await fetch(`${API_BASE}/me/saas-grants`, { credentials: 'include' });
-        if (!res.ok) { cachedSaasGrants = []; return; }
+        if (!res.ok) { cachedSaasGrants = []; cachedSaasVisibleStatuses = ['habilitado']; cachedSaasStatusOverrides = []; return; }
         const data = await res.json();
         cachedSaasGrants = data.grants || [];
+        cachedSaasVisibleStatuses = data.visibleStatuses || ['habilitado'];
+        cachedSaasStatusOverrides = data.saasStatusOverrides || [];
     } catch {
         cachedSaasGrants = [];
+        cachedSaasVisibleStatuses = ['habilitado'];
+        cachedSaasStatusOverrides = [];
     }
 }
+function resolveSaasNodeStatus(itemId) {
+    const overrides = cachedSaasStatusOverrides || [];
+    if (!overrides.length) return 'habilitado';
+    const parts = String(itemId).split('::');
+    for (let i = 1; i <= parts.length; i += 1) {
+        const prefix = parts.slice(0, i).join('::');
+        const hit = overrides.find((r) => r.itemId === prefix);
+        if (hit) return hit.status;
+    }
+    return 'habilitado';
+}
 function hasSaasScreenGrant(itemId, subItemId = null) {
+    const fullKey = subItemId ? `${itemId}::${subItemId}` : itemId;
+    const visible = cachedSaasVisibleStatuses || ['habilitado'];
+    if (!visible.includes(resolveSaasNodeStatus(fullKey))) return false;
     const grants = cachedSaasGrants || [];
     if (!grants.length) return true;
     return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
@@ -5526,6 +5552,62 @@ function isUnrestrictedClientAdmin() {
     return !!currentUser?.isClientAdmin && (cachedBusinessProfile?.effectiveGrants || []).length === 0;
 }
 
+// --- Estatus visibility gate ------------------------------------------------
+// Mirrors db.js's own resolveMasterNodeStatus (server-side, same cascade
+// math) so this real-time, no-round-trip check reads a node's EFFECTIVE
+// Estatus the exact same way: broadest-ancestor-wins over
+// master_permission_status's own explicit rows (masterStatusOverrides,
+// sent once with business-profile -- only ever the small set of nodes an
+// admin has touched away from 'habilitado', see that field's own db.js
+// comment), 'habilitado' for anything nobody has ever touched. Confirmed
+// live, 2026-09-27: "solo si está habilitado, lo podrán ver usuarios
+// reales" -- every real user's own visibleStatuses defaults to just
+// ['habilitado']; only a Usuario de Pruebas gets all 4.
+function masterTreeNodeKey(sectionId, itemId, submenuId) {
+    return `${sectionId}::${itemId || ''}::${submenuId || ''}`;
+}
+let masterStatusOverrideMapCache = null;
+let masterStatusOverrideMapSource = null;
+function getMasterStatusOverrideMap() {
+    const overrides = cachedBusinessProfile?.masterStatusOverrides || [];
+    if (masterStatusOverrideMapSource !== overrides) {
+        masterStatusOverrideMapCache = new Map(
+            overrides.map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r.status]),
+        );
+        masterStatusOverrideMapSource = overrides;
+    }
+    return masterStatusOverrideMapCache;
+}
+function resolveMasterNodeStatus(sectionId, itemId, submenuId) {
+    const overrides = getMasterStatusOverrideMap();
+    if (!overrides.size) return 'habilitado';
+    const deptStatus = overrides.get(masterTreeNodeKey(sectionId, null, null));
+    if (deptStatus) return deptStatus;
+    if (itemId) {
+        const itemStatus = overrides.get(masterTreeNodeKey(sectionId, itemId, null));
+        if (itemStatus) return itemStatus;
+    }
+    if (submenuId) {
+        const parts = String(submenuId).split('/');
+        for (let i = 1; i <= parts.length; i += 1) {
+            const partial = overrides.get(masterTreeNodeKey(sectionId, itemId, parts.slice(0, i).join('/')));
+            if (partial) return partial;
+        }
+    }
+    return 'habilitado';
+}
+// Applies REGARDLESS of isUnrestrictedClientAdmin -- that bypass answers
+// "does this user have an explicit grant", a separate question from "has
+// GEIPSA even released this yet", so a node under construction stays
+// invisible to the client's own unrestricted admin too, same as any other
+// real user. Only that client's own Usuario de Pruebas (Cuenta de
+// Capacitación) has every status in its own visibleStatuses.
+function isEstatusVisible(sectionId, itemId, submenuId) {
+    const status = resolveMasterNodeStatus(sectionId, itemId, submenuId);
+    const visible = cachedBusinessProfile?.visibleStatuses || ['habilitado'];
+    return visible.includes(status);
+}
+
 // availableDepartments (see applyLoginDefaults/wherever it's narrowed) only
 // ever filtered by this user's own grants at the Departamento level -- the
 // Área picker under a chosen department never got the same treatment, so it
@@ -5534,9 +5616,10 @@ function isUnrestrictedClientAdmin() {
 // department's own sectionId).
 function availableAreasForDepartment(deptKey) {
     const areas = (deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [];
-    if (isUnrestrictedClientAdmin()) return areas;
+    const visible = areas.filter((a) => isEstatusVisible(deptKey, a.key, null));
+    if (isUnrestrictedClientAdmin()) return visible;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
-    return areas.filter((a) => grants.some((g) => g.sectionId === deptKey && g.itemId === a.key));
+    return visible.filter((a) => grants.some((g) => g.sectionId === deptKey && g.itemId === a.key));
 }
 
 // "Pantalla habilitada" — whether this specific {sectionId, itemId,
@@ -5558,6 +5641,7 @@ function availableAreasForDepartment(deptKey) {
 // being reachable, matching how a worker actually experiences "I was given
 // access to this screen's fields."
 function hasScreenGrant(sectionId, itemId, submenuId) {
+    if (!isEstatusVisible(sectionId, itemId, submenuId)) return false;
     if (isUnrestrictedClientAdmin()) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     return grants.some((g) => (
@@ -5576,6 +5660,7 @@ function hasScreenGrant(sectionId, itemId, submenuId) {
 // Administrador") — an empty effectiveGrants set means "no override", not
 // "nothing granted", for that one user.
 function hasMainButtonPermission(itemId) {
+    if (!isEstatusVisible('main', itemId, null)) return false;
     if (isUnrestrictedClientAdmin()) return true;
     return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === 'main' && g.itemId === itemId);
 }
@@ -5616,6 +5701,7 @@ function syncButtonConfigShortcuts() {
 // still works too).
 const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-tamano-sistema', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
 function hasSettingsAccess() {
+    if (!isEstatusVisible('main', 'btn-configuracion', null)) return false;
     if (isUnrestrictedClientAdmin()) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     return grants.some((g) => {
@@ -5667,6 +5753,7 @@ function syncTopBarButtonVisibility() {
 // checks its 5 children instead), so this only ever matters for grants
 // saved before this breakdown shipped.
 function hasSettingsSubPermission(submenuId) {
+    if (!isEstatusVisible('main', 'btn-configuracion', submenuId)) return false;
     if (isUnrestrictedClientAdmin()) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     if (grants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-configuracion' && !g.submenuId)) return true;
@@ -6376,14 +6463,15 @@ async function initDashboard({ activePage } = {}) {
             window.location.replace('Inicio-en.html');
             return null;
         }
-        availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
+        availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key) && isEstatusVisible(d.key, null, null));
         // Narrow further to departments this SPECIFIC user actually has any
         // grant in (their Puesto de Trabajo's defaults + Permisos
         // Adicionales, already loaded into cachedBusinessProfile.effectiveGrants
         // by loadBusinessProfile() above) -- an unrestricted client admin
         // (Admin+ABBR, or the Capacitación account) skips this: they have
         // zero grant rows by design, which means "sees everything", not
-        // "sees nothing" (see isUnrestrictedClientAdmin's own comment).
+        // "sees nothing" (see isUnrestrictedClientAdmin's own comment). The
+        // Estatus filter just above still applies to them either way.
         if (!isUnrestrictedClientAdmin()) {
             const grantedSectionIds = new Set((cachedBusinessProfile?.effectiveGrants || []).map((g) => g.sectionId));
             availableDepartments = availableDepartments.filter((d) => grantedSectionIds.has(d.key));
