@@ -4475,3 +4475,471 @@ body.dark-mode .admin-save-status{
     padding: 0.8rem 0.4rem 0;
     cursor: pointer;
 }
+
+/* ===========================================================================
+   MobileTreeNav -- the "bank-app" style drill-down navigator that replaces
+   the raw scrollable tree on phone-width screens (see MobileTreeNav.js's own
+   header comment). Renders into a `.mtn-host` sitting right next to the real
+   engine's own container, which carries `.mtn-hidden-engine` here (kept in
+   the document -- never display:none -- since it still needs to lay out
+   normally for its own internal width/measurement logic; it is simply moved
+   off whatever the viewport can ever scroll to).
+   =========================================================================== */
+.mtn-hidden-engine{
+    position: absolute;
+    top: 0;
+    left: -9999px;
+    width: 1400px; /* wide enough that the engine never wraps/truncates its own columns while measuring */
+    height: 1px;
+    overflow: hidden;
+    pointer-events: none;
+}
+.mtn-host{
+    position: relative;
+}
+.mtn-root{
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+/* Breadcrumb bar -- always visible, one tap jumps back to any ancestor */
+.mtn-crumbbar{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.1rem 0.1rem 0.3rem;
+    font-size: 0.78rem;
+}
+.mtn-crumb{
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-weight: 600;
+    padding: 0.15rem 0.3rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    max-width: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mtn-crumb-now{
+    color: var(--color-text-primary);
+    background: var(--color-surface-alt);
+}
+.mtn-crumb-sep{
+    color: var(--color-border);
+    font-size: 0.7rem;
+}
+
+.mtn-pane{
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+/* Root screen -- short eyebrow + big title, matches the same "hero" idea
+   every other phone-style summary card in this app already opens with. */
+.mtn-top{
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.2rem 0.1rem 0;
+}
+.mtn-hello{
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.mtn-title{
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+/* Pinned shortcuts -- horizontal scroller of the admin's own most-used
+   nodes, replayed via MobileTreeNav.js's openPath (no search index needed:
+   it just re-clicks the same ancestors it took to get there the first time). */
+.mtn-pinbar{
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding: 0.1rem 0.1rem 0.2rem;
+}
+.mtn-pin{
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    cursor: pointer;
+}
+.mtn-pin-star{
+    width: 0.9rem;
+    height: 0.9rem;
+    color: var(--color-accent);
+    flex: none;
+}
+.mtn-pin-star svg{ width: 100%; height: 100%; display: block; }
+
+/* "Back" row -- shown instead of the hero once drilled into a node */
+.mtn-back{
+    display: flex;
+}
+.mtn-back button{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    color: var(--color-text-primary);
+    font: inherit;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 0.2rem 0.1rem;
+    cursor: pointer;
+    max-width: 100%;
+}
+.mtn-back button svg{ width: 1.1rem; height: 1.1rem; flex: none; color: var(--color-text-secondary); }
+.mtn-back button span{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtn-stat{
+    padding: 0 0.1rem;
+    font-size: 0.76rem;
+    color: var(--color-text-secondary);
+}
+.mtn-stat b{ color: var(--color-text-primary); font-weight: 700; }
+
+/* Card list -- one full-width row per child, tap drills straight into it
+   (a container) or opens its detail sheet (a leaf) -- see isLeafRow. */
+.mtn-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.mtn-empty{
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+    padding: 1.2rem 0.5rem;
+}
+.mtn-card{
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    width: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.9rem;
+    padding: 0.65rem 0.8rem;
+    cursor: pointer;
+    text-align: left;
+}
+.mtn-card:active{ background: var(--color-surface-alt); }
+.mtn-ico{
+    flex: none;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.65rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.mtn-ico svg{ width: 1.15rem; height: 1.15rem; }
+.mtn-ico-navy{
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+}
+.mtn-body{
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.mtn-name{
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mtn-meta{
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+.mtn-dots{
+    flex: none;
+    display: flex;
+    gap: 0.25rem;
+}
+.mtn-dot{
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--color-border);
+}
+.mtn-dot-full{ background: #1D9E75; }
+.mtn-dot-partial{ background: #D8A11D; }
+.mtn-dot-empty{ background: var(--color-border); }
+.mtn-chev{
+    flex: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    color: var(--color-text-secondary);
+}
+
+/* Detail sheet -- a leaf's (columna/acción) full editing surface, every
+   control here proxies straight to the real hidden engine's own control
+   (see MobileTreeNav.js) -- Guardar included. */
+.mtn-sheet{
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    padding: 1rem;
+}
+.mtn-sheet-head{
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+}
+.mtn-sheet-eyebrow{
+    display: none; /* reserved for a future per-kind label; kept out of the header for now to avoid a redundant "Columna" over every single sheet */
+}
+.mtn-sheet-title{
+    flex: 1 1 auto;
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+.mtn-pin-toggle{
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-alt);
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0.4rem;
+}
+.mtn-pin-toggle svg{ width: 100%; height: 100%; }
+.mtn-pin-toggle-on{
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+.mtn-sec{
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.mtn-sec-label{
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+}
+.mtn-chips{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.mtn-chip{
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-alt);
+    color: var(--color-text-primary);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.4rem 0.8rem;
+    border-radius: 1rem;
+    cursor: pointer;
+}
+.mtn-chip:disabled{ opacity: 0.5; cursor: default; }
+.mtn-chip-sel{
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+}
+.mtn-classpill{
+    align-self: flex-start;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.35rem 0.8rem;
+    border-radius: 1rem;
+    border: 1px solid currentColor;
+}
+
+.mtn-row2{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+.mtn-lbl{
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+.mtn-hint{
+    margin: 0.1rem 0 0;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+.mtn-mini-btn{
+    flex: none;
+    border: 1px solid var(--color-accent);
+    background: none;
+    color: var(--color-accent);
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.35rem 0.7rem;
+    border-radius: 0.6rem;
+    cursor: pointer;
+}
+
+/* Toggle switch -- proxies to the real hidden <input type=checkbox> (see
+   buildToggleRow: sets .checked then dispatches a real 'change' event,
+   since a synthetic event alone never flips native checkbox state). */
+.mtn-toggle{
+    flex: none;
+    width: 2.7rem;
+    height: 1.55rem;
+    border-radius: 1rem;
+    border: none;
+    background: var(--color-border);
+    position: relative;
+    cursor: pointer;
+    padding: 0;
+}
+.mtn-toggle i{
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background: var(--color-surface);
+    transition: left 0.15s ease;
+    display: block;
+}
+.mtn-toggle-on{ background: var(--color-accent); }
+.mtn-toggle-on i{ left: calc(100% - 1.4rem); }
+.mtn-toggle:disabled{ opacity: 0.5; cursor: default; }
+
+.mtn-costrow{
+    display: flex;
+    gap: 0.6rem;
+}
+.mtn-cost-field{
+    flex: 1 1 0;
+}
+.mtn-cost-field input{
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-alt);
+    color: var(--color-text-primary);
+    border-radius: 0.6rem;
+    padding: 0.5rem 0.6rem;
+    font: inherit;
+    font-size: 0.85rem;
+}
+
+.mtn-actionsrow{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-top: 0.2rem;
+    border-top: 1px solid var(--color-border);
+}
+.mtn-abtn{
+    flex: 1 1 auto;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-alt);
+    color: var(--color-text-primary);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.6rem 0.8rem;
+    border-radius: 0.7rem;
+    cursor: pointer;
+    text-align: center;
+}
+.mtn-abtn-primary{
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+}
+
+/* Giro's own semáforo chip (grantMode:'giro' -- see MobileTreeNav.js's
+   buildGateRow), same 5-state palette as the desktop .perm-tree-gate-icon-*
+   rules it proxies to. */
+.mtn-gate-chip{
+    flex: none;
+    border: 1px solid var(--color-border);
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.4rem 0.8rem;
+    border-radius: 1rem;
+    cursor: pointer;
+    background: transparent;
+    color: var(--color-text-secondary);
+}
+.mtn-gate-chip:disabled{ cursor: not-allowed; opacity: 0.7; }
+.mtn-gate-chip-granted{
+    background: color-mix(in srgb, #1e7e34 14%, transparent);
+    color: #1e7e34;
+    border-color: transparent;
+}
+.mtn-gate-chip-partial{
+    background: var(--color-surface-alt);
+    color: var(--color-text-secondary);
+}
+.mtn-gate-chip-available{
+    background: transparent;
+    color: var(--color-text-secondary);
+}
+.mtn-gate-chip-needsWeb{
+    background: transparent;
+    border-style: dashed;
+    opacity: 0.75;
+}
+.mtn-gate-chip-blocked{
+    background: color-mix(in srgb, #b3261e 12%, transparent);
+    color: #b3261e;
+    border-color: transparent;
+}
+/* Same JS-toggled body.dark-mode convention every other rule in this file
+   uses (not data-theme/prefers-color-scheme -- this app has no such
+   convention), mirroring .perm-tree-gate-icon-granted/-blocked's own dark
+   override right above. */
+body.dark-mode .mtn-gate-chip-granted{ background: color-mix(in srgb, #7fd99a 18%, transparent); color: #7fd99a; }
+body.dark-mode .mtn-gate-chip-blocked{ background: color-mix(in srgb, #e37b73 18%, transparent); color: #e37b73; }

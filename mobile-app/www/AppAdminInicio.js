@@ -1180,6 +1180,19 @@ async function loadMasterTree(token) {
         treeViewWrap.appendChild(treeWrap);
         contentEl.appendChild(treeViewWrap);
 
+        // "Árbol" now shows MobileTreeNav's own bank-app-style drill-down
+        // instead of the raw scrollable tree -- confirmed live, 2026-09-27
+        // ("reemplaza la vista actual"). treeWrap keeps rendering the SAME
+        // real engine as before (nothing about PermissionTree.js's own
+        // logic changes), just visually off-screen now (see
+        // .mtn-hidden-engine in Admin.css): MobileTreeNav reads its DOM and
+        // drives its real controls, so every rollup/save/diff/order/cost
+        // behavior already built for this tree keeps working unchanged.
+        treeWrap.classList.add('mtn-hidden-engine');
+        const navHost = document.createElement('div');
+        navHost.className = 'mtn-host';
+        treeViewWrap.appendChild(navHost);
+
         const resumenViewWrap = document.createElement('div');
         resumenViewWrap.hidden = true;
         contentEl.appendChild(resumenViewWrap);
@@ -1238,6 +1251,13 @@ async function loadMasterTree(token) {
             openConfirmSheet(changes, extraChanges, () => saveMasterTree(saveBtn));
         });
         contentEl.appendChild(saveBtn);
+
+        window.MobileTreeNav.mount(navHost, treeWrap, {
+            title: t('admin.masterTreeNavHello'),
+            rootLabel: t('menu.masterPermissionsTree'),
+            pinsKey: 'mtnPinsMaster',
+            onSave: () => saveBtn.click(),
+        });
     } catch {
         if (token !== renderToken) return;
         contentEl.innerHTML = '';
@@ -1256,12 +1276,32 @@ async function loadMasterTree(token) {
 // everything else (fetch, build header/rows/Guardar, wire events) since
 // that file is its own self-contained factory, not a shared instance API
 // like PermissionTree.js's own create().
-function loadSaasMasterTree(token) {
+async function loadSaasMasterTree(token) {
     contentEl.innerHTML = '';
     const wrap = document.createElement('div');
-    wrap.className = 'admin-master-tree';
+    wrap.className = 'admin-master-tree mtn-hidden-engine';
     contentEl.appendChild(wrap);
-    window.SaasMasterTree.render(wrap);
+    // Awaited -- render() fetches its own data and only then fills listEl
+    // with real rows; MobileTreeNav needs those rows to already be there
+    // the moment it mounts, or its root screen would show empty until
+    // something else happened to trigger a re-render.
+    await window.SaasMasterTree.render(wrap);
+    if (token !== renderToken) return; // switched tabs while that fetch was in flight
+    // Same MobileTreeNav swap as loadMasterTree above -- wrap keeps
+    // rendering the real SaaS tree engine off-screen; navHost shows the
+    // phone-style drill-down instead. This screen never exposed its own
+    // Guardar reference (SaasMasterTree.render builds its own saveBtn
+    // internally), so it's found by class right after render() resolves.
+    const navHost = document.createElement('div');
+    navHost.className = 'mtn-host';
+    contentEl.appendChild(navHost);
+    const saveBtn = wrap.querySelector('button.btn');
+    window.MobileTreeNav.mount(navHost, wrap, {
+        title: t('admin.masterTreeNavHello'),
+        rootLabel: t('menu.saasMasterTree'),
+        pinsKey: 'mtnPinsSaas',
+        onSave: () => saveBtn && saveBtn.click(),
+    });
 }
 
 // --- Giros de Negocio -- ports Admin-BusinessSectors.js's own screen into
@@ -1483,12 +1523,15 @@ function renderSectorTree(sector) {
     // checkbox tree this replaced (that one's App column never actually
     // worked here either -- GET /api/business/app-screens 404s with no
     // req.user.clientId on a GEIPSA admin session).
-    treeWrap.className = 'perm-tree perm-tree-scroll-x';
+    treeWrap.className = 'perm-tree perm-tree-scroll-x mtn-hidden-engine';
     contentEl.appendChild(treeWrap);
     const hint = document.createElement('p');
     hint.className = 'home-carga-empty-note';
     hint.textContent = t('admin.loading') || '...';
     treeWrap.appendChild(hint);
+    const navHost = document.createElement('div');
+    navHost.className = 'mtn-host';
+    contentEl.appendChild(navHost);
 
     let sectorTreeInstance = null;
     (async () => {
@@ -1511,6 +1554,19 @@ function renderSectorTree(sector) {
                 costCurrency: costsData.currency || 'MXN',
             });
             await sectorTreeInstance.init(grantsData.grants || []);
+            // Same MobileTreeNav swap as the other two trees -- treeWrap
+            // keeps rendering the real "Accesos Globales" réplica off-screen,
+            // navHost shows the drill-down. Estatus/$ Web/$ App render
+            // read-only here (grantMode disables them); Web/App itself is
+            // this screen's own editable semáforo, handled by MobileTreeNav's
+            // buildGateRow (a different control shape than the other two
+            // trees' checkbox, see that file's own comment).
+            window.MobileTreeNav.mount(navHost, treeWrap, {
+                title: t('admin.masterTreeNavHello'),
+                rootLabel: t('admin.giroAccesosGlobalesTitle'),
+                pinsKey: `mtnPinsGiro:${sector.id}`,
+                onSave: () => saveBtn.click(),
+            });
         } catch {
             treeWrap.innerHTML = '';
             const error = document.createElement('p');

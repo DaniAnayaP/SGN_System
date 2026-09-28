@@ -1854,6 +1854,11 @@
         function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, previewInfo, classificationCtx, tint) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
+            // Identifies this row for MobileTreeNav.js, which drives this
+            // same engine's real controls from a phone-style drill-down UI
+            // instead of re-implementing any of the logic below -- see that
+            // file's own header comment.
+            if (key) row.dataset.nodeKey = key;
             // Drag-to-reorder -- Árbol Maestro only. dragCtx is
             // { kind, id, scope, onDrop(draggedId, targetId) }, passed at
             // whichever depth is currently reorderable (depth 0 for
@@ -5000,6 +5005,18 @@
                     // sit at depth-3, which was never uppercased to begin
                     // with, so they need no exemption of their own.
                     if (isGeneralItem) itemRow.classList.add('perm-tree-row-plain-case');
+                    // Iconos de Navegación's own buttons render AFTER
+                    // Inicio/Panel/Tablero (this whole forEach keeps
+                    // menu.json's own item order, never regrouped by
+                    // isNavIconItem), so they aren't DOM-contiguous with
+                    // their own header row above -- depth+order alone can't
+                    // tell MobileTreeNav.js's generic child-scan that a
+                    // depth-2 Inicio/Panel/Tablero row in between isn't the
+                    // end of "Iconos de Navegación"'s own children. This
+                    // explicit stamp is that adapter's one escape hatch
+                    // (see childrenOf there); purely additive, no visual or
+                    // behavioral change here.
+                    if (isNavIconItem) itemRow.dataset.parentKey = navIconsKey;
                     treeRoot.appendChild(itemRow);
                     if (!hasSubmenu || !itemExpanded) return;
                     const smAncestorLocked = itemOwnAncestorLocked || nodeWebOff(itemStateKey);

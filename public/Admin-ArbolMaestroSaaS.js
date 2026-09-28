@@ -1907,6 +1907,7 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
     row.appendChild(labelElNode);
     row.appendChild(countBadge(1 + nested.reduce((sum, na) => sum + nestedChildItemCount(screen, na), 0)));
     row.appendChild(buildControls(key, nestedKeys, screen.href, classificationCtx, label));
+    row.dataset.nodeKey = key; // see MobileTreeNav.js's own header comment
     listEl.appendChild(row);
     // This leaf's own "esta columna" override (col-own:key, see
     // buildLeafColorGroup) always wins on THIS row -- it's a single-row
@@ -1955,6 +1956,7 @@ function renderLeafWithLevels(screen, apartado, leaf, depth, aKey, dragGroupId, 
             if (ownNestedTint.bg) levelRow.style.backgroundColor = ownNestedTint.bg;
             if (ownNestedTint.text) levelLabelNode.style.color = ownNestedTint.text;
         }
+        levelRow.dataset.nodeKey = levelKey;
         listEl.appendChild(levelRow);
     });
 }
@@ -2001,6 +2003,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
             if (nestedTint.bg) iconsRow.style.backgroundColor = nestedTint.bg;
             if (nestedTint.text) iconsLabelNode.style.color = nestedTint.text;
         }
+        iconsRow.dataset.nodeKey = iconsKey;
         listEl.appendChild(iconsRow);
         if (isExpanded(`cls:${iconsKey}`)) {
             ICON_PERSONALIZATION_ITEMS.forEach((icon) => {
@@ -2018,6 +2021,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
                     if (nestedTint.bg) iconRow.style.backgroundColor = nestedTint.bg;
                     if (nestedTint.text) iconLabelNode.style.color = nestedTint.text;
                 }
+                iconRow.dataset.nodeKey = iconKey;
                 listEl.appendChild(iconRow);
             });
         }
@@ -2090,6 +2094,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
         if (nestedTint.bg) apRow.style.backgroundColor = nestedTint.bg;
         if (nestedTint.text) apLabelNode.style.color = nestedTint.text;
     }
+    apRow.dataset.nodeKey = aKey;
     listEl.appendChild(apRow);
     if (!hasOwnBody || !isExpanded(`a:${aKey}`)) return;
 
@@ -2124,6 +2129,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
             if (nestedTint.bg) ciRow.style.backgroundColor = nestedTint.bg;
             if (nestedTint.text) ciLabelNode.style.color = nestedTint.text;
         }
+        ciRow.dataset.nodeKey = ciGroupKey;
         listEl.appendChild(ciRow);
         if (isExpanded(`cls:${ciGroupKey}`)) {
             fixedCiLeaves.forEach((leaf) => {
@@ -2165,6 +2171,7 @@ function renderApartadoNode(screen, apartado, depth, opts) {
             if (nestedTint.bg) clsRow.style.backgroundColor = nestedTint.bg;
             if (nestedTint.text) clsLabelNode.style.color = nestedTint.text;
         }
+        clsRow.dataset.nodeKey = groupKey;
         listEl.appendChild(clsRow);
         if (!isExpanded(`cls:${groupKey}`)) return;
 
@@ -2271,6 +2278,7 @@ function renderList() {
     // likewise the whole app shell, not a real Grupo like Servicio a
     // Cliente/Config. SaaS (confirmed live, 2026-09-17).
     generalRow.appendChild(buildControls('__general__', allLeafKeys, CATALOG[0].screens[0].href, { readOnlyLabel: Dashboard.t('admin.masterTreeGeneralClassification'), readOnlyColor: SAAS_LEVEL_BADGES.apartado.color }, Dashboard.t('admin.saasMasterTreeGeneral')));
+    generalRow.dataset.nodeKey = '__general__';
     listEl.appendChild(generalRow);
 
     if (isExpanded('gen:main')) {
@@ -2289,6 +2297,7 @@ function renderList() {
         gaRow.appendChild(labelEl(Dashboard.t('sidebar.generalAccess')));
         gaRow.appendChild(countBadge(gaLeafKeys.length));
         gaRow.appendChild(buildControls('ga:main', gaLeafKeys, GENERAL_ITEMS.find((i) => i.href)?.href || null, buildLevelBadgeCtx('apartado'), Dashboard.t('sidebar.generalAccess')));
+        gaRow.dataset.nodeKey = 'ga:main';
         listEl.appendChild(gaRow);
 
         if (isExpanded('ga:main')) {
@@ -2305,6 +2314,7 @@ function renderList() {
                 itemRow.appendChild(labelEl(Dashboard.t(item.labelKey)));
                 itemRow.appendChild(countBadge(1));
                 itemRow.appendChild(buildControls(item.itemId, [], item.href, buildLevelBadgeCtx('pantalla'), Dashboard.t(item.labelKey)));
+                itemRow.dataset.nodeKey = item.itemId;
                 listEl.appendChild(itemRow);
             });
 
@@ -2323,6 +2333,7 @@ function renderList() {
             navRow.appendChild(labelEl(Dashboard.t('menu.navIcons')));
             navRow.appendChild(countBadge(NAV_ICON_ITEMS.length + navConfigItemCount));
             navRow.appendChild(buildControls(NAV_ICONS_KEY, navKeys, null, navCtx, Dashboard.t('menu.navIcons')));
+            navRow.dataset.nodeKey = NAV_ICONS_KEY;
             listEl.appendChild(navRow);
             if (isExpanded(`cls:${NAV_ICONS_KEY}`)) {
                 NAV_ICON_ITEMS.forEach((icon) => {
@@ -2356,6 +2367,7 @@ function renderList() {
                     navIconRow.appendChild(labelEl(Dashboard.t(icon.labelKey)));
                     navIconRow.appendChild(countBadge(isConfig ? 1 + navConfigItemCount : 1));
                     navIconRow.appendChild(buildControls(icon.itemId, isConfig ? navConfigLeafKeys : [], null, navCtx, Dashboard.t(icon.labelKey)));
+                    navIconRow.dataset.nodeKey = icon.itemId;
                     listEl.appendChild(navIconRow);
                     if (isConfig && expandedLeaves.has(`leaf:${icon.itemId}`)) {
                         renderApartadoNode(NAV_ICONS_SCREEN, MODAL_CONFIG_APARTADO, 4, { draggable: false });
@@ -2384,6 +2396,7 @@ function renderList() {
         // rollup -- points at this group's own first screen, same
         // first-screen fallback General uses just above.
         groupRow.appendChild(buildControls(group.groupId, groupLeafKeys, group.screens[0].href, buildLevelBadgeCtx('apartado'), Dashboard.t(group.labelKey)));
+        groupRow.dataset.nodeKey = group.groupId;
         listEl.appendChild(groupRow);
         if (!isExpanded(`g:${group.groupId}`)) return;
 
@@ -2401,6 +2414,7 @@ function renderList() {
             screenRow.appendChild(labelEl(Dashboard.t(screen.labelKey)));
             screenRow.appendChild(countBadge(screensItemCount([screen])));
             screenRow.appendChild(buildControls(screen.itemId, screenLeafKeys, screen.href, buildLevelBadgeCtx('pantalla'), Dashboard.t(screen.labelKey)));
+            screenRow.dataset.nodeKey = screen.itemId;
             listEl.appendChild(screenRow);
             if (!isExpanded(`s:${screen.itemId}`)) return;
 
@@ -2439,6 +2453,7 @@ function renderList() {
                 botonesRow.appendChild(labelEl(Dashboard.t('menu.classBotones')));
                 botonesRow.appendChild(countBadge(actionLeafKeys.length));
                 botonesRow.appendChild(buildControls(botonesKey, actionLeafKeys, screen.href, botonesCtx, Dashboard.t('menu.classBotones')));
+                botonesRow.dataset.nodeKey = botonesKey;
                 listEl.appendChild(botonesRow);
                 if (isExpanded(`cls:${botonesKey}`)) {
                     screenActionEntries.forEach(({ apartado, leaf }) => {
