@@ -2722,6 +2722,18 @@
         max-height: 16rem;
         overflow-y: auto;
     }
+    /* Admin-EquipoSaaS.js's own Historial de cambios modal -- same
+       .data-table-col-filter-trigger/-menu classes above, just not a
+       registered .data-table (no pin/reorder/width there, only filtering
+       makes sense in a fixed 6-column history dialog), so the <th> itself
+       needs the same position:relative + padding-left th.data-table-col-
+       sortable already gives a real .data-table header, without pulling in
+       the sort-arrow spacing that class also carries. Confirmed visually
+       with the user, 2026-09-28, before building this. */
+    .saas-changes-th{
+        position: relative;
+        padding-left: 1.7rem;
+    }
     /* Set by applyColumnValueFilters — independent from (and composes
        additively with) each page's own `tr.hidden`, see that function's own
        comment in Dashboard.js. */

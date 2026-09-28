@@ -696,6 +696,32 @@ function hasSaasScreenAccess(activePage) {
     return hasSaasScreenGrant(itemId);
 }
 
+// Per-table Iconos Personalización, SaaS side -- mirrors hasIconGrant's own
+// client-side check, but against the SaaS tree's Estatus instead of a
+// profile grant (there's no per-account icon-level grant yet -- see
+// SaasAdminCatalog.js's own comment on "el árbol de permisos POR CUENTA...
+// todavía no profundiza"). Confirmed live, 2026-09-28: "todas las tablas
+// deben llevar su clasificación... la cual se define desde el árbol de
+// permisos" -- Árbol Maestro SaaS already gives every Iconos Personalización
+// leaf its own Estatus selector (see ICON_PERSONALIZATION_ITEMS/buildLeaves
+// in Admin-ArbolMaestroSaaS.js), this is what actually makes that selector
+// do something at runtime; before this it was purely cosmetic. Returns null
+// (not a SaaS table) so callers fall back to hasIconGrant for every other
+// table -- resolveIconGrant below is that fallback dispatcher.
+const SAAS_TABLE_ICON_SCREENS = {
+    'equipo-saas': { screenItemId: 'saas-team', apartadoId: 'tabla' },
+    'nuestros-clientes': { screenItemId: 'saas-clients', apartadoId: 'tabla' },
+    'mis-planes': { screenItemId: 'saas-plans', apartadoId: 'tabla' },
+    'costo-accesos-permisos': { screenItemId: 'saas-module-costs', apartadoId: 'tabla' },
+};
+function hasSaasTableIconGrant(tableId, iconId) {
+    const mapping = SAAS_TABLE_ICON_SCREENS[tableId];
+    if (!mapping) return null;
+    const key = `${mapping.screenItemId}::${mapping.apartadoId}::icon-${iconId}`;
+    const visible = cachedSaasVisibleStatuses || ['habilitado'];
+    return visible.includes(resolveSaasNodeStatus(key));
+}
+
 // Árbol Maestro SaaS's own reorder (saas_master_order, edited on
 // Admin-ArbolMaestroSaaS.html) used to only ever change that screen's own
 // tree display -- confirmed live that dragging "Giros de Negocio" above
@@ -2240,7 +2266,7 @@ function renderDataTableZoomControls() {
         const tableKey = wrapper.dataset.tableId;
         const zoom = document.createElement('div');
         zoom.className = 'data-table-zoom';
-        if (hasIconGrant(tableKey, 'iconZoomOut')) {
+        if (resolveIconGrant(tableKey, 'iconZoomOut')) {
             const outBtn = document.createElement('button');
             outBtn.type = 'button';
             outBtn.className = 'data-table-zoom-btn';
@@ -2250,7 +2276,7 @@ function renderDataTableZoomControls() {
             outBtn.addEventListener('click', () => setDataTableFontSize(getDataTableFontSize() - DATA_TABLE_FONT_STEP));
             zoom.appendChild(outBtn);
         }
-        if (hasIconGrant(tableKey, 'iconZoomIn')) {
+        if (resolveIconGrant(tableKey, 'iconZoomIn')) {
             const inBtn = document.createElement('button');
             inBtn.type = 'button';
             inBtn.className = 'data-table-zoom-btn';
@@ -4166,7 +4192,7 @@ function renderDataTableColumnControls() {
             const tableKey = getTableId(wrapper, index);
             const toAppend = [];
 
-            if (hasIconGrant(tableKey, 'iconPin')) {
+            if (resolveIconGrant(tableKey, 'iconPin')) {
                 const pinBtn = document.createElement('button');
                 pinBtn.type = 'button';
                 pinBtn.className = 'data-table-zoom-btn';
@@ -4178,7 +4204,7 @@ function renderDataTableColumnControls() {
                 toAppend.push(pinBtn);
             }
 
-            if (hasIconGrant(tableKey, 'iconVisibility')) {
+            if (resolveIconGrant(tableKey, 'iconVisibility')) {
                 const visBtn = document.createElement('button');
                 visBtn.type = 'button';
                 visBtn.className = 'data-table-zoom-btn';
@@ -4190,7 +4216,7 @@ function renderDataTableColumnControls() {
                 toAppend.push(visBtn);
             }
 
-            if (hasIconGrant(tableKey, 'iconHistory')) {
+            if (resolveIconGrant(tableKey, 'iconHistory')) {
                 const historyBtn = document.createElement('button');
                 historyBtn.type = 'button';
                 historyBtn.className = 'data-table-zoom-btn';
@@ -4202,7 +4228,7 @@ function renderDataTableColumnControls() {
                 toAppend.push(historyBtn);
             }
 
-            if (hasIconGrant(tableKey, 'iconLegend')) {
+            if (resolveIconGrant(tableKey, 'iconLegend')) {
                 const legendBtn = document.createElement('button');
                 legendBtn.type = 'button';
                 legendBtn.className = 'data-table-zoom-btn';
@@ -4243,7 +4269,7 @@ function renderDataTableColumnControls() {
             if (filterBar?.classList?.contains('filter-bar')) {
                 const filterToAppend = [];
                 let filterBtn = null;
-                if (hasIconGrant(tableKey, 'iconFilter')) {
+                if (resolveIconGrant(tableKey, 'iconFilter')) {
                     filterBtn = document.createElement('button');
                     filterBtn.type = 'button';
                     filterBtn.className = 'data-table-zoom-btn';
@@ -4260,7 +4286,7 @@ function renderDataTableColumnControls() {
                     filterToAppend.push(filterBtn);
                 }
 
-                if (hasIconGrant(tableKey, 'iconFilterClear')) {
+                if (resolveIconGrant(tableKey, 'iconFilterClear')) {
                     const clearBtn = document.createElement('button');
                     clearBtn.type = 'button';
                     clearBtn.className = 'data-table-zoom-btn';
@@ -6755,6 +6781,15 @@ function hasIconGrant(tableKey, iconId) {
     return grants.some((g) => (
         g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}`
     ));
+}
+// Dispatcher every icon-grant check site calls instead of hasIconGrant
+// directly -- hasSaasTableIconGrant returns null for a tableKey it doesn't
+// recognize (any client table), so this transparently falls back to the
+// original client-side check there, and only diverts to the SaaS Estatus
+// check for the 4 SaaS admin tables that need it.
+function resolveIconGrant(tableKey, iconId) {
+    const saasResult = hasSaasTableIconGrant(tableKey, iconId);
+    return saasResult !== null ? saasResult : hasIconGrant(tableKey, iconId);
 }
 // `pending` (whether the SERVER already reported this exact field as
 // awaiting approval, via GET .../fuel-records|hr-workers' pendingFields)

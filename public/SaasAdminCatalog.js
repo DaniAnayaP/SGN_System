@@ -108,14 +108,28 @@ window.SAAS_ADMIN_CATALOG = [
             {
                 itemId: 'saas-module-costs', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html',
                 apartados: [
-                    { id: 'tabla', label: 'Tabla principal', columnas: ['Nombre del plan', 'Fecha de creación', 'Costo accesos/permisos', 'Costo por centro de costo', 'Status'], acciones: ['Filtrar', 'Editar costo', 'Registro de Cambios'] },
+                    // controlInterno: true (via tablaApartado) -- confirmed
+                    // live, 2026-09-28: "todas las tablas deben llevar su
+                    // clasificación... la cual se define desde el árbol de
+                    // permisos". This is what actually turns on the
+                    // "Iconos Personalización" sibling row (Filtrar included
+                    // among its 8 leaves, see ICON_PERSONALIZATION_ITEMS in
+                    // Admin-ArbolMaestroSaaS.js) -- 'Filtrar' dropped from
+                    // acciones below since it would otherwise show twice.
+                    tablaApartado('tabla', ['Nombre del plan', 'Fecha de creación', 'Costo accesos/permisos', 'Costo por centro de costo', 'Status'], ['Editar costo', 'Registro de Cambios']),
                     { id: 'modal-arbol-costo', label: 'Modal: Árbol de Costo (por plan)', acciones: ['Editar $ Web', 'Editar $ App'] },
                 ],
             },
             {
                 itemId: 'saas-team', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html',
                 apartados: [
-                    { id: 'tabla', label: 'Tabla principal', columnas: ['Username', 'Nombre', 'Email', 'Fecha de creación'], acciones: ['+ Nuevo Admin SaaS'], tableActions: ['Acceso de esta cuenta'] },
+                    // controlInterno: true (via tablaApartado) -- same fix
+                    // as saas-module-costs above, confirmed live,
+                    // 2026-09-28. Column/action list kept as-is here (not
+                    // backfilling the Status column or the 3 newer row
+                    // icons added later this session -- separate, narrower
+                    // catalog-accuracy cleanup, not part of this fix).
+                    tablaApartado('tabla', ['Username', 'Nombre', 'Email', 'Fecha de creación'], ['+ Nuevo Admin SaaS'], ['Acceso de esta cuenta']),
                     // Modal: Acceso de la cuenta -- un árbol propio (ver
                     // SAAS_PERMISSION_CATALOG en Admin-EquipoSaaS.js), una
                     // pantalla por Apartado en vez de una sola fila con el
