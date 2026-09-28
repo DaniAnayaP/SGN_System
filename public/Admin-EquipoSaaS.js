@@ -229,6 +229,37 @@ function renderSaasUsers() {
         });
         tdActions.appendChild(editNameBtn);
 
+        // Editar usuario -- same pattern as Editar nombre above, confirmed
+        // live, 2026-09-28: renaming the seeded admin account's username to
+        // admin_saas. Own icon (bx-user, not bx-edit) so the two edit
+        // actions read as distinct controls, not duplicates.
+        const editUsernameBtn = document.createElement('button');
+        editUsernameBtn.type = 'button';
+        editUsernameBtn.className = 'admin-icon-btn';
+        editUsernameBtn.setAttribute('aria-label', Dashboard.t('admin.saasEditUsername'));
+        editUsernameBtn.title = Dashboard.t('admin.saasEditUsername');
+        editUsernameBtn.innerHTML = '<i class="bx bx-user" aria-hidden="true"></i>';
+        editUsernameBtn.addEventListener('click', async () => {
+            const nextUsername = window.prompt(Dashboard.t('admin.saasEditUsernamePrompt'), user.username);
+            if (nextUsername == null) return; // cancelled
+            const trimmed = nextUsername.trim();
+            if (!trimmed || trimmed === user.username) return;
+            try {
+                const res = await fetch(`/api/admin/saas-users/${user.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username: trimmed }),
+                });
+                if (!res.ok) throw new Error(res.status === 409 ? 'taken' : 'update failed');
+                Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+                await loadSaasUsers();
+            } catch (err) {
+                Dashboard.showToast(err.message === 'taken' ? Dashboard.t('admin.saasUsernameTaken') : Dashboard.t('admin.saveError'), 'error');
+            }
+        });
+        tdActions.appendChild(editUsernameBtn);
+
         const treeBtn = document.createElement('button');
         treeBtn.type = 'button';
         treeBtn.className = 'admin-icon-btn';

@@ -302,6 +302,8 @@ const {
     getSaasUserById,
     setSaasUserActive,
     setSaasUserName,
+    setSaasUserUsername,
+    isSaasUsernameTaken,
     resetSaasUserPassword,
     getSaasUserChanges,
     getAllSaasUserChanges,
@@ -2558,8 +2560,8 @@ app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) =>
 // what id is sent.
 app.patch('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => {
     const targetId = Number(req.params.id);
-    const { active, name } = req.body || {};
-    if (active === undefined && name === undefined) return res.status(400).json({ message: 'Nothing to update.' });
+    const { active, name, username } = req.body || {};
+    if (active === undefined && name === undefined && username === undefined) return res.status(400).json({ message: 'Nothing to update.' });
     if (active !== undefined) {
         if (typeof active !== 'boolean') return res.status(400).json({ message: 'active must be a boolean.' });
         if (!active && targetId === req.user.sub) return res.status(400).json({ message: "You can't deactivate your own account." });
@@ -2569,6 +2571,16 @@ app.patch('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => 
     if (name !== undefined) {
         if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'name must be a non-empty string.' });
         const updated = setSaasUserName(targetId, name.trim(), changedByLabel(req));
+        if (!updated) return res.status(404).json({ message: 'SaaS account not found.' });
+    }
+    // username -- confirmed live, 2026-09-28: renaming the seeded admin
+    // account to admin_saas. Same UNIQUE constraint as creation/registration,
+    // checked here first instead of letting the UPDATE throw.
+    if (username !== undefined) {
+        if (typeof username !== 'string' || !username.trim()) return res.status(400).json({ message: 'username must be a non-empty string.' });
+        const trimmed = username.trim();
+        if (isSaasUsernameTaken(trimmed, targetId)) return res.status(409).json({ message: 'Username already taken.' });
+        const updated = setSaasUserUsername(targetId, trimmed, changedByLabel(req));
         if (!updated) return res.status(404).json({ message: 'SaaS account not found.' });
     }
     res.json({ user: getSaasUserById(targetId) });

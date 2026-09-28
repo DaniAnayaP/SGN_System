@@ -6953,6 +6953,28 @@ function setSaasUserName(userId, name, changedBy) {
     });
     return getSaasUserById(userId);
 }
+// username is UNIQUE across the whole users table (clients included) --
+// server.js checks isSaasUsernameTaken before calling this, same
+// "validate first, then write" split usernameOrEmailExists' own callers
+// already use for creation.
+function isSaasUsernameTaken(username, excludeUserId) {
+    return !!db.prepare('SELECT 1 FROM users WHERE username = ? AND id != ?').get(username, excludeUserId);
+}
+// Same shape/logging as setSaasUserName above -- lets an admin correct a
+// SaaS account's own login username (e.g. renaming the seeded admin/admin
+// account's username to admin_saas, confirmed live 2026-09-28). recordLabel
+// uses the NEW username (the row's own identifier is what's changing here,
+// unlike a name/status edit where the username stays put as the label).
+function setSaasUserUsername(userId, username, changedBy) {
+    const user = getSaasUserById(userId);
+    if (!user) return null;
+    db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, userId);
+    logSaasUserChange({
+        userId, recordLabel: username, action: 'update', fieldKey: 'business.username',
+        oldValue: user.username, newValue: username, changedBy,
+    });
+    return getSaasUserById(userId);
+}
 // Same shape as activateClient/provisionTrainingAccount's own
 // { generatedPassword } -- for when nobody has (or remembers) an account's
 // current password, e.g. Pruebas_SGN's own auto-generated one, which
@@ -7520,6 +7542,8 @@ module.exports = {
     getSaasUserById,
     setSaasUserActive,
     setSaasUserName,
+    setSaasUserUsername,
+    isSaasUsernameTaken,
     resetSaasUserPassword,
     getSaasUserChanges,
     getAllSaasUserChanges,
