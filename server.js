@@ -2559,6 +2559,24 @@ app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) =>
 // way back in from here) -- getSaasUserById's own role='admin' scoping is
 // what stops this route from ever reaching a client user's row, no matter
 // what id is sent.
+// TEMPORARY, 2026-09-28 -- one-time cleanup of throwaway test SaaS accounts
+// created during today's access-control verification (__prod_verify_zero__
+// etc.). Never a real "delete a user" feature (that stays removed, per the
+// standing "never delete, only change Estatus" rule) -- scoped so it can
+// ONLY ever touch a username starting with "__", which no real account
+// uses. Remove this route entirely right after using it once.
+app.delete('/api/admin/saas-users-test-cleanup/:id', requireAuth, requireAdmin, (req, res) => {
+    const targetId = Number(req.params.id);
+    const target = getSaasUserById(targetId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    if (!target.username.startsWith('__')) {
+        return res.status(400).json({ message: 'Refusing to delete a non-test account.' });
+    }
+    db.prepare('DELETE FROM saas_user_changes WHERE user_id = ?').run(targetId);
+    db.prepare('DELETE FROM saas_user_grants WHERE user_id = ?').run(targetId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(targetId);
+    res.json({ deleted: target.username });
+});
 app.patch('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => {
     const targetId = Number(req.params.id);
     const { active, name, username } = req.body || {};
