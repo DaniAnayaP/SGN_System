@@ -1782,8 +1782,8 @@ ensureColumn('users', 'is_test_account', 'INTEGER NOT NULL DEFAULT 0');
 // 'habilitado' or 'habilitado,inhabilitado,construccion,mejoras') -- every
 // REAL user defaults to just 'habilitado' (confirmed live, 2026-09-27:
 // "solo si está habilitado, lo podrán ver usuarios reales"), while a
-// Usuario de Pruebas (see is_test_account, USUARIO_PRUEBAS, and
-// provisionTrainingAccount's own Pruebas_<Abreviatura> accounts) gets all
+// Usuario de Pruebas (see is_test_account, the SaaS-side Pruebas_SGN
+// account, and provisionTrainingAccount's own Pruebas_<Abreviatura> accounts) gets all
 // 4. This is deliberately its own per-user setting, not hardcoded to
 // is_test_account, per the user's own follow-up: "a cada usuario, se le
 // puede agregar cual de los 4 estatus pueda ver... puede tener uno o los
@@ -2099,27 +2099,50 @@ if (userCount === 0) {
 // provisionTrainingAccount below); the SaaS/GEIPSA-internal side (Árbol
 // Maestro SaaS, Config. SaaS) had no equivalent until now (confirmed live,
 // 2026-09-27: "Por default todos los clientes deben tener un usuario de
-// pruebas... así como en el SaaS"). Exactly one such account, username
-// literally "USUARIO_PRUEBAS" per the user's own naming choice, role
-// 'admin' like any other GEIPSA staff account, is_test_account = 1 so the
-// coming Estatus gate (habilitado/inhabilitado/construccion/mejoras) knows
-// to exempt it. Zero saas_user_grants rows on a fresh account already means
-// "sees everything" (see hasSaasGrant's own `if (!grants.length) return
-// true`), so no grants need seeding here. Idempotent by username, same as
-// the admin/admin seed above, so this only ever inserts once per database.
-if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get('USUARIO_PRUEBAS')) {
+// pruebas... así como en el SaaS"). Exactly one such account, role 'admin'
+// like any other GEIPSA staff account, is_test_account = 1 so the Estatus
+// gate (habilitado/inhabilitado/construccion/mejoras) knows to exempt it.
+// Username follows the SAME "Pruebas_<Abreviatura>" convention
+// provisionTrainingAccount uses per client, just with "SGN" as GEIPSA's own
+// abbreviation (confirmed live, 2026-09-28 -- an earlier message that day
+// had asked for the literal string "USUARIO_PRUEBAS" instead; this
+// supersedes that, see the rename block right below for the account
+// already created under that name). Zero saas_user_grants rows on a fresh
+// account already means "sees everything" (see hasSaasGrant's own `if
+// (!grants.length) return true`), so no grants need seeding here.
+// Idempotent by username, same as the admin/admin seed above, so this only
+// ever inserts once per database.
+const SAAS_TEST_USERNAME = 'Pruebas_SGN';
+// One-time rename FIRST, before the create-if-missing check below -- the
+// very first version of this seed (2026-09-27) used the literal username
+// "USUARIO_PRUEBAS" before the naming convention was corrected to match
+// the client side's own Pruebas_<Abreviatura> pattern. Renaming (not
+// delete+recreate) keeps its id, password, is_test_account,
+// visible_statuses and any grants/history already on it intact -- only the
+// username/email/name change. Must run before the block below, or that
+// block would see "no Pruebas_SGN yet" and insert a brand-new row while
+// this one still exists under its old name, then collide with it here.
+{
+    const legacy = db.prepare("SELECT id FROM users WHERE username = 'USUARIO_PRUEBAS'").get();
+    if (legacy) {
+        db.prepare('UPDATE users SET username = ?, email = ?, name = ? WHERE id = ?')
+            .run(SAAS_TEST_USERNAME, 'pruebas_sgn@sgn.invalid', 'Pruebas de SGN', legacy.id);
+        console.log(`[db] Renamed SaaS test account "USUARIO_PRUEBAS" -> "${SAAS_TEST_USERNAME}".`);
+    }
+}
+if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(SAAS_TEST_USERNAME)) {
     db.prepare(`
         INSERT INTO users (username, email, password_hash, name, role, is_test_account, visible_statuses)
         VALUES (@username, @email, @passwordHash, @name, @role, 1, @visibleStatuses)
     `).run({
-        username: 'USUARIO_PRUEBAS',
-        email: 'usuario_pruebas@sgn.invalid',
+        username: SAAS_TEST_USERNAME,
+        email: 'pruebas_sgn@sgn.invalid',
         passwordHash: hashPasswordSync(generateRandomPassword()),
-        name: 'Usuario de Pruebas',
+        name: 'Pruebas de SGN',
         role: 'admin',
         visibleStatuses: ALL_ESTATUS_VALUES.join(','),
     });
-    console.log('[db] Seeded SaaS-side USUARIO_PRUEBAS test account (first run only) — set its password from Config. SaaS > Usuarios before relying on it.');
+    console.log(`[db] Seeded SaaS-side ${SAAS_TEST_USERNAME} test account (first run only) — set its password from Config. SaaS > Usuarios before relying on it.`);
 }
 
 // --- One-time backfill: rename any training account provisioned before the
@@ -2152,7 +2175,7 @@ if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get('USUARIO_PRUEBAS')
 }
 
 // --- One-time backfill: widen visible_statuses for every already-existing
-// is_test_account to all 4 -- covers training accounts (and USUARIO_PRUEBAS
+// is_test_account to all 4 -- covers training accounts (and Pruebas_SGN
 // itself, though that one's own seed above already sets it) provisioned
 // before the visible_statuses column existed, which would otherwise sit at
 // its default ('habilitado' only) despite being a test account. No-op once
@@ -6781,6 +6804,32 @@ function listSaasAdmins() {
         .prepare("SELECT id, username, email, name, active, created_at FROM users WHERE role = 'admin' ORDER BY created_at ASC")
         .all();
 }
+// Scoped to role='admin' (never a client_id-scoped lookup like the business
+// getUserById above) -- the one place server.js confirms an id it's about
+// to delete/reset-password on is actually a GEIPSA/SaaS account before
+// touching it, so a stray/guessed id can never delete or reset a real
+// client user's account through this route.
+function getSaasUserById(id) {
+    return db.prepare("SELECT id, username, email, name, active, created_at FROM users WHERE id = ? AND role = 'admin'").get(id);
+}
+// Confirmed live, 2026-09-28: "solo dejaremos en el saas, los usuarios de
+// admin y el de Pruebas" -- removes leftover test accounts. users' own row
+// is the only thing deleted; saas_user_grants has ON DELETE CASCADE (see
+// its own DDL) so no orphaned grants are left behind.
+function deleteSaasUser(userId) {
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+}
+// Same shape as activateClient/provisionTrainingAccount's own
+// { generatedPassword } -- for when nobody has (or remembers) an account's
+// current password, e.g. Pruebas_SGN's own auto-generated one, which
+// was only ever logged to the server console at creation time and is not
+// recoverable any other way (password_hash is one-way).
+async function resetSaasUserPassword(userId) {
+    const password = generateRandomPassword();
+    const passwordHash = await hashPassword(password);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId);
+    return { password };
+}
 
 function getSaasUserGrants(userId) {
     return db
@@ -7329,6 +7378,9 @@ module.exports = {
     getPlanChanges,
     logPlanChange,
     listSaasAdmins,
+    getSaasUserById,
+    deleteSaasUser,
+    resetSaasUserPassword,
     getSaasUserGrants,
     setSaasUserGrants,
     hasSaasGrant,

@@ -168,6 +168,58 @@ function renderSaasUsers() {
         treeBtn.addEventListener('click', () => openTreeModal(user));
         tdActions.appendChild(treeBtn);
 
+        // Reset password -- for exactly the case that came up live,
+        // 2026-09-28: an auto-generated account (Pruebas_SGN) whose
+        // password nobody ever wrote down (it's only ever logged once, to
+        // the server console, at creation time -- password_hash itself is
+        // one-way, there's no "recover" path, only "replace").
+        const resetPwBtn = document.createElement('button');
+        resetPwBtn.type = 'button';
+        resetPwBtn.className = 'admin-icon-btn';
+        resetPwBtn.setAttribute('aria-label', Dashboard.t('admin.saasResetPassword'));
+        resetPwBtn.title = Dashboard.t('admin.saasResetPassword');
+        resetPwBtn.innerHTML = '<i class="bx bx-key" aria-hidden="true"></i>';
+        resetPwBtn.addEventListener('click', async () => {
+            if (!(await Dashboard.confirm(Dashboard.t('admin.saasResetPasswordConfirm', { name: user.name })))) return;
+            try {
+                const res = await fetch(`/api/admin/saas-users/${user.id}/reset-password`, { method: 'POST', credentials: 'include' });
+                if (!res.ok) throw new Error('reset failed');
+                const { password } = await res.json();
+                // A one-time reveal, same reason a native prompt (not a
+                // toast) is used for Admin-SaaS.js's own generated-client-
+                // password flow -- it stays on screen, selected, until the
+                // admin dismisses it, instead of disappearing on its own.
+                window.prompt(Dashboard.t('admin.saasResetPasswordResult', { username: user.username }), password);
+            } catch {
+                Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+            }
+        });
+        tdActions.appendChild(resetPwBtn);
+
+        // Delete -- only for the leftover test accounts this screen
+        // shouldn't keep around; admin/admin and Pruebas_SGN stay.
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'admin-icon-btn';
+        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
+        deleteBtn.title = Dashboard.t('admin.delete');
+        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+        deleteBtn.addEventListener('click', async () => {
+            if (!(await Dashboard.confirm(Dashboard.t('admin.saasDeleteUserConfirm', { name: user.name })))) return;
+            try {
+                const res = await fetch(`/api/admin/saas-users/${user.id}`, { method: 'DELETE', credentials: 'include' });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.message || 'delete failed');
+                }
+                Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+                await loadSaasUsers();
+            } catch {
+                Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+            }
+        });
+        tdActions.appendChild(deleteBtn);
+
         tr.append(tdUsername, tdName, tdEmail, tdCreatedAt, tdActions);
         tableBody.appendChild(tr);
     });

@@ -298,6 +298,9 @@ const {
     getPlanChanges,
     logPlanChange,
     listSaasAdmins,
+    getSaasUserById,
+    deleteSaasUser,
+    resetSaasUserPassword,
     getSaasUserGrants,
     setSaasUserGrants,
     hasSaasGrant,
@@ -2409,6 +2412,32 @@ app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) =>
     });
 });
 
+// Confirmed live, 2026-09-28: "Borra estos 2 usuarios, solo dejaremos en el
+// saas, los usuarios de admin y el de Pruebas". Can't delete your own
+// session's account (locks you out with no other way back in from here)
+// or Pruebas_SGN/any other account this session isn't looking at by
+// mistake -- getSaasUserById's own role='admin' scoping is what stops this
+// route from ever reaching a client user's row, no matter what id is sent.
+app.delete('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => {
+    const targetId = Number(req.params.id);
+    if (targetId === req.user.sub) return res.status(400).json({ message: "You can't delete your own account." });
+    const target = getSaasUserById(targetId);
+    if (!target) return res.status(404).json({ message: 'SaaS account not found.' });
+    deleteSaasUser(targetId);
+    res.json({ success: true });
+});
+
+// Same "nobody has (or remembers) this account's password" reset as a
+// client's own Reestablecer Contraseña, just for a SaaS/GEIPSA account --
+// returns the new password ONCE, the same way provisionTrainingAccount's
+// own generatedPassword does, since it's never stored recoverably.
+app.post('/api/admin/saas-users/:id/reset-password', requireAuth, requireAdmin, async (req, res) => {
+    const target = getSaasUserById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'SaaS account not found.' });
+    const { password } = await resetSaasUserPassword(req.params.id);
+    res.json({ password });
+});
+
 function validateSaasGrants(grants) {
     if (!Array.isArray(grants)) return 'grants must be an array.';
     for (const g of grants) {
@@ -2434,7 +2463,7 @@ app.put('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res
 // Which of habilitado/inhabilitado/construccion/mejoras this GEIPSA/SaaS
 // staff account is allowed to see anything under (see visible_statuses'
 // own migration comment in db.js) — every real staff account starts at
-// just habilitado; USUARIO_PRUEBAS and any other account an admin widens
+// just habilitado; Pruebas_SGN and any other account an admin widens
 // see the rest too. Same shape as the client-side route below.
 app.put('/api/admin/saas-users/:id/visible-statuses', requireAuth, requireAdmin, (req, res) => {
     const { statuses } = req.body || {};
