@@ -40,6 +40,7 @@ const EMBEDDED_TRANSLATIONS = {
             helloWelcome: "Hello, welcome!", noAccount: "Don't have an account?",
             showPassword: "Show password", hidePassword: "Hide password",
             invalidCredentials: "Incorrect username or password.",
+            tooManyAttempts: "Too many login attempts. Please wait a few minutes and try again.",
             genericError: "Something went wrong. Please try again.",
             operationalInactive: "You cannot access the system due to a contract termination. Contact Human Resources if you believe this is an error.",
             operationalSuspended: "Your account is temporarily suspended. Contact Human Resources if you believe this is an error.",
@@ -59,6 +60,7 @@ const EMBEDDED_TRANSLATIONS = {
             helloWelcome: "¡Hola, bienvenido!", noAccount: "¿No tienes una cuenta?",
             showPassword: "Mostrar contraseña", hidePassword: "Ocultar contraseña",
             invalidCredentials: "Usuario o contraseña incorrectos.",
+            tooManyAttempts: "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.",
             genericError: "Algo salió mal. Inténtalo de nuevo.",
             operationalInactive: "No puedes acceder al sistema debido a una rescisión de contrato. Contacta a Recursos Humanos si crees que esto es un error.",
             operationalSuspended: "Tu cuenta está suspendida temporalmente. Contacta a Recursos Humanos si crees que esto es un error.",
@@ -209,6 +211,15 @@ loginForm?.addEventListener('submit', async (event) => {
                 showError(t('login.operationalSuspended'));
             } else if (res.status === 401) {
                 showError(t('login.invalidCredentials'));
+            } else if (res.status === 429) {
+                // Two independent rate limits can produce this -- per-IP
+                // (loginLimiter) or per-username (isUsernameLocked), both in
+                // server.js. Same message either way; distinguishing them
+                // isn't useful to whoever's staring at this screen. Confirmed
+                // live, 2026-09-28: this used to fall into the generic
+                // "Algo salió mal" branch below, which looked like a real
+                // bug instead of "you'll be fine in a few minutes".
+                showError(t('login.tooManyAttempts'));
             } else {
                 showError(t('login.genericError'));
             }

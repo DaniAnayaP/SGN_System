@@ -38,6 +38,7 @@
     "showPassword": "Mostrar contraseña",
     "hidePassword": "Ocultar contraseña",
     "invalidCredentials": "Usuario o contraseña incorrectos.",
+    "tooManyAttempts": "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.",
     "genericError": "Algo salió mal. Inténtalo de nuevo.",
     "operationalInactive": "No puedes acceder al sistema debido a una rescisión de contrato. Contacta a Recursos Humanos si crees que esto es un error.",
     "operationalSuspended": "Tu cuenta está suspendida temporalmente. Contacta a Recursos Humanos si crees que esto es un error.",

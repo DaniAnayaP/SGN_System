@@ -290,6 +290,12 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
                     showPwError(t('login.operationalSuspended', 'Your account is temporarily suspended.'));
                 } else if (res.status === 401) {
                     showPwError(t('login.invalidCredentials', 'Incorrect username or password.'));
+                } else if (res.status === 429) {
+                    // Same fix as login.js -- this used to fall into the
+                    // generic error branch below, which reads like a real
+                    // bug instead of "you'll be fine in a few minutes".
+                    // Confirmed live, 2026-09-28.
+                    showPwError(t('login.tooManyAttempts', 'Too many login attempts. Please wait a few minutes and try again.'));
                 } else {
                     showPwError(t('login.genericError', 'Something went wrong. Please try again.'));
                 }

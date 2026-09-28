@@ -38,6 +38,7 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "invalidCredentials": "Incorrect username or password.",
+    "tooManyAttempts": "Too many login attempts. Please wait a few minutes and try again.",
     "genericError": "Something went wrong. Please try again.",
     "operationalInactive": "You cannot access the system due to a contract termination. Contact Human Resources if you believe this is an error.",
     "operationalSuspended": "Your account is temporarily suspended. Contact Human Resources if you believe this is an error.",
