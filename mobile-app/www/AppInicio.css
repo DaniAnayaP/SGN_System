@@ -144,10 +144,25 @@ body{
     white-space: nowrap;
 }
 
+/* Fixed app-shell frame -- header on top, tabbar (plus whatever a screen
+   puts right above it, e.g. Guardar) pinned to the bottom, ONLY
+   .home-section scrolls in between (confirmed live, 2026-09-27: "esta
+   parte de aquí debe quedar fija como estructura de la pantalla app").
+   Before this, .home-screen only had min-height:100vh with everything
+   static, so it LOOKED fixed only as long as a screen's own content
+   happened to fit one viewport -- true for every screen until
+   MobileTreeNav's own card lists (long department/column lists) started
+   running taller, which pushed the header/tabbar off-screen and made the
+   whole page scroll as one block instead. 100dvh (falls back to the vh
+   right above it in a WebView that doesn't support dvh) accounts for a
+   mobile browser's own address bar showing/hiding, which 100vh alone
+   doesn't. */
 .home-screen{
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     background: radial-gradient(circle at 30% 0%, var(--home-bg-grad-1), var(--home-bg-grad-2) 60%);
 }
 
@@ -525,6 +540,15 @@ body{
 
 .home-section{
     padding: 0.6rem 1.4rem;
+    /* The one scrollable region of .home-screen's fixed frame -- see that
+       rule's own comment. flex/min-height together are what let this
+       shrink below its content's natural height instead of pushing
+       .home-tabbar past the viewport; overflow-y is what puts the
+       scrollbar here instead of on the whole page. */
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 .home-section-title{
     font-size: 0.78rem;

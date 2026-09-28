@@ -1164,10 +1164,13 @@ async function loadMasterTree(token) {
         toolbar.appendChild(viewToggle);
         contentEl.appendChild(toolbar);
 
-        const currencyHint = document.createElement('span');
-        currencyHint.className = 'admin-toolbar-hint';
-        currencyHint.textContent = t('admin.masterCostCurrencyHint');
-        contentEl.appendChild(currencyHint);
+        // The old "Todos los precios de este árbol... están en esta
+        // moneda" line used to sit right here, just above the raw table --
+        // dropped now that MobileTreeNav's own card-based drill-down
+        // replaced that table (confirmed live, 2026-09-27: it read as
+        // orphaned clutter sitting above the new breadcrumb/hero instead).
+        // The "Moneda" pill in the toolbar above already says which
+        // currency is active.
 
         const treeViewWrap = document.createElement('div');
         const treeWrap = document.createElement('div');
