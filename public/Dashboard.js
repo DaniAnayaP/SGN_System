@@ -5566,17 +5566,20 @@ function isUnrestrictedClientAdmin() {
 function masterTreeNodeKey(sectionId, itemId, submenuId) {
     return `${sectionId}::${itemId || ''}::${submenuId || ''}`;
 }
-let masterStatusOverrideMapCache = null;
-let masterStatusOverrideMapSource = null;
+// No memoization here on purpose -- a cache needs a `let` to hold it, and
+// this function gets called (via availableAreasForDepartment) from other
+// top-level script code that runs EARLIER in Dashboard.js's own load order
+// than a `let` declared this far down the file, which threw "Cannot access
+// before initialization" in production the moment this shipped (a `let`
+// is hoisted but stays in its temporal dead zone until the line that
+// declares it actually runs, unlike this function itself, which — being a
+// function declaration — IS safely callable from anywhere the instant the
+// script starts). Rebuilding the Map every call is cheap regardless:
+// masterStatusOverrides only ever holds whatever's been explicitly set
+// away from habilitado, a small list even on a large tree.
 function getMasterStatusOverrideMap() {
     const overrides = cachedBusinessProfile?.masterStatusOverrides || [];
-    if (masterStatusOverrideMapSource !== overrides) {
-        masterStatusOverrideMapCache = new Map(
-            overrides.map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r.status]),
-        );
-        masterStatusOverrideMapSource = overrides;
-    }
-    return masterStatusOverrideMapCache;
+    return new Map(overrides.map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r.status]));
 }
 function resolveMasterNodeStatus(sectionId, itemId, submenuId) {
     const overrides = getMasterStatusOverrideMap();
