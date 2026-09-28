@@ -512,7 +512,7 @@
     "noSaasUsers": "Aún no hay otras cuentas del SaaS.",
     "saasUserNewTitle": "Nuevo Admin SaaS",
     "saasTreeTitle": "Accesos de esta cuenta SaaS",
-    "saasTreeHint": "Sin nada marcado, esta cuenta queda sin restricciones (ve/hace todo) — igual que admin/admin hoy.",
+    "saasTreeHint": "Sin nada marcado, esta cuenta no ve ni puede hacer nada — marca aquí exactamente lo que sí debe tener.",
     "saasResetPassword": "Restablecer contraseña",
     "saasResetPasswordConfirm": "¿Generar una nueva contraseña para {name}? La anterior dejará de funcionar.",
     "saasResetPasswordResult": "Nueva contraseña de {username} (cópiala, no se volverá a mostrar):",

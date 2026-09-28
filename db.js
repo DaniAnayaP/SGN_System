@@ -703,6 +703,13 @@ if (!userColumns.some((c) => c.name === 'active')) {
 if (!userColumns.some((c) => c.name === 'is_client_admin')) {
     db.exec('ALTER TABLE users ADD COLUMN is_client_admin INTEGER NOT NULL DEFAULT 0');
 }
+// SaaS-side equivalent of is_client_admin above -- the ONE account meant to
+// have unrestricted access to the whole SaaS system (see hasSaasGrant's own
+// comment). Confirmed live, 2026-09-28: "si creo una cuenta debe nacer sin
+// ningún acceso... solamente [admin_saas]... deben tener todo el acceso".
+if (!userColumns.some((c) => c.name === 'is_saas_super_admin')) {
+    db.exec('ALTER TABLE users ADD COLUMN is_saas_super_admin INTEGER NOT NULL DEFAULT 0');
+}
 // Self-service profile fields shown in the top-bar "Datos de Usuario" /
 // "Datos Personales" panel — all optional (blank until someone fills them
 // in), so a plain '' default reads as "not set" without needing NULL checks.
@@ -2102,8 +2109,8 @@ db.exec(`
 const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
 if (userCount === 0) {
     db.prepare(`
-        INSERT INTO users (username, email, password_hash, name, role)
-        VALUES (@username, @email, @passwordHash, @name, @role)
+        INSERT INTO users (username, email, password_hash, name, role, is_saas_super_admin)
+        VALUES (@username, @email, @passwordHash, @name, @role, 1)
     `).run({
         username: 'admin',
         email: 'admin@geipsa.com',
@@ -2116,6 +2123,13 @@ if (userCount === 0) {
     });
     console.log('[db] Seeded demo user admin/admin (first run only).');
 }
+// One-time backfill for the row that already existed before
+// is_saas_super_admin was added (both local and production already have
+// this account, since-renamed to admin_saas -- see the SaaS test username
+// block below for the same "rename already happened, just backfill a flag"
+// pattern). Matches on EITHER name in case some environment hasn't been
+// renamed yet.
+db.prepare("UPDATE users SET is_saas_super_admin = 1 WHERE username IN ('admin', 'admin_saas') AND is_saas_super_admin = 0").run();
 
 // --- One-time seed: the SaaS/GEIPSA-side "Usuario de Pruebas" ----------------
 // The client side already has one training account per client (see
@@ -2130,9 +2144,13 @@ if (userCount === 0) {
 // abbreviation (confirmed live, 2026-09-28 -- an earlier message that day
 // had asked for the literal string "USUARIO_PRUEBAS" instead; this
 // supersedes that, see the rename block right below for the account
-// already created under that name). Zero saas_user_grants rows on a fresh
-// account already means "sees everything" (see hasSaasGrant's own `if
-// (!grants.length) return true`), so no grants need seeding here.
+// already created under that name). is_saas_super_admin = 1, same as
+// admin_saas itself -- corrected 2026-09-28: an ordinary account (zero
+// saas_user_grants rows) no longer means "sees everything" by default (see
+// hasSaasGrant's own comment), so this training account needs the SAME
+// explicit unrestricted flag admin_saas has, mirroring how the client
+// side's own training account is also isClientAdmin=1, not unrestricted
+// merely by having no grants.
 // Idempotent by username, same as the admin/admin seed above, so this only
 // ever inserts once per database.
 const SAAS_TEST_USERNAME = 'Pruebas_SGN';
@@ -2171,8 +2189,8 @@ const SAAS_TEST_USERNAME = 'Pruebas_SGN';
 }
 if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(SAAS_TEST_USERNAME)) {
     db.prepare(`
-        INSERT INTO users (username, email, password_hash, name, role, is_test_account, visible_statuses)
-        VALUES (@username, @email, @passwordHash, @name, @role, 1, @visibleStatuses)
+        INSERT INTO users (username, email, password_hash, name, role, is_test_account, visible_statuses, is_saas_super_admin)
+        VALUES (@username, @email, @passwordHash, @name, @role, 1, @visibleStatuses, 1)
     `).run({
         username: SAAS_TEST_USERNAME,
         email: 'pruebas_sgn@sgn.invalid',
@@ -2183,6 +2201,9 @@ if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(SAAS_TEST_USERNAME
     });
     console.log(`[db] Seeded SaaS-side ${SAAS_TEST_USERNAME} test account (first run only) — set its password from Config. SaaS > Usuarios before relying on it.`);
 }
+// Backfill for a Pruebas_SGN row that already existed before
+// is_saas_super_admin was added.
+db.prepare('UPDATE users SET is_saas_super_admin = 1 WHERE username = ? AND is_saas_super_admin = 0').run(SAAS_TEST_USERNAME);
 
 // --- One-time backfill: a "Cuenta creada" entry for every SaaS/GEIPSA
 // account that already existed before saas_user_changes did (admin/admin
@@ -7010,13 +7031,22 @@ function setSaasUserGrants(userId, grants) {
     return getSaasUserGrants(userId);
 }
 
-// grants.length === 0 means unrestricted (see saas_user_grants' own
-// comment) — mirrors isUnrestrictedClientAdmin's exact convention on the
-// client side. subItemId null matches the screen-level grant itself
-// (itemId with no sub-permission) OR is used to check a specific granular
-// action (e.g. itemId:'saas-plans', subItemId:'activate').
-function hasSaasGrant(grants, itemId, subItemId = null) {
-    if (!grants.length) return true;
+// CORRECTED, 2026-09-28: "si creo una cuenta debe nacer sin ningún acceso...
+// Solamente esos 2 usuarios [admin_saas y el admin de cada empresa] deben
+// tener todo el acceso" -- grants.length === 0 no longer means unrestricted
+// for just anyone; it only bypasses the check for the ONE designated SaaS
+// super-admin (users.is_saas_super_admin, carried on the JWT as
+// isSaasSuperAdmin -- see server.js's login route). Any OTHER account
+// (including a brand-new "+ Nuevo Admin SaaS" one, which also starts with
+// zero rows here) now correctly sees/does NOTHING until real grants are
+// assigned via its own "Acceso de esta cuenta" tree -- the opposite of the
+// old default. The client side's own isUnrestrictedClientAdmin already got
+// this right from the start (scoped to isClientAdmin, which the client's
+// training account also gets, not just "zero grants") -- this brings the
+// SaaS side in line with that same design instead of the blanket "empty =
+// everything" this function used to apply to any account at all.
+function hasSaasGrant(grants, itemId, subItemId = null, isSuperAdmin = false) {
+    if (isSuperAdmin) return true;
     return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
 }
 

@@ -672,12 +672,19 @@ function resolveSaasNodeStatus(itemId) {
     }
     return 'habilitado';
 }
+// CORRECTED, 2026-09-28, same fix as hasSaasGrant in db.js: zero grants no
+// longer means unrestricted for just anyone -- only the one designated SaaS
+// super-admin (currentUser.isSaasSuperAdmin, mirrors isClientAdmin on the
+// client side) bypasses this. This is the client-side UX-only mirror of the
+// real server-side check (hiding a menu item this account can't actually
+// use), not itself the enforcement -- server.js's own hasSaasGrant is what
+// actually protects each route.
 function hasSaasScreenGrant(itemId, subItemId = null) {
     const fullKey = subItemId ? `${itemId}::${subItemId}` : itemId;
     const visible = cachedSaasVisibleStatuses || ['habilitado'];
     if (!visible.includes(resolveSaasNodeStatus(fullKey))) return false;
+    if (currentUser?.isSaasSuperAdmin) return true;
     const grants = cachedSaasGrants || [];
-    if (!grants.length) return true;
     return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
 }
 // Equipo SaaS itself isn't gated by this tree — restricting who can see it

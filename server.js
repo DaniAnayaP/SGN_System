@@ -708,6 +708,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             clientId: user.client_id,
             isClientAdmin: !!user.is_client_admin,
             isTestAccount: !!user.is_test_account,
+            isSaasSuperAdmin: !!user.is_saas_super_admin,
         },
         JWT_SECRET,
         { expiresIn: '8h' }
@@ -1110,7 +1111,7 @@ function validateSectorNegocio(sectorNegocio) {
 }
 
 app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'crear')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'crear', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para crear clientes.' });
     }
     const error = validateClientBody(req.body);
@@ -1138,10 +1139,10 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     const grants = getSaasUserGrants(req.user.sub);
     const changesStatus = req.body?.status !== undefined && req.body.status !== existing.status;
     const changesOtherFields = Object.keys(req.body || {}).some((k) => k !== 'status');
-    if (changesOtherFields && !hasSaasGrant(grants, 'saas-clients', 'editar')) {
+    if (changesOtherFields && !hasSaasGrant(grants, 'saas-clients', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar clientes.' });
     }
-    if (changesStatus && !hasSaasGrant(grants, 'saas-clients', 'activar')) {
+    if (changesStatus && !hasSaasGrant(grants, 'saas-clients', 'activar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para activar/desactivar clientes.' });
     }
     const error = validateClientBody(req.body);
@@ -1178,7 +1179,7 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
 // dismissed or the page reloads, same "shown once" lifetime as the
 // password itself.
 app.post('/api/admin/clients/:id/resend-admin-email', requireAuth, requireAdmin, async (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'activar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'activar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para activar/desactivar clientes.' });
     }
     const client = getClientById(req.params.id);
@@ -1197,7 +1198,7 @@ app.post('/api/admin/clients/:id/resend-admin-email', requireAuth, requireAdmin,
 // at all (separate from Editar — the Acciones icon in Nuestros Clientes),
 // same 'saas-clients'/'editar' grant as the rest of the record.
 app.patch('/api/admin/clients/:id/app-enabled', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar clientes.' });
     }
     const existing = getClientById(req.params.id);
@@ -1215,7 +1216,7 @@ app.patch('/api/admin/clients/:id/app-enabled', requireAuth, requireAdmin, (req,
 // this just by having the other two), so it's not something a normal
 // Activar/Editar grant accidentally opens up.
 app.post('/api/admin/clients/:id/reset', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'reset')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'reset', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para reiniciar clientes.' });
     }
     const existing = getClientById(req.params.id);
@@ -1371,7 +1372,7 @@ app.get('/api/admin/clients/:id/anexo-changes', requireAuth, requireAdmin, (req,
 // should be able to see WHAT exists without being able to open the actual
 // photos.
 app.get('/api/admin/clients/:id/backups', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-backups')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-backups', null, req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para ver Nuestros Respaldos.' });
     }
     const client = getClientById(req.params.id);
@@ -1380,7 +1381,7 @@ app.get('/api/admin/clients/:id/backups', requireAuth, requireAdmin, (req, res) 
 });
 
 app.get('/api/admin/clients/:id/backups/download-url', requireAuth, requireAdmin, async (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-backups', 'descargar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-backups', 'descargar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para descargar evidencias.' });
     }
     const client = getClientById(req.params.id);
@@ -1412,7 +1413,7 @@ app.get('/api/admin/clients/:id/backups/download-url', requireAuth, requireAdmin
 // (matches the client-side gate); Subir is the separate leaf that unlocks
 // uploading/replacing/deleting.
 app.get('/api/admin/clients/:id/material-apoyo', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', null, req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para ver Material Apoyo.' });
     }
     const client = getClientById(req.params.id);
@@ -1423,7 +1424,7 @@ app.get('/api/admin/clients/:id/material-apoyo', requireAuth, requireAdmin, (req
 });
 
 app.get('/api/admin/clients/:id/material-apoyo/download-url', requireAuth, requireAdmin, async (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', null, req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para ver Material Apoyo.' });
     }
     const client = getClientById(req.params.id);
@@ -1440,7 +1441,7 @@ app.get('/api/admin/clients/:id/material-apoyo/download-url', requireAuth, requi
 });
 
 app.post('/api/admin/clients/:id/material-apoyo/upload-url', requireAuth, requireAdmin, async (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para subir Material Apoyo.' });
     }
     const client = getClientById(req.params.id);
@@ -1458,7 +1459,7 @@ app.post('/api/admin/clients/:id/material-apoyo/upload-url', requireAuth, requir
 });
 
 app.post('/api/admin/clients/:id/material-apoyo', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para subir Material Apoyo.' });
     }
     const client = getClientById(req.params.id);
@@ -1476,7 +1477,7 @@ app.post('/api/admin/clients/:id/material-apoyo', requireAuth, requireAdmin, (re
 });
 
 app.delete('/api/admin/clients/:id/material-apoyo/:materialId', requireAuth, requireAdmin, async (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-material-apoyo', 'subir', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para eliminar Material Apoyo.' });
     }
     const material = getSupportMaterialById(Number(req.params.materialId), req.params.id);
@@ -1549,7 +1550,7 @@ app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'crear')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'crear', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para crear planes.' });
     }
     const error = validatePlanBody(req.body);
@@ -1598,13 +1599,13 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const changesStatus = status !== undefined && status !== existing.status;
     const changesPricing = bodyKeys.some((k) => k === 'currency' || k === 'costPerCostCenter');
     const changesPlanFields = bodyKeys.some((k) => k !== 'status' && k !== 'currency' && k !== 'costPerCostCenter');
-    if (changesPlanFields && !hasSaasGrant(grants, 'saas-plans', 'editar')) {
+    if (changesPlanFields && !hasSaasGrant(grants, 'saas-plans', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
     }
-    if (changesStatus && !hasSaasGrant(grants, 'saas-plans', 'activate')) {
+    if (changesStatus && !hasSaasGrant(grants, 'saas-plans', 'activate', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para activar/desactivar planes.' });
     }
-    if (changesPricing && !hasSaasGrant(grants, 'saas-module-costs', 'editar')) {
+    if (changesPricing && !hasSaasGrant(grants, 'saas-module-costs', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar costos de accesos-permisos.' });
     }
     if (currency !== undefined && !['MXN', 'USD'].includes(currency)) {
@@ -1669,7 +1670,7 @@ app.post('/api/admin/plans/:id/activate', requireAuth, requireAdmin, (req, res) 
         return res.status(409).json({ message: 'Solo un plan en Revisión puede activarse.' });
     }
     const grants = getSaasUserGrants(req.user.sub);
-    if (!hasSaasGrant(grants, 'saas-plans', 'activate')) {
+    if (!hasSaasGrant(grants, 'saas-plans', 'activate', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para autorizar planes.' });
     }
     const plan = activatePlan(req.params.id);
@@ -1683,7 +1684,7 @@ app.post('/api/admin/plans/:id/activate', requireAuth, requireAdmin, (req, res) 
 app.delete('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
     }
     deletePlan(req.params.id);
@@ -1714,7 +1715,7 @@ app.get('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
 app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
     }
     if (existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
@@ -1759,7 +1760,7 @@ app.get('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req
 app.put('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-module-costs', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-module-costs', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar costos de accesos-permisos.' });
     }
     const { costs, currency } = req.body || {};
@@ -1866,7 +1867,7 @@ app.get('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'crear')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'crear', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para crear apps.' });
     }
     const { name, icon, colorFrom, colorTo, sector, status } = req.body || {};
@@ -1889,7 +1890,7 @@ app.post('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
 });
 
 app.patch('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar apps.' });
     }
     const existing = getSaasAppById(req.params.id);
@@ -1913,7 +1914,7 @@ app.patch('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
 });
 
 app.delete('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para eliminar apps.' });
     }
     const existing = getSaasAppById(req.params.id);
@@ -1923,7 +1924,7 @@ app.delete('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => 
 });
 
 app.post('/api/admin/saas-apps/:id/screens', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar apps.' });
     }
     const existing = getSaasAppById(req.params.id);
@@ -1940,7 +1941,7 @@ app.post('/api/admin/saas-apps/:id/screens', requireAuth, requireAdmin, (req, re
 });
 
 app.delete('/api/admin/saas-apps/:id/screens/:screenId', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar apps.' });
     }
     const existing = getSaasAppById(req.params.id);
@@ -1958,7 +1959,7 @@ app.get('/api/admin/web-screens-catalog/:webScreenKey/fields', requireAuth, requ
 });
 
 app.put('/api/admin/saas-apps/:id/screens/:screenId/fields', requireAuth, requireAdmin, (req, res) => {
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar')) {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-apps', 'editar', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar apps.' });
     }
     const existing = getSaasAppById(req.params.id);

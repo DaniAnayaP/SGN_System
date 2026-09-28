@@ -512,7 +512,7 @@
     "noSaasUsers": "No other SaaS accounts yet.",
     "saasUserNewTitle": "New SaaS Admin",
     "saasTreeTitle": "Access for this SaaS account",
-    "saasTreeHint": "Check nothing to leave this account unrestricted (sees/does everything) — same as admin/admin today.",
+    "saasTreeHint": "Check nothing and this account sees/does nothing — check exactly what it should have access to.",
     "saasResetPassword": "Reset password",
     "saasResetPasswordConfirm": "Generate a new password for {name}? The old one will stop working.",
     "saasResetPasswordResult": "New password for {username} (copy it, it won't be shown again):",

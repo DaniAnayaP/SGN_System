@@ -6,10 +6,15 @@
 // more admin accounts, (2) lets an admin configure another account's access
 // to the 3 SaaS screens (Nuestros Clientes / Nuestros Planes / Costos de
 // Módulos), including the granular "Autorizar Planes" permission under
-// Nuestros Planes. An account with NO grants at all is unrestricted (sees/
-// does everything) — same convention as isUnrestrictedClientAdmin on the
-// client side, so admin/admin itself (which starts with zero rows here)
-// never gets accidentally locked out. Shell comes from Dashboard.js.
+// Nuestros Planes. CORRECTED 2026-09-28: an account with NO grants at all
+// used to mean unrestricted (sees/does everything); confirmed live that's
+// wrong for anyone except the one designated super-admin (users.
+// is_saas_super_admin, only admin_saas and the Pruebas_SGN training
+// account have it) -- a brand-new "+ Nuevo Admin SaaS" account starts with
+// zero grants same as always, but now that correctly means it sees/does
+// NOTHING until this screen's own tree below grants it something, same
+// "empty = no access" the client side's own profiles already had. Shell
+// comes from Dashboard.js.
 //
 // Deliberately NOT the full PermissionTree.js component — the SaaS tree is
 // just 3 flat screens (one with a single nested permission), a plain
