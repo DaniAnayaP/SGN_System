@@ -959,6 +959,7 @@
     "filterClientsSearchHint": "RFC, nickname, owner, contact...",
     "filterPlansSearchHint": "Name, description, created by...",
     "filterSaasTeamSearchHint": "Username, name, email...",
+    "filterSaasChangesSearchHint": "User, record, change, requested by, authorized by...",
     "rowEditableLegend": "Row with at least one field you can still edit",
     "rowEditableName": "Editable row",
     "columnLegendBtn": "Color legend",

@@ -279,6 +279,7 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear
 // look, just pointed at this screen's own /api/admin/saas-users/... routes.
 let saasChangesModal = null;
 let saasChangesList = null;
+let saasChangesFilterInput = null;
 function ensureSaasChangesModal() {
     if (saasChangesModal) return;
     saasChangesModal = document.createElement('div');
@@ -287,6 +288,10 @@ function ensureSaasChangesModal() {
     saasChangesModal.innerHTML = `
         <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="saas-user-history-title">
             <h3 id="saas-user-history-title"></h3>
+            <div class="admin-field">
+                <label for="saas-changes-filter" data-i18n="main.filterSaasChangesSearchHint">${Dashboard.t('main.filterSaasChangesSearchHint')}</label>
+                <input type="search" id="saas-changes-filter" data-i18n-placeholder="main.filterSaasChangesSearchHint" placeholder="${Dashboard.t('main.filterSaasChangesSearchHint')}">
+            </div>
             <div class="admin-table-wrap">
                 <table class="admin-table">
                     <thead>
@@ -309,9 +314,22 @@ function ensureSaasChangesModal() {
     `;
     document.body.appendChild(saasChangesModal);
     saasChangesList = saasChangesModal.querySelector('[data-role="list"]');
+    saasChangesFilterInput = saasChangesModal.querySelector('#saas-changes-filter');
+    saasChangesFilterInput.addEventListener('input', applySaasChangesFilter);
     const close = () => { saasChangesModal.hidden = true; };
     saasChangesModal.querySelector('[data-role="close"]').addEventListener('click', close);
     saasChangesModal.addEventListener('click', (event) => { if (event.target === saasChangesModal) close(); });
+}
+
+// Client-side filter across every visible cell (Usuario/Registro/Cambio/
+// Solicitó/Autorizó) — the modal's own dataset is already fetched and small
+// enough that no server round-trip is needed, same "hide rows that don't
+// match" approach as applySaasTeamFilters above.
+function applySaasChangesFilter() {
+    const text = (saasChangesFilterInput?.value || '').trim().toLowerCase();
+    saasChangesList.querySelectorAll('tr').forEach((tr) => {
+        tr.hidden = !!text && !tr.textContent.toLowerCase().includes(text);
+    });
 }
 function renderSaasChangeRow(cells) {
     const tr = document.createElement('tr');
@@ -329,6 +347,7 @@ async function openSaasUserChanges(userId) {
     ensureSaasChangesModal();
     saasChangesModal.hidden = false;
     saasChangesModal.querySelector('#saas-user-history-title').textContent = userId ? Dashboard.t('main.changeHistoryTitleRecord') : Dashboard.t('main.changeHistoryTitle');
+    if (saasChangesFilterInput) saasChangesFilterInput.value = '';
     saasChangesList.innerHTML = '';
     saasChangesList.appendChild(renderSaasChangeRow([Dashboard.t('main.changeHistoryEmpty'), '', '', '', '', '']));
     try {
