@@ -2184,6 +2184,45 @@ if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(SAAS_TEST_USERNAME
     console.log(`[db] Seeded SaaS-side ${SAAS_TEST_USERNAME} test account (first run only) — set its password from Config. SaaS > Usuarios before relying on it.`);
 }
 
+// --- One-time backfill: a "Cuenta creada" entry for every SaaS/GEIPSA
+// account that already existed before saas_user_changes did (admin/admin
+// itself, and Pruebas_SGN/its old USUARIO_PRUEBAS name -- both auto-
+// provisioned by this very seed block, above, not by any admin clicking
+// "+ Nuevo Admin SaaS"). Confirmed live, 2026-09-28: "el primer registro es
+// su creación" -- every account's history should start there, not empty.
+// changed_by/requested_by/authorized_by all say "Sistema" here (not a
+// blank dash, not a fabricated person) since that's the honest answer for
+// these two specifically -- nobody on staff actually created them by hand.
+// Uses each account's own real created_at as changed_at so it sorts where
+// it actually happened, not "just now". Runs every startup but is a no-op
+// once every admin account already has its own 'create' row.
+{
+    const missingCreateLog = db.prepare(`
+        SELECT users.id, users.username, users.created_at FROM users
+        WHERE users.role = 'admin'
+        AND NOT EXISTS (SELECT 1 FROM saas_user_changes WHERE saas_user_changes.user_id = users.id AND saas_user_changes.action = 'create')
+    `).all();
+    missingCreateLog.forEach((user) => {
+        logSaasUserChange({
+            userId: user.id, recordLabel: user.username, action: 'create',
+            changedBy: 'Sistema', requestedBy: 'Sistema', authorizedBy: 'Sistema', changedAt: user.created_at,
+        });
+    });
+    if (missingCreateLog.length) {
+        console.log(`[db] Backfilled "Cuenta creada" history for ${missingCreateLog.length} pre-existing SaaS account(s).`);
+    }
+    // Same "siempre deben estar llenas con información real" fix, applied
+    // retroactively -- a handful of real rows already exist from earlier
+    // today (before requested_by/authorized_by defaulted to changed_by,
+    // above) with those two columns still NULL. changed_by is exactly who
+    // both requested and carried this out, same reasoning as the default.
+    const filled = db.prepare("UPDATE saas_user_changes SET requested_by = changed_by WHERE requested_by IS NULL OR requested_by = ''").run();
+    db.prepare("UPDATE saas_user_changes SET authorized_by = changed_by WHERE authorized_by IS NULL OR authorized_by = ''").run();
+    if (filled.changes) {
+        console.log(`[db] Backfilled Solicitó/Autorizó on ${filled.changes} existing saas_user_changes row(s).`);
+    }
+}
+
 // --- One-time backfill: rename any training account provisioned before the
 // "Pruebas_<Abreviatura>" convention above existed (it used to be
 // "Pruebas<ApodoEmpresa>", no underscore, sourced from company_nickname
@@ -6860,15 +6899,27 @@ function getSaasUserChanges(userId) {
 function getAllSaasUserChanges() {
     return db.prepare('SELECT * FROM saas_user_changes ORDER BY changed_at DESC, id DESC').all();
 }
-function logSaasUserChange({ userId, recordLabel, action, fieldKey, oldValue, newValue, changedBy }) {
+// Confirmed live, 2026-09-28: "sus columnas... siempre deben estar llenas
+// con información real" -- requestedBy/authorizedBy default to changedBy
+// (never blank) instead of data_table_changes' own "leave null for a
+// direct edit" convention: every action on THIS screen genuinely is one
+// admin, alone, both requesting and carrying it out on the spot (no
+// separate approval step exists here to leave those columns honestly
+// blank for), so changedBy IS the real, true answer for all three unless
+// a caller has something more specific (see the creation backfill below,
+// which uses 'Sistema' for accounts nobody here actually created).
+function logSaasUserChange({ userId, recordLabel, action, fieldKey, oldValue, newValue, changedBy, requestedBy, authorizedBy, changedAt }) {
     db.prepare(`
-        INSERT INTO saas_user_changes (user_id, record_label, action, field_key, old_value, new_value, changed_by)
-        VALUES (@userId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy)
+        INSERT INTO saas_user_changes (user_id, record_label, action, field_key, old_value, new_value, changed_by, requested_by, authorized_by${changedAt ? ', changed_at' : ''})
+        VALUES (@userId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy, @requestedBy, @authorizedBy${changedAt ? ', @changedAt' : ''})
     `).run({
         userId, recordLabel: recordLabel || '', action, fieldKey: fieldKey || '',
         oldValue: oldValue == null ? '' : String(oldValue),
         newValue: newValue == null ? '' : String(newValue),
         changedBy: changedBy || '',
+        requestedBy: requestedBy || changedBy || '',
+        authorizedBy: authorizedBy || changedBy || '',
+        ...(changedAt ? { changedAt } : {}),
     });
 }
 
