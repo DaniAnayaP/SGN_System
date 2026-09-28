@@ -299,8 +299,11 @@ const {
     logPlanChange,
     listSaasAdmins,
     getSaasUserById,
-    deleteSaasUser,
+    setSaasUserActive,
     resetSaasUserPassword,
+    getSaasUserChanges,
+    getAllSaasUserChanges,
+    logSaasUserChange,
     getSaasUserGrants,
     setSaasUserGrants,
     hasSaasGrant,
@@ -2407,24 +2410,27 @@ app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) =>
         return res.status(409).json({ message: 'Username or email already taken.' });
     }
     const user = createUser({ username, email, passwordHash: await hashPassword(password), name, role: 'admin' });
+    logSaasUserChange({ userId: user.id, recordLabel: user.username, action: 'create', changedBy: changedByLabel(req) });
     res.status(201).json({
         user: { id: user.id, username: user.username, email: user.email, name: user.name, active: user.active, created_at: user.created_at },
     });
 });
 
-// Confirmed live, 2026-09-28: "Borra estos 2 usuarios, solo dejaremos en el
-// saas, los usuarios de admin y el de Pruebas". Can't delete your own
-// session's account (locks you out with no other way back in from here)
-// or Pruebas_SGN/any other account this session isn't looking at by
-// mistake -- getSaasUserById's own role='admin' scoping is what stops this
-// route from ever reaching a client user's row, no matter what id is sent.
-app.delete('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => {
+// Confirmed live, 2026-09-28: "ningún usuario se puede eliminar, solo se
+// pueden colocar en estatus diferente" -- same rule already established for
+// client business users, replacing the delete route this used to be.
+// Can't deactivate your own session's account (locks you out with no other
+// way back in from here) -- getSaasUserById's own role='admin' scoping is
+// what stops this route from ever reaching a client user's row, no matter
+// what id is sent.
+app.patch('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => {
     const targetId = Number(req.params.id);
-    if (targetId === req.user.sub) return res.status(400).json({ message: "You can't delete your own account." });
-    const target = getSaasUserById(targetId);
-    if (!target) return res.status(404).json({ message: 'SaaS account not found.' });
-    deleteSaasUser(targetId);
-    res.json({ success: true });
+    const { active } = req.body || {};
+    if (typeof active !== 'boolean') return res.status(400).json({ message: 'active must be a boolean.' });
+    if (!active && targetId === req.user.sub) return res.status(400).json({ message: "You can't deactivate your own account." });
+    const updated = setSaasUserActive(targetId, active, changedByLabel(req));
+    if (!updated) return res.status(404).json({ message: 'SaaS account not found.' });
+    res.json({ user: updated });
 });
 
 // Same "nobody has (or remembers) this account's password" reset as a
@@ -2434,8 +2440,21 @@ app.delete('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) =>
 app.post('/api/admin/saas-users/:id/reset-password', requireAuth, requireAdmin, async (req, res) => {
     const target = getSaasUserById(req.params.id);
     if (!target) return res.status(404).json({ message: 'SaaS account not found.' });
-    const { password } = await resetSaasUserPassword(req.params.id);
+    const { password } = await resetSaasUserPassword(req.params.id, changedByLabel(req));
     res.json({ password });
+});
+
+// "Control de Cambios" -- generic (whole Equipo SaaS) and per-row, same
+// pair every other admin screen already has (confirmed live, 2026-09-28:
+// "debe tener los mismos [campos] que todos los demás registros de
+// cambios") -- see saas_user_changes' own DDL comment in db.js for why this
+// is its own table instead of reusing data_table_changes (that one's
+// client_id-scoped and its own route 404s for admin accounts).
+app.get('/api/admin/saas-users/changes', requireAuth, requireAdmin, (req, res) => {
+    res.json({ changes: getAllSaasUserChanges() });
+});
+app.get('/api/admin/saas-users/:id/changes', requireAuth, requireAdmin, (req, res) => {
+    res.json({ changes: getSaasUserChanges(req.params.id) });
 });
 
 function validateSaasGrants(grants) {
@@ -2457,7 +2476,16 @@ app.put('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res
     const { grants } = req.body || {};
     const error = validateSaasGrants(grants);
     if (error) return res.status(400).json({ message: error });
-    res.json({ grants: setSaasUserGrants(req.params.id, grants) });
+    const target = getSaasUserById(req.params.id);
+    const before = getSaasUserGrants(req.params.id);
+    const after = setSaasUserGrants(req.params.id, grants);
+    if (before.length !== after.length) {
+        logSaasUserChange({
+            userId: req.params.id, recordLabel: target?.username, action: 'update', fieldKey: 'business.saasUserGrants',
+            oldValue: before.length, newValue: after.length, changedBy: changedByLabel(req),
+        });
+    }
+    res.json({ grants: after });
 });
 
 // Which of habilitado/inhabilitado/construccion/mejoras this GEIPSA/SaaS
@@ -2470,7 +2498,16 @@ app.put('/api/admin/saas-users/:id/visible-statuses', requireAuth, requireAdmin,
     if (!Array.isArray(statuses) || statuses.some((s) => !ALL_ESTATUS_VALUES.includes(s))) {
         return res.status(400).json({ message: `statuses must be an array of: ${ALL_ESTATUS_VALUES.join(', ')}.` });
     }
-    res.json({ visibleStatuses: setUserVisibleStatuses(req.params.id, statuses) });
+    const target = getSaasUserById(req.params.id);
+    const before = getUserVisibleStatuses(req.params.id);
+    const after = setUserVisibleStatuses(req.params.id, statuses);
+    if (before.join(',') !== after.join(',')) {
+        logSaasUserChange({
+            userId: req.params.id, recordLabel: target?.username, action: 'update', fieldKey: 'admin.visibleStatusesLabel',
+            oldValue: before.join(', '), newValue: after.join(', '), changedBy: changedByLabel(req),
+        });
+    }
+    res.json({ visibleStatuses: after });
 });
 
 // The current admin's own SaaS grants — used by Dashboard.js to filter the

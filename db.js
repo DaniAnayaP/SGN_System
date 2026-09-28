@@ -1416,6 +1416,29 @@ db.exec(`
         sub_item_id  TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_saas_user_grants_user_id ON saas_user_grants(user_id);
+
+    -- "Control de Cambios" for Equipo SaaS -- same shape as data_table_changes
+    -- (its own DDL comment above) minus client_id (this is GEIPSA/SaaS-
+    -- internal, never client-scoped), confirmed live, 2026-09-28: "debe
+    -- tener los mismos [campos] que todos los demás registros de cambios".
+    -- requested_by/authorized_by ride along for that same reason even
+    -- though nothing here goes through a real request/approval step (an
+    -- admin acts directly) -- left NULL, same as any other direct edit
+    -- logTableChange already records elsewhere.
+    CREATE TABLE IF NOT EXISTS saas_user_changes (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        record_label   TEXT NOT NULL DEFAULT '',
+        action         TEXT NOT NULL,
+        field_key      TEXT NOT NULL DEFAULT '',
+        old_value      TEXT NOT NULL DEFAULT '',
+        new_value      TEXT NOT NULL DEFAULT '',
+        changed_by     TEXT NOT NULL DEFAULT '',
+        requested_by   TEXT,
+        authorized_by  TEXT,
+        changed_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_user_changes_user_id ON saas_user_changes(user_id);
 `);
 
 const MODULE_CATALOG = [
@@ -2125,9 +2148,25 @@ const SAAS_TEST_USERNAME = 'Pruebas_SGN';
 {
     const legacy = db.prepare("SELECT id FROM users WHERE username = 'USUARIO_PRUEBAS'").get();
     if (legacy) {
-        db.prepare('UPDATE users SET username = ?, email = ?, name = ? WHERE id = ?')
-            .run(SAAS_TEST_USERNAME, 'pruebas_sgn@sgn.invalid', 'Pruebas de SGN', legacy.id);
-        console.log(`[db] Renamed SaaS test account "USUARIO_PRUEBAS" -> "${SAAS_TEST_USERNAME}".`);
+        // Defensive: a brief window of this file, between the rename block
+        // being added and it being ordered BEFORE the create-if-missing
+        // block below, could leave a database with BOTH the legacy row and
+        // a separately-inserted "Pruebas_SGN" row -- renaming straight into
+        // that would violate the email/username UNIQUE constraint and crash
+        // the server on every single restart. If that already-broken state
+        // exists, just drop the legacy duplicate (the newer row already has
+        // the right name; whatever the legacy row's own history/grants
+        // were is the one piece of real data this can't recover, but it's
+        // an internal GEIPSA test account, not client data).
+        const already = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(SAAS_TEST_USERNAME, 'pruebas_sgn@sgn.invalid');
+        if (already && already.id !== legacy.id) {
+            db.prepare('DELETE FROM users WHERE id = ?').run(legacy.id);
+            console.log(`[db] Removed duplicate legacy "USUARIO_PRUEBAS" row (id ${legacy.id}) -- "${SAAS_TEST_USERNAME}" (id ${already.id}) already exists.`);
+        } else {
+            db.prepare('UPDATE users SET username = ?, email = ?, name = ? WHERE id = ?')
+                .run(SAAS_TEST_USERNAME, 'pruebas_sgn@sgn.invalid', 'Pruebas de SGN', legacy.id);
+            console.log(`[db] Renamed SaaS test account "USUARIO_PRUEBAS" -> "${SAAS_TEST_USERNAME}".`);
+        }
     }
 }
 if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(SAAS_TEST_USERNAME)) {
@@ -6812,22 +6851,57 @@ function listSaasAdmins() {
 function getSaasUserById(id) {
     return db.prepare("SELECT id, username, email, name, active, created_at FROM users WHERE id = ? AND role = 'admin'").get(id);
 }
-// Confirmed live, 2026-09-28: "solo dejaremos en el saas, los usuarios de
-// admin y el de Pruebas" -- removes leftover test accounts. users' own row
-// is the only thing deleted; saas_user_grants has ON DELETE CASCADE (see
-// its own DDL) so no orphaned grants are left behind.
-function deleteSaasUser(userId) {
-    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+function getSaasUserChanges(userId) {
+    return db.prepare('SELECT * FROM saas_user_changes WHERE user_id = ? ORDER BY changed_at DESC, id DESC').all(userId);
+}
+// The generic/toolbar version -- every account's history together, same
+// "whole table" idea as data_table_changes' own getAllTableChanges.
+function getAllSaasUserChanges() {
+    return db.prepare('SELECT * FROM saas_user_changes ORDER BY changed_at DESC, id DESC').all();
+}
+function logSaasUserChange({ userId, recordLabel, action, fieldKey, oldValue, newValue, changedBy }) {
+    db.prepare(`
+        INSERT INTO saas_user_changes (user_id, record_label, action, field_key, old_value, new_value, changed_by)
+        VALUES (@userId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy)
+    `).run({
+        userId, recordLabel: recordLabel || '', action, fieldKey: fieldKey || '',
+        oldValue: oldValue == null ? '' : String(oldValue),
+        newValue: newValue == null ? '' : String(newValue),
+        changedBy: changedBy || '',
+    });
+}
+
+// Confirmed live, 2026-09-28: "ningún usuario se puede eliminar, solo se
+// pueden colocar en estatus diferente" -- same rule already established for
+// client business users (users.active + Estatus RH). GEIPSA staff have no
+// HR module behind them, so this is the plain binary form: Activo/Inactivo
+// via the same users.active column toggleUserActive already uses for
+// clients, nothing deleted, ever. Replaces the earlier deleteSaasUser.
+function setSaasUserActive(userId, active, changedBy) {
+    const user = getSaasUserById(userId);
+    if (!user) return null;
+    db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, userId);
+    logSaasUserChange({
+        userId, recordLabel: user.username, action: 'update', fieldKey: 'business.saasUserStatus',
+        oldValue: user.active ? 'Activo' : 'Inactivo', newValue: active ? 'Activo' : 'Inactivo', changedBy,
+    });
+    return getSaasUserById(userId);
 }
 // Same shape as activateClient/provisionTrainingAccount's own
 // { generatedPassword } -- for when nobody has (or remembers) an account's
 // current password, e.g. Pruebas_SGN's own auto-generated one, which
 // was only ever logged to the server console at creation time and is not
 // recoverable any other way (password_hash is one-way).
-async function resetSaasUserPassword(userId) {
+async function resetSaasUserPassword(userId, changedBy) {
+    const user = getSaasUserById(userId);
     const password = generateRandomPassword();
     const passwordHash = await hashPassword(password);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId);
+    logSaasUserChange({
+        userId, recordLabel: user?.username, action: 'update', fieldKey: 'business.saasUserPassword',
+        oldValue: '', newValue: '', changedBy,
+    });
     return { password };
 }
 
@@ -7379,8 +7453,11 @@ module.exports = {
     logPlanChange,
     listSaasAdmins,
     getSaasUserById,
-    deleteSaasUser,
+    setSaasUserActive,
     resetSaasUserPassword,
+    getSaasUserChanges,
+    getAllSaasUserChanges,
+    logSaasUserChange,
     getSaasUserGrants,
     setSaasUserGrants,
     hasSaasGrant,

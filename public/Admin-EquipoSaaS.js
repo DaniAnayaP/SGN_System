@@ -156,6 +156,43 @@ function renderSaasUsers() {
         tdCreatedAt.dataset.col = 'createdAt';
         tdCreatedAt.textContent = (user.created_at || '').slice(0, 10) || '—';
 
+        // Estatus -- confirmed live, 2026-09-28: "ningún usuario se puede
+        // eliminar, solo se pueden colocar en estatus diferente", same rule
+        // already established for client business users (users.active).
+        // GEIPSA staff have no HR module behind them, so this is that same
+        // idea in its plain binary form: tap to flip Activo/Inactivo via
+        // users.active, nothing ever deleted.
+        const tdStatus = document.createElement('td');
+        tdStatus.dataset.col = 'status';
+        const statusBtn = document.createElement('button');
+        statusBtn.type = 'button';
+        statusBtn.className = `admin-badge admin-badge-${user.active ? 'activo' : 'inactivo'}`;
+        statusBtn.style.cursor = 'pointer';
+        statusBtn.style.border = 'none';
+        statusBtn.textContent = Dashboard.t(user.active ? 'business.hrStatusEffectActive' : 'business.hrStatusEffectInactive');
+        statusBtn.addEventListener('click', async () => {
+            const nextActive = !user.active;
+            const confirmKey = nextActive ? 'admin.saasActivateUserConfirm' : 'admin.saasDeactivateUserConfirm';
+            if (!(await Dashboard.confirm(Dashboard.t(confirmKey, { name: user.name })))) return;
+            try {
+                const res = await fetch(`/api/admin/saas-users/${user.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ active: nextActive }),
+                });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.message || 'update failed');
+                }
+                Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+                await loadSaasUsers();
+            } catch (err) {
+                Dashboard.showToast(err.message === "You can't deactivate your own account." ? Dashboard.t('admin.saasCantDeactivateSelf') : Dashboard.t('admin.saveError'), 'error');
+            }
+        });
+        tdStatus.appendChild(statusBtn);
+
         const tdActions = document.createElement('td');
         tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
@@ -196,31 +233,19 @@ function renderSaasUsers() {
         });
         tdActions.appendChild(resetPwBtn);
 
-        // Delete -- only for the leftover test accounts this screen
-        // shouldn't keep around; admin/admin and Pruebas_SGN stay.
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'admin-icon-btn';
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-        deleteBtn.title = Dashboard.t('admin.delete');
-        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', async () => {
-            if (!(await Dashboard.confirm(Dashboard.t('admin.saasDeleteUserConfirm', { name: user.name })))) return;
-            try {
-                const res = await fetch(`/api/admin/saas-users/${user.id}`, { method: 'DELETE', credentials: 'include' });
-                if (!res.ok) {
-                    const body = await res.json().catch(() => ({}));
-                    throw new Error(body.message || 'delete failed');
-                }
-                Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
-                await loadSaasUsers();
-            } catch {
-                Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-            }
-        });
-        tdActions.appendChild(deleteBtn);
+        // Cambios (per-row) -- see openSaasUserChanges below; the toolbar's
+        // own #saas-team-history-btn is the generic/whole-screen version of
+        // the exact same dialog.
+        const historyBtn = document.createElement('button');
+        historyBtn.type = 'button';
+        historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+        historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+        historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+        historyBtn.addEventListener('click', () => openSaasUserChanges(user.id));
+        tdActions.appendChild(historyBtn);
 
-        tr.append(tdUsername, tdName, tdEmail, tdCreatedAt, tdActions);
+        tr.append(tdUsername, tdName, tdEmail, tdCreatedAt, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
     applySaasTeamFilters();
@@ -243,6 +268,90 @@ function applySaasTeamFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applySaasTeamFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applySaasTeamFilters);
 
+// --- Control de Cambios -- generic (whole screen) + per-row -------------
+// Same 6-column dialog every other admin screen already shows
+// (Dashboard.js's own ensureChangeHistoryModal/openChangeHistory), rebuilt
+// here as its own small singleton instead of reused directly: that shared
+// one is hardwired to /api/business/table-changes/... (client-scoped, see
+// saas_user_changes' own DDL comment in db.js), which 404s for this
+// admin-only screen. Confirmed live, 2026-09-28: "debe tener los mismos
+// [campos] que todos los demás registros de cambios" -- same columns, same
+// look, just pointed at this screen's own /api/admin/saas-users/... routes.
+let saasChangesModal = null;
+let saasChangesList = null;
+function ensureSaasChangesModal() {
+    if (saasChangesModal) return;
+    saasChangesModal = document.createElement('div');
+    saasChangesModal.className = 'modal-overlay';
+    saasChangesModal.hidden = true;
+    saasChangesModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="saas-user-history-title">
+            <h3 id="saas-user-history-title"></h3>
+            <div class="admin-table-wrap">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>${Dashboard.t('main.changeHistoryDate')}</th>
+                            <th>${Dashboard.t('main.changeHistoryUser')}</th>
+                            <th>${Dashboard.t('main.changeHistoryRecord')}</th>
+                            <th>${Dashboard.t('main.changeHistoryChange')}</th>
+                            <th>${Dashboard.t('main.changeHistoryRequestedBy')}</th>
+                            <th>${Dashboard.t('main.changeHistoryAuthorizedBy')}</th>
+                        </tr>
+                    </thead>
+                    <tbody data-role="list"></tbody>
+                </table>
+            </div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" data-role="close">${Dashboard.t('admin.cancel')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(saasChangesModal);
+    saasChangesList = saasChangesModal.querySelector('[data-role="list"]');
+    const close = () => { saasChangesModal.hidden = true; };
+    saasChangesModal.querySelector('[data-role="close"]').addEventListener('click', close);
+    saasChangesModal.addEventListener('click', (event) => { if (event.target === saasChangesModal) close(); });
+}
+function renderSaasChangeRow(cells) {
+    const tr = document.createElement('tr');
+    cells.forEach((text) => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+    });
+    return tr;
+}
+// userId omitted = every account's history (toolbar button); passed = just
+// that one account's (per-row button) -- same "narrower scope, same
+// endpoint family" idea as Dashboard.js's own openChangeHistory.
+async function openSaasUserChanges(userId) {
+    ensureSaasChangesModal();
+    saasChangesModal.hidden = false;
+    saasChangesModal.querySelector('#saas-user-history-title').textContent = userId ? Dashboard.t('main.changeHistoryTitleRecord') : Dashboard.t('main.changeHistoryTitle');
+    saasChangesList.innerHTML = '';
+    saasChangesList.appendChild(renderSaasChangeRow([Dashboard.t('main.changeHistoryEmpty'), '', '', '', '', '']));
+    try {
+        const url = userId ? `/api/admin/saas-users/${userId}/changes` : '/api/admin/saas-users/changes';
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) return;
+        const { changes } = await res.json();
+        if (!changes || !changes.length) return;
+        saasChangesList.innerHTML = '';
+        changes.forEach((change) => {
+            let description;
+            if (change.action === 'create') description = Dashboard.t('main.changeHistoryCreated');
+            else if (change.field_key === 'business.saasUserPassword') description = Dashboard.t('admin.saasResetPassword');
+            else description = `${Dashboard.t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+            saasChangesList.appendChild(renderSaasChangeRow([
+                change.changed_at, change.changed_by || '—', change.record_label || '—', description,
+                change.requested_by || '—', change.authorized_by || '—',
+            ]));
+        });
+    } catch {
+        // Leave the empty-state row in place, same as the shared modal.
+    }
+}
 async function loadSaasUsers() {
     try {
         const res = await fetch('/api/admin/saas-users', { credentials: 'include' });
@@ -471,6 +580,19 @@ document.addEventListener('dashboard:language-changed', () => {
         }
         renderNewUserButton();
         await loadSaasUsers();
+        // Wired here (after loadSaasUsers, not right after initDashboard
+        // above) -- Dashboard.t()'s language dict apparently isn't fully
+        // populated the instant initDashboard's own promise resolves, only
+        // a few ticks later; loadSaasUsers' own network round trip is
+        // what gives it time to catch up before any OTHER Dashboard.t call
+        // in this file runs, which is why only this one (placed right after
+        // the bare await) ever showed the raw key instead of translated
+        // text.
+        const historyToolbarBtn = document.getElementById('saas-team-history-btn');
+        if (historyToolbarBtn) {
+            historyToolbarBtn.title = Dashboard.t('main.changeHistory');
+            historyToolbarBtn.addEventListener('click', () => openSaasUserChanges());
+        }
     } catch (err) {
         console.error('Admin (Equipo SaaS) failed to initialize:', err);
     }

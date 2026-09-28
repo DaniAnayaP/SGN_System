@@ -382,6 +382,19 @@
                 </div>
             </div>
 
+            <!-- Manually populated (one button, [data-col-action="history"] already
+                 set) instead of left for Dashboard.js's own renderDataTableColumnControls
+                 to auto-fill: that generic mechanism opens client-scoped
+                 table-changes, which 404s for this admin-only screen (see
+                 saas_user_changes' own DDL comment in db.js) -- this button
+                 calls openSaasUserChanges() below instead. Dashboard.js's own
+                 injection already skips a zoom bar that has a
+                 [data-col-action] child, so this doesn't get duplicated. -->
+            <div class="data-table-zoom">
+                <button type="button" class="data-table-zoom-btn" data-col-action="history" id="saas-team-history-btn" data-i18n-aria="main.changeHistory" aria-label="Change history">
+                    <i class="bx bx-history" aria-hidden="true"></i>
+                </button>
+            </div>
             <div class="data-table-wrapper" data-table-id="equipo-saas">
                 <table class="data-table">
                     <thead>
@@ -390,6 +403,7 @@
                             <th data-i18n="admin.saasUserName" data-col="name">Name</th>
                             <th data-i18n="admin.saasUserEmail" data-col="email">Email</th>
                             <th data-i18n="admin.planCreatedAt" data-col="createdAt">Creation date</th>
+                            <th data-i18n="admin.saasUserStatus" data-col="status">Status</th>
                             <th data-i18n="main.colActions" data-col="actions">Actions</th>
                         </tr>
                     </thead>
