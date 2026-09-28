@@ -196,6 +196,39 @@ function renderSaasUsers() {
         const tdActions = document.createElement('td');
         tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
+
+        // Editar nombre -- confirmed live, 2026-09-28: the seeded admin/admin
+        // account's name started as the placeholder "Admin" and needed a
+        // real display name. window.prompt, same lightweight single-value-
+        // edit pattern as reset password below (no separate modal just for
+        // one text field).
+        const editNameBtn = document.createElement('button');
+        editNameBtn.type = 'button';
+        editNameBtn.className = 'admin-icon-btn';
+        editNameBtn.setAttribute('aria-label', Dashboard.t('admin.saasEditName'));
+        editNameBtn.title = Dashboard.t('admin.saasEditName');
+        editNameBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+        editNameBtn.addEventListener('click', async () => {
+            const nextName = window.prompt(Dashboard.t('admin.saasEditNamePrompt'), user.name);
+            if (nextName == null) return; // cancelled
+            const trimmed = nextName.trim();
+            if (!trimmed || trimmed === user.name) return;
+            try {
+                const res = await fetch(`/api/admin/saas-users/${user.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ name: trimmed }),
+                });
+                if (!res.ok) throw new Error('update failed');
+                Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+                await loadSaasUsers();
+            } catch {
+                Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+            }
+        });
+        tdActions.appendChild(editNameBtn);
+
         const treeBtn = document.createElement('button');
         treeBtn.type = 'button';
         treeBtn.className = 'admin-icon-btn';

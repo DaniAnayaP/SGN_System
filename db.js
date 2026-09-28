@@ -6939,6 +6939,20 @@ function setSaasUserActive(userId, active, changedBy) {
     });
     return getSaasUserById(userId);
 }
+// Same shape/logging as setSaasUserActive above -- lets an admin correct a
+// SaaS account's own display name (e.g. the seeded admin/admin account's
+// name started as the placeholder "Admin", confirmed live 2026-09-28 it
+// should read "Administrador Principal del Saas" instead).
+function setSaasUserName(userId, name, changedBy) {
+    const user = getSaasUserById(userId);
+    if (!user) return null;
+    db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, userId);
+    logSaasUserChange({
+        userId, recordLabel: user.username, action: 'update', fieldKey: 'business.saasUserName',
+        oldValue: user.name, newValue: name, changedBy,
+    });
+    return getSaasUserById(userId);
+}
 // Same shape as activateClient/provisionTrainingAccount's own
 // { generatedPassword } -- for when nobody has (or remembers) an account's
 // current password, e.g. Pruebas_SGN's own auto-generated one, which
@@ -7505,6 +7519,7 @@ module.exports = {
     listSaasAdmins,
     getSaasUserById,
     setSaasUserActive,
+    setSaasUserName,
     resetSaasUserPassword,
     getSaasUserChanges,
     getAllSaasUserChanges,
