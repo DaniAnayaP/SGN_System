@@ -301,6 +301,7 @@ const {
     listSaasAdmins,
     getSaasUserById,
     setSaasUserActive,
+    hardDeleteTestSaasUser,
     setSaasUserName,
     setSaasUserUsername,
     isSaasUsernameTaken,
@@ -2566,16 +2567,9 @@ app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) =>
 // ONLY ever touch a username starting with "__", which no real account
 // uses. Remove this route entirely right after using it once.
 app.delete('/api/admin/saas-users-test-cleanup/:id', requireAuth, requireAdmin, (req, res) => {
-    const targetId = Number(req.params.id);
-    const target = getSaasUserById(targetId);
-    if (!target) return res.status(404).json({ message: 'Not found.' });
-    if (!target.username.startsWith('__')) {
-        return res.status(400).json({ message: 'Refusing to delete a non-test account.' });
-    }
-    db.prepare('DELETE FROM saas_user_changes WHERE user_id = ?').run(targetId);
-    db.prepare('DELETE FROM saas_user_grants WHERE user_id = ?').run(targetId);
-    db.prepare('DELETE FROM users WHERE id = ?').run(targetId);
-    res.json({ deleted: target.username });
+    const deletedUsername = hardDeleteTestSaasUser(Number(req.params.id));
+    if (!deletedUsername) return res.status(404).json({ message: 'Not found (or not a test account).' });
+    res.json({ deleted: deletedUsername });
 });
 app.patch('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => {
     const targetId = Number(req.params.id);

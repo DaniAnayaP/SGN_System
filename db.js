@@ -6944,6 +6944,20 @@ function logSaasUserChange({ userId, recordLabel, action, fieldKey, oldValue, ne
     });
 }
 
+// TEMPORARY, 2026-09-28 -- see server.js's own matching comment on the
+// one-off route that calls this. Deliberately separate from
+// setSaasUserActive below (a REAL delete, not a status change) and scoped
+// so it can only ever remove a "__"-prefixed throwaway test account --
+// remove this function and its server.js route together right after use.
+function hardDeleteTestSaasUser(userId) {
+    const user = getSaasUserById(userId);
+    if (!user || !user.username.startsWith('__')) return null;
+    db.prepare('DELETE FROM saas_user_changes WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM saas_user_grants WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    return user.username;
+}
+
 // Confirmed live, 2026-09-28: "ningún usuario se puede eliminar, solo se
 // pueden colocar en estatus diferente" -- same rule already established for
 // client business users (users.active + Estatus RH). GEIPSA staff have no
@@ -7571,6 +7585,7 @@ module.exports = {
     listSaasAdmins,
     getSaasUserById,
     setSaasUserActive,
+    hardDeleteTestSaasUser,
     setSaasUserName,
     setSaasUserUsername,
     isSaasUsernameTaken,
