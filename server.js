@@ -25,6 +25,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
@@ -300,6 +301,7 @@ const {
     listSaasAdmins,
     getSaasUserById,
     setSaasUserActive,
+    setSaasUserName,
     resetSaasUserPassword,
     getSaasUserChanges,
     getAllSaasUserChanges,
@@ -390,7 +392,12 @@ app.use((req, res, next) => {
         res.setHeader('Vary', 'Origin');
         if (req.method === 'OPTIONS') {
             res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            // X-CSRF-Token added 2026-09-28 (security review, finding #04) --
+            // without it here, the native app's own preflight for every
+            // mutating request would fail closed the moment requireCsrf
+            // below started requiring that header, breaking every save from
+            // the phone.
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
             return res.sendStatus(204);
         }
     }
@@ -428,6 +435,58 @@ app.use(helmet({
 // this just raises the hard ceiling above them.
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
+
+// --- CSRF protection (double-submit cookie) ---------------------------------
+// Security review, 2026-09-28 (finding #04): sgn_session is SameSite=None in
+// production (required for the native app's cross-origin WebView requests),
+// which on its own leaves nothing stopping a malicious page from riding an
+// authenticated user's session cross-site -- CORS/body-parser only blocked it
+// incidentally, not by design.
+//
+// The usual double-submit fix (client reads the cookie's own value back via
+// document.cookie and echoes it in a header) doesn't work here: the native
+// app's pages live at the capacitor://localhost origin, but sgn_csrf below is
+// set by sgnsystem-production.up.railway.app's own Set-Cookie response to a
+// cross-origin fetch -- that cookie lands in the WebView's cookie jar under
+// THAT domain, invisible to document.cookie reads made from a
+// capacitor://localhost page. So instead: the token is handed to the client
+// ONCE, in the login response BODY (see /api/auth/login and the new
+// /api/auth/csrf-token below), and the client keeps it in localStorage and
+// echoes it back as a header on every mutating request from then on (see
+// Dashboard.js and AppConfig.js's own fetch patches) -- it never needs to
+// read the cookie back to know its own value. The cookie itself can stay
+// httpOnly, since nothing legitimate needs to read it via JS anymore; the
+// double-submit property still holds, because only a same-origin (or
+// genuinely-authenticated native app) page ever received that value at all.
+const CSRF_COOKIE = 'sgn_csrf';
+const CSRF_HEADER = 'x-csrf-token';
+const CSRF_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+function issueCsrfCookie(res) {
+    const token = crypto.randomBytes(32).toString('hex');
+    res.cookie(CSRF_COOKIE, token, {
+        httpOnly: true,
+        secure: IS_PROD,
+        sameSite: IS_PROD ? 'none' : 'lax',
+        maxAge: 8 * 60 * 60 * 1000,
+    });
+    return token;
+}
+// Only enforced once a session cookie exists -- login/register have nothing
+// to forge yet, and a caller with no sgn_session cookie at all (e.g. a
+// Bearer-token client, if one is ever added) isn't exposed to CSRF in the
+// first place, since forging a header the browser doesn't attach on its own
+// is exactly what CSRF can't do.
+function requireCsrf(req, res, next) {
+    if (CSRF_SAFE_METHODS.has(req.method)) return next();
+    if (!req.cookies?.sgn_session) return next();
+    const cookieToken = req.cookies?.[CSRF_COOKIE];
+    const headerToken = req.headers[CSRF_HEADER];
+    if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+        return res.status(403).json({ message: 'Missing or invalid CSRF token.', code: 'CSRF' });
+    }
+    next();
+}
+app.use(requireCsrf);
 
 // --- Static frontend ---------------------------------------------------------
 // Only files inside public/ (the desktop site) and mobile-app/www (see just
@@ -505,6 +564,47 @@ const loginLimiter = rateLimit({
     message: { message: 'Too many login attempts. Try again later.' },
 });
 
+// Security review, 2026-09-28 (finding #05): loginLimiter above only throttles
+// by IP -- an attacker spreading attempts across many IPs isn't slowed down
+// at all. This adds a second, independent counter keyed by the USERNAME being
+// attacked, so the same account can't be brute-forced regardless of how many
+// IPs the attempts come from. In-memory, same single-process assumption
+// express-rate-limit's own default store already makes here; resets on
+// deploy/restart, which is fine for a throttle, not meant as a permanent ban.
+const loginFailuresByUsername = new Map(); // lowercased username -> { count, resetAt }
+const LOGIN_USERNAME_MAX_ATTEMPTS = 10;
+const LOGIN_USERNAME_WINDOW_MS = 15 * 60 * 1000;
+function isUsernameLocked(username) {
+    const entry = loginFailuresByUsername.get(username.toLowerCase());
+    if (!entry) return false;
+    if (Date.now() > entry.resetAt) { loginFailuresByUsername.delete(username.toLowerCase()); return false; }
+    return entry.count >= LOGIN_USERNAME_MAX_ATTEMPTS;
+}
+function recordLoginFailure(username) {
+    const key = username.toLowerCase();
+    const entry = loginFailuresByUsername.get(key);
+    if (!entry || Date.now() > entry.resetAt) {
+        loginFailuresByUsername.set(key, { count: 1, resetAt: Date.now() + LOGIN_USERNAME_WINDOW_MS });
+    } else {
+        entry.count += 1;
+    }
+}
+function clearLoginFailures(username) {
+    loginFailuresByUsername.delete(username.toLowerCase());
+}
+
+// Same finding #05: /api/auth/register had no rate limit at all -- scrypt is
+// deliberately CPU-heavy, so unlimited account creation is a mild CPU-DoS
+// vector. Registration is rare for a real user, so this can be much tighter
+// than the login limiter.
+const registerLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5,                   // 5 new accounts per IP per hour
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many accounts created from this address. Try again later.' },
+});
+
 // --- Auth middleware (protects any route that follows it) ------------------
 function requireAuth(req, res, next) {
     const token = req.cookies?.sgn_session || req.headers.authorization?.replace('Bearer ', '');
@@ -547,6 +647,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     if (!username || !password) {
         return res.status(400).json({ message: 'Username and password are required.' });
     }
+    if (isUsernameLocked(username)) {
+        return res.status(429).json({ message: 'Too many login attempts for this account. Try again later.' });
+    }
 
     const user = findUserByUsername(username);
     // Always run the hash comparison even if the user is missing, using a
@@ -556,8 +659,10 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const passwordMatches = await verifyPassword(password, user?.password_hash || dummyHash);
 
     if (!user || !passwordMatches) {
+        recordLoginFailure(username);
         return res.status(401).json({ message: 'Invalid username or password.' });
     }
+    clearLoginFailures(username);
     // Credentials matched, so revealing "inactive" here doesn't leak whether
     // an unknown username exists — the deactivation only ever fires for a
     // client whose status left 'activo' (see activateClient/deactivateClientUsers).
@@ -605,14 +710,26 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         sameSite: IS_PROD ? 'none' : 'lax',
         maxAge: 8 * 60 * 60 * 1000,
     });
+    const csrfToken = issueCsrfCookie(res);
 
     res.json({
         user: { id: user.id, username: user.username, name: user.name, email: user.email },
+        csrfToken,
     });
 });
 
+// Lets an already-logged-in session (sgn_session cookie still valid) obtain
+// a CSRF token without logging in again -- covers sessions that were issued
+// before this feature existed, plus any login path other than POST
+// /api/auth/login itself. The client's own fetch patch (Dashboard.js /
+// AppConfig.js) calls this once, automatically, the first time it hits a 403
+// CSRF response with no token cached yet, and retries.
+app.get('/api/auth/csrf-token', requireAuth, (req, res) => {
+    res.json({ csrfToken: issueCsrfCookie(res) });
+});
+
 // --- POST /api/auth/register --------------------------------------------------
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', registerLimiter, async (req, res) => {
     const { username, email, password } = req.body || {};
     if (!username || !email || !password || password.length < 8) {
         return res.status(400).json({ message: 'All fields are required; password must be at least 8 characters.' });
@@ -629,6 +746,7 @@ app.post('/api/auth/register', async (req, res) => {
 // --- POST /api/auth/logout ----------------------------------------------------
 app.post('/api/auth/logout', (req, res) => {
     res.clearCookie('sgn_session');
+    res.clearCookie(CSRF_COOKIE);
     res.json({ message: 'Logged out.' });
 });
 
@@ -2425,12 +2543,20 @@ app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) =>
 // what id is sent.
 app.patch('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => {
     const targetId = Number(req.params.id);
-    const { active } = req.body || {};
-    if (typeof active !== 'boolean') return res.status(400).json({ message: 'active must be a boolean.' });
-    if (!active && targetId === req.user.sub) return res.status(400).json({ message: "You can't deactivate your own account." });
-    const updated = setSaasUserActive(targetId, active, changedByLabel(req));
-    if (!updated) return res.status(404).json({ message: 'SaaS account not found.' });
-    res.json({ user: updated });
+    const { active, name } = req.body || {};
+    if (active === undefined && name === undefined) return res.status(400).json({ message: 'Nothing to update.' });
+    if (active !== undefined) {
+        if (typeof active !== 'boolean') return res.status(400).json({ message: 'active must be a boolean.' });
+        if (!active && targetId === req.user.sub) return res.status(400).json({ message: "You can't deactivate your own account." });
+        const updated = setSaasUserActive(targetId, active, changedByLabel(req));
+        if (!updated) return res.status(404).json({ message: 'SaaS account not found.' });
+    }
+    if (name !== undefined) {
+        if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'name must be a non-empty string.' });
+        const updated = setSaasUserName(targetId, name.trim(), changedByLabel(req));
+        if (!updated) return res.status(404).json({ message: 'SaaS account not found.' });
+    }
+    res.json({ user: getSaasUserById(targetId) });
 });
 
 // Same "nobody has (or remembers) this account's password" reset as a
@@ -5194,30 +5320,36 @@ app.post('/api/business/hr-workers/:id/activate-user', requireAuth, requireClien
     });
 });
 
-// "Reenviar correo" on the one-time hr-credentials-modal -- same reasoning
-// as the client admin's own resend route: the password only ever exists in
-// the browser's own memory from the activate-user response above, so this
-// just resends the SAME username/password, nowhere to look it up again
-// server-side.
-// requireClientAdmin -- same reasoning as activate-user above (security
-// review, 2026-09-28): resending real login credentials, verbatim, to a
-// coworker's personal email is an administrative action. The
-// username/password still have to come from the request body (see the
-// comment above this route -- the plaintext password is never persisted
-// server-side, only its hash), but at least now only a client admin can
-// trigger the send.
+// "Reenviar correo" on the one-time hr-credentials-modal -- USED TO trust
+// whatever username/password the client posted (the admin's own browser
+// re-sending what it had cached from the activate-user response), since the
+// plaintext password is never persisted server-side, only its hash, so
+// there was nothing to look up again. Confirmed live, 2026-09-28 (security
+// review, finding #03): that's a real gap -- it let the caller email
+// arbitrary "credential" text to a coworker's personal address. Fixed the
+// only honest way possible given the plaintext truly isn't recoverable:
+// this now calls activateHrWorkerUser again, same as the route above, so
+// "reenviar" really means "reissue a fresh, server-generated password and
+// send THAT" -- the old one stops working the moment this is clicked,
+// exactly like clicking Activar again would. req.body is no longer read at
+// all here.
 app.post('/api/business/hr-workers/:id/resend-credentials-email', requireAuth, requireClientAdmin, async (req, res) => {
     const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
-    const { username, password } = req.body || {};
-    if (!username || !password) return res.status(400).json({ message: 'username and password are required.' });
+    const generated = await activateHrWorkerUser(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!generated) return res.status(409).json({ message: 'This worker has no linked account.' });
     const emailSent = await sendMail({
         to: existing.personal_email,
         subject: `Acceso a SGN — ${existing.full_name}`,
-        text: `Se activó tu cuenta en SGN.\n\nUsuario: ${username}\nContraseña: ${password}\n\n`
+        text: `Se activó tu cuenta en SGN.\n\nUsuario: ${generated.username}\nContraseña: ${generated.password}\n\n`
             + 'Guarda esta contraseña en un lugar seguro — no se puede recuperar después de este correo.',
     });
-    res.json({ emailSent, emailTo: existing.personal_email });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: existing.id,
+        recordLabel: existing.full_name, action: 'update', fieldKey: 'main.colHrUserActivated',
+        oldValue: '—', newValue: generated.username, changedBy: changedByLabel(req),
+    });
+    res.json({ generated: { ...generated, emailSent, emailTo: existing.personal_email } });
 });
 
 // No DELETE route -- a worker leaving is a Rescisión de Contrato Estatus

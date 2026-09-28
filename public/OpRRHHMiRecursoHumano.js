@@ -631,20 +631,27 @@ credentialsReveal.addEventListener('click', () => {
     renderCredentialsPassword(credentialsRevealed);
 });
 
+// Security review, 2026-09-28 (finding #03): this used to resend the exact
+// username/password the browser had cached, sent back up in the request
+// body -- the server trusted whatever text the caller posted as "the
+// credentials". Since the plaintext password is never stored server-side
+// (only its hash), the only honest fix is for this to reissue a brand-new
+// password itself (server-generated, same as Activar) and send that --
+// req.body carries nothing now. That means clicking "Reenviar correo" more
+// than once invalidates the previous password each time, same as clicking
+// Activar again would.
 credentialsResendBtn.addEventListener('click', async () => {
     if (!currentCredentials) return;
     credentialsResendBtn.disabled = true;
     try {
         const res = await fetch(`/api/business/hr-workers/${currentCredentials.workerId}/resend-credentials-email`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ username: currentCredentials.username, password: currentCredentials.password }),
         });
         if (!res.ok) throw new Error('resend failed');
-        const { emailSent, emailTo } = await res.json();
-        Dashboard.showToast(Dashboard.t(emailSent ? 'main.changeSaved' : 'admin.saveError'), emailSent ? 'success' : 'error');
-        if (emailSent) showCredentials(currentCredentials.workerId, { ...currentCredentials, emailSent, emailTo });
+        const { generated } = await res.json();
+        Dashboard.showToast(Dashboard.t(generated.emailSent ? 'main.changeSaved' : 'admin.saveError'), generated.emailSent ? 'success' : 'error');
+        if (generated.emailSent) showCredentials(currentCredentials.workerId, generated);
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     } finally {

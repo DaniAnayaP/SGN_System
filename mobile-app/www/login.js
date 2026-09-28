@@ -222,6 +222,14 @@ loginForm?.addEventListener('submit', async (event) => {
         if (data.token) {
             sessionStorage.setItem('sgn_token', data.token);
         }
+        // CSRF double-submit token (security review, 2026-09-28, finding
+        // #04) -- see requireCsrf in server.js for why this has to come from
+        // the login response body rather than being read back from the
+        // cookie. Dashboard.js's own patched fetch reads this on every
+        // mutating request from here on.
+        if (data.csrfToken) {
+            try { localStorage.setItem('sgn_csrf_token', data.csrfToken); } catch { /* ignore */ }
+        }
         // Tells Dashboard.js's first page load after this login to apply the
         // account's saved default Departamento/Área/Centro de Costos instead
         // of whatever's left over in localStorage from a previous session.

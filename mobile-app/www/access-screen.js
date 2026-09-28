@@ -295,6 +295,13 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
                 }
                 return;
             }
+            // CSRF double-submit token (security review, 2026-09-28, finding
+            // #04) -- see requireCsrf in server.js. AppConfig.js's own
+            // patched fetch reads this back on every mutating request.
+            const data = await res.json().catch(() => ({}));
+            if (data.csrfToken) {
+                try { localStorage.setItem('sgn_csrf_token', data.csrfToken); } catch { /* ignore */ }
+            }
             sessionStorage.setItem('applyLoginDefaults', '1');
             localStorage.setItem(HAD_SESSION_KEY, '1');
             window.location.href = await resolveHomeScreen();

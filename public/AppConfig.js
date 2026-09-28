@@ -35,3 +35,55 @@ window.APP_CONFIG = {
 window.apiUrl = function apiUrl(path) {
     return sgnIsNativeApp() ? SGN_NATIVE_API_ORIGIN + path : path;
 };
+
+// --- CSRF token on every mutating fetch (security review, 2026-09-28,
+// finding #04) -------------------------------------------------------------
+// Same patch as Dashboard.js's own (see the long comment there for the full
+// reasoning), loaded here instead so it covers every App*/Admin mobile+PWA
+// screen -- AppConfig.js is the one script every one of those pages loads
+// first, before AppOfflineSync.js, PermissionTree.js, or any page's own
+// AppXxx.js ever gets a chance to call fetch. The one difference from
+// Dashboard.js: "our own API" here also means the native app's ABSOLUTE
+// cross-origin URL (SGN_NATIVE_API_ORIGIN), not just same-origin -- every
+// native fetch is cross-origin by design (see sgnIsNativeApp above), so
+// same-origin alone would never match and no request would ever get a
+// token. A third-party request (R2's presigned upload URL, boxicons, fonts)
+// still correctly gets skipped either way.
+(function installCsrfFetchPatch() {
+    const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+    const originalFetch = window.fetch.bind(window);
+    function getToken() {
+        try { return localStorage.getItem('sgn_csrf_token'); } catch { return null; }
+    }
+    function setToken(token) {
+        try { localStorage.setItem('sgn_csrf_token', token); } catch { /* ignore */ }
+    }
+    function isOwnApi(url) {
+        try {
+            const origin = new URL(url, window.location.href).origin;
+            if (origin === window.location.origin) return true;
+            return origin === new URL(SGN_NATIVE_API_ORIGIN).origin;
+        } catch { return false; }
+    }
+    window.fetch = async function (input, init = {}) {
+        const method = (init?.method || (input instanceof Request ? input.method : 'GET') || 'GET').toUpperCase();
+        const url = input instanceof Request ? input.url : input;
+        if (!MUTATING.has(method) || !isOwnApi(url)) return originalFetch(input, init);
+
+        const attempt = (token) => originalFetch(input, { ...init, headers: { ...(init.headers || {}), 'X-CSRF-Token': token || '' } });
+        let res = await attempt(getToken());
+        if (res.status === 403 && !getToken()) {
+            // Same rollout-gap recovery as Dashboard.js: a session opened
+            // before this feature shipped (or via a login path that doesn't
+            // capture the token) mints one here instead of failing outright.
+            try {
+                const tokenRes = await originalFetch(window.apiUrl('/api/auth/csrf-token'), { credentials: 'include' });
+                if (tokenRes.ok) {
+                    const { csrfToken } = await tokenRes.json();
+                    if (csrfToken) { setToken(csrfToken); res = await attempt(csrfToken); }
+                }
+            } catch { /* leave the original 403 response as-is */ }
+        }
+        return res;
+    };
+})();

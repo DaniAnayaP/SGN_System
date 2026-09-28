@@ -11,6 +11,57 @@
 // (see requireAdmin in server.js) — the redirects here are just UX.
 // ---------------------------------------------------------------------------
 
+// --- CSRF token on every mutating fetch (security review, 2026-09-28,
+// finding #04) -------------------------------------------------------------
+// Patches window.fetch ONCE, here, before any page-specific script (loaded
+// after this one in every page's <script> order) makes its first call --
+// every existing `fetch(...)` call site across the whole desktop app keeps
+// working unchanged, this just adds the header underneath it. Only touches
+// same-origin POST/PUT/PATCH/DELETE calls -- GETs don't need it, and a
+// third-party PUT (e.g. an evidence upload straight to R2's presigned URL)
+// must NOT get an extra header it doesn't expect, or its own CORS policy
+// rejects the preflight. See requireCsrf/issueCsrfCookie in server.js for
+// why the token comes from localStorage (set at login, see login.js) rather
+// than read back from the cookie -- on the desktop site that distinction
+// doesn't matter (it's same-origin either way), but the exact same patch is
+// mirrored in AppConfig.js for the mobile/PWA side, where it does.
+(function installCsrfFetchPatch() {
+    const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+    const originalFetch = window.fetch.bind(window);
+    function getToken() {
+        try { return localStorage.getItem('sgn_csrf_token'); } catch { return null; }
+    }
+    function setToken(token) {
+        try { localStorage.setItem('sgn_csrf_token', token); } catch { /* ignore */ }
+    }
+    function isSameOrigin(url) {
+        try { return new URL(url, window.location.href).origin === window.location.origin; } catch { return false; }
+    }
+    window.fetch = async function (input, init = {}) {
+        const method = (init?.method || (input instanceof Request ? input.method : 'GET') || 'GET').toUpperCase();
+        const url = input instanceof Request ? input.url : input;
+        if (!MUTATING.has(method) || !isSameOrigin(url)) return originalFetch(input, init);
+
+        const attempt = (token) => originalFetch(input, { ...init, headers: { ...(init.headers || {}), 'X-CSRF-Token': token || '' } });
+        let res = await attempt(getToken());
+        if (res.status === 403 && !getToken()) {
+            // Rollout gap: a session that was already open before this
+            // feature shipped never got a token at login -- mint one now
+            // (the session cookie alone is enough to authorize this) and
+            // retry once, so nobody has to log out/in for this to start
+            // working.
+            try {
+                const tokenRes = await originalFetch('/api/auth/csrf-token', { credentials: 'include' });
+                if (tokenRes.ok) {
+                    const { csrfToken } = await tokenRes.json();
+                    if (csrfToken) { setToken(csrfToken); res = await attempt(csrfToken); }
+                }
+            } catch { /* leave the original 403 response as-is */ }
+        }
+        return res;
+    };
+})();
+
 // --- Toast notifications (Éxito/Error/Info/Advertencia) --------------------
 // Dashboard.showToast(message, type, { title, duration }) -- a lightweight
 // replacement for the ad-hoc alert()/inline-error-text patterns scattered
