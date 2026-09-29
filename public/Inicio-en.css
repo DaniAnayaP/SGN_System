@@ -1908,12 +1908,23 @@
         color: var(--color-text-primary);
         margin: 0;
     }
+    /* Collapsed (no .filter-bar-expanded) has NOTHING visible inside it --
+       .filter-bar-panel (border/background/title/fields, all below) is
+       display:none until the toolbar's own funnel icon toggles this class
+       on (see Dashboard.js's filterBtn click handler). Moving the
+       border/background/margin here, off the bare .filter-bar, means a
+       collapsed bar takes 0px instead of drawing an empty bordered sliver
+       with its own 24px margin around nothing -- confirmed live,
+       2026-09-29: read as "mucho espacio perdido" above every table using
+       this bar, on every screen that has one, not just this one. */
     .filter-bar{
+        overflow: hidden;
+    }
+    .filter-bar.filter-bar-expanded{
         background-color: var(--color-surface);
         border: 1px solid var(--color-border);
         border-radius: 0.6rem;
         margin-bottom: 1.5rem;
-        overflow: hidden;
     }
     .filter-bar-title{
         margin: 0;

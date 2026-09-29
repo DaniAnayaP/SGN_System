@@ -3068,6 +3068,12 @@ body:has(.saas-master-tree-panel) main{
     display: flex;
     flex-direction: column;
     min-height: 0;
+    /* Same 0.75rem .master-tree-panel already uses for the client tree --
+       this one kept .admin-panel's own generic 1.5rem (never trimmed to
+       match its sibling), leaving twice the air around "Guardar" here.
+       Confirmed live, 2026-09-29: "aquí siento que perdemos mucho
+       espacio", comparing directly against the client tree. */
+    padding: 0.75rem;
     /* Same 0.5rem the client tree's own .master-tree-subview uses, so the
        subtitle sits right under the table instead of the browser's own
        default <p> margin plus admin-subtitle's 1.25rem stacking on top of

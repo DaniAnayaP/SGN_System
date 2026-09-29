@@ -692,10 +692,25 @@ function hasSaasScreenGrant(itemId, subItemId = null) {
 // bootstrapping problem this small a team doesn't need. Kept as its own
 // map (not folded into SCREEN_GRANT_PATHS) since it's a completely
 // separate namespace (flat itemId, no {sectionId,itemId,submenuId} triple).
+// Extended 2026-09-29 (was just these 3) to cover every real SaaS-admin
+// screen that also carries a saasItemId in buildSidebarData's own item list
+// below -- admin-nuestras-apps/admin-master-permissions/admin-business-
+// sectors/admin-nuestros-respaldos/admin-material-apoyo were already hidden
+// from the sidebar correctly when their Estatus wasn't visible, but typing
+// their URL directly still worked regardless (this map only ever gated
+// direct access, not the sidebar). Confirmed live: "porque si Giro está en
+// mejora, se visualiza en la barra lateral?" -- admin-business-sectors
+// specifically had NO saasItemId at all yet, in either place, so it never
+// respected Estatus for sidebar OR direct access.
 const SAAS_SCREEN_GRANT_PATHS = {
     'admin-saas': 'saas-clients',
     'admin-planes': 'saas-plans',
+    'admin-nuestras-apps': 'saas-apps',
+    'admin-master-permissions': 'saas-master-permissions-tree',
+    'admin-business-sectors': 'saas-business-sectors',
     'admin-costos-modulos': 'saas-module-costs',
+    'admin-nuestros-respaldos': 'saas-backups',
+    'admin-material-apoyo': 'saas-material-apoyo',
 };
 function hasSaasScreenAccess(activePage) {
     const itemId = SAAS_SCREEN_GRANT_PATHS[activePage];
@@ -827,7 +842,7 @@ function buildSidebarData(data, role, activePage) {
         // client account ends up able to see, same as Nuestros Clientes/
         // Planes above (corrected 2026-09-15, initially miscategorized).
         {
-            id: 'admin-master-permissions', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html', icon: 'bx-sitemap',
+            id: 'admin-master-permissions', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html', icon: 'bx-sitemap', saasItemId: 'saas-master-permissions-tree',
             // Same ladder idea as admin-business-sectors below -- this label
             // used to ellipsize straight to "Árbol de Permisos Mae..." even
             // though "Árbol Permisos Mtro." fits the sidebar's own width on
@@ -835,7 +850,7 @@ function buildSidebarData(data, role, activePage) {
             abbrKeys: ['menu.masterPermissionsTreeAbbr1', 'menu.masterPermissionsTreeAbbr2', 'menu.masterPermissionsTreeAbbr3', 'menu.masterPermissionsTreeAbbr4'],
         },
         {
-            id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html', icon: 'bx-briefcase',
+            id: 'admin-business-sectors', labelKey: 'menu.businessSectors', href: 'Admin-BusinessSectors.html', icon: 'bx-briefcase', saasItemId: 'saas-business-sectors',
             // Longest label in this dropdown -- steps down this ladder (in
             // order) until one fits the sidebar's fixed expanded width
             // instead of ellipsizing straight to "..." (see
