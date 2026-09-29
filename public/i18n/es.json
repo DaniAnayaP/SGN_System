@@ -1231,6 +1231,7 @@
     "downloadError": "No se pudo generar la descarga. Intenta de nuevo.",
     "columnHidePinnedConfirm": "Esta columna está fijada. ¿Seguro que quieres ocultarla?",
     "dragToReorder": "Arrastrar para reordenar",
+    "helpMode": "Modo ayuda",
     "uiScale": "Tamaño del sistema",
     "uiScaleIdeal": "Ideal",
     "uiScaleDecrease": "Disminuir tamaño",

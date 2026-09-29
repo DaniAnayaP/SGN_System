@@ -1232,6 +1232,7 @@
     "downloadError": "Couldn't generate the download. Please try again.",
     "columnHidePinnedConfirm": "This column is pinned. Are you sure you want to hide it?",
     "dragToReorder": "Drag to reorder",
+    "helpMode": "Help mode",
     "uiScale": "System size",
     "uiScaleIdeal": "Ideal",
     "uiScaleDecrease": "Decrease size",

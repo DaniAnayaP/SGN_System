@@ -1011,6 +1011,31 @@
         background-color: var(--color-bg);
         color: var(--color-text-primary);
     }
+    /* "Modo ayuda" -- toggle button + floating description bubble (see
+       setHelpModeActive/showHelpModeTooltip in Dashboard.js). !important on
+       the cursor since most buttons set their own cursor:pointer, and this
+       is a deliberate whole-page mode override while it's on. */
+    #help-mode-toggle.help-mode-toggle-active{
+        background-color: var(--color-accent);
+        color: var(--color-accent-text);
+    }
+    body.help-mode-active,
+    body.help-mode-active *{
+        cursor: help !important;
+    }
+    .help-mode-tooltip{
+        position: fixed;
+        z-index: 2000;
+        max-width: 18rem;
+        background: var(--color-text-primary);
+        color: var(--color-surface);
+        font-size: 0.8rem;
+        line-height: 1.4;
+        padding: 0.55rem 0.8rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        pointer-events: none;
+    }
     /* Top-bar buttons hidden per Accesos y Permisos / contratación (see
        syncTopBarButtonVisibility in Dashboard.js) — !important so it wins
        over ".top-bar-actions button"'s own display:flex regardless of

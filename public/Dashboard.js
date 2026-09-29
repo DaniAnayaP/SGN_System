@@ -4975,6 +4975,127 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeUiScaleMenu();
 });
 
+// --- "Modo ayuda" (SAP-style click-for-description) ------------------------
+// Requested live, 2026-09-29: "como en SAP, cuando das ctrl+shift... te da
+// la descripción de qué funcionalidad es cada botón/columna/opción". Almost
+// every button/icon/column in the app already carries a real title/
+// aria-label (what shows today as the browser's own slow, small native
+// tooltip after holding the mouse still) -- this doesn't invent new content,
+// it just surfaces that same text instantly, in a bigger bubble, on demand,
+// and swallows the click so asking "what does this do" never also DOES it
+// (no filter opens, no save fires) while the mode is on.
+let helpModeActive = false;
+let helpModeTooltipEl = null;
+
+function closeHelpModeTooltip() {
+    helpModeTooltipEl?.remove();
+    helpModeTooltipEl = null;
+}
+
+// Walks up from the clicked element to the nearest ancestor carrying a
+// real description -- aria-label first (screen-reader text is already
+// written to stand alone, title sometimes isn't), title otherwise.
+function findHelpModeText(startEl) {
+    let node = startEl;
+    while (node && node.nodeType === 1 && node !== document.body) {
+        const text = node.getAttribute('aria-label') || node.getAttribute('title');
+        if (text) return text;
+        node = node.parentElement;
+    }
+    return null;
+}
+
+function showHelpModeTooltip(text, x, y) {
+    closeHelpModeTooltip();
+    const tip = document.createElement('div');
+    tip.className = 'help-mode-tooltip';
+    tip.textContent = text;
+    document.body.appendChild(tip);
+    const rect = tip.getBoundingClientRect();
+    const left = Math.min(x + 14, window.innerWidth - rect.width - 8);
+    const top = Math.min(y + 14, window.innerHeight - rect.height - 8);
+    tip.style.left = `${Math.max(8, left)}px`;
+    tip.style.top = `${Math.max(8, top)}px`;
+    helpModeTooltipEl = tip;
+}
+
+function setHelpModeActive(active) {
+    helpModeActive = active;
+    document.body.classList.toggle('help-mode-active', active);
+    document.querySelectorAll('#help-mode-toggle').forEach((btn) => {
+        btn.classList.toggle('help-mode-toggle-active', active);
+        btn.setAttribute('aria-pressed', String(active));
+    });
+    closeHelpModeTooltip();
+}
+
+// Capture phase, not bubble -- has to run and (when it finds a description)
+// stopPropagation BEFORE the clicked control's own handler ever fires, or
+// "just tell me what this does" would also do it.
+document.addEventListener('click', (event) => {
+    if (!helpModeActive) return;
+    if (event.target.closest('#help-mode-toggle')) return;
+    const text = findHelpModeText(event.target);
+    event.preventDefault();
+    event.stopPropagation();
+    if (text) showHelpModeTooltip(text, event.clientX, event.clientY);
+    else closeHelpModeTooltip();
+}, true);
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && helpModeActive) setHelpModeActive(false);
+});
+
+document.querySelectorAll('.top-bar-actions').forEach((container) => {
+    if (container.querySelector('#help-mode-toggle')) return;
+    const settingsMenuEl = container.querySelector('#settings-menu');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'help-mode-toggle';
+    btn.setAttribute('aria-pressed', 'false');
+    btn.setAttribute('aria-label', t('main.helpMode'));
+    btn.title = t('main.helpMode');
+    btn.innerHTML = '<i class="bx bx-help-circle" aria-hidden="true"></i>';
+    btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        setHelpModeActive(!helpModeActive);
+    });
+    if (settingsMenuEl) {
+        settingsMenuEl.insertAdjacentElement('beforebegin', btn);
+    } else {
+        container.appendChild(btn);
+    }
+});
+
+// The fixed page title (.welcome-text, e.g. "SaaS Team", "Árbol Maestro
+// SaaS") becomes the help-mode target for "what does this whole screen do"
+// -- its own .admin-subtitle text (previously a permanently-visible
+// paragraph above every table) moves onto it as a title attribute, then
+// hides. Confirmed live, 2026-09-29: "quitar el texto de administra las
+// cuentas, eso va cuando... me diga como funciona la pantalla" -- applies
+// site-wide, to every screen using .admin-subtitle, not just one. Copy-then-
+// hide (not a CSS display:none) so a page shaped differently than expected
+// just keeps its subtitle visible instead of silently losing the text
+// nowhere.
+// DIRECT child of .admin-panel specifically -- not just any .admin-subtitle
+// on the page. Admin-NuestrasApps.html's own detail view reuses the same
+// class for #app-detail-clients, a per-record runtime value (which clients
+// use this one app), nested inside .saas-app-detail-head, not a screen-level
+// description -- querySelector('.admin-subtitle') alone would risk grabbing
+// or hiding THAT instead, depending on DOM order.
+(function migrateAdminSubtitleIntoHelpMode() {
+    const subtitle = document.querySelector('.admin-panel > .admin-subtitle');
+    const titleEl = document.querySelector('.top-bar-title .welcome-text');
+    if (!subtitle || !titleEl) return;
+    const text = subtitle.textContent.trim();
+    if (!text) return;
+    if (!titleEl.getAttribute('title') && !titleEl.getAttribute('aria-label')) {
+        titleEl.setAttribute('aria-label', text);
+        titleEl.title = text;
+    }
+    subtitle.hidden = true;
+})();
+
 // --- Notifications dropdown (Alertas / Avisos / Solicitudes / Autorizar) ---
 // Converts the existing static #notifications-btn (already present, plain,
 // in every page's top bar) into a proper dropdown — same JS-built pattern
