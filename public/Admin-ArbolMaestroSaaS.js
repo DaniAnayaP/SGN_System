@@ -1841,7 +1841,12 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         device.className = 'perm-tree-mstatus-device';
         const checked = platform === 'web' ? state.webEnabled : state.appEnabled;
         if (checked) device.classList.add('perm-tree-mstatus-device-on');
-        const locked = platform === 'app' && !state.webEnabled;
+        // Inhabilitado blocks both -- confirmed live, 2026-09-29: only
+        // Inhabilitado, not Construcción/Mejoras (a screen already live on
+        // Web that's now "en mejoras" still needs its own Web switch usable
+        // during that work, not force-locked). APP still additionally needs
+        // WEB on regardless of Estatus.
+        const locked = state.status === 'inhabilitado' || (platform === 'app' && !state.webEnabled);
         const box = document.createElement('span');
         box.className = 'perm-tree-mstatus-device-box';
         box.innerHTML = deviceIconSvg(platform, '');

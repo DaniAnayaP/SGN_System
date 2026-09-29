@@ -5053,8 +5053,16 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     btn.type = 'button';
     btn.id = 'help-mode-toggle';
     btn.setAttribute('aria-pressed', 'false');
-    btn.setAttribute('aria-label', t('main.helpMode'));
-    btn.title = t('main.helpMode');
+    // data-i18n-aria (not a direct t() call) -- this runs at top-level
+    // script time, before the async i18n fetch resolves, same as
+    // messagesBtn/chatbotBtn just above; a direct t() call here bakes in
+    // the untranslated key ("main.helpMode") forever, since
+    // applyStaticTranslations only re-visits elements carrying this
+    // attribute. Confirmed live, 2026-09-29: the button's own accessible
+    // name showed the literal key until this.
+    btn.setAttribute('data-i18n-aria', 'main.helpMode');
+    btn.setAttribute('aria-label', 'Help mode');
+    btn.title = 'Help mode';
     btn.innerHTML = '<i class="bx bx-help-circle" aria-hidden="true"></i>';
     btn.addEventListener('click', (event) => {
         event.stopPropagation();

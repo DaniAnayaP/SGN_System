@@ -2429,8 +2429,14 @@
             if (!next.web && !next.app) costMap.delete(key);
             else costMap.set(key, next);
         }
+        // Despite the name (kept for its 6 existing ancestorLocked call
+        // sites), also true when this node's own Estatus is Inhabilitado --
+        // a locked/disabled Web toggle up the chain should cascade the same
+        // lock down to everything nested under it, exactly like Web-off
+        // already does (see buildPlatformCheckbox's own locked computation).
         function nodeWebOff(key) {
-            return !getNodeState(key).webEnabled;
+            const state = getNodeState(key);
+            return !state.webEnabled || state.status === 'inhabilitado';
         }
         function getBaselineState(key) {
             return baselineMap.get(key) || { status: DEFAULT_STATUS, webEnabled: true, appEnabled: false };
@@ -2736,14 +2742,16 @@
         }
 
         // Sistema Web / App Móvil -- simple availability checkboxes, not
-        // their own status. Estatus is informational only for now (no
-        // dedicated test/staging environment to justify locking Web off
-        // for anything short of Habilitado -- confirmed with the user);
-        // the dependencies that stay are App can't outrun Web (same rule
-        // the checkbox/grant tree above enforces via computeAppToggle) and,
-        // new here, a node can't outrun its own ancestors: once any
-        // Departamento/Área/Apartado above this one has Web off,
-        // everything nested under it locks too (see ancestorLocked,
+        // their own status. Inhabilitado blocks both (revised 2026-09-29 --
+        // was "Estatus is informational only", explicitly reversed: "ya no
+        // queremos eso, bloquea en ambos" against Admin-ArbolMaestroSaaS.js's
+        // own same-day fix). Construcción/Mejoras still don't lock -- a node
+        // already live on Web that's now "en mejoras" still needs its own
+        // Web switch usable during that work. The dependencies that stay are
+        // App can't outrun Web (same rule the checkbox/grant tree above
+        // enforces via computeAppToggle) and a node can't outrun its own
+        // ancestors: once any Departamento/Área/Apartado above this one has
+        // Web off, everything nested under it locks too (see ancestorLocked,
         // threaded down through renderStatusTree). Locking never erases
         // the stored value -- input.checked always reflects it as-is, so
         // turning the ancestor back on brings every locked descendant back
@@ -2756,7 +2764,7 @@
             platformTag.className = 'perm-tree-mstatus-platform';
             platformTag.textContent = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
             const state = getNodeState(key);
-            const locked = ancestorLocked || (platform === 'app' && !state.webEnabled);
+            const locked = ancestorLocked || state.status === 'inhabilitado' || (platform === 'app' && !state.webEnabled);
             if (ancestorLocked) wrap.title = t('admin.masterTreeLockedByAncestor');
             const device = document.createElement('span');
             device.className = 'perm-tree-mstatus-device';
