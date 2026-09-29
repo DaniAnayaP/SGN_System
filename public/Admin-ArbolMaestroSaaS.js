@@ -445,6 +445,144 @@ let draggedId = null;
 // save, a reorder, a color pick) never folds the rows you had open.
 let expandedRows = new Set();
 function isExpanded(key) { return expandedRows.has(key); }
+
+// Real parent -> [own children] map for EVERY row's own key. Mirrors
+// PermissionTree.js's own statusChildrenMap/buildStatusChildrenMap/
+// collectDescendantStatusKeys exactly -- that one already gets this right
+// for the client tree, walking every real descendant (Botones/Tabla/Iconos
+// Personalización/nested modals included, not just leaf columns/actions).
+// This tree's own "Aplicar Estatus/WEB/APP a lo anidado" buttons used to
+// cascade only through the ad hoc collectLeafKeysForScreens/
+// collectLeafKeysForApartado helpers above, which were only ever built to
+// return real leaf keys for rollup/count-badge purposes -- a structural
+// row's OWN separately-stored Estatus (Botones, Iconos Personalización, a
+// Tabla/Modal apartado's own row) was never in that list, so it silently
+// never moved. Confirmed live, 2026-09-28: "porque doy aplicar anidados, y
+// no se aplican" against a real screenshot (Costo Accesos-Permisos -> En
+// mejoras, its own Botones/Iconos Personalización/Tabla principal/Modal
+// children stayed unchanged).
+let statusChildrenMap = new Map();
+function registerStatusChild(parentKey, childKey) {
+    if (!parentKey || !childKey) return;
+    if (!statusChildrenMap.has(parentKey)) statusChildrenMap.set(parentKey, []);
+    statusChildrenMap.get(parentKey).push(childKey);
+}
+function collectDescendantStatusKeys(rootKey) {
+    const result = [];
+    (function walk(key) {
+        (statusChildrenMap.get(key) || []).forEach((childKey) => {
+            result.push(childKey);
+            walk(childKey);
+        });
+    })(rootKey);
+    return result;
+}
+// A leaf's own Operar/Editar/Autorizar/Eliminar sub-levels, plus its nested
+// modal apartado (if any, via nestUnder.column -- see buildNestedByColumn).
+// Shared by every place a real columna/acción leaf gets registered below.
+function registerLeafStatusDescendants(screen, key, leaf, nestedApartadosForLeaf) {
+    const levels = (leaf.kind === 'action' || leaf.kind === 'table-action') ? LEAF_ACTION_LEVELS : LEAF_COLUMN_LEVELS;
+    levels.forEach((level) => registerStatusChild(key, `${key}/${level.id}`));
+    (nestedApartadosForLeaf || []).forEach((childApartado) => {
+        registerStatusChild(key, apartadoKey(screen, childApartado));
+        walkApartadoForStatusMap(screen, childApartado);
+    });
+}
+// Data-only mirror of renderApartadoNode -- same grouping helpers
+// (buildNestedByColumn/buildNestedByClassification/getEffectiveApartadoGroups),
+// same branches (Iconos Personalización, Control Interno, classification
+// groups, nested modals), just registering edges instead of building DOM,
+// and never gated behind isExpanded/hasOwnBody -- the map has to be right
+// regardless of what the user has actually opened.
+function walkApartadoForStatusMap(screen, apartado) {
+    const aKey = apartadoKey(screen, apartado);
+    if (apartado.controlInterno) {
+        const iconsKey = `${aKey}::icons`;
+        registerStatusChild(aKey, iconsKey);
+        ICON_PERSONALIZATION_ITEMS.forEach((icon) => registerStatusChild(iconsKey, `${aKey}::icon-${icon.id}`));
+    }
+    const nestedByColumn = buildNestedByColumn(screen, apartado);
+    const nestedByClassification = buildNestedByClassification(screen, apartado);
+    const apartadoGroups = getEffectiveApartadoGroups(screen, apartado);
+    nestedByClassification.forEach((_, classificationId) => {
+        if (!apartadoGroups.some((g) => g.classificationId === classificationId)) {
+            apartadoGroups.push({ classificationId, leaves: [] });
+        }
+    });
+    if (apartado.controlInterno) {
+        const fixedCiLeaves = buildLeaves(apartado).filter((l) => l.kind === 'ci');
+        const reassignedCiLeaves = buildLeaves(apartado).filter((l) => l.kind !== 'ci'
+            && classificationOverrides.get(leafKey(screen, apartado, l))?.classificationId === SAAS_CLASS_CONTROL_INTERNO_ID);
+        const ciGroupKey = `${aKey}::class::${SAAS_CLASS_CONTROL_INTERNO_ID}`;
+        registerStatusChild(aKey, ciGroupKey);
+        [...fixedCiLeaves, ...reassignedCiLeaves].forEach((leaf) => {
+            const key = leafKey(screen, apartado, leaf);
+            registerStatusChild(ciGroupKey, key);
+            registerLeafStatusDescendants(screen, key, leaf, nestedByColumn.get(leaf.label));
+        });
+    }
+    apartadoGroups.forEach((clsGroup) => {
+        const groupKey = `${aKey}::class::${clsGroup.classificationId}`;
+        registerStatusChild(aKey, groupKey);
+        const nestedForGroup = nestedByClassification.get(clsGroup.classificationId) || [];
+        clsGroup.leaves.forEach((leaf) => {
+            const key = leafKey(screen, apartado, leaf);
+            registerStatusChild(groupKey, key);
+            registerLeafStatusDescendants(screen, key, leaf, nestedByColumn.get(leaf.label));
+        });
+        nestedForGroup.forEach((childApartado) => {
+            registerStatusChild(groupKey, apartadoKey(screen, childApartado));
+            walkApartadoForStatusMap(screen, childApartado);
+        });
+    });
+}
+// Data-only mirror of renderList's own top-to-bottom structure (General ->
+// Accesos Generales -> Iconos de Navegación, then every Grupo -> Pantalla ->
+// Botones/Apartado) -- rebuilt fresh at the top of every renderList() call.
+function buildStatusChildrenMap() {
+    registerStatusChild('__general__', 'ga:main');
+    GENERAL_ITEMS.forEach((item) => registerStatusChild('ga:main', item.itemId));
+    registerStatusChild('ga:main', NAV_ICONS_KEY);
+    NAV_ICON_ITEMS.forEach((icon) => {
+        registerStatusChild(NAV_ICONS_KEY, icon.itemId);
+        if (icon.itemId === 'saas-nav-settings') {
+            registerStatusChild(icon.itemId, apartadoKey(NAV_ICONS_SCREEN, MODAL_CONFIG_APARTADO));
+            walkApartadoForStatusMap(NAV_ICONS_SCREEN, MODAL_CONFIG_APARTADO);
+        }
+    });
+
+    orderedGroups().forEach((group) => {
+        // General is "a real kill-switch over the whole tree" (see its own
+        // comment in renderList) -- its allLeafKeys used to be hand-assembled
+        // to cover literally every screen for exactly this reason. Wire it
+        // in here too, or "aplicar a lo anidado" on General would only ever
+        // reach Inicio/Panel/Tablero/Iconos de Navegación, never Servicio a
+        // Cliente/Configuración SaaS's own real screens.
+        registerStatusChild('__general__', group.groupId);
+        orderedScreens(group).forEach((screen) => {
+            registerStatusChild(group.groupId, screen.itemId);
+            const screenApartados = orderedApartados(screen);
+            const screenActionEntries = screenApartados.flatMap((apartado) => (
+                apartado.acciones && apartado.acciones.length
+                    ? buildActionLeaves(apartado).map((leaf) => ({ apartado, leaf }))
+                    : []
+            ));
+            if (screenActionEntries.length) {
+                const botonesKey = `${screen.itemId}::botones`;
+                registerStatusChild(screen.itemId, botonesKey);
+                screenActionEntries.forEach(({ apartado, leaf }) => {
+                    const key = leafKey(screen, apartado, leaf);
+                    registerStatusChild(botonesKey, key);
+                    registerLeafStatusDescendants(screen, key, leaf, null);
+                });
+            }
+            screenApartados.filter((apartado) => !apartado.nestUnder).forEach((apartado) => {
+                registerStatusChild(screen.itemId, apartadoKey(screen, apartado));
+                walkApartadoForStatusMap(screen, apartado);
+            });
+        });
+    });
+}
 // The old persisted state would otherwise sit in localStorage forever.
 try { localStorage.removeItem('saasMasterTreeCollapsed'); } catch { /* storage blocked -- nothing to clean */ }
 
@@ -1679,7 +1817,12 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
     const nestCell = document.createElement('div');
     nestCell.className = 'perm-tree-mstatus-status-nest-cell';
     nestCell.appendChild(nestBtn('Aplicar Estatus a lo anidado', () => {
-        descendantKeys.forEach((k) => setState(k, { ...getState(k), status: select.value }));
+        // collectDescendantStatusKeys, not the leaf-only descendantKeys param
+        // below (that one only gates the button's disabled state) -- this is
+        // the real fix: walk EVERY real descendant row (Botones, Iconos
+        // Personalización, a nested Tabla/Modal's own row included), not
+        // just the deepest columns/actions. See statusChildrenMap above.
+        collectDescendantStatusKeys(key).forEach((k) => setState(k, { ...getState(k), status: select.value }));
         renderList();
     }, !descendantKeys.length));
     controls.appendChild(nestCell);
@@ -1722,7 +1865,9 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         group.appendChild(badge);
         group.appendChild(nestBtn(`Aplicar ${platform.toUpperCase()} a lo anidado`, () => {
             const value = platform === 'web' ? state.webEnabled : state.appEnabled;
-            descendantKeys.forEach((k) => {
+            // Same fix as the Estatus nest button above -- every real
+            // descendant row, not just leaf keys.
+            collectDescendantStatusKeys(key).forEach((k) => {
                 const s = getState(k);
                 setState(k, platform === 'web' ? { ...s, webEnabled: value, appEnabled: value ? s.appEnabled : false } : { ...s, appEnabled: value });
             });
@@ -2246,6 +2391,10 @@ function buildHeader() {
 function renderList() {
     listEl.innerHTML = '';
     listEl.appendChild(buildHeader());
+    // Rebuilt fresh every pass, independent of what's collapsed -- see
+    // buildStatusChildrenMap above.
+    statusChildrenMap = new Map();
+    buildStatusChildrenMap();
 
     // "General" -- a real row with its own stored Estatus/Web-App and a
     // cascade over literally every leaf (confirmed against the real Árbol de
@@ -2457,7 +2606,7 @@ function renderList() {
                 listEl.appendChild(botonesRow);
                 if (isExpanded(`cls:${botonesKey}`)) {
                     screenActionEntries.forEach(({ apartado, leaf }) => {
-                        renderLeafWithLevels(screen, apartado, leaf, 3, apartadoKey(screen, apartado), null, botonesCtx, leaf.label);
+                        renderLeafWithLevels(screen, apartado, leaf, 3, apartadoKey(screen, apartado), null, botonesCtx, leaf.label, null, null);
                     });
                 }
             }
