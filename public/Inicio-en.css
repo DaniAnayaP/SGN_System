@@ -2123,7 +2123,16 @@
         align-items: center;
         justify-content: flex-end;
         gap: 0.4rem;
-        margin-bottom: 0.5rem;
+        /* Separates controls (zoom/filter/history icons, "+ Nuevo ...")
+           from content (the table right below) -- confirmed live,
+           2026-09-29: liked as a visual divider, just moved here from
+           where it used to accidentally show up (.filter-bar's own
+           collapsed border, removed above) to between the toolbar and the
+           table instead: "colocarla entre el botón y la tabla". Applies
+           to every .data-table screen, not just the one shown. */
+        padding-bottom: 0.6rem;
+        margin-bottom: 0.75rem;
+        border-bottom: 1px solid var(--color-border);
     }
     .data-table-zoom-btn{
         display: flex;
