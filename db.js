@@ -6419,6 +6419,56 @@ function clearSaasClassificationColor(classificationId, kind, updatedBy) {
     return clearColorRow('saas_classification_colors', classificationId, kind, updatedBy, logSaasMasterChange);
 }
 
+// Historial de cambios (Equipo SaaS) -- classification-color stripe.
+// `saas_user_changes.field_key` (see logSaasUserChange's own call sites in
+// server.js) has 6 values; only 3 correspond to a real Árbol Maestro SaaS
+// catalog leaf (see SaasAdminCatalog.js's own saas-team screen: Username=c0,
+// Nombre=c1, "Acceso de esta cuenta"=ta0). saasUserStatus/saasUserPassword/
+// visibleStatusesLabel have no matching column at all (acknowledged gap,
+// same comment) and are left out on purpose -- the caller treats a missing
+// key as "sin clasificar" instead of guessing. defaultClassificationId
+// mirrors getEffectiveApartadoGroups' own col/table-action default rule in
+// Admin-ArbolMaestroSaaS.js (a plain column defaults to Por Definir, a
+// table-action to Acciones) -- there's no menu.json-shaped structure to walk
+// server-side for the SaaS catalog like getEffectiveColumnClassifications
+// does for the client side, so this hardcodes just these 3 leaves instead of
+// reimplementing that whole resolver for one screen. The 3 string ids below
+// must stay in sync with SAAS_CLASS_POR_DEFINIR_ID/SAAS_CLASS_ACCIONES_ID in
+// Admin-ArbolMaestroSaaS.js.
+const SAAS_USER_FIELD_LEAF_KEYS = {
+    'business.username': { leafKey: 'saas-team::tabla::c0', defaultClassificationId: 'saas-class-por-definir' },
+    'business.saasUserName': { leafKey: 'saas-team::tabla::c1', defaultClassificationId: 'saas-class-por-definir' },
+    'business.saasUserGrants': { leafKey: 'saas-team::tabla::ta0', defaultClassificationId: 'saas-class-acciones' },
+};
+// Effective (override-or-default) classification + color for an arbitrary
+// list of SaaS catalog leaf keys -- same override-wins-over-structural-
+// default resolution getEffectiveApartadoGroups already does client-side,
+// just for a caller-supplied leaf list instead of a whole apartado.
+function getEffectiveSaasLeafClassifications(leaves) {
+    const overridesByKey = new Map(getSaasClassificationOverrides().map((o) => [o.nodeKey, o]));
+    const colors = new Map(getSaasClassificationColors().map((c) => [c.classificationId, c]));
+    const result = {};
+    leaves.forEach(({ leafKey, defaultClassificationId }) => {
+        const override = overridesByKey.get(leafKey);
+        const classificationId = override ? override.classificationId : defaultClassificationId;
+        if (!classificationId) return;
+        const colorRow = colors.get(classificationId);
+        result[leafKey] = { classificationId, color: (colorRow && colorRow.color) || null };
+    });
+    return result;
+}
+// Keyed by field_key directly (not leafKey) so Admin-EquipoSaaS.js's history
+// modal can look a change row's own field_key up with zero knowledge of the
+// underlying catalog leaf ids.
+function getEffectiveSaasUserFieldClassifications() {
+    const byLeafKey = getEffectiveSaasLeafClassifications(Object.values(SAAS_USER_FIELD_LEAF_KEYS));
+    const result = {};
+    Object.entries(SAAS_USER_FIELD_LEAF_KEYS).forEach(([fieldKey, { leafKey }]) => {
+        if (byLeafKey[leafKey]) result[fieldKey] = byLeafKey[leafKey];
+    });
+    return result;
+}
+
 function logSaasMasterChange(nodeKey, field, oldValue, newValue, changedBy) {
     db.prepare(`
         INSERT INTO saas_master_change_log (node_key, field, old_value, new_value, changed_by)
@@ -7534,6 +7584,7 @@ module.exports = {
     setSaasClassificationColor,
     setSaasClassificationTextColor,
     clearSaasClassificationColor,
+    getEffectiveSaasUserFieldClassifications,
     getSaasMasterChangeLog,
     getMasterPermissionOrder,
     setMasterPermissionOrder,

@@ -266,6 +266,7 @@ const {
     setSaasClassificationColor,
     setSaasClassificationTextColor,
     clearSaasClassificationColor,
+    getEffectiveSaasUserFieldClassifications,
     getSaasMasterChangeLog,
     getSaasPersonalOrder,
     setSaasPersonalOrder,
@@ -2432,6 +2433,14 @@ app.delete('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (
     if (!classificationId) return res.status(400).json({ message: 'classificationId is required.' });
     if (kind !== 'dot' && kind !== 'text') return res.status(400).json({ message: "kind must be 'dot' or 'text'." });
     res.json({ cleared: clearSaasClassificationColor(classificationId, kind, changedByLabel(req)) });
+});
+
+// Read-only -- feeds the classification-color stripe on Equipo SaaS's own
+// Historial de cambios (Admin-EquipoSaaS.js's openSaasUserChanges). Mirrors
+// /api/business/table-classifications' shape, keyed by field_key instead of
+// column id since that's what a saas_user_changes row already carries.
+app.get('/api/admin/saas-user-field-classifications', requireAuth, requireAdmin, (req, res) => {
+    res.json({ fields: getEffectiveSaasUserFieldClassifications() });
 });
 
 app.get('/api/admin/saas-master-change-log', requireAuth, requireAdmin, (req, res) => {

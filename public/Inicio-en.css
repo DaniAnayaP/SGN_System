@@ -2737,7 +2737,14 @@
        the ROWS under a fixed header, not the header itself off-screen --
        confirmed live, 2026-09-28: "lo desplazante debe ser las filas, no el
        encabezado". */
-    .saas-changes-th{
+    /* .admin-table th (specificity 0,1,1, Admin.css) sets its own
+       shorthand `padding`, which beats a bare `.saas-changes-th` (0,1,0)
+       on padding-left regardless of stylesheet order -- confirmed live,
+       2026-09-28: the funnel icon still overlapped the header's first
+       letter on both Admin-EquipoSaaS.js's own modal and the newly-ported
+       generic one, the earlier 1.7rem->2.3rem bump never actually applied.
+       Qualifying with .admin-table (0,2,1) wins outright. */
+    .admin-table th.saas-changes-th{
         position: sticky;
         top: 0;
         z-index: 1;
@@ -2747,12 +2754,39 @@
     /* The scroll container itself -- a sticky <th> only sticks within
        whatever actually scrolls, so this needs its OWN bounded height +
        overflow-y instead of leaving the whole .modal-panel (title included)
-       as the one scrolling region. Scoped to this one modal (not the shared
-       .admin-table-wrap other change-history dialogs also use) so nothing
-       else's layout changes. */
+       as the one scrolling region. Its own class, not a plain
+       .admin-table-wrap rule, so other .admin-table-wrap consumers
+       (Admin-BusinessSectors.html, PermissionTree.js, Admin-ArbolMaestroSaaS.js)
+       keep their unbounded height -- applied to BOTH change-history modals
+       now (Admin-EquipoSaaS.js's own, and Dashboard.js's shared generic one),
+       since both got the same per-column filter treatment 2026-09-28. */
     .saas-changes-table-wrap{
         max-height: 22rem;
         overflow-y: auto;
+    }
+    /* Classification color stripe -- Historial de cambios (both modals).
+       Each row's left edge is tinted by the EFFECTIVE classification color
+       of the field that changed (an admin's Árbol Maestro reclassification
+       here too, exactly like the real table's own column-group band already
+       does -- see fillBandRow/columnGroupColor in Dashboard.js). A "create"/
+       "delete" row, or a field with no resolvable classification, gets the
+       neutral border color instead of no stripe at all -- confirmed live,
+       2026-09-29: gray reads as "sin clasificar", not as "something's wrong".
+       ::before on the first <td> (not box-shadow on the <tr>) -- box-shadow
+       on a table row paints inconsistently across browsers, an absolutely
+       positioned pseudo-element on one real cell doesn't. */
+    .change-history-row td:first-child{
+        position: relative;
+    }
+    .change-history-row td:first-child::before{
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.15rem;
+        bottom: 0.15rem;
+        width: 4px;
+        border-radius: 3px;
+        background: var(--change-history-stripe-color, var(--color-border));
     }
     /* Set by applyColumnValueFilters — independent from (and composes
        additively with) each page's own `tr.hidden`, see that function's own

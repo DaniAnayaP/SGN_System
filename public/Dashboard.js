@@ -4028,25 +4028,37 @@ function openVisibilityPicker(tableId) {
 let changeHistoryModal = null;
 let changeHistoryList = null;
 
+// Column keys, in the same order renderChangeHistoryRow's cells array is
+// always built — shared by ensureChangeHistoryModal (headers),
+// renderChangeHistoryRow (cells) and the column-filter functions below
+// (which column of a <tr> to read). 'date' is the only one treated as a
+// date range; every other column gets the text mode+search filter — same
+// per-column filter already built for Admin-EquipoSaaS.js's own Historial
+// de cambios modal (openSaasChangesFilterMenu there), mirrored here so
+// EVERY screen's generic history dialog gets it too. Confirmed live,
+// 2026-09-28: "quiero el filtro también en el historial genérico" / "igual
+// debe aplicar a todos los historial de cambios". Reuses the exact same
+// .saas-changes-th/.saas-changes-table-wrap CSS (sticky header, spacing,
+// bounded scroll) instead of new classes — the rules aren't SaaS-specific,
+// just happened to be added there first.
+const CHANGE_HISTORY_COLUMNS = ['date', 'user', 'record', 'change', 'requestedBy', 'authorizedBy'];
+
 function ensureChangeHistoryModal() {
     if (changeHistoryModal) return;
     changeHistoryModal = document.createElement('div');
     changeHistoryModal.className = 'modal-overlay';
     changeHistoryModal.hidden = true;
+    const headerCells = [
+        ['date', 'main.changeHistoryDate'], ['user', 'main.changeHistoryUser'], ['record', 'main.changeHistoryRecord'],
+        ['change', 'main.changeHistoryChange'], ['requestedBy', 'main.changeHistoryRequestedBy'], ['authorizedBy', 'main.changeHistoryAuthorizedBy'],
+    ].map(([col, key]) => `<th data-col="${col}" class="saas-changes-th">${t(key)}</th>`).join('');
     changeHistoryModal.innerHTML = `
         <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-history-title">
             <h3 id="data-table-history-title">${t('main.changeHistoryTitle')}</h3>
-            <div class="admin-table-wrap">
+            <div class="admin-table-wrap saas-changes-table-wrap">
                 <table class="admin-table">
                     <thead>
-                        <tr>
-                            <th>${t('main.changeHistoryDate')}</th>
-                            <th>${t('main.changeHistoryUser')}</th>
-                            <th>${t('main.changeHistoryRecord')}</th>
-                            <th>${t('main.changeHistoryChange')}</th>
-                            <th>${t('main.changeHistoryRequestedBy')}</th>
-                            <th>${t('main.changeHistoryAuthorizedBy')}</th>
-                        </tr>
+                        <tr>${headerCells}</tr>
                     </thead>
                     <tbody data-role="list"></tbody>
                 </table>
@@ -4058,19 +4070,285 @@ function ensureChangeHistoryModal() {
     `;
     document.body.appendChild(changeHistoryModal);
     changeHistoryList = changeHistoryModal.querySelector('[data-role="list"]');
-    const close = () => { changeHistoryModal.hidden = true; };
+    changeHistoryModal.querySelectorAll('th[data-col]').forEach((th) => attachChangeHistoryFilterTrigger(th, th.dataset.col));
+    const close = () => { changeHistoryModal.hidden = true; closeChangeHistoryFilterMenu(); };
     changeHistoryModal.querySelector('[data-role="close"]').addEventListener('click', close);
     wireModalDismiss(changeHistoryModal, close);
 }
 
-function renderChangeHistoryRow(cells) {
+// stripeColor: hex string (a real classification color), '' (no
+// classification resolved -- e.g. create/delete, or a field with no
+// classification yet) for the neutral fallback, or undefined to skip the
+// stripe entirely (the empty-state placeholder row).
+function renderChangeHistoryRow(cells, stripeColor) {
     const tr = document.createElement('tr');
-    cells.forEach((text) => {
+    if (stripeColor !== undefined) {
+        tr.classList.add('change-history-row');
+        tr.style.setProperty('--change-history-stripe-color', stripeColor || 'var(--color-border)');
+    }
+    cells.forEach((text, i) => {
         const td = document.createElement('td');
+        td.dataset.col = CHANGE_HISTORY_COLUMNS[i];
         td.textContent = text;
         tr.appendChild(td);
     });
     return tr;
+}
+
+// --- Per-column filter (Fecha = rango; el resto = modo + buscador + lista
+// de valores) -- same visual mechanism/CSS classes as any real .data-table
+// column (see openColumnFilterMenu below), reimplemented small here because
+// this modal isn't a registered .data-table in dataTableColumnState (no
+// pin/reorder/width — only filtering makes sense in a fixed 6-column
+// history dialog). Mirrors Admin-EquipoSaaS.js's own saasChanges* version
+// exactly, just under this modal's own state so the two never collide.
+let changeHistoryColumnFilters = new Map(); // colKey -> Set of selected values (ausente = todos seleccionados)
+let changeHistoryFilterMenuEl = null;
+let changeHistoryFilterMenuCol = null;
+const CHANGE_HISTORY_DATE_COLUMNS = new Set(['date']);
+
+function getChangeHistoryDistinctValues(colKey) {
+    const values = new Set();
+    changeHistoryList.querySelectorAll(`td[data-col="${colKey}"]`).forEach((td) => values.add(td.textContent.trim()));
+    return Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+function applyChangeHistoryColumnFilters() {
+    const rows = Array.from(changeHistoryList.rows);
+    if (!changeHistoryColumnFilters.size) {
+        rows.forEach((tr) => { tr.hidden = false; });
+        return;
+    }
+    rows.forEach((tr) => {
+        let visible = true;
+        changeHistoryColumnFilters.forEach((selectedSet, key) => {
+            const td = tr.querySelector(`[data-col="${key}"]`);
+            if (!selectedSet.has(td ? td.textContent.trim() : '')) visible = false;
+        });
+        tr.hidden = !visible;
+    });
+}
+
+function closeChangeHistoryFilterMenu() {
+    changeHistoryFilterMenuEl?.remove();
+    changeHistoryFilterMenuEl = null;
+    changeHistoryFilterMenuCol = null;
+    document.removeEventListener('click', handleChangeHistoryFilterOutsideClick, true);
+}
+function handleChangeHistoryFilterOutsideClick(event) {
+    if (changeHistoryFilterMenuEl && !changeHistoryFilterMenuEl.contains(event.target) && !event.target.closest('.data-table-col-filter-trigger')) {
+        closeChangeHistoryFilterMenu();
+    }
+}
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && changeHistoryFilterMenuEl) closeChangeHistoryFilterMenu();
+});
+
+// Adapted from Admin-EquipoSaaS.js's own openSaasChangesFilterMenu (itself
+// adapted from openColumnFilterMenu below) -- same structure/CSS classes,
+// trimmed to just this modal's own state.
+function openChangeHistoryFilterMenu(th, colKey) {
+    const reopening = changeHistoryFilterMenuCol === colKey;
+    closeChangeHistoryFilterMenu();
+    if (reopening) return;
+
+    const distinctValues = getChangeHistoryDistinctValues(colKey);
+    const selected = changeHistoryColumnFilters.get(colKey) || new Set(distinctValues);
+
+    const menu = document.createElement('div');
+    menu.className = 'data-table-col-filter-menu';
+
+    const searchRow = document.createElement('div');
+    searchRow.className = 'data-table-col-filter-search-row';
+    let applyRowSearch = () => true;
+
+    if (CHANGE_HISTORY_DATE_COLUMNS.has(colKey)) {
+        const fromField = document.createElement('input');
+        fromField.type = 'date';
+        fromField.className = 'data-table-col-filter-date';
+        fromField.setAttribute('aria-label', t('main.filterDateFrom'));
+        fromField.addEventListener('click', (event) => event.stopPropagation());
+        const toField = document.createElement('input');
+        toField.type = 'date';
+        toField.className = 'data-table-col-filter-date';
+        toField.setAttribute('aria-label', t('main.filterDateTo'));
+        toField.addEventListener('click', (event) => event.stopPropagation());
+
+        const fromLabel = document.createElement('span');
+        fromLabel.className = 'data-table-col-filter-date-label';
+        fromLabel.textContent = t('main.filterDateFrom');
+        const toLabel = document.createElement('span');
+        toLabel.className = 'data-table-col-filter-date-label';
+        toLabel.textContent = t('main.filterDateTo');
+        searchRow.append(fromLabel, fromField, toLabel, toField);
+
+        applyRowSearch = (row) => {
+            const value = row.dataset.searchValue;
+            if (fromField.value && value < fromField.value) return false;
+            if (toField.value && value > toField.value) return false;
+            return true;
+        };
+        fromField.addEventListener('input', () => searchInputChanged());
+        toField.addEventListener('input', () => searchInputChanged());
+    } else {
+        const FILTER_MODES = [
+            { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
+            { id: 'contains', labelKey: 'main.filterModeContains' },
+            { id: 'equals', labelKey: 'main.filterModeEquals' },
+        ];
+        let searchMode = 'contains';
+
+        const modeCurrentLabel = document.createElement('div');
+        modeCurrentLabel.className = 'data-table-col-filter-mode-current';
+        modeCurrentLabel.textContent = t('main.filterModeContains');
+        menu.appendChild(modeCurrentLabel);
+
+        const modeBtn = document.createElement('button');
+        modeBtn.type = 'button';
+        modeBtn.className = 'data-table-col-filter-mode-btn';
+        modeBtn.setAttribute('aria-label', t('main.filterModeLabel'));
+        modeBtn.title = t('main.filterModeLabel');
+        modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
+        searchRow.appendChild(modeBtn);
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'search';
+        searchInput.className = 'data-table-col-filter-search';
+        searchInput.placeholder = t('main.filterSearchPlaceholder');
+        searchInput.addEventListener('click', (event) => event.stopPropagation());
+        searchRow.appendChild(searchInput);
+
+        const modeMenu = document.createElement('div');
+        modeMenu.className = 'data-table-col-filter-mode-menu';
+        modeMenu.hidden = true;
+        const modeButtons = FILTER_MODES.map((mode) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'data-table-col-filter-mode-option';
+            btn.textContent = t(mode.labelKey);
+            btn.classList.toggle('data-table-col-filter-mode-option-active', mode.id === searchMode);
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                searchMode = mode.id;
+                modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
+                btn.classList.add('data-table-col-filter-mode-option-active');
+                modeCurrentLabel.textContent = t(mode.labelKey);
+                modeMenu.hidden = true;
+                searchInputChanged();
+            });
+            modeMenu.appendChild(btn);
+            return btn;
+        });
+        searchRow.appendChild(modeMenu);
+
+        modeBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            modeMenu.hidden = !modeMenu.hidden;
+        });
+        menu.addEventListener('click', (event) => {
+            if (!modeMenu.hidden && event.target !== modeBtn && !modeMenu.contains(event.target)) modeMenu.hidden = true;
+        });
+
+        applyRowSearch = (row) => {
+            const query = searchInput.value.trim().toLowerCase();
+            if (query === '') return true;
+            const value = row.dataset.searchValue;
+            if (searchMode === 'equals') return value === query;
+            return searchMode === 'startsWith' ? value.startsWith(query) : value.includes(query);
+        };
+        searchInput.addEventListener('input', () => searchInputChanged());
+    }
+    menu.appendChild(searchRow);
+
+    const allRow = document.createElement('label');
+    allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
+    const allCheckbox = document.createElement('input');
+    allCheckbox.type = 'checkbox';
+    allCheckbox.checked = selected.size === distinctValues.length;
+    allCheckbox.indeterminate = selected.size > 0 && selected.size < distinctValues.length;
+    const allLabel = document.createElement('span');
+    allLabel.textContent = t('main.filterAll');
+    allRow.append(allCheckbox, allLabel);
+    menu.appendChild(allRow);
+
+    const list = document.createElement('div');
+    list.className = 'data-table-col-filter-list';
+    const checkboxes = [];
+
+    function syncAllCheckbox() {
+        const current = changeHistoryColumnFilters.get(colKey) || new Set(distinctValues);
+        allCheckbox.checked = current.size === distinctValues.length;
+        allCheckbox.indeterminate = current.size > 0 && current.size < distinctValues.length;
+    }
+
+    distinctValues.forEach((value) => {
+        const row = document.createElement('label');
+        row.className = 'data-table-col-filter-option';
+        row.dataset.searchValue = (value || '').toLowerCase();
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = selected.has(value);
+        cb.addEventListener('change', () => {
+            const current = new Set(changeHistoryColumnFilters.get(colKey) || new Set(distinctValues));
+            if (cb.checked) current.add(value); else current.delete(value);
+            if (current.size === distinctValues.length) changeHistoryColumnFilters.delete(colKey);
+            else changeHistoryColumnFilters.set(colKey, current);
+            applyChangeHistoryColumnFilters();
+            th.classList.toggle('data-table-col-filter-active', changeHistoryColumnFilters.has(colKey));
+            syncAllCheckbox();
+        });
+        const span = document.createElement('span');
+        span.textContent = value || '—';
+        row.append(cb, span);
+        list.appendChild(row);
+        checkboxes.push(cb);
+    });
+    menu.appendChild(list);
+
+    function searchInputChanged() {
+        list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
+            row.hidden = !applyRowSearch(row);
+        });
+    }
+
+    allCheckbox.addEventListener('change', () => {
+        checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
+        if (allCheckbox.checked) changeHistoryColumnFilters.delete(colKey);
+        else changeHistoryColumnFilters.set(colKey, new Set());
+        applyChangeHistoryColumnFilters();
+        th.classList.toggle('data-table-col-filter-active', changeHistoryColumnFilters.has(colKey));
+        allCheckbox.indeterminate = false;
+    });
+
+    document.body.appendChild(menu);
+    const rect = th.getBoundingClientRect();
+    const menuWidth = menu.offsetWidth;
+    const left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - menuWidth - 8);
+    menu.style.position = 'absolute';
+    menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
+    menu.style.left = `${Math.max(8, left)}px`;
+    // Same z-index bump Admin-EquipoSaaS.js's own copy needs -- this table
+    // lives inside .modal-overlay (z-index: 100), above the shared
+    // .data-table-col-filter-menu's own default (50).
+    menu.style.zIndex = '150';
+    changeHistoryFilterMenuEl = menu;
+    changeHistoryFilterMenuCol = colKey;
+    searchRow.querySelector('input')?.focus();
+    setTimeout(() => document.addEventListener('click', handleChangeHistoryFilterOutsideClick, true), 0);
+}
+
+function attachChangeHistoryFilterTrigger(th, colKey) {
+    if (th.querySelector('.data-table-col-filter-trigger')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-col-filter-trigger';
+    btn.setAttribute('aria-label', t('main.filterColumn'));
+    btn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
+    btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openChangeHistoryFilterMenu(th, colKey);
+    });
+    th.appendChild(btn);
 }
 
 // `recordId`, when passed (from a per-row history icon — see
@@ -4082,24 +4360,46 @@ async function openChangeHistory(tableId, recordId) {
     changeHistoryModal.hidden = false;
     const titleEl = changeHistoryModal.querySelector('#data-table-history-title');
     if (titleEl) titleEl.textContent = recordId ? t('main.changeHistoryTitleRecord') : t('main.changeHistoryTitle');
+    // Fresh filter state every time it opens -- avoids a stale filter
+    // silently hiding rows on a later open (same convention Admin-EquipoSaaS.js's
+    // own openSaasUserChanges follows).
+    changeHistoryColumnFilters = new Map();
+    closeChangeHistoryFilterMenu();
+    changeHistoryModal.querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
     changeHistoryList.innerHTML = '';
     changeHistoryList.appendChild(renderChangeHistoryRow([t('main.changeHistoryEmpty'), '', '', '', '', '']));
     try {
         const url = `/api/business/table-changes/${encodeURIComponent(tableId)}${recordId ? `?recordId=${encodeURIComponent(recordId)}` : ''}`;
+        // In parallel, not chained -- fetchTableClassifications already
+        // caches per tableId and never throws (falls back to {columns: {}}
+        // on a 404/network error), so this never blocks or breaks the
+        // history fetch above; a table with no Árbol de Permisos Maestro
+        // classification info just renders every row's stripe as "sin
+        // clasificar" (neutral gray) instead of a real color.
+        const classificationsPromise = fetchTableClassifications(tableId);
         const res = await fetch(url, { credentials: 'include' });
         if (!res.ok) return;
         const { changes } = await res.json();
         if (!changes || !changes.length) return;
+        const classificationCols = (await classificationsPromise).columns || {};
         changeHistoryList.innerHTML = '';
         changes.forEach((change) => {
             let description;
+            let stripeColor = '';
             if (change.action === 'create') description = t('main.changeHistoryCreated');
             else if (change.action === 'delete') description = t('main.changeHistoryDeleted');
-            else description = `${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+            else {
+                description = `${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+                // field_key is "<namespace>.<colId>" (see checkAndLogFieldChanges
+                // in server.js) -- the bare colId is exactly what
+                // getEffectiveColumnClassifications returns entries for.
+                const colId = (change.field_key || '').split('.').pop();
+                stripeColor = classificationCols[colId]?.color || '';
+            }
             changeHistoryList.appendChild(renderChangeHistoryRow([
                 change.changed_at, change.changed_by || '—', change.record_label || '—', description,
                 change.requested_by || '—', change.authorized_by || '—',
-            ]));
+            ], stripeColor));
         });
     } catch {
         // Leave the empty-state row in place — no network/parse errors surfaced here.

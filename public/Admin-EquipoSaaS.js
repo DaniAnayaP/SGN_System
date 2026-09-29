@@ -388,8 +388,15 @@ function ensureSaasChangesModal() {
     saasChangesModal.addEventListener('click', (event) => { if (event.target === saasChangesModal) close(); });
 }
 
-function renderSaasChangeRow(cells) {
+// stripeColor: same convention as Dashboard.js's own renderChangeHistoryRow
+// -- a hex string, '' for the neutral "sin clasificar" fallback, or
+// undefined to skip the stripe (the empty-state placeholder row).
+function renderSaasChangeRow(cells, stripeColor) {
     const tr = document.createElement('tr');
+    if (stripeColor !== undefined) {
+        tr.classList.add('change-history-row');
+        tr.style.setProperty('--change-history-stripe-color', stripeColor || 'var(--color-border)');
+    }
     cells.forEach((text, i) => {
         const td = document.createElement('td');
         td.dataset.col = SAAS_CHANGES_COLUMNS[i];
@@ -659,6 +666,19 @@ function attachSaasChangesFilterTrigger(th, colKey) {
     });
     th.appendChild(btn);
 }
+// Classification color stripe -- fixed, param-less endpoint (only 3 of the
+// 6 possible field_keys ever resolve, see getEffectiveSaasUserFieldClassifications
+// in db.js), so one cached promise is enough, no per-tableKey Map like
+// Dashboard.js's own fetchTableClassifications needs.
+let saasUserFieldClassificationsPromise = null;
+function fetchSaasUserFieldClassifications() {
+    if (!saasUserFieldClassificationsPromise) {
+        saasUserFieldClassificationsPromise = fetch('/api/admin/saas-user-field-classifications', { credentials: 'include' })
+            .then((res) => (res.ok ? res.json() : { fields: {} }))
+            .catch(() => ({ fields: {} }));
+    }
+    return saasUserFieldClassificationsPromise;
+}
 // userId omitted = every account's history (toolbar button); passed = just
 // that one account's (per-row button) -- same "narrower scope, same
 // endpoint family" idea as Dashboard.js's own openChangeHistory.
@@ -675,20 +695,28 @@ async function openSaasUserChanges(userId) {
     saasChangesList.appendChild(renderSaasChangeRow([Dashboard.t('main.changeHistoryEmpty'), '', '', '', '', '']));
     try {
         const url = userId ? `/api/admin/saas-users/${userId}/changes` : '/api/admin/saas-users/changes';
+        const classificationsPromise = fetchSaasUserFieldClassifications();
         const res = await fetch(url, { credentials: 'include' });
         if (!res.ok) return;
         const { changes } = await res.json();
         if (!changes || !changes.length) return;
+        const fieldClassifications = (await classificationsPromise).fields || {};
         saasChangesList.innerHTML = '';
         changes.forEach((change) => {
             let description;
-            if (change.action === 'create') description = Dashboard.t('main.changeHistoryCreated');
-            else if (change.field_key === 'business.saasUserPassword') description = Dashboard.t('admin.saasResetPassword');
-            else description = `${Dashboard.t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+            let stripeColor = '';
+            if (change.action === 'create') {
+                description = Dashboard.t('main.changeHistoryCreated');
+            } else if (change.field_key === 'business.saasUserPassword') {
+                description = Dashboard.t('admin.saasResetPassword');
+            } else {
+                description = `${Dashboard.t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+                stripeColor = fieldClassifications[change.field_key]?.color || '';
+            }
             saasChangesList.appendChild(renderSaasChangeRow([
                 change.changed_at, change.changed_by || '—', change.record_label || '—', description,
                 change.requested_by || '—', change.authorized_by || '—',
-            ]));
+            ], stripeColor));
         });
     } catch {
         // Leave the empty-state row in place, same as the shared modal.
