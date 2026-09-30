@@ -39,8 +39,9 @@ function buildDownloadCell(file) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'admin-icon-btn';
-    btn.setAttribute('aria-label', Dashboard.t('main.saasActionDownload'));
-    btn.title = Dashboard.t('main.saasActionDownload');
+    btn.setAttribute('aria-label', Dashboard.t('admin.saasActionDownload'));
+    btn.title = Dashboard.t('admin.saasActionDownload');
+    btn.setAttribute('data-help-key', 'download');
     btn.innerHTML = '<i class="bx bx-download" aria-hidden="true"></i>';
     btn.addEventListener('click', () => downloadFile(file, btn));
     td.appendChild(btn);

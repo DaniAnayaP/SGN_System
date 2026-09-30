@@ -44,8 +44,9 @@ function buildActionsCell(material) {
     const downloadBtn = document.createElement('button');
     downloadBtn.type = 'button';
     downloadBtn.className = 'admin-icon-btn';
-    downloadBtn.setAttribute('aria-label', Dashboard.t('main.saasActionDownload'));
-    downloadBtn.title = Dashboard.t('main.saasActionDownload');
+    downloadBtn.setAttribute('aria-label', Dashboard.t('admin.saasActionDownload'));
+    downloadBtn.title = Dashboard.t('admin.saasActionDownload');
+    downloadBtn.setAttribute('data-help-key', 'download');
     downloadBtn.innerHTML = '<i class="bx bx-download" aria-hidden="true"></i>';
     downloadBtn.addEventListener('click', () => downloadMaterial(material, downloadBtn));
     td.appendChild(downloadBtn);
@@ -55,6 +56,7 @@ function buildActionsCell(material) {
     deleteBtn.className = 'admin-icon-btn';
     deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
     deleteBtn.title = Dashboard.t('admin.delete');
+    deleteBtn.setAttribute('data-help-key', 'delete');
     deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
     deleteBtn.addEventListener('click', () => deleteMaterial(material, deleteBtn));
     td.appendChild(deleteBtn);

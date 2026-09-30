@@ -1855,6 +1855,10 @@
     "saasResetPassword": {
       "what": "Genera una contraseña nueva para esta cuenta, por si la persona la perdió u olvidó.",
       "example": "alguien no puede entrar porque olvidó su contraseña, se la reinicias y le compartes la nueva."
+    },
+    "download": {
+      "what": "Baja este archivo a tu computadora para que lo puedas abrir o guardar.",
+      "example": "descargas el respaldo de la base de datos del mes pasado para revisarlo."
     }
   }
 }

@@ -1856,6 +1856,10 @@
     "saasResetPassword": {
       "what": "Generates a new password for this account, in case the person lost or forgot theirs.",
       "example": "someone can't log in because they forgot their password, you reset it and share the new one."
+    },
+    "download": {
+      "what": "Downloads this file to your computer so you can open or save it.",
+      "example": "you download last month's database backup to review it."
     }
   }
 }

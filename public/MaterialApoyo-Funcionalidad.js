@@ -39,8 +39,9 @@ function buildActionsCell(material) {
     const downloadBtn = document.createElement('button');
     downloadBtn.type = 'button';
     downloadBtn.className = 'admin-icon-btn';
-    downloadBtn.setAttribute('aria-label', Dashboard.t('main.saasActionDownload'));
-    downloadBtn.title = Dashboard.t('main.saasActionDownload');
+    downloadBtn.setAttribute('aria-label', Dashboard.t('admin.saasActionDownload'));
+    downloadBtn.title = Dashboard.t('admin.saasActionDownload');
+    downloadBtn.setAttribute('data-help-key', 'download');
     downloadBtn.innerHTML = '<i class="bx bx-download" aria-hidden="true"></i>';
     downloadBtn.addEventListener('click', () => downloadMaterial(material, downloadBtn));
     td.appendChild(downloadBtn);
