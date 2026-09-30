@@ -1877,10 +1877,13 @@ ensureColumn('business_sector_types', 'icon_category', 'TEXT');
 // of training on "cómo funcionan ciertas cosas" for THIS client. Only the
 // day-to-day business records that would visibly clutter a real list get
 // their own is_test_data.
-[
+// Named (not inline) so resetTrainingAccountData below can reuse the exact
+// same list -- one place to update if a 9th table ever needs isolation.
+const TRAINING_DATA_TABLES = [
     'cost_centers', 'job_positions', 'hr_workers', 'hr_status_catalog',
     'fuel_records', 'fuel_loading_records', 'unit_types', 'fleet_units',
-].forEach((table) => ensureColumn(table, 'is_test_data', 'INTEGER NOT NULL DEFAULT 0'));
+];
+TRAINING_DATA_TABLES.forEach((table) => ensureColumn(table, 'is_test_data', 'INTEGER NOT NULL DEFAULT 0'));
 
 // A worker's real link to the Puestos de Trabajo catalog (see Roles/
 // job_position_grants above) -- position (TEXT) stays as the frozen label
@@ -2474,6 +2477,29 @@ async function provisionTrainingAccount(clientId) {
     });
     const user = create();
     return { user, generatedPassword: password };
+}
+
+// "Reiniciar Capacitación" -- confirmed with the user, 2026-09-30: training
+// data was never going to expire/reset on its own (no cadence was ever
+// decided), so this is a manual, GEIPSA-triggered wipe instead. Clears every
+// is_test_data=1 row this client's training account ever wrote (see
+// TRAINING_DATA_TABLES above), scoped by client_id so it can never touch
+// another client's practice data or this client's own REAL records (those
+// are never is_test_data=1 to begin with). The training account itself
+// (login, username, password) is untouched -- only its data disappears, same
+// as if it had just been created. Nothing needs re-seeding here: every
+// affected table already lazily re-seeds its own defaults on next read where
+// that applies (see ensureDefaultHrStatusCatalog, called from
+// listHrStatusCatalog on every list, not just at provision time).
+function resetTrainingAccountData(clientId) {
+    const client = getClientById(clientId);
+    if (!client || !client.training_user_id) throw new Error('This client has no training account to reset.');
+    const wipe = db.transaction(() => {
+        TRAINING_DATA_TABLES.forEach((table) => {
+            db.prepare(`DELETE FROM ${table} WHERE client_id = ? AND is_test_data = 1`).run(clientId);
+        });
+    });
+    wipe();
 }
 
 function deactivateClientUsers(clientId) {
@@ -7714,6 +7740,7 @@ module.exports = {
     hasSaasGrant,
     activateClient,
     provisionTrainingAccount,
+    resetTrainingAccountData,
     deactivateClientUsers,
     listBusinessUsers,
     getUserById,

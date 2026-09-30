@@ -441,6 +441,11 @@ function renderClients() {
                 },
             ),
             appToggleBtn,
+            iconButton('bx-reset', Dashboard.t('admin.resetTrainingTitle'), () => resetTrainingAccount(client), {
+                disabled: !client.training_user_id,
+                title: client.training_user_id ? Dashboard.t('admin.resetTrainingTitle') : Dashboard.t('admin.resetTrainingNoAccount'),
+                helpKey: 'resetTraining',
+            }),
             iconButton('bx-trash-alt', Dashboard.t('admin.clientResetTooltip'), () => openResetClientModal(client), {
                 disabled: !canResetClients,
                 title: canResetClients ? Dashboard.t('admin.clientResetTooltip') : Dashboard.t('admin.clientResetNoPermission'),
@@ -586,6 +591,22 @@ async function toggleClientAppEnabled(client) {
         if (!res.ok) throw new Error('save failed');
         await loadClients();
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
+// "Reiniciar Capacitación" -- confirmed with the user, 2026-09-30: training
+// data never expires on its own, so this is the deliberate manual reset.
+// Only clears that client's own practice records (see
+// resetTrainingAccountData in db.js) -- the training account's login itself
+// is untouched, nothing to show/regenerate here unlike Reset Password.
+async function resetTrainingAccount(client) {
+    if (!(await Dashboard.confirm(Dashboard.t('admin.resetTrainingConfirm', { name: client.company_name })))) return;
+    try {
+        const res = await fetch(`/api/admin/clients/${client.id}/reset-training`, { method: 'POST', credentials: 'include' });
+        if (!res.ok) throw new Error('reset failed');
+        Dashboard.showToast(Dashboard.t('admin.resetTrainingSuccess'), 'success');
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }

@@ -491,6 +491,10 @@
     "clientResetTooltip": "Reset (delete test data)",
     "clientResetTitle": "Reset test client",
     "clientResetWarning": "This COMPLETELY deletes {company}: users, permissions, cost centers, records, reports, change history — everything. This can't be undone.",
+    "resetTrainingTitle": "Reset Training",
+    "resetTrainingNoAccount": "This client doesn't have a Training account yet.",
+    "resetTrainingConfirm": "Reset {name}'s Training? Every practice record in their Training account (Pruebas_...) will be deleted so they start fresh. Their real admin account and all their real data are NOT affected — this doesn't delete the client, only their practice data.",
+    "resetTrainingSuccess": "Training reset.",
     "clientResetConfirmLabel": "Type the company's exact name to confirm:",
     "clientResetConfirmBtn": "Delete everything",
     "clientResetMismatch": "The name doesn't match.",
@@ -1822,6 +1826,10 @@
     "clientReset": {
       "what": "Erases all of this client's test data and leaves it like new, so someone else can try it from scratch.",
       "example": "you use this after a demo, to leave the test client clean for the next person."
+    },
+    "resetTraining": {
+      "what": "Deletes this client's Training account's own practice records (the one they use to learn the system), without touching their real account or real data.",
+      "example": "the client's team finished practicing and wants to start over, without deleting anything they're actually using for real."
     },
     "delete": {
       "what": "Removes this record from the system completely -- it can't be recovered afterward.",

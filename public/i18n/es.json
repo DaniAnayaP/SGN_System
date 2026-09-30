@@ -491,6 +491,10 @@
     "clientResetTooltip": "Reiniciar (borrar datos de prueba)",
     "clientResetTitle": "Reiniciar cliente de prueba",
     "clientResetWarning": "Esto borra POR COMPLETO a {company}: usuarios, permisos, centros de costo, registros, reportes, historial de cambios — todo. No se puede deshacer.",
+    "resetTrainingTitle": "Reiniciar Capacitación",
+    "resetTrainingNoAccount": "Este cliente todavía no tiene cuenta de Capacitación.",
+    "resetTrainingConfirm": "¿Reiniciar la Capacitación de {name}? Se borrarán todos los registros de práctica de su cuenta de Capacitación (Pruebas_...) para que empiecen de cero. Su cuenta real de administrador y todos sus datos reales NO se ven afectados — esto no borra al cliente, solo su práctica.",
+    "resetTrainingSuccess": "Capacitación reiniciada.",
     "clientResetConfirmLabel": "Escribe el nombre exacto de la empresa para confirmar:",
     "clientResetConfirmBtn": "Borrar todo",
     "clientResetMismatch": "El nombre no coincide.",
@@ -1821,6 +1825,10 @@
     "clientReset": {
       "what": "Borra todos los datos de prueba de este cliente y lo deja como si fuera nuevo, para que alguien más lo pruebe desde cero.",
       "example": "lo usas después de una demo, para dejar limpio el cliente de pruebas para la siguiente persona."
+    },
+    "resetTraining": {
+      "what": "Borra los registros de práctica de la cuenta de Capacitación de este cliente (la que usan para aprender el sistema), sin tocar su cuenta real ni sus datos reales.",
+      "example": "el equipo del cliente terminó de practicar y quiere volver a empezar desde cero, sin borrar nada de lo que ya está usando de verdad."
     },
     "delete": {
       "what": "Borra este registro por completo del sistema, sin poder recuperarlo después.",

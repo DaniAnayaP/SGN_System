@@ -50,6 +50,7 @@ const {
     setClientAppEnabled,
     deleteClientCompletely,
     provisionTrainingAccount,
+    resetTrainingAccountData,
     updateClientBranding,
     findClientByRfc,
     getModuleCosts,
@@ -1055,6 +1056,23 @@ async function applyClientLifecycle(client) {
     deactivateClientUsers(client.id);
     return { generatedAdmin: null, generatedTrainingAccount: null };
 }
+
+// "Reiniciar Capacitación" -- manual, GEIPSA-triggered (confirmed with the
+// user, 2026-09-30: training data was never going to expire on its own, no
+// automatic cadence). Wipes this client's training account's own practice
+// records back to empty; the account's login itself is untouched, so nobody
+// needs a new username/password after this.
+app.post('/api/admin/clients/:id/reset-training', requireAuth, requireAdmin, (req, res) => {
+    const client = getClientById(req.params.id);
+    if (!client) return res.status(404).json({ message: 'Client not found.' });
+    if (!client.training_user_id) return res.status(400).json({ message: 'This client has no training account yet.' });
+    try {
+        resetTrainingAccountData(req.params.id);
+        res.json({ ok: true });
+    } catch {
+        res.status(500).json({ message: 'Reset failed.' });
+    }
+});
 
 // A plan's módulos + centros de costo limit (set in Planes y Paquetes) get
 // stamped onto the client's own real access every time a client is saved
