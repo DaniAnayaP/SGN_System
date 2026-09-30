@@ -6293,6 +6293,36 @@ function syncTopBarButtonVisibility() {
     });
 }
 
+// This function's own mirror image, for GEIPSA staff (role 'admin') instead
+// of a client's contracted modules -- syncTopBarButtonVisibility above
+// explicitly skips role==='admin', these icons were never gated by
+// anything on that side at all despite Árbol Maestro SaaS already giving
+// each one its own real Estatus row ("Iconos de Navegación", see
+// NAV_ICON_ITEMS in Admin-ArbolMaestroSaaS.js) -- confirmed live,
+// 2026-09-30, against a real zero-grant test account ("daniel.anaya"):
+// every top-bar icon showed regardless of its own node being "En
+// construcción". ui-scale-menu has no client-side equivalent row in
+// TOP_BAR_BUTTONS (always visible for clients) but does have its own SaaS
+// tree leaf, so it's included here even though it isn't above.
+const SAAS_NAV_ICON_GATES = {
+    'messages-btn': 'saas-nav-messages',
+    'chatbot-btn': 'saas-nav-chatbot',
+    'notifications-menu': 'saas-nav-notifications',
+    'bookmarks-btn': 'saas-nav-bookmarks',
+    'ui-scale-menu': 'saas-nav-ui-scale',
+    'settings-menu': 'saas-nav-settings',
+    'user-info-menu': 'saas-nav-user',
+    'business-profile-menu': 'saas-nav-business',
+};
+function syncSaasNavIconVisibility() {
+    if (currentUser?.role !== 'admin') return;
+    Object.entries(SAAS_NAV_ICON_GATES).forEach(([elementId, itemId]) => {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.classList.toggle('top-bar-btn-hidden', !hasSaasScreenGrant(itemId));
+    });
+}
+
 // Once the gear icon itself is visible, each row inside its dropdown is
 // independently gated too — Idioma/Estilo/Administración del Negocio/
 // Configuración de Botones/Otros are submenu grants under "btn-configuracion"
@@ -7086,6 +7116,7 @@ async function initDashboard({ activePage } = {}) {
     }
     syncButtonConfigShortcuts();
     syncTopBarButtonVisibility();
+    syncSaasNavIconVisibility();
     syncSettingsSubmenuVisibility();
     // Restore the saved style now that clientBranding (needed for
     // Institutional's real colors) has loaded — every other page load was
