@@ -6347,6 +6347,14 @@ function syncSaasNavIconVisibility() {
     // it isn't in SAAS_NAV_ICON_GATES above.
     const searchWrap = document.querySelector('.search');
     if (searchWrap) searchWrap.classList.toggle('top-bar-btn-hidden', !hasSaasScreenGrant('saas-search'));
+    // #help-mode-toggle is injected once per .top-bar-actions container
+    // (see the injection IIFE above), so several elements share this id --
+    // querySelectorAll, not getElementById, same reasoning setHelpModeActive
+    // already uses for the same id.
+    const helpModeGranted = hasSaasScreenGrant('saas-nav-help');
+    document.querySelectorAll('#help-mode-toggle').forEach((btn) => {
+        btn.classList.toggle('top-bar-btn-hidden', !helpModeGranted);
+    });
 }
 
 // Once the gear icon itself is visible, each row inside its dropdown is

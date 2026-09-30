@@ -90,6 +90,7 @@ const NAV_ICON_ITEMS = [
     { itemId: 'saas-nav-settings', labelKey: 'main.settings' },
     { itemId: 'saas-nav-user', labelKey: 'main.userInfo' },
     { itemId: 'saas-nav-business', labelKey: 'main.businessProfile' },
+    { itemId: 'saas-nav-help', labelKey: 'main.helpMode' },
 ];
 // "Configuración" (saas-nav-settings) is the one nav icon with real content
 // behind it -- confirmed live, 2026-09-27: "todo el detalle, igual que el
