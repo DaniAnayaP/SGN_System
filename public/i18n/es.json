@@ -1787,6 +1787,10 @@
     "fieldRules": {
       "what": "Aquí defines en qué orden se deben llenar los campos de esta tabla, y cuáles son obligatorios.",
       "example": "obligas a llenar primero \"Nombre\" antes de poder escribir en \"Correo\"."
+    },
+    "sidebarSearch": {
+      "what": "Busca cualquier pantalla del menú por su nombre, sin tener que abrir cada grupo para encontrarla.",
+      "example": "escribes \"traslados\" y te muestra directo la pantalla de Registro de Traslados."
     }
   }
 }

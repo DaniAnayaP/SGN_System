@@ -1788,6 +1788,10 @@
     "fieldRules": {
       "what": "This is where you set the order this table's fields must be filled in, and which ones are required.",
       "example": "you require \"Name\" to be filled in before \"Email\" can be typed."
+    },
+    "sidebarSearch": {
+      "what": "Searches for any screen in the menu by its name, without having to open every group to find it.",
+      "example": "you type \"transfer\" and it shows you the Transfer Log screen directly."
     }
   }
 }

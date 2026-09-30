@@ -5110,6 +5110,7 @@ const HELP_CONTENT_KEYS = {
     'settings-btn': 'settings',
     'user-info-btn': 'userInfo',
     'business-profile-btn': 'businessProfile',
+    'sidebar-search': 'sidebarSearch',
 };
 // <th data-col="..."> -- the 13 Control Interno columns (see
 // getSystemColumnsForRecord in db.js), hardcoded static markup repeated
@@ -5156,13 +5157,16 @@ document.addEventListener('dashboard:language-changed', applyHelpContentKeys);
 // a plain name -- checked at every level together, not name-first, since a
 // column header (<th data-col="colSysEmpresa">) has no aria-label/title of
 // its own at all, only its own visible text (textContent), unlike a
-// top-bar icon which always has an aria-label already.
+// top-bar icon which always has an aria-label already. placeholder is the
+// last resort, for an <input> like #sidebar-search which has neither an
+// aria-label/title nor any visible textContent of its own.
 function findHelpModeContent(startEl) {
     let node = startEl;
     while (node && node.nodeType === 1 && node !== document.body) {
         const helpKey = node.getAttribute('data-help-key');
         if (helpKey) {
-            const name = node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent.trim();
+            const name = node.getAttribute('aria-label') || node.getAttribute('title')
+                || node.textContent.trim() || node.getAttribute('placeholder');
             if (name) return { name, what: t(`help.${helpKey}.what`), example: t(`help.${helpKey}.example`) };
         }
         const name = node.getAttribute('aria-label') || node.getAttribute('title');
