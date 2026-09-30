@@ -89,6 +89,7 @@ function renderPlans() {
         editBtn.type = 'button';
         editBtn.className = 'admin-icon-btn';
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+        editBtn.setAttribute('data-help-key', 'edit');
         if (canEditCosts) {
             editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
             editBtn.title = Dashboard.t('admin.edit');
@@ -102,6 +103,7 @@ function renderPlans() {
         historyBtn.className = 'admin-icon-btn';
         historyBtn.setAttribute('aria-label', Dashboard.t('admin.planChangeHistory'));
         historyBtn.title = Dashboard.t('admin.planChangeHistory');
+        historyBtn.setAttribute('data-help-key', 'changeHistory');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
         historyBtn.addEventListener('click', () => Dashboard.openPlanChangeHistory(plan));
         tdActions.append(editBtn, historyBtn);
