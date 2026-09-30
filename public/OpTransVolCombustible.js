@@ -165,6 +165,7 @@ function buildActionsCell(record, tr) {
     const historyBtn = document.createElement('button');
     historyBtn.type = 'button';
     historyBtn.className = 'admin-icon-btn';
+    historyBtn.setAttribute('data-help-key', 'changeHistory');
     historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
     historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
     historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
@@ -174,6 +175,7 @@ function buildActionsCell(record, tr) {
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+        deleteBtn.setAttribute('data-help-key', 'delete');
         deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.title = Dashboard.t('admin.delete');
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
@@ -306,6 +308,7 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
         const label = pending ? 'main.changePending' : (stored ? viewLabelKey : uploadLabelKey);
         btn.setAttribute('aria-label', Dashboard.t(label));
         btn.title = Dashboard.t(label);
+        btn.setAttribute('data-help-key', 'evidencePhoto');
         // Icon-only cell -- textContent alone can't tell empty from filled
         // (see Reglas de Orden de Llenado's applyFieldFillRules), so this
         // marks it explicitly, same convention as Dashboard.attachInlineEdit.

@@ -1863,6 +1863,14 @@
     "evidencePhoto": {
       "what": "Aquí subes o revisas una foto como comprobante de este dato.",
       "example": "subes la foto del ticket de la gasolinera como evidencia de cuánto combustible se cargó."
+    },
+    "hrActivateUser": {
+      "what": "Crea el usuario y contraseña para que este trabajador pueda iniciar sesión en el sistema por primera vez.",
+      "example": "contratas a alguien nuevo y le das acceso al sistema con este botón."
+    },
+    "hrResetPassword": {
+      "what": "Genera una contraseña nueva para este trabajador, por si la perdió u olvidó.",
+      "example": "un empleado no recuerda su contraseña, se la reinicias y le compartes la nueva."
     }
   }
 }

@@ -1864,6 +1864,14 @@
     "evidencePhoto": {
       "what": "This is where you upload or check a photo as proof of this data.",
       "example": "you upload a photo of the gas station receipt as proof of how much fuel was loaded."
+    },
+    "hrActivateUser": {
+      "what": "Creates the username and password so this worker can log into the system for the first time.",
+      "example": "you hire someone new and give them system access with this button."
+    },
+    "hrResetPassword": {
+      "what": "Generates a new password for this worker, in case they lost or forgot theirs.",
+      "example": "an employee can't remember their password, you reset it and share the new one."
     }
   }
 }

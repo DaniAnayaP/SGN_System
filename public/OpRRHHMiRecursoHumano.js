@@ -275,6 +275,7 @@ function buildActionsCell(worker) {
     const historyBtn = document.createElement('button');
     historyBtn.type = 'button';
     historyBtn.className = 'admin-icon-btn';
+    historyBtn.setAttribute('data-help-key', 'changeHistory');
     historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
     historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
     historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
@@ -354,6 +355,7 @@ function buildUserStatusCell(worker) {
     btn.innerHTML = `<i class="bx ${worker.userActive ? 'bx-key' : 'bx-check-shield'}" aria-hidden="true"></i>`;
     btn.setAttribute('aria-label', Dashboard.t(worker.userActive ? 'main.hrResetPassword' : 'main.hrActivateUser'));
     btn.title = Dashboard.t(worker.userActive ? 'main.hrResetPassword' : 'main.hrActivateUser');
+    btn.setAttribute('data-help-key', worker.userActive ? 'hrResetPassword' : 'hrActivateUser');
     btn.addEventListener('click', () => activateWorkerUser(worker.id));
     td.append(badge, btn);
     return td;
