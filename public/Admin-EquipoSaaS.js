@@ -212,6 +212,7 @@ function renderSaasUsers() {
         editNameBtn.className = 'admin-icon-btn';
         editNameBtn.setAttribute('aria-label', Dashboard.t('admin.saasEditName'));
         editNameBtn.title = Dashboard.t('admin.saasEditName');
+        editNameBtn.setAttribute('data-help-key', 'saasEditName');
         editNameBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editNameBtn.addEventListener('click', async () => {
             const nextName = window.prompt(Dashboard.t('admin.saasEditNamePrompt'), user.name);
@@ -243,6 +244,7 @@ function renderSaasUsers() {
         editUsernameBtn.className = 'admin-icon-btn';
         editUsernameBtn.setAttribute('aria-label', Dashboard.t('admin.saasEditUsername'));
         editUsernameBtn.title = Dashboard.t('admin.saasEditUsername');
+        editUsernameBtn.setAttribute('data-help-key', 'saasEditUsername');
         editUsernameBtn.innerHTML = '<i class="bx bx-user" aria-hidden="true"></i>';
         editUsernameBtn.addEventListener('click', async () => {
             const nextUsername = window.prompt(Dashboard.t('admin.saasEditUsernamePrompt'), user.username);
@@ -270,6 +272,7 @@ function renderSaasUsers() {
         treeBtn.className = 'admin-icon-btn';
         treeBtn.setAttribute('aria-label', Dashboard.t('admin.saasTreeTitle'));
         treeBtn.title = Dashboard.t('admin.saasTreeTitle');
+        treeBtn.setAttribute('data-help-key', 'saasAccountAccess');
         treeBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         treeBtn.addEventListener('click', () => openTreeModal(user));
         tdActions.appendChild(treeBtn);
@@ -284,6 +287,7 @@ function renderSaasUsers() {
         resetPwBtn.className = 'admin-icon-btn';
         resetPwBtn.setAttribute('aria-label', Dashboard.t('admin.saasResetPassword'));
         resetPwBtn.title = Dashboard.t('admin.saasResetPassword');
+        resetPwBtn.setAttribute('data-help-key', 'saasResetPassword');
         resetPwBtn.innerHTML = '<i class="bx bx-key" aria-hidden="true"></i>';
         resetPwBtn.addEventListener('click', async () => {
             if (!(await Dashboard.confirm(Dashboard.t('admin.saasResetPasswordConfirm', { name: user.name })))) return;
@@ -310,6 +314,7 @@ function renderSaasUsers() {
         historyBtn.className = 'admin-icon-btn';
         historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
         historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+        historyBtn.setAttribute('data-help-key', 'changeHistory');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
         historyBtn.addEventListener('click', () => openSaasUserChanges(user.id));
         tdActions.appendChild(historyBtn);

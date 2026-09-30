@@ -1839,6 +1839,22 @@
     "businessSectorPreview": {
       "what": "Te deja ver el sistema tal como lo vería un cliente de este giro de negocio, sin tener que iniciar sesión como uno de ellos.",
       "example": "revisas cómo se ve el menú para un cliente de \"Restaurantes\" antes de activarlo."
+    },
+    "saasEditName": {
+      "what": "Cambia el nombre que se muestra para esta cuenta del equipo SaaS.",
+      "example": "corriges \"Admin\" por el nombre real de la persona, como \"Juan Pérez\"."
+    },
+    "saasEditUsername": {
+      "what": "Cambia el nombre de usuario con el que esta persona inicia sesión.",
+      "example": "cambias \"admin\" por \"juan.perez\" para identificar mejor quién es cada cuenta."
+    },
+    "saasAccountAccess": {
+      "what": "Define qué pantallas y qué puede hacer esta persona dentro del panel de administración de GEIPSA.",
+      "example": "le das acceso solo a \"Nuestros Clientes\" a alguien de ventas, sin que vea el resto."
+    },
+    "saasResetPassword": {
+      "what": "Genera una contraseña nueva para esta cuenta, por si la persona la perdió u olvidó.",
+      "example": "alguien no puede entrar porque olvidó su contraseña, se la reinicias y le compartes la nueva."
     }
   }
 }

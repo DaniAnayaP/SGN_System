@@ -1840,6 +1840,22 @@
     "businessSectorPreview": {
       "what": "Lets you see the system the way a client in this business sector would, without having to log in as one of them.",
       "example": "you check what the menu looks like for a \"Restaurants\" client before activating it."
+    },
+    "saasEditName": {
+      "what": "Changes the display name shown for this SaaS team account.",
+      "example": "you fix \"Admin\" to show the person's real name, like \"John Smith\"."
+    },
+    "saasEditUsername": {
+      "what": "Changes the username this person logs in with.",
+      "example": "you change \"admin\" to \"john.smith\" so each account is easier to tell apart."
+    },
+    "saasAccountAccess": {
+      "what": "Sets which screens and what this person can do inside GEIPSA's admin panel.",
+      "example": "you give a sales person access to only \"Nuestros Clientes\", without seeing the rest."
+    },
+    "saasResetPassword": {
+      "what": "Generates a new password for this account, in case the person lost or forgot theirs.",
+      "example": "someone can't log in because they forgot their password, you reset it and share the new one."
     }
   }
 }
