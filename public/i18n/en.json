@@ -1456,6 +1456,8 @@
     "changeHistoryUser": "User",
     "changeHistoryRecord": "Record",
     "changeHistoryChange": "Change",
+    "changeHistoryGranted": "Granted",
+    "changeHistoryNotGranted": "Not granted",
     "fieldLocked": "You are not authorized to make changes to this option, check with your Direct Supervisor",
     "tablePrefix": "Table",
     "permSoloVer": "View Only",

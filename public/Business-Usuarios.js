@@ -63,7 +63,10 @@ async function openActivePermsModal(user) {
         const res = await fetch(`/api/business/users/${user.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        const tree = window.PermissionCostTree.create(activePermsContainer, { mode: 'clientTricolor', interactive: false, columnLevels: true });
+        const tree = window.PermissionCostTree.create(activePermsContainer, {
+            mode: 'clientTricolor', interactive: false, columnLevels: true,
+            historyEndpoint: '/api/business/user-grant-change-log', historyParams: { userId: user.id },
+        });
         await tree.init(data.jobPositionGrants || [], [], data.grants || []);
     } catch {
         activePermsError.textContent = Dashboard.t('admin.loadError');
@@ -108,7 +111,10 @@ async function openGrantAccessModal(user) {
         // "add something EXTRA" rather than "reassign everything from
         // scratch" -- restricted to allowedSectionIds so a user can never be
         // offered a módulo their own client hasn't contracted.
-        grantTree = window.PermissionCostTree.create(grantAccessContainer, { mode: 'clientTricolor', interactive: true, allowedSectionIds, columnLevels: true });
+        grantTree = window.PermissionCostTree.create(grantAccessContainer, {
+            mode: 'clientTricolor', interactive: true, allowedSectionIds, columnLevels: true,
+            historyEndpoint: '/api/business/user-grant-change-log', historyParams: { userId: user.id },
+        });
         await grantTree.init(data.jobPositionGrants || [], [], data.grants || []);
         pendingVisibleStatuses = data.visibleStatuses && data.visibleStatuses.length ? data.visibleStatuses : ['habilitado'];
         window.VisibleStatusesChips.render(grantAccessVisibleStatuses, pendingVisibleStatuses, (next) => { pendingVisibleStatuses = next; });

@@ -1404,6 +1404,25 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_client_permission_grants_client_id ON client_permission_grants(client_id);
 
+    -- Per-node audit trail for client_permission_grants above (Nuestros
+    -- Clientes' "Permisos Contratados"/"+ Adicionales" modals) -- same shape
+    -- as master_permission_change_log, just scoped by client_id since the
+    -- same node_key means something different for every client (unlike the
+    -- one global master tree). field is always 'granted' here (a grant is
+    -- binary, on or off); old_value/new_value are 'true'/'false' strings,
+    -- diffed against the previous saved set in setClientPermissionGrants.
+    CREATE TABLE IF NOT EXISTS client_permission_change_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        node_key    TEXT NOT NULL,
+        field       TEXT NOT NULL,
+        old_value   TEXT,
+        new_value   TEXT,
+        changed_by  TEXT,
+        changed_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_permission_change_log ON client_permission_change_log(client_id, node_key);
+
     -- Access tree for GEIPSA's own SaaS-side staff (role='admin' users) —
     -- a much smaller, flat namespace than the client-side department tree
     -- (PermissionTree.js): itemId is one of the 3 SaaS screens
@@ -1518,6 +1537,21 @@ db.exec(`
         item_id     TEXT,
         submenu_id  TEXT
     );
+
+    -- Per-node audit trail for user_grants above (Business-Usuarios.js's
+    -- "Otorgar Accesos" editor) -- same shape as client_permission_change_log,
+    -- scoped by user_id instead of client_id.
+    CREATE TABLE IF NOT EXISTS user_grant_change_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        node_key    TEXT NOT NULL,
+        field       TEXT NOT NULL,
+        old_value   TEXT,
+        new_value   TEXT,
+        changed_by  TEXT,
+        changed_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_grant_change_log ON user_grant_change_log(user_id, node_key);
 
     -- Material Apoyo (Funcionalidad Pantallas / Flujo Sistema / Nuestros
     -- Procesos) -- a document library per client, scoped by Departamento/
@@ -6834,7 +6868,28 @@ function getClientPermissionGrants(clientId) {
         .all(clientId);
 }
 
-function setClientPermissionGrants(clientId, grants) {
+// Per-node audit trail — see client_permission_change_log's own DDL comment.
+// field is always 'granted' (a grant is on/off, not a named field the way
+// Estatus/Clasificación are), old_value/new_value are 'true'/'false'.
+function logClientPermissionChange(clientId, nodeKey, oldValue, newValue, changedBy) {
+    db.prepare(`
+        INSERT INTO client_permission_change_log (client_id, node_key, field, old_value, new_value, changed_by)
+        VALUES (?, ?, 'granted', ?, ?, ?)
+    `).run(clientId, nodeKey, String(oldValue), String(newValue), changedBy || '');
+}
+function getClientPermissionChangeLog(clientId, nodeKey) {
+    return db.prepare(`
+        SELECT field, old_value AS oldValue, new_value AS newValue, changed_by AS changedBy, changed_at AS changedAt
+        FROM client_permission_change_log
+        WHERE client_id = ? AND node_key = ?
+        ORDER BY id DESC
+    `).all(clientId, nodeKey);
+}
+
+function setClientPermissionGrants(clientId, grants, changedBy) {
+    const keyOfGrant = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const before = new Set(getClientPermissionGrants(clientId).map(keyOfGrant));
+    const after = new Set((grants || []).map(keyOfGrant));
     const replace = db.transaction((rows) => {
         db.prepare('DELETE FROM client_permission_grants WHERE client_id = ?').run(clientId);
         const insert = db.prepare(`
@@ -6846,6 +6901,8 @@ function setClientPermissionGrants(clientId, grants) {
         }
     });
     replace(grants);
+    after.forEach((key) => { if (!before.has(key)) logClientPermissionChange(clientId, key, false, true, changedBy); });
+    before.forEach((key) => { if (!after.has(key)) logClientPermissionChange(clientId, key, true, false, changedBy); });
     return getClientPermissionGrants(clientId);
 }
 
@@ -7314,7 +7371,27 @@ function getUserEffectiveGrants(userId) {
     return combined;
 }
 
-function setUserGrants(userId, grants) {
+// Per-node audit trail — see user_grant_change_log's own DDL comment, same
+// shape/reasoning as logClientPermissionChange above.
+function logUserGrantChange(userId, nodeKey, oldValue, newValue, changedBy) {
+    db.prepare(`
+        INSERT INTO user_grant_change_log (user_id, node_key, field, old_value, new_value, changed_by)
+        VALUES (?, ?, 'granted', ?, ?, ?)
+    `).run(userId, nodeKey, String(oldValue), String(newValue), changedBy || '');
+}
+function getUserGrantChangeLog(userId, nodeKey) {
+    return db.prepare(`
+        SELECT field, old_value AS oldValue, new_value AS newValue, changed_by AS changedBy, changed_at AS changedAt
+        FROM user_grant_change_log
+        WHERE user_id = ? AND node_key = ?
+        ORDER BY id DESC
+    `).all(userId, nodeKey);
+}
+
+function setUserGrants(userId, grants, changedBy) {
+    const keyOfGrant = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const before = new Set(getUserGrants(userId).map(keyOfGrant));
+    const after = new Set((grants || []).map(keyOfGrant));
     const replace = db.transaction((rows) => {
         db.prepare('DELETE FROM user_grants WHERE user_id = ?').run(userId);
         const insert = db.prepare(`
@@ -7326,6 +7403,8 @@ function setUserGrants(userId, grants) {
         }
     });
     replace(grants);
+    after.forEach((key) => { if (!before.has(key)) logUserGrantChange(userId, key, false, true, changedBy); });
+    before.forEach((key) => { if (!after.has(key)) logUserGrantChange(userId, key, true, false, changedBy); });
     return getUserGrants(userId);
 }
 
@@ -7614,6 +7693,7 @@ module.exports = {
     computeAccessCostTotal,
     getClientPermissionGrants,
     setClientPermissionGrants,
+    getClientPermissionChangeLog,
     computeClientAdditionalPermissionsCost,
     isTupleGranted,
     syncClientModulesFromPermissionGrants,
@@ -7651,4 +7731,5 @@ module.exports = {
     setJobPositionGrants,
     getUserGrants,
     setUserGrants,
+    getUserGrantChangeLog,
 };

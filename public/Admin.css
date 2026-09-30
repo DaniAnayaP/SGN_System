@@ -3752,6 +3752,44 @@ body.dark-mode .status-card-hab .mini-self-match{ color: #7fd99a; }
     background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
     color: var(--color-accent);
 }
+/* Per-row "Cambios" button, clientTricolor mode only (see buildRow's own
+   historyEndpoint guard in PermissionCostTree.js) -- same icon-button look
+   as .perm-tree-app-equalize-btn just above, pushed to the row's far right
+   since (unlike PermissionTree.js's own grid-column layout) this file's own
+   rows are a plain flex sequence with no dedicated trailing column. */
+.perm-tree-cost-history-btn{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    margin-left: auto;
+    border: none;
+    border-radius: 0.3rem;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.perm-tree-cost-history-btn i{
+    font-size: 0.8rem;
+}
+.perm-tree-cost-history-btn:hover{
+    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+    color: var(--color-accent);
+}
+/* Classification group row's own color dot (read-only, see
+   applyClassificationColorTo in PermissionCostTree.js) -- same small-circle
+   idea as PermissionTree.js's own classification badge dot. */
+.perm-tree-cost-classification-dot{
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    margin-right: 0.35rem;
+    flex-shrink: 0;
+}
 /* clientTricolor mode's read-only App-vision badge (PermissionCostTree.js's
    appendClientAppSlot) -- same bx-mobile-alt icon as the interactive
    .perm-tree-app-toggle above, just tinted green/amarillo/rojo like the

@@ -1050,6 +1050,7 @@ async function openPermisosContratadosModal(client) {
         const plan = client.plan ? plans.find((p) => p.name === client.plan) : null;
         const tree = window.PermissionCostTree.create(permisosContratadosContainer, {
             mode: 'clientTricolor', interactive: false, currency: plan?.currency || 'MXN',
+            historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },
         });
         await tree.init(planGrants || [], costs, grants || []);
         permisosContratadosModal.hidden = false;
@@ -1124,6 +1125,7 @@ async function openPermisosAdicionalesModal(client) {
         adicionalesCurrency = plan?.currency || 'MXN';
         adicionalesTree = window.PermissionCostTree.create(permisosAdicionalesContainer, {
             mode: 'clientTricolor', interactive: true, currency: adicionalesCurrency,
+            historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },
         });
         await adicionalesTree.init(planGrants || [], costs, grants || []);
         updateAdicionalesTotal();

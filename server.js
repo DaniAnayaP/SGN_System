@@ -294,6 +294,7 @@ const {
     computeAccessCostTotal,
     getClientPermissionGrants,
     setClientPermissionGrants,
+    getClientPermissionChangeLog,
     computeClientAdditionalPermissionsCost,
     isTupleGranted,
     syncClientModulesFromPermissionGrants,
@@ -330,6 +331,7 @@ const {
     setJobPositionGrants,
     getUserGrants,
     setUserGrants,
+    getUserGrantChangeLog,
     listClientEvidenceFiles,
     getEvidenceRawValue,
     setEvidenceValue,
@@ -1356,11 +1358,21 @@ app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
             return res.status(400).json({ message: 'Ese permiso ya está incluido en el plan del cliente.' });
         }
     }
-    const saved = setClientPermissionGrants(req.params.id, grants);
+    const saved = setClientPermissionGrants(req.params.id, grants, changedByLabel(req));
     if (syncClientModulesFromPermissionGrants(req.params.id)) {
         applyEffectiveEntitlements(req.params.id);
     }
     res.json({ grants: saved, additionalPermissionsPayment: computeClientAdditionalPermissionsCost(req.params.id) });
+});
+
+// Per-node "Cambios" for the tree above -- see client_permission_change_log's
+// own DDL comment. Scoped to this same client (the tuple {clientId, nodeKey}
+// is what setClientPermissionGrants logged against), so one client can never
+// see another's grant history even by guessing a nodeKey.
+app.get('/api/admin/client-permission-change-log', requireAuth, requireAdmin, (req, res) => {
+    const { clientId, nodeKey } = req.query || {};
+    if (!clientId || !nodeKey) return res.status(400).json({ message: 'clientId and nodeKey are required.' });
+    res.json({ entries: getClientPermissionChangeLog(clientId, nodeKey) });
 });
 
 // Cambios de Anexos: read-only history for the modal that shows who
@@ -2294,6 +2306,16 @@ app.put('/api/admin/master-permission-classifications', requireAuth, requireAdmi
 app.get('/api/admin/master-permission-classification-colors', requireAuth, requireAdmin, (req, res) => {
     res.json({ colors: getClassificationColors() });
 });
+// Read-only twin of the route above, for the same global colors, reachable
+// by any authenticated business user (client admin or regular staff) --
+// PermissionCostTree.js's clientTricolor mode (Nuestros Clientes'/Business-
+// Usuarios'/Business-MisAccesos' own trees) needs to DISPLAY a classification
+// group's already-set color, same as the master tree does, but those screens
+// never run as role:'admin' so the /api/admin/* route above 403s them. Never
+// exposes write access -- only GEIPSA's own Árbol Maestro can set colors.
+app.get('/api/business/master-permission-classification-colors', requireAuth, (req, res) => {
+    res.json({ colors: getClassificationColors() });
+});
 app.put('/api/admin/master-permission-classification-colors', requireAuth, requireAdmin, (req, res) => {
     const { classificationId, color, textColor } = req.body || {};
     if (typeof classificationId !== 'string' || !classificationId) {
@@ -2801,6 +2823,16 @@ app.get('/api/business/me/grants', requireAuth, (req, res) => {
     res.json({ grants: getUserGrants(req.user.sub), jobPositionGrants: getUserJobPositionGrants(req.user.sub) });
 });
 
+// Per-node "Cambios" for Business-MisAccesos.js's own read-only tricolor
+// tree -- scoped implicitly to req.user.sub (never a userId query param),
+// since this route is "my own history", reachable by any authenticated
+// business user, not just a client admin.
+app.get('/api/business/me/grant-change-log', requireAuth, (req, res) => {
+    const { nodeKey } = req.query || {};
+    if (!nodeKey) return res.status(400).json({ message: 'nodeKey is required.' });
+    res.json({ entries: getUserGrantChangeLog(req.user.sub, nodeKey) });
+});
+
 app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
@@ -2827,7 +2859,20 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
-    res.json({ grants: setUserGrants(req.params.id, grants) });
+    res.json({ grants: setUserGrants(req.params.id, grants, changedByLabel(req)) });
+});
+
+// Per-node "Cambios" for the tree above -- same reasoning as the client
+// permission-grants one just above, scoped by userId instead of clientId.
+// getUserById already scopes the lookup to req.user.clientId, so a client
+// admin can never pull another client's user's grant history even by
+// guessing a userId.
+app.get('/api/business/user-grant-change-log', requireAuth, requireClientAdmin, (req, res) => {
+    const { userId, nodeKey } = req.query || {};
+    if (!userId || !nodeKey) return res.status(400).json({ message: 'userId and nodeKey are required.' });
+    const user = getUserById(userId, req.user.clientId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    res.json({ entries: getUserGrantChangeLog(userId, nodeKey) });
 });
 
 // Which of habilitado/inhabilitado/construccion/mejoras this business user

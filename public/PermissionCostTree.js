@@ -147,7 +147,18 @@
     // Contratados/Adicionales) never passes it, so the whole system menu
     // keeps showing there exactly as before -- GEIPSA needs to see
     // everything, contracted or not, to decide what to sell.
-    function create(container, { mode = 'costEdit', currency = 'MXN', interactive = false, allowedSectionIds = null, columnLevels = false } = {}) {
+    function create(container, {
+        mode = 'costEdit', currency = 'MXN', interactive = false, allowedSectionIds = null, columnLevels = false,
+        // clientTricolor only -- see the "Cambios" section below. historyEndpoint
+        // is the GET route to query (a caller-owned URL, since which entity a
+        // clientTricolor tree is scoped to -- a client or a user -- differs by
+        // host screen); historyParams are extra query params always sent with
+        // it (e.g. { clientId } or { userId }). Omitting historyEndpoint just
+        // means no Cambios button renders anywhere in this tree (costEdit and
+        // grantReadonlyCost never pass it -- the former isn't in scope for this
+        // feature, the latter already has its own screen-level Cambios button).
+        historyEndpoint = null, historyParams = {},
+    } = {}) {
         let sectionsData = [];
         let grantSet = new Set(); // costEdit/grantReadonlyCost modes
         let planGrantSet = new Set(); // clientTricolor: coverage granted by the client's PLAN (green)
@@ -162,6 +173,13 @@
         let sectorDefaultSet = new Set();
         let expandedSections = new Set();
         let expandedItems = new Set();
+        // Read-only display of the SAME global classification colors
+        // PermissionTree.js's own picker manages -- see this file's init()
+        // for why the fetch never fails the tree if it 404s/offline (every
+        // classification badge just falls back to its own hashed default).
+        let classificationColors = new Map();
+        let classificationTextColors = new Map();
+        let historyDialogEl = null;
 
         function formatCurrencyLocal(amount) {
             return window.Dashboard ? window.Dashboard.formatCurrency(amount, currency) : String(amount);
@@ -278,13 +296,60 @@
             return status;
         }
 
+        // Read-only twins of PermissionTree.js's own classificationColor/
+        // classificationTextColor (see this file's own classificationColors
+        // init() fetch) -- same palette/hash fallback, so a classification
+        // never explicitly colored by an admin still reads as something
+        // other than plain text, and consistently the SAME automatic color
+        // it would get on the master tree.
+        const CLASSIFICATION_COLOR_PALETTE = ['#3A4BC9', '#1E7E34', '#9A6B00', '#B3261E', '#0E7C86', '#6C4BA6'];
+        function classificationColor(id) {
+            if (!id) return 'var(--color-text-secondary)';
+            const chosen = classificationColors.get(id);
+            if (chosen) return chosen;
+            if (id === 'class-control-interno') return '#3A4BC9';
+            let hash = 0;
+            for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+            return CLASSIFICATION_COLOR_PALETTE[hash % CLASSIFICATION_COLOR_PALETTE.length];
+        }
+        function classificationTextColor(id) {
+            if (!id) return null;
+            return classificationTextColors.get(id) || null;
+        }
+
+        // A classification group's own color (read-only display -- see
+        // classificationColor's own comment) applied to whichever label
+        // element buildRow actually renders text into for this row, since
+        // that differs by mode. Text color: the admin's own chosen one if
+        // set, else the same dot color at reduced opacity via color-mix so
+        // it stays legible against the surface -- same fallback idea
+        // PermissionTree.js's classification badge CSS already uses.
+        function applyClassificationColorTo(el, classificationId) {
+            if (!classificationId) return;
+            const color = classificationColor(classificationId);
+            const textColor = classificationTextColor(classificationId) || `color-mix(in srgb, ${color} 82%, var(--color-text-primary))`;
+            el.style.color = textColor;
+            const dot = document.createElement('span');
+            dot.className = 'perm-tree-cost-classification-dot';
+            dot.style.background = color;
+            el.prepend(dot);
+        }
+
         // toggle is null for leaf rows (no children to expand). costKey is
         // null to suppress the cost slot entirely (used for the column
         // sub-permission-level rows in grantReadonlyCost mode, which are
         // never individually priced — pricing stops at Columna). colorSlot
         // (clientTricolor only) is { color, checked, onChange } — see
-        // extraSlotArgs below for how callers build it.
-        function buildRow(labelText, depth, toggle, costKey, colorSlot, appToggle) {
+        // extraSlotArgs below for how callers build it. classificationId
+        // (only ever passed for a classification group's own row) tints
+        // that row's label with its color -- read-only display, no picker
+        // here (colors are set once, globally, from the master tree only).
+        // historyKey/historyLabel add a per-row "Cambios" button, clientTricolor
+        // only, when this create() call was given a historyEndpoint (see its
+        // own comment) -- costEdit and grantReadonlyCost never pass either,
+        // the former out of scope for this feature, the latter already
+        // having its own screen-level Cambios button.
+        function buildRow(labelText, depth, toggle, costKey, colorSlot, appToggle, classificationId, historyKey) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
 
@@ -333,6 +398,7 @@
                     input.addEventListener('change', () => { colorSlot.onChange(input.checked); render(); });
                     const span = document.createElement('span');
                     span.textContent = labelText;
+                    applyClassificationColorTo(span, classificationId);
                     labelEl.append(input, span);
                     row.appendChild(labelEl);
                 } else {
@@ -344,6 +410,7 @@
                     const label = document.createElement('span');
                     label.className = 'perm-tree-status-label';
                     label.textContent = labelText;
+                    applyClassificationColorTo(label, classificationId);
                     row.appendChild(label);
                 }
                 // Interactive "+ Adicionales" only: shows what each row would
@@ -359,6 +426,7 @@
                 input.type = 'checkbox';
                 const span = document.createElement('span');
                 span.textContent = labelText;
+                applyClassificationColorTo(span, classificationId);
                 labelEl.append(input, span);
                 // grantReadonlyCost only -- a leaf this Plan's own Sector
                 // already grants by default (see init()'s sectorDefaultSet),
@@ -377,6 +445,20 @@
                 row.appendChild(labelEl);
                 if (costKey != null) row.appendChild(buildCostSlot(costKey));
                 appendAppToggle(row, appToggle, costKey);
+            }
+
+            if (mode === 'clientTricolor' && historyEndpoint && historyKey) {
+                const historyBtn = document.createElement('button');
+                historyBtn.type = 'button';
+                historyBtn.className = 'perm-tree-cost-history-btn';
+                historyBtn.title = t('main.changeHistory');
+                historyBtn.setAttribute('aria-label', t('main.changeHistory'));
+                historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+                historyBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    openHistoryDialog(historyKey, labelText);
+                });
+                row.appendChild(historyBtn);
             }
 
             return { row, input };
@@ -781,7 +863,7 @@
                 const { row } = buildRow(t(col.labelKey, col.labelParams), depth, {
                     expanded: colExpanded,
                     onToggle: () => { if (colExpanded) expandedItems.delete(colTreeKey); else expandedItems.add(colTreeKey); },
-                }, colCostKey, colorSlot, appColumnExtraSlot(soloVerKeyTri, [soloVerKeyTri, ...subLevelKeys]));
+                }, colCostKey, colorSlot, appColumnExtraSlot(soloVerKeyTri, [soloVerKeyTri, ...subLevelKeys]), null, soloVerKeyTri);
                 container.appendChild(row);
                 if (!colExpanded) return;
 
@@ -812,7 +894,7 @@
                     onChange: (checked) => levelKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
                 };
                 const soloVerKeyTri = keyOf(section.id, item.id, `${base}/solo-ver`);
-                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, colCostKey, colorSlot, appColumnExtraSlot(soloVerKeyTri, levelKeys));
+                const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, colCostKey, colorSlot, appColumnExtraSlot(soloVerKeyTri, levelKeys), null, soloVerKeyTri);
                 container.appendChild(row);
                 return;
             }
@@ -894,7 +976,7 @@
             const { row, input } = buildRow(t(cls.labelKey, cls.labelParams), 5, {
                 expanded: classExpanded,
                 onToggle: () => { if (classExpanded) expandedItems.delete(classTreeKey); else expandedItems.add(classTreeKey); },
-            }, ...extraSlotArgs(null, classLeafKeys), computeAppToggle(classLeafKeys) || appExtraSlotArgs(classLeafKeys));
+            }, ...extraSlotArgs(null, classLeafKeys), computeAppToggle(classLeafKeys) || appExtraSlotArgs(classLeafKeys), cls.id);
             row.classList.add('perm-tree-row-classification');
             if (input && mode !== 'clientTricolor') {
                 input.checked = classChecked === classLeafKeys.length;
@@ -1016,10 +1098,18 @@
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
                     const itemKey = `${section.id}::${item.id}`;
                     const itemExpanded = expandedItems.has(itemKey);
+                    // A leaf item (no submenu -- Home/Panel/Dashboard/etc.) has
+                    // exactly ONE real grant tuple, itself, same as a leaf
+                    // sm/subSm/column elsewhere in this file -- gets its own
+                    // Cambios button. An item WITH a submenu is a pure
+                    // container (its own bare key is never individually
+                    // logged, only its leaves are -- see setKeys' own
+                    // comment), so it gets none, same reasoning as
+                    // section/table rows.
                     const { row: itemRowEl, input: itemInput } = buildRow(t(item.labelKey, item.labelParams), 1, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => { if (itemExpanded) expandedItems.delete(itemKey); else expandedItems.add(itemKey); },
-                    } : null, ...extraSlotArgs(keyOf(section.id, item.id, null), itemLeafKeys), computeAppToggle(itemLeafKeys) || appExtraSlotArgs(itemLeafKeys));
+                    } : null, ...extraSlotArgs(keyOf(section.id, item.id, null), itemLeafKeys), computeAppToggle(itemLeafKeys) || appExtraSlotArgs(itemLeafKeys), null, hasSubmenu ? null : itemLeafKeys[0]);
                     if (itemInput && mode !== 'clientTricolor') {
                         itemInput.checked = itemChecked === itemLeafKeys.length;
                         itemInput.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
@@ -1032,7 +1122,7 @@
                         const hasSubSubmenu = !!(sm.submenu && sm.submenu.length);
                         const smCostKey = keyOf(section.id, item.id, sm.id);
                         if (!hasSubSubmenu) {
-                            const { row: smRowEl, input: smInput } = buildRow(t(sm.labelKey, sm.labelParams), 2, null, ...extraSlotArgs(smCostKey, [smCostKey]), computeAppToggle([smCostKey]) || appExtraSlotArgs([smCostKey]));
+                            const { row: smRowEl, input: smInput } = buildRow(t(sm.labelKey, sm.labelParams), 2, null, ...extraSlotArgs(smCostKey, [smCostKey]), computeAppToggle([smCostKey]) || appExtraSlotArgs([smCostKey]), null, smCostKey);
                             if (smInput && mode !== 'clientTricolor') {
                                 smInput.checked = grantSet.has(smCostKey);
                                 smInput.addEventListener('change', () => { setKeys([smCostKey], smInput.checked); render(); });
@@ -1073,7 +1163,7 @@
                             const { row: subRowEl, input: subInput } = buildRow(t(subSm.labelKey, subSm.labelParams), 3, subHasDetail ? {
                                 expanded: subDetailExpanded,
                                 onToggle: () => { if (subDetailExpanded) expandedItems.delete(subDetailKey); else expandedItems.add(subDetailKey); },
-                            } : null, ...extraSlotArgs(key, [key]), computeAppToggle([key]) || appExtraSlotArgs([key]));
+                            } : null, ...extraSlotArgs(key, [key]), computeAppToggle([key]) || appExtraSlotArgs([key]), null, key);
                             if (subInput && mode !== 'clientTricolor') {
                                 subInput.checked = grantSet.has(key);
                                 subInput.addEventListener('change', () => { setKeys([key], subInput.checked); render(); });
@@ -1158,6 +1248,78 @@
             return total;
         }
 
+        // "Cambios" dialog -- clientTricolor only (see buildRow's own guard).
+        // Self-contained, same shape as PermissionTree.js's own
+        // ensureHistoryDialog/openHistoryDialog (this file is a deliberate
+        // copy, not a wrapper -- see the header comment), adapted for a
+        // grant's own binary field instead of Estatus/Web/App/Clasificación:
+        // every entry here has field === 'granted', old/new values are the
+        // strings 'true'/'false' (see logClientPermissionChange/
+        // logUserGrantChange in db.js).
+        function formatGrantChange(entry) {
+            const bool = (v) => (v === 'true' ? t('main.changeHistoryGranted') : t('main.changeHistoryNotGranted'));
+            return `${bool(entry.oldValue)} → ${bool(entry.newValue)}`;
+        }
+        function ensureHistoryDialog() {
+            if (historyDialogEl) return;
+            historyDialogEl = document.createElement('div');
+            historyDialogEl.className = 'modal-overlay';
+            historyDialogEl.hidden = true;
+            historyDialogEl.innerHTML = `
+                <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="perm-cost-tree-history-title">
+                    <h3 id="perm-cost-tree-history-title" data-role="title"></h3>
+                    <div class="admin-table-wrap">
+                        <table class="admin-table">
+                            <thead><tr>
+                                <th>${t('main.changeHistoryDate')}</th>
+                                <th>${t('main.changeHistoryUser')}</th>
+                                <th>${t('main.changeHistoryChange')}</th>
+                            </tr></thead>
+                            <tbody data-role="list"></tbody>
+                        </table>
+                    </div>
+                    <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                        <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(historyDialogEl);
+            const close = () => { historyDialogEl.hidden = true; };
+            historyDialogEl.querySelector('[data-role="close"]').addEventListener('click', close);
+            historyDialogEl.addEventListener('click', (event) => { if (event.target === historyDialogEl) close(); });
+            document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !historyDialogEl.hidden) close(); });
+        }
+        async function openHistoryDialog(nodeKey, label) {
+            ensureHistoryDialog();
+            historyDialogEl.querySelector('[data-role="title"]').textContent = `${t('main.changeHistory')} — ${label}`;
+            const list = historyDialogEl.querySelector('[data-role="list"]');
+            list.innerHTML = `<tr><td colspan="3">${t('admin.loading')}</td></tr>`;
+            historyDialogEl.hidden = false;
+            try {
+                const params = new URLSearchParams({ ...historyParams, nodeKey });
+                const res = await fetch(`${historyEndpoint}?${params}`, { credentials: 'include' });
+                if (!res.ok) throw new Error('load failed');
+                const data = await res.json();
+                const entries = data.entries || [];
+                list.innerHTML = '';
+                if (!entries.length) {
+                    list.innerHTML = `<tr><td colspan="3">${t('main.changeHistoryEmpty')}</td></tr>`;
+                    return;
+                }
+                entries.forEach((entry) => {
+                    const tr = document.createElement('tr');
+                    [entry.changedAt || '', entry.changedBy || '', formatGrantChange(entry)].forEach((value) => {
+                        const td = document.createElement('td');
+                        td.textContent = value;
+                        tr.appendChild(td);
+                    });
+                    list.appendChild(tr);
+                });
+            } catch {
+                list.innerHTML = `<tr><td colspan="3">${t('admin.loadError')}</td></tr>`;
+            }
+        }
+
         return {
             // clientGrants is only meaningful (and only fetched by callers)
             // in clientTricolor mode — ignored otherwise. sectorDefaultGrants
@@ -1232,6 +1394,30 @@
                 }
 
                 costMap = new Map((initialCosts || []).filter((c) => c.cost > 0).map((c) => [keyOf(c.sectionId, c.itemId, c.submenuId), c.cost]));
+
+                // Read-only -- see classificationColor's own comment above.
+                // Never in costEdit mode: that screen never shows a
+                // classification group at all (see renderClassificationGroup's
+                // own costEdit branch), so the round trip would be wasted.
+                // The business-safe endpoint (not /api/admin/...) works from
+                // every one of this file's callers regardless of role.
+                classificationColors = new Map();
+                classificationTextColors = new Map();
+                if (mode !== 'costEdit') {
+                    try {
+                        const colorsRes = await fetch('/api/business/master-permission-classification-colors', { credentials: 'include' });
+                        if (colorsRes.ok) {
+                            const colorsData = await colorsRes.json();
+                            (colorsData.colors || []).forEach((c) => {
+                                if (c && c.classificationId && c.color) classificationColors.set(c.classificationId, c.color);
+                                if (c && c.classificationId && c.textColor) classificationTextColors.set(c.classificationId, c.textColor);
+                            });
+                        }
+                    } catch {
+                        // offline/transient -- every classification badge
+                        // just falls back to its own hashed default color.
+                    }
+                }
 
                 expandedSections = new Set();
                 expandedItems = new Set();
