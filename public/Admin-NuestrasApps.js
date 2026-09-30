@@ -157,7 +157,7 @@ function renderApps() {
         tdActions.dataset.col = 'actions';
         tdActions.className = 'actions';
         tdActions.innerHTML = `
-            <button type="button" class="admin-icon-btn" aria-label="Edit" data-action="edit">
+            <button type="button" class="admin-icon-btn" aria-label="${Dashboard.t('admin.edit')}" data-action="edit" data-help-key="edit">
                 <i class="bx bx-edit" aria-hidden="true"></i>
             </button>
         `;
@@ -219,7 +219,7 @@ function renderDetail() {
                 <span class="saas-app-screen-link">${Dashboard.t('menu.appScreenWebLink')}: ${webScreenLabel(screen.webScreenKey)}</span>
             </div>
             <div class="saas-app-screen-tag">${Dashboard.t(screen.screenType === 'readonly' ? 'menu.appScreenTypeReadonly' : 'menu.appScreenTypeGuided')}</div>
-            <button type="button" class="admin-icon-btn admin-icon-btn-danger" aria-label="Delete" data-screen-id="${screen.id}">
+            <button type="button" class="admin-icon-btn admin-icon-btn-danger" aria-label="${Dashboard.t('admin.delete')}" data-help-key="delete" data-screen-id="${screen.id}">
                 <i class="bx bx-trash" aria-hidden="true"></i>
             </button>
         `;
