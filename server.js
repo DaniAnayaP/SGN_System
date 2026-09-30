@@ -544,6 +544,13 @@ app.get('/sw.js', (req, res) => {
         swFileCache = fs.readFileSync(path.join(PUBLIC_DIR, 'sw.js'), 'utf8')
             .replace(/const CACHE_VERSION = '[^']*';/, `const CACHE_VERSION = '${SW_CACHE_VERSION}';`);
     }
+    // Explicit no-cache -- the client's own registration now also passes
+    // { updateViaCache: 'none' } so the browser never relies on its normal
+    // HTTP cache to decide whether sw.js changed, but this is a second,
+    // independent backstop against any intermediate proxy (Railway's own,
+    // or anything else in front of this) caching the response regardless of
+    // what the client asked for.
+    res.set('Cache-Control', 'no-cache');
     res.type('application/javascript').send(swFileCache);
 });
 
@@ -569,6 +576,8 @@ app.get('/mobile/sw.js', (req, res) => {
         mobileSwFileCache = fs.readFileSync(path.join(__dirname, 'mobile-app', 'www', 'sw.js'), 'utf8')
             .replace(/const CACHE_VERSION = '[^']*';/, `const CACHE_VERSION = '${SW_CACHE_VERSION}';`);
     }
+    // Same no-cache backstop as /sw.js above.
+    res.set('Cache-Control', 'no-cache');
     res.type('application/javascript').send(mobileSwFileCache);
 });
 app.use('/mobile', express.static(path.join(__dirname, 'mobile-app', 'www'), { maxAge: '1m' }));

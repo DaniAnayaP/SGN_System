@@ -12,7 +12,17 @@
     <link rel="stylesheet" href="vendor/boxicons/css/boxicons.min.css">
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js');
+            navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+            // Fires once the new SW's own clients.claim() (sw.js) takes over --
+            // without this, a tab left open across a deploy keeps running its
+            // already-loaded old JS/CSS in memory forever, the exact "still
+            // serving stale code after deploy" symptom this whole change fixes.
+            let sgnSwRefreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (sgnSwRefreshing) return;
+                sgnSwRefreshing = true;
+                window.location.reload();
+            });
         }
     </script>
 </head>
