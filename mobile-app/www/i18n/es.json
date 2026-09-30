@@ -389,20 +389,20 @@
     "sectorIconNoResults": "Ningún icono coincide con esa búsqueda.",
     "sectorIconCount": "{count} de {total} iconos · {scope}",
     "sectorIconCat": {
-        "alimentos": "Alimentos y Restaurantes",
-        "transporte": "Transporte y Logística",
-        "retail": "Retail y Comercio",
-        "tecnologia": "Tecnología",
-        "salud": "Salud",
-        "construccion": "Construcción",
-        "manufactura": "Manufactura e Industria",
-        "finanzas": "Finanzas y Seguros",
-        "educacion": "Educación",
-        "agricultura": "Agricultura y Campo",
-        "belleza": "Belleza y Bienestar",
-        "servicios": "Servicios Profesionales",
-        "entretenimiento": "Entretenimiento y Turismo",
-        "inmobiliaria": "Inmobiliaria"
+      "alimentos": "Alimentos y Restaurantes",
+      "transporte": "Transporte y Logística",
+      "retail": "Retail y Comercio",
+      "tecnologia": "Tecnología",
+      "salud": "Salud",
+      "construccion": "Construcción",
+      "manufactura": "Manufactura e Industria",
+      "finanzas": "Finanzas y Seguros",
+      "educacion": "Educación",
+      "agricultura": "Agricultura y Campo",
+      "belleza": "Belleza y Bienestar",
+      "servicios": "Servicios Profesionales",
+      "entretenimiento": "Entretenimiento y Turismo",
+      "inmobiliaria": "Inmobiliaria"
     },
     "businessSectorDescription": "Descripción",
     "businessSectorPermsAssigned": "Permisos Asignados",
@@ -859,6 +859,8 @@
     "addUser": "Agregar usuario",
     "language": "Idioma",
     "style": "Estilo",
+    "helpMode": "Modo ayuda",
+    "helpExampleLabel": "Ejemplo:",
     "screenViewToggle": "Vista de pantallas",
     "others": "Otros",
     "buttonConfig": "Configuración botones",
@@ -1646,5 +1648,315 @@
     "viewGrid": "Cuadrícula",
     "viewList": "Lista",
     "categorySoonTag": "Pronto"
+  },
+  "help": {
+    "messages": {
+      "what": "Aquí puedes escribirle a otras personas que usan el sistema, como si fuera un chat.",
+      "example": "le escribes a un compañero para preguntarle algo sin salir de la pantalla."
+    },
+    "chatbot": {
+      "what": "Es un asistente que responde tus preguntas sobre cómo usar el sistema, sin necesidad de llamar a alguien.",
+      "example": "le preguntas \"¿cómo registro un cliente nuevo?\" y te explica los pasos."
+    },
+    "notifications": {
+      "what": "Te avisa cuando pasa algo importante: alertas, avisos, solicitudes que esperan tu aprobación.",
+      "example": "alguien pide autorización para algo y aquí te llega el aviso."
+    },
+    "bookmarks": {
+      "what": "Guarda tus pantallas favoritas para regresar a ellas rápido, sin buscar en el menú cada vez.",
+      "example": "guardas la pantalla que usas todos los días para no buscarla cada vez."
+    },
+    "uiScale": {
+      "what": "Hace el texto y las tablas más grandes o más chicas en toda la aplicación.",
+      "example": "si te cuesta leer, lo agrandas; si quieres ver más filas de una tabla, lo achicas."
+    },
+    "settings": {
+      "what": "Aquí cambias cómo se ve y se comporta el sistema para ti: idioma, colores, y otras opciones.",
+      "example": "cambias el idioma de inglés a español, o el estilo de claro a oscuro."
+    },
+    "userInfo": {
+      "what": "Muestra tu información personal guardada en el sistema, como tu nombre y tu correo.",
+      "example": "revisas aquí si tu correo está bien escrito."
+    },
+    "businessProfile": {
+      "what": "Muestra tu información dentro de la empresa: tu puesto, tu rol, y a quién le reportas.",
+      "example": "revisas aquí quién es tu jefe directo dentro del sistema."
+    },
+    "colSysEmpresa": {
+      "what": "Dice el nombre de la empresa a la que pertenece este registro.",
+      "example": "si trabajas para varias empresas dentro del sistema, aquí ves para cuál es esta fila."
+    },
+    "colSysArea": {
+      "what": "Dice a qué área de la empresa pertenece este registro, como Finanzas o Recursos Humanos.",
+      "example": "un registro de nómina normalmente dice \"Recursos Humanos\" aquí."
+    },
+    "colSysModulo": {
+      "what": "Dice de qué módulo o sección del sistema vino este registro.",
+      "example": "si el registro se creó en \"Cadena de Suministro\", aquí lo dice."
+    },
+    "colSysPantalla": {
+      "what": "Dice el nombre exacto de la pantalla donde se creó este registro.",
+      "example": "si lo llenaste en \"Registro de Traslados\", aquí aparece ese nombre."
+    },
+    "colSysCentroCostos": {
+      "what": "Dice a qué centro de costos pertenece este registro, para saber quién paga por él.",
+      "example": "un gasto de la sucursal Norte muestra aquí \"Sucursal Norte\"."
+    },
+    "colSysFecha": {
+      "what": "Es la fecha exacta en que se guardó este registro.",
+      "example": "si lo capturaste hoy, aquí se ve la fecha de hoy, como \"30/sep/2026\"."
+    },
+    "colSysDiaNum": {
+      "what": "Es el número del día del mes en que se guardó el registro.",
+      "example": "si se guardó el 5 de un mes, aquí dice \"05\"."
+    },
+    "colSysDiaTexto": {
+      "what": "Dice qué día de la semana era cuando se guardó el registro.",
+      "example": "si fue lunes, aquí dice \"Lun\"."
+    },
+    "colSysMesNum": {
+      "what": "Es el número del mes en que se guardó el registro.",
+      "example": "si fue en septiembre, aquí dice \"09\"."
+    },
+    "colSysMesTexto": {
+      "what": "Es el nombre corto del mes en que se guardó el registro.",
+      "example": "si fue en septiembre, aquí dice \"Sep\"."
+    },
+    "colSysAnio": {
+      "what": "Es el año en que se guardó el registro.",
+      "example": "si fue este año, aquí dice \"2026\"."
+    },
+    "colSysSemana": {
+      "what": "Dice qué semana del año era cuando se guardó el registro, para agrupar información por semana.",
+      "example": "si fue en la semana 40 del año, aquí dice \"Sem40_2026\"."
+    },
+    "colSysHora": {
+      "what": "Es la hora exacta, con segundos, en que se guardó el registro.",
+      "example": "si lo guardaste a las 3 de la tarde, aquí dice algo como \"15:04:22\"."
+    },
+    "filterColumn": {
+      "what": "Te deja elegir solo las filas que tengan cierto valor en esta columna, en vez de verlas todas.",
+      "example": "en la columna \"Estatus\" filtras para ver solo los registros \"Activos\"."
+    },
+    "zoomOut": {
+      "what": "Hace el texto y las filas de la tabla más pequeños, para ver más información de un vistazo.",
+      "example": "si una tabla tiene muchas columnas, la achicas para ver más sin tener que hacer scroll."
+    },
+    "zoomIn": {
+      "what": "Hace el texto y las filas de la tabla más grandes, para leer mejor.",
+      "example": "si te cuesta leer los números pequeños, la agrandas."
+    },
+    "pinColumns": {
+      "what": "Deja fija una o varias columnas del lado izquierdo, para que no se muevan cuando avanzas la tabla hacia la derecha.",
+      "example": "fijas la columna \"Nombre\" para siempre saber de quién es la fila aunque veas columnas lejanas."
+    },
+    "columnVisibility": {
+      "what": "Te deja ocultar las columnas que no necesitas ver por ahora, sin borrar su información.",
+      "example": "ocultas las columnas que no usas para que la tabla se vea más simple."
+    },
+    "changeHistory": {
+      "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",
+      "example": "si un dato cambió y no sabes por qué, aquí ves quién lo modificó y qué valor tenía antes."
+    },
+    "columnLegend": {
+      "what": "Explica qué significa cada color que ves en las filas y columnas de la tabla.",
+      "example": "un color verde en una fila puede significar que ese registro se puede editar."
+    },
+    "fieldRules": {
+      "what": "Aquí defines en qué orden se deben llenar los campos de esta tabla, y cuáles son obligatorios.",
+      "example": "obligas a llenar primero \"Nombre\" antes de poder escribir en \"Correo\"."
+    },
+    "sidebarSearch": {
+      "what": "Busca cualquier pantalla del menú por su nombre, sin tener que abrir cada grupo para encontrarla.",
+      "example": "escribes \"traslados\" y te muestra directo la pantalla de Registro de Traslados."
+    },
+    "edit": {
+      "what": "Abre este registro para poder cambiar su información.",
+      "example": "si el nombre de un cliente está mal escrito, lo corriges aquí."
+    },
+    "activate": {
+      "what": "Vuelve a prender este registro para que funcione de nuevo en el sistema, sin tener que crearlo otra vez.",
+      "example": "reactivas a un cliente que había dejado de pagar y ahora ya se puso al corriente."
+    },
+    "deactivate": {
+      "what": "Apaga este registro sin borrarlo, para que deje de funcionar en el sistema por ahora.",
+      "example": "desactivas a un cliente que dejó de pagar, sin perder toda su información."
+    },
+    "adminAccess": {
+      "what": "Muestra el usuario y la contraseña del administrador principal de este cliente, para poder entrar a su cuenta si lo necesitas.",
+      "example": "si el cliente pide ayuda y no puede entrar, aquí ves sus datos de acceso."
+    },
+    "permisosAdicionales": {
+      "what": "Aquí le das a un cliente accesos extra que no venían incluidos en su plan original, y se le cobran aparte.",
+      "example": "un cliente quiere una pantalla que su plan no incluye, se la agregas aquí y se le suma a su pago mensual."
+    },
+    "appToggle": {
+      "what": "Prende o apaga el acceso de este cliente a la aplicación móvil, sin afectar su acceso a la versión web.",
+      "example": "un cliente que solo paga por Web no debe poder usar la App, aquí se lo permites o se lo quitas."
+    },
+    "clientReset": {
+      "what": "Borra todos los datos de prueba de este cliente y lo deja como si fuera nuevo, para que alguien más lo pruebe desde cero.",
+      "example": "lo usas después de una demo, para dejar limpio el cliente de pruebas para la siguiente persona."
+    },
+    "delete": {
+      "what": "Borra este registro por completo del sistema, sin poder recuperarlo después.",
+      "example": "borras un plan que creaste por error y nunca se usó."
+    },
+    "planTree": {
+      "what": "Aquí defines qué pantallas y permisos incluye este plan, y qué le cuesta al cliente que lo contrate.",
+      "example": "armas un plan \"Básico\" que solo incluye 3 pantallas, y un plan \"Premium\" con todas."
+    },
+    "giroAccesosGlobales": {
+      "what": "Define qué pantallas y permisos tienen por defecto todos los clientes de este giro de negocio, sin configurar cliente por cliente.",
+      "example": "todos los clientes de giro \"Restaurantes\" ven automáticamente la pantalla de Control de Inventario de Alimentos."
+    },
+    "giroReordenPersonalizado": {
+      "what": "Cambia el orden en que aparecen las pantallas en el menú, solo para los clientes de este giro de negocio.",
+      "example": "subes \"Recetas\" hasta arriba del menú porque es lo primero que usan los restaurantes."
+    },
+    "businessSectorPreview": {
+      "what": "Te deja ver el sistema tal como lo vería un cliente de este giro de negocio, sin tener que iniciar sesión como uno de ellos.",
+      "example": "revisas cómo se ve el menú para un cliente de \"Restaurantes\" antes de activarlo."
+    },
+    "saasEditName": {
+      "what": "Cambia el nombre que se muestra para esta cuenta del equipo SaaS.",
+      "example": "corriges \"Admin\" por el nombre real de la persona, como \"Juan Pérez\"."
+    },
+    "saasEditUsername": {
+      "what": "Cambia el nombre de usuario con el que esta persona inicia sesión.",
+      "example": "cambias \"admin\" por \"juan.perez\" para identificar mejor quién es cada cuenta."
+    },
+    "saasAccountAccess": {
+      "what": "Define qué pantallas y qué puede hacer esta persona dentro del panel de administración de GEIPSA.",
+      "example": "le das acceso solo a \"Nuestros Clientes\" a alguien de ventas, sin que vea el resto."
+    },
+    "saasResetPassword": {
+      "what": "Genera una contraseña nueva para esta cuenta, por si la persona la perdió u olvidó.",
+      "example": "alguien no puede entrar porque olvidó su contraseña, se la reinicias y le compartes la nueva."
+    },
+    "download": {
+      "what": "Baja este archivo a tu computadora para que lo puedas abrir o guardar.",
+      "example": "descargas el respaldo de la base de datos del mes pasado para revisarlo."
+    },
+    "evidencePhoto": {
+      "what": "Aquí subes o revisas una foto como comprobante de este dato.",
+      "example": "subes la foto del ticket de la gasolinera como evidencia de cuánto combustible se cargó."
+    },
+    "hrActivateUser": {
+      "what": "Crea el usuario y contraseña para que este trabajador pueda iniciar sesión en el sistema por primera vez.",
+      "example": "contratas a alguien nuevo y le das acceso al sistema con este botón."
+    },
+    "hrResetPassword": {
+      "what": "Genera una contraseña nueva para este trabajador, por si la perdió u olvidó.",
+      "example": "un empleado no recuerda su contraseña, se la reinicias y le compartes la nueva."
+    },
+    "jobPositionPermissions": {
+      "what": "Define qué pantallas y qué puede hacer cualquier persona con este puesto de trabajo.",
+      "example": "das acceso a \"Nómina\" a todos los que tengan el puesto \"Gerente de RH\", sin configurar a cada persona por separado."
+    },
+    "authorizeFieldRule": {
+      "what": "Activa esta regla de orden de llenado para que empiece a aplicarse de verdad en el sistema.",
+      "example": "alguien crea una regla nueva, pero no funciona hasta que un administrador la autoriza aquí."
+    },
+    "operationalStatusLocked": {
+      "what": "Este usuario está bloqueado automáticamente por su Estatus RH (por ejemplo, dado de baja); no se puede activar o desactivar a mano desde aquí.",
+      "example": "si alguien fue dado de baja en RH, aquí se ve bloqueado hasta que se resuelva desde su expediente de RH."
+    },
+    "activePermissionsTree": {
+      "what": "Muestra un resumen de todo lo que esta persona puede ver y hacer ahora mismo, sumando su puesto y cualquier permiso extra.",
+      "example": "revisas rápido qué puede hacer un empleado sin tener que revisar cada permiso uno por uno."
+    },
+    "grantAccess": {
+      "what": "Da a esta persona un permiso extra que no viene incluido en su puesto de trabajo.",
+      "example": "le das acceso a un reporte especial a alguien que normalmente no lo tendría por su puesto."
+    },
+    "resetRole": {
+      "what": "Quita todos los permisos extra que le diste a esta persona y la deja solo con lo que su puesto normalmente incluye.",
+      "example": "alguien cambió de puesto y quieres quitarle los accesos extra de su puesto anterior."
+    },
+    "reportRemoveColumn": {
+      "what": "Elimina esta columna del reporte que estás armando, sin afectar los datos originales.",
+      "example": "agregaste una columna de más al reporte, la quitas antes de guardarlo."
+    },
+    "reportRemoveOperand": {
+      "what": "Elimina este valor de la fórmula que estás armando para una columna calculada.",
+      "example": "quitas un número que ya no necesitas en el cálculo de tu fórmula."
+    },
+    "reportAuthorize": {
+      "what": "Aprueba este reporte para que se pueda ejecutar de verdad.",
+      "example": "alguien arma un reporte nuevo, pero no corre hasta que un administrador lo autoriza aquí."
+    },
+    "orgChartAltSupervisors": {
+      "what": "Aquí eliges quién puede supervisar a este puesto además de su jefe directo, para cuando ese jefe no esté disponible.",
+      "example": "si el gerente está de vacaciones, un supervisor alterno puede autorizar cosas en su lugar."
+    },
+    "masterTreeStatus": {
+      "what": "Dice si esta pantalla, columna o botón está listo para usarse (Habilitado), apagado (Inhabilitado), o todavía en desarrollo (Construcción/Mejoras).",
+      "example": "pones \"Inhabilitado\" en una pantalla nueva mientras la terminas, para que nadie la vea hasta que esté lista."
+    },
+    "masterTreeWeb": {
+      "what": "Prende o apaga esta pantalla o función para la versión de escritorio (navegador) del sistema.",
+      "example": "si apagas Web para una pantalla nueva, nadie la verá en la computadora hasta que la actives."
+    },
+    "masterTreeApp": {
+      "what": "Prende o apaga esta pantalla o función para la aplicación móvil, sin afectar la versión de escritorio.",
+      "example": "una pantalla puede estar lista en Web pero aún no en la App, hasta que actives este switch."
+    },
+    "masterTreeApplyNestedPlatform": {
+      "what": "Copia este mismo valor de Web o App hacia todo lo que está anidado debajo, sin tener que marcarlo uno por uno.",
+      "example": "activas Web en \"Servicio a Cliente\" y lo aplicas a todas sus pantallas de un solo clic."
+    },
+    "masterTreeApplyNestedStatus": {
+      "what": "Copia este mismo Estatus hacia todo lo que está anidado debajo, sin tener que cambiarlo uno por uno.",
+      "example": "pones \"En construcción\" en un departamento completo y lo aplicas a todas sus pantallas de golpe."
+    },
+    "masterTreeClassification": {
+      "what": "Agrupa esta columna con otras del mismo tipo (por ejemplo, todas las de \"Control Interno\" o \"Acciones\"), para poder aplicarles el mismo color o manejarlas juntas.",
+      "example": "agrupas varias columnas como \"Financiero\" para pintarlas todas del mismo color en la tabla real."
+    },
+    "masterTreePreview": {
+      "what": "Te muestra cómo se ve esta pantalla real, sin tener que salir del árbol de permisos para buscarla.",
+      "example": "revisas rápido cómo luce \"Nuestros Clientes\" mientras decides si activarla o no."
+    },
+    "masterTreeAppVision": {
+      "what": "Marca si este renglón también aplica para la versión móvil, además de la web.",
+      "example": "activas esta casilla para que un costo también aplique en la App, no solo en la computadora."
+    },
+    "masterTreeEqualizeRow": {
+      "what": "Copia el valor de esta fila en Web hacia la misma fila en App, para que ambos queden iguales.",
+      "example": "pones el mismo costo en Web y en App sin tener que escribirlo dos veces."
+    },
+    "masterTreeFillMissingRow": {
+      "what": "Copia el valor de Web hacia App solo en las filas donde App todavía está vacío, sin tocar las que ya tienen su propio valor.",
+      "example": "llenas de golpe los costos de App que faltan, sin pisar los que ya configuraste distinto."
+    },
+    "masterTreeColumnColor": {
+      "what": "Cambia el color de fondo y de letra que usan las columnas de este grupo en la tabla real, para identificarlas más fácil de un vistazo.",
+      "example": "pones en amarillo todas las columnas de \"Por Definir\" para verlas rápido entre las demás."
+    },
+    "masterTreeColorViewToggle": {
+      "what": "Muestra una vista de cómo se vería la tabla real con este color aplicado, antes de guardarlo.",
+      "example": "pruebas un color antes de aplicarlo, para ver si se lee bien el texto encima."
+    },
+    "masterTreeColorReset": {
+      "what": "Quita el color personalizado y regresa esta columna al color por defecto de su clasificación.",
+      "example": "probaste un color que no te gustó, lo quitas con este botón sin tener que recordar el original."
+    },
+    "paletteSeed": {
+      "what": "Aquí eliges un solo color que representa tu marca, y el sistema arma automáticamente todos los demás colores a partir de él.",
+      "example": "eliges el azul de tu logotipo, y el sistema propone el resto de los colores (fondo, texto, bordes) que combinan bien con ese azul."
+    },
+    "paletteSuggest": {
+      "what": "Genera de nuevo todos los colores del sistema (fondo, texto, bordes, etc.) a partir del color que elegiste arriba, sin tener que ajustar cada uno a mano.",
+      "example": "cambias el color de tu marca y usas este botón para actualizar todo el sistema de un solo clic."
+    },
+    "paletteShowPreview": {
+      "what": "Muestra u oculta un ejemplo de cómo se vería el sistema real con estos colores aplicados.",
+      "example": "revisas la vista previa antes de guardar, para confirmar que los colores se ven bien juntos."
+    },
+    "paletteEditColor": {
+      "what": "Abre el selector de color de tu computadora para cambiar este color en particular.",
+      "example": "el color de fondo quedó muy oscuro, lo abres aquí y eliges uno más claro."
+    }
   }
 }

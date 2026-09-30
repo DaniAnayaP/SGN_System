@@ -654,6 +654,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
 
 (async function init() {
     await loadLanguage();
+    window.HelpMode?.init(t);
     try {
         const meRes = await fetch(apiUrl('/api/me'), { credentials: 'include' });
         if (!meRes.ok) { window.location.replace('Login.html'); return; }

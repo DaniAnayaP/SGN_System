@@ -660,6 +660,7 @@
             const label = document.createElement('label');
             label.className = 'perm-tree-app-toggle';
             label.title = t('main.appVisionColumn');
+            label.setAttribute('data-help-key', 'masterTreeAppVision');
             const input = document.createElement('input');
             input.type = 'checkbox';
             input.checked = appToggle.checked;
@@ -677,6 +678,7 @@
                 eqBtn.className = 'perm-tree-app-equalize-btn';
                 eqBtn.title = t('main.appEqualizeRow');
                 eqBtn.setAttribute('aria-label', t('main.appEqualizeRow'));
+                eqBtn.setAttribute('data-help-key', 'masterTreeEqualizeRow');
                 eqBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
                 eqBtn.addEventListener('click', appToggle.equalize);
                 row.appendChild(eqBtn);
@@ -687,6 +689,7 @@
                 fillBtn.className = 'perm-tree-app-equalize-btn';
                 fillBtn.title = t('main.appFillMissingRow');
                 fillBtn.setAttribute('aria-label', t('main.appFillMissingRow'));
+                fillBtn.setAttribute('data-help-key', 'masterTreeFillMissingRow');
                 fillBtn.innerHTML = '<i class="bx bx-list-plus" aria-hidden="true"></i>';
                 fillBtn.addEventListener('click', appToggle.fillMissing);
                 row.appendChild(fillBtn);
@@ -1376,6 +1379,7 @@
             trigger.className = 'perm-preview-col-filter-trigger';
             trigger.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
             trigger.setAttribute('aria-label', t('admin.masterTreePreviewFilterColumn'));
+            trigger.setAttribute('data-help-key', 'filterColumn');
             trigger.addEventListener('click', (event) => {
                 event.stopPropagation();
                 openPreviewColumnFilterMenu(colTh, tableEl, colIndex, trigger);
@@ -2078,6 +2082,7 @@
                         colorTriggerBtn.className = 'perm-tree-color-picker-btn';
                         colorTriggerBtn.dataset.classColorKey = classificationCtx.classificationId;
                         colorTriggerBtn.setAttribute('aria-label', t('admin.masterTreeColumnColorMenu'));
+                        colorTriggerBtn.setAttribute('data-help-key', 'masterTreeColumnColor');
                         colorTriggerBtn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
                         colorTriggerBtn.style.color = classificationCtx.readOnlyColor;
                         colorTriggerBtn.style.borderColor = classificationCtx.readOnlyColor;
@@ -2134,6 +2139,7 @@
                     select.value = classificationCtx.currentId;
                     select.title = t('admin.masterTreeClassificationPicker');
                     select.setAttribute('aria-label', select.title);
+                    select.setAttribute('data-help-key', 'masterTreeClassification');
                     // Fixed color per classification (see classificationColor's
                     // own comment) -- confirmed with the user this needed to
                     // read as a real colored badge, not plain unstyled text.
@@ -2210,6 +2216,7 @@
                     statusNestBtn.className = 'perm-tree-mstatus-nest-btn';
                     statusNestBtn.title = t('admin.masterTreeApplyNestedStatus');
                     statusNestBtn.setAttribute('aria-label', statusNestBtn.title);
+                    statusNestBtn.setAttribute('data-help-key', 'masterTreeApplyNestedStatus');
                     statusNestBtn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
                     // Disabled (never omitted) whenever there's nothing to
                     // cascade to (a true leaf) or grantMode 'giro' makes
@@ -2314,6 +2321,7 @@
                 navigateBtn.className = 'perm-tree-mstatus-nest-btn';
                 navigateBtn.title = t('admin.businessSectorPreview');
                 navigateBtn.setAttribute('aria-label', t('admin.businessSectorPreview'));
+                navigateBtn.setAttribute('data-help-key', 'masterTreePreview');
                 navigateBtn.innerHTML = '<i class="bx bx-compass" aria-hidden="true"></i>';
                 // 'nav' (Departamento/Área/Apartado) always previews --
                 // it's just menu.json's own structure, no built/unbuilt
@@ -2341,6 +2349,7 @@
                 historyBtn.className = 'perm-tree-mstatus-nest-btn';
                 historyBtn.title = t('main.changeHistory');
                 historyBtn.setAttribute('aria-label', t('main.changeHistory'));
+                historyBtn.setAttribute('data-help-key', 'changeHistory');
                 historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
                 historyBtn.addEventListener('click', () => {
                     openHistoryDialog(key, classificationCtx?.classificationId || null, labelText);
@@ -2485,6 +2494,7 @@
             // when applyStatusAbbreviations has stepped this all the way
             // down to a bare symbol with no visible word left at all.
             select.title = t(STATUS_OPTIONS.find((opt) => opt.value === state.status).labelKey);
+            select.setAttribute('data-help-key', 'masterTreeStatus');
             select.addEventListener('change', () => {
                 // Estatus is informational only for now -- confirmed with
                 // the user: there's no real test/staging environment yet,
@@ -2765,7 +2775,15 @@
             platformTag.textContent = t(platform === 'web' ? 'admin.masterTreePlatformWeb' : 'admin.masterTreePlatformApp');
             const state = getNodeState(key);
             const locked = ancestorLocked || state.status === 'inhabilitado' || (platform === 'app' && !state.webEnabled);
-            if (ancestorLocked) wrap.title = t('admin.masterTreeLockedByAncestor');
+            if (ancestorLocked) {
+                // Explains WHY it's locked, not what the checkbox normally
+                // does -- more useful here than the generic Modo ayuda
+                // content below, so no data-help-key in this branch (falls
+                // back to this title, name-only).
+                wrap.title = t('admin.masterTreeLockedByAncestor');
+            } else {
+                wrap.setAttribute('data-help-key', platform === 'web' ? 'masterTreeWeb' : 'masterTreeApp');
+            }
             const device = document.createElement('span');
             device.className = 'perm-tree-mstatus-device';
             // Pending-added (yellow) / pending-removed (gray) -- compares
@@ -2845,6 +2863,7 @@
                 btn.className = 'perm-tree-mstatus-nest-btn';
                 btn.title = t(platform === 'web' ? 'admin.masterTreeApplyNestedWeb' : 'admin.masterTreeApplyNestedApp');
                 btn.setAttribute('aria-label', btn.title);
+                btn.setAttribute('data-help-key', 'masterTreeApplyNestedPlatform');
                 btn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
                 btn.disabled = !leafKeys || !leafKeys.length;
                 btn.addEventListener('click', () => applyNestedPlatform(leafKeys, key, platform));
@@ -3165,6 +3184,7 @@
                 btn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
                 btn.title = t('admin.masterTreeColorViewToggle');
                 btn.setAttribute('aria-label', btn.title);
+                btn.setAttribute('data-help-key', 'masterTreeColorViewToggle');
                 btn.setAttribute('aria-pressed', view.on ? 'true' : 'false');
                 btn.addEventListener('click', (event) => { event.stopPropagation(); view.onToggle(); });
                 const cap = document.createElement('span');
@@ -3312,6 +3332,8 @@
             resetBtn.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
             resetBtn.appendChild(document.createTextNode(t('admin.masterTreeColorReset')));
             resetBtn.title = t('admin.masterTreeColorResetHint');
+            resetBtn.setAttribute('aria-label', resetBtn.title);
+            resetBtn.setAttribute('data-help-key', 'masterTreeColorReset');
             resetBtn.disabled = !currentHex;
             resetBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -3439,6 +3461,7 @@
             trigger.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
             trigger.title = t('admin.masterTreeColumnColorMenu');
             trigger.setAttribute('aria-label', trigger.title);
+            trigger.setAttribute('data-help-key', 'masterTreeColumnColor');
             trigger.addEventListener('click', (event) => {
                 event.stopPropagation();
                 openLeafColorPanel(trigger, ownId, nestedId, key, label);
@@ -4340,12 +4363,14 @@
             applyNestedStatusHeader.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status-nest';
             applyNestedStatusHeader.innerHTML = `<i class="bx bx-copy" aria-hidden="true"></i> ${t('admin.masterTreeColApplyNested')}`;
             applyNestedStatusHeader.title = t('admin.masterTreeColApplyNested');
+            applyNestedStatusHeader.setAttribute('data-help-key', 'masterTreeApplyNestedStatus');
             // Icon + visible label -- see classificationCtx/
             // buildClassificationCtx in statusRow.
             const classificationHeader = document.createElement('span');
             classificationHeader.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-class';
             classificationHeader.innerHTML = `<i class="bx bx-purchase-tag-alt" aria-hidden="true"></i> ${t('admin.masterTreeColClassification')}`;
             classificationHeader.title = t('admin.masterTreeColClassification');
+            classificationHeader.setAttribute('data-help-key', 'masterTreeClassification');
             const platforms = document.createElement('span');
             platforms.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
             platforms.textContent = t('admin.masterTreeColPlatforms');
@@ -4363,6 +4388,7 @@
             navigate.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-navigate';
             navigate.innerHTML = `<i class="bx bx-compass" aria-hidden="true"></i> ${t('admin.masterTreeColNavigate')}`;
             navigate.title = t('admin.masterTreeColNavigate');
+            navigate.setAttribute('data-help-key', 'masterTreePreview');
             // "Cambios" -- see openHistoryDialog/the historyCell in
             // statusRow. Same icon+label header treatment as every other
             // column here.
@@ -4370,6 +4396,7 @@
             history.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-history';
             history.innerHTML = `<i class="bx bx-history" aria-hidden="true"></i> ${t('admin.masterTreeColHistory')}`;
             history.title = t('admin.masterTreeColHistory');
+            history.setAttribute('data-help-key', 'changeHistory');
             // Wrapped together with margin-left:auto -- same trailing group
             // a row's own .perm-tree-mstatus-controls is (see statusRow),
             // so both end up flush against the SAME right edge regardless

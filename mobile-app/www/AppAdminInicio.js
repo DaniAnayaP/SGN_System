@@ -3259,6 +3259,7 @@ async function renderClientAdicionalesTree(client) {
 
 (async function init() {
     await loadLanguage();
+    window.HelpMode?.init(t);
     updateConnIndicator();
     try {
         const meRes = await fetch(apiUrl('/api/me'), { credentials: 'include' });

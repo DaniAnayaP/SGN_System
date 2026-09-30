@@ -516,6 +516,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
 
 (async function init() {
     await loadLanguage();
+    window.HelpMode?.init(t);
     try {
         const [meRes, businessProfileRes] = await Promise.all([
             fetch(apiUrl('/api/me'), { credentials: 'include' }),

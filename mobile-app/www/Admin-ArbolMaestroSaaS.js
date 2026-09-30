@@ -576,12 +576,13 @@ function labelEl(text) {
 // 2026-09-17: "visualmente no debe de haber espacios vacíos entre
 // filas"), same reasoning every other conditional cell in this file
 // already gets an empty PLACEHOLDER element for (never a true gap).
-function nestBtn(title, onClick, disabled) {
+function nestBtn(title, onClick, disabled, helpKey) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'perm-tree-mstatus-nest-btn';
     btn.title = title;
     btn.setAttribute('aria-label', title);
+    if (helpKey) btn.setAttribute('data-help-key', helpKey);
     btn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
     if (disabled) btn.disabled = true;
     else btn.addEventListener('click', onClick);
@@ -734,6 +735,7 @@ function appendColorKindRow(panel, colorId, kind, onChange, view) {
         btn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
         btn.title = t('admin.masterTreeColorViewToggle');
         btn.setAttribute('aria-label', btn.title);
+        btn.setAttribute('data-help-key', 'masterTreeColorViewToggle');
         btn.setAttribute('aria-pressed', view.on ? 'true' : 'false');
         btn.addEventListener('click', (event) => { event.stopPropagation(); view.onToggle(); });
         const cap = document.createElement('span');
@@ -877,6 +879,8 @@ function appendColorPalette(panel, colorId, kind, onPick) {
     resetBtn.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
     resetBtn.appendChild(document.createTextNode(t('admin.masterTreeColorReset')));
     resetBtn.title = t('admin.masterTreeColorResetHint');
+    resetBtn.setAttribute('aria-label', resetBtn.title);
+    resetBtn.setAttribute('data-help-key', 'masterTreeColorReset');
     resetBtn.disabled = !currentHex;
     resetBtn.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -1528,6 +1532,7 @@ function buildLeafColorGroup(key, label) {
     trigger.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
     trigger.title = t('admin.masterTreeColumnColorMenu');
     trigger.setAttribute('aria-label', trigger.title);
+    trigger.setAttribute('data-help-key', 'masterTreeColumnColor');
     trigger.addEventListener('click', (event) => {
         event.stopPropagation();
         openLeafColorPanel(trigger, ownId, nestedId, key, label);
@@ -1593,6 +1598,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
             colorTriggerBtn.className = 'perm-tree-color-picker-btn';
             colorTriggerBtn.dataset.classColorKey = classificationCtx.classificationId;
             colorTriggerBtn.setAttribute('aria-label', t('admin.masterTreeColumnColorMenu'));
+            colorTriggerBtn.setAttribute('data-help-key', 'masterTreeColumnColor');
             colorTriggerBtn.innerHTML = '<i class="bx bx-palette" aria-hidden="true"></i>';
             colorTriggerBtn.style.color = classificationCtx.readOnlyColor;
             colorTriggerBtn.style.borderColor = classificationCtx.readOnlyColor;
@@ -1633,6 +1639,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         classSelect.value = classificationCtx.currentId;
         classSelect.title = t('admin.masterTreeClassificationPicker');
         classSelect.setAttribute('aria-label', classSelect.title);
+        classSelect.setAttribute('data-help-key', 'masterTreeClassification');
         const currentColor = classificationColor(classificationCtx.currentId);
         // The pill's chrome (border/fill/text color) lives on selectWrap,
         // not on the <select> itself -- the color trigger sits INSIDE the
@@ -1662,6 +1669,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
     statusCell.className = 'perm-tree-mstatus-status-cell';
     const select = document.createElement('select');
     select.className = `perm-tree-mstatus-select perm-tree-mstatus-select-${state.status}`;
+    select.setAttribute('data-help-key', 'masterTreeStatus');
     STATUS_OPTIONS.forEach((opt) => {
         const optionEl = document.createElement('option');
         optionEl.value = opt.value;
@@ -1670,6 +1678,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         select.appendChild(optionEl);
     });
     select.value = state.status;
+    select.title = t(STATUS_OPTIONS.find((opt) => opt.value === state.status).labelKey);
     select.addEventListener('change', () => {
         setState(key, { ...getState(key), status: select.value });
         renderList();
@@ -1682,7 +1691,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
     nestCell.appendChild(nestBtn('Aplicar Estatus a lo anidado', () => {
         descendantKeys.forEach((k) => setState(k, { ...getState(k), status: select.value }));
         renderList();
-    }, !descendantKeys.length));
+    }, !descendantKeys.length, 'masterTreeApplyNestedStatus'));
     controls.appendChild(nestCell);
 
     const platformsCell = document.createElement('div');
@@ -1692,6 +1701,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         group.className = 'perm-tree-mstatus-platform-group';
         const badge = document.createElement('label');
         badge.className = `perm-tree-mstatus-badge perm-tree-mstatus-badge-${platform}`;
+        badge.setAttribute('data-help-key', platform === 'web' ? 'masterTreeWeb' : 'masterTreeApp');
         const tag = document.createElement('span');
         tag.className = 'perm-tree-mstatus-platform';
         tag.textContent = platform === 'web' ? 'WEB' : 'APP';
@@ -1728,7 +1738,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
                 setState(k, platform === 'web' ? { ...s, webEnabled: value, appEnabled: value ? s.appEnabled : false } : { ...s, appEnabled: value });
             });
             renderList();
-        }, !descendantKeys.length));
+        }, !descendantKeys.length, 'masterTreeApplyNestedPlatform'));
         platformsCell.appendChild(group);
     });
     controls.appendChild(platformsCell);
@@ -1741,6 +1751,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         btn.className = 'perm-tree-mstatus-nest-btn';
         btn.title = 'Navegar';
         btn.setAttribute('aria-label', 'Navegar');
+        btn.setAttribute('data-help-key', 'masterTreePreview');
         btn.innerHTML = '<i class="bx bx-link-external" aria-hidden="true"></i>';
         btn.addEventListener('click', () => { window.location.href = navigateHref; });
         navCell.appendChild(btn);
@@ -1759,6 +1770,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
     historyBtn.className = 'perm-tree-mstatus-nest-btn';
     historyBtn.title = t('main.changeHistory');
     historyBtn.setAttribute('aria-label', historyBtn.title);
+    historyBtn.setAttribute('data-help-key', 'changeHistory');
     historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     historyBtn.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -2222,15 +2234,18 @@ function buildHeader() {
     classCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-class';
     classCol.innerHTML = `<i class="bx bx-purchase-tag-alt" aria-hidden="true"></i> ${t('admin.masterTreeColClassification')}`;
     classCol.title = t('admin.masterTreeColClassification');
+    classCol.setAttribute('data-help-key', 'masterTreeClassification');
     controls.appendChild(classCol);
     const statusCol = document.createElement('span');
     statusCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status';
     statusCol.textContent = t('admin.masterTreeColStatus');
+    statusCol.setAttribute('data-help-key', 'masterTreeStatus');
     controls.appendChild(statusCol);
     const nestCol = document.createElement('span');
     nestCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-status-nest';
     nestCol.innerHTML = `<i class="bx bx-copy" aria-hidden="true"></i> ${t('admin.masterTreeColApplyNested')}`;
     nestCol.title = t('admin.masterTreeColApplyNested');
+    nestCol.setAttribute('data-help-key', 'masterTreeApplyNestedStatus');
     controls.appendChild(nestCol);
     const platformsCol = document.createElement('span');
     platformsCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-platforms';
@@ -2240,11 +2255,13 @@ function buildHeader() {
     navCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-navigate';
     navCol.innerHTML = `<i class="bx bx-link-external" aria-hidden="true"></i> ${t('admin.masterTreeColNavigate')}`;
     navCol.title = t('admin.masterTreeColNavigate');
+    navCol.setAttribute('data-help-key', 'masterTreePreview');
     controls.appendChild(navCol);
     const historyCol = document.createElement('span');
     historyCol.className = 'perm-tree-mstatus-header-col perm-tree-mstatus-header-history';
     historyCol.innerHTML = `<i class="bx bx-history" aria-hidden="true"></i> ${t('admin.masterTreeColHistory')}`;
     historyCol.title = t('admin.masterTreeColHistory');
+    historyCol.setAttribute('data-help-key', 'changeHistory');
     controls.appendChild(historyCol);
     header.appendChild(controls);
     return header;

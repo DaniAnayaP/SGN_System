@@ -389,20 +389,20 @@
     "sectorIconNoResults": "No icon matches that search.",
     "sectorIconCount": "{count} of {total} icons · {scope}",
     "sectorIconCat": {
-        "alimentos": "Food & Restaurants",
-        "transporte": "Transport & Logistics",
-        "retail": "Retail & Commerce",
-        "tecnologia": "Technology",
-        "salud": "Health",
-        "construccion": "Construction",
-        "manufactura": "Manufacturing & Industry",
-        "finanzas": "Finance & Insurance",
-        "educacion": "Education",
-        "agricultura": "Agriculture & Farming",
-        "belleza": "Beauty & Wellness",
-        "servicios": "Professional Services",
-        "entretenimiento": "Entertainment & Tourism",
-        "inmobiliaria": "Real Estate"
+      "alimentos": "Food & Restaurants",
+      "transporte": "Transport & Logistics",
+      "retail": "Retail & Commerce",
+      "tecnologia": "Technology",
+      "salud": "Health",
+      "construccion": "Construction",
+      "manufactura": "Manufacturing & Industry",
+      "finanzas": "Finance & Insurance",
+      "educacion": "Education",
+      "agricultura": "Agriculture & Farming",
+      "belleza": "Beauty & Wellness",
+      "servicios": "Professional Services",
+      "entretenimiento": "Entertainment & Tourism",
+      "inmobiliaria": "Real Estate"
     },
     "businessSectorDescription": "Description",
     "businessSectorPermsAssigned": "Assigned Permissions",
@@ -859,6 +859,8 @@
     "addUser": "Add user",
     "language": "Language",
     "style": "Style",
+    "helpMode": "Help mode",
+    "helpExampleLabel": "Example:",
     "screenViewToggle": "Screen view",
     "others": "Others",
     "buttonConfig": "Button Settings",
@@ -1646,5 +1648,315 @@
     "viewGrid": "Grid",
     "viewList": "List",
     "categorySoonTag": "Soon"
+  },
+  "help": {
+    "messages": {
+      "what": "Here you can message other people who use the system, like a chat.",
+      "example": "you message a coworker to ask something without leaving the screen."
+    },
+    "chatbot": {
+      "what": "It's an assistant that answers your questions about how to use the system, without needing to call anyone.",
+      "example": "you ask \"how do I register a new client?\" and it walks you through the steps."
+    },
+    "notifications": {
+      "what": "Alerts you when something important happens: alerts, notices, requests waiting for your approval.",
+      "example": "someone asks for authorization and the notice shows up here."
+    },
+    "bookmarks": {
+      "what": "Saves your favorite screens so you can get back to them fast, without searching the menu every time.",
+      "example": "you save the screen you use every day so you don't have to search for it again."
+    },
+    "uiScale": {
+      "what": "Makes the text and tables bigger or smaller across the whole application.",
+      "example": "if reading is hard, you make it bigger; if you want to see more rows in a table, you make it smaller."
+    },
+    "settings": {
+      "what": "This is where you change how the system looks and behaves for you: language, colors, and other options.",
+      "example": "you switch the language from English to Spanish, or the style from light to dark."
+    },
+    "userInfo": {
+      "what": "Shows your personal information stored in the system, like your name and email.",
+      "example": "you check here if your email is spelled correctly."
+    },
+    "businessProfile": {
+      "what": "Shows your information within the company: your position, your role, and who you report to.",
+      "example": "you check here who your direct manager is in the system."
+    },
+    "colSysEmpresa": {
+      "what": "Shows the name of the company this record belongs to.",
+      "example": "if you work across several companies in the system, this tells you which one this row is for."
+    },
+    "colSysArea": {
+      "what": "Shows which area of the company this record belongs to, like Finance or Human Resources.",
+      "example": "a payroll record usually shows \"Human Resources\" here."
+    },
+    "colSysModulo": {
+      "what": "Shows which module or section of the system this record came from.",
+      "example": "if the record was created in \"Supply Chain\", it says that here."
+    },
+    "colSysPantalla": {
+      "what": "Shows the exact name of the screen where this record was created.",
+      "example": "if you filled it out in \"Transfer Log\", that name shows up here."
+    },
+    "colSysCentroCostos": {
+      "what": "Shows which cost center this record belongs to, so you know who pays for it.",
+      "example": "an expense from the North branch shows \"North Branch\" here."
+    },
+    "colSysFecha": {
+      "what": "Is the exact date this record was saved.",
+      "example": "if you entered it today, you'll see today's date here, like \"30/sep/2026\"."
+    },
+    "colSysDiaNum": {
+      "what": "Is the day-of-month number when the record was saved.",
+      "example": "if it was saved on the 5th, this shows \"05\"."
+    },
+    "colSysDiaTexto": {
+      "what": "Shows which day of the week it was when the record was saved.",
+      "example": "if it was a Monday, this shows \"Mon\"."
+    },
+    "colSysMesNum": {
+      "what": "Is the month number when the record was saved.",
+      "example": "if it was September, this shows \"09\"."
+    },
+    "colSysMesTexto": {
+      "what": "Is the short month name when the record was saved.",
+      "example": "if it was September, this shows \"Sep\"."
+    },
+    "colSysAnio": {
+      "what": "Is the year the record was saved.",
+      "example": "if it was this year, this shows \"2026\"."
+    },
+    "colSysSemana": {
+      "what": "Shows which week of the year it was when the record was saved, to group information by week.",
+      "example": "if it was week 40 of the year, this shows \"Sem40_2026\"."
+    },
+    "colSysHora": {
+      "what": "Is the exact time, down to the second, the record was saved.",
+      "example": "if you saved it at 3pm, this shows something like \"15:04:22\"."
+    },
+    "filterColumn": {
+      "what": "Lets you show only the rows that have a certain value in this column, instead of all of them.",
+      "example": "in the \"Status\" column, you filter to see only the \"Active\" records."
+    },
+    "zoomOut": {
+      "what": "Makes the table's text and rows smaller, so you can see more information at a glance.",
+      "example": "if a table has many columns, you shrink it to see more without scrolling."
+    },
+    "zoomIn": {
+      "what": "Makes the table's text and rows bigger, so it's easier to read.",
+      "example": "if small numbers are hard to read, you make it bigger."
+    },
+    "pinColumns": {
+      "what": "Locks one or more columns on the left side, so they stay in place while you scroll the table to the right.",
+      "example": "you pin the \"Name\" column so you always know whose row it is, even looking at far-away columns."
+    },
+    "columnVisibility": {
+      "what": "Lets you hide the columns you don't need to see right now, without deleting their information.",
+      "example": "you hide the columns you don't use so the table looks simpler."
+    },
+    "changeHistory": {
+      "what": "Shows who changed something in this table, what they changed, and when.",
+      "example": "if a value changed and you don't know why, this shows who modified it and what it used to be."
+    },
+    "columnLegend": {
+      "what": "Explains what each color you see on the table's rows and columns means.",
+      "example": "a green row can mean that record is editable."
+    },
+    "fieldRules": {
+      "what": "This is where you set the order this table's fields must be filled in, and which ones are required.",
+      "example": "you require \"Name\" to be filled in before \"Email\" can be typed."
+    },
+    "sidebarSearch": {
+      "what": "Searches for any screen in the menu by its name, without having to open every group to find it.",
+      "example": "you type \"transfer\" and it shows you the Transfer Log screen directly."
+    },
+    "edit": {
+      "what": "Opens this record so you can change its information.",
+      "example": "if a client's name is misspelled, you fix it here."
+    },
+    "activate": {
+      "what": "Turns this record back on so it works in the system again, without having to create it from scratch.",
+      "example": "you reactivate a client who had stopped paying and is now caught up."
+    },
+    "deactivate": {
+      "what": "Turns this record off without deleting it, so it stops working in the system for now.",
+      "example": "you deactivate a client who stopped paying, without losing any of their information."
+    },
+    "adminAccess": {
+      "what": "Shows this client's main administrator username and password, so you can log into their account if you need to.",
+      "example": "if the client asks for help and can't log in, you check their access details here."
+    },
+    "permisosAdicionales": {
+      "what": "This is where you give a client extra access that wasn't included in their original plan, billed separately.",
+      "example": "a client wants a screen their plan doesn't include, you add it here and it gets added to their monthly payment."
+    },
+    "appToggle": {
+      "what": "Turns this client's access to the mobile app on or off, without affecting their access to the web version.",
+      "example": "a client who only pays for Web shouldn't be able to use the App -- this is where you allow or remove it."
+    },
+    "clientReset": {
+      "what": "Erases all of this client's test data and leaves it like new, so someone else can try it from scratch.",
+      "example": "you use this after a demo, to leave the test client clean for the next person."
+    },
+    "delete": {
+      "what": "Removes this record from the system completely -- it can't be recovered afterward.",
+      "example": "you delete a plan you created by mistake that was never used."
+    },
+    "planTree": {
+      "what": "This is where you set which screens and permissions this plan includes, and what it costs a client who subscribes to it.",
+      "example": "you build a \"Basic\" plan with only 3 screens, and a \"Premium\" plan with all of them."
+    },
+    "giroAccesosGlobales": {
+      "what": "Sets which screens and permissions every client in this business sector gets by default, without configuring each client one by one.",
+      "example": "every \"Restaurants\" client automatically sees the Food Inventory Control screen."
+    },
+    "giroReordenPersonalizado": {
+      "what": "Changes the order screens appear in the menu, only for clients in this business sector.",
+      "example": "you move \"Recipes\" to the top of the menu because that's the first thing restaurants use."
+    },
+    "businessSectorPreview": {
+      "what": "Lets you see the system the way a client in this business sector would, without having to log in as one of them.",
+      "example": "you check what the menu looks like for a \"Restaurants\" client before activating it."
+    },
+    "saasEditName": {
+      "what": "Changes the display name shown for this SaaS team account.",
+      "example": "you fix \"Admin\" to show the person's real name, like \"John Smith\"."
+    },
+    "saasEditUsername": {
+      "what": "Changes the username this person logs in with.",
+      "example": "you change \"admin\" to \"john.smith\" so each account is easier to tell apart."
+    },
+    "saasAccountAccess": {
+      "what": "Sets which screens and what this person can do inside GEIPSA's admin panel.",
+      "example": "you give a sales person access to only \"Nuestros Clientes\", without seeing the rest."
+    },
+    "saasResetPassword": {
+      "what": "Generates a new password for this account, in case the person lost or forgot theirs.",
+      "example": "someone can't log in because they forgot their password, you reset it and share the new one."
+    },
+    "download": {
+      "what": "Downloads this file to your computer so you can open or save it.",
+      "example": "you download last month's database backup to review it."
+    },
+    "evidencePhoto": {
+      "what": "This is where you upload or check a photo as proof of this data.",
+      "example": "you upload a photo of the gas station receipt as proof of how much fuel was loaded."
+    },
+    "hrActivateUser": {
+      "what": "Creates the username and password so this worker can log into the system for the first time.",
+      "example": "you hire someone new and give them system access with this button."
+    },
+    "hrResetPassword": {
+      "what": "Generates a new password for this worker, in case they lost or forgot theirs.",
+      "example": "an employee can't remember their password, you reset it and share the new one."
+    },
+    "jobPositionPermissions": {
+      "what": "Sets which screens and what anyone with this job position can do.",
+      "example": "you give \"Payroll\" access to everyone with the \"HR Manager\" position, without setting up each person separately."
+    },
+    "authorizeFieldRule": {
+      "what": "Activates this fill-order rule so it actually starts applying in the system.",
+      "example": "someone creates a new rule, but it doesn't work until an administrator authorizes it here."
+    },
+    "operationalStatusLocked": {
+      "what": "This user is automatically locked by their HR Status (for example, terminated); it can't be activated or deactivated by hand from here.",
+      "example": "if someone was terminated in HR, this shows locked until it's resolved from their HR record."
+    },
+    "activePermissionsTree": {
+      "what": "Shows a summary of everything this person can currently see and do, combining their job position and any extra permissions.",
+      "example": "you quickly check what an employee can do without reviewing every permission one by one."
+    },
+    "grantAccess": {
+      "what": "Gives this person an extra permission that isn't included in their job position.",
+      "example": "you give access to a special report to someone who wouldn't normally have it based on their position."
+    },
+    "resetRole": {
+      "what": "Removes every extra permission you gave this person, leaving them with only what their job position normally includes.",
+      "example": "someone changed positions and you want to remove the extra access from their previous one."
+    },
+    "reportRemoveColumn": {
+      "what": "Removes this column from the report you're building, without affecting the original data.",
+      "example": "you added one extra column to the report, you remove it before saving."
+    },
+    "reportRemoveOperand": {
+      "what": "Removes this value from the formula you're building for a calculated column.",
+      "example": "you remove a number you no longer need in your formula's calculation."
+    },
+    "reportAuthorize": {
+      "what": "Approves this report so it can actually run.",
+      "example": "someone builds a new report, but it doesn't run until an administrator authorizes it here."
+    },
+    "orgChartAltSupervisors": {
+      "what": "This is where you choose who can supervise this position besides its direct boss, for when that boss isn't available.",
+      "example": "if the manager is on vacation, an alternate supervisor can approve things in their place."
+    },
+    "masterTreeStatus": {
+      "what": "Says whether this screen, column or button is ready to use (Enabled), turned off (Disabled), or still being built (Under construction/Being improved).",
+      "example": "you set a new screen to \"Disabled\" while you finish it, so nobody sees it until it's ready."
+    },
+    "masterTreeWeb": {
+      "what": "Turns this screen or feature on or off for the desktop (browser) version of the system.",
+      "example": "if you turn Web off for a new screen, nobody sees it on their computer until you turn it on."
+    },
+    "masterTreeApp": {
+      "what": "Turns this screen or feature on or off for the mobile app, without affecting the desktop version.",
+      "example": "a screen can be ready on Web but not yet on the App, until you turn on this switch."
+    },
+    "masterTreeApplyNestedPlatform": {
+      "what": "Copies this same Web or App value to everything nested underneath, instead of checking each one by hand.",
+      "example": "you turn Web on for \"Customer Service\" and apply it to all its screens in one click."
+    },
+    "masterTreeApplyNestedStatus": {
+      "what": "Copies this same Status to everything nested underneath, instead of changing each one by hand.",
+      "example": "you set \"Under construction\" on a whole department and apply it to all its screens at once."
+    },
+    "masterTreeClassification": {
+      "what": "Groups this column with others of the same kind (for example, every \"Control Interno\" or \"Acciones\" column), so they can share a color or be managed together.",
+      "example": "you group several columns as \"Financial\" so they're all painted the same color in the real table."
+    },
+    "masterTreePreview": {
+      "what": "Shows you what this real screen looks like, without leaving the permission tree to go find it.",
+      "example": "you quickly check what \"Nuestros Clientes\" looks like while deciding whether to enable it."
+    },
+    "masterTreeAppVision": {
+      "what": "Marks whether this row also applies to the mobile version, in addition to web.",
+      "example": "you check this box so a cost also applies in the App, not just on the computer."
+    },
+    "masterTreeEqualizeRow": {
+      "what": "Copies this row's Web value over to the same row in App, so both end up the same.",
+      "example": "you set the same cost on Web and App without typing it twice."
+    },
+    "masterTreeFillMissingRow": {
+      "what": "Copies the Web value over to App only on rows where App is still empty, without touching the ones that already have their own value.",
+      "example": "you fill in every missing App cost at once, without overwriting the ones you already set differently."
+    },
+    "masterTreeColumnColor": {
+      "what": "Changes the background and text color this group's columns use in the real table, so you can spot them at a glance.",
+      "example": "you make every \"Por Definir\" column yellow so they stand out among the rest."
+    },
+    "masterTreeColorViewToggle": {
+      "what": "Shows a preview of what the real table would look like with this color applied, before saving it.",
+      "example": "you test a color before applying it, to check the text still reads well on top of it."
+    },
+    "masterTreeColorReset": {
+      "what": "Removes the custom color and returns this column to its classification's default color.",
+      "example": "you tried a color you didn't like and remove it with this button without having to remember the original."
+    },
+    "paletteSeed": {
+      "what": "Here you pick one color that represents your brand, and the system automatically builds every other color from it.",
+      "example": "you pick your logo's blue, and the system suggests the rest of the colors (background, text, borders) that go well with that blue."
+    },
+    "paletteSuggest": {
+      "what": "Regenerates every color in the system (background, text, borders, etc.) from the color you picked above, instead of adjusting each one by hand.",
+      "example": "you change your brand color and use this button to update the whole system in one click."
+    },
+    "paletteShowPreview": {
+      "what": "Shows or hides an example of what the real system would look like with these colors applied.",
+      "example": "you check the preview before saving, to confirm the colors look good together."
+    },
+    "paletteEditColor": {
+      "what": "Opens your computer's color picker so you can change this particular color.",
+      "example": "the background color turned out too dark, so you open it here and pick a lighter one."
+    }
   }
 }
