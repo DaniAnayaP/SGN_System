@@ -1912,6 +1912,58 @@
     "orgChartAltSupervisors": {
       "what": "This is where you choose who can supervise this position besides its direct boss, for when that boss isn't available.",
       "example": "if the manager is on vacation, an alternate supervisor can approve things in their place."
+    },
+    "masterTreeStatus": {
+      "what": "Says whether this screen, column or button is ready to use (Enabled), turned off (Disabled), or still being built (Under construction/Being improved).",
+      "example": "you set a new screen to \"Disabled\" while you finish it, so nobody sees it until it's ready."
+    },
+    "masterTreeWeb": {
+      "what": "Turns this screen or feature on or off for the desktop (browser) version of the system.",
+      "example": "if you turn Web off for a new screen, nobody sees it on their computer until you turn it on."
+    },
+    "masterTreeApp": {
+      "what": "Turns this screen or feature on or off for the mobile app, without affecting the desktop version.",
+      "example": "a screen can be ready on Web but not yet on the App, until you turn on this switch."
+    },
+    "masterTreeApplyNestedPlatform": {
+      "what": "Copies this same Web or App value to everything nested underneath, instead of checking each one by hand.",
+      "example": "you turn Web on for \"Customer Service\" and apply it to all its screens in one click."
+    },
+    "masterTreeApplyNestedStatus": {
+      "what": "Copies this same Status to everything nested underneath, instead of changing each one by hand.",
+      "example": "you set \"Under construction\" on a whole department and apply it to all its screens at once."
+    },
+    "masterTreeClassification": {
+      "what": "Groups this column with others of the same kind (for example, every \"Control Interno\" or \"Acciones\" column), so they can share a color or be managed together.",
+      "example": "you group several columns as \"Financial\" so they're all painted the same color in the real table."
+    },
+    "masterTreePreview": {
+      "what": "Shows you what this real screen looks like, without leaving the permission tree to go find it.",
+      "example": "you quickly check what \"Nuestros Clientes\" looks like while deciding whether to enable it."
+    },
+    "masterTreeAppVision": {
+      "what": "Marks whether this row also applies to the mobile version, in addition to web.",
+      "example": "you check this box so a cost also applies in the App, not just on the computer."
+    },
+    "masterTreeEqualizeRow": {
+      "what": "Copies this row's Web value over to the same row in App, so both end up the same.",
+      "example": "you set the same cost on Web and App without typing it twice."
+    },
+    "masterTreeFillMissingRow": {
+      "what": "Copies the Web value over to App only on rows where App is still empty, without touching the ones that already have their own value.",
+      "example": "you fill in every missing App cost at once, without overwriting the ones you already set differently."
+    },
+    "masterTreeColumnColor": {
+      "what": "Changes the background and text color this group's columns use in the real table, so you can spot them at a glance.",
+      "example": "you make every \"Por Definir\" column yellow so they stand out among the rest."
+    },
+    "masterTreeColorViewToggle": {
+      "what": "Shows a preview of what the real table would look like with this color applied, before saving it.",
+      "example": "you test a color before applying it, to check the text still reads well on top of it."
+    },
+    "masterTreeColorReset": {
+      "what": "Removes the custom color and returns this column to its classification's default color.",
+      "example": "you tried a color you didn't like and remove it with this button without having to remember the original."
     }
   }
 }

@@ -1911,6 +1911,58 @@
     "orgChartAltSupervisors": {
       "what": "Aquí eliges quién puede supervisar a este puesto además de su jefe directo, para cuando ese jefe no esté disponible.",
       "example": "si el gerente está de vacaciones, un supervisor alterno puede autorizar cosas en su lugar."
+    },
+    "masterTreeStatus": {
+      "what": "Dice si esta pantalla, columna o botón está listo para usarse (Habilitado), apagado (Inhabilitado), o todavía en desarrollo (Construcción/Mejoras).",
+      "example": "pones \"Inhabilitado\" en una pantalla nueva mientras la terminas, para que nadie la vea hasta que esté lista."
+    },
+    "masterTreeWeb": {
+      "what": "Prende o apaga esta pantalla o función para la versión de escritorio (navegador) del sistema.",
+      "example": "si apagas Web para una pantalla nueva, nadie la verá en la computadora hasta que la actives."
+    },
+    "masterTreeApp": {
+      "what": "Prende o apaga esta pantalla o función para la aplicación móvil, sin afectar la versión de escritorio.",
+      "example": "una pantalla puede estar lista en Web pero aún no en la App, hasta que actives este switch."
+    },
+    "masterTreeApplyNestedPlatform": {
+      "what": "Copia este mismo valor de Web o App hacia todo lo que está anidado debajo, sin tener que marcarlo uno por uno.",
+      "example": "activas Web en \"Servicio a Cliente\" y lo aplicas a todas sus pantallas de un solo clic."
+    },
+    "masterTreeApplyNestedStatus": {
+      "what": "Copia este mismo Estatus hacia todo lo que está anidado debajo, sin tener que cambiarlo uno por uno.",
+      "example": "pones \"En construcción\" en un departamento completo y lo aplicas a todas sus pantallas de golpe."
+    },
+    "masterTreeClassification": {
+      "what": "Agrupa esta columna con otras del mismo tipo (por ejemplo, todas las de \"Control Interno\" o \"Acciones\"), para poder aplicarles el mismo color o manejarlas juntas.",
+      "example": "agrupas varias columnas como \"Financiero\" para pintarlas todas del mismo color en la tabla real."
+    },
+    "masterTreePreview": {
+      "what": "Te muestra cómo se ve esta pantalla real, sin tener que salir del árbol de permisos para buscarla.",
+      "example": "revisas rápido cómo luce \"Nuestros Clientes\" mientras decides si activarla o no."
+    },
+    "masterTreeAppVision": {
+      "what": "Marca si este renglón también aplica para la versión móvil, además de la web.",
+      "example": "activas esta casilla para que un costo también aplique en la App, no solo en la computadora."
+    },
+    "masterTreeEqualizeRow": {
+      "what": "Copia el valor de esta fila en Web hacia la misma fila en App, para que ambos queden iguales.",
+      "example": "pones el mismo costo en Web y en App sin tener que escribirlo dos veces."
+    },
+    "masterTreeFillMissingRow": {
+      "what": "Copia el valor de Web hacia App solo en las filas donde App todavía está vacío, sin tocar las que ya tienen su propio valor.",
+      "example": "llenas de golpe los costos de App que faltan, sin pisar los que ya configuraste distinto."
+    },
+    "masterTreeColumnColor": {
+      "what": "Cambia el color de fondo y de letra que usan las columnas de este grupo en la tabla real, para identificarlas más fácil de un vistazo.",
+      "example": "pones en amarillo todas las columnas de \"Por Definir\" para verlas rápido entre las demás."
+    },
+    "masterTreeColorViewToggle": {
+      "what": "Muestra una vista de cómo se vería la tabla real con este color aplicado, antes de guardarlo.",
+      "example": "pruebas un color antes de aplicarlo, para ver si se lee bien el texto encima."
+    },
+    "masterTreeColorReset": {
+      "what": "Quita el color personalizado y regresa esta columna al color por defecto de su clasificación.",
+      "example": "probaste un color que no te gustó, lo quitas con este botón sin tener que recordar el original."
     }
   }
 }
