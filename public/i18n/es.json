@@ -1703,6 +1703,62 @@
     "businessProfile": {
       "what": "Muestra tu información dentro de la empresa: tu puesto, tu rol, y a quién le reportas.",
       "example": "revisas aquí quién es tu jefe directo dentro del sistema."
+    },
+    "colSysEmpresa": {
+      "what": "Dice el nombre de la empresa a la que pertenece este registro.",
+      "example": "si trabajas para varias empresas dentro del sistema, aquí ves para cuál es esta fila."
+    },
+    "colSysArea": {
+      "what": "Dice a qué área de la empresa pertenece este registro, como Finanzas o Recursos Humanos.",
+      "example": "un registro de nómina normalmente dice \"Recursos Humanos\" aquí."
+    },
+    "colSysModulo": {
+      "what": "Dice de qué módulo o sección del sistema vino este registro.",
+      "example": "si el registro se creó en \"Cadena de Suministro\", aquí lo dice."
+    },
+    "colSysPantalla": {
+      "what": "Dice el nombre exacto de la pantalla donde se creó este registro.",
+      "example": "si lo llenaste en \"Registro de Traslados\", aquí aparece ese nombre."
+    },
+    "colSysCentroCostos": {
+      "what": "Dice a qué centro de costos pertenece este registro, para saber quién paga por él.",
+      "example": "un gasto de la sucursal Norte muestra aquí \"Sucursal Norte\"."
+    },
+    "colSysFecha": {
+      "what": "Es la fecha exacta en que se guardó este registro.",
+      "example": "si lo capturaste hoy, aquí se ve la fecha de hoy, como \"30/sep/2026\"."
+    },
+    "colSysDiaNum": {
+      "what": "Es el número del día del mes en que se guardó el registro.",
+      "example": "si se guardó el 5 de un mes, aquí dice \"05\"."
+    },
+    "colSysDiaTexto": {
+      "what": "Dice qué día de la semana era cuando se guardó el registro.",
+      "example": "si fue lunes, aquí dice \"Lun\"."
+    },
+    "colSysMesNum": {
+      "what": "Es el número del mes en que se guardó el registro.",
+      "example": "si fue en septiembre, aquí dice \"09\"."
+    },
+    "colSysMesTexto": {
+      "what": "Es el nombre corto del mes en que se guardó el registro.",
+      "example": "si fue en septiembre, aquí dice \"Sep\"."
+    },
+    "colSysAnio": {
+      "what": "Es el año en que se guardó el registro.",
+      "example": "si fue este año, aquí dice \"2026\"."
+    },
+    "colSysSemana": {
+      "what": "Dice qué semana del año era cuando se guardó el registro, para agrupar información por semana.",
+      "example": "si fue en la semana 40 del año, aquí dice \"Sem40_2026\"."
+    },
+    "colSysHora": {
+      "what": "Es la hora exacta, con segundos, en que se guardó el registro.",
+      "example": "si lo guardaste a las 3 de la tarde, aquí dice algo como \"15:04:22\"."
+    },
+    "filterColumn": {
+      "what": "Te deja elegir solo las filas que tengan cierto valor en esta columna, en vez de verlas todas.",
+      "example": "en la columna \"Estatus\" filtras para ver solo los registros \"Activos\"."
     }
   }
 }

@@ -3369,6 +3369,7 @@ function attachColumnFilterTrigger(th, tableId) {
     btn.type = 'button';
     btn.className = 'data-table-col-filter-trigger';
     btn.setAttribute('aria-label', t('main.filterColumn'));
+    btn.setAttribute('data-help-key', 'filterColumn');
     btn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -4441,6 +4442,7 @@ function attachChangeHistoryFilterTrigger(th, colKey) {
     btn.type = 'button';
     btn.className = 'data-table-col-filter-trigger';
     btn.setAttribute('aria-label', t('main.filterColumn'));
+    btn.setAttribute('data-help-key', 'filterColumn');
     btn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -5115,22 +5117,42 @@ applyHelpContentKeys();
 // other 7 that were already tagged) catches it too.
 document.addEventListener('dashboard:language-changed', applyHelpContentKeys);
 
-// Walks up from the clicked element to the nearest ancestor carrying a real
-// name (aria-label first -- screen-reader text is already written to stand
-// alone, title sometimes isn't) -- then reads that SAME element's own
-// data-help-key (see HELP_CONTENT_KEYS above) for the fuller "qué hace" +
-// example, when one exists.
+// Same idea as HELP_CONTENT_KEYS, but keyed by a <th data-col="..."> value
+// instead of an element id -- the 13 Control Interno columns (see
+// getSystemColumnsForRecord in db.js) are hardcoded markup repeated as
+// static HTML across ~35 different screens (search any of these ids across
+// public/*.html), not something Dashboard.js builds, so this is the one
+// place that can cover all of them at once instead of editing every screen.
+const HELP_CONTENT_COLUMN_KEYS = {
+    colSysEmpresa: 'colSysEmpresa', colSysArea: 'colSysArea', colSysModulo: 'colSysModulo',
+    colSysPantalla: 'colSysPantalla', colSysCentroCostos: 'colSysCentroCostos', colSysFecha: 'colSysFecha',
+    colSysDiaNum: 'colSysDiaNum', colSysDiaTexto: 'colSysDiaTexto', colSysMesNum: 'colSysMesNum',
+    colSysMesTexto: 'colSysMesTexto', colSysAnio: 'colSysAnio', colSysSemana: 'colSysSemana', colSysHora: 'colSysHora',
+};
+function applyHelpContentColumnKeys() {
+    Object.entries(HELP_CONTENT_COLUMN_KEYS).forEach(([col, key]) => {
+        document.querySelectorAll(`[data-col="${col}"]`).forEach((el) => el.setAttribute('data-help-key', key));
+    });
+}
+applyHelpContentColumnKeys();
+document.addEventListener('dashboard:language-changed', applyHelpContentColumnKeys);
+
+// Walks up from the clicked element to the nearest ancestor carrying either
+// a data-help-key (see HELP_CONTENT_KEYS/HELP_CONTENT_COLUMN_KEYS above) or
+// a plain name -- checked at every level together, not name-first, since a
+// column header (<th data-col="colSysEmpresa">) has no aria-label/title of
+// its own at all, only its own visible text (textContent), unlike a
+// top-bar icon which always has an aria-label already.
 function findHelpModeContent(startEl) {
     let node = startEl;
     while (node && node.nodeType === 1 && node !== document.body) {
-        const name = node.getAttribute('aria-label') || node.getAttribute('title');
-        if (name) {
-            const helpKey = node.getAttribute('data-help-key');
-            if (helpKey) {
-                return { name, what: t(`help.${helpKey}.what`), example: t(`help.${helpKey}.example`) };
-            }
-            return { name, what: null, example: null };
+        const helpKey = node.getAttribute('data-help-key');
+        if (helpKey) {
+            const name = node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent.trim();
+            if (name) return { name, what: t(`help.${helpKey}.what`), example: t(`help.${helpKey}.example`) };
         }
+        const name = node.getAttribute('aria-label') || node.getAttribute('title');
+        if (name) return { name, what: null, example: null };
         node = node.parentElement;
     }
     return null;

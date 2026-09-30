@@ -1704,6 +1704,62 @@
     "businessProfile": {
       "what": "Shows your information within the company: your position, your role, and who you report to.",
       "example": "you check here who your direct manager is in the system."
+    },
+    "colSysEmpresa": {
+      "what": "Shows the name of the company this record belongs to.",
+      "example": "if you work across several companies in the system, this tells you which one this row is for."
+    },
+    "colSysArea": {
+      "what": "Shows which area of the company this record belongs to, like Finance or Human Resources.",
+      "example": "a payroll record usually shows \"Human Resources\" here."
+    },
+    "colSysModulo": {
+      "what": "Shows which module or section of the system this record came from.",
+      "example": "if the record was created in \"Supply Chain\", it says that here."
+    },
+    "colSysPantalla": {
+      "what": "Shows the exact name of the screen where this record was created.",
+      "example": "if you filled it out in \"Transfer Log\", that name shows up here."
+    },
+    "colSysCentroCostos": {
+      "what": "Shows which cost center this record belongs to, so you know who pays for it.",
+      "example": "an expense from the North branch shows \"North Branch\" here."
+    },
+    "colSysFecha": {
+      "what": "Is the exact date this record was saved.",
+      "example": "if you entered it today, you'll see today's date here, like \"30/sep/2026\"."
+    },
+    "colSysDiaNum": {
+      "what": "Is the day-of-month number when the record was saved.",
+      "example": "if it was saved on the 5th, this shows \"05\"."
+    },
+    "colSysDiaTexto": {
+      "what": "Shows which day of the week it was when the record was saved.",
+      "example": "if it was a Monday, this shows \"Mon\"."
+    },
+    "colSysMesNum": {
+      "what": "Is the month number when the record was saved.",
+      "example": "if it was September, this shows \"09\"."
+    },
+    "colSysMesTexto": {
+      "what": "Is the short month name when the record was saved.",
+      "example": "if it was September, this shows \"Sep\"."
+    },
+    "colSysAnio": {
+      "what": "Is the year the record was saved.",
+      "example": "if it was this year, this shows \"2026\"."
+    },
+    "colSysSemana": {
+      "what": "Shows which week of the year it was when the record was saved, to group information by week.",
+      "example": "if it was week 40 of the year, this shows \"Sem40_2026\"."
+    },
+    "colSysHora": {
+      "what": "Is the exact time, down to the second, the record was saved.",
+      "example": "if you saved it at 3pm, this shows something like \"15:04:22\"."
+    },
+    "filterColumn": {
+      "what": "Lets you show only the rows that have a certain value in this column, instead of all of them.",
+      "example": "in the \"Status\" column, you filter to see only the \"Active\" records."
     }
   }
 }
