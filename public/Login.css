@@ -77,7 +77,15 @@ body{
     line-height: 1;
 }
 .input-box:has(.toggle-password) input{
-    padding-right: 50px;
+    /* Was 50px, right at the toggle icon's own left edge (right:20px +
+       ~20px icon width = 40px, leaving only 10px of buffer) -- different
+       browsers render the password-mask bullet character at different
+       widths, so a long password's dots could reach under the icon in a
+       browser using a wider glyph even though the same text fit fine
+       elsewhere. Confirmed live, 2026-09-30, screenshot from a non-Chrome
+       browser: "ve como se empalma esto". Bumped for real headroom instead
+       of matching the icon's position exactly. */
+    padding-right: 64px;
 }
 .input-box .field-error{
     display: block;
