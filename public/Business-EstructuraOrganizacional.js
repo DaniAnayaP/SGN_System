@@ -120,6 +120,7 @@ function renderTable() {
         tdAlt.textContent = altNames.length ? altNames.join(', ') : '—';
         tdAlt.classList.add('editable-cell');
         tdAlt.title = Dashboard.t('main.fuelClickToEdit');
+        tdAlt.setAttribute('data-help-key', 'orgChartAltSupervisors');
         tdAlt.onclick = () => openAltSupervisorsModal(position);
 
         const tdOccupied = document.createElement('td');

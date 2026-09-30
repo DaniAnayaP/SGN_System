@@ -1908,6 +1908,10 @@
     "reportAuthorize": {
       "what": "Approves this report so it can actually run.",
       "example": "someone builds a new report, but it doesn't run until an administrator authorizes it here."
+    },
+    "orgChartAltSupervisors": {
+      "what": "This is where you choose who can supervise this position besides its direct boss, for when that boss isn't available.",
+      "example": "if the manager is on vacation, an alternate supervisor can approve things in their place."
     }
   }
 }

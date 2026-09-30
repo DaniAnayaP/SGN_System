@@ -5176,8 +5176,17 @@ function findHelpModeContent(startEl) {
     while (node && node.nodeType === 1 && node !== document.body) {
         const helpKey = node.getAttribute('data-help-key');
         if (helpKey) {
-            const name = node.getAttribute('aria-label') || node.getAttribute('title')
-                || node.textContent.trim() || node.getAttribute('placeholder');
+            // A data-col cell's own column header (its <th data-col="...">
+            // in the same table) beats aria-label/title -- a LOT of editable
+            // cells across the app share one generic "Clic para editar"
+            // title (Dashboard.attachInlineEdit's own convention), which
+            // would otherwise show as the tooltip's name instead of what
+            // the column actually is. Harmless for a <th> itself (e.g. a
+            // Control Interno column) since it just re-finds itself.
+            const col = node.getAttribute('data-col');
+            const header = col && node.closest('table')?.querySelector(`th[data-col="${col}"]`);
+            const name = (header && header.textContent.trim()) || node.getAttribute('aria-label')
+                || node.getAttribute('title') || node.textContent.trim() || node.getAttribute('placeholder');
             if (name) return { name, what: t(`help.${helpKey}.what`), example: t(`help.${helpKey}.example`) };
         }
         const name = node.getAttribute('aria-label') || node.getAttribute('title');

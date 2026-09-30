@@ -1907,6 +1907,10 @@
     "reportAuthorize": {
       "what": "Aprueba este reporte para que se pueda ejecutar de verdad.",
       "example": "alguien arma un reporte nuevo, pero no corre hasta que un administrador lo autoriza aquí."
+    },
+    "orgChartAltSupervisors": {
+      "what": "Aquí eliges quién puede supervisar a este puesto además de su jefe directo, para cuando ese jefe no esté disponible.",
+      "example": "si el gerente está de vacaciones, un supervisor alterno puede autorizar cosas en su lugar."
     }
   }
 }
