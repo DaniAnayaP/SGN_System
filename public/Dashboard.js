@@ -1562,6 +1562,24 @@ function wireMenuInteractions() {
             menuBtn.setAttribute('aria-expanded', String(!isMinimized));
             hideSidebarTooltip();
             applySubmenuAbbreviations();
+            // The sidebar's own collapse/expand transition (.Sidebar's own
+            // "transition: width 0.5s ease" in Inicio-en.css) changes how
+            // much width every .data-table-wrapper actually has, same as a
+            // window resize would -- resizeAllDataTables (below) re-stretches
+            // each table to match instead of leaving it sized for the old
+            // width. Waits for the transition to actually finish (not a
+            // fixed timeout guessing at that 0.5s) so it reads the sidebar's
+            // real final width, not a mid-animation one; the 600ms fallback
+            // covers prefers-reduced-motion or any other case where the
+            // transition never fires its end event at all.
+            let settled = false;
+            const onSettled = () => { if (settled) return; settled = true; resizeAllDataTables(); };
+            Sidebar.addEventListener('transitionend', function handler(e) {
+                if (e.propertyName !== 'width') return;
+                Sidebar.removeEventListener('transitionend', handler);
+                onSettled();
+            });
+            setTimeout(onSettled, 600);
         });
     }
 
@@ -2549,7 +2567,19 @@ function applyDataTableColumnLayout(tableId) {
     const totalWidth = visualOrder.filter((k) => !hiddenSet.has(k))
         .reduce((sum, k) => sum + (config.widths[k] || DATA_TABLE_COL_MIN_WIDTH), 0);
     table.style.tableLayout = 'fixed';
-    table.style.width = `${totalWidth}px`;
+    // A short table (few columns, e.g. Equipo SaaS's 6) left a blank strip
+    // between the table's own right edge and the wrapper's -- table-layout:
+    // fixed plus a table width fixed to the SUM of its own column widths
+    // never stretches past that sum, no matter how much wider the wrapper
+    // actually is. Confirmed live, 2026-09-30: "Ninguna tabla se debe ver
+    // cortada... se debe ajustar el ancho de las columnas al espacio de la
+    // tabla". Growing to the wrapper's own width when there's room lets the
+    // browser's own fixed-layout algorithm redistribute the extra space
+    // across columns proportionally (confirmed empirically -- setting a
+    // wider width than the sum of <col> widths grows every column, not just
+    // the last one); a wide table (more columns than fit) still gets exactly
+    // totalWidth as before, so it scrolls horizontally same as always.
+    table.style.width = `${Math.max(totalWidth, state.wrapper.clientWidth)}px`;
     table.style.minWidth = `${totalWidth}px`;
 
     Array.from(table.tBodies[0]?.rows || []).forEach((tr) => {
@@ -2558,6 +2588,17 @@ function applyDataTableColumnLayout(tableId) {
 
     renderColumnGroupBand(tableId);
 }
+// Re-stretches every already-initialized table to its wrapper's current
+// width on resize (window resize, or the sidebar collapsing/expanding --
+// see its own call to this below, since toggling a CSS class never fires
+// a window resize event on its own) -- without this, a table sized to fill
+// the wrapper at load time would stay stuck at that old pixel width once
+// the wrapper grew, leaving the same blank-strip bug back the moment the
+// window or sidebar changed size.
+function resizeAllDataTables() {
+    dataTableColumnState.forEach((_, tableId) => applyDataTableColumnLayout(tableId));
+}
+window.addEventListener('resize', resizeAllDataTables);
 
 // Restores order/widths/hidden/pinned to their true defaults — the order
 // columns appear in the HTML (which always matches the permission tree's
