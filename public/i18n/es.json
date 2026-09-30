@@ -1759,6 +1759,34 @@
     "filterColumn": {
       "what": "Te deja elegir solo las filas que tengan cierto valor en esta columna, en vez de verlas todas.",
       "example": "en la columna \"Estatus\" filtras para ver solo los registros \"Activos\"."
+    },
+    "zoomOut": {
+      "what": "Hace el texto y las filas de la tabla más pequeños, para ver más información de un vistazo.",
+      "example": "si una tabla tiene muchas columnas, la achicas para ver más sin tener que hacer scroll."
+    },
+    "zoomIn": {
+      "what": "Hace el texto y las filas de la tabla más grandes, para leer mejor.",
+      "example": "si te cuesta leer los números pequeños, la agrandas."
+    },
+    "pinColumns": {
+      "what": "Deja fija una o varias columnas del lado izquierdo, para que no se muevan cuando avanzas la tabla hacia la derecha.",
+      "example": "fijas la columna \"Nombre\" para siempre saber de quién es la fila aunque veas columnas lejanas."
+    },
+    "columnVisibility": {
+      "what": "Te deja ocultar las columnas que no necesitas ver por ahora, sin borrar su información.",
+      "example": "ocultas las columnas que no usas para que la tabla se vea más simple."
+    },
+    "changeHistory": {
+      "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",
+      "example": "si un dato cambió y no sabes por qué, aquí ves quién lo modificó y qué valor tenía antes."
+    },
+    "columnLegend": {
+      "what": "Explica qué significa cada color que ves en las filas y columnas de la tabla.",
+      "example": "un color verde en una fila puede significar que ese registro se puede editar."
+    },
+    "fieldRules": {
+      "what": "Aquí defines en qué orden se deben llenar los campos de esta tabla, y cuáles son obligatorios.",
+      "example": "obligas a llenar primero \"Nombre\" antes de poder escribir en \"Correo\"."
     }
   }
 }

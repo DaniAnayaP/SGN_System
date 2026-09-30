@@ -5088,10 +5088,19 @@ function closeHelpModeTooltip() {
     helpModeTooltipEl = null;
 }
 
-// Element id -> help.<key> namespace in i18n/es.json + i18n/en.json. Applied
-// once per element below (not every top-bar icon exists on every page, so
-// this tolerates misses) -- add a row here and a matching help.<key> entry
-// in both dictionaries to extend "Modo ayuda" to a new button/column.
+// Generic "attribute value -> help.<key>" applier, reused below for every
+// way a help-worthy element can be found on the page (id, data-col,
+// data-zoom, data-col-action, and whatever the next screen-by-screen batch
+// needs) -- add a row to one of the maps below and a matching help.<key>
+// entry in i18n/es.json + i18n/en.json to extend "Modo ayuda" to a new
+// button/column, no new plumbing required.
+function applyHelpKeysByAttr(attr, map) {
+    Object.entries(map).forEach(([value, key]) => {
+        document.querySelectorAll(`[${attr}="${value}"]`).forEach((el) => el.setAttribute('data-help-key', key));
+    });
+}
+// Element id -- the 8 top-bar icons (not every one exists on every page, so
+// this tolerates misses).
 const HELP_CONTENT_KEYS = {
     'messages-btn': 'messages',
     'chatbot-btn': 'chatbot',
@@ -5102,40 +5111,45 @@ const HELP_CONTENT_KEYS = {
     'user-info-btn': 'userInfo',
     'business-profile-btn': 'businessProfile',
 };
-function applyHelpContentKeys() {
-    Object.entries(HELP_CONTENT_KEYS).forEach(([id, key]) => {
-        document.querySelectorAll(`#${id}`).forEach((el) => el.setAttribute('data-help-key', key));
-    });
-}
-applyHelpContentKeys();
-// #ui-scale-btn specifically doesn't exist yet at this point in the script
-// (built later by renderUiScaleControl, called from initDashboard) -- the
-// querySelectorAll above simply finds nothing for it on this first pass.
-// dashboard:language-changed fires once after initDashboard's own
-// loadLanguage() call, by which point every button here really exists, so
-// re-running there (harmless -- setAttribute to the same value -- for the
-// other 7 that were already tagged) catches it too.
-document.addEventListener('dashboard:language-changed', applyHelpContentKeys);
-
-// Same idea as HELP_CONTENT_KEYS, but keyed by a <th data-col="..."> value
-// instead of an element id -- the 13 Control Interno columns (see
-// getSystemColumnsForRecord in db.js) are hardcoded markup repeated as
-// static HTML across ~35 different screens (search any of these ids across
-// public/*.html), not something Dashboard.js builds, so this is the one
-// place that can cover all of them at once instead of editing every screen.
+// <th data-col="..."> -- the 13 Control Interno columns (see
+// getSystemColumnsForRecord in db.js), hardcoded static markup repeated
+// across ~35 different screens (search any of these ids across
+// public/*.html), not something Dashboard.js builds -- this is the one
+// place that covers all of them at once instead of editing every screen.
 const HELP_CONTENT_COLUMN_KEYS = {
     colSysEmpresa: 'colSysEmpresa', colSysArea: 'colSysArea', colSysModulo: 'colSysModulo',
     colSysPantalla: 'colSysPantalla', colSysCentroCostos: 'colSysCentroCostos', colSysFecha: 'colSysFecha',
     colSysDiaNum: 'colSysDiaNum', colSysDiaTexto: 'colSysDiaTexto', colSysMesNum: 'colSysMesNum',
     colSysMesTexto: 'colSysMesTexto', colSysAnio: 'colSysAnio', colSysSemana: 'colSysSemana', colSysHora: 'colSysHora',
 };
-function applyHelpContentColumnKeys() {
-    Object.entries(HELP_CONTENT_COLUMN_KEYS).forEach(([col, key]) => {
-        document.querySelectorAll(`[data-col="${col}"]`).forEach((el) => el.setAttribute('data-help-key', key));
-    });
+// data-zoom="in"/"out" -- the font-size zoom buttons every .data-table gets
+// (renderDataTableZoomControls).
+const HELP_CONTENT_ZOOM_KEYS = { out: 'zoomOut', in: 'zoomIn' };
+// data-col-action="..." -- the per-table toolbar buttons every .data-table
+// can get depending on its own icon grants (renderDataTableColumnControls):
+// Fijar/Mostrar-ocultar/Historial/Leyenda/Reglas de Orden.
+const HELP_CONTENT_COL_ACTION_KEYS = {
+    pin: 'pinColumns', visibility: 'columnVisibility', history: 'changeHistory',
+    legend: 'columnLegend', 'field-rules': 'fieldRules',
+};
+function applyHelpContentKeys() {
+    applyHelpKeysByAttr('id', HELP_CONTENT_KEYS);
+    applyHelpKeysByAttr('data-col', HELP_CONTENT_COLUMN_KEYS);
+    applyHelpKeysByAttr('data-zoom', HELP_CONTENT_ZOOM_KEYS);
+    applyHelpKeysByAttr('data-col-action', HELP_CONTENT_COL_ACTION_KEYS);
 }
-applyHelpContentColumnKeys();
-document.addEventListener('dashboard:language-changed', applyHelpContentColumnKeys);
+applyHelpContentKeys();
+// Several of these (ui-scale-btn, the whole zoom/col-action toolbar) don't
+// exist yet at this point in the script -- they're built later, from
+// initDashboard's own render passes -- so the pass above simply finds
+// nothing for them on this first run. dashboard:language-changed fires once
+// after initDashboard's own loadLanguage() call, by which point every
+// button here really exists, so re-running there (harmless -- setAttribute
+// to the same value -- for whatever was already tagged) catches the rest;
+// it's also what already re-attaches a column's filter-trigger button after
+// a language switch resets its textContent, so this piggybacks on a pass
+// that already has to happen anyway.
+document.addEventListener('dashboard:language-changed', applyHelpContentKeys);
 
 // Walks up from the clicked element to the nearest ancestor carrying either
 // a data-help-key (see HELP_CONTENT_KEYS/HELP_CONTENT_COLUMN_KEYS above) or
@@ -7324,6 +7338,10 @@ async function initDashboard({ activePage } = {}) {
     renderTopBarCollapseToggle();
     renderDataTableZoomControls();
     renderDataTableColumnControls();
+    // Both build their own buttons (data-zoom/data-col-action) fresh right
+    // above -- tag them with their Modo ayuda content now instead of
+    // waiting for a language switch that may never happen this session.
+    applyHelpContentKeys();
     sizeDataTableWrappers();
     // Confirms the .brand click actually did something -- a bare
     // location.reload() wipes all JS state before any toast could render,

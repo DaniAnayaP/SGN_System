@@ -1760,6 +1760,34 @@
     "filterColumn": {
       "what": "Lets you show only the rows that have a certain value in this column, instead of all of them.",
       "example": "in the \"Status\" column, you filter to see only the \"Active\" records."
+    },
+    "zoomOut": {
+      "what": "Makes the table's text and rows smaller, so you can see more information at a glance.",
+      "example": "if a table has many columns, you shrink it to see more without scrolling."
+    },
+    "zoomIn": {
+      "what": "Makes the table's text and rows bigger, so it's easier to read.",
+      "example": "if small numbers are hard to read, you make it bigger."
+    },
+    "pinColumns": {
+      "what": "Locks one or more columns on the left side, so they stay in place while you scroll the table to the right.",
+      "example": "you pin the \"Name\" column so you always know whose row it is, even looking at far-away columns."
+    },
+    "columnVisibility": {
+      "what": "Lets you hide the columns you don't need to see right now, without deleting their information.",
+      "example": "you hide the columns you don't use so the table looks simpler."
+    },
+    "changeHistory": {
+      "what": "Shows who changed something in this table, what they changed, and when.",
+      "example": "if a value changed and you don't know why, this shows who modified it and what it used to be."
+    },
+    "columnLegend": {
+      "what": "Explains what each color you see on the table's rows and columns means.",
+      "example": "a green row can mean that record is editable."
+    },
+    "fieldRules": {
+      "what": "This is where you set the order this table's fields must be filled in, and which ones are required.",
+      "example": "you require \"Name\" to be filled in before \"Email\" can be typed."
     }
   }
 }
