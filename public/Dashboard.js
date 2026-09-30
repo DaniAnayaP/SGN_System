@@ -3514,7 +3514,18 @@ function initDataTableColumns(wrapper, index) {
 // already gives the real header cells beneath it, or scrolling would slide
 // the real (now fixed-in-place) column out from under its own color while
 // some OTHER band segment drifts into that same screen position instead.
-function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state) {
+// applyOwnColor -- classification band only (never the table-of-origin
+// band just above it, which has its own separate per-pantalla CSS colors
+// keyed by labelKey, e.g. menu.opTransVolCombustible's fuel tint --
+// columnGroupColor has no entry for those and would flatten them to the
+// neutral "sin clasificar" gray). Live version of the exact same
+// selectWrap.style.color/backgroundColor pill PermissionTree.js's own
+// classification picker already paints with (color-mix at 16%, full color
+// as the text) -- an admin's custom color now actually reaches the real
+// table it was chosen for, not just the tree's own preview. Classifications
+// never explicitly colored keep rendering exactly as before (columnGroupColor
+// itself falls back to COLUMN_GROUP_META's own static swatch, or neutral).
+function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state, applyOwnColor) {
     bandRow.innerHTML = '';
     const pinnedSet = new Set(state?.visiblePinned || []);
     const lastPinnedKey = pinnedSet.size ? state.visiblePinned[state.visiblePinned.length - 1] : null;
@@ -3540,6 +3551,19 @@ function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state) {
             th.textContent = resolveGroupLabel(s.groupKey);
             th.className = 'data-table-group-band-cell';
             th.dataset.groupKey = s.groupKey;
+            // Only when an admin actually picked a color for THIS
+            // classification (columnGroupColor's own fallback chain returns
+            // 'var(--color-border)' for one that never got its own) -- every
+            // classification otherwise keeps sharing the one static CSS
+            // look .data-table-group-band-classification already gives
+            // every band cell, same as before this existed.
+            if (applyOwnColor) {
+                const ownColor = columnGroupColor(s.groupKey);
+                if (ownColor && ownColor !== 'var(--color-border)' && !ownColor.startsWith('var(')) {
+                    th.style.backgroundColor = `color-mix(in srgb, ${ownColor} 16%, var(--color-surface))`;
+                    th.style.color = ownColor;
+                }
+            }
         } else if (allUngrouped && emptyLabelKey) {
             th.textContent = t(emptyLabelKey);
             th.className = 'data-table-group-band-cell-empty';
@@ -3594,9 +3618,9 @@ function renderColumnGroupBand(tableId) {
     // renders at 0 width either way, so there's no need to special-case it.
     const visualOrder = getVisualColumnOrder(state.config);
     const tableBandRow = state.table.tHead.querySelector('tr.data-table-group-band-table');
-    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state);
+    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state, false);
     const classBandRow = state.table.tHead.querySelector('tr.data-table-group-band-classification');
-    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state);
+    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state, true);
 }
 
 function wireModalDismiss(overlay, onClose) {
