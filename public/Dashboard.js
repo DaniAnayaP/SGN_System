@@ -1719,6 +1719,13 @@ function getSidebarTooltip() {
 }
 
 function showSidebarTooltip(menuItem, Sidebar) {
+    // Confirmed live, 2026-09-30: hovering an abbreviated sidebar item while
+    // Modo ayuda is active showed this plain "full name" tooltip stacked
+    // right on top of Modo ayuda's own richer one after the click -- same
+    // name shown twice, reading as "2 mensajes". This tooltip's whole job
+    // (reveal the real name) is already covered by Modo ayuda's, so it steps
+    // aside while that mode is on instead of fighting for the same space.
+    if (helpModeActive) return;
     if (!Sidebar.classList.contains('minimize')) return;
     const label = menuItem.querySelector('.menu-link > span')?.textContent;
     if (!label) return;
@@ -1741,6 +1748,8 @@ function showSidebarTooltip(menuItem, Sidebar) {
 // Maestro's row labels, wired from PermissionTree.js) -- same tooltip,
 // reused as-is rather than duplicated for that other caller.
 function showSubmenuTooltip(link) {
+    // Same reasoning as showSidebarTooltip's own guard just above.
+    if (helpModeActive) return;
     const span = link.querySelector('span') || (link.tagName === 'SPAN' ? link : null);
     if (!span) return;
     const ladder = span.dataset.abbrLadder ? JSON.parse(span.dataset.abbrLadder) : null;
