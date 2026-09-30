@@ -913,6 +913,18 @@ function buildSidebarData(data, role, activePage) {
         orderedGroupItems.forEach((item) => { if (!used.has(item)) ordered.push(item); });
         orderedGroupItems = ordered;
     }
+    // The group header itself (Servicio a Cliente / Config. SaaS) has its
+    // own real Estatus row in Árbol Maestro SaaS (the "Apartado" line the
+    // 2 groups render as there), but nothing ever checked it -- only each
+    // CHILD screen's own saasItemId was gated, so a zero-grant account with
+    // every child hidden still saw the parent group itself, expandable into
+    // an empty dropdown. Confirmed live, 2026-09-30, against daniel.anaya:
+    // "Servicio a Cliente"/"Config. SaaS" both still showed with nothing
+    // inside. hasSaasScreenGrant(saasGroupId) mirrors the per-item check
+    // exactly; the submenu.length guard is a second, independent reason to
+    // hide the same empty-dropdown case even if that ever diverges from the
+    // group's own node.
+    orderedGroupItems = orderedGroupItems.filter((item) => item.submenu.length > 0 && hasSaasScreenGrant(item.saasGroupId));
     return { ...data, sections: [{ id: 'main', items: [home, dashboard, ...orderedGroupItems].filter(Boolean) }] };
 }
 
