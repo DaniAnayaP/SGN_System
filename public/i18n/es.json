@@ -1963,6 +1963,22 @@
     "masterTreeColorReset": {
       "what": "Quita el color personalizado y regresa esta columna al color por defecto de su clasificación.",
       "example": "probaste un color que no te gustó, lo quitas con este botón sin tener que recordar el original."
+    },
+    "paletteSeed": {
+      "what": "Aquí eliges un solo color que representa tu marca, y el sistema arma automáticamente todos los demás colores a partir de él.",
+      "example": "eliges el azul de tu logotipo, y el sistema propone el resto de los colores (fondo, texto, bordes) que combinan bien con ese azul."
+    },
+    "paletteSuggest": {
+      "what": "Genera de nuevo todos los colores del sistema (fondo, texto, bordes, etc.) a partir del color que elegiste arriba, sin tener que ajustar cada uno a mano.",
+      "example": "cambias el color de tu marca y usas este botón para actualizar todo el sistema de un solo clic."
+    },
+    "paletteShowPreview": {
+      "what": "Muestra u oculta un ejemplo de cómo se vería el sistema real con estos colores aplicados.",
+      "example": "revisas la vista previa antes de guardar, para confirmar que los colores se ven bien juntos."
+    },
+    "paletteEditColor": {
+      "what": "Abre el selector de color de tu computadora para cambiar este color en particular.",
+      "example": "el color de fondo quedó muy oscuro, lo abres aquí y eliges uno más claro."
     }
   }
 }

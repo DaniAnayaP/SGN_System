@@ -78,6 +78,7 @@ function ensureDownloadButton() {
     btn.className = 'data-table-zoom-btn';
     btn.setAttribute('aria-label', Dashboard.t('main.downloadReport'));
     btn.title = Dashboard.t('main.downloadReport');
+    btn.setAttribute('data-help-key', 'download');
     btn.style.position = 'relative';
     btn.innerHTML = '<i class="bx bx-download" aria-hidden="true"></i>';
 

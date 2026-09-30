@@ -1964,6 +1964,22 @@
     "masterTreeColorReset": {
       "what": "Removes the custom color and returns this column to its classification's default color.",
       "example": "you tried a color you didn't like and remove it with this button without having to remember the original."
+    },
+    "paletteSeed": {
+      "what": "Here you pick one color that represents your brand, and the system automatically builds every other color from it.",
+      "example": "you pick your logo's blue, and the system suggests the rest of the colors (background, text, borders) that go well with that blue."
+    },
+    "paletteSuggest": {
+      "what": "Regenerates every color in the system (background, text, borders, etc.) from the color you picked above, instead of adjusting each one by hand.",
+      "example": "you change your brand color and use this button to update the whole system in one click."
+    },
+    "paletteShowPreview": {
+      "what": "Shows or hides an example of what the real system would look like with these colors applied.",
+      "example": "you check the preview before saving, to confirm the colors look good together."
+    },
+    "paletteEditColor": {
+      "what": "Opens your computer's color picker so you can change this particular color.",
+      "example": "the background color turned out too dark, so you open it here and pick a lighter one."
     }
   }
 }

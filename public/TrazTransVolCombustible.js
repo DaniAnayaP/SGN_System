@@ -122,6 +122,7 @@ function buildActionsCell(record) {
     historyBtn.className = 'admin-icon-btn';
     historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
     historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+    historyBtn.setAttribute('data-help-key', 'changeHistory');
     historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     historyBtn.addEventListener('click', () => Dashboard.openChangeHistory('registro-combustible', record.id));
     td.appendChild(historyBtn);
