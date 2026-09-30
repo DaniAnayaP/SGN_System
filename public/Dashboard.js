@@ -1276,6 +1276,9 @@ function buildSubmenu(items) {
         // of just rendering blank.
         const fullLabel = item.label || t(item.labelKey, item.labelParams || {});
         span.textContent = fullLabel;
+        // Same Modo ayuda fix as buildMenuItem's own aria-label above -- a
+        // sub-menu row had no name of its own either.
+        a.setAttribute('aria-label', fullLabel);
         // abbrKeys (see buildSidebarData's admin-business-sectors entry for
         // the first real user) — a ladder of progressively shorter labels,
         // longest first. Stashed as data instead of resolved once here
@@ -1327,6 +1330,14 @@ function buildMenuItem(item) {
     // data (e.g. a saved report's own name), never a translatable string.
     const fullLabel = item.label || t(item.labelKey, item.labelParams || {});
     span.textContent = fullLabel;
+    // The FULL label, not whatever abbrKeys shortens the visible span to --
+    // this is also this link's own name for Modo ayuda (findHelpModeContent
+    // reads aria-label before ever considering a distant ancestor's own).
+    // Confirmed live, 2026-09-30: without this, clicking any sidebar item
+    // (Inicio, a group header like "Config. SaaS", any submenu row) walked
+    // all the way up to <nav aria-label="Main navigation"> instead, since
+    // .menu-link/.sub-menu-link never had a name of their own at all.
+    a.setAttribute('aria-label', fullLabel);
     // abbrKeys -- same progressively-shorter-label ladder as buildSubmenu's
     // own abbrLadder (see applySubmenuAbbreviations), just for a top-level
     // item instead of a nested one. A top-level item with no abbrKeys still
