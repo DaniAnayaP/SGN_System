@@ -113,6 +113,34 @@
             if (btn && btn.getAttribute('aria-expanded') !== 'true') btn.click();
         }
         function fireChange(el) { el.dispatchEvent(new Event('change', { bubbles: true })); }
+        // A row this level's engine marked draggable (Árbol Maestro/Giro's
+        // own Reorden Personalizado, see statusRow's own dragCtx comment in
+        // PermissionTree.js/Admin-ArbolMaestroSaaS.js) -- checked per row,
+        // not just once for the whole list, since a mixed level (e.g.
+        // Inicio/Panel/Tablero ahead of the real, draggable áreas) can have
+        // some non-draggable rows leading a mostly-draggable group.
+        function isDraggableRow(row) { return row.classList.contains('perm-tree-row-draggable'); }
+        // Replays the exact dragstart -> drop sequence a real desktop drag
+        // would fire (see PermissionTree.js/Admin-ArbolMaestroSaaS.js's own
+        // statusRow: draggedNode is a closure variable set from dragstart,
+        // dataTransfer itself is never actually read back out, only used
+        // for the browser's own effectAllowed/dropEffect bookkeeping) --
+        // "drive the real control" for a gesture native HTML5 D&D has no
+        // real touch support for in this WebView (same reasoning
+        // AppAdminInicio.js's own enableTileReorder already documents for
+        // the home-screen tile grid). fromRow ends up positioned wherever
+        // toRow currently sits (reorderInPlace's own "insert before target"
+        // rule) -- a real drop is enough, dragover is fired too only so any
+        // visual class toggling the same listener does stays consistent.
+        function fireDropReorder(fromRow, toRow) {
+            let dt;
+            try { dt = new DataTransfer(); } catch { dt = null; }
+            const opts = dt ? { bubbles: true, cancelable: true, dataTransfer: dt } : { bubbles: true, cancelable: true };
+            fromRow.dispatchEvent(new DragEvent('dragstart', opts));
+            toRow.dispatchEvent(new DragEvent('dragover', opts));
+            toRow.dispatchEvent(new DragEvent('drop', opts));
+            fromRow.dispatchEvent(new DragEvent('dragend', opts));
+        }
 
         // --- pins (per-device shortcuts, see the module comment) ---------
         function loadPins() {
@@ -135,19 +163,26 @@
         // means "show the root/depth-0 rows".
         let stack = [];
         let currentKey = null;
+        // Reorder mode -- see buildList's own toolbar and enableCardReorder
+        // below. Reset on every navigation (goRoot/goInto/goToCrumb) since a
+        // different level is a different sibling group entirely -- carrying
+        // "reordering" across that would apply to the wrong rows.
+        let reorderMode = false;
 
-        function goRoot() { stack = []; currentKey = null; render(); }
+        function goRoot() { stack = []; currentKey = null; reorderMode = false; render(); }
         function goInto(row) {
             const key = row.dataset.nodeKey;
             ensureExpanded(row);
             stack.push({ key, label: labelOf(row) });
             currentKey = key;
+            reorderMode = false;
             render();
         }
         function goToCrumb(index) {
             // index -1 = root
             stack = stack.slice(0, index + 1);
             currentKey = stack.length ? stack[stack.length - 1].key : null;
+            reorderMode = false;
             render();
         }
         // Replays a saved pin's own path (an array of {key,label} exactly
@@ -256,9 +291,36 @@
                 stat.appendChild(b);
                 wrap.appendChild(stat);
             }
+            const kids = node ? childrenOf(node) : allRows().filter((r) => depthOf(r) === 0);
+            // Reorder toggle -- only when this level's engine actually wired
+            // drag-to-reorder onto at least one of these rows (Árbol
+            // Maestro's own Departamento/Área/Apartado depths, Giro's
+            // Reorden Personalizado at every depth) -- a level with none
+            // gets no toolbar at all, same as today.
+            const anyReorderable = kids.some(isDraggableRow);
+            if (anyReorderable) {
+                const toolbar = document.createElement('div');
+                toolbar.className = 'mtn-reorder-toolbar';
+                const toggleBtn = document.createElement('button');
+                toggleBtn.type = 'button';
+                toggleBtn.className = 'mtn-reorder-toggle' + (reorderMode ? ' mtn-reorder-toggle-on' : '');
+                toggleBtn.textContent = reorderMode
+                    ? (t('admin.masterTreeNavReorderDone') || 'Listo')
+                    : (t('admin.masterTreeNavReorderStart') || 'Reordenar');
+                toggleBtn.addEventListener('click', () => { reorderMode = !reorderMode; render(); });
+                toolbar.appendChild(toggleBtn);
+                wrap.appendChild(toolbar);
+                if (reorderMode) {
+                    const hint = document.createElement('p');
+                    hint.className = 'mtn-reorder-hint';
+                    hint.textContent = t('admin.masterTreeNavReorderHint') || '';
+                    wrap.appendChild(hint);
+                }
+            } else if (reorderMode) {
+                reorderMode = false; // stale state from a different level -- see goInto/goToCrumb/goRoot's own reset
+            }
             const list = document.createElement('div');
             list.className = 'mtn-list';
-            const kids = node ? childrenOf(node) : allRows().filter((r) => depthOf(r) === 0);
             if (!kids.length) {
                 const empty = document.createElement('p');
                 empty.className = 'mtn-empty';
@@ -279,11 +341,89 @@
                 `;
                 card.querySelector('.mtn-name').textContent = labelOf(row);
                 card.querySelector('.mtn-meta').textContent = `${countOf(row)} ${t('admin.masterTreeNavItems')}`.trim();
-                card.addEventListener('click', () => goInto(row));
+                // No accidental navigation while reordering -- same rule
+                // AppAdminInicio.js's own enableTileReorder already follows
+                // for the home-screen tile grid. A real `disabled` button
+                // stops dispatching pointer events to its OWN children too
+                // (the drag handle prepended below would never see its own
+                // pointerdown), so this is a plain reorderMode check inside
+                // the handler instead of the disabled attribute.
+                card.addEventListener('click', () => { if (!reorderMode) goInto(row); });
+                if (reorderMode) {
+                    if (isDraggableRow(row)) {
+                        card.classList.add('mtn-card-reorderable');
+                        card.dataset.nodeKey = row.dataset.nodeKey;
+                        const handle = document.createElement('span');
+                        handle.className = 'mtn-drag-handle';
+                        handle.setAttribute('aria-hidden', 'true');
+                        handle.innerHTML = '<i class="bx bx-dots-vertical-rounded"></i><i class="bx bx-dots-vertical-rounded"></i>';
+                        card.prepend(handle);
+                    } else {
+                        card.classList.add('mtn-card-locked');
+                    }
+                }
                 list.appendChild(card);
             });
             wrap.appendChild(list);
+            if (reorderMode) enableCardReorder(list);
             return wrap;
+        }
+        // Pointer-events drag (not HTML5 dragstart/dragover -- no real touch
+        // support for it in this WebView, same finding AppAdminInicio.js's
+        // own enableTileReorder already documents) over the CURRENT list's
+        // own reorderable cards. Reorders the DOM live as the dragged card
+        // crosses a neighbor's midpoint, then on release replays the real
+        // engine's own drag-drop sequence once (fireDropReorder) between the
+        // moved row and whichever real row ended up its new neighbor --
+        // that single real "drop" is what actually mutates sectionsData and
+        // re-renders the hidden engine; this module's own render() (called
+        // right after) just re-scrapes the result, same as any other edit.
+        function enableCardReorder(list) {
+            let dragEl = null;
+            let startY = 0;
+            function onPointerMove(e) {
+                if (!dragEl) return;
+                e.preventDefault();
+                dragEl.style.transform = `translateY(${e.clientY - startY}px)`;
+                const under = document.elementFromPoint(dragEl.getBoundingClientRect().left + 20, e.clientY)?.closest('.mtn-card-reorderable');
+                if (under && under !== dragEl && under.parentElement === list) {
+                    const rect = under.getBoundingClientRect();
+                    const before = e.clientY < rect.top + rect.height / 2;
+                    list.insertBefore(dragEl, before ? under : under.nextSibling);
+                }
+            }
+            function onPointerUp() {
+                if (!dragEl) return;
+                const movedCard = dragEl;
+                movedCard.classList.remove('mtn-card-dragging');
+                movedCard.style.transform = '';
+                document.removeEventListener('pointermove', onPointerMove);
+                document.removeEventListener('pointerup', onPointerUp);
+                dragEl = null;
+                // Whichever real card now sits right after the moved one is
+                // the real engine's own "insert before this" target
+                // (reorderInPlace's exact semantic); if the moved card ended
+                // up last, there's no such neighbor and nothing changed.
+                const neighbor = movedCard.nextElementSibling;
+                if (neighbor && neighbor.classList.contains('mtn-card-reorderable') && neighbor.dataset.nodeKey !== movedCard.dataset.nodeKey) {
+                    const fromRow = rowByKey(movedCard.dataset.nodeKey);
+                    const toRow = rowByKey(neighbor.dataset.nodeKey);
+                    if (fromRow && toRow) fireDropReorder(fromRow, toRow);
+                }
+                render();
+            }
+            [].slice.call(list.querySelectorAll('.mtn-card-reorderable')).forEach((card) => {
+                const handle = card.querySelector('.mtn-drag-handle');
+                if (!handle) return;
+                handle.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    dragEl = card;
+                    startY = e.clientY;
+                    card.classList.add('mtn-card-dragging');
+                    document.addEventListener('pointermove', onPointerMove);
+                    document.addEventListener('pointerup', onPointerUp);
+                });
+            });
         }
 
         // --- the detail sheet, for a leaf (columna/acción) row --------------

@@ -1901,12 +1901,21 @@ function renderSectorOrder(sector) {
         renderSectorSubView();
     }));
     const treeWrap = document.createElement('div');
-    treeWrap.className = 'perm-tree perm-tree-scroll-x';
+    // mtn-hidden-engine -- same MobileTreeNav swap as renderSectorTree's own
+    // "Accesos Globales" réplica just above: this réplica keeps rendering
+    // off-screen, navHost shows the phone-style drill-down, now with its own
+    // reorder mode (see MobileTreeNav.js's own buildList/enableCardReorder)
+    // since reordering IS this whole screen's one job, unlike the other 3
+    // trees where it's one of several things a row can do.
+    treeWrap.className = 'perm-tree perm-tree-scroll-x mtn-hidden-engine';
     contentEl.appendChild(treeWrap);
     const hint = document.createElement('p');
     hint.className = 'home-carga-empty-note';
     hint.textContent = t('admin.loading') || '...';
     treeWrap.appendChild(hint);
+    const navHost = document.createElement('div');
+    navHost.className = 'mtn-host';
+    contentEl.appendChild(navHost);
 
     let sectorOrderInstance = null;
     (async () => {
@@ -1937,6 +1946,12 @@ function renderSectorOrder(sector) {
                 columnOrder: orderData.customColumnOrders || {},
             });
             await sectorOrderInstance.init(grantsData.grants || []);
+            window.MobileTreeNav.mount(navHost, treeWrap, {
+                title: t('admin.masterTreeNavHello'),
+                rootLabel: t('admin.giroReordenPersonalizadoTitle'),
+                pinsKey: `mtnPinsGiroOrder:${sector.id}`,
+                onSave: () => saveBtn.click(),
+            });
         } catch {
             treeWrap.innerHTML = '';
             const error = document.createElement('p');

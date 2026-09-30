@@ -4649,6 +4649,65 @@ body.dark-mode .admin-save-status{
     text-align: left;
 }
 .mtn-card:active{ background: var(--color-surface-alt); }
+/* Reorder mode -- Árbol Maestro's own Departamento/Área/Apartado depths,
+   Giro's Reorden Personalizado at every depth (see buildList/
+   enableCardReorder in MobileTreeNav.js). Same visual language as
+   AppInicio.css's own .home-reorder-toggle/.home-tile-drag-handle
+   (this app's existing tile-grid reorder), just on --color-* tokens since
+   this shell (AppAdminInicio.html) themes through Admin.css, not
+   AppInicio.css's own --home-* set. */
+.mtn-reorder-toolbar{ display: flex; justify-content: flex-end; margin: 0 0 0.5rem; }
+.mtn-reorder-toggle{
+    display: flex; align-items: center; gap: 0.3rem;
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 999px; padding: 0.35rem 0.75rem;
+    font-size: 0.72rem; font-weight: 700; color: var(--color-text-secondary);
+    font-family: inherit; cursor: pointer;
+}
+.mtn-reorder-toggle-on{ background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text); }
+.mtn-reorder-hint{
+    font-size: 0.72rem;
+    color: var(--color-accent);
+    margin: 0 0 0.5rem;
+}
+.mtn-card-reorderable{
+    position: relative;
+    border-color: var(--color-accent);
+    border-style: dashed;
+}
+.mtn-card-dragging{
+    opacity: 0.7;
+    border-style: solid;
+    box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.22);
+    z-index: 5;
+    position: relative;
+    cursor: grabbing;
+    /* Without this, the dragged card's own (transformed) position hit-tests
+       ABOVE whatever real sibling it's currently overlapping -- elementFromPoint
+       in enableCardReorder's onPointerMove would keep resolving back to the
+       card being dragged instead of the neighbor underneath it, so the live
+       reorder never triggered (confirmed live). Same fix
+       AppInicio.css's own .home-tile-dragging already uses. */
+    pointer-events: none;
+}
+.mtn-drag-handle{
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    margin-right: -0.15rem;
+    color: var(--color-text-secondary);
+    touch-action: none;
+    cursor: grab;
+}
+.mtn-drag-handle i{ font-size: 1rem; margin: -0.3rem 0; display: block; }
+/* A row this level never made draggable (e.g. Inicio/Panel/Tablero ahead of
+   the real, reorderable áreas) -- still visible while reordering (removing
+   it would misalign against the hidden engine's own indices), just clearly
+   inert instead of looking tappable with nothing happening on tap. */
+.mtn-card-locked{ opacity: 0.55; cursor: default; }
 .mtn-ico{
     flex: none;
     width: 2.1rem;
