@@ -1820,6 +1820,14 @@
     "clientReset": {
       "what": "Erases all of this client's test data and leaves it like new, so someone else can try it from scratch.",
       "example": "you use this after a demo, to leave the test client clean for the next person."
+    },
+    "delete": {
+      "what": "Removes this record from the system completely -- it can't be recovered afterward.",
+      "example": "you delete a plan you created by mistake that was never used."
+    },
+    "planTree": {
+      "what": "This is where you set which screens and permissions this plan includes, and what it costs a client who subscribes to it.",
+      "example": "you build a \"Basic\" plan with only 3 screens, and a \"Premium\" plan with all of them."
     }
   }
 }

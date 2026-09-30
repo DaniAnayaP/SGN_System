@@ -1819,6 +1819,14 @@
     "clientReset": {
       "what": "Borra todos los datos de prueba de este cliente y lo deja como si fuera nuevo, para que alguien más lo pruebe desde cero.",
       "example": "lo usas después de una demo, para dejar limpio el cliente de pruebas para la siguiente persona."
+    },
+    "delete": {
+      "what": "Borra este registro por completo del sistema, sin poder recuperarlo después.",
+      "example": "borras un plan que creaste por error y nunca se usó."
+    },
+    "planTree": {
+      "what": "Aquí defines qué pantallas y permisos incluye este plan, y qué le cuesta al cliente que lo contrate.",
+      "example": "armas un plan \"Básico\" que solo incluye 3 pantallas, y un plan \"Premium\" con todas."
     }
   }
 }

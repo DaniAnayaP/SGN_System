@@ -301,6 +301,7 @@ function renderPlans() {
         treeBtn.className = 'admin-icon-btn';
         treeBtn.setAttribute('aria-label', Dashboard.t('admin.planTreeTitle'));
         treeBtn.title = Dashboard.t('admin.planTreeTitle');
+        treeBtn.setAttribute('data-help-key', 'planTree');
         treeBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         treeBtn.addEventListener('click', () => selectPlanForTree(plan));
         const historyBtn = document.createElement('button');
@@ -308,6 +309,12 @@ function renderPlans() {
         historyBtn.className = 'admin-icon-btn';
         historyBtn.setAttribute('aria-label', Dashboard.t('admin.planChangeHistory'));
         historyBtn.title = Dashboard.t('admin.planChangeHistory');
+        // Reuses the same generic help.changeHistory content every other
+        // change-history icon in the system does (Dashboard.js's own
+        // table-toolbar version, Admin-SaaS.js's future ones) -- the concept
+        // is identical everywhere, only this button's own name (aria-label
+        // above) differs per screen.
+        historyBtn.setAttribute('data-help-key', 'changeHistory');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
         historyBtn.addEventListener('click', () => Dashboard.openPlanChangeHistory(plan));
         tdActions.append(treeBtn, historyBtn);
@@ -316,6 +323,7 @@ function renderPlans() {
             editBtn.type = 'button';
             editBtn.className = 'admin-icon-btn';
             editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+            editBtn.setAttribute('data-help-key', 'edit');
             if (canEditPlans) {
                 editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
                 editBtn.addEventListener('click', () => openEditModal(plan));
@@ -331,6 +339,7 @@ function renderPlans() {
             activateBtn.type = 'button';
             activateBtn.className = 'admin-icon-btn';
             activateBtn.innerHTML = '<i class="bx bx-check-shield" aria-hidden="true"></i>';
+            activateBtn.setAttribute('data-help-key', 'activate');
             if (canActivate) {
                 activateBtn.setAttribute('aria-label', Dashboard.t('admin.planActivate'));
                 activateBtn.title = Dashboard.t('admin.planActivate');
@@ -346,6 +355,7 @@ function renderPlans() {
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+        deleteBtn.setAttribute('data-help-key', 'delete');
         if (canEditPlans) {
             deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
             deleteBtn.addEventListener('click', () => removePlan(plan));
