@@ -892,8 +892,14 @@ function buildSidebarData(data, role, activePage) {
     if (role !== 'admin') return data;
 
     const mainSection = data.sections.find((s) => s.id === 'main');
-    const home = mainSection?.items.find((i) => i.id === 'home');
-    const dashboard = mainSection?.items.find((i) => i.id === 'dashboard');
+    // Inicio/Tablero themselves have real Estatus rows too (saas-home/
+    // saas-board, GENERAL_ITEMS in Admin-ArbolMaestroSaaS.js) -- confirmed
+    // live, 2026-09-30: "porque siguen apareciendo estas 3 opciones?...
+    // todo debe de habilitarse desde el árbol", against a screenshot
+    // showing Inicio/Tablero still visible for a zero-grant account. Same
+    // rule as every other item now: gated, not a free pass.
+    const home = hasSaasScreenGrant('saas-home') ? mainSection?.items.find((i) => i.id === 'home') : null;
+    const dashboard = hasSaasScreenGrant('saas-board') ? mainSection?.items.find((i) => i.id === 'dashboard') : null;
     // The 2 category dropdowns themselves are also reorderable in Árbol
     // Maestro SaaS (order.groups) -- confirmed live this was STILL missed
     // even after fixing each group's own internal screen order: dragging
@@ -6333,6 +6339,14 @@ function syncSaasNavIconVisibility() {
         if (!el) return;
         el.classList.toggle('top-bar-btn-hidden', !hasSaasScreenGrant(itemId));
     });
+    // The sidebar's own search box -- same "todo debe de habilitarse desde
+    // el árbol" rule, confirmed live 2026-09-30 against a screenshot still
+    // showing Buscar/Inicio/Tablero for a zero-grant account. .search has no
+    // id (shared markup across every page), and saas-search is a new
+    // GENERAL_ITEMS leaf (Admin-ArbolMaestroSaaS.js), not a top-bar icon, so
+    // it isn't in SAAS_NAV_ICON_GATES above.
+    const searchWrap = document.querySelector('.search');
+    if (searchWrap) searchWrap.classList.toggle('top-bar-btn-hidden', !hasSaasScreenGrant('saas-search'));
 }
 
 // Once the gear icon itself is visible, each row inside its dropdown is

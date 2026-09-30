@@ -62,6 +62,10 @@ const GENERAL_ITEMS = [
     { itemId: 'saas-home', labelKey: 'menu.home', href: null },
     { itemId: 'saas-panel', labelKey: 'menu.panel', href: null },
     { itemId: 'saas-board', labelKey: 'menu.dashboard', href: 'Inicio-en.html' },
+    // The sidebar's own search box -- added 2026-09-30 so it has a real row
+    // to enable/disable too ("todo debe de habilitarse desde el árbol"),
+    // same as Inicio/Panel/Tablero right above it.
+    { itemId: 'saas-search', labelKey: 'main.search', href: null },
 ];
 
 // "Iconos de Navegación" -- the icons of the top bar every SaaS page shares
