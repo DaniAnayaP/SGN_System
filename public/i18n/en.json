@@ -1792,6 +1792,34 @@
     "sidebarSearch": {
       "what": "Searches for any screen in the menu by its name, without having to open every group to find it.",
       "example": "you type \"transfer\" and it shows you the Transfer Log screen directly."
+    },
+    "edit": {
+      "what": "Opens this record so you can change its information.",
+      "example": "if a client's name is misspelled, you fix it here."
+    },
+    "activate": {
+      "what": "Turns this record back on so it works in the system again, without having to create it from scratch.",
+      "example": "you reactivate a client who had stopped paying and is now caught up."
+    },
+    "deactivate": {
+      "what": "Turns this record off without deleting it, so it stops working in the system for now.",
+      "example": "you deactivate a client who stopped paying, without losing any of their information."
+    },
+    "adminAccess": {
+      "what": "Shows this client's main administrator username and password, so you can log into their account if you need to.",
+      "example": "if the client asks for help and can't log in, you check their access details here."
+    },
+    "permisosAdicionales": {
+      "what": "This is where you give a client extra access that wasn't included in their original plan, billed separately.",
+      "example": "a client wants a screen their plan doesn't include, you add it here and it gets added to their monthly payment."
+    },
+    "appToggle": {
+      "what": "Turns this client's access to the mobile app on or off, without affecting their access to the web version.",
+      "example": "a client who only pays for Web shouldn't be able to use the App -- this is where you allow or remove it."
+    },
+    "clientReset": {
+      "what": "Erases all of this client's test data and leaves it like new, so someone else can try it from scratch.",
+      "example": "you use this after a demo, to leave the test client clean for the next person."
     }
   }
 }

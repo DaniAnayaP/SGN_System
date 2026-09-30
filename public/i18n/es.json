@@ -1791,6 +1791,34 @@
     "sidebarSearch": {
       "what": "Busca cualquier pantalla del menú por su nombre, sin tener que abrir cada grupo para encontrarla.",
       "example": "escribes \"traslados\" y te muestra directo la pantalla de Registro de Traslados."
+    },
+    "edit": {
+      "what": "Abre este registro para poder cambiar su información.",
+      "example": "si el nombre de un cliente está mal escrito, lo corriges aquí."
+    },
+    "activate": {
+      "what": "Vuelve a prender este registro para que funcione de nuevo en el sistema, sin tener que crearlo otra vez.",
+      "example": "reactivas a un cliente que había dejado de pagar y ahora ya se puso al corriente."
+    },
+    "deactivate": {
+      "what": "Apaga este registro sin borrarlo, para que deje de funcionar en el sistema por ahora.",
+      "example": "desactivas a un cliente que dejó de pagar, sin perder toda su información."
+    },
+    "adminAccess": {
+      "what": "Muestra el usuario y la contraseña del administrador principal de este cliente, para poder entrar a su cuenta si lo necesitas.",
+      "example": "si el cliente pide ayuda y no puede entrar, aquí ves sus datos de acceso."
+    },
+    "permisosAdicionales": {
+      "what": "Aquí le das a un cliente accesos extra que no venían incluidos en su plan original, y se le cobran aparte.",
+      "example": "un cliente quiere una pantalla que su plan no incluye, se la agregas aquí y se le suma a su pago mensual."
+    },
+    "appToggle": {
+      "what": "Prende o apaga el acceso de este cliente a la aplicación móvil, sin afectar su acceso a la versión web.",
+      "example": "un cliente que solo paga por Web no debe poder usar la App, aquí se lo permites o se lo quitas."
+    },
+    "clientReset": {
+      "what": "Borra todos los datos de prueba de este cliente y lo deja como si fuera nuevo, para que alguien más lo pruebe desde cero.",
+      "example": "lo usas después de una demo, para dejar limpio el cliente de pruebas para la siguiente persona."
     }
   }
 }

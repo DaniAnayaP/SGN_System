@@ -300,7 +300,7 @@ function systemCell(value) {
     return td;
 }
 
-function iconButton(iconClass, label, onClick, { disabled = false, title = '', danger = false } = {}) {
+function iconButton(iconClass, label, onClick, { disabled = false, title = '', danger = false, helpKey = '' } = {}) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = danger ? 'admin-icon-btn admin-icon-btn-danger' : 'admin-icon-btn';
@@ -312,6 +312,11 @@ function iconButton(iconClass, label, onClick, { disabled = false, title = '', d
     // disabled-reason hint, usually) ever showed a hover tooltip at all;
     // every other icon-only button in the row stayed silent on hover.
     btn.title = title || label;
+    // Modo ayuda's own "qué hace"/example (Dashboard.js's findHelpModeContent
+    // reads this the same way it reads a top-bar icon's) -- optional so
+    // call sites without a written help.<key> entry yet keep today's
+    // name-only tooltip.
+    if (helpKey) btn.setAttribute('data-help-key', helpKey);
     btn.addEventListener('click', onClick);
     return btn;
 }
@@ -404,6 +409,7 @@ function renderClients() {
             {
                 disabled: !canEditClients,
                 title: canEditClients ? Dashboard.t(client.app_enabled ? 'menu.appToggleOn' : 'menu.appToggleOff') : Dashboard.t('admin.clientEditNoPermission'),
+                helpKey: 'appToggle',
             },
         );
         appToggleBtn.classList.add(client.app_enabled ? 'admin-icon-btn-toggle-on' : 'admin-icon-btn-toggle-off');
@@ -414,11 +420,15 @@ function renderClients() {
             iconButton('bx-key', Dashboard.t('admin.adminAccessTitle'), () => openAdminAccessModal(client), {
                 disabled: !client.adminUsername,
                 title: client.adminUsername ? '' : Dashboard.t('admin.adminAccessNoAdminYet'),
+                helpKey: 'adminAccess',
             }),
-            iconButton('bx-plus', Dashboard.t('admin.permisosAdicionalesTitle'), () => openPermisosAdicionalesModal(client)),
+            iconButton('bx-plus', Dashboard.t('admin.permisosAdicionalesTitle'), () => openPermisosAdicionalesModal(client), {
+                helpKey: 'permisosAdicionales',
+            }),
             iconButton('bx-edit', Dashboard.t('admin.edit'), () => startEdit(client), {
                 disabled: !canEditClients,
                 title: canEditClients ? '' : Dashboard.t('admin.clientEditNoPermission'),
+                helpKey: 'edit',
             }),
             iconButton(
                 client.status === 'inactivo' ? 'bx-check-circle' : 'bx-x-circle',
@@ -427,6 +437,7 @@ function renderClients() {
                 {
                     disabled: !canActivateClients,
                     title: canActivateClients ? '' : Dashboard.t('admin.clientActivateNoPermission'),
+                    helpKey: client.status === 'inactivo' ? 'activate' : 'deactivate',
                 },
             ),
             appToggleBtn,
@@ -434,6 +445,7 @@ function renderClients() {
                 disabled: !canResetClients,
                 title: canResetClients ? Dashboard.t('admin.clientResetTooltip') : Dashboard.t('admin.clientResetNoPermission'),
                 danger: true,
+                helpKey: 'clientReset',
             }),
         );
 
