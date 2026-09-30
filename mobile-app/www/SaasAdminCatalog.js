@@ -158,6 +158,15 @@ window.SAAS_ADMIN_CATALOG = [
                     tablaApartado('tabla', ['Título', 'Nombre de archivo', 'Subido por', 'Fecha de subida'], ['Filtros en cascada (Cliente/Depto/Área/Categoría)', '+ Subir archivo', 'Descargar', 'Eliminar']),
                 ],
             },
+            // "Árbol Maestro SaaS" describing itself -- mirrors
+            // public/SaasAdminCatalog.js's own entry (moved here from a
+            // GENERAL_ITEMS leaf so it sits with its real sidebar siblings).
+            {
+                itemId: 'saas-master-tree', labelKey: 'menu.saasMasterTree', href: 'Admin-ArbolMaestroSaaS.html',
+                apartados: [
+                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Guardar'] },
+                ],
+            },
         ],
     },
 ];

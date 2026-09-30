@@ -158,6 +158,22 @@ window.SAAS_ADMIN_CATALOG = [
                     tablaApartado('tabla', ['Título', 'Nombre de archivo', 'Subido por', 'Fecha de subida'], ['Filtros en cascada (Cliente/Depto/Área/Categoría)', '+ Subir archivo', 'Descargar', 'Eliminar']),
                 ],
             },
+            // "Árbol Maestro SaaS" describing itself -- same self-referential
+            // pattern the client tree's own "Árbol de Permisos Maestro" uses
+            // above (saas-master-permissions-tree). Moved here from a
+            // GENERAL_ITEMS leaf, confirmed live, 2026-09-30: "porque en el
+            // árbol del saas no se ve el árbol Maestro del saas?" -- it needs
+            // to sit alongside its REAL sidebar siblings (Costo Accesos-
+            // Permisos, Equipo SaaS, Nuestros Respaldos, Material de Apoyo,
+            // see saasConfigSubmenu in Dashboard.js), not under Accesos
+            // Generales next to Inicio/Panel/Tablero, which is a different
+            // grouping than the real sidebar ever had.
+            {
+                itemId: 'saas-master-tree', labelKey: 'menu.saasMasterTree', href: 'Admin-ArbolMaestroSaaS.html',
+                apartados: [
+                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Guardar'] },
+                ],
+            },
         ],
     },
 ];

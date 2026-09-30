@@ -66,23 +66,6 @@ const GENERAL_ITEMS = [
     // to enable/disable too ("todo debe de habilitarse desde el árbol"),
     // same as Inicio/Panel/Tablero right above it.
     { itemId: 'saas-search', labelKey: 'main.search', href: null },
-    // This screen describing itself -- closes the LAST "deliberate
-    // exception" it and 'saas-team' (Equipo SaaS, gated via its own
-    // existing SAAS_ADMIN_CATALOG entry, see Dashboard.js) had. Confirmed
-    // live, 2026-09-30: "SOLO EL USUARIO admin_saas tiene accesos a
-    // todo... los usuarios de prueba tienen la misma estructura" -- the
-    // bootstrapping problem (this screen could lock everyone out of the
-    // tool that un-locks it) is solved by admin_saas's own
-    // isSaasSuperAdmin bypass, not by leaving the screen permanently
-    // ungated. A flat GENERAL_ITEMS entry, not a self-referential
-    // apartados:[{...}] screen like the client tree's own "Árbol de
-    // Permisos Maestro" (SaasAdminCatalog.js's 'saas-master-permissions-
-    // tree') -- this screen's only real control (Guardar) is a plain
-    // acción with nothing of its own to nest, and an acción-only apartado
-    // only ever surfaces through a real CATALOG screen's own "Botones"
-    // sibling row (see the "hasOwnBody" comment in renderApartadoNode),
-    // which this synthetic entry never passes through anyway.
-    { itemId: 'saas-master-tree', labelKey: 'menu.saasMasterTree', href: null },
 ];
 
 // "Iconos de Navegación" -- the icons of the top bar every SaaS page shares
