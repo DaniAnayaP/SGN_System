@@ -160,6 +160,7 @@ function renderJobPositions() {
         const historyBtn = document.createElement('button');
         historyBtn.type = 'button';
         historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('data-help-key', 'changeHistory');
         historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
         historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
@@ -167,12 +168,14 @@ function renderJobPositions() {
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'admin-icon-btn';
+        editBtn.setAttribute('data-help-key', 'edit');
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editBtn.addEventListener('click', () => openEditModal(jp));
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+        deleteBtn.setAttribute('data-help-key', 'delete');
         deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
         deleteBtn.addEventListener('click', () => removeJobPosition(jp));

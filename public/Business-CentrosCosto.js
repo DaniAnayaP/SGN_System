@@ -125,6 +125,7 @@ function renderCostCenters() {
         const historyBtn = document.createElement('button');
         historyBtn.type = 'button';
         historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('data-help-key', 'changeHistory');
         historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
         historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
@@ -132,6 +133,7 @@ function renderCostCenters() {
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'admin-icon-btn';
+        editBtn.setAttribute('data-help-key', 'edit');
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editBtn.addEventListener('click', () => openEditModal(cc));
@@ -139,6 +141,7 @@ function renderCostCenters() {
         toggleBtn.type = 'button';
         toggleBtn.className = 'admin-icon-btn';
         toggleBtn.innerHTML = `<i class="bx ${cc.status === 'inactive' ? 'bx-check-circle' : 'bx-x-circle'}" aria-hidden="true"></i>`;
+        toggleBtn.setAttribute('data-help-key', cc.status === 'inactive' ? 'activate' : 'deactivate');
         toggleBtn.setAttribute('aria-label', Dashboard.t(cc.status === 'inactive' ? 'admin.activate' : 'admin.deactivate'));
         toggleBtn.title = Dashboard.t(cc.status === 'inactive' ? 'admin.activate' : 'admin.deactivate');
         toggleBtn.addEventListener('click', () => toggleCostCenterStatus(cc));

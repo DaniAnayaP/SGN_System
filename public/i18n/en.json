@@ -1872,6 +1872,30 @@
     "hrResetPassword": {
       "what": "Generates a new password for this worker, in case they lost or forgot theirs.",
       "example": "an employee can't remember their password, you reset it and share the new one."
+    },
+    "jobPositionPermissions": {
+      "what": "Sets which screens and what anyone with this job position can do.",
+      "example": "you give \"Payroll\" access to everyone with the \"HR Manager\" position, without setting up each person separately."
+    },
+    "authorizeFieldRule": {
+      "what": "Activates this fill-order rule so it actually starts applying in the system.",
+      "example": "someone creates a new rule, but it doesn't work until an administrator authorizes it here."
+    },
+    "operationalStatusLocked": {
+      "what": "This user is automatically locked by their HR Status (for example, terminated); it can't be activated or deactivated by hand from here.",
+      "example": "if someone was terminated in HR, this shows locked until it's resolved from their HR record."
+    },
+    "activePermissionsTree": {
+      "what": "Shows a summary of everything this person can currently see and do, combining their job position and any extra permissions.",
+      "example": "you quickly check what an employee can do without reviewing every permission one by one."
+    },
+    "grantAccess": {
+      "what": "Gives this person an extra permission that isn't included in their job position.",
+      "example": "you give access to a special report to someone who wouldn't normally have it based on their position."
+    },
+    "resetRole": {
+      "what": "Removes every extra permission you gave this person, leaving them with only what their job position normally includes.",
+      "example": "someone changed positions and you want to remove the extra access from their previous one."
     }
   }
 }

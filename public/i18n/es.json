@@ -1871,6 +1871,30 @@
     "hrResetPassword": {
       "what": "Genera una contraseña nueva para este trabajador, por si la perdió u olvidó.",
       "example": "un empleado no recuerda su contraseña, se la reinicias y le compartes la nueva."
+    },
+    "jobPositionPermissions": {
+      "what": "Define qué pantallas y qué puede hacer cualquier persona con este puesto de trabajo.",
+      "example": "das acceso a \"Nómina\" a todos los que tengan el puesto \"Gerente de RH\", sin configurar a cada persona por separado."
+    },
+    "authorizeFieldRule": {
+      "what": "Activa esta regla de orden de llenado para que empiece a aplicarse de verdad en el sistema.",
+      "example": "alguien crea una regla nueva, pero no funciona hasta que un administrador la autoriza aquí."
+    },
+    "operationalStatusLocked": {
+      "what": "Este usuario está bloqueado automáticamente por su Estatus RH (por ejemplo, dado de baja); no se puede activar o desactivar a mano desde aquí.",
+      "example": "si alguien fue dado de baja en RH, aquí se ve bloqueado hasta que se resuelva desde su expediente de RH."
+    },
+    "activePermissionsTree": {
+      "what": "Muestra un resumen de todo lo que esta persona puede ver y hacer ahora mismo, sumando su puesto y cualquier permiso extra.",
+      "example": "revisas rápido qué puede hacer un empleado sin tener que revisar cada permiso uno por uno."
+    },
+    "grantAccess": {
+      "what": "Da a esta persona un permiso extra que no viene incluido en su puesto de trabajo.",
+      "example": "le das acceso a un reporte especial a alguien que normalmente no lo tendría por su puesto."
+    },
+    "resetRole": {
+      "what": "Quita todos los permisos extra que le diste a esta persona y la deja solo con lo que su puesto normalmente incluye.",
+      "example": "alguien cambió de puesto y quieres quitarle los accesos extra de su puesto anterior."
     }
   }
 }

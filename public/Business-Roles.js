@@ -87,6 +87,7 @@ function renderJobPositions() {
         configureBtn.type = 'button';
         configureBtn.className = 'admin-icon-btn';
         configureBtn.setAttribute('aria-label', Dashboard.t('business.permissionsTitle'));
+        configureBtn.setAttribute('data-help-key', 'jobPositionPermissions');
         configureBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         configureBtn.addEventListener('click', () => selectJobPositionForPermissions(jp));
         tdActions.appendChild(configureBtn);

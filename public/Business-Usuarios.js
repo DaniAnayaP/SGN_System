@@ -276,10 +276,12 @@ function renderUsersTable() {
             opToggleBtn.innerHTML = '<i class="bx bx-lock-alt" aria-hidden="true"></i>';
             opToggleBtn.setAttribute('aria-label', Dashboard.t('business.accesosOperationalLocked'));
             opToggleBtn.title = Dashboard.t('business.accesosOperationalLocked');
+            opToggleBtn.setAttribute('data-help-key', 'operationalStatusLocked');
         } else {
             opToggleBtn.innerHTML = `<i class="bx ${user.active ? 'bx-x-circle' : 'bx-check-circle'}" aria-hidden="true"></i>`;
             opToggleBtn.setAttribute('aria-label', Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate'));
             opToggleBtn.title = Dashboard.t(user.active ? 'admin.deactivate' : 'admin.activate');
+            opToggleBtn.setAttribute('data-help-key', user.active ? 'deactivate' : 'activate');
             opToggleBtn.addEventListener('click', () => toggleUserActive(user));
         }
         tdOperationalStatus.append(opBadge, opToggleBtn);
@@ -289,6 +291,7 @@ function renderUsersTable() {
         const activePermsBtn = document.createElement('button');
         activePermsBtn.type = 'button';
         activePermsBtn.className = 'admin-icon-btn';
+        activePermsBtn.setAttribute('data-help-key', 'activePermissionsTree');
         activePermsBtn.setAttribute('aria-label', Dashboard.t('business.accesosActivePermsBtn'));
         activePermsBtn.title = Dashboard.t('business.accesosActivePermsBtn');
         activePermsBtn.innerHTML = '<i class="bx bx-sitemap" aria-hidden="true"></i>';
@@ -301,6 +304,7 @@ function renderUsersTable() {
         const grantBtn = document.createElement('button');
         grantBtn.type = 'button';
         grantBtn.className = 'admin-icon-btn';
+        grantBtn.setAttribute('data-help-key', 'grantAccess');
         grantBtn.setAttribute('aria-label', Dashboard.t('business.accesosGrantTitle'));
         grantBtn.title = Dashboard.t('business.accesosGrantTitle');
         grantBtn.innerHTML = '<i class="bx bx-key" aria-hidden="true"></i>';
@@ -310,6 +314,7 @@ function renderUsersTable() {
         const resetRoleBtn = document.createElement('button');
         resetRoleBtn.type = 'button';
         resetRoleBtn.className = 'admin-icon-btn';
+        resetRoleBtn.setAttribute('data-help-key', 'resetRole');
         resetRoleBtn.setAttribute('aria-label', Dashboard.t('business.resetRoleBtn'));
         resetRoleBtn.title = Dashboard.t('business.resetRoleBtn');
         resetRoleBtn.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
