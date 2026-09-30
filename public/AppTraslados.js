@@ -358,6 +358,7 @@ function renderListView() {
     const newBtn = document.createElement('button');
     newBtn.type = 'button';
     newBtn.className = 'home-carga-new-btn';
+    newBtn.setAttribute('data-help-key', 'mobileNewRecord');
     newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('home.trasladoNewButton')}</span>`;
     newBtn.addEventListener('click', createNewTransfer);
     bodyEl.appendChild(newBtn);
@@ -654,6 +655,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
 
 (async function init() {
     await loadLanguage();
+    window.HelpMode?.init(t);
     try {
         const meRes = await fetch(apiUrl('/api/me'), { credentials: 'include' });
         if (!meRes.ok) { window.location.replace('Login.html'); return; }

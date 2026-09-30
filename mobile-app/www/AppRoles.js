@@ -238,6 +238,7 @@ async function openJobPositionTree(jp) {
         equalizeBtn.type = 'button';
         equalizeBtn.className = 'home-carga-secondary-btn';
         equalizeBtn.style.marginTop = '1rem';
+        equalizeBtn.setAttribute('data-help-key', 'roleEqualizeAllAppWeb');
         equalizeBtn.innerHTML = `<i class="bx bx-copy" aria-hidden="true"></i><span>${t('main.appEqualizeAll')}</span>`;
         equalizeBtn.addEventListener('click', () => tree?.equalizeAllAppToWeb());
         bodyEl.appendChild(equalizeBtn);
@@ -246,6 +247,7 @@ async function openJobPositionTree(jp) {
         fillMissingBtn.type = 'button';
         fillMissingBtn.className = 'home-carga-secondary-btn';
         fillMissingBtn.style.marginTop = '1rem';
+        fillMissingBtn.setAttribute('data-help-key', 'roleFillMissingAppWeb');
         fillMissingBtn.innerHTML = `<i class="bx bx-list-plus" aria-hidden="true"></i><span>${t('main.appFillMissingAll')}</span>`;
         fillMissingBtn.addEventListener('click', () => tree?.fillAllMissingAppToWeb());
         bodyEl.appendChild(fillMissingBtn);

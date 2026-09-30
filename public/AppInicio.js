@@ -2264,6 +2264,7 @@ async function loadClientBranding() {
 
 (async function init() {
     await loadLanguage();
+    window.HelpMode?.init(t);
     updateConnIndicator();
     try {
         const [meRes, screensRes, profileRes] = await Promise.all([

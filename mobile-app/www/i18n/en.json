@@ -1957,6 +1957,22 @@
     "paletteEditColor": {
       "what": "Opens your computer's color picker so you can change this particular color.",
       "example": "the background color turned out too dark, so you open it here and pick a lighter one."
+    },
+    "mobileNewRecord": {
+      "what": "Creates a real, blank record right away -- not a form you fill out before saving. You fill in each field one at a time, and it saves as you go.",
+      "example": "you tap it to start a new record, then fill in each field one by one, without having to finish everything in one sitting."
+    },
+    "mobileBarcodeScan": {
+      "what": "Opens the camera to scan the barcode, instead of typing it by hand.",
+      "example": "you point the camera at the box's barcode and the number fills in by itself."
+    },
+    "roleEqualizeAllAppWeb": {
+      "what": "Copies the Web value over to App in EVERY row of this job position at once, instead of equalizing them one by one.",
+      "example": "you granted Web-only access to many screens, and with one tap you equalize them in App too."
+    },
+    "roleFillMissingAppWeb": {
+      "what": "Copies Web over to App only in rows where App is still empty, without touching the ones you already set differently on purpose.",
+      "example": "you fill in every missing App permission at once, without overwriting the ones you already left different."
     }
   }
 }

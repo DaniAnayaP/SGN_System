@@ -396,6 +396,7 @@ function renderListView() {
     const newBtn = document.createElement('button');
     newBtn.type = 'button';
     newBtn.className = 'home-carga-new-btn';
+    newBtn.setAttribute('data-help-key', 'mobileNewRecord');
     newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('home.articuloNewButton')}</span>`;
     newBtn.addEventListener('click', createNewSkuItem);
     bodyEl.appendChild(newBtn);
@@ -619,6 +620,7 @@ function buildFieldBody(field, record) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'home-carga-photo-btn';
+        btn.setAttribute('data-help-key', 'evidencePhoto');
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = 'image/*';
@@ -689,6 +691,7 @@ function buildFieldBody(field, record) {
         const scanBtn = document.createElement('button');
         scanBtn.type = 'button';
         scanBtn.className = 'scan-btn';
+        scanBtn.setAttribute('data-help-key', 'mobileBarcodeScan');
         scanBtn.innerHTML = `<i class="bx bx-barcode-reader" aria-hidden="true"></i><span>${t('home.articuloScanButton')}</span>`;
         scanBtn.addEventListener('click', () => openBarcodeScanner(field));
         const divider = document.createElement('div');
@@ -830,6 +833,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
 
 (async function init() {
     await loadLanguage();
+    window.HelpMode?.init(t);
     try {
         const meRes = await fetch(apiUrl('/api/me'), { credentials: 'include' });
         if (!meRes.ok) { window.location.replace('Login.html'); return; }

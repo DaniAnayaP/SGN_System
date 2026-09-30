@@ -387,6 +387,7 @@ function renderListView() {
     const newBtn = document.createElement('button');
     newBtn.type = 'button';
     newBtn.className = 'home-carga-new-btn';
+    newBtn.setAttribute('data-help-key', 'mobileNewRecord');
     newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('home.cargaNewButton')}</span>`;
     newBtn.addEventListener('click', createNewCarga);
     bodyEl.appendChild(newBtn);
@@ -673,6 +674,7 @@ function buildFieldBody(field, record) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'home-carga-photo-btn';
+        btn.setAttribute('data-help-key', 'evidencePhoto');
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = 'image/*';

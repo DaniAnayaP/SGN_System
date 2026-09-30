@@ -290,6 +290,7 @@ function renderListView() {
     const newBtn = document.createElement('button');
     newBtn.type = 'button';
     newBtn.className = 'home-carga-new-btn';
+    newBtn.setAttribute('data-help-key', 'mobileNewRecord');
     newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('home.catNewButton')}</span>`;
     newBtn.addEventListener('click', createNewCategory);
     bodyEl.appendChild(newBtn);
@@ -349,6 +350,7 @@ function renderFormView() {
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'home-carga-photo-btn';
+    deleteBtn.setAttribute('data-help-key', 'delete');
     deleteBtn.style.marginTop = '0.8rem';
     deleteBtn.innerHTML = `<i class="bx bx-trash" aria-hidden="true"></i><span>${t('admin.delete')}</span>`;
     deleteBtn.addEventListener('click', () => {
@@ -512,6 +514,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
 
 (async function init() {
     await loadLanguage();
+    window.HelpMode?.init(t);
     try {
         const [meRes, businessProfileRes] = await Promise.all([
             fetch(apiUrl('/api/me'), { credentials: 'include' }),

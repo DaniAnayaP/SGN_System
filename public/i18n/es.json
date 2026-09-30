@@ -1979,6 +1979,22 @@
     "paletteEditColor": {
       "what": "Abre el selector de color de tu computadora para cambiar este color en particular.",
       "example": "el color de fondo quedó muy oscuro, lo abres aquí y eliges uno más claro."
+    },
+    "mobileNewRecord": {
+      "what": "Crea un registro nuevo y en blanco de inmediato — no es un formulario que llenas antes de guardar. Vas llenando cada dato por separado, y se guarda solo conforme avanzas.",
+      "example": "lo tocas para empezar un registro nuevo, y luego vas llenando cada campo uno por uno, sin tener que terminarlo todo de un jalón."
+    },
+    "mobileBarcodeScan": {
+      "what": "Abre la cámara para escanear el código de barras, en vez de escribirlo a mano.",
+      "example": "apuntas la cámara al código de barras de la caja y el número se llena solo."
+    },
+    "roleEqualizeAllAppWeb": {
+      "what": "Copia el valor de Web hacia App en TODOS los renglones de este puesto de trabajo a la vez, en lugar de igualarlos uno por uno.",
+      "example": "diste permisos solo en Web para muchas pantallas, y con un toque los igualas también en App."
+    },
+    "roleFillMissingAppWeb": {
+      "what": "Copia Web hacia App solo en los renglones donde App todavía está vacío, sin tocar los que ya configuraste distinto a propósito.",
+      "example": "llenas de golpe los permisos de App que faltan, sin pisar los que ya dejaste diferentes."
     }
   }
 }

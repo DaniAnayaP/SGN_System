@@ -866,6 +866,54 @@ body{
     transition: width linear;
 }
 
+/* "Modo ayuda" -- HelpMode.js's shared toggle + floating description
+   bubble (see public/Dashboard.js's own setHelpModeActive/
+   showHelpModeTooltip for the desktop original). Regular surface, not
+   desktop's inverted dark chip -- matches this app's own floating-panel
+   language (.home-toast/.home-picker-dropdown above) better than copying
+   desktop's look verbatim. */
+[data-help-mode-toggle].active{
+    background: var(--home-accent-strong-1);
+    border-color: var(--home-accent-strong-1);
+    color: var(--home-on-accent);
+}
+body.help-mode-active,
+body.help-mode-active *{
+    cursor: help !important;
+}
+.help-mode-tooltip{
+    position: fixed;
+    z-index: 2000;
+    max-width: min(18rem, calc(100vw - 1.6rem));
+    background: var(--home-surface);
+    border: 1px solid var(--home-border);
+    color: var(--home-text-primary);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    padding: 0.6rem 0.85rem;
+    border-radius: 0.6rem;
+    box-shadow: 0 8px 20px -10px var(--home-shadow);
+    pointer-events: none;
+}
+.help-mode-tooltip-name{
+    font-weight: 700;
+}
+.help-mode-tooltip-what{
+    margin-top: 0.4rem;
+    color: var(--home-text-secondary);
+}
+.help-mode-tooltip-example{
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--home-border);
+    color: var(--home-text-tertiary);
+    font-size: 0.74rem;
+}
+.help-mode-tooltip-example b{
+    color: var(--home-accent-strong-1);
+    font-weight: 600;
+}
+
 /* Bottom sheet — the mobile-native pattern every hamburger-menu item that
    needs more than a plain toggle should use (see "Tamaño del sistema" here
    as the reference implementation); a dim backdrop + a rounded-top card
