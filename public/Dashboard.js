@@ -5174,18 +5174,29 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
 // use this one app), nested inside .saas-app-detail-head, not a screen-level
 // description -- querySelector('.admin-subtitle') alone would risk grabbing
 // or hiding THAT instead, depending on DOM order.
-(function migrateAdminSubtitleIntoHelpMode() {
+// Run from dashboard:language-changed (fired once at initial load AND on
+// every later language switch, see loadLanguage above), never at top-level
+// script time -- confirmed live, 2026-09-30: with Español selected, the
+// tooltip still read in English. Root cause: this used to be a plain IIFE
+// that ran the instant the script parsed, BEFORE initDashboard's own
+// loadLanguage(getStoredLang()) had fetched/applied translations, so it
+// always captured .admin-subtitle's raw English HTML fallback instead of
+// the real selected language, then never touched it again -- the
+// "only if no title/aria-label yet" guard made that capture permanent even
+// after the subtitle's own text later re-translated correctly around it.
+// Removed that guard too, so switching language while the page is open
+// re-syncs the tooltip instead of leaving it stuck on whatever ran first.
+function migrateAdminSubtitleIntoHelpMode() {
     const subtitle = document.querySelector('.admin-panel > .admin-subtitle');
     const titleEl = document.querySelector('.top-bar-title .welcome-text');
     if (!subtitle || !titleEl) return;
     const text = subtitle.textContent.trim();
     if (!text) return;
-    if (!titleEl.getAttribute('title') && !titleEl.getAttribute('aria-label')) {
-        titleEl.setAttribute('aria-label', text);
-        titleEl.title = text;
-    }
+    titleEl.setAttribute('aria-label', text);
+    titleEl.title = text;
     subtitle.hidden = true;
-})();
+}
+document.addEventListener('dashboard:language-changed', migrateAdminSubtitleIntoHelpMode);
 
 // --- Notifications dropdown (Alertas / Avisos / Solicitudes / Autorizar) ---
 // Converts the existing static #notifications-btn (already present, plain,
