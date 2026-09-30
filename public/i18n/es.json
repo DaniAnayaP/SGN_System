@@ -1827,6 +1827,18 @@
     "planTree": {
       "what": "Aquí defines qué pantallas y permisos incluye este plan, y qué le cuesta al cliente que lo contrate.",
       "example": "armas un plan \"Básico\" que solo incluye 3 pantallas, y un plan \"Premium\" con todas."
+    },
+    "giroAccesosGlobales": {
+      "what": "Define qué pantallas y permisos tienen por defecto todos los clientes de este giro de negocio, sin configurar cliente por cliente.",
+      "example": "todos los clientes de giro \"Restaurantes\" ven automáticamente la pantalla de Control de Inventario de Alimentos."
+    },
+    "giroReordenPersonalizado": {
+      "what": "Cambia el orden en que aparecen las pantallas en el menú, solo para los clientes de este giro de negocio.",
+      "example": "subes \"Recetas\" hasta arriba del menú porque es lo primero que usan los restaurantes."
+    },
+    "businessSectorPreview": {
+      "what": "Te deja ver el sistema tal como lo vería un cliente de este giro de negocio, sin tener que iniciar sesión como uno de ellos.",
+      "example": "revisas cómo se ve el menú para un cliente de \"Restaurantes\" antes de activarlo."
     }
   }
 }

@@ -262,6 +262,7 @@ function renderSectors() {
         treeBtn.className = 'admin-icon-btn';
         treeBtn.setAttribute('aria-label', Dashboard.t('admin.giroAccesosGlobalesTitle'));
         treeBtn.title = Dashboard.t('admin.giroAccesosGlobalesTitle');
+        treeBtn.setAttribute('data-help-key', 'giroAccesosGlobales');
         treeBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         treeBtn.addEventListener('click', () => openSectorTreeModal(sector));
 
@@ -270,6 +271,7 @@ function renderSectors() {
         orderBtn.className = 'admin-icon-btn';
         orderBtn.setAttribute('aria-label', Dashboard.t('admin.giroReordenPersonalizadoTitle'));
         orderBtn.title = Dashboard.t('admin.giroReordenPersonalizadoTitle');
+        orderBtn.setAttribute('data-help-key', 'giroReordenPersonalizado');
         orderBtn.innerHTML = '<i class="bx bx-sort-alt-2" aria-hidden="true"></i>';
         orderBtn.addEventListener('click', () => openSectorOrderModal(sector));
 
@@ -278,6 +280,7 @@ function renderSectors() {
         previewBtn.className = 'admin-icon-btn';
         previewBtn.setAttribute('aria-label', Dashboard.t('admin.businessSectorPreview'));
         previewBtn.title = Dashboard.t('admin.businessSectorPreview');
+        previewBtn.setAttribute('data-help-key', 'businessSectorPreview');
         previewBtn.innerHTML = '<i class="bx bx-compass" aria-hidden="true"></i>';
         previewBtn.addEventListener('click', () => Dashboard.showToast(Dashboard.t('admin.underConstruction'), 'info'));
 
@@ -286,6 +289,7 @@ function renderSectors() {
         editBtn.className = 'admin-icon-btn';
         editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
         editBtn.title = Dashboard.t('admin.edit');
+        editBtn.setAttribute('data-help-key', 'edit');
         editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
         editBtn.addEventListener('click', () => openEditModal(sector));
 
@@ -294,6 +298,7 @@ function renderSectors() {
         historyBtn.className = 'admin-icon-btn';
         historyBtn.setAttribute('aria-label', Dashboard.t('admin.businessSectorChangeHistory'));
         historyBtn.title = Dashboard.t('admin.businessSectorChangeHistory');
+        historyBtn.setAttribute('data-help-key', 'changeHistory');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
         historyBtn.addEventListener('click', () => openSectorHistoryModal(sector));
 
@@ -303,6 +308,7 @@ function renderSectors() {
         toggleBtn.innerHTML = `<i class="bx ${sector.status === 'inactive' ? 'bx-check-circle' : 'bx-x-circle'}" aria-hidden="true"></i>`;
         toggleBtn.setAttribute('aria-label', Dashboard.t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate'));
         toggleBtn.title = Dashboard.t(sector.status === 'inactive' ? 'admin.activate' : 'admin.deactivate');
+        toggleBtn.setAttribute('data-help-key', sector.status === 'inactive' ? 'activate' : 'deactivate');
         toggleBtn.addEventListener('click', () => toggleSectorStatus(sector));
 
         tdActions.append(treeBtn, orderBtn, previewBtn, editBtn, historyBtn, toggleBtn);

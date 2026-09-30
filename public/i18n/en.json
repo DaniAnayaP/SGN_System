@@ -1828,6 +1828,18 @@
     "planTree": {
       "what": "This is where you set which screens and permissions this plan includes, and what it costs a client who subscribes to it.",
       "example": "you build a \"Basic\" plan with only 3 screens, and a \"Premium\" plan with all of them."
+    },
+    "giroAccesosGlobales": {
+      "what": "Sets which screens and permissions every client in this business sector gets by default, without configuring each client one by one.",
+      "example": "every \"Restaurants\" client automatically sees the Food Inventory Control screen."
+    },
+    "giroReordenPersonalizado": {
+      "what": "Changes the order screens appear in the menu, only for clients in this business sector.",
+      "example": "you move \"Recipes\" to the top of the menu because that's the first thing restaurants use."
+    },
+    "businessSectorPreview": {
+      "what": "Lets you see the system the way a client in this business sector would, without having to log in as one of them.",
+      "example": "you check what the menu looks like for a \"Restaurants\" client before activating it."
     }
   }
 }
