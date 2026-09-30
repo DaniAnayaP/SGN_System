@@ -1996,6 +1996,46 @@
     "roleFillMissingAppWeb": {
       "what": "Copies Web over to App only in rows where App is still empty, without touching the ones you already set differently on purpose.",
       "example": "you fill in every missing App permission at once, without overwriting the ones you already left different."
+    },
+    "businessLogoUpload": {
+      "what": "This is where you upload your company's own logo, so it shows up in the system instead of the generic one.",
+      "example": "you upload your restaurant's logo so it shows at the top of the system instead of GEIPSA's."
+    },
+    "businessLogoRemove": {
+      "what": "Removes the logo you uploaded and goes back to the generic one.",
+      "example": "you uploaded the wrong logo by mistake, and remove it here without having to find the right file yet."
+    },
+    "sidebarNavigation": {
+      "what": "Takes you to that screen in the system.",
+      "example": "you tap a screen's name in the menu to open it."
+    },
+    "genericActions": {
+      "what": "This is where the buttons to edit, delete, or do something else with this record live.",
+      "example": "you tap the pencil icon in this column to edit that row."
+    },
+    "genericUsername": {
+      "what": "The username this person uses to log in to the system.",
+      "example": "\"admin_saas\" is what that person types on the login screen, along with their password."
+    },
+    "genericEmail": {
+      "what": "The email address registered for this account.",
+      "example": "the system uses this email if this person needs to recover their access."
+    },
+    "genericCreatedAt": {
+      "what": "The date this record was created.",
+      "example": "you see how long this account or record has existed in the system."
+    },
+    "genericStatus": {
+      "what": "Says what state this record is in right now (for example, Active or Inactive).",
+      "example": "you see at a glance whether this account is still active, without opening it."
+    },
+    "genericName": {
+      "what": "The name that identifies this record.",
+      "example": "you see the name this row is known by in the list."
+    },
+    "createNewRecord": {
+      "what": "Creates a new record for this list, ready to fill in.",
+      "example": "you tap this button to add a new client, item, or record to the list."
     }
   }
 }

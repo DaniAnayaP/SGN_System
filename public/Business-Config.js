@@ -9,6 +9,13 @@ const logoInput = document.getElementById('config-logo');
 const logoDataField = document.getElementById('config-logo-data');
 const logoPreview = document.getElementById('config-logo-preview');
 const logoClearBtn = document.getElementById('config-logo-clear');
+// data-i18n-aria (not a direct Dashboard.t() call) -- this runs at top-level
+// script time, before the async i18n fetch resolves (same reasoning
+// Dashboard.js's own #help-mode-toggle injection documents).
+logoInput.setAttribute('data-i18n-aria', 'admin.logo');
+logoInput.setAttribute('aria-label', 'Logo');
+logoInput.setAttribute('data-help-key', 'businessLogoUpload');
+logoClearBtn.setAttribute('data-help-key', 'businessLogoRemove');
 const paletteContainer = document.getElementById('config-color-palette');
 let paletteWidget; // created after Dashboard.initDashboard() so i18n labels are ready — see init() below
 const errorBanner = document.getElementById('config-error');

@@ -1995,6 +1995,46 @@
     "roleFillMissingAppWeb": {
       "what": "Copia Web hacia App solo en los renglones donde App todavía está vacío, sin tocar los que ya configuraste distinto a propósito.",
       "example": "llenas de golpe los permisos de App que faltan, sin pisar los que ya dejaste diferentes."
+    },
+    "businessLogoUpload": {
+      "what": "Aquí subes el logo de tu empresa, para que aparezca en el sistema en vez del logo genérico.",
+      "example": "subes el logo de tu restaurante para que se vea en la parte de arriba del sistema, en vez del logo de GEIPSA."
+    },
+    "businessLogoRemove": {
+      "what": "Quita el logo que subiste y regresa al logo genérico.",
+      "example": "subiste un logo por error, lo quitas con este botón sin tener que buscar el archivo correcto todavía."
+    },
+    "sidebarNavigation": {
+      "what": "Te lleva a esa pantalla del sistema.",
+      "example": "tocas el nombre de una pantalla en el menú para abrirla."
+    },
+    "genericActions": {
+      "what": "Aquí están los botones para editar, eliminar o hacer otra acción con este registro.",
+      "example": "tocas el ícono de lápiz en esta columna para editar esa fila."
+    },
+    "genericUsername": {
+      "what": "El nombre de usuario con el que esta persona inicia sesión en el sistema.",
+      "example": "\"admin_saas\" es lo que esa persona escribe en la pantalla de acceso, junto con su contraseña."
+    },
+    "genericEmail": {
+      "what": "El correo electrónico registrado para esta cuenta.",
+      "example": "el sistema usa este correo si esta persona necesita recuperar su acceso."
+    },
+    "genericCreatedAt": {
+      "what": "La fecha en que se creó este registro.",
+      "example": "ves desde cuándo existe esta cuenta o registro en el sistema."
+    },
+    "genericStatus": {
+      "what": "Dice en qué situación está este registro en este momento (por ejemplo, Activo o Inactivo).",
+      "example": "ves de un vistazo si esta cuenta sigue activa, sin tener que abrirla."
+    },
+    "genericName": {
+      "what": "El nombre que identifica a este registro.",
+      "example": "aquí ves el nombre con el que se reconoce esta fila en la lista."
+    },
+    "createNewRecord": {
+      "what": "Crea un registro nuevo para esta lista, con los campos listos para llenar.",
+      "example": "tocas este botón para agregar un cliente, artículo o registro nuevo a la lista."
     }
   }
 }

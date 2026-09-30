@@ -1279,6 +1279,7 @@ function buildSubmenu(items) {
         // Same Modo ayuda fix as buildMenuItem's own aria-label above -- a
         // sub-menu row had no name of its own either.
         a.setAttribute('aria-label', fullLabel);
+        a.setAttribute('data-help-key', 'sidebarNavigation');
         // abbrKeys (see buildSidebarData's admin-business-sectors entry for
         // the first real user) — a ladder of progressively shorter labels,
         // longest first. Stashed as data instead of resolved once here
@@ -1338,6 +1339,7 @@ function buildMenuItem(item) {
     // all the way up to <nav aria-label="Main navigation"> instead, since
     // .menu-link/.sub-menu-link never had a name of their own at all.
     a.setAttribute('aria-label', fullLabel);
+    a.setAttribute('data-help-key', 'sidebarNavigation');
     // abbrKeys -- same progressively-shorter-label ladder as buildSubmenu's
     // own abbrLadder (see applySubmenuAbbreviations), just for a top-level
     // item instead of a nested one. A top-level item with no abbrKeys still
@@ -5133,6 +5135,18 @@ const HELP_CONTENT_COLUMN_KEYS = {
     colSysPantalla: 'colSysPantalla', colSysCentroCostos: 'colSysCentroCostos', colSysFecha: 'colSysFecha',
     colSysDiaNum: 'colSysDiaNum', colSysDiaTexto: 'colSysDiaTexto', colSysMesNum: 'colSysMesNum',
     colSysMesTexto: 'colSysMesTexto', colSysAnio: 'colSysAnio', colSysSemana: 'colSysSemana', colSysHora: 'colSysHora',
+    // Generic, reused-everywhere data-col values (confirmed live, 2026-09-30:
+    // "Acciones" header, and every plain Usuario/Nombre/Correo/Fecha/Estatus
+    // cell, showed nothing at all in Modo ayuda -- only Control Interno's own
+    // 13 columns and each screen's own custom buttons had ever been wired).
+    // Applies to BOTH a <th> and every <td> sharing that data-col across
+    // every table that uses it (confirmed: "actions" alone spans 63 files),
+    // same one-map-covers-everything leverage as the Control Interno rows
+    // above. Harmless where a row's own action buttons already carry a more
+    // specific data-help-key -- that's checked at the clicked element itself
+    // before ever walking up to the shared <td data-col="actions">.
+    actions: 'genericActions', username: 'genericUsername', email: 'genericEmail',
+    createdAt: 'genericCreatedAt', status: 'genericStatus', name: 'genericName',
 };
 // data-zoom="in"/"out" -- the font-size zoom buttons every .data-table gets
 // (renderDataTableZoomControls).
@@ -5149,6 +5163,12 @@ function applyHelpContentKeys() {
     applyHelpKeysByAttr('data-col', HELP_CONTENT_COLUMN_KEYS);
     applyHelpKeysByAttr('data-zoom', HELP_CONTENT_ZOOM_KEYS);
     applyHelpKeysByAttr('data-col-action', HELP_CONTENT_COL_ACTION_KEYS);
+    // .data-table-new-record-btn -- the shared "+ Nuevo X" class 15 admin/
+    // catalog/operational screens already build their own create button
+    // with (confirmed live, 2026-09-30: had no aria-label or data-help-key
+    // at all, so clicking it in Modo ayuda did nothing). One class-based
+    // pass instead of editing each screen, same leverage as the maps above.
+    document.querySelectorAll('.data-table-new-record-btn').forEach((el) => el.setAttribute('data-help-key', 'createNewRecord'));
 }
 applyHelpContentKeys();
 // Several of these (ui-scale-btn, the whole zoom/col-action toolbar) don't
@@ -5171,10 +5191,25 @@ document.addEventListener('dashboard:language-changed', applyHelpContentKeys);
 // top-bar icon which always has an aria-label already. placeholder is the
 // last resort, for an <input> like #sidebar-search which has neither an
 // aria-label/title nor any visible textContent of its own.
+// Live fallback for the generic id/data-col/class maps above -- a table row
+// (Usuario/Correo/Estatus/Acciones cells, the "+ Nuevo X" button) is very
+// often built AFTER initDashboard's own one-time 'dashboard:language-changed'
+// event already fired (its own data load happens inside each screen's own
+// init(), past that point), so applyHelpContentKeys never gets a second
+// chance to stamp data-help-key onto it. Confirmed live, 2026-09-30: Equipo
+// SaaS's own "+ Nuevo Admin SaaS" button and every plain row cell showed
+// nothing at all in Modo ayuda for exactly this reason. Resolving these maps
+// again HERE, at click time, is immune to that timing gap regardless of when
+// the element was actually created.
+function resolveGenericHelpKey(node) {
+    return HELP_CONTENT_KEYS[node.id] || HELP_CONTENT_COLUMN_KEYS[node.getAttribute('data-col')]
+        || HELP_CONTENT_ZOOM_KEYS[node.getAttribute('data-zoom')] || HELP_CONTENT_COL_ACTION_KEYS[node.getAttribute('data-col-action')]
+        || (node.classList.contains('data-table-new-record-btn') ? 'createNewRecord' : null);
+}
 function findHelpModeContent(startEl) {
     let node = startEl;
     while (node && node.nodeType === 1 && node !== document.body) {
-        const helpKey = node.getAttribute('data-help-key');
+        const helpKey = node.getAttribute('data-help-key') || resolveGenericHelpKey(node);
         if (helpKey) {
             // A data-col cell's own column header (its <th data-col="...">
             // in the same table) beats aria-label/title -- a LOT of editable
