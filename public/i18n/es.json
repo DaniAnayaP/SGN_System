@@ -1895,6 +1895,18 @@
     "resetRole": {
       "what": "Quita todos los permisos extra que le diste a esta persona y la deja solo con lo que su puesto normalmente incluye.",
       "example": "alguien cambió de puesto y quieres quitarle los accesos extra de su puesto anterior."
+    },
+    "reportRemoveColumn": {
+      "what": "Elimina esta columna del reporte que estás armando, sin afectar los datos originales.",
+      "example": "agregaste una columna de más al reporte, la quitas antes de guardarlo."
+    },
+    "reportRemoveOperand": {
+      "what": "Elimina este valor de la fórmula que estás armando para una columna calculada.",
+      "example": "quitas un número que ya no necesitas en el cálculo de tu fórmula."
+    },
+    "reportAuthorize": {
+      "what": "Aprueba este reporte para que se pueda ejecutar de verdad.",
+      "example": "alguien arma un reporte nuevo, pero no corre hasta que un administrador lo autoriza aquí."
     }
   }
 }

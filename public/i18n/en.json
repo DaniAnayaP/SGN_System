@@ -1896,6 +1896,18 @@
     "resetRole": {
       "what": "Removes every extra permission you gave this person, leaving them with only what their job position normally includes.",
       "example": "someone changed positions and you want to remove the extra access from their previous one."
+    },
+    "reportRemoveColumn": {
+      "what": "Removes this column from the report you're building, without affecting the original data.",
+      "example": "you added one extra column to the report, you remove it before saving."
+    },
+    "reportRemoveOperand": {
+      "what": "Removes this value from the formula you're building for a calculated column.",
+      "example": "you remove a number you no longer need in your formula's calculation."
+    },
+    "reportAuthorize": {
+      "what": "Approves this report so it can actually run.",
+      "example": "someone builds a new report, but it doesn't run until an administrator authorizes it here."
     }
   }
 }

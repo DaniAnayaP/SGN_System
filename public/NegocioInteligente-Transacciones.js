@@ -92,6 +92,7 @@ function renderColumnList() {
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+        removeBtn.setAttribute('data-help-key', 'reportRemoveColumn');
         removeBtn.setAttribute('aria-label', Dashboard.t('main.reportRemoveColumn'));
         removeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
         removeBtn.addEventListener('click', () => {
@@ -268,6 +269,7 @@ function renderFormulaOperands() {
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+            removeBtn.setAttribute('data-help-key', 'reportRemoveOperand');
             removeBtn.setAttribute('aria-label', Dashboard.t('main.reportRemoveOperand'));
             removeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
             removeBtn.addEventListener('click', () => {
@@ -415,6 +417,7 @@ function renderReports() {
             authorizeBtn.className = 'admin-icon-btn';
             authorizeBtn.setAttribute('aria-label', Dashboard.t('main.reportAuthorize'));
             authorizeBtn.title = Dashboard.t('main.reportAuthorize');
+            authorizeBtn.setAttribute('data-help-key', 'reportAuthorize');
             authorizeBtn.innerHTML = '<i class="bx bx-check-shield" aria-hidden="true"></i>';
             authorizeBtn.addEventListener('click', () => authorizeReport(report));
             tdActions.appendChild(authorizeBtn);
@@ -423,6 +426,7 @@ function renderReports() {
             const editBtn = document.createElement('button');
             editBtn.type = 'button';
             editBtn.className = 'admin-icon-btn';
+            editBtn.setAttribute('data-help-key', 'edit');
             editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
             editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
             editBtn.addEventListener('click', () => openReportModal(report));
@@ -432,6 +436,7 @@ function renderReports() {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+            deleteBtn.setAttribute('data-help-key', 'delete');
             deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
             deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
             deleteBtn.addEventListener('click', () => deleteReport(report));

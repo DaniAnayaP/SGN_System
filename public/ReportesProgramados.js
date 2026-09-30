@@ -179,6 +179,7 @@ function renderScheduledReports() {
             authorizeBtn.className = 'admin-icon-btn';
             authorizeBtn.setAttribute('aria-label', Dashboard.t('main.scheduledAuthorize'));
             authorizeBtn.title = Dashboard.t('main.scheduledAuthorize');
+            authorizeBtn.setAttribute('data-help-key', 'reportAuthorize');
             authorizeBtn.innerHTML = '<i class="bx bx-check-shield" aria-hidden="true"></i>';
             authorizeBtn.addEventListener('click', () => authorizeScheduled(scheduled));
             tdActions.appendChild(authorizeBtn);
@@ -187,6 +188,7 @@ function renderScheduledReports() {
             const editBtn = document.createElement('button');
             editBtn.type = 'button';
             editBtn.className = 'admin-icon-btn';
+            editBtn.setAttribute('data-help-key', 'edit');
             editBtn.setAttribute('aria-label', Dashboard.t('admin.edit'));
             editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
             editBtn.addEventListener('click', () => openScheduledModal(scheduled));
@@ -196,6 +198,7 @@ function renderScheduledReports() {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
+            deleteBtn.setAttribute('data-help-key', 'delete');
             deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
             deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
             deleteBtn.addEventListener('click', () => deleteScheduled(scheduled));
