@@ -679,22 +679,44 @@ function resolveSaasNodeStatus(itemId) {
 // real server-side check (hiding a menu item this account can't actually
 // use), not itself the enforcement -- server.js's own hasSaasGrant is what
 // actually protects each route.
+// Bypass checked FIRST, not after the visibility gate -- reordered
+// 2026-09-30 after locking myself out of Admin-ArbolMaestroSaaS.html
+// locally: with 'saas-master-tree' (this screen's own new self-gating
+// leaf, see GENERAL_ITEMS in Admin-ArbolMaestroSaaS.js) set to a status
+// outside an account's cachedSaasVisibleStatuses, the OLD order failed the
+// visibility check before ever reaching isSaasSuperAdmin, so even a real
+// super-admin got redirected away from the one screen that could undo it.
+// Production's admin_saas happens to have every status marked visible
+// today, which is why this never surfaced before, but that's a data
+// fact this function shouldn't have to depend on -- a super-admin bypass
+// that a status/visibility combination can still defeat isn't a real
+// bypass. Now isSaasSuperAdmin always wins, for every node, not just this
+// new one.
 function hasSaasScreenGrant(itemId, subItemId = null) {
+    if (currentUser?.isSaasSuperAdmin) return true;
     const fullKey = subItemId ? `${itemId}::${subItemId}` : itemId;
     const visible = cachedSaasVisibleStatuses || ['habilitado'];
     if (!visible.includes(resolveSaasNodeStatus(fullKey))) return false;
-    if (currentUser?.isSaasSuperAdmin) return true;
     const grants = cachedSaasGrants || [];
     return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
 }
-// Equipo SaaS itself isn't gated by this tree — restricting who can see it
-// would need to be granted BY someone who can already see it, a
-// bootstrapping problem this small a team doesn't need. Kept as its own
-// map (not folded into SCREEN_GRANT_PATHS) since it's a completely
-// separate namespace (flat itemId, no {sectionId,itemId,submenuId} triple).
-// Extended 2026-09-29 (was just these 3) to cover every real SaaS-admin
-// screen that also carries a saasItemId in buildSidebarData's own item list
-// below -- admin-nuestras-apps/admin-master-permissions/admin-business-
+// Equipo SaaS and Árbol Maestro SaaS itself used to be a deliberate
+// exception here -- restricting who can see them would need to be granted
+// BY someone who can already see them, a bootstrapping problem. Removed
+// 2026-09-30, confirmed live: "SOLO EL USUARIO admin_saas tiene accesos a
+// todo... los usuarios de prueba tienen la misma estructura" -- the
+// bootstrapping risk is solved by admin_saas's own isSaasSuperAdmin bypass
+// (hasSaasScreenGrant above) instead of leaving either screen permanently
+// ungated for every account. 'saas-team' already had a real catalog entry
+// (SaasAdminCatalog.js, under saasConfig) that nothing pointed at yet;
+// 'saas-master-tree' is a new GENERAL_ITEMS leaf (Admin-ArbolMaestroSaaS.js,
+// this screen describing itself). Kept as its own map (not folded into
+// SCREEN_GRANT_PATHS) since
+// it's a completely separate namespace (flat itemId, no
+// {sectionId,itemId,submenuId} triple). Extended 2026-09-29 (was just these
+// 3) to cover every real SaaS-admin screen that also carries a saasItemId
+// in buildSidebarData's own item list below -- admin-nuestras-apps/admin-
+// master-permissions/admin-business-
 // sectors/admin-nuestros-respaldos/admin-material-apoyo were already hidden
 // from the sidebar correctly when their Estatus wasn't visible, but typing
 // their URL directly still worked regardless (this map only ever gated
@@ -709,6 +731,8 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
     'admin-costos-modulos': 'saas-module-costs',
+    'admin-equipo-saas': 'saas-team',
+    'admin-saas-master-status': 'saas-master-tree',
     'admin-nuestros-respaldos': 'saas-backups',
     'admin-material-apoyo': 'saas-material-apoyo',
 };
@@ -866,11 +890,11 @@ function buildSidebarData(data, role, activePage) {
         // GEIPSA's own internal screens instead of the client-facing ones.
         // Its own table (saas_master_status) -- never master_permission_status.
         {
-            id: 'admin-saas-master-status', labelKey: 'menu.saasMasterTree', href: 'Admin-ArbolMaestroSaaS.html', icon: 'bx-shield',
+            id: 'admin-saas-master-status', labelKey: 'menu.saasMasterTree', href: 'Admin-ArbolMaestroSaaS.html', icon: 'bx-shield', saasItemId: 'saas-master-tree',
             abbrKeys: ['menu.saasMasterTreeAbbr1', 'menu.saasMasterTreeAbbr2'],
         },
         { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', icon: 'bx-dollar-circle', saasItemId: 'saas-module-costs' },
-        { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html', icon: 'bx-id-card' },
+        { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html', icon: 'bx-id-card', saasItemId: 'saas-team' },
         { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', icon: 'bx-cloud-upload', saasItemId: 'saas-backups' },
         {
             id: 'admin-material-apoyo', labelKey: 'menu.ourSupportMaterial', href: 'Admin-MaterialApoyo.html', icon: 'bx-book-open', saasItemId: 'saas-material-apoyo',

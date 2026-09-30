@@ -63,6 +63,16 @@ const GENERAL_ITEMS = [
     { itemId: 'saas-home', labelKey: 'menu.home', href: null },
     { itemId: 'saas-panel', labelKey: 'menu.panel', href: null },
     { itemId: 'saas-board', labelKey: 'menu.dashboard', href: 'Inicio-en.html' },
+    // This screen describing itself -- mirrors
+    // public/Admin-ArbolMaestroSaaS.js's own GENERAL_ITEMS entry. Closes
+    // the last "deliberate exception" this screen and 'saas-team' had --
+    // confirmed live, 2026-09-30: "SOLO EL USUARIO admin_saas tiene
+    // accesos a todo". A flat entry, not a self-referential apartados:
+    // [{...}] screen -- its only real control (Guardar) is a plain acción
+    // with nothing of its own to nest, and an acción-only apartado only
+    // ever surfaces through a real CATALOG screen's own "Botones" sibling
+    // row, which this synthetic entry never passes through.
+    { itemId: 'saas-master-tree', labelKey: 'menu.saasMasterTree', href: null },
 ];
 
 // "Iconos de Navegación" -- the icons of the top bar every SaaS page shares
