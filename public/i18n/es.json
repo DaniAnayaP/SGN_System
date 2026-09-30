@@ -1232,6 +1232,7 @@
     "columnHidePinnedConfirm": "Esta columna está fijada. ¿Seguro que quieres ocultarla?",
     "dragToReorder": "Arrastrar para reordenar",
     "helpMode": "Modo ayuda",
+    "helpExampleLabel": "Ejemplo:",
     "uiScale": "Tamaño del sistema",
     "uiScaleIdeal": "Ideal",
     "uiScaleDecrease": "Disminuir tamaño",
@@ -1669,5 +1670,39 @@
     "viewGrid": "Cuadrícula",
     "viewList": "Lista",
     "categorySoonTag": "Pronto"
+  },
+  "help": {
+    "messages": {
+      "what": "Aquí puedes escribirle a otras personas que usan el sistema, como si fuera un chat.",
+      "example": "le escribes a un compañero para preguntarle algo sin salir de la pantalla."
+    },
+    "chatbot": {
+      "what": "Es un asistente que responde tus preguntas sobre cómo usar el sistema, sin necesidad de llamar a alguien.",
+      "example": "le preguntas \"¿cómo registro un cliente nuevo?\" y te explica los pasos."
+    },
+    "notifications": {
+      "what": "Te avisa cuando pasa algo importante: alertas, avisos, solicitudes que esperan tu aprobación.",
+      "example": "alguien pide autorización para algo y aquí te llega el aviso."
+    },
+    "bookmarks": {
+      "what": "Guarda tus pantallas favoritas para regresar a ellas rápido, sin buscar en el menú cada vez.",
+      "example": "guardas la pantalla que usas todos los días para no buscarla cada vez."
+    },
+    "uiScale": {
+      "what": "Hace el texto y las tablas más grandes o más chicas en toda la aplicación.",
+      "example": "si te cuesta leer, lo agrandas; si quieres ver más filas de una tabla, lo achicas."
+    },
+    "settings": {
+      "what": "Aquí cambias cómo se ve y se comporta el sistema para ti: idioma, colores, y otras opciones.",
+      "example": "cambias el idioma de inglés a español, o el estilo de claro a oscuro."
+    },
+    "userInfo": {
+      "what": "Muestra tu información personal guardada en el sistema, como tu nombre y tu correo.",
+      "example": "revisas aquí si tu correo está bien escrito."
+    },
+    "businessProfile": {
+      "what": "Muestra tu información dentro de la empresa: tu puesto, tu rol, y a quién le reportas.",
+      "example": "revisas aquí quién es tu jefe directo dentro del sistema."
+    }
   }
 }

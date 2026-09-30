@@ -1233,6 +1233,7 @@
     "columnHidePinnedConfirm": "This column is pinned. Are you sure you want to hide it?",
     "dragToReorder": "Drag to reorder",
     "helpMode": "Help mode",
+    "helpExampleLabel": "Example:",
     "uiScale": "System size",
     "uiScaleIdeal": "Ideal",
     "uiScaleDecrease": "Decrease size",
@@ -1670,5 +1671,39 @@
     "viewGrid": "Grid",
     "viewList": "List",
     "categorySoonTag": "Soon"
+  },
+  "help": {
+    "messages": {
+      "what": "Here you can message other people who use the system, like a chat.",
+      "example": "you message a coworker to ask something without leaving the screen."
+    },
+    "chatbot": {
+      "what": "It's an assistant that answers your questions about how to use the system, without needing to call anyone.",
+      "example": "you ask \"how do I register a new client?\" and it walks you through the steps."
+    },
+    "notifications": {
+      "what": "Alerts you when something important happens: alerts, notices, requests waiting for your approval.",
+      "example": "someone asks for authorization and the notice shows up here."
+    },
+    "bookmarks": {
+      "what": "Saves your favorite screens so you can get back to them fast, without searching the menu every time.",
+      "example": "you save the screen you use every day so you don't have to search for it again."
+    },
+    "uiScale": {
+      "what": "Makes the text and tables bigger or smaller across the whole application.",
+      "example": "if reading is hard, you make it bigger; if you want to see more rows in a table, you make it smaller."
+    },
+    "settings": {
+      "what": "This is where you change how the system looks and behaves for you: language, colors, and other options.",
+      "example": "you switch the language from English to Spanish, or the style from light to dark."
+    },
+    "userInfo": {
+      "what": "Shows your personal information stored in the system, like your name and email.",
+      "example": "you check here if your email is spelled correctly."
+    },
+    "businessProfile": {
+      "what": "Shows your information within the company: your position, your role, and who you report to.",
+      "example": "you check here who your direct manager is in the system."
+    }
   }
 }

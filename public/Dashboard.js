@@ -5067,6 +5067,17 @@ document.addEventListener('keydown', (event) => {
 // it just surfaces that same text instantly, in a bigger bubble, on demand,
 // and swallows the click so asking "what does this do" never also DOES it
 // (no filter opens, no save fires) while the mode is on.
+//
+// Extended 2026-09-30, confirmed live: a plain name ("Tamaño del sistema")
+// wasn't enough -- "También me debe mostrar el Qué hace... muy explícito...
+// como si le explicarás a un niño de 10 años... adicional, un ejemplo claro
+// y preciso". Elements listed in HELP_CONTENT_KEYS get a data-help-key
+// attribute (set once below); help.<key>.what/example (i18n/es.json,
+// i18n/en.json) supply the extra 2 lines. Anything NOT yet in that map
+// keeps today's name-only tooltip (findHelpModeContent falls back to it) --
+// "cada botón, columna, opción, etc, TODO" is the eventual goal, but this
+// is the mechanism plus the 8 top-bar icons; the rest rolls out
+// screen-by-screen on top of the same data-help-key/help.* pattern.
 let helpModeActive = false;
 let helpModeTooltipEl = null;
 
@@ -5075,24 +5086,79 @@ function closeHelpModeTooltip() {
     helpModeTooltipEl = null;
 }
 
-// Walks up from the clicked element to the nearest ancestor carrying a
-// real description -- aria-label first (screen-reader text is already
-// written to stand alone, title sometimes isn't), title otherwise.
-function findHelpModeText(startEl) {
+// Element id -> help.<key> namespace in i18n/es.json + i18n/en.json. Applied
+// once per element below (not every top-bar icon exists on every page, so
+// this tolerates misses) -- add a row here and a matching help.<key> entry
+// in both dictionaries to extend "Modo ayuda" to a new button/column.
+const HELP_CONTENT_KEYS = {
+    'messages-btn': 'messages',
+    'chatbot-btn': 'chatbot',
+    'notifications-btn': 'notifications',
+    'bookmarks-btn': 'bookmarks',
+    'ui-scale-btn': 'uiScale',
+    'settings-btn': 'settings',
+    'user-info-btn': 'userInfo',
+    'business-profile-btn': 'businessProfile',
+};
+function applyHelpContentKeys() {
+    Object.entries(HELP_CONTENT_KEYS).forEach(([id, key]) => {
+        document.querySelectorAll(`#${id}`).forEach((el) => el.setAttribute('data-help-key', key));
+    });
+}
+applyHelpContentKeys();
+// #ui-scale-btn specifically doesn't exist yet at this point in the script
+// (built later by renderUiScaleControl, called from initDashboard) -- the
+// querySelectorAll above simply finds nothing for it on this first pass.
+// dashboard:language-changed fires once after initDashboard's own
+// loadLanguage() call, by which point every button here really exists, so
+// re-running there (harmless -- setAttribute to the same value -- for the
+// other 7 that were already tagged) catches it too.
+document.addEventListener('dashboard:language-changed', applyHelpContentKeys);
+
+// Walks up from the clicked element to the nearest ancestor carrying a real
+// name (aria-label first -- screen-reader text is already written to stand
+// alone, title sometimes isn't) -- then reads that SAME element's own
+// data-help-key (see HELP_CONTENT_KEYS above) for the fuller "qué hace" +
+// example, when one exists.
+function findHelpModeContent(startEl) {
     let node = startEl;
     while (node && node.nodeType === 1 && node !== document.body) {
-        const text = node.getAttribute('aria-label') || node.getAttribute('title');
-        if (text) return text;
+        const name = node.getAttribute('aria-label') || node.getAttribute('title');
+        if (name) {
+            const helpKey = node.getAttribute('data-help-key');
+            if (helpKey) {
+                return { name, what: t(`help.${helpKey}.what`), example: t(`help.${helpKey}.example`) };
+            }
+            return { name, what: null, example: null };
+        }
         node = node.parentElement;
     }
     return null;
 }
 
-function showHelpModeTooltip(text, x, y) {
+function showHelpModeTooltip(content, x, y) {
     closeHelpModeTooltip();
     const tip = document.createElement('div');
     tip.className = 'help-mode-tooltip';
-    tip.textContent = text;
+    const nameEl = document.createElement('div');
+    nameEl.className = 'help-mode-tooltip-name';
+    nameEl.textContent = content.name;
+    tip.appendChild(nameEl);
+    if (content.what) {
+        const whatEl = document.createElement('div');
+        whatEl.className = 'help-mode-tooltip-what';
+        whatEl.textContent = content.what;
+        tip.appendChild(whatEl);
+    }
+    if (content.example) {
+        const exampleEl = document.createElement('div');
+        exampleEl.className = 'help-mode-tooltip-example';
+        const label = document.createElement('b');
+        label.textContent = t('main.helpExampleLabel');
+        exampleEl.appendChild(label);
+        exampleEl.append(` ${content.example}`);
+        tip.appendChild(exampleEl);
+    }
     document.body.appendChild(tip);
     const rect = tip.getBoundingClientRect();
     const left = Math.min(x + 14, window.innerWidth - rect.width - 8);
@@ -5118,10 +5184,10 @@ function setHelpModeActive(active) {
 document.addEventListener('click', (event) => {
     if (!helpModeActive) return;
     if (event.target.closest('#help-mode-toggle')) return;
-    const text = findHelpModeText(event.target);
+    const content = findHelpModeContent(event.target);
     event.preventDefault();
     event.stopPropagation();
-    if (text) showHelpModeTooltip(text, event.clientX, event.clientY);
+    if (content) showHelpModeTooltip(content, event.clientX, event.clientY);
     else closeHelpModeTooltip();
 }, true);
 

@@ -1036,6 +1036,29 @@
         box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         pointer-events: none;
     }
+    /* 3-part shape confirmed live, 2026-09-30: name (existing aria-label/
+       title, unchanged), then "qué hace" in plain language, then a concrete
+       example -- see HELP_CONTENT_KEYS/findHelpModeContent in Dashboard.js.
+       Only .help-mode-tooltip-name renders when a clicked element has no
+       help.<key> entry yet, so this stays a no-op visually for anything not
+       yet covered. */
+    .help-mode-tooltip-name{
+        font-weight: 700;
+    }
+    .help-mode-tooltip-what{
+        margin-top: 0.4rem;
+    }
+    .help-mode-tooltip-example{
+        margin-top: 0.4rem;
+        padding-top: 0.4rem;
+        border-top: 1px solid color-mix(in srgb, var(--color-surface) 20%, transparent);
+        color: color-mix(in srgb, var(--color-surface) 75%, var(--color-text-primary));
+        font-size: 0.76rem;
+    }
+    .help-mode-tooltip-example b{
+        color: var(--color-surface);
+        font-weight: 600;
+    }
     /* Top-bar buttons hidden per Accesos y Permisos / contratación (see
        syncTopBarButtonVisibility in Dashboard.js) — !important so it wins
        over ".top-bar-actions button"'s own display:flex regardless of
