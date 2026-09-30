@@ -137,6 +137,7 @@ function buildActionsCell(record, tr) {
     historyBtn.className = 'admin-icon-btn';
     historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
     historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+    historyBtn.setAttribute('data-help-key', 'changeHistory');
     historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
     td.appendChild(historyBtn);
@@ -146,6 +147,7 @@ function buildActionsCell(record, tr) {
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
         deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
         deleteBtn.title = Dashboard.t('admin.delete');
+        deleteBtn.setAttribute('data-help-key', 'delete');
         deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
         deleteBtn.addEventListener('click', () => deleteFuelLoadingRecord(record.id, tr));
         td.appendChild(deleteBtn);
@@ -213,6 +215,11 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
         const label = pending ? 'main.changePending' : (stored ? viewLabelKey : uploadLabelKey);
         btn.setAttribute('aria-label', Dashboard.t(label));
         btn.title = Dashboard.t(label);
+        // Generic across every photo-evidence cell (Trip antes/después, Costo
+        // Total, and any future one) -- the cell's own real name (aria-label
+        // above) already differs per field, this only supplies the shared
+        // "qué hace"/example.
+        btn.setAttribute('data-help-key', 'evidencePhoto');
         // Icon-only cell -- textContent alone can't tell empty from filled
         // (see Reglas de Orden de Llenado's applyFieldFillRules), so this
         // marks it explicitly, same convention as Dashboard.attachInlineEdit.

@@ -1860,6 +1860,10 @@
     "download": {
       "what": "Downloads this file to your computer so you can open or save it.",
       "example": "you download last month's database backup to review it."
+    },
+    "evidencePhoto": {
+      "what": "This is where you upload or check a photo as proof of this data.",
+      "example": "you upload a photo of the gas station receipt as proof of how much fuel was loaded."
     }
   }
 }

@@ -1859,6 +1859,10 @@
     "download": {
       "what": "Baja este archivo a tu computadora para que lo puedas abrir o guardar.",
       "example": "descargas el respaldo de la base de datos del mes pasado para revisarlo."
+    },
+    "evidencePhoto": {
+      "what": "Aquí subes o revisas una foto como comprobante de este dato.",
+      "example": "subes la foto del ticket de la gasolinera como evidencia de cuánto combustible se cargó."
     }
   }
 }
