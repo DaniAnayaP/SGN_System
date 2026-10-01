@@ -286,13 +286,21 @@ const {
     getPlanGrants,
     setPlanGrants,
     syncPlanModulesFromGrants,
-    getPlanPermissionCosts,
-    setPlanPermissionCosts,
     getMasterPermissionCosts,
     setMasterPermissionCosts,
     getMasterCostSettings,
     applyMasterCostCurrencyChange,
     computeAccessCostTotal,
+    getSectorCostAdjustDefault,
+    setSectorCostAdjustDefault,
+    getSectorPermissionCostAdjustments,
+    setSectorPermissionCostAdjustments,
+    getPlanCostAdjustDefault,
+    setPlanCostAdjustDefault,
+    getPlanPermissionCostAdjustments,
+    setPlanPermissionCostAdjustments,
+    getPlanCostAdjustBaseCosts,
+    getCascadedPlanCosts,
     getClientPermissionGrants,
     setClientPermissionGrants,
     getClientPermissionChangeLog,
@@ -1625,14 +1633,15 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     if (status === 'active' && !existing.locked) {
         return res.status(400).json({ message: 'Usa el botón Activar para pasar un plan a Activo.' });
     }
-    // This one route serves 3 different screens' saves, each its own Equipo
-    // SaaS leaf: plan fields/endDate (Nuestros Planes -> Editar), status
-    // (Nuestros Planes -> Activar/Desactivar toggle once already locked;
-    // the one-time Revisión->Activo transition stays gated by 'activate'
-    // via POST .../activate above, not here), and currency/
-    // costPerCostCenter (Costo Accesos-Permisos -> Editar, see
-    // Admin-CostosModulos.js's patchPlanField, which calls this same
-    // route). A save can touch more than one bucket at once, so each is
+    // This one route serves 2 different buckets on Nuestros Planes, each
+    // its own Equipo SaaS leaf: plan fields/endDate (Editar), status
+    // (Activar/Desactivar toggle once already locked; the one-time
+    // Revisión->Activo transition stays gated by 'activate' via POST
+    // .../activate above, not here). currency/costPerCostCenter moved here
+    // too (cost cascade, 2026-09-30) now that Costo Accesos-Permisos/
+    // Admin-CostosModulos.js is gone -- same 'saas-plans'/'editar' grant as
+    // the plan-fields bucket, since there's no separate screen for them
+    // anymore. A save can touch more than one bucket at once, so each is
     // checked independently against whatever it actually changes.
     const grants = getSaasUserGrants(req.user.sub);
     const bodyKeys = Object.keys(req.body || {});
@@ -1645,8 +1654,8 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     if (changesStatus && !hasSaasGrant(grants, 'saas-plans', 'activate', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para activar/desactivar planes.' });
     }
-    if (changesPricing && !hasSaasGrant(grants, 'saas-module-costs', 'editar', req.user.isSaasSuperAdmin)) {
-        return res.status(403).json({ message: 'No tienes permiso para editar costos de accesos-permisos.' });
+    if (changesPricing && !hasSaasGrant(grants, 'saas-plans', 'editar', req.user.isSaasSuperAdmin)) {
+        return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
     }
     if (currency !== undefined && !['MXN', 'USD'].includes(currency)) {
         return res.status(400).json({ message: 'currency must be MXN or USD.' });
@@ -1777,52 +1786,104 @@ app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
     res.json({ grants: saved });
 });
 
-function validatePlanPermissionCosts(costs) {
-    if (!Array.isArray(costs)) return 'costs must be an array.';
-    for (const c of costs) {
-        if (!c || typeof c.sectionId !== 'string' || !c.sectionId) return 'each cost row needs a sectionId.';
-        if (typeof c.cost !== 'number' || Number.isNaN(c.cost) || c.cost < 0) return 'cost must be a number >= 0.';
+// --- Cost cascade: Árbol Maestro -> Giro -> Plan ---------------------------
+// Replaces Costo Accesos-Permisos' flat per-node price sheet (see db.js's
+// own DEPRECATED comment on plan_permission_costs). Never lock-gated (same
+// as the old screen) — pricing stays editable even once a plan is
+// Activo/bloqueado, unlike name/description/modules/costCentersLimit/the
+// grant tree itself.
+function validateCostAdjustDefault(body) {
+    if (!body || typeof body !== 'object') return 'default is required.';
+    const { type, valueWeb, valueApp } = body;
+    if (type !== 'percent' && type !== 'flat') return "type must be 'percent' or 'flat'.";
+    if (typeof valueWeb !== 'number' || Number.isNaN(valueWeb)) return 'valueWeb must be a number.';
+    if (typeof valueApp !== 'number' || Number.isNaN(valueApp)) return 'valueApp must be a number.';
+    // A discount is negative on purpose -- only a floor, not a >=0 check
+    // like the old validatePlanPermissionCosts (a flat price can never be
+    // negative; a percent ADJUSTMENT routinely is).
+    if (type === 'percent' && (valueWeb < -100 || valueApp < -100)) return 'a percent discount cannot exceed -100.';
+    return null;
+}
+function validateCostAdjustOverrides(overrides) {
+    if (!Array.isArray(overrides)) return 'overrides must be an array.';
+    for (const o of overrides) {
+        if (!o || typeof o.sectionId !== 'string' || !o.sectionId) return 'each override needs a sectionId.';
+        const error = validateCostAdjustDefault(o);
+        if (error) return error;
     }
     return null;
 }
 
-// --- Costo Accesos-Permisos ("Nuestros Planes" — precio por nodo del árbol,
-// por plan) ------------------------------------------------------------
-// Never lock-gated (see updatePlan's comment) — pricing stays editable even
-// once a plan is Activo/bloqueado, unlike name/description/modules/
-// costCentersLimit/the grant tree itself.
-app.get('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req, res) => {
-    const existing = getPlanById(req.params.id);
-    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    res.json({ costs: getPlanPermissionCosts(req.params.id), currency: existing.currency });
+app.get('/api/admin/business-sectors/:id/cost-adjust', requireAuth, requireAdmin, (req, res) => {
+    const existing = getBusinessSectorById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Business sector not found.' });
+    res.json({
+        default: getSectorCostAdjustDefault(req.params.id),
+        overrides: getSectorPermissionCostAdjustments(req.params.id),
+        masterCosts: getMasterPermissionCosts(),
+        currency: getMasterCostSettings().currency,
+    });
 });
 
-app.put('/api/admin/plans/:id/permission-costs', requireAuth, requireAdmin, (req, res) => {
+app.put('/api/admin/business-sectors/:id/cost-adjust', requireAuth, requireAdmin, (req, res) => {
+    const existing = getBusinessSectorById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Business sector not found.' });
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-business-sectors', 'editar', req.user.isSaasSuperAdmin)) {
+        return res.status(403).json({ message: 'No tienes permiso para editar giros.' });
+    }
+    const { default: defaultAdjust, overrides } = req.body || {};
+    const defaultError = validateCostAdjustDefault(defaultAdjust);
+    if (defaultError) return res.status(400).json({ message: defaultError });
+    const overridesError = validateCostAdjustOverrides(overrides);
+    if (overridesError) return res.status(400).json({ message: overridesError });
+    const savedDefault = setSectorCostAdjustDefault(req.params.id, defaultAdjust);
+    const savedOverrides = setSectorPermissionCostAdjustments(req.params.id, overrides);
+    logBusinessSectorChange({
+        businessSectorId: req.params.id, action: 'update', fieldKey: 'admin.sectorCostAdjust',
+        oldValue: '', newValue: `${savedOverrides.length}`, changedBy: changedByLabel(req),
+    });
+    res.json({ default: savedDefault, overrides: savedOverrides });
+});
+
+app.get('/api/admin/plans/:id/cost-adjust', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
-    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-module-costs', 'editar', req.user.isSaasSuperAdmin)) {
-        return res.status(403).json({ message: 'No tienes permiso para editar costos de accesos-permisos.' });
+    res.json({
+        default: getPlanCostAdjustDefault(req.params.id),
+        overrides: getPlanPermissionCostAdjustments(req.params.id),
+        baseCosts: getPlanCostAdjustBaseCosts(req.params.id),
+        currency: getMasterCostSettings().currency,
+    });
+});
+
+app.put('/api/admin/plans/:id/cost-adjust', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'editar', req.user.isSaasSuperAdmin)) {
+        return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
     }
-    const { costs, currency } = req.body || {};
-    const error = validatePlanPermissionCosts(costs);
-    if (error) return res.status(400).json({ message: error });
-    if (currency !== undefined && !['MXN', 'USD'].includes(currency)) {
-        return res.status(400).json({ message: 'currency must be MXN or USD.' });
-    }
-    const saved = setPlanPermissionCosts(req.params.id, costs);
-    let plan = existing;
-    if (currency !== undefined && currency !== existing.currency) {
-        plan = updatePlan(req.params.id, { currency });
-        logPlanChange({
-            planId: req.params.id, action: 'update', fieldKey: 'admin.planCurrency',
-            oldValue: existing.currency, newValue: currency, changedBy: changedByLabel(req),
-        });
-    }
+    const { default: defaultAdjust, overrides } = req.body || {};
+    const defaultError = validateCostAdjustDefault(defaultAdjust);
+    if (defaultError) return res.status(400).json({ message: defaultError });
+    const overridesError = validateCostAdjustOverrides(overrides);
+    if (overridesError) return res.status(400).json({ message: overridesError });
+    const savedDefault = setPlanCostAdjustDefault(req.params.id, defaultAdjust);
+    const savedOverrides = setPlanPermissionCostAdjustments(req.params.id, overrides);
     logPlanChange({
         planId: req.params.id, action: 'update', fieldKey: 'admin.accessPermissionsCost',
-        oldValue: '', newValue: `${saved.length}`, changedBy: changedByLabel(req),
+        oldValue: '', newValue: `${savedOverrides.length}`, changedBy: changedByLabel(req),
     });
-    res.json({ costs: saved, plan: { ...plan, accessPermissionsCost: computeAccessCostTotal(req.params.id) } });
+    res.json({ default: savedDefault, overrides: savedOverrides, plan: { ...existing, accessPermissionsCost: computeAccessCostTotal(req.params.id) } });
+});
+
+// Nuestros Planes' read-only shield-icon modal (PermissionCostTree.js's
+// grantReadonlyCost mode) -- same {sectionId,itemId,submenuId,cost} shape
+// plan_permission_costs always returned, just computed live from the
+// cascade now.
+app.get('/api/admin/plans/:id/cascaded-costs', requireAuth, requireAdmin, (req, res) => {
+    const existing = getPlanById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Plan not found.' });
+    res.json({ costs: getCascadedPlanCosts(req.params.id), currency: getMasterCostSettings().currency });
 });
 
 app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) => {

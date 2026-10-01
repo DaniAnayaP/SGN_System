@@ -90,13 +90,6 @@ const SAAS_PERMISSION_CATALOG = [
         ],
     },
     {
-        itemId: 'saas-module-costs', labelKey: 'menu.moduleCosts',
-        actions: [
-            { subItemId: null, labelKey: 'admin.saasActionView' },
-            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
-        ],
-    },
-    {
         itemId: 'saas-apps', labelKey: 'menu.ourApps',
         actions: [
             { subItemId: null, labelKey: 'admin.saasActionView' },

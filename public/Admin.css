@@ -191,6 +191,9 @@
     gap: 1rem;
     margin-bottom: 1rem;
 }
+.admin-form-grid[hidden]{
+    display: none;
+}
 .admin-field{
     display: flex;
     flex-direction: column;

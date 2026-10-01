@@ -105,27 +105,16 @@ window.SAAS_ADMIN_CATALOG = [
     {
         groupId: 'saasConfig', labelKey: 'menu.saasConfig',
         screens: [
-            {
-                itemId: 'saas-module-costs', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html',
-                apartados: [
-                    // controlInterno: true (via tablaApartado) -- confirmed
-                    // live, 2026-09-28: "todas las tablas deben llevar su
-                    // clasificación... la cual se define desde el árbol de
-                    // permisos". This is what actually turns on the
-                    // "Iconos Personalización" sibling row (Filtrar included
-                    // among its 8 leaves, see ICON_PERSONALIZATION_ITEMS in
-                    // Admin-ArbolMaestroSaaS.js) -- 'Filtrar' dropped from
-                    // acciones below since it would otherwise show twice.
-                    tablaApartado('tabla', ['Nombre del plan', 'Fecha de creación', 'Costo accesos/permisos', 'Costo por centro de costo', 'Status'], ['Editar costo', 'Registro de Cambios']),
-                    { id: 'modal-arbol-costo', label: 'Modal: Árbol de Costo (por plan)', acciones: ['Editar $ Web', 'Editar $ App'] },
-                ],
-            },
+            // saas-module-costs (Costo Accesos-Permisos) removed, 2026-09-30
+            // -- replaced by the cost cascade (Árbol Maestro -> Giro -> Plan,
+            // see db.js's resolveCostAdjustment). Its own $ icon now lives on
+            // Nuestras Giros/Nuestros Planes themselves (saas-business-sectors/
+            // saas-plans), not a separate catalog entry.
             {
                 itemId: 'saas-team', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html',
                 apartados: [
-                    // controlInterno: true (via tablaApartado) -- same fix
-                    // as saas-module-costs above, confirmed live,
-                    // 2026-09-28. Column/action list kept as-is here (not
+                    // controlInterno: true (via tablaApartado) -- confirmed
+                    // live, 2026-09-28. Column/action list kept as-is here (not
                     // backfilling the Status column or the 3 newer row
                     // icons added later this session -- separate, narrower
                     // catalog-accuracy cleanup, not part of this fix).

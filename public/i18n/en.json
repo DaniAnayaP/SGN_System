@@ -584,6 +584,17 @@
     "costPerCostCenterColumn": "Cost Per Cost Center",
     "costCenterTotalColumn": "Cost Center Total",
     "planCurrency": "Currency",
+    "sectorCostAdjustTitle": "Cost",
+    "costAdjustDefaultLabel": "Default adjustment for the whole tree",
+    "costAdjustPercent": "Percent",
+    "costAdjustFlat": "Flat amount",
+    "costAdjustNode": "Node",
+    "costAdjustBase": "Base",
+    "costAdjustType": "Type",
+    "costAdjustValueWeb": "Web",
+    "costAdjustValueApp": "APP",
+    "costAdjustResult": "Result",
+    "costAdjustClear": "Clear exception (use default)",
     "accessPermCostOverlapHint": "A price set on a container level (Department/Area/Category) is counted separately from — and on top of — the prices of what's underneath it.",
     "accessPermTreeColumn": "Access / Permissions",
     "accessPermTreeCostColumn": "Cost $",
@@ -1842,6 +1853,10 @@
     "giroAccesosGlobales": {
       "what": "Sets which screens and permissions every client in this business sector gets by default, without configuring each client one by one.",
       "example": "every \"Restaurants\" client automatically sees the Food Inventory Control screen."
+    },
+    "sectorCostAdjust": {
+      "what": "Sets the discount or increase this Giro (or Plan) applies on top of the Árbol Maestro's base cost -- one default for the whole tree, plus per-node exceptions if needed.",
+      "example": "a screen's base cost is $100; if the Giro has a -10% default, that screen costs $90 for any plan under that giro, unless it has its own exception."
     },
     "giroReordenPersonalizado": {
       "what": "Changes the order screens appear in the menu, only for clients in this business sector.",

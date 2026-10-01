@@ -556,6 +556,32 @@
         </div>
     </div>
 
+    <!-- Cost cascade: this Giro's own default discount/increase on top of
+         Árbol Maestro's base cost, plus per-node exceptions -- see
+         PermissionCostAdjustTree.js. Replaces Costo Accesos-Permisos
+         entirely (that screen priced per-plan directly; now Plan applies
+         its OWN adjustment on top of whatever this screen produces). -->
+    <div class="modal-overlay" id="sector-cost-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-cost-modal-title" style="max-width: 54rem;">
+            <h3 id="sector-cost-modal-title" data-i18n="admin.sectorCostAdjustTitle">Cost</h3>
+            <div class="perm-tree-cost-adjust-default">
+                <label data-i18n="admin.costAdjustDefaultLabel">Default adjustment for this entire tree</label>
+                <select id="sector-cost-default-type">
+                    <option value="percent" data-i18n="admin.costAdjustPercent">Percent</option>
+                    <option value="flat" data-i18n="admin.costAdjustFlat">Flat amount</option>
+                </select>
+                <input type="number" step="0.01" id="sector-cost-default-web" aria-label="Web">
+                <input type="number" step="0.01" id="sector-cost-default-app" aria-label="App">
+            </div>
+            <div id="sector-cost-container" class="perm-tree-scroll-x"></div>
+            <div id="sector-cost-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="sector-cost-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="sector-cost-close" data-i18n="admin.cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
             <h3 id="business-summary-modal-title" data-i18n="main.businessProfile">Business User Data</h3>
@@ -612,6 +638,7 @@
     <script src="Dashboard.js"></script>
     <script src="AppConfig.js"></script>
     <script src="PermissionTree.js"></script>
+    <script src="PermissionCostAdjustTree.js"></script>
     <script src="BusinessSectorIcons.js"></script>
     <script src="Admin-BusinessSectors.js"></script>
 </body>

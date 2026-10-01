@@ -1047,7 +1047,7 @@ async function loadClientPlanCosts(client) {
     if (!client.plan) return [];
     const plan = plans.find((p) => p.name === client.plan);
     if (!plan) return [];
-    const res = await fetch(`/api/admin/plans/${plan.id}/permission-costs`, { credentials: 'include' });
+    const res = await fetch(`/api/admin/plans/${plan.id}/cascaded-costs`, { credentials: 'include' });
     if (!res.ok) return [];
     const data = await res.json();
     return data.costs || [];

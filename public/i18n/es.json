@@ -583,6 +583,17 @@
     "costPerCostCenterColumn": "Costo Por Centro de Costos",
     "costCenterTotalColumn": "Costo de Centro de Costos",
     "planCurrency": "Moneda",
+    "sectorCostAdjustTitle": "Costo",
+    "costAdjustDefaultLabel": "Ajuste por default para todo el árbol",
+    "costAdjustPercent": "Porcentaje",
+    "costAdjustFlat": "Monto fijo",
+    "costAdjustNode": "Nodo",
+    "costAdjustBase": "Base",
+    "costAdjustType": "Tipo",
+    "costAdjustValueWeb": "Web",
+    "costAdjustValueApp": "APP",
+    "costAdjustResult": "Resultado",
+    "costAdjustClear": "Quitar excepción (usar el default)",
     "accessPermCostOverlapHint": "Un costo puesto en un nivel contenedor (Departamento/Área/Categoría) se cuenta aparte de — y además de — los costos de lo que tiene debajo.",
     "accessPermTreeColumn": "Accesos / Permisos",
     "accessPermTreeCostColumn": "$ Costo",
@@ -1841,6 +1852,10 @@
     "giroAccesosGlobales": {
       "what": "Define qué pantallas y permisos tienen por defecto todos los clientes de este giro de negocio, sin configurar cliente por cliente.",
       "example": "todos los clientes de giro \"Restaurantes\" ven automáticamente la pantalla de Control de Inventario de Alimentos."
+    },
+    "sectorCostAdjust": {
+      "what": "Define el descuento o incremento que este Giro (o Plan) aplica sobre el costo base del Árbol Maestro -- un default para todo el árbol, más excepciones por nodo si hace falta.",
+      "example": "el costo base de una pantalla es $100; si el Giro tiene -10% de default, esa pantalla cuesta $90 para cualquier plan de ese giro, salvo que tenga su propia excepción."
     },
     "giroReordenPersonalizado": {
       "what": "Cambia el orden en que aparecen las pantallas en el menú, solo para los clientes de este giro de negocio.",

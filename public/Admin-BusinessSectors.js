@@ -266,6 +266,15 @@ function renderSectors() {
         treeBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         treeBtn.addEventListener('click', () => openSectorTreeModal(sector));
 
+        const costBtn = document.createElement('button');
+        costBtn.type = 'button';
+        costBtn.className = 'admin-icon-btn';
+        costBtn.setAttribute('aria-label', Dashboard.t('admin.sectorCostAdjustTitle'));
+        costBtn.title = Dashboard.t('admin.sectorCostAdjustTitle');
+        costBtn.setAttribute('data-help-key', 'sectorCostAdjust');
+        costBtn.innerHTML = '<i class="bx bx-dollar-circle" aria-hidden="true"></i>';
+        costBtn.addEventListener('click', () => openSectorCostModal(sector));
+
         const orderBtn = document.createElement('button');
         orderBtn.type = 'button';
         orderBtn.className = 'admin-icon-btn';
@@ -311,7 +320,7 @@ function renderSectors() {
         toggleBtn.setAttribute('data-help-key', sector.status === 'inactive' ? 'activate' : 'deactivate');
         toggleBtn.addEventListener('click', () => toggleSectorStatus(sector));
 
-        tdActions.append(treeBtn, orderBtn, previewBtn, editBtn, historyBtn, toggleBtn);
+        tdActions.append(treeBtn, costBtn, orderBtn, previewBtn, editBtn, historyBtn, toggleBtn);
         tr.append(tdIcon, tdName, tdType, tdDescription, tdPerms, tdStatus, tdCreatedBy, tdCreatedAt, ...systemCols, tdActions);
         tableBody.appendChild(tr);
     });
@@ -511,6 +520,81 @@ sectorTreeSaveBtn.addEventListener('click', async () => {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     } finally {
         sectorTreeSaveBtn.disabled = false;
+    }
+});
+
+// --- Cost cascade -- this Giro's own default discount/increase + per-node
+// exceptions, applied on top of Árbol Maestro's base cost (see
+// PermissionCostAdjustTree.js and db.js's resolveCostAdjustment). Replaces
+// Costo Accesos-Permisos entirely.
+const sectorCostModal = document.getElementById('sector-cost-modal');
+const sectorCostContainer = document.getElementById('sector-cost-container');
+const sectorCostError = document.getElementById('sector-cost-error');
+const sectorCostSaveBtn = document.getElementById('sector-cost-save');
+const sectorCostCloseBtn = document.getElementById('sector-cost-close');
+const sectorCostDefaultType = document.getElementById('sector-cost-default-type');
+const sectorCostDefaultWeb = document.getElementById('sector-cost-default-web');
+const sectorCostDefaultApp = document.getElementById('sector-cost-default-app');
+
+let sectorCostTree = null;
+let selectedSectorCostId = null;
+
+function readSectorCostDefaultInputs() {
+    return {
+        type: sectorCostDefaultType.value === 'flat' ? 'flat' : 'percent',
+        valueWeb: parseFloat(sectorCostDefaultWeb.value) || 0,
+        valueApp: parseFloat(sectorCostDefaultApp.value) || 0,
+    };
+}
+
+async function openSectorCostModal(sector) {
+    selectedSectorCostId = sector.id;
+    sectorCostError.hidden = true;
+    sectorCostContainer.innerHTML = '';
+    sectorCostModal.hidden = false;
+    try {
+        const res = await fetch(`/api/admin/business-sectors/${sector.id}/cost-adjust`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        sectorCostDefaultType.value = data.default.type;
+        sectorCostDefaultWeb.value = data.default.valueWeb;
+        sectorCostDefaultApp.value = data.default.valueApp;
+        sectorCostTree = window.PermissionCostAdjustTree.create(sectorCostContainer, { ownerType: 'sector' });
+        await sectorCostTree.init(data);
+        const onDefaultChange = () => sectorCostTree && sectorCostTree.setDefault(readSectorCostDefaultInputs());
+        sectorCostDefaultType.onchange = onDefaultChange;
+        sectorCostDefaultWeb.onchange = onDefaultChange;
+        sectorCostDefaultApp.onchange = onDefaultChange;
+    } catch {
+        sectorCostError.textContent = Dashboard.t('admin.loadError');
+        sectorCostError.hidden = false;
+    }
+}
+
+function closeSectorCostModal() {
+    sectorCostModal.hidden = true;
+    sectorCostTree = null;
+    selectedSectorCostId = null;
+}
+sectorCostCloseBtn.addEventListener('click', closeSectorCostModal);
+sectorCostModal.addEventListener('click', (event) => { if (event.target === sectorCostModal) closeSectorCostModal(); });
+
+sectorCostSaveBtn.addEventListener('click', async () => {
+    if (!selectedSectorCostId || !sectorCostTree) return;
+    sectorCostSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/business-sectors/${selectedSectorCostId}/cost-adjust`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ default: readSectorCostDefaultInputs(), overrides: sectorCostTree.getOverrides() }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    } finally {
+        sectorCostSaveBtn.disabled = false;
     }
 });
 

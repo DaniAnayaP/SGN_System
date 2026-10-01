@@ -51,6 +51,8 @@ const createdAtField = document.getElementById('plan-created-at');
 const createdByField = document.getElementById('plan-created-by');
 const endDateField = document.getElementById('plan-end-date');
 const costCentersLimitField = document.getElementById('plan-cost-centers-limit');
+const currencyField = document.getElementById('plan-currency');
+const costPerCostCenterField = document.getElementById('plan-cost-per-cost-center');
 const businessSectorField = document.getElementById('plan-sector');
 const errorBanner = document.getElementById('plan-form-error');
 const submitBtn = document.getElementById('plan-form-submit');
@@ -304,6 +306,14 @@ function renderPlans() {
         treeBtn.setAttribute('data-help-key', 'planTree');
         treeBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         treeBtn.addEventListener('click', () => selectPlanForTree(plan));
+        const costBtn = document.createElement('button');
+        costBtn.type = 'button';
+        costBtn.className = 'admin-icon-btn';
+        costBtn.setAttribute('aria-label', Dashboard.t('admin.sectorCostAdjustTitle'));
+        costBtn.title = Dashboard.t('admin.sectorCostAdjustTitle');
+        costBtn.setAttribute('data-help-key', 'sectorCostAdjust');
+        costBtn.innerHTML = '<i class="bx bx-dollar-circle" aria-hidden="true"></i>';
+        costBtn.addEventListener('click', () => openPlanCostModal(plan));
         const historyBtn = document.createElement('button');
         historyBtn.type = 'button';
         historyBtn.className = 'admin-icon-btn';
@@ -317,7 +327,7 @@ function renderPlans() {
         historyBtn.setAttribute('data-help-key', 'changeHistory');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
         historyBtn.addEventListener('click', () => Dashboard.openPlanChangeHistory(plan));
-        tdActions.append(treeBtn, historyBtn);
+        tdActions.append(treeBtn, costBtn, historyBtn);
         if (!isHardLocked(plan)) {
             const editBtn = document.createElement('button');
             editBtn.type = 'button';
@@ -407,6 +417,8 @@ function openEditModal(plan) {
     createdByField.value = plan.createdBy || '';
     endDateField.value = plan.endDate || '';
     costCentersLimitField.value = plan.costCentersLimit || 0;
+    currencyField.value = plan.currency || 'MXN';
+    costPerCostCenterField.value = plan.costPerCostCenter || 0;
     editOnlyFields.hidden = false;
     editModalTitle.textContent = Dashboard.t('admin.planEditTitle');
     submitBtn.textContent = Dashboard.t('admin.save');
@@ -478,6 +490,11 @@ form.addEventListener('submit', async (event) => {
 
     const editingId = idField.value;
     const isCreate = !editingId;
+    // currency/costPerCostCenter only apply once a plan exists (same reason
+    // the rest of #plan-edit-only-fields is create-only hidden) -- moved
+    // here from the old Costo Accesos-Permisos screen now that it's gone.
+    const currency = isCreate ? undefined : currencyField.value;
+    const costPerCostCenter = isCreate ? undefined : Math.max(0, parseFloat(costPerCostCenterField.value) || 0);
 
     submitBtn.disabled = true;
     try {
@@ -485,7 +502,7 @@ form.addEventListener('submit', async (event) => {
             method: isCreate ? 'POST' : 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, description, businessSectorId, costCentersLimit, createdAt, createdBy, endDate }),
+            body: JSON.stringify({ name, description, businessSectorId, costCentersLimit, createdAt, createdBy, endDate, currency, costPerCostCenter }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -534,7 +551,7 @@ async function selectPlanForTree(plan) {
     try {
         const [grantsRes, costsRes] = await Promise.all([
             fetch(`/api/admin/plans/${plan.id}/grants`, { credentials: 'include' }),
-            fetch(`/api/admin/plans/${plan.id}/permission-costs`, { credentials: 'include' }),
+            fetch(`/api/admin/plans/${plan.id}/cascaded-costs`, { credentials: 'include' }),
         ]);
         if (!grantsRes.ok || !costsRes.ok) throw new Error('load failed');
         const grantsData = await grantsRes.json();
@@ -542,8 +559,9 @@ async function selectPlanForTree(plan) {
         // Checkboxes here are exactly as interactive as before (nothing
         // about granting changes) — the only difference from the old plain
         // PermissionTree.js is a read-only cost value shown alongside each
-        // row, sourced from this same plan's own prices (Costo
-        // Accesos-Permisos). NOT mounted with readOnly:true — that mode
+        // row, sourced from this plan's own cascaded cost (Árbol Maestro's
+        // base -> this plan's own Giro -> this plan's own adjustment, see
+        // the $ icon's cost-adjust modal below). NOT mounted with readOnly:true — that mode
         // shows a contracted/blocked module badge instead of the actual
         // grantSet checked-state, the opposite of what a locked plan needs
         // to display (exactly what it grants, just non-editable) — so it
@@ -601,8 +619,85 @@ function showTreeError(el, message) {
     el.hidden = false;
 }
 
-// Per-plan change history modal is shared with Admin-CostosModulos.js —
-// see Dashboard.openPlanChangeHistory (Dashboard.js).
+// --- Cost cascade -- this Plan's own default discount/increase + per-node
+// exceptions, applied on top of whatever its own Giro already produced (see
+// PermissionCostAdjustTree.js and db.js's resolveCostAdjustment/
+// computeSectorCascadedCost). Replaces Costo Accesos-Permisos entirely.
+const planCostModal = document.getElementById('plan-cost-modal');
+const planCostModalTitle = document.getElementById('plan-cost-modal-title');
+const planCostContainer = document.getElementById('plan-cost-container');
+const planCostError = document.getElementById('plan-cost-error');
+const planCostSaveBtn = document.getElementById('plan-cost-save');
+const planCostCloseBtn = document.getElementById('plan-cost-close');
+const planCostDefaultType = document.getElementById('plan-cost-default-type');
+const planCostDefaultWeb = document.getElementById('plan-cost-default-web');
+const planCostDefaultApp = document.getElementById('plan-cost-default-app');
+
+let planCostTree = null;
+let selectedPlanCostId = null;
+
+function readPlanCostDefaultInputs() {
+    return {
+        type: planCostDefaultType.value === 'flat' ? 'flat' : 'percent',
+        valueWeb: parseFloat(planCostDefaultWeb.value) || 0,
+        valueApp: parseFloat(planCostDefaultApp.value) || 0,
+    };
+}
+
+async function openPlanCostModal(plan) {
+    selectedPlanCostId = plan.id;
+    planCostModalTitle.textContent = `${Dashboard.t('admin.sectorCostAdjustTitle')} — ${plan.name}`;
+    planCostError.hidden = true;
+    planCostContainer.innerHTML = '';
+    planCostModal.hidden = false;
+    try {
+        const res = await fetch(`/api/admin/plans/${plan.id}/cost-adjust`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        planCostDefaultType.value = data.default.type;
+        planCostDefaultWeb.value = data.default.valueWeb;
+        planCostDefaultApp.value = data.default.valueApp;
+        planCostTree = window.PermissionCostAdjustTree.create(planCostContainer, { ownerType: 'plan' });
+        await planCostTree.init(data);
+        const onDefaultChange = () => planCostTree && planCostTree.setDefault(readPlanCostDefaultInputs());
+        planCostDefaultType.onchange = onDefaultChange;
+        planCostDefaultWeb.onchange = onDefaultChange;
+        planCostDefaultApp.onchange = onDefaultChange;
+    } catch {
+        planCostError.textContent = Dashboard.t('admin.loadError');
+        planCostError.hidden = false;
+    }
+}
+
+function closePlanCostModal() {
+    planCostModal.hidden = true;
+    planCostTree = null;
+    selectedPlanCostId = null;
+}
+planCostCloseBtn.addEventListener('click', closePlanCostModal);
+planCostModal.addEventListener('click', (event) => { if (event.target === planCostModal) closePlanCostModal(); });
+
+planCostSaveBtn.addEventListener('click', async () => {
+    if (!selectedPlanCostId || !planCostTree) return;
+    planCostSaveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/admin/plans/${selectedPlanCostId}/cost-adjust`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ default: readPlanCostDefaultInputs(), overrides: planCostTree.getOverrides() }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        await loadPlans();
+        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    } finally {
+        planCostSaveBtn.disabled = false;
+    }
+});
+
+// Per-plan change history modal -- see Dashboard.openPlanChangeHistory (Dashboard.js).
 
 // "+ Nuevo Plan" — same toolbar-button placement/style as "+ Nuevo
 // Registro" on Registro Combustible (Inicio-en.css .data-table-new-record-btn,

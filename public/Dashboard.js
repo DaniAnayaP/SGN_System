@@ -730,7 +730,6 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-nuestras-apps': 'saas-apps',
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
-    'admin-costos-modulos': 'saas-module-costs',
     'admin-equipo-saas': 'saas-team',
     'admin-saas-master-status': 'saas-master-tree',
     'admin-nuestros-respaldos': 'saas-backups',
@@ -758,7 +757,6 @@ const SAAS_TABLE_ICON_SCREENS = {
     'equipo-saas': { screenItemId: 'saas-team', apartadoId: 'tabla' },
     'nuestros-clientes': { screenItemId: 'saas-clients', apartadoId: 'tabla' },
     'mis-planes': { screenItemId: 'saas-plans', apartadoId: 'tabla' },
-    'costo-accesos-permisos': { screenItemId: 'saas-module-costs', apartadoId: 'tabla' },
 };
 function hasSaasTableIconGrant(tableId, iconId) {
     const mapping = SAAS_TABLE_ICON_SCREENS[tableId];
@@ -801,7 +799,6 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-business-sectors': 'saas-business-sectors',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
-    'admin-costos-modulos': 'saas-module-costs',
     'admin-equipo-saas': 'saas-team',
     'admin-nuestros-respaldos': 'saas-backups',
     'admin-material-apoyo': 'saas-material-apoyo',
@@ -893,7 +890,6 @@ function buildSidebarData(data, role, activePage) {
             id: 'admin-saas-master-status', labelKey: 'menu.saasMasterTree', href: 'Admin-ArbolMaestroSaaS.html', icon: 'bx-shield', saasItemId: 'saas-master-tree',
             abbrKeys: ['menu.saasMasterTreeAbbr1', 'menu.saasMasterTreeAbbr2'],
         },
-        { id: 'admin-costos-modulos', labelKey: 'menu.moduleCosts', href: 'Admin-CostosModulos.html', icon: 'bx-dollar-circle', saasItemId: 'saas-module-costs' },
         { id: 'admin-equipo-saas', labelKey: 'menu.saasTeam', href: 'Admin-EquipoSaaS.html', icon: 'bx-id-card', saasItemId: 'saas-team' },
         { id: 'admin-nuestros-respaldos', labelKey: 'menu.ourBackups', href: 'Admin-NuestrosRespaldos.html', icon: 'bx-cloud-upload', saasItemId: 'saas-backups' },
         {
@@ -7782,9 +7778,8 @@ function formatCurrency(amount, currency = 'MXN') {
 
 // Per-plan change history (plans are GEIPSA-wide, not client-scoped, so
 // they can't use openChangeHistory's client-scoped table-changes endpoint)
-// — shared by Admin-Planes.js and Admin-CostosModulos.js, both of which
-// show a Cambios icon per plan row against the exact same
-// GET /api/admin/plans/:id/changes data.
+// — used by Admin-Planes.js's own Cambios icon per plan row, against
+// GET /api/admin/plans/:id/changes.
 let planHistoryModal = null;
 let planHistoryList = null;
 

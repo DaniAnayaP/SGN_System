@@ -1384,6 +1384,49 @@ db.exec(`
         UNIQUE(plan_id, section_id, item_id, submenu_id)
     );
     CREATE INDEX IF NOT EXISTS idx_plan_permission_costs_plan_id ON plan_permission_costs(plan_id);
+    -- DEPRECATED (cost cascade, 2026-09-30): Costo Accesos-Permisos' flat
+    -- price sheet above is replaced by sector_permission_cost_adjust/
+    -- plan_permission_cost_adjust below, cascading off master_permission_cost
+    -- instead. Table kept (never drop tables in this file), left unused.
+
+    -- Cost cascade, step 2 of 3 (master_permission_cost is the base, see
+    -- that table above): a sparse per-node discount/increase exception for
+    -- one Giro, on top of that Giro's own flat default (business_sectors.
+    -- cost_adjust_type/value_web/value_app). Only a node whose adjustment
+    -- actually differs from the Giro's own default needs a row here — see
+    -- resolveCostAdjustment's ancestor walk (db.js, near computeCascadedCost)
+    -- for how a missing row falls back to the nearest ancestor's override,
+    -- then to the Giro's own default.
+    CREATE TABLE IF NOT EXISTS sector_permission_cost_adjust (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_sector_id  INTEGER NOT NULL REFERENCES business_sectors(id) ON DELETE CASCADE,
+        section_id          TEXT NOT NULL,
+        item_id             TEXT,
+        submenu_id          TEXT,
+        adjust_type         TEXT NOT NULL DEFAULT 'percent',
+        adjust_value_web    REAL NOT NULL DEFAULT 0,
+        adjust_value_app    REAL NOT NULL DEFAULT 0,
+        UNIQUE(business_sector_id, section_id, item_id, submenu_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sector_permission_cost_adjust_sector_id ON sector_permission_cost_adjust(business_sector_id);
+
+    -- Cost cascade, step 3 of 3: same shape as sector_permission_cost_adjust
+    -- above, one level later -- a Plan's own per-node exception, applied on
+    -- top of whatever that Plan's Giro already produced (sequential cascade,
+    -- confirmed with the user: Base -> Giro -> Plan, not three independent
+    -- adjustments summed).
+    CREATE TABLE IF NOT EXISTS plan_permission_cost_adjust (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id     INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        section_id  TEXT NOT NULL,
+        item_id     TEXT,
+        submenu_id  TEXT,
+        adjust_type       TEXT NOT NULL DEFAULT 'percent',
+        adjust_value_web  REAL NOT NULL DEFAULT 0,
+        adjust_value_app  REAL NOT NULL DEFAULT 0,
+        UNIQUE(plan_id, section_id, item_id, submenu_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_plan_permission_cost_adjust_plan_id ON plan_permission_cost_adjust(plan_id);
 
     -- client_permission_grants: the client-level counterpart of
     -- plan_grants — a "+ adicional" sold to THIS client beyond what their
@@ -1425,8 +1468,8 @@ db.exec(`
 
     -- Access tree for GEIPSA's own SaaS-side staff (role='admin' users) —
     -- a much smaller, flat namespace than the client-side department tree
-    -- (PermissionTree.js): itemId is one of the 3 SaaS screens
-    -- ('saas-clients' | 'saas-plans' | 'saas-module-costs'), subItemId is
+    -- (PermissionTree.js): itemId is one of the SaaS screens
+    -- ('saas-clients' | 'saas-plans' | ...), subItemId is
     -- an optional granular action under that screen (today only
     -- 'activate', under 'saas-plans' — "Autorizar Planes"). No
     -- profiles/roles layer on purpose (direct per-admin grants) — there
@@ -1865,6 +1908,21 @@ ensureColumn('business_sectors', 'status', "TEXT NOT NULL DEFAULT 'active'");
 ensureColumn('business_sectors', 'icon', "TEXT NOT NULL DEFAULT 'bx-briefcase'");
 ensureColumn('business_sectors', 'type_id', 'INTEGER REFERENCES business_sector_types(id)');
 ensureColumn('business_sectors', 'description', "TEXT NOT NULL DEFAULT ''");
+// Cost cascade (Árbol Maestro -> Giro -> Plan, replacing Costo
+// Accesos-Permisos' flat per-plan price sheet): this Giro's own default
+// discount/increase, applied to every node's master_permission_cost unless
+// a more specific sector_permission_cost_adjust row overrides it (see
+// resolveCostAdjustment below). Defaults ('percent', 0, 0) are a no-op --
+// every existing Giro starts exactly neutral (confirmed with the user,
+// 2026-09-30: "empezar en cero", not migrated from the old flat prices).
+ensureColumn('business_sectors', 'cost_adjust_type', "TEXT NOT NULL DEFAULT 'percent'");
+ensureColumn('business_sectors', 'cost_adjust_value_web', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('business_sectors', 'cost_adjust_value_app', 'REAL NOT NULL DEFAULT 0');
+// Same cascade, one step later -- this Plan's own default, applied on top
+// of whatever its Giro already produced (sequential: Base -> Giro -> Plan).
+ensureColumn('plans', 'cost_adjust_type', "TEXT NOT NULL DEFAULT 'percent'");
+ensureColumn('plans', 'cost_adjust_value_web', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('plans', 'cost_adjust_value_app', 'REAL NOT NULL DEFAULT 0');
 // Which of BusinessSectorIcons.js's 14 rubros this Tipo de Giro's own icon
 // picker should jump to by default (null = no default, picker opens on
 // "todos los rubros") -- see the icon-category picker feature.
@@ -5354,7 +5412,10 @@ seedSaasScreenActionGrants();
 // Contrataciones edits per-client — see applyPlanToClient in server.js.
 function deserializePlan(row) {
     if (!row) return row;
-    const { modules, cost_centers_limit, created_by, end_date, locked, cost_per_cost_center, app_id, business_sector_id, ...rest } = row;
+    const {
+        modules, cost_centers_limit, created_by, end_date, locked, cost_per_cost_center, app_id, business_sector_id,
+        cost_adjust_type, cost_adjust_value_web, cost_adjust_value_app, ...rest
+    } = row;
     let parsedModules = [];
     try { parsedModules = JSON.parse(modules) || []; } catch { parsedModules = []; }
     return {
@@ -5366,6 +5427,9 @@ function deserializePlan(row) {
         locked: !!locked,
         costPerCostCenter: cost_per_cost_center || 0,
         businessSectorId: business_sector_id || null,
+        costAdjustType: cost_adjust_type || 'percent',
+        costAdjustValueWeb: cost_adjust_value_web || 0,
+        costAdjustValueApp: cost_adjust_value_app || 0,
         ...getSystemColumnsForRecord({
             companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Planes',
             centroCostos: 'SGN', createdAt: row.created_at,
@@ -5701,10 +5765,13 @@ function getWebScreenFieldsCatalog(webScreenKey) {
 
 function deserializeBusinessSector(row) {
     if (!row) return row;
-    const { created_at, created_by, type_id, type_name, ...rest } = row;
+    const { created_at, created_by, type_id, type_name, cost_adjust_type, cost_adjust_value_web, cost_adjust_value_app, ...rest } = row;
     return {
         ...rest, createdAt: created_at, createdBy: created_by || '',
         typeId: type_id || null, typeName: type_name || '',
+        costAdjustType: cost_adjust_type || 'percent',
+        costAdjustValueWeb: cost_adjust_value_web || 0,
+        costAdjustValueApp: cost_adjust_value_app || 0,
         ...getSystemColumnsForRecord({
             companyName: 'GEIPSA', area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Sectores de Negocio',
             centroCostos: 'SGN', createdAt: created_at,
@@ -6621,31 +6688,6 @@ function syncPlanModulesFromGrants(planId) {
     return changed;
 }
 
-function getPlanPermissionCosts(planId) {
-    return db
-        .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId, cost FROM plan_permission_costs WHERE plan_id = ?')
-        .all(planId);
-}
-
-function setPlanPermissionCosts(planId, costs) {
-    const replace = db.transaction((rows) => {
-        db.prepare('DELETE FROM plan_permission_costs WHERE plan_id = ?').run(planId);
-        const insert = db.prepare(`
-            INSERT INTO plan_permission_costs (plan_id, section_id, item_id, submenu_id, cost)
-            VALUES (@planId, @sectionId, @itemId, @submenuId, @cost)
-        `);
-        for (const c of rows) {
-            if (!(Number(c.cost) > 0)) continue; // sparse storage, same convention as plan_grants (no zero-value rows)
-            insert.run({
-                planId, sectionId: c.sectionId, itemId: c.itemId || null, submenuId: c.submenuId || null,
-                cost: Math.max(0, Number(c.cost) || 0),
-            });
-        }
-    });
-    replace(costs);
-    return getPlanPermissionCosts(planId);
-}
-
 // --- Árbol Maestro's own suggested/base cost (see master_permission_cost --
 // comment above) -- same sparse-storage/replace-all-on-save shape as
 // plan_permission_costs, just GEIPSA-global (no plan_id) and Web+App as two
@@ -6873,19 +6915,281 @@ function computeCostTotalForGrantSet(grantSet, costMap) {
     return total;
 }
 
-// A plan's own "Costo Accesos-Permisos" total is just the sum of every
-// price entered in its cost tree — it does NOT require the same node to
-// also be granted in the plan's separate access tree (the shield-icon
-// modal). Pricing and granting are independent actions on purpose: a price
-// alone is enough to say "this plan charges for this," so this is a plain
-// sum, not computeCostTotalForGrantSet (that shared per-level traversal is
-// still what computeClientAdditionalPermissionsCost uses below, where
-// gating by an actual grant IS correct — it represents what was really
-// sold to that one client, not just priced on the plan's sheet).
-// plan_permission_costs is sparse (cost > 0 only, see
-// setPlanPermissionCosts), so no filtering is needed here.
+// --- Cost cascade: Árbol Maestro (base) -> Giro -> Plan --------------------
+// Replaces Costo Accesos-Permisos' flat, manually-typed plan_permission_costs
+// sheet (see that table's own DEPRECATED comment) with a computed cascade:
+// master_permission_cost is the base, business_sectors' own cost_adjust_*
+// fields are that Giro's default discount/increase (overridable per node via
+// sector_permission_cost_adjust), then plans' own cost_adjust_* fields apply
+// a SECOND discount/increase on top of THAT result (overridable per node via
+// plan_permission_cost_adjust). Confirmed with the user, 2026-09-30:
+// sequential (Base -> Giro -> Plan, not three independent percentages
+// summed), and every existing Giro/Plan starts neutral (0%, discarding the
+// old flat prices rather than migrating them).
+
+// Narrowest-to-broadest walk: the full submenuId path, then each shorter
+// '/'-prefix of it, then item-level, then department-level, then the
+// owner's own global default. Deliberately the OPPOSITE order of
+// resolveMasterNodeStatus's walk above (that one is broadest-first on
+// purpose, so a blocked department always wins over a narrower status) --
+// a cost override needs the opposite precedence: a department-wide discount
+// must never win over a more specific screen's own override.
+function resolveCostAdjustment(sectionId, itemId, submenuId, overridesByKey, globalDefault) {
+    const tryKeys = [];
+    if (submenuId) {
+        const parts = String(submenuId).split('/');
+        for (let i = parts.length; i >= 1; i -= 1) {
+            tryKeys.push(planTupleKey(sectionId, itemId, parts.slice(0, i).join('/')));
+        }
+    }
+    if (itemId) tryKeys.push(planTupleKey(sectionId, itemId, null));
+    tryKeys.push(planTupleKey(sectionId, null, null));
+    for (const key of tryKeys) {
+        const hit = overridesByKey.get(key);
+        if (hit) return hit;
+    }
+    return globalDefault;
+}
+
+function buildCostAdjustOverrideMap(rows) {
+    return new Map(rows.map((r) => [
+        planTupleKey(r.sectionId, r.itemId, r.submenuId),
+        { type: r.adjustType, valueWeb: r.adjustValueWeb, valueApp: r.adjustValueApp },
+    ]));
+}
+
+// One cascade step: percent compounds on the current value, flat adds a
+// fixed amount -- either way floored at 0 (a discount can zero out a node's
+// cost but never push it negative; the safest default, confirmed with the
+// user as fine for now).
+function applyCostAdjustment(base, adjustment, platform) {
+    if (!adjustment) return base;
+    const value = platform === 'app' ? adjustment.valueApp : adjustment.valueWeb;
+    const result = adjustment.type === 'flat' ? base + value : base * (1 + value / 100);
+    return Math.max(0, result);
+}
+
+// Base -> Giro only (stops before the Plan step) -- this is the "base" a
+// Plan's OWN adjustment is layered on top of (see getPlanCostAdjustBaseCosts).
+function computeSectorCascadedCost(sectionId, itemId, submenuId, ctx) {
+    const master = ctx.masterCostByKey.get(planTupleKey(sectionId, itemId, submenuId)) || { web: 0, app: 0 };
+    const sectorAdjust = ctx.sectorId
+        ? resolveCostAdjustment(sectionId, itemId, submenuId, ctx.sectorOverridesByKey, ctx.sectorGlobalDefault)
+        : null;
+    return {
+        web: applyCostAdjustment(master.web, sectorAdjust, 'web'),
+        app: applyCostAdjustment(master.app, sectorAdjust, 'app'),
+    };
+}
+// Full cascade: Base -> Giro -> Plan.
+function computeCascadedCost(sectionId, itemId, submenuId, ctx) {
+    const afterSector = computeSectorCascadedCost(sectionId, itemId, submenuId, ctx);
+    const planAdjust = resolveCostAdjustment(sectionId, itemId, submenuId, ctx.planOverridesByKey, ctx.planGlobalDefault);
+    return {
+        web: applyCostAdjustment(afterSector.web, planAdjust, 'web'),
+        app: applyCostAdjustment(afterSector.app, planAdjust, 'app'),
+    };
+}
+
+function getSectorCostAdjustDefault(sectorId) {
+    const sector = getBusinessSectorById(sectorId);
+    if (!sector) return { type: 'percent', valueWeb: 0, valueApp: 0 };
+    return { type: sector.costAdjustType, valueWeb: sector.costAdjustValueWeb, valueApp: sector.costAdjustValueApp };
+}
+function setSectorCostAdjustDefault(sectorId, { type, valueWeb, valueApp }) {
+    db.prepare('UPDATE business_sectors SET cost_adjust_type = ?, cost_adjust_value_web = ?, cost_adjust_value_app = ? WHERE id = ?')
+        .run(type === 'flat' ? 'flat' : 'percent', Number(valueWeb) || 0, Number(valueApp) || 0, sectorId);
+    return getSectorCostAdjustDefault(sectorId);
+}
+function getPlanCostAdjustDefault(planId) {
+    const plan = getPlanById(planId);
+    if (!plan) return { type: 'percent', valueWeb: 0, valueApp: 0 };
+    return { type: plan.costAdjustType, valueWeb: plan.costAdjustValueWeb, valueApp: plan.costAdjustValueApp };
+}
+function setPlanCostAdjustDefault(planId, { type, valueWeb, valueApp }) {
+    db.prepare('UPDATE plans SET cost_adjust_type = ?, cost_adjust_value_web = ?, cost_adjust_value_app = ? WHERE id = ?')
+        .run(type === 'flat' ? 'flat' : 'percent', Number(valueWeb) || 0, Number(valueApp) || 0, planId);
+    return getPlanCostAdjustDefault(planId);
+}
+
+function getSectorPermissionCostAdjustments(sectorId) {
+    return db.prepare(`
+        SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId,
+               adjust_type AS adjustType, adjust_value_web AS adjustValueWeb, adjust_value_app AS adjustValueApp
+        FROM sector_permission_cost_adjust WHERE business_sector_id = ?
+    `).all(sectorId);
+}
+function setSectorPermissionCostAdjustments(sectorId, rows) {
+    const replace = db.transaction((list) => {
+        db.prepare('DELETE FROM sector_permission_cost_adjust WHERE business_sector_id = ?').run(sectorId);
+        const insert = db.prepare(`
+            INSERT INTO sector_permission_cost_adjust (business_sector_id, section_id, item_id, submenu_id, adjust_type, adjust_value_web, adjust_value_app)
+            VALUES (@sectorId, @sectionId, @itemId, @submenuId, @adjustType, @adjustValueWeb, @adjustValueApp)
+        `);
+        for (const r of list) {
+            const valueWeb = Number(r.valueWeb) || 0;
+            const valueApp = Number(r.valueApp) || 0;
+            if (!valueWeb && !valueApp) continue; // sparse -- a no-op exception isn't worth a row
+            insert.run({
+                sectorId, sectionId: r.sectionId, itemId: r.itemId || null, submenuId: r.submenuId || null,
+                adjustType: r.type === 'flat' ? 'flat' : 'percent',
+                adjustValueWeb: valueWeb, adjustValueApp: valueApp,
+            });
+        }
+    });
+    replace(rows);
+    return getSectorPermissionCostAdjustments(sectorId);
+}
+
+function getPlanPermissionCostAdjustments(planId) {
+    return db.prepare(`
+        SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId,
+               adjust_type AS adjustType, adjust_value_web AS adjustValueWeb, adjust_value_app AS adjustValueApp
+        FROM plan_permission_cost_adjust WHERE plan_id = ?
+    `).all(planId);
+}
+function setPlanPermissionCostAdjustments(planId, rows) {
+    const replace = db.transaction((list) => {
+        db.prepare('DELETE FROM plan_permission_cost_adjust WHERE plan_id = ?').run(planId);
+        const insert = db.prepare(`
+            INSERT INTO plan_permission_cost_adjust (plan_id, section_id, item_id, submenu_id, adjust_type, adjust_value_web, adjust_value_app)
+            VALUES (@planId, @sectionId, @itemId, @submenuId, @adjustType, @adjustValueWeb, @adjustValueApp)
+        `);
+        for (const r of list) {
+            const valueWeb = Number(r.valueWeb) || 0;
+            const valueApp = Number(r.valueApp) || 0;
+            if (!valueWeb && !valueApp) continue;
+            insert.run({
+                planId, sectionId: r.sectionId, itemId: r.itemId || null, submenuId: r.submenuId || null,
+                adjustType: r.type === 'flat' ? 'flat' : 'percent',
+                adjustValueWeb: valueWeb, adjustValueApp: valueApp,
+            });
+        }
+    });
+    replace(rows);
+    return getPlanPermissionCostAdjustments(planId);
+}
+
+// Everything a cascade computation needs for one plan, fetched once instead
+// of per-node -- a plan with no business_sector_id (never assigned a Giro)
+// simply skips that step (Base -> Plan only, sectorId stays null).
+function buildCascadeContextForPlan(planId) {
+    const plan = getPlanById(planId);
+    const sectorId = plan ? plan.businessSectorId : null;
+    return {
+        sectorId,
+        masterCostByKey: new Map(getMasterPermissionCosts().map((c) => [planTupleKey(c.sectionId, c.itemId, c.submenuId), c])),
+        sectorOverridesByKey: sectorId ? buildCostAdjustOverrideMap(getSectorPermissionCostAdjustments(sectorId)) : new Map(),
+        sectorGlobalDefault: sectorId ? getSectorCostAdjustDefault(sectorId) : null,
+        planOverridesByKey: buildCostAdjustOverrideMap(getPlanPermissionCostAdjustments(planId)),
+        planGlobalDefault: plan
+            ? { type: plan.costAdjustType, valueWeb: plan.costAdjustValueWeb, valueApp: plan.costAdjustValueApp }
+            : { type: 'percent', valueWeb: 0, valueApp: 0 },
+    };
+}
+
+// Visits every {sectionId,itemId,submenuId} cost node up to Columna exactly
+// once -- same traversal computeCostTotalForGrantSet already does above
+// (shared here instead of writing a third copy), minus that function's own
+// grant-gating: a cost-cascade caller wants EVERY node's cascaded cost,
+// summed independently per level (the same "double-counting across levels
+// is the accepted design" this file's cost functions already established),
+// not just the ones a particular grant set happens to cover.
+function walkCostTreeNodes(visit) {
+    buildPlanTreeSections().forEach((section) => {
+        visit(section.id, null, null, planTupleKey(section.id, null, null));
+
+        section.items.forEach((item) => {
+            visit(section.id, item.id, null, planTupleKey(section.id, item.id, null));
+            if (!(item.submenu && item.submenu.length)) return;
+
+            item.submenu.forEach((sm) => {
+                visit(section.id, item.id, sm.id, planTupleKey(section.id, item.id, sm.id));
+                if (!(sm.submenu && sm.submenu.length)) return;
+
+                sm.submenu.forEach((subSm) => {
+                    const subSmItemId = subSm.standalone ? subSm.id : item.id;
+                    const subSmSubmenuId = subSm.standalone ? null : `${sm.id}/${subSm.id}`;
+                    visit(section.id, subSmItemId, subSmSubmenuId, planTupleKey(section.id, subSmItemId, subSmSubmenuId));
+                    if (!(subSm.submenu && subSm.submenu.length)) return;
+
+                    subSm.submenu.forEach((col) => {
+                        const base = `${sm.id}/${subSm.id}/${col.id}`;
+                        visit(section.id, item.id, base, planTupleKey(section.id, item.id, base));
+                    });
+                });
+            });
+        });
+    });
+}
+
+// Feeds computeCostTotalForGrantSet UNCHANGED (that function stays exactly
+// as-is) -- builds the same key/#app-suffix-keyed Map it already expects,
+// just populated from live cascade math instead of a stored flat number.
+function buildCascadedCostMapForPlan(planId) {
+    const ctx = buildCascadeContextForPlan(planId);
+    const map = new Map();
+    walkCostTreeNodes((sectionId, itemId, submenuId, key) => {
+        const { web, app } = computeCascadedCost(sectionId, itemId, submenuId, ctx);
+        map.set(key, web);
+        map.set(key + GRANT_APP_SUFFIX, app);
+    });
+    return map;
+}
+
+// Replaces getPlanPermissionCosts for display (Nuestros Planes' read-only
+// cost view, PermissionCostTree.js's grantReadonlyCost mode) -- same exact
+// {sectionId,itemId,submenuId,cost} shape, App rows encoded the same
+// #app-suffixed-submenuId way, just computed live from the cascade instead
+// of read from a stored price. PermissionCostTree.js needs zero changes to
+// consume this.
+function getCascadedPlanCosts(planId) {
+    const ctx = buildCascadeContextForPlan(planId);
+    const rows = [];
+    walkCostTreeNodes((sectionId, itemId, submenuId) => {
+        const { web, app } = computeCascadedCost(sectionId, itemId, submenuId, ctx);
+        if (web > 0) rows.push({ sectionId, itemId: itemId || null, submenuId: submenuId || null, cost: web });
+        if (app > 0) rows.push({ sectionId, itemId: itemId || null, submenuId: (submenuId || '') + GRANT_APP_SUFFIX, cost: app });
+    });
+    return rows;
+}
+
+// {sectionId,itemId,submenuId,web,app} rows from a (sectionId,itemId,
+// submenuId,ctx) -> {web,app} compute function -- shared by the two
+// PermissionCostAdjustTree.js-facing endpoints below (new component, no
+// legacy flat-shape constraint to match, so a {web,app} object per row is
+// simpler than the #app-suffix trick above).
+function buildCostRows(computeFn, ctx) {
+    const rows = [];
+    walkCostTreeNodes((sectionId, itemId, submenuId) => {
+        const { web, app } = computeFn(sectionId, itemId, submenuId, ctx);
+        if (web || app) rows.push({ sectionId, itemId: itemId || null, submenuId: submenuId || null, web, app });
+    });
+    return rows;
+}
+// The "base" a Plan's OWN adjustment is layered on top of -- master cost
+// cascaded through its Giro only. Used by the Plan cost editor to show
+// "this is what you're starting from" per node.
+function getPlanCostAdjustBaseCosts(planId) {
+    return buildCostRows(computeSectorCascadedCost, buildCascadeContextForPlan(planId));
+}
+
+// A plan's own "Costo Accesos-Permisos" total used to be a plain sum of
+// every row in its flat price sheet (pricing and granting were independent
+// — a price alone meant "this plan charges for this," regardless of the
+// plan's own separate access tree). Same idea now, over the cascade: every
+// node's cascaded cost, summed independently per level (still not gated by
+// plan_grants — computeClientAdditionalPermissionsCost below is the one
+// that gates by an actual grant, since THAT one represents what was really
+// sold to a specific client).
 function computeAccessCostTotal(planId) {
-    return getPlanPermissionCosts(planId).reduce((sum, c) => sum + (Number(c.cost) || 0), 0);
+    const ctx = buildCascadeContextForPlan(planId);
+    let total = 0;
+    walkCostTreeNodes((sectionId, itemId, submenuId) => {
+        const { web, app } = computeCascadedCost(sectionId, itemId, submenuId, ctx);
+        total += web + app;
+    });
+    return total;
 }
 
 function getClientPermissionGrants(clientId) {
@@ -6946,8 +7250,7 @@ function computeClientAdditionalPermissionsCost(clientId) {
     const plan = getPlanByName(client.plan);
     if (!plan) return 0;
     const grantSet = new Set(getClientPermissionGrants(clientId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
-    const costMap = new Map(getPlanPermissionCosts(plan.id).map((c) => [planTupleKey(c.sectionId, c.itemId, c.submenuId), c.cost]));
-    return computeCostTotalForGrantSet(grantSet, costMap);
+    return computeCostTotalForGrantSet(grantSet, buildCascadedCostMapForPlan(plan.id));
 }
 
 // 3-tier "is this tuple covered" check (exact match / broadened to the
@@ -7709,14 +8012,22 @@ module.exports = {
     getPlanGrants,
     setPlanGrants,
     syncPlanModulesFromGrants,
-    getPlanPermissionCosts,
-    setPlanPermissionCosts,
     getMasterPermissionCosts,
     setMasterPermissionCosts,
     getMasterCostSettings,
     setMasterCostSettings,
     applyMasterCostCurrencyChange,
     computeAccessCostTotal,
+    getSectorCostAdjustDefault,
+    setSectorCostAdjustDefault,
+    getSectorPermissionCostAdjustments,
+    setSectorPermissionCostAdjustments,
+    getPlanCostAdjustDefault,
+    setPlanCostAdjustDefault,
+    getPlanPermissionCostAdjustments,
+    setPlanPermissionCostAdjustments,
+    getPlanCostAdjustBaseCosts,
+    getCascadedPlanCosts,
     getClientPermissionGrants,
     setClientPermissionGrants,
     getClientPermissionChangeLog,
