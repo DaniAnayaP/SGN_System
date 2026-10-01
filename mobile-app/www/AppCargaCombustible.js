@@ -599,7 +599,10 @@ async function commitFieldValue(field, value) {
                 credentials: 'include',
                 body: JSON.stringify({}),
             });
-            if (!res.ok) throw new Error('create failed');
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                throw new Error(body?.message || 'create failed');
+            }
             const { record } = await res.json();
             records.push(record);
             openRecordId = record.id;
@@ -612,8 +615,8 @@ async function commitFieldValue(field, value) {
                 autoPatch.centroCostos = `${cc.code} - ${cc.name}`;
             }
             await patchRecord(record.id, { ...autoPatch, ...patch });
-        } catch {
-            showToast(t('admin.saveError'));
+        } catch (err) {
+            showToast(err.message === 'create failed' ? t('admin.saveError') : err.message);
             draftRecord = null;
             view = 'list';
             render();

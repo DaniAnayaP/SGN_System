@@ -418,14 +418,17 @@ async function commitFieldValue(field, value) {
     if (draftRecord) {
         try {
             const res = await fetch(apiUrl(API_BASE), { method: 'POST', credentials: 'include' });
-            if (!res.ok) throw new Error('create failed');
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                throw new Error(body?.message || 'create failed');
+            }
             const { category } = await res.json();
             records.push(category);
             openRecordId = category.id;
             draftRecord = null;
             await patchRecord(category.id, { [field.apiKey]: value });
-        } catch {
-            showToast(t('admin.saveError'));
+        } catch (err) {
+            showToast(err.message === 'create failed' ? t('admin.saveError') : err.message);
             draftRecord = null;
             view = 'list';
             render();

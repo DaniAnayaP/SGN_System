@@ -547,7 +547,10 @@ async function ensureRealRecord() {
         credentials: 'include',
         body: JSON.stringify({}),
     });
-    if (!res.ok) throw new Error('create failed');
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || 'create failed');
+    }
     const { skuItem } = await res.json();
     records.push(skuItem);
     openRecordId = skuItem.id;
@@ -561,8 +564,8 @@ async function commitFieldValue(field, value) {
     try {
         const record = await ensureRealRecord();
         await patchRecord(record.id, { [field.apiKey]: value });
-    } catch {
-        showToast(t('admin.saveError'));
+    } catch (err) {
+        showToast(err.message === 'create failed' ? t('admin.saveError') : err.message);
         // Only a still-blank draft that never made it to the server needs
         // discarding here -- an existing record's own patch failure is
         // already handled (and already re-rendered) inside patchRecord.
@@ -650,8 +653,8 @@ function buildFieldBody(field, record) {
             let recordId;
             try {
                 recordId = (await ensureRealRecord()).id;
-            } catch {
-                showToast(t('admin.saveError'));
+            } catch (err) {
+                showToast(err.message === 'create failed' ? t('admin.saveError') : err.message);
                 btn.disabled = false;
                 renderPhotoBtn(false);
                 return;

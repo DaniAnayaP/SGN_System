@@ -59,13 +59,16 @@ async function ensureCreatedThenPatch(record, patch) {
     if (record.id) return patchUnitType(record.id, patch);
     try {
         const res = await fetch('/api/business/unit-types', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('create failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.message || 'create failed');
+        }
         const { unitType } = await res.json();
         record.id = unitType.id;
         await patchUnitType(unitType.id, patch);
     } catch (err) {
         console.error('Tipos de Unidad: failed to create record', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        Dashboard.showToast(err.message === 'create failed' ? Dashboard.t('admin.saveError') : err.message, 'error');
     }
 }
 

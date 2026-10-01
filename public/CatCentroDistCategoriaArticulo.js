@@ -73,7 +73,10 @@ async function ensureCreatedThenPatch(record, patch) {
     if (record.id) return patchCategory(record.id, patch);
     try {
         const res = await fetch(API_BASE, { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('create failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.message || 'create failed');
+        }
         const { category } = await res.json();
         record.id = category.id;
         record.registroUnico = category.registroUnico;
@@ -81,7 +84,7 @@ async function ensureCreatedThenPatch(record, patch) {
         await patchCategory(category.id, patch);
     } catch (err) {
         console.error('Nuestras Categorías: failed to create record', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        Dashboard.showToast(err.message === 'create failed' ? Dashboard.t('admin.saveError') : err.message, 'error');
     }
 }
 

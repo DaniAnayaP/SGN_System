@@ -525,7 +525,10 @@ createForm?.addEventListener('submit', async (event) => {
     saveBtn.disabled = true;
     try {
         const res = await fetch('/api/business/transfers', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('create failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.message || 'create failed');
+        }
         const { transfer } = await res.json();
 
         const patch = {};
@@ -551,7 +554,7 @@ createForm?.addEventListener('submit', async (event) => {
         await refreshTable();
     } catch (err) {
         console.error('Nuestros Traslados: failed to save new record', err);
-        createFormError.textContent = Dashboard.t('admin.saveError');
+        createFormError.textContent = err.message === 'create failed' ? Dashboard.t('admin.saveError') : err.message;
         createFormError.hidden = false;
     } finally {
         saveBtn.disabled = false;

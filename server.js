@@ -188,6 +188,7 @@ const {
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,
+    canCreateColumn,
     createPendingChange,
     getPendingChangeById,
     hasPendingChangeForField,
@@ -4184,6 +4185,9 @@ app.get('/api/business/fuel-records', requireAuth, (req, res) => {
 
 app.post('/api/business/fuel-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'registro-combustible', 'colFuelCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const { date, ecoUnit, driver, coordinator, centroCostos } = req.body || {};
     if (!date || !ecoUnit?.trim() || !driver?.trim() || !coordinator?.trim()) {
         return res.status(400).json({ message: 'date, ecoUnit, driver and coordinator are required.' });
@@ -4301,6 +4305,9 @@ app.get('/api/business/fuel-loading-records', requireAuth, (req, res) => {
 // identifying ones, is filled in afterward one at a time via PATCH.
 app.post('/api/business/fuel-loading-records', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'carga-combustible', 'colCargaCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const record = createFuelLoadingRecord({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: record.id,
@@ -4382,6 +4389,9 @@ app.get('/api/business/unit-types', requireAuth, (req, res) => {
 
 app.post('/api/business/unit-types', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'tipos-unidad', 'colUnitTypeCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const unitType = createUnitType({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: unitType.id,
@@ -4466,6 +4476,9 @@ app.get('/api/business/fleet-units', requireAuth, (req, res) => {
 
 app.post('/api/business/fleet-units', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'nuestras-unidades', 'colFleetCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const fleetUnit = createFleetUnit({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: fleetUnit.id,
@@ -4573,6 +4586,9 @@ app.get('/api/business/sku-items', requireAuth, (req, res) => {
 
 app.post('/api/business/sku-items', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'nuestros-articulos', 'colArticuloCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const skuItem = createSkuItem({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: skuItem.id,
@@ -4719,6 +4735,9 @@ app.post('/api/business/article-categories/:categoryType', requireAuth, (req, re
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const config = articleCategoryTypeConfig(req.params.categoryType);
     if (!config) return res.status(404).json({ message: 'Unknown category type.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), config.tableKey, 'colCatCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const category = createArticleCategory({ clientId: req.user.clientId, categoryType: req.params.categoryType, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: config.tableKey, recordId: category.id,
@@ -5012,6 +5031,9 @@ app.get('/api/business/freight-quotes-active', requireAuth, (req, res) => {
 
 app.post('/api/business/freight-quotes', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'nuestras-cotizaciones', 'colCotCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const freightQuote = createFreightQuote({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestras-cotizaciones', recordId: freightQuote.id,
@@ -5105,6 +5127,9 @@ app.get('/api/business/transfers', requireAuth, (req, res) => {
 
 app.post('/api/business/transfers', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'nuestros-traslados', 'colTrasladoCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const transfer = createTransfer({ clientId: req.user.clientId, isTestData: req.user.isTestAccount });
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestros-traslados', recordId: transfer.id,
@@ -5400,6 +5425,9 @@ app.get('/api/business/hr-workers', requireAuth, (req, res) => {
 
 app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'mi-recurso-humano', 'colHrWorkerCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
     const { givenNames, surnames, position, jobPositionId, startDate, costCenterId, email, personalEmail } = req.body || {};
     if (!givenNames?.trim() || !surnames?.trim() || !position?.trim() || !jobPositionId || !startDate || !email?.trim()) {
         return res.status(400).json({ message: 'givenNames, surnames, position, jobPositionId, startDate, and email are required.' });

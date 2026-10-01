@@ -492,7 +492,10 @@ async function commitFieldValue(field, value) {
     if (draftRecord) {
         try {
             const res = await fetch(apiUrl('/api/business/transfers'), { method: 'POST', credentials: 'include' });
-            if (!res.ok) throw new Error('create failed');
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                throw new Error(body?.message || 'create failed');
+            }
             const { transfer } = await res.json();
             records.push(transfer);
             openRecordId = transfer.id;
@@ -503,8 +506,8 @@ async function commitFieldValue(field, value) {
             // has a real sourceRecordId to attach to.
             if (isRequestNew) { openCatalogRequestSheet(transfer); render(); return; }
             await patchRecord(transfer.id, { [field.apiKey]: value });
-        } catch {
-            showToast(t('admin.saveError'));
+        } catch (err) {
+            showToast(err.message === 'create failed' ? t('admin.saveError') : err.message);
             draftRecord = null;
             view = 'list';
             render();

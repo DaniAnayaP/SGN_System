@@ -703,7 +703,10 @@ async function saveNewRecord() {
                 centroCostos: `${selectedCc.code} - ${selectedCc.name}`,
             }),
         });
-        if (!res.ok) throw new Error('save failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.message || 'save failed');
+        }
         const { record } = await res.json();
         const tbody = getTbody();
         const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
@@ -712,7 +715,7 @@ async function saveNewRecord() {
         closeNewRecordModal();
         Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
     } catch (err) {
-        newRecordError.textContent = Dashboard.t('admin.saveError');
+        newRecordError.textContent = err.message === 'save failed' ? Dashboard.t('admin.saveError') : err.message;
         newRecordError.hidden = false;
     } finally {
         newRecordSaveBtn.disabled = false;

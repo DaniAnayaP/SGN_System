@@ -304,7 +304,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colUnitTypeDeleteAuth", "labelKey": "main.colUnitTypeDeleteAuth", "permissionOnly": true }
+                { "id": "colUnitTypeDeleteAuth", "labelKey": "main.colUnitTypeDeleteAuth", "permissionOnly": true },
+                { "id": "colUnitTypeCreateAuth", "labelKey": "main.colUnitTypeCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -401,7 +402,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colFuelDeleteAuth", "labelKey": "main.colFuelDeleteAuth", "permissionOnly": true }
+                { "id": "colFuelDeleteAuth", "labelKey": "main.colFuelDeleteAuth", "permissionOnly": true },
+                { "id": "colFuelCreateAuth", "labelKey": "main.colFuelCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -457,7 +459,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCargaDeleteAuth", "labelKey": "main.colCargaDeleteAuth", "permissionOnly": true }
+                { "id": "colCargaDeleteAuth", "labelKey": "main.colCargaDeleteAuth", "permissionOnly": true },
+                { "id": "colCargaCreateAuth", "labelKey": "main.colCargaCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -507,7 +510,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colFleetDeleteAuth", "labelKey": "main.colFleetDeleteAuth", "permissionOnly": true }
+                { "id": "colFleetDeleteAuth", "labelKey": "main.colFleetDeleteAuth", "permissionOnly": true },
+                { "id": "colFleetCreateAuth", "labelKey": "main.colFleetCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -589,7 +593,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colTrasladoDeleteAuth", "labelKey": "main.colTrasladoDeleteAuth", "permissionOnly": true }
+                { "id": "colTrasladoDeleteAuth", "labelKey": "main.colTrasladoDeleteAuth", "permissionOnly": true },
+                { "id": "colTrasladoCreateAuth", "labelKey": "main.colTrasladoCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -640,7 +645,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCotDeleteAuth", "labelKey": "main.colCotDeleteAuth", "permissionOnly": true }
+                { "id": "colCotDeleteAuth", "labelKey": "main.colCotDeleteAuth", "permissionOnly": true },
+                { "id": "colCotCreateAuth", "labelKey": "main.colCotCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -694,7 +700,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true },
+                { "id": "colCatCreateAuth", "labelKey": "main.colCatCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -736,7 +743,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true },
+                { "id": "colCatCreateAuth", "labelKey": "main.colCatCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -778,7 +786,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true },
+                { "id": "colCatCreateAuth", "labelKey": "main.colCatCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -820,7 +829,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true },
+                { "id": "colCatCreateAuth", "labelKey": "main.colCatCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -862,7 +872,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true },
+                { "id": "colCatCreateAuth", "labelKey": "main.colCatCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -904,7 +915,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true },
+                { "id": "colCatCreateAuth", "labelKey": "main.colCatCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -946,7 +958,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true },
+                { "id": "colCatCreateAuth", "labelKey": "main.colCatCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -988,7 +1001,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true }
+                { "id": "colCatDeleteAuth", "labelKey": "main.colCatDeleteAuth", "permissionOnly": true },
+                { "id": "colCatCreateAuth", "labelKey": "main.colCatCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -1053,7 +1067,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colArticuloDeleteAuth", "labelKey": "main.colArticuloDeleteAuth", "permissionOnly": true }
+                { "id": "colArticuloDeleteAuth", "labelKey": "main.colArticuloDeleteAuth", "permissionOnly": true },
+                { "id": "colArticuloCreateAuth", "labelKey": "main.colArticuloCreateAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -1114,7 +1129,13 @@
             { "id": "colHrDepartment", "labelKey": "main.colHrDepartment", "permissionOnly": true },
             { "id": "colHrCostCenter", "labelKey": "main.colHrCostCenter", "permissionOnly": true },
             { "id": "colHrUsername", "labelKey": "main.colHrUsername", "permissionOnly": true },
-            { "id": "colHrUserStatus", "labelKey": "main.colHrUserStatus", "permissionOnly": true }
+            { "id": "colHrUserStatus", "labelKey": "main.colHrUserStatus", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colHrWorkerCreateAuth", "labelKey": "main.colHrWorkerCreateAuth", "permissionOnly": true }
+              ]
+            }
           ],
           "iconsSubmenu": [
             { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },

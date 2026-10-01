@@ -562,7 +562,10 @@ async function createNewRecord() {
     }
     try {
         const res = await fetch('/api/business/fuel-loading-records', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('save failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.message || 'save failed');
+        }
         const { record } = await res.json();
         const tbody = getTbody();
         const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
@@ -575,7 +578,7 @@ async function createNewRecord() {
         Dashboard.showToast(Dashboard.t('main.recordSaved'), 'success');
     } catch (err) {
         console.error('Carga Combustible: failed to create record', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        Dashboard.showToast(err.message === 'save failed' ? Dashboard.t('admin.saveError') : err.message, 'error');
     }
 }
 

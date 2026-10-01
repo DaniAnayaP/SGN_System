@@ -74,13 +74,16 @@ async function ensureCreatedThenPatch(record, patch) {
     if (record.id) return patchFleetUnit(record.id, patch);
     try {
         const res = await fetch('/api/business/fleet-units', { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('create failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.message || 'create failed');
+        }
         const { fleetUnit } = await res.json();
         record.id = fleetUnit.id;
         await patchFleetUnit(fleetUnit.id, patch);
     } catch (err) {
         console.error('Nuestras Unidades: failed to create record', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        Dashboard.showToast(err.message === 'create failed' ? Dashboard.t('admin.saveError') : err.message, 'error');
     }
 }
 

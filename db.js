@@ -3075,6 +3075,20 @@ function canDeleteColumn(grants, tableKey, colKey, pathOverride) {
     return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
 }
 
+// Independent "can this user create a new row in this table" gate --
+// confirmed with the user, 2026-10-01: having this does NOT imply having
+// write access to any particular field, and vice versa (a blank-row create
+// still goes through the normal per-column check on whatever field gets
+// typed first). No dedicated "Crear" checkbox exists in the tree (only
+// Ver y Operar/Editar/Autorizar/Eliminar are universal per column) -- same
+// convention colReportAuthorization/colScheduledAuthorizedBy already use:
+// a plain permission-only leaf (col*CreateAuth), read via the ordinary
+// Ver y Operar/Editar levels, not a bespoke suffix like Eliminar/Autorizar.
+function canCreateColumn(grants, tableKey, colKey, pathOverride) {
+    const level = getColumnGrantLevel(grants, tableKey, colKey, pathOverride);
+    return level === 'ver-y-operar' || level === 'editar';
+}
+
 // --- Pending changes (real approval workflow for "Editar" on an ---------
 // --- already-saved value — see checkAndLogFieldChanges in server.js) -----
 function createPendingChange({ clientId, tableKey, recordId, recordLabel, fieldKey, columnKey, oldValue, newValue, requestedBy, requestedByUserId, escalatedToUserId }) {
@@ -7766,6 +7780,7 @@ module.exports = {
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,
+    canCreateColumn,
     listClientEvidenceFiles,
     getEvidenceRawValue,
     setEvidenceValue,
