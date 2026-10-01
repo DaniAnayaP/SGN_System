@@ -185,6 +185,11 @@ const {
     getTableChanges,
     getAllTableChanges,
     logTableChange,
+    getSavedSearchesForClientTable,
+    getSavedSearchById,
+    createSavedSearch,
+    deleteSavedSearch,
+    getJobPositionIdForUser,
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,
@@ -5564,6 +5569,83 @@ app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const recordId = req.query.recordId ? Number(req.query.recordId) : undefined;
     res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey, recordId) });
+});
+
+// --- Búsqueda Guardada --------------------------------------------------
+// A 'global' row matches a user if ANY of its 3 criteria matches (OR
+// across criteria), each with its own exceptUserIds (Puestos/Centros de
+// Costo only -- Usuarios has none, excluding a user from a literal user
+// list is just not picking them). Cost-center access comes from the
+// user's own real grants (the same 'cc-<id>' leaves Dashboard.js's
+// hasCostCenterPermission checks client-side), not job_positions.
+// cost_center_scope -- grants are the already-resolved source of truth
+// everywhere else in this app. No "sites" criterion yet -- see db.js's
+// schema comment on saved_searches.
+function matchesSavedSearchAudience(audience, { userId, jobPositionId, costCenterIds }) {
+    if (!audience) return false;
+    if ((audience.userIds || []).includes(userId)) return true;
+    if (jobPositionId && (audience.jobPositions || []).some((jp) => jp.id === jobPositionId && !(jp.exceptUserIds || []).includes(userId))) return true;
+    if ((audience.costCenters || []).some((cc) => costCenterIds.includes(cc.id) && !(cc.exceptUserIds || []).includes(userId))) return true;
+    return false;
+}
+
+function validateSavedSearchAudience(audience) {
+    if (!audience || typeof audience !== 'object') return false;
+    const isIdArray = (v) => Array.isArray(v) && v.every((x) => Number.isInteger(x));
+    const isExceptGroup = (arr) => Array.isArray(arr) && arr.every((e) => e && Number.isInteger(e.id) && (e.exceptUserIds === undefined || isIdArray(e.exceptUserIds)));
+    if (audience.userIds !== undefined && !isIdArray(audience.userIds)) return false;
+    if (audience.jobPositions !== undefined && !isExceptGroup(audience.jobPositions)) return false;
+    if (audience.costCenters !== undefined && !isExceptGroup(audience.costCenters)) return false;
+    return true;
+}
+
+app.get('/api/business/saved-searches/:tableKey', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const userId = req.user.sub;
+    const jobPositionId = getJobPositionIdForUser(userId);
+    const grants = getUserEffectiveGrants(userId);
+    const costCenterIds = grants
+        .filter((g) => g.sectionId === 'main' && g.itemId === 'cc-list' && g.submenuId?.startsWith('cc-'))
+        .map((g) => Number(g.submenuId.slice(3)))
+        .filter((id) => Number.isFinite(id));
+    const all = getSavedSearchesForClientTable(req.user.clientId, req.params.tableKey);
+    const visible = all.filter((row) => {
+        if (row.scope === 'personal') return row.ownerUserId === userId;
+        return !!req.user.isClientAdmin || matchesSavedSearchAudience(row.audience, { userId, jobPositionId, costCenterIds });
+    });
+    res.json({ searches: visible });
+});
+
+app.post('/api/business/saved-searches', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { tableKey, name, filter, scope, audience } = req.body || {};
+    if (!tableKey || typeof tableKey !== 'string') return res.status(400).json({ message: 'Missing tableKey.' });
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
+    if (!filter || typeof filter !== 'object') return res.status(400).json({ message: 'Missing filter.' });
+    const finalScope = scope === 'global' ? 'global' : 'personal';
+    if (finalScope === 'global') {
+        if (!req.user.isClientAdmin) return res.status(403).json({ message: 'Solo un administrador puede crear una búsqueda guardada global.' });
+        const hasAnyTarget = (audience?.userIds?.length || audience?.jobPositions?.length || audience?.costCenters?.length);
+        if (!validateSavedSearchAudience(audience) || !hasAnyTarget) {
+            return res.status(400).json({ message: 'Elige al menos un usuario, puesto o centro de costo.' });
+        }
+    }
+    const row = createSavedSearch({
+        clientId: req.user.clientId, tableKey, name: name.trim(), filter,
+        scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
+        audience: finalScope === 'global' ? audience : undefined,
+    });
+    res.status(201).json({ search: row });
+});
+
+app.delete('/api/business/saved-searches/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const row = getSavedSearchById(Number(req.params.id));
+    if (!row || row.clientId !== req.user.clientId) return res.status(404).json({ message: 'Not found.' });
+    const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
+    if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar esta búsqueda guardada.' });
+    deleteSavedSearch(row.id);
+    res.json({ ok: true });
 });
 
 // --- Base de Datos de Nuestros Cambios ---------------------------------------

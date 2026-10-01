@@ -4548,6 +4548,431 @@ async function openChangeHistory(tableId, recordId) {
     }
 }
 
+// --- Búsqueda Guardada ---------------------------------------------------
+// One dedicated modal, same singleton pattern as Change History above,
+// works on any .data-table-wrapper automatically (8th Iconos
+// Personalizados leaf, iconSavedSearch, gated the same binary way as
+// iconFilter/iconHistory/etc). Captures BOTH filter mechanisms every table
+// already has: the page's own .filter-bar fields (serialized by DOM id --
+// this file never learns a page's own field names, same as the
+// Filtrar/Limpiar buttons already do) and the generic per-column value
+// filter (dataTableColumnState's own columnFilters Map). Creating a
+// 'global' one (visible to a chosen audience instead of just its owner) is
+// admin-only -- a non-admin only ever sees "Solo yo", same split
+// "Reglas de Orden de Llenado" already uses elsewhere in this file.
+const SAVED_SEARCH_AUDIENCE_GROUPS = [
+    { key: 'userIds', labelKey: 'main.savedSearchAudienceUsers', excludable: false },
+    { key: 'jobPositions', labelKey: 'main.savedSearchAudienceJobPositions', excludable: true },
+    { key: 'costCenters', labelKey: 'main.savedSearchAudienceCostCenters', excludable: true },
+    // A 4th entry (Sitios) belongs here the day Holding ships a real
+    // Sucursal entity -- same {key, labelKey, excludable:true} shape,
+    // nothing else in this block needs to change.
+];
+
+let savedSearchModal = null;
+let savedSearchListEl = null;
+let savedSearchEmptyEl = null;
+let savedSearchErrorEl = null;
+let savedSearchNameInput = null;
+let savedSearchAdminSection = null;
+let savedSearchAudiencePanel = null;
+let savedSearchSaveBtn = null;
+let savedSearchTableId = null;
+let savedSearchAudienceCatalog = null; // {userIds:[{id,label}], jobPositions:[...], costCenters:[...]}
+// Live selection while the picker is open -- Map<groupKey, Map<optionId, Set<exceptUserId>>>.
+// userIds' own inner Set is always empty/unused -- excluding a user from a
+// literal user list is just not picking them in the first place.
+let savedSearchAudienceSelection = new Map();
+
+function ensureSavedSearchModal() {
+    if (savedSearchModal) return;
+    savedSearchModal = document.createElement('div');
+    savedSearchModal.className = 'modal-overlay';
+    savedSearchModal.hidden = true;
+    savedSearchModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 32rem;" role="dialog" aria-modal="true" aria-labelledby="saved-search-title">
+            <h3 id="saved-search-title">${t('main.savedSearchTitle')}</h3>
+            <div data-role="list" class="saved-search-list"></div>
+            <p data-role="empty" class="admin-hint" hidden>${t('main.savedSearchEmpty')}</p>
+            <div class="saved-search-save-block">
+                <p class="admin-hint">${t('main.savedSearchSaveHint')}</p>
+                <input type="text" data-role="name" class="saved-search-name-input" placeholder="${t('main.savedSearchNamePlaceholder')}">
+                <div data-role="admin-section" class="saved-search-audience-radios" hidden>
+                    <label><input type="radio" name="saved-search-audience" value="self" checked> ${t('main.savedSearchAudienceSelf')}</label>
+                    <label><input type="radio" name="saved-search-audience" value="assign"> ${t('main.savedSearchAudienceAssign')}</label>
+                </div>
+                <div data-role="audience-panel" class="saved-search-audience-panel" hidden></div>
+                <p data-role="error" class="admin-error" role="alert" hidden></p>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
+                    <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(savedSearchModal);
+    savedSearchListEl = savedSearchModal.querySelector('[data-role="list"]');
+    savedSearchEmptyEl = savedSearchModal.querySelector('[data-role="empty"]');
+    savedSearchErrorEl = savedSearchModal.querySelector('[data-role="error"]');
+    savedSearchNameInput = savedSearchModal.querySelector('[data-role="name"]');
+    savedSearchAdminSection = savedSearchModal.querySelector('[data-role="admin-section"]');
+    savedSearchAudiencePanel = savedSearchModal.querySelector('[data-role="audience-panel"]');
+    savedSearchSaveBtn = savedSearchModal.querySelector('[data-role="save"]');
+    const close = () => { savedSearchModal.hidden = true; };
+    savedSearchModal.querySelector('[data-role="close"]').addEventListener('click', close);
+    wireModalDismiss(savedSearchModal, close);
+    savedSearchModal.querySelectorAll('input[name="saved-search-audience"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (radio.checked && radio.value === 'assign') {
+                savedSearchAudiencePanel.hidden = false;
+                buildSavedSearchAudiencePanel();
+            } else if (radio.checked) {
+                savedSearchAudiencePanel.hidden = true;
+            }
+        });
+    });
+    savedSearchSaveBtn.addEventListener('click', saveSavedSearch);
+}
+
+async function openSavedSearchPicker(tableId) {
+    ensureSavedSearchModal();
+    savedSearchTableId = tableId;
+    savedSearchNameInput.value = '';
+    savedSearchErrorEl.hidden = true;
+    savedSearchAudienceSelection = new Map(SAVED_SEARCH_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
+    savedSearchAdminSection.hidden = !currentUser?.isClientAdmin;
+    savedSearchAudiencePanel.hidden = true;
+    savedSearchModal.querySelectorAll('input[name="saved-search-audience"]').forEach((r) => { r.checked = r.value === 'self'; });
+    savedSearchModal.hidden = false;
+    await loadSavedSearchList();
+}
+
+async function loadSavedSearchList() {
+    savedSearchListEl.innerHTML = '';
+    savedSearchEmptyEl.hidden = true;
+    try {
+        const res = await fetch(`/api/business/saved-searches/${encodeURIComponent(savedSearchTableId)}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const { searches } = await res.json();
+        renderSavedSearchList(searches || []);
+    } catch {
+        // Leave the empty-state message in place -- no network/parse errors surfaced here.
+    }
+}
+
+// Built with createElement/textContent, not innerHTML -- search.name is
+// free text a user typed, same reasoning renderChangeHistoryRow already
+// follows for its own user-provided cell values.
+function renderSavedSearchList(searches) {
+    savedSearchListEl.innerHTML = '';
+    savedSearchEmptyEl.hidden = searches.length > 0;
+    searches.forEach((search) => {
+        const row = document.createElement('div');
+        row.className = 'saved-search-row';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'saved-search-row-name';
+        nameEl.textContent = search.name;
+        row.appendChild(nameEl);
+
+        const badge = document.createElement('span');
+        badge.className = `saved-search-scope-badge saved-search-scope-${search.scope}`;
+        badge.textContent = t(search.scope === 'global' ? 'main.savedSearchScopeGlobal' : 'main.savedSearchScopePersonal');
+        row.appendChild(badge);
+
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'btn-link';
+        applyBtn.textContent = t('main.savedSearchApply');
+        applyBtn.addEventListener('click', () => applySavedSearch(savedSearchTableId, search));
+        row.appendChild(applyBtn);
+
+        // A 'personal' row only ever appears in the viewer's OWN list (the
+        // server already scopes it to its owner) -- no need to separately
+        // compare ownerUserId against the current user here.
+        const canDelete = !!currentUser?.isClientAdmin || search.scope === 'personal';
+        if (canDelete) {
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn-link-danger';
+            delBtn.setAttribute('aria-label', t('admin.delete'));
+            delBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+            delBtn.addEventListener('click', () => deleteSavedSearchRow(search.id));
+            row.appendChild(delBtn);
+        }
+        savedSearchListEl.appendChild(row);
+    });
+}
+
+async function deleteSavedSearchRow(id) {
+    try {
+        const res = await fetch(`/api/business/saved-searches/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (res.ok) await loadSavedSearchList();
+    } catch {
+        // Leave the list as-is -- next open retries the fetch anyway.
+    }
+}
+
+// Zoom toolbar sits right before the wrapper (insertAdjacentElement
+// 'beforebegin'), and the filter-bar (when the page has one) sits right
+// before THAT -- see renderDataTableColumnControls above. Reusing
+// dataTableColumnState's own stored wrapper reference instead of
+// re-querying the DOM by tableId.
+function getSavedSearchFilterBar(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const zoomBar = state?.wrapper?.previousElementSibling;
+    if (!zoomBar?.classList?.contains('data-table-zoom')) return null;
+    const bar = zoomBar.previousElementSibling;
+    return bar?.classList?.contains('filter-bar') ? bar : null;
+}
+
+function collectCurrentFilterSnapshot(tableId) {
+    const fields = {};
+    getSavedSearchFilterBar(tableId)?.querySelectorAll('input[id], select[id]').forEach((el) => { fields[el.id] = el.value; });
+    const columnFilters = {};
+    dataTableColumnState.get(tableId)?.columnFilters.forEach((set, key) => { columnFilters[key] = [...set]; });
+    return { fields, columnFilters };
+}
+
+// Replays a saved snapshot: sets each .filter-bar field by id (skipping
+// any that no longer exist) and dispatches the same data-table:filter-apply
+// event the page's own "Buscar" button fires, then rebuilds columnFilters
+// for whichever columns still exist today -- a column renamed/removed since
+// this was saved just drops out silently rather than erroring.
+function applySavedSearch(tableId, search) {
+    const filterBar = getSavedSearchFilterBar(tableId);
+    if (filterBar) {
+        Object.entries(search.filter?.fields || {}).forEach(([id, value]) => {
+            const el = filterBar.querySelector(`#${CSS.escape(id)}`);
+            if (el) el.value = value;
+        });
+        filterBar.dispatchEvent(new CustomEvent('data-table:filter-apply'));
+        filterBar.classList.add('filter-bar-expanded');
+    }
+    const state = dataTableColumnState.get(tableId);
+    if (state) {
+        const existingKeys = new Set(getDataTableColumnKeys(state.table));
+        const newFilters = new Map();
+        Object.entries(search.filter?.columnFilters || {}).forEach(([key, values]) => {
+            if (existingKeys.has(key)) newFilters.set(key, new Set(values));
+        });
+        state.columnFilters = newFilters;
+        applyColumnValueFilters(tableId);
+        getHeaderRow(state.table).querySelectorAll('th[data-col]').forEach((th) => {
+            updateColumnFilterIndicator(th, newFilters.has(th.dataset.col));
+        });
+        state.wrapper?.previousElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'true');
+    }
+    sizeDataTableWrappers();
+    savedSearchModal.hidden = true;
+}
+
+async function fetchSavedSearchAudienceCatalog() {
+    if (savedSearchAudienceCatalog) return savedSearchAudienceCatalog;
+    try {
+        const [usersRes, jpRes, ccRes] = await Promise.all([
+            fetch('/api/business/users', { credentials: 'include' }),
+            fetch('/api/business/job-positions', { credentials: 'include' }),
+            fetch('/api/business/cost-centers', { credentials: 'include' }),
+        ]);
+        const [usersData, jpData, ccData] = await Promise.all([usersRes.json(), jpRes.json(), ccRes.json()]);
+        savedSearchAudienceCatalog = {
+            userIds: (usersData.users || []).map((u) => ({ id: u.id, label: u.name || u.username })),
+            jobPositions: (jpData.jobPositions || []).map((jp) => ({ id: jp.id, label: jp.name })),
+            costCenters: (ccData.costCenters || []).map((cc) => ({ id: cc.id, label: `${cc.code} - ${cc.name}` })),
+        };
+    } catch {
+        savedSearchAudienceCatalog = { userIds: [], jobPositions: [], costCenters: [] };
+    }
+    return savedSearchAudienceCatalog;
+}
+
+// 3-state "seleccionar todos" rollup per group -- same indeterminate-dash
+// convention the permission tree's own container checkboxes use: checked
+// only if EVERY option is on, a dash the moment even one is missing.
+function updateSavedSearchGroupAllCheckbox(group, options, allCb) {
+    const groupMap = savedSearchAudienceSelection.get(group.key);
+    const onCount = options.filter((opt) => groupMap.has(opt.id)).length;
+    allCb.checked = onCount > 0 && onCount === options.length;
+    allCb.indeterminate = onCount > 0 && onCount < options.length;
+}
+
+// One exclusion block per currently-selected chip in an excludable group --
+// each keeps its own independent "excepto" list of users.
+function renderSavedSearchExclusions(group, options, container) {
+    const groupMap = savedSearchAudienceSelection.get(group.key);
+    const users = savedSearchAudienceCatalog?.userIds || [];
+    container.innerHTML = '';
+    options.filter((opt) => groupMap.has(opt.id)).forEach((opt) => {
+        const exceptSet = groupMap.get(opt.id);
+        const block = document.createElement('div');
+        block.className = 'saved-search-exclude-block';
+
+        const label = document.createElement('div');
+        label.className = 'saved-search-exclude-label';
+        const strong = document.createElement('b');
+        strong.textContent = opt.label;
+        label.appendChild(strong);
+        label.appendChild(document.createTextNode(' ' + t('main.savedSearchAudienceExceptLabel')));
+        block.appendChild(label);
+
+        const chipsEl = document.createElement('div');
+        chipsEl.className = 'saved-search-chips';
+        users.forEach((u) => {
+            const chip = document.createElement('label');
+            chip.className = 'saved-search-chip saved-search-chip-exclude';
+            chip.classList.toggle('saved-search-chip-on', exceptSet.has(u.id));
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = exceptSet.has(u.id);
+            chip.appendChild(cb);
+            chip.appendChild(document.createTextNode(' ' + u.label));
+            chip.addEventListener('click', (event) => {
+                event.preventDefault();
+                if (exceptSet.has(u.id)) exceptSet.delete(u.id); else exceptSet.add(u.id);
+                cb.checked = exceptSet.has(u.id);
+                chip.classList.toggle('saved-search-chip-on', exceptSet.has(u.id));
+            });
+            chipsEl.appendChild(chip);
+        });
+        block.appendChild(chipsEl);
+        container.appendChild(block);
+    });
+}
+
+function updateSavedSearchAudienceSummary(summaryEl) {
+    const catalog = savedSearchAudienceCatalog;
+    const parts = [];
+    SAVED_SEARCH_AUDIENCE_GROUPS.forEach((group) => {
+        const groupMap = savedSearchAudienceSelection.get(group.key);
+        const options = catalog?.[group.key] || [];
+        groupMap.forEach((exceptSet, id) => {
+            const opt = options.find((o) => o.id === id);
+            if (!opt) return;
+            if (exceptSet.size) {
+                const exceptLabels = [...exceptSet].map((uid) => catalog.userIds.find((u) => u.id === uid)?.label).filter(Boolean);
+                parts.push(`${opt.label} (${t('main.savedSearchAudienceExcept')} ${exceptLabels.join(', ')})`);
+            } else {
+                parts.push(opt.label);
+            }
+        });
+    });
+    summaryEl.textContent = parts.length ? `${t('main.savedSearchAudienceWillSee')} ${parts.join(', ')}` : t('main.savedSearchAudienceSummaryEmpty');
+}
+
+async function buildSavedSearchAudiencePanel() {
+    const catalog = await fetchSavedSearchAudienceCatalog();
+    savedSearchAudiencePanel.innerHTML = '';
+    const summaryEl = document.createElement('p');
+    summaryEl.className = 'saved-search-audience-summary';
+
+    SAVED_SEARCH_AUDIENCE_GROUPS.forEach((group) => {
+        const options = catalog[group.key] || [];
+        const groupEl = document.createElement('div');
+        groupEl.className = 'saved-search-audience-group';
+
+        const groupLabel = document.createElement('label');
+        groupLabel.className = 'saved-search-audience-group-label';
+        const allCb = document.createElement('input');
+        allCb.type = 'checkbox';
+        groupLabel.appendChild(allCb);
+        groupLabel.appendChild(document.createTextNode(' ' + t(group.labelKey)));
+        groupEl.appendChild(groupLabel);
+
+        const chipsEl = document.createElement('div');
+        chipsEl.className = 'saved-search-chips';
+        const exclusionsEl = group.excludable ? document.createElement('div') : null;
+        if (exclusionsEl) exclusionsEl.className = 'saved-search-exclusions';
+
+        options.forEach((opt) => {
+            const chip = document.createElement('label');
+            chip.className = 'saved-search-chip';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            chip.appendChild(cb);
+            chip.appendChild(document.createTextNode(' ' + opt.label));
+            chip.addEventListener('click', (event) => {
+                event.preventDefault();
+                const groupMap = savedSearchAudienceSelection.get(group.key);
+                if (groupMap.has(opt.id)) groupMap.delete(opt.id); else groupMap.set(opt.id, new Set());
+                cb.checked = groupMap.has(opt.id);
+                chip.classList.toggle('saved-search-chip-on', groupMap.has(opt.id));
+                if (exclusionsEl) renderSavedSearchExclusions(group, options, exclusionsEl);
+                updateSavedSearchGroupAllCheckbox(group, options, allCb);
+                updateSavedSearchAudienceSummary(summaryEl);
+            });
+            chipsEl.appendChild(chip);
+        });
+        groupEl.appendChild(chipsEl);
+        if (exclusionsEl) groupEl.appendChild(exclusionsEl);
+
+        allCb.addEventListener('click', (event) => {
+            event.preventDefault();
+            const groupMap = savedSearchAudienceSelection.get(group.key);
+            const allOn = options.every((opt) => groupMap.has(opt.id));
+            chipsEl.querySelectorAll('.saved-search-chip').forEach((chip, i) => {
+                const opt = options[i];
+                const cb = chip.querySelector('input');
+                if (allOn) { groupMap.delete(opt.id); cb.checked = false; chip.classList.remove('saved-search-chip-on'); }
+                else { groupMap.set(opt.id, new Set()); cb.checked = true; chip.classList.add('saved-search-chip-on'); }
+            });
+            if (exclusionsEl) renderSavedSearchExclusions(group, options, exclusionsEl);
+            updateSavedSearchGroupAllCheckbox(group, options, allCb);
+            updateSavedSearchAudienceSummary(summaryEl);
+        });
+
+        savedSearchAudiencePanel.appendChild(groupEl);
+    });
+
+    savedSearchAudiencePanel.appendChild(summaryEl);
+    updateSavedSearchAudienceSummary(summaryEl);
+}
+
+async function saveSavedSearch() {
+    savedSearchErrorEl.hidden = true;
+    const name = savedSearchNameInput.value.trim();
+    if (!name) {
+        savedSearchErrorEl.textContent = t('main.savedSearchNameRequired');
+        savedSearchErrorEl.hidden = false;
+        return;
+    }
+    const isAssign = savedSearchModal.querySelector('input[name="saved-search-audience"][value="assign"]')?.checked;
+    const scope = (currentUser?.isClientAdmin && isAssign) ? 'global' : 'personal';
+    let audience;
+    if (scope === 'global') {
+        audience = {};
+        SAVED_SEARCH_AUDIENCE_GROUPS.forEach((group) => {
+            const groupMap = savedSearchAudienceSelection.get(group.key);
+            if (!groupMap.size) return;
+            if (group.key === 'userIds') audience.userIds = [...groupMap.keys()];
+            else audience[group.key] = [...groupMap.entries()].map(([id, exceptSet]) => ({ id, exceptUserIds: [...exceptSet] }));
+        });
+        if (!audience.userIds?.length && !audience.jobPositions?.length && !audience.costCenters?.length) {
+            savedSearchErrorEl.textContent = t('main.savedSearchAudienceSummaryEmpty');
+            savedSearchErrorEl.hidden = false;
+            return;
+        }
+    }
+    const filter = collectCurrentFilterSnapshot(savedSearchTableId);
+    try {
+        const res = await fetch('/api/business/saved-searches', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ tableKey: savedSearchTableId, name, filter, scope, audience }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            savedSearchErrorEl.textContent = body?.message || t('admin.saveError');
+            savedSearchErrorEl.hidden = false;
+            return;
+        }
+        savedSearchNameInput.value = '';
+        await loadSavedSearchList();
+    } catch {
+        savedSearchErrorEl.textContent = t('admin.saveError');
+        savedSearchErrorEl.hidden = false;
+    }
+}
+
 // Color legend modal — one row for the row-editable green tint (universal,
 // every table has it) plus one row per column classification actually
 // present on THIS table (read from state.groupKeys, so a table with no
@@ -4687,6 +5112,18 @@ function renderDataTableColumnControls() {
                 legendBtn.innerHTML = '<span class="data-table-legend-icon" aria-hidden="true"><span></span><span></span><span></span></span>';
                 legendBtn.addEventListener('click', () => openColumnLegend(getTableId(wrapper, index)));
                 toAppend.push(legendBtn);
+            }
+
+            if (resolveIconGrant(tableKey, 'iconSavedSearch')) {
+                const savedSearchBtn = document.createElement('button');
+                savedSearchBtn.type = 'button';
+                savedSearchBtn.className = 'data-table-zoom-btn';
+                savedSearchBtn.dataset.colAction = 'saved-search';
+                savedSearchBtn.setAttribute('aria-label', t('main.savedSearchBtn'));
+                savedSearchBtn.title = t('main.savedSearchBtn');
+                savedSearchBtn.innerHTML = '<i class="bx bx-bookmark-star" aria-hidden="true"></i>';
+                savedSearchBtn.addEventListener('click', () => openSavedSearchPicker(getTableId(wrapper, index)));
+                toAppend.push(savedSearchBtn);
             }
 
             // Reglas de Orden de Llenado — admin-only (it's a configuration

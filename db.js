@@ -1428,6 +1428,30 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_plan_permission_cost_adjust_plan_id ON plan_permission_cost_adjust(plan_id);
 
+    -- Búsqueda Guardada -- a snapshot of BOTH filter mechanisms every real
+    -- data table already has (the page's own .filter-bar fields, by their
+    -- DOM id, plus the generic per-column Excel-style value filter), so one
+    -- row can be replayed with a single click. 'personal' is visible only
+    -- to owner_user_id; 'global' (admin-only to create) is visible per
+    -- audience_json instead -- see resolveSavedSearchAudience in server.js
+    -- for the matching logic (Usuarios/Puestos/Centros de Costo, OR'd
+    -- together). audience_json deliberately has no "sites" key yet -- that
+    -- criterion doesn't exist as a real entity until Holding ships
+    -- Sucursal; adding the key later is additive, nothing to migrate.
+    CREATE TABLE IF NOT EXISTS saved_searches (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id           INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        table_key           TEXT NOT NULL,
+        name                TEXT NOT NULL,
+        filter_json         TEXT NOT NULL,
+        scope               TEXT NOT NULL DEFAULT 'personal',
+        owner_user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_by_user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        audience_json       TEXT,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saved_searches_client_table ON saved_searches(client_id, table_key);
+
     -- client_permission_grants: the client-level counterpart of
     -- plan_grants — a "+ adicional" sold to THIS client beyond what their
     -- plan already includes, at the exact same {sectionId, itemId,
@@ -2895,6 +2919,62 @@ function logTableChange({ clientId, tableKey, recordId, recordLabel, action, fie
     });
 }
 
+// Búsqueda Guardada -- CRUD for saved_searches (schema above). Audience
+// matching (who can see a 'global' row) needs grant/job-position data this
+// file doesn't resolve on its own, so that logic lives in server.js
+// (resolveSavedSearchAudience) -- these functions just move rows in and out.
+function deserializeSavedSearch(row) {
+    if (!row) return null;
+    let filter = { fields: {}, columnFilters: {} };
+    try { filter = JSON.parse(row.filter_json) || filter; } catch { /* keep default */ }
+    let audience = null;
+    if (row.audience_json) {
+        try { audience = JSON.parse(row.audience_json); } catch { audience = null; }
+    }
+    return {
+        id: row.id,
+        clientId: row.client_id,
+        tableKey: row.table_key,
+        name: row.name,
+        filter,
+        scope: row.scope,
+        ownerUserId: row.owner_user_id,
+        createdByUserId: row.created_by_user_id,
+        audience,
+        createdAt: row.created_at,
+    };
+}
+
+function getSavedSearchesForClientTable(clientId, tableKey) {
+    return db
+        .prepare('SELECT * FROM saved_searches WHERE client_id = ? AND table_key = ? ORDER BY created_at ASC, id ASC')
+        .all(clientId, tableKey)
+        .map(deserializeSavedSearch);
+}
+
+function getSavedSearchById(id) {
+    return deserializeSavedSearch(db.prepare('SELECT * FROM saved_searches WHERE id = ?').get(id));
+}
+
+function createSavedSearch({ clientId, tableKey, name, filter, scope, ownerUserId, createdByUserId, audience }) {
+    const info = db.prepare(`
+        INSERT INTO saved_searches (client_id, table_key, name, filter_json, scope, owner_user_id, created_by_user_id, audience_json)
+        VALUES (@clientId, @tableKey, @name, @filterJson, @scope, @ownerUserId, @createdByUserId, @audienceJson)
+    `).run({
+        clientId, tableKey, name,
+        filterJson: JSON.stringify(filter || { fields: {}, columnFilters: {} }),
+        scope: scope === 'global' ? 'global' : 'personal',
+        ownerUserId: scope === 'global' ? null : ownerUserId,
+        createdByUserId,
+        audienceJson: scope === 'global' ? JSON.stringify(audience || {}) : null,
+    });
+    return getSavedSearchById(info.lastInsertRowid);
+}
+
+function deleteSavedSearch(id) {
+    db.prepare('DELETE FROM saved_searches WHERE id = ?').run(id);
+}
+
 // Who most recently touched this exact field -- used by the offline-queue
 // conflict check (see checkAndLogFieldChanges's baseline option in
 // server.js) to name whoever's change a replayed offline edit would
@@ -3663,6 +3743,11 @@ function wouldCreateReportsToCycle(clientId, positionId, candidateId) {
 // createAccessDeniedAlert). Stops (returns null) at the top of the chart,
 // if the user has no Puesto at all, or after 20 hops (cycle guard --
 // reports_to has no cycle detection on write, see the migration above).
+function getJobPositionIdForUser(userId) {
+    const worker = db.prepare('SELECT job_position_id AS jobPositionId FROM hr_workers WHERE user_id = ?').get(userId);
+    return worker?.jobPositionId || null;
+}
+
 function resolveDirectSupervisorUserId(userId) {
     const worker = db.prepare('SELECT job_position_id AS jobPositionId FROM hr_workers WHERE user_id = ?').get(userId);
     let jobPositionId = worker?.jobPositionId;
@@ -7777,6 +7862,10 @@ module.exports = {
     getTableChanges,
     getAllTableChanges,
     logTableChange,
+    getSavedSearchesForClientTable,
+    getSavedSearchById,
+    createSavedSearch,
+    deleteSavedSearch,
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,
@@ -7846,6 +7935,7 @@ module.exports = {
     listAllAccessDeniedAlerts,
     markAccessDeniedAlertsSeen,
     resolveDirectSupervisorUserId,
+    getJobPositionIdForUser,
     getOrgChartPositions,
     setJobPositionReportsTo,
     wouldCreateReportsToCycle,

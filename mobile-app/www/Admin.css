@@ -4713,3 +4713,172 @@ body.dark-mode .admin-save-status{
     padding: 0.8rem 0.4rem 0;
     cursor: pointer;
 }
+
+/* Búsqueda Guardada -- the icon's own modal (see Dashboard.js), plus the
+   admin-only audience picker (Usuarios/Puestos/Centros de Costo, each a
+   chip list with a 3-state "seleccionar todos" and, for Puestos/CC, a
+   per-chip "excepto" exclusion block). A plain inline text button
+   (.btn-link/-danger) didn't exist yet -- every other "Aplicar"/"Eliminar"
+   in this app is either a full .btn pill or an icon-only button, neither
+   fitting a dense list row. */
+.btn-link{
+    background: none;
+    border: none;
+    padding: 0.2rem 0.4rem;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-accent);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btn-link:hover{ text-decoration: underline; }
+.btn-link-danger{
+    background: none;
+    border: none;
+    padding: 0.2rem;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+.btn-link-danger:hover{ color: #c23b3b; }
+
+.saved-search-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 16rem;
+    overflow-y: auto;
+    margin: 0.5rem 0;
+}
+.saved-search-row{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+}
+.saved-search-row-name{
+    flex: 1;
+    min-width: 0;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.saved-search-scope-badge{
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    white-space: nowrap;
+}
+.saved-search-scope-global{
+    background-color: color-mix(in srgb, #6d3fc0 18%, transparent);
+    color: #6d3fc0;
+}
+.saved-search-scope-personal{
+    background-color: color-mix(in srgb, #0f8a6b 18%, transparent);
+    color: #0f8a6b;
+}
+.saved-search-save-block{
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.saved-search-name-input{
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-elevated, var(--color-bg));
+    color: var(--color-text-primary);
+}
+.saved-search-audience-radios{
+    display: flex;
+    gap: 1rem;
+    font-size: 0.82rem;
+}
+.saved-search-audience-radios[hidden]{ display: none; }
+.saved-search-audience-radios label{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+}
+.saved-search-audience-panel{
+    border: 1px dashed var(--color-accent);
+    border-radius: 0.5rem;
+    padding: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+.saved-search-audience-panel[hidden]{ display: none; }
+.saved-search-audience-group-label{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-accent);
+    cursor: pointer;
+    margin-bottom: 0.3rem;
+}
+.saved-search-chips{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+.saved-search-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.74rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem 0.2rem 0.4rem;
+    cursor: pointer;
+}
+.saved-search-chip-on{
+    border-color: var(--color-accent);
+    background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    font-weight: 600;
+}
+.saved-search-chip-exclude.saved-search-chip-on{
+    border-color: #c23b3b;
+    background-color: color-mix(in srgb, #c23b3b 12%, transparent);
+    color: #c23b3b;
+}
+.saved-search-exclusions{
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+}
+.saved-search-exclude-block{
+    border-left: 2px solid #c23b3b;
+    padding-left: 0.5rem;
+}
+.saved-search-exclude-label{
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.25rem;
+}
+.saved-search-audience-summary{
+    font-size: 0.74rem;
+    color: var(--color-text-secondary);
+    background: var(--color-bg);
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    margin: 0;
+}
