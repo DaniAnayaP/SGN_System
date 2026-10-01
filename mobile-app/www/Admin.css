@@ -191,6 +191,9 @@
     gap: 1rem;
     margin-bottom: 1rem;
 }
+.admin-form-grid[hidden]{
+    display: none;
+}
 .admin-field{
     display: flex;
     flex-direction: column;
@@ -291,6 +294,7 @@
     mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
 }
 .sector-icon-picker-chip{
+    display: inline-flex; align-items: center; gap: 0.35rem;
     flex: none; border: 1px solid var(--color-border); border-radius: 999px;
     background-color: var(--color-bg); color: var(--color-text-secondary);
     font-size: 0.74rem; font-weight: 600; padding: 0.32rem 0.7rem; cursor: pointer;
@@ -2868,6 +2872,17 @@ body.dark-mode .perm-tree-color-popover{ background-color: #23242b; }
     border-color: var(--color-accent);
     color: #fff;
 }
+/* Admin-ArbolMaestroSaaS.js's own Web/App toggle is a plain clickable
+   span, not a real checkbox (predates this session) -- its "on" state
+   was never actually styled, so every icon looked identically unfilled
+   regardless of state (confirmed live, 2026-09-17: "el color al
+   seleccionar no es el mismo que el de árbol maestro de cliente"). Same
+   "on" look as the client tree's own checked state above. */
+.perm-tree-mstatus-device-on .perm-tree-mstatus-device-box{
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+}
 .perm-tree-mstatus-device:has(input:disabled) .perm-tree-mstatus-device-box{
     opacity: 0.4;
 }
@@ -3023,6 +3038,111 @@ body.dark-mode .perm-tree-gate-icon-blocked{
     cursor: not-allowed;
     opacity: 0.5;
 }
+/* Admin-ArbolMaestroSaaS.html -- full-depth tree (Grupo -> Pantalla ->
+   Apartado/Tabla/Modal -> Columna/Acción, see SaasAdminCatalog.js), reusing
+   statusMode's row/select/badge classes directly (its own small renderer,
+   not PermissionTree.js -- see Admin-ArbolMaestroSaaS.js's own comment for
+   why). .perm-tree-mstatus-label's own width normally comes from
+   alignLabelColumnWidth's canvas measurement (see its own comment above);
+   this page never runs that, so it's fixed here instead of falling back to
+   a cramped 5rem -- a FIXED width (not auto-by-content) is what keeps every
+   row's Estatus/Web·App columns aligned regardless of label length, same
+   principle alignLabelColumnWidth achieves by measuring on the client tree. */
+/* Same dynamic-height trick Admin-ArbolMaestro.html already uses for its
+   own .master-tree-panel (see that rule below) -- confirmed live that a
+   fixed rem max-height here left the box a fixed size regardless of the
+   actual browser window, which then needed the WHOLE PAGE to scroll past
+   it on a shorter window, on top of the box's own internal scrollbar (two
+   scrollbars, neither matching the real one's behavior). This makes <main>
+   fill the viewport and never scroll itself, and the tree box grow/shrink
+   to fill whatever room is left below the subtitle/Guardar button,
+   scrolling only internally -- exactly Árbol de Permisos Maestro's own
+   layout, scoped to this page's own marker class so nothing else sharing
+   .admin-panel/.saas-master-status-list is affected. */
+body:has(.saas-master-tree-panel) main{
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    padding-bottom: 1rem;
+}
+.saas-master-tree-panel{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    /* Same 0.75rem .master-tree-panel already uses for the client tree --
+       this one kept .admin-panel's own generic 1.5rem (never trimmed to
+       match its sibling), leaving twice the air around "Guardar" here.
+       Confirmed live, 2026-09-29: "aquí siento que perdemos mucho
+       espacio", comparing directly against the client tree. */
+    padding: 0.75rem;
+    /* Same 0.5rem the client tree's own .master-tree-subview uses, so the
+       subtitle sits right under the table instead of the browser's own
+       default <p> margin plus admin-subtitle's 1.25rem stacking on top of
+       it (confirmed live, 2026-09-17, "4 veces": "este espacio es mucho,
+       debe ser lo mínimo"). */
+    gap: 0.5rem;
+}
+.saas-master-tree-panel .saas-master-status-list{
+    flex: 1;
+    min-height: 0;
+}
+/* Matches this page's own 0.4rem container padding -- the base rule's
+   -0.5rem offset/margin assumes .perm-tree's own 0.5rem padding, which
+   this page never uses (see .master-tree-panel's own -0.35rem override
+   just below for the same reasoning against ITS 0.35rem). */
+.saas-master-tree-panel .perm-tree-mstatus-header{
+    top: -0.4rem;
+    margin: -0.4rem -0.4rem 0.4rem;
+}
+.saas-master-tree-panel .admin-subtitle,
+.saas-master-tree-panel .admin-form-actions,
+.saas-master-tree-panel .admin-save-status{
+    flex-shrink: 0;
+    margin: 0;
+}
+.saas-master-status-list{
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    padding: 0.4rem;
+    overflow-x: auto;
+    overflow-y: auto;
+    /* Positioning context for .perm-tree-nest-guide (absolutely positioned
+       dashed lines, appended straight into this element by drawGuides in
+       Admin-ArbolMaestroSaaS.js) -- same reasoning as .perm-tree's own
+       position:relative above. Also what lets .perm-tree-mstatus-header's
+       position:sticky actually stick to something bounded instead of the
+       whole page scrolling past it. */
+    position: relative;
+}
+.saas-master-status-list .perm-tree-row{
+    min-width: max-content;
+}
+/* .perm-tree-depth-2 (shared, base rule above) uppercases its own row
+   label as the client tree's own "Apartado" section-header cue -- this
+   page's hierarchy is shallower (Apartado/Pantalla/[Botones|Ícono|Tabla]),
+   so Botones/Iconos Personalización/Tabla land on that same depth number
+   by coincidence and inherited the client tree's Apartado-only styling
+   unintentionally (confirmed live: "veo palabras mayúsculas (BOTONES), no
+   la combinación de mayúscula y minúscula"). Cancel it here, scoped to
+   this page only -- the client tree's own Apartado rows still need it. */
+.saas-master-status-list .perm-tree-depth-2{
+    text-transform: none;
+    letter-spacing: normal;
+}
+/* This page's own label/count-badge column is now measured and aligned
+   dynamically by alignLabelColumnWidth in Admin-ArbolMaestroSaaS.js --
+   same --perm-tree-label-col-width custom property + per-row inline width
+   the client tree's own identical function sets, ported here since a
+   fixed 16rem (the previous approach) put every row's count badge at a
+   DIFFERENT x position once depth varied (confirmed live, 2026-09-17:
+   "esto todavía se ve desalineado" comparing directly against the client
+   tree). No CSS override needed anymore -- the base .perm-tree-mstatus-label/
+   .perm-tree-mstatus-header-label rules already read that same variable. */
+.saas-master-status-row-general{
+    background: var(--color-bg);
+}
 .perm-tree-mstatus-select-habilitado{ background-color: #e3f6e8; color: #1e7e34; }
 .perm-tree-mstatus-select-inhabilitado{ background-color: #f2e9e9; color: #8a4b4b; }
 .perm-tree-mstatus-select-construccion{ background-color: #fff2d9; color: #9a6b00; }
@@ -3031,6 +3151,61 @@ body.dark-mode .perm-tree-mstatus-select-habilitado{ background-color: #1c3324; 
 body.dark-mode .perm-tree-mstatus-select-inhabilitado{ background-color: #332020; color: #e0a3a3; }
 body.dark-mode .perm-tree-mstatus-select-construccion{ background-color: #3a2e10; color: #f0c463; }
 body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; color: #8fb8ea; }
+
+/* "¿Qué Estatus puede ver?" chip row -- see VisibleStatusesChips.js. Same 4
+   colors as .perm-tree-mstatus-select-* right above (this IS that same
+   Estatus vocabulary, just answering "who sees it" instead of "what is
+   it"), styled as toggle chips instead of a <select> since several can be
+   active at once. */
+.visible-statuses-field{
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--color-border);
+}
+.visible-statuses-label{
+    margin: 0 0 0.15rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+.visible-statuses-row{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.visible-status-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 1.4rem;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    opacity: 0.45;
+    filter: grayscale(0.5);
+}
+.visible-status-chip.active{
+    opacity: 1;
+    filter: none;
+    border-color: currentColor;
+}
+.visible-status-dot{
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: currentColor;
+}
+.visible-status-chip-ok{ background-color: #e3f6e8; color: #1e7e34; }
+.visible-status-chip-off{ background-color: #f2e9e9; color: #8a4b4b; }
+.visible-status-chip-build{ background-color: #fff2d9; color: #9a6b00; }
+.visible-status-chip-improve{ background-color: #eaf1fb; color: #2c5aa0; }
+body.dark-mode .visible-status-chip-ok{ background-color: #1c3324; color: #7fd99a; }
+body.dark-mode .visible-status-chip-off{ background-color: #332020; color: #e0a3a3; }
+body.dark-mode .visible-status-chip-build{ background-color: #3a2e10; color: #f0c463; }
+body.dark-mode .visible-status-chip-improve{ background-color: #1e2a3a; color: #8fb8ea; }
 
 /* Persistent column header for statusMode (see buildStatusTreeHeader) --
    sticks to the top of .perm-tree's own scroll container (overflow-y:auto
@@ -3098,17 +3273,6 @@ body.dark-mode .perm-tree-mstatus-select-mejoras{ background-color: #1e2a3a; col
    flush against its right edge (see alignLabelColumnWidth's own comment),
    so no extra width math is needed here. */
 .perm-tree-mstatus-header-count{ flex-shrink: 0; color: var(--color-text-secondary); font-weight: 600; }
-/* .perm-tree-depth-2 (shared, Admin-ArbolMaestro's own rule) uppercases
-   its own row label as the client tree's "Apartado" section-header cue --
-   the SaaS tree's shallower hierarchy puts Botones/Iconos Personalización/
-   Tabla on that same depth number by coincidence and inherited it
-   unintentionally. Cancel it here, scoped to the SaaS tree's own list only
-   -- the client tree's real Apartado rows still need it. Mirrors the same
-   fix in public/Admin.css. */
-.saas-master-status-list .perm-tree-depth-2{
-    text-transform: none;
-    letter-spacing: normal;
-}
 .perm-tree-mstatus-header-col{ flex-shrink: 0; text-align: center; }
 .perm-tree-mstatus-header-status{ width: var(--perm-tree-status-col-width, 9.5rem); }
 .perm-tree-mstatus-header-platforms{ width: 13rem; }
@@ -3152,6 +3316,7 @@ body.dark-mode .perm-tree-mstatus-header{ background-color: #1f2030; }
     border-color: var(--color-accent);
 }
 .perm-tree-mstatus-nest-btn i{ font-size: 0.75rem; }
+body.dark-mode .perm-tree-mstatus-nest-btn{ background-color: #23242b; }
 /* Giro de Negocio's Accesos Globales (grantMode 'giro') -- read-only
    reference copy of this same button, same opacity/cursor treatment as
    .perm-tree-mstatus-select:disabled just above, so this cell reads as
@@ -3160,7 +3325,6 @@ body.dark-mode .perm-tree-mstatus-header{ background-color: #1f2030; }
     cursor: not-allowed;
     opacity: 0.5;
 }
-body.dark-mode .perm-tree-mstatus-nest-btn{ background-color: #23242b; }
 
 /* Frees real width back to the row label on a narrow tree instead of
    letting it keep shrinking past readability (confirmed with the user:
@@ -3591,6 +3755,44 @@ body.dark-mode .status-card-hab .mini-self-match{ color: #7fd99a; }
     background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
     color: var(--color-accent);
 }
+/* Per-row "Cambios" button, clientTricolor mode only (see buildRow's own
+   historyEndpoint guard in PermissionCostTree.js) -- same icon-button look
+   as .perm-tree-app-equalize-btn just above, pushed to the row's far right
+   since (unlike PermissionTree.js's own grid-column layout) this file's own
+   rows are a plain flex sequence with no dedicated trailing column. */
+.perm-tree-cost-history-btn{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    margin-left: auto;
+    border: none;
+    border-radius: 0.3rem;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.perm-tree-cost-history-btn i{
+    font-size: 0.8rem;
+}
+.perm-tree-cost-history-btn:hover{
+    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+    color: var(--color-accent);
+}
+/* Classification group row's own color dot (read-only, see
+   applyClassificationColorTo in PermissionCostTree.js) -- same small-circle
+   idea as PermissionTree.js's own classification badge dot. */
+.perm-tree-cost-classification-dot{
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    margin-right: 0.35rem;
+    flex-shrink: 0;
+}
 /* clientTricolor mode's read-only App-vision badge (PermissionCostTree.js's
    appendClientAppSlot) -- same bx-mobile-alt icon as the interactive
    .perm-tree-app-toggle above, just tinted green/amarillo/rojo like the
@@ -3948,6 +4150,18 @@ body.dark-mode .status-card-hab .mini-self-match{ color: #7fd99a; }
     color: var(--color-text-primary);
     font-weight: 500;
 }
+/* Column-visibility picker only -- one dot per row/chip naming that
+   column's own classification, same colors COLUMN_GROUP_META already gives
+   the real "Leyenda de columnas" modal (see columnGroupColor in
+   Dashboard.js). A border keeps the paler swatches (Control Interno)
+   visible against the row's own background instead of blending into it. */
+.data-table-col-dot{
+    display: inline-block; vertical-align: middle;
+    width: 0.55rem; height: 0.55rem; border-radius: 50%;
+    border: 1px solid var(--color-border);
+    margin-right: 0.45rem;
+}
+.data-table-col-dot-chip{ margin-right: 0; }
 
 /* Reglas de Orden de Llenado (Dashboard.js: openFieldRulesModal) -- one
    card per gate column, listing every dependent field it unlocks as a
@@ -4202,6 +4416,30 @@ body.dark-mode .admin-save-status{
    into a 30rem form-sized panel. */
 .evidence-preview-panel{
     max-width: 40rem;
+}
+/* Mostrar/ocultar columnas -- confirmed live that with a search box + chip
+   row + count line added above a 20+ item list, the base .modal-panel's
+   single overflow-y:auto scrolled the title/Guardar/search/chips away with
+   the list instead of keeping them in view ("se ve todo amontonado... la
+   barra de desplazamiento solo debe mover las opciones"). Turns the panel
+   into a column with a fixed header block and only .admin-module-list
+   scrolling underneath it. */
+.data-table-vis-panel{
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.data-table-vis-fixed{
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+.data-table-vis-list{
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-top: 1rem;
 }
 /* "Reenviar" solicitud -- picking among jefe directo / homólogos / jefes
    alternos (see openCatalogRequestForwardModal in Dashboard.js). */
@@ -4475,648 +4713,3 @@ body.dark-mode .admin-save-status{
     padding: 0.8rem 0.4rem 0;
     cursor: pointer;
 }
-
-/* ===========================================================================
-   MobileTreeNav -- the "bank-app" style drill-down navigator that replaces
-   the raw scrollable tree on phone-width screens (see MobileTreeNav.js's own
-   header comment). Renders into a `.mtn-host` sitting right next to the real
-   engine's own container, which carries `.mtn-hidden-engine` here (kept in
-   the document -- never display:none -- since it still needs to lay out
-   normally for its own internal width/measurement logic; it is simply moved
-   off whatever the viewport can ever scroll to).
-   =========================================================================== */
-.mtn-hidden-engine{
-    position: absolute;
-    top: 0;
-    left: -9999px;
-    width: 1400px; /* wide enough that the engine never wraps/truncates its own columns while measuring */
-    height: 1px;
-    overflow: hidden;
-    pointer-events: none;
-}
-.mtn-host{
-    position: relative;
-}
-.mtn-root{
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-}
-
-/* Breadcrumb bar -- always visible, one tap jumps back to any ancestor */
-.mtn-crumbbar{
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.15rem;
-    padding: 0.1rem 0.1rem 0.3rem;
-    font-size: 0.78rem;
-}
-.mtn-crumb{
-    background: none;
-    border: none;
-    color: var(--color-text-secondary);
-    font: inherit;
-    font-weight: 600;
-    padding: 0.15rem 0.3rem;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    max-width: 9rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.mtn-crumb-now{
-    color: var(--color-text-primary);
-    background: var(--color-surface-alt);
-}
-.mtn-crumb-sep{
-    color: var(--color-border);
-    font-size: 0.7rem;
-}
-/* Crumb bar + search icon, side by side -- the crumb trail itself still
-   wraps to a second line on a deep path (see .mtn-crumbbar's own
-   flex-wrap), the search button never moves with it. */
-.mtn-topbar{
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.4rem;
-}
-.mtn-topbar .mtn-crumbbar{ flex: 1 1 auto; min-width: 0; }
-.mtn-search-btn{
-    flex: none;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-}
-.mtn-search-btn svg{ width: 1.05rem; height: 1.05rem; }
-/* Full-tree search overlay -- same full-screen-sheet idiom as this file's
-   other modals elsewhere in Admin.css, own class names since MobileTreeNav
-   is meant to stay self-contained (see its own header comment). */
-.mtn-search-overlay{
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    background: var(--color-bg);
-    display: flex;
-    flex-direction: column;
-}
-.mtn-search-overlay[hidden]{
-    display: none;
-}
-.mtn-search-head{
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.8rem;
-    border-bottom: 1px solid var(--color-border);
-    flex: none;
-}
-.mtn-search-field{
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 0.7rem;
-    padding: 0.5rem 0.75rem;
-}
-.mtn-search-field-icon{
-    flex: none;
-    display: flex;
-    color: var(--color-text-secondary);
-}
-.mtn-search-field-icon svg{ width: 1rem; height: 1rem; }
-.mtn-search-input{
-    flex: 1 1 auto;
-    min-width: 0;
-    border: none;
-    background: none;
-    font: inherit;
-    font-size: 0.9rem;
-    color: var(--color-text-primary);
-    outline: none;
-}
-.mtn-search-close{
-    flex: none;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-}
-.mtn-search-close svg{ width: 1.05rem; height: 1.05rem; }
-.mtn-search-results{
-    flex: 1 1 auto;
-    overflow-y: auto;
-    padding: 0.5rem 0.8rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-}
-.mtn-search-result{
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.1rem;
-    width: 100%;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 0.7rem;
-    padding: 0.55rem 0.75rem;
-    text-align: left;
-    cursor: pointer;
-}
-.mtn-search-result:active{ background: var(--color-surface-alt); }
-.mtn-search-result .mtn-name{ font-size: 0.86rem; font-weight: 600; }
-.mtn-search-result-path{
-    font-size: 0.72rem;
-    color: var(--color-text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
-}
-
-.mtn-pane{
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-}
-
-/* Root screen -- short eyebrow + big title, matches the same "hero" idea
-   every other phone-style summary card in this app already opens with. */
-.mtn-top{
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-    padding: 0.2rem 0.1rem 0;
-}
-.mtn-hello{
-    margin: 0;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-}
-.mtn-title{
-    margin: 0;
-    font-size: 1.35rem;
-    font-weight: 700;
-    color: var(--color-text-primary);
-}
-
-/* Pinned shortcuts -- horizontal scroller of the admin's own most-used
-   nodes, replayed via MobileTreeNav.js's openPath (no search index needed:
-   it just re-clicks the same ancestors it took to get there the first time). */
-.mtn-pinbar{
-    display: flex;
-    gap: 0.5rem;
-    overflow-x: auto;
-    padding: 0.1rem 0.1rem 0.2rem;
-}
-.mtn-pin{
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 1rem;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.76rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    white-space: nowrap;
-    cursor: pointer;
-}
-.mtn-pin-star{
-    width: 0.9rem;
-    height: 0.9rem;
-    color: var(--color-accent);
-    flex: none;
-}
-.mtn-pin-star svg{ width: 100%; height: 100%; display: block; }
-
-/* "Back" row -- shown instead of the hero once drilled into a node */
-.mtn-back{
-    display: flex;
-}
-.mtn-back button{
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: none;
-    border: none;
-    color: var(--color-text-primary);
-    font: inherit;
-    font-weight: 700;
-    font-size: 1rem;
-    padding: 0.2rem 0.1rem;
-    cursor: pointer;
-    max-width: 100%;
-}
-.mtn-back button svg{ width: 1.1rem; height: 1.1rem; flex: none; color: var(--color-text-secondary); }
-.mtn-back button span{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mtn-stat{
-    padding: 0 0.1rem;
-    font-size: 0.76rem;
-    color: var(--color-text-secondary);
-}
-.mtn-stat b{ color: var(--color-text-primary); font-weight: 700; }
-
-/* Card list -- one full-width row per child, tap drills straight into it
-   (a container) or opens its detail sheet (a leaf) -- see isLeafRow. */
-.mtn-list{
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-.mtn-empty{
-    text-align: center;
-    color: var(--color-text-secondary);
-    font-size: 0.82rem;
-    padding: 1.2rem 0.5rem;
-}
-.mtn-card{
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    width: 100%;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 0.9rem;
-    padding: 0.65rem 0.8rem;
-    cursor: pointer;
-    text-align: left;
-}
-.mtn-card:active{ background: var(--color-surface-alt); }
-/* Reorder mode -- Árbol Maestro's own Departamento/Área/Apartado depths,
-   Giro's Reorden Personalizado at every depth (see buildList/
-   enableCardReorder in MobileTreeNav.js). Same visual language as
-   AppInicio.css's own .home-reorder-toggle/.home-tile-drag-handle
-   (this app's existing tile-grid reorder), just on --color-* tokens since
-   this shell (AppAdminInicio.html) themes through Admin.css, not
-   AppInicio.css's own --home-* set. */
-.mtn-reorder-toolbar{ display: flex; justify-content: flex-end; margin: 0 0 0.5rem; }
-.mtn-reorder-toggle{
-    display: flex; align-items: center; gap: 0.3rem;
-    background: var(--color-surface); border: 1px solid var(--color-border);
-    border-radius: 999px; padding: 0.35rem 0.75rem;
-    font-size: 0.72rem; font-weight: 700; color: var(--color-text-secondary);
-    font-family: inherit; cursor: pointer;
-}
-.mtn-reorder-toggle-on{ background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text); }
-.mtn-reorder-hint{
-    font-size: 0.72rem;
-    color: var(--color-accent);
-    margin: 0 0 0.5rem;
-}
-.mtn-card-reorderable{
-    position: relative;
-    border-color: var(--color-accent);
-    border-style: dashed;
-}
-.mtn-card-dragging{
-    opacity: 0.7;
-    border-style: solid;
-    box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.22);
-    z-index: 5;
-    position: relative;
-    cursor: grabbing;
-    /* Without this, the dragged card's own (transformed) position hit-tests
-       ABOVE whatever real sibling it's currently overlapping -- elementFromPoint
-       in enableCardReorder's onPointerMove would keep resolving back to the
-       card being dragged instead of the neighbor underneath it, so the live
-       reorder never triggered (confirmed live). Same fix
-       AppInicio.css's own .home-tile-dragging already uses. */
-    pointer-events: none;
-}
-.mtn-drag-handle{
-    flex: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.6rem;
-    height: 1.6rem;
-    margin-right: -0.15rem;
-    color: var(--color-text-secondary);
-    touch-action: none;
-    cursor: grab;
-}
-.mtn-drag-handle i{ font-size: 1rem; margin: -0.3rem 0; display: block; }
-/* A row this level never made draggable (e.g. Inicio/Panel/Tablero ahead of
-   the real, reorderable áreas) -- still visible while reordering (removing
-   it would misalign against the hidden engine's own indices), just clearly
-   inert instead of looking tappable with nothing happening on tap. */
-.mtn-card-locked{ opacity: 0.55; cursor: default; }
-.mtn-ico{
-    flex: none;
-    width: 2.1rem;
-    height: 2.1rem;
-    border-radius: 0.65rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.mtn-ico svg{ width: 1.15rem; height: 1.15rem; }
-.mtn-ico-navy{
-    background: var(--color-accent);
-    color: var(--color-accent-text);
-}
-.mtn-body{
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-}
-.mtn-name{
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: var(--color-text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.mtn-meta{
-    font-size: 0.72rem;
-    color: var(--color-text-secondary);
-}
-.mtn-dots{
-    flex: none;
-    display: flex;
-    gap: 0.25rem;
-}
-.mtn-dot{
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    background: var(--color-border);
-}
-.mtn-dot-full{ background: #1D9E75; }
-.mtn-dot-partial{ background: #D8A11D; }
-.mtn-dot-empty{ background: var(--color-border); }
-.mtn-chev{
-    flex: none;
-    width: 1.1rem;
-    height: 1.1rem;
-    color: var(--color-text-secondary);
-}
-
-/* Detail sheet -- a leaf's (columna/acción) full editing surface, every
-   control here proxies straight to the real hidden engine's own control
-   (see MobileTreeNav.js) -- Guardar included. */
-.mtn-sheet{
-    display: flex;
-    flex-direction: column;
-    gap: 1.1rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 1rem;
-    padding: 1rem;
-}
-.mtn-sheet-head{
-    display: flex;
-    align-items: flex-start;
-    gap: 0.6rem;
-}
-.mtn-sheet-eyebrow{
-    display: none; /* reserved for a future per-kind label; kept out of the header for now to avoid a redundant "Columna" over every single sheet */
-}
-.mtn-sheet-title{
-    flex: 1 1 auto;
-    margin: 0;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--color-text-primary);
-}
-.mtn-pin-toggle{
-    flex: none;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface-alt);
-    color: var(--color-text-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0.4rem;
-}
-.mtn-pin-toggle svg{ width: 100%; height: 100%; }
-.mtn-pin-toggle-on{
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-}
-
-.mtn-sec{
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-.mtn-sec-label{
-    margin: 0;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--color-text-secondary);
-}
-.mtn-chips{
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-.mtn-chip{
-    border: 1px solid var(--color-border);
-    background: var(--color-surface-alt);
-    color: var(--color-text-primary);
-    font: inherit;
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.4rem 0.8rem;
-    border-radius: 1rem;
-    cursor: pointer;
-}
-.mtn-chip:disabled{ opacity: 0.5; cursor: default; }
-.mtn-chip-sel{
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: var(--color-accent-text);
-}
-.mtn-classpill{
-    align-self: flex-start;
-    font-size: 0.78rem;
-    font-weight: 700;
-    padding: 0.35rem 0.8rem;
-    border-radius: 1rem;
-    border: 1px solid currentColor;
-}
-
-.mtn-row2{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.6rem;
-}
-.mtn-lbl{
-    margin: 0;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-}
-.mtn-hint{
-    margin: 0.1rem 0 0;
-    font-size: 0.72rem;
-    color: var(--color-text-secondary);
-}
-.mtn-mini-btn{
-    flex: none;
-    border: 1px solid var(--color-accent);
-    background: none;
-    color: var(--color-accent);
-    font: inherit;
-    font-size: 0.76rem;
-    font-weight: 700;
-    padding: 0.35rem 0.7rem;
-    border-radius: 0.6rem;
-    cursor: pointer;
-}
-
-/* Toggle switch -- proxies to the real hidden <input type=checkbox> (see
-   buildToggleRow: sets .checked then dispatches a real 'change' event,
-   since a synthetic event alone never flips native checkbox state). */
-.mtn-toggle{
-    flex: none;
-    width: 2.7rem;
-    height: 1.55rem;
-    border-radius: 1rem;
-    border: none;
-    background: var(--color-border);
-    position: relative;
-    cursor: pointer;
-    padding: 0;
-}
-.mtn-toggle i{
-    position: absolute;
-    top: 0.15rem;
-    left: 0.15rem;
-    width: 1.25rem;
-    height: 1.25rem;
-    border-radius: 50%;
-    background: var(--color-surface);
-    transition: left 0.15s ease;
-    display: block;
-}
-.mtn-toggle-on{ background: var(--color-accent); }
-.mtn-toggle-on i{ left: calc(100% - 1.4rem); }
-.mtn-toggle:disabled{ opacity: 0.5; cursor: default; }
-
-.mtn-costrow{
-    display: flex;
-    gap: 0.6rem;
-}
-.mtn-cost-field{
-    flex: 1 1 0;
-}
-.mtn-cost-field input{
-    width: 100%;
-    box-sizing: border-box;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface-alt);
-    color: var(--color-text-primary);
-    border-radius: 0.6rem;
-    padding: 0.5rem 0.6rem;
-    font: inherit;
-    font-size: 0.85rem;
-}
-
-.mtn-actionsrow{
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    padding-top: 0.2rem;
-    border-top: 1px solid var(--color-border);
-}
-.mtn-abtn{
-    flex: 1 1 auto;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface-alt);
-    color: var(--color-text-primary);
-    font: inherit;
-    font-size: 0.8rem;
-    font-weight: 700;
-    padding: 0.6rem 0.8rem;
-    border-radius: 0.7rem;
-    cursor: pointer;
-    text-align: center;
-}
-.mtn-abtn-primary{
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: var(--color-accent-text);
-}
-
-/* Giro's own semáforo chip (grantMode:'giro' -- see MobileTreeNav.js's
-   buildGateRow), same 5-state palette as the desktop .perm-tree-gate-icon-*
-   rules it proxies to. */
-.mtn-gate-chip{
-    flex: none;
-    border: 1px solid var(--color-border);
-    font: inherit;
-    font-size: 0.76rem;
-    font-weight: 700;
-    padding: 0.4rem 0.8rem;
-    border-radius: 1rem;
-    cursor: pointer;
-    background: transparent;
-    color: var(--color-text-secondary);
-}
-.mtn-gate-chip:disabled{ cursor: not-allowed; opacity: 0.7; }
-.mtn-gate-chip-granted{
-    background: color-mix(in srgb, #1e7e34 14%, transparent);
-    color: #1e7e34;
-    border-color: transparent;
-}
-.mtn-gate-chip-partial{
-    background: var(--color-surface-alt);
-    color: var(--color-text-secondary);
-}
-.mtn-gate-chip-available{
-    background: transparent;
-    color: var(--color-text-secondary);
-}
-.mtn-gate-chip-needsWeb{
-    background: transparent;
-    border-style: dashed;
-    opacity: 0.75;
-}
-.mtn-gate-chip-blocked{
-    background: color-mix(in srgb, #b3261e 12%, transparent);
-    color: #b3261e;
-    border-color: transparent;
-}
-/* Same JS-toggled body.dark-mode convention every other rule in this file
-   uses (not data-theme/prefers-color-scheme -- this app has no such
-   convention), mirroring .perm-tree-gate-icon-granted/-blocked's own dark
-   override right above. */
-body.dark-mode .mtn-gate-chip-granted{ background: color-mix(in srgb, #7fd99a 18%, transparent); color: #7fd99a; }
-body.dark-mode .mtn-gate-chip-blocked{ background: color-mix(in srgb, #e37b73 18%, transparent); color: #e37b73; }

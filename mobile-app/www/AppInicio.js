@@ -252,7 +252,6 @@ wireMenuGroupToggle('home-menu-business-intelligence', 'home-business-intelligen
 // "unrestricted client admin sees everything" bypass as every other
 // permission check on this page.
 function hasSettingsSubPermission(submenuId) {
-    if (!isEstatusVisible('main', 'btn-configuracion', submenuId)) return false;
     if (isUnrestrictedClientAdmin()) return true;
     if (effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-configuracion' && !g.submenuId)) return true;
     return effectiveGrants.some((g) => g.submenuId === submenuId || (g.submenuId && g.submenuId.startsWith(`${submenuId}/`)));
@@ -267,13 +266,11 @@ function hasSettingsSubPermission(submenuId) {
 // actually granted. 'home'/'panel'/'dashboard' aren't in MODULE_CATALOG, so
 // they're grant-only, no contract check.
 function hasMainButtonPermission(itemId) {
-    if (!isEstatusVisible('main', itemId, null)) return false;
     if (isUnrestrictedClientAdmin()) return true;
     return effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === itemId);
 }
 const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-tamano-sistema', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
 function hasSettingsAccess() {
-    if (!isEstatusVisible('main', 'btn-configuracion', null)) return false;
     if (isUnrestrictedClientAdmin()) return true;
     return effectiveGrants.some((g) => {
         if (g.sectionId !== 'main' || g.itemId !== 'btn-configuracion') return false;
@@ -1521,15 +1518,6 @@ const HOME_TAB_CATEGORY_IDS = {
 
 let menuData = null;
 let effectiveGrants = [];
-// Estatus visibility gate -- mirrors Dashboard.js's own
-// resolveMasterNodeStatus/isEstatusVisible (see there for the full
-// rationale): masterStatusOverrides is the small "what's currently NOT
-// habilitado anywhere in Árbol de Permisos Maestro" list, visibleStatuses
-// is THIS account's own allowlist (just ['habilitado'] for any real user;
-// all 4 for a Usuario de Pruebas). Both come down with business-profile
-// (see applyDeptAreaCcData/initDeptAreaCc).
-let masterStatusOverrides = [];
-let visibleStatuses = ['habilitado'];
 let isClientAdmin = false;
 let contractedModuleKeys = [];
 let availableDepartments = DEPARTMENTS;
@@ -1619,37 +1607,6 @@ function isUnrestrictedClientAdmin() {
     return isClientAdmin && effectiveGrants.length === 0;
 }
 
-// Estatus visibility gate -- see masterStatusOverrides/visibleStatuses'
-// own comment above. Applies regardless of isUnrestrictedClientAdmin: that
-// bypass only answers "does this account have an explicit grant", a
-// separate question from "has GEIPSA even released this yet", so a
-// screen under construction stays invisible to the client's own
-// unrestricted admin too, same as any other real user.
-function masterTreeNodeKey(sectionId, itemId, submenuId) {
-    return `${sectionId}::${itemId || ''}::${submenuId || ''}`;
-}
-function resolveMasterNodeStatus(sectionId, itemId, submenuId) {
-    if (!masterStatusOverrides.length) return 'habilitado';
-    const overrideMap = new Map(masterStatusOverrides.map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r.status]));
-    const deptStatus = overrideMap.get(masterTreeNodeKey(sectionId, null, null));
-    if (deptStatus) return deptStatus;
-    if (itemId) {
-        const itemStatus = overrideMap.get(masterTreeNodeKey(sectionId, itemId, null));
-        if (itemStatus) return itemStatus;
-    }
-    if (submenuId) {
-        const parts = String(submenuId).split('/');
-        for (let i = 1; i <= parts.length; i += 1) {
-            const partial = overrideMap.get(masterTreeNodeKey(sectionId, itemId, parts.slice(0, i).join('/')));
-            if (partial) return partial;
-        }
-    }
-    return 'habilitado';
-}
-function isEstatusVisible(sectionId, itemId, submenuId) {
-    return visibleStatuses.includes(resolveMasterNodeStatus(sectionId, itemId, submenuId));
-}
-
 // availableDepartments already narrows to what THIS user has any grant in
 // (see initDeptAreaCc) -- the Área list under a picked department needs the
 // exact same narrowing (an área is itemId under that department's own
@@ -1659,12 +1616,10 @@ function isEstatusVisible(sectionId, itemId, submenuId) {
 // nobody had closed on either side yet.
 function availableAreasForDepartment(deptKey) {
     const areas = (deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [];
-    const visible = areas.filter((a) => isEstatusVisible(deptKey, a.key, null));
-    if (isUnrestrictedClientAdmin()) return visible;
-    return visible.filter((a) => effectiveGrants.some((g) => g.sectionId === deptKey && g.itemId === a.key));
+    if (isUnrestrictedClientAdmin()) return areas;
+    return areas.filter((a) => effectiveGrants.some((g) => g.sectionId === deptKey && g.itemId === a.key));
 }
 function hasScreenGrant(sectionId, itemId, submenuId) {
-    if (!isEstatusVisible(sectionId, itemId, submenuId)) return false;
     if (isUnrestrictedClientAdmin()) return true;
     return effectiveGrants.some((g) => (
         (g.sectionId === sectionId && g.itemId === itemId && g.submenuId === submenuId)
@@ -2034,13 +1989,11 @@ function updateTabBarVisibility() {
 // tiles now that effectiveGrants is real). Pulled out of initDeptAreaCc so
 // the offline path below can run the exact same logic against cached
 // values instead of re-deriving a second, easily-drifting copy of it.
-function applyDeptAreaCcData(rawMenuData, rawContractedModuleKeys, rawEffectiveGrants, rawCostCenters, rawVisibleStatuses, rawMasterStatusOverrides) {
+function applyDeptAreaCcData(rawMenuData, rawContractedModuleKeys, rawEffectiveGrants, rawCostCenters) {
     menuData = rawMenuData;
     contractedModuleKeys = rawContractedModuleKeys || [];
     effectiveGrants = rawEffectiveGrants || [];
-    visibleStatuses = (rawVisibleStatuses && rawVisibleStatuses.length) ? rawVisibleStatuses : ['habilitado'];
-    masterStatusOverrides = rawMasterStatusOverrides || [];
-    availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key) && isEstatusVisible(d.key, null, null));
+    availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
     // Narrow further to departments THIS user actually has any grant in
     // (Puesto de Trabajo defaults + Permisos Adicionales) -- same fix
     // Dashboard.js's own department picker already got; this page had
@@ -2110,15 +2063,10 @@ async function initDeptAreaCc() {
         const modules = modulesRes.ok ? await modulesRes.json() : { moduleKeys: [] };
         const profileData = profileRes.ok ? await profileRes.json() : {};
         const rawEffectiveGrants = profileData.profile?.effectiveGrants || [];
-        const rawVisibleStatuses = profileData.profile?.visibleStatuses || ['habilitado'];
-        const rawMasterStatusOverrides = profileData.profile?.masterStatusOverrides || [];
         const ccData = ccRes.ok ? await ccRes.json() : { costCenters: [] };
-        applyDeptAreaCcData(rawMenuData, modules.moduleKeys, rawEffectiveGrants, ccData.costCenters, rawVisibleStatuses, rawMasterStatusOverrides);
+        applyDeptAreaCcData(rawMenuData, modules.moduleKeys, rawEffectiveGrants, ccData.costCenters);
         saveAppDataCache({
-            deptAreaCc: {
-                menuData: rawMenuData, contractedModuleKeys: modules.moduleKeys, effectiveGrants: rawEffectiveGrants, costCenters: ccData.costCenters,
-                visibleStatuses: rawVisibleStatuses, masterStatusOverrides: rawMasterStatusOverrides,
-            },
+            deptAreaCc: { menuData: rawMenuData, contractedModuleKeys: modules.moduleKeys, effectiveGrants: rawEffectiveGrants, costCenters: ccData.costCenters },
         });
     } catch (err) {
         console.error('AppInicio: failed to load department/area/cost-center data:', err);
@@ -2132,7 +2080,7 @@ async function initDeptAreaCc() {
         // un-gated markup default.
         const cached = loadAppDataCache().deptAreaCc;
         if (cached) {
-            applyDeptAreaCcData(cached.menuData, cached.contractedModuleKeys, cached.effectiveGrants, cached.costCenters, cached.visibleStatuses, cached.masterStatusOverrides);
+            applyDeptAreaCcData(cached.menuData, cached.contractedModuleKeys, cached.effectiveGrants, cached.costCenters);
         }
     }
 }
@@ -2329,15 +2277,6 @@ async function loadClientBranding() {
             return;
         }
         const { user } = await meRes.json();
-        // GEIPSA staff (role 'admin') has no department/área/cost-center --
-        // everything below this point assumes a client account and would
-        // render broken. access-screen.js already routes a fresh login the
-        // right way; this only catches a stray deep link (e.g. this page's
-        // own manifest.json start_url) landing an admin account here directly.
-        if (user?.role === 'admin') {
-            window.location.replace('AppAdminInicio.html');
-            return;
-        }
         isClientAdmin = !!user?.isClientAdmin;
         // The auto-provisioned client-admin account's `name` is frozen as
         // "Admin <razón social completa>" (see activateClient in db.js) --

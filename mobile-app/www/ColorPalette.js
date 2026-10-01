@@ -141,11 +141,14 @@
         const seedInput = document.createElement('input');
         seedInput.type = 'color';
         seedInput.value = seedValue;
+        seedInput.setAttribute('aria-label', t('admin.paletteSeedLabel'));
+        seedInput.setAttribute('data-help-key', 'paletteSeed');
         seedField.append(seedLabel, seedInput);
         const suggestBtn = document.createElement('button');
         suggestBtn.type = 'button';
         suggestBtn.className = 'btn btn-secondary';
         suggestBtn.textContent = t('admin.paletteSuggest');
+        suggestBtn.setAttribute('data-help-key', 'paletteSuggest');
         seedRow.append(seedField, suggestBtn);
         container.appendChild(seedRow);
 
@@ -165,6 +168,7 @@
         previewToggleBtn.type = 'button';
         previewToggleBtn.className = 'btn btn-secondary palette-preview-toggle';
         previewToggleBtn.textContent = t('admin.paletteShowPreview');
+        previewToggleBtn.setAttribute('data-help-key', 'paletteShowPreview');
         container.appendChild(previewToggleBtn);
 
         const preview = document.createElement('div');
@@ -237,6 +241,7 @@
                 swatch.type = 'button';
                 swatch.className = 'palette-swatch';
                 swatch.setAttribute('aria-label', t('admin.edit'));
+                swatch.setAttribute('data-help-key', 'paletteEditColor');
                 const hexText = document.createElement('span');
                 hexText.className = 'palette-hex';
                 tdValue.append(swatch, hexText, input);
@@ -246,6 +251,7 @@
                 editBtn.type = 'button';
                 editBtn.className = 'admin-icon-btn';
                 editBtn.setAttribute('aria-label', t('admin.edit'));
+                editBtn.setAttribute('data-help-key', 'paletteEditColor');
                 editBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
                 tdEdit.appendChild(editBtn);
 
