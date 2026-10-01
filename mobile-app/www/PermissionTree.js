@@ -461,6 +461,26 @@
         // touches grantSet, so it can't change what's actually saved.
         let expandedSections = new Set();
         let expandedItems = new Set();
+        // Bypasses the STRUCTURAL expandedSections/expandedItems checks below
+        // (Departamento/Área/Apartado/Pantalla/screen) without touching
+        // either Set — lets a caller (MobileTreeNav's full-tree search) see
+        // every screen name in one render() pass instead of clicking every
+        // chevron one at a time (each click's own render() rebuilds the
+        // whole visible tree, so doing that once per node is an O(n) full
+        // rebuild per click — measured as a multi-minute hang on a real
+        // master tree). Deliberately does NOT reach the deeper col/class/
+        // table/icons/buttons/subDetail checks further down (see each of
+        // those sites' own comment) — a department like Supply Chain alone
+        // runs into the thousands of screens, and descending further into
+        // every screen's own Tabla/Columna/Clasificación/Iconos/Botones
+        // breakdown on top of that measured as a (worse) hang of its own,
+        // confirmed live, 2026-09-30. Searching screen names covers the
+        // real use case ("¿dónde está tal pantalla?"); a column/button's own
+        // name still isn't reachable from search, same as before this
+        // existed. Toggling it back off and re-rendering restores the
+        // user's real collapse/expand state exactly as it was, since
+        // nothing was ever mutated.
+        let forceExpandAll = false;
         // { app: {id,name,sector,icon,colorFrom,colorTo} | null, screens: [...] }
         // — this client's assigned App (see GET /api/business/app-screens),
         // fetched once in init() when showAppTab is on. screens carry the
@@ -4882,7 +4902,7 @@
             treeRoot.innerHTML = '';
             treeRoot.appendChild(buildStatusTreeHeader());
             sectionsData.forEach((section) => {
-                const sectionExpanded = expandedSections.has(section.id);
+                const sectionExpanded = (forceExpandAll || expandedSections.has(section.id));
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
                 const sectionStateKey = keyOf(section.id, null, null);
                 // grantOrderMode ("Reorden Personalizado") -- skip this
@@ -4943,7 +4963,7 @@
                 const generalTreeKey = `general::${section.id}`;
                 let generalChildrenVisible = false;
                 if (generalKey && !(grantOrderMode && !subtreeHasGrant(generalKey))) {
-                    const generalExpanded = expandedItems.has(generalTreeKey);
+                    const generalExpanded = (forceExpandAll || expandedItems.has(generalTreeKey));
                     treeRoot.appendChild(statusRow(t('sidebar.generalAccess'), 1, generalKey, {
                         expanded: generalExpanded,
                         onToggle: () => {
@@ -4968,7 +4988,7 @@
                 const navIconsTreeKey = `nav-icons::${section.id}`;
                 let navIconsChildrenVisible = false;
                 if (navIconsKey && generalChildrenVisible && !(grantOrderMode && !subtreeHasGrant(navIconsKey))) {
-                    const navIconsExpanded = expandedItems.has(navIconsTreeKey);
+                    const navIconsExpanded = (forceExpandAll || expandedItems.has(navIconsTreeKey));
                     const navIconsRow = statusRow(t('menu.navIcons'), 2, navIconsKey, {
                         expanded: navIconsExpanded,
                         onToggle: () => {
@@ -4993,7 +5013,7 @@
                     if (isNavIconItem && !navIconsChildrenVisible) return;
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
                     const itemKey = `${section.id}::${item.id}`;
-                    const itemExpanded = expandedItems.has(itemKey);
+                    const itemExpanded = (forceExpandAll || expandedItems.has(itemKey));
                     const itemLeafKeys = hasSubmenu ? leafKeysUnder(section, item) : [];
                     const itemStateKey = keyOf(section.id, item.id, null);
                     if (grantOrderMode && !subtreeHasGrant(itemStateKey)) return;
@@ -5086,7 +5106,7 @@
                         }
 
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
-                        const smExpandedNow = expandedItems.has(smKey);
+                        const smExpandedNow = (forceExpandAll || expandedItems.has(smKey));
                         const smLeafKeys = leafKeysUnderSm(section, item, sm);
                         treeRoot.appendChild(statusRow(t(sm.labelKey, sm.labelParams), smDepth, smStateKey, {
                             expanded: smExpandedNow,
@@ -5110,6 +5130,7 @@
                             if (grantOrderMode && !subtreeHasGrant(key)) return;
                             const subHasDetail = subSmHasDetail(subSm);
                             const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
+                            // Not forceExpandAll -- see its own comment: this is the gate into Tabla/Columna/Clasificación/Iconos/Botones, deliberately excluded from full-tree search.
                             const subDetailExpanded = expandedItems.has(subDetailKey);
                             const pantallaDragCtx = (isRealArea && !subSm.standalone)
                                 ? { kind: 'pantalla', id: subSm.id, scope: pantallaScope, onDrop: (draggedId, targetId) => reorderPantallas(section.id, item.id, sm.id, draggedId, targetId) }
@@ -5197,7 +5218,7 @@
                 const sectionBlocked = readOnly && section.id !== 'main' && !isModuleEnabled(section.id);
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
                 const sectionChecked = sectionLeafKeys.filter((k) => grantSet.has(k)).length;
-                const sectionExpanded = expandedSections.has(section.id);
+                const sectionExpanded = (forceExpandAll || expandedSections.has(section.id));
                 const sectionRow = buildRow(t(sectionLabelKey(section)), 0, section.items.length ? {
                     expanded: sectionExpanded,
                     onToggle: () => {
@@ -5234,7 +5255,7 @@
                     const itemChecked = itemLeafKeys.filter((k) => grantSet.has(k)).length;
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
                     const itemKey = `${section.id}::${item.id}`;
-                    const itemExpanded = expandedItems.has(itemKey);
+                    const itemExpanded = (forceExpandAll || expandedItems.has(itemKey));
                     const itemRow = buildRow(t(item.labelKey, item.labelParams), 1, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => {
@@ -5285,7 +5306,7 @@
                         ));
                         const smChecked = smLeafKeys.filter((k) => grantSet.has(k)).length;
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
-                        const smExpandedNow = expandedItems.has(smKey);
+                        const smExpandedNow = (forceExpandAll || expandedItems.has(smKey));
                         const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2, {
                             expanded: smExpandedNow,
                             onToggle: () => {
@@ -5340,6 +5361,7 @@
                             // own checkbox in view.
                             const subHasDetail = subSmHasDetail(subSm);
                             const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
+                            // Not forceExpandAll -- see its own comment: this is the gate into Tabla/Columna/Clasificación/Iconos/Botones, deliberately excluded from full-tree search.
                             const subDetailExpanded = expandedItems.has(subDetailKey);
                             const subRow = buildRow(t(subSm.labelKey, subSm.labelParams), 3, subHasDetail ? {
                                 expanded: subDetailExpanded,
@@ -6015,6 +6037,16 @@
             setBaseline(rows) {
                 applyBaseline(rows);
                 if (statusMode) renderStatusTree();
+            },
+            // Full-tree search's bulk expand/collapse (see MobileTreeNav.js) --
+            // render() is the single safe re-render entry point regardless of
+            // mode (it dispatches to renderStatusTree() itself when needed),
+            // so flipping the flag then calling it renders either fully
+            // expanded or back to the user's real collapse state, in exactly
+            // one pass either way.
+            setForceExpandAll(flag) {
+                forceExpandAll = !!flag;
+                render();
             },
         };
     }

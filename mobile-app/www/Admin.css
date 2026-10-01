@@ -4534,6 +4534,124 @@ body.dark-mode .admin-save-status{
     color: var(--color-border);
     font-size: 0.7rem;
 }
+/* Crumb bar + search icon, side by side -- the crumb trail itself still
+   wraps to a second line on a deep path (see .mtn-crumbbar's own
+   flex-wrap), the search button never moves with it. */
+.mtn-topbar{
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.4rem;
+}
+.mtn-topbar .mtn-crumbbar{ flex: 1 1 auto; min-width: 0; }
+.mtn-search-btn{
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.mtn-search-btn svg{ width: 1.05rem; height: 1.05rem; }
+/* Full-tree search overlay -- same full-screen-sheet idiom as this file's
+   other modals elsewhere in Admin.css, own class names since MobileTreeNav
+   is meant to stay self-contained (see its own header comment). */
+.mtn-search-overlay{
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: var(--color-bg);
+    display: flex;
+    flex-direction: column;
+}
+.mtn-search-overlay[hidden]{
+    display: none;
+}
+.mtn-search-head{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.8rem;
+    border-bottom: 1px solid var(--color-border);
+    flex: none;
+}
+.mtn-search-field{
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.7rem;
+    padding: 0.5rem 0.75rem;
+}
+.mtn-search-field-icon{
+    flex: none;
+    display: flex;
+    color: var(--color-text-secondary);
+}
+.mtn-search-field-icon svg{ width: 1rem; height: 1rem; }
+.mtn-search-input{
+    flex: 1 1 auto;
+    min-width: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--color-text-primary);
+    outline: none;
+}
+.mtn-search-close{
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.mtn-search-close svg{ width: 1.05rem; height: 1.05rem; }
+.mtn-search-results{
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0.5rem 0.8rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.mtn-search-result{
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    width: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.7rem;
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    cursor: pointer;
+}
+.mtn-search-result:active{ background: var(--color-surface-alt); }
+.mtn-search-result .mtn-name{ font-size: 0.86rem; font-weight: 600; }
+.mtn-search-result-path{
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
 
 .mtn-pane{
     display: flex;

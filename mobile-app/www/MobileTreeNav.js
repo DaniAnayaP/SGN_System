@@ -104,6 +104,61 @@
             }
             return out;
         }
+        // Inverse of childrenOf -- this row's own immediate parent, for
+        // search results (see pathToRow below), which land on a row from
+        // anywhere in the tree with no existing stack/crumb trail to reuse
+        // the way a tap-to-drill-in or a saved pin already has one. Mirrors
+        // childrenOf's own two cases: an explicit data-parent-key first
+        // (the same non-contiguous rows that hook needs), else the nearest
+        // PRECEDING row exactly one depth shallower.
+        function findParentRow(row) {
+            if (row.dataset.parentKey) return rowByKey(row.dataset.parentKey);
+            const d = depthOf(row);
+            if (d <= 0) return null;
+            const all = allRows();
+            const idx = all.indexOf(row);
+            for (let i = idx - 1; i >= 0; i--) {
+                const dd = depthOf(all[i]);
+                if (dd === d - 1) return all[i];
+            }
+            return null;
+        }
+        // Root-to-row chain of {key,label} steps, exactly the shape openPath
+        // already knows how to replay (it's the same shape a saved pin's own
+        // `path` already is) -- walking up via findParentRow instead of
+        // recording it on the way down, since a search result has no "way
+        // down" of its own to have recorded one.
+        function pathToRow(row) {
+            const path = [];
+            let node = row;
+            while (node) {
+                path.unshift({ key: node.dataset.nodeKey, label: labelOf(node) });
+                node = findParentRow(node);
+            }
+            return path;
+        }
+        // Expands the WHOLE hidden engine, not just one row -- full-tree
+        // search's only way to make every row exist in the DOM to scan at
+        // all (see this module's own header comment on lazy expansion).
+        // A real master tree has thousands of toggle nodes once Tabla/
+        // Columna/Clasificación/Iconos/Botones are counted -- clicking each
+        // one individually (the first version of this) re-renders the WHOLE
+        // visible tree after every single click, an O(n) full DOM rebuild
+        // per click that measured as a multi-minute hang (confirmed live,
+        // 2026-09-30, had to force-close the tab). opts.expandAll (see
+        // PermissionTree.js/Admin-ArbolMaestroSaaS.js's own setForceExpandAll)
+        // instead flips one flag the engine's OWN render already checks at
+        // every level, so one single render() shows everything at once --
+        // same end result, one render instead of thousands. Falls back to
+        // doing nothing (search just scopes to whatever's already visible)
+        // if a caller ever mounts without it, rather than reintroducing the
+        // click-loop hang.
+        function expandAllForSearch() {
+            if (typeof opts.expandAll === 'function') opts.expandAll(true);
+        }
+        function collapseAfterSearch() {
+            if (typeof opts.expandAll === 'function') opts.expandAll(false);
+        }
         // Expands the row in the HIDDEN engine (a real toggle click, same
         // as a desktop user would do) if it isn't already, so its children
         // actually exist in the DOM to read. Synchronous -- every engine's
@@ -217,8 +272,16 @@
         function iconStar(filled) {
             return `<svg viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/></svg>`;
         }
+        function iconSearch() {
+            return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
+        }
+        function iconX() {
+            return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+        }
 
         function buildCrumbBar() {
+            const wrap = document.createElement('div');
+            wrap.className = 'mtn-topbar';
             const bar = document.createElement('div');
             bar.className = 'mtn-crumbbar';
             const home = document.createElement('button');
@@ -239,7 +302,21 @@
                 b.addEventListener('click', () => goToCrumb(i));
                 bar.appendChild(b);
             });
-            return bar;
+            wrap.appendChild(bar);
+            // Full-tree search -- reachable from any level, not just root
+            // (unlike pins, which only ever save a place you already visited).
+            // See openSearch below for why every collapsed branch gets
+            // expanded first: a row not yet drilled into doesn't exist in the
+            // hidden engine's own DOM at all yet (see this module's own
+            // header comment), so it's simply unsearchable until it does.
+            const searchBtn = document.createElement('button');
+            searchBtn.type = 'button';
+            searchBtn.className = 'mtn-search-btn';
+            searchBtn.innerHTML = iconSearch();
+            searchBtn.setAttribute('aria-label', t('main.search') || 'Search');
+            searchBtn.addEventListener('click', openSearch);
+            wrap.appendChild(searchBtn);
+            return wrap;
         }
 
         function buildPinsBar() {
@@ -671,6 +748,90 @@
             backBtn.addEventListener('click', () => goToCrumb(stack.length - 2));
             wrap.appendChild(backBtn);
             return wrap;
+        }
+
+        // --- full-tree search ------------------------------------------------
+        let searchOverlayEl = null;
+        // Shared by the close button, Escape, and tapping a result -- always
+        // pairs with openSearch's own expandAllForSearch so the hidden
+        // engine never gets left fully expanded behind the user's back.
+        function closeSearch() {
+            if (searchOverlayEl) searchOverlayEl.hidden = true;
+            collapseAfterSearch();
+        }
+        function ensureSearchOverlay() {
+            if (searchOverlayEl) return searchOverlayEl;
+            searchOverlayEl = document.createElement('div');
+            searchOverlayEl.className = 'mtn-search-overlay';
+            searchOverlayEl.hidden = true;
+            searchOverlayEl.innerHTML = `
+                <div class="mtn-search-head">
+                    <div class="mtn-search-field">
+                        <span class="mtn-search-field-icon">${iconSearch()}</span>
+                        <input type="text" class="mtn-search-input" data-role="input" autocomplete="off" placeholder="${t('sidebar.searchPlaceholder') || 'Buscar'}">
+                    </div>
+                    <button type="button" class="mtn-search-close" data-role="close" aria-label="${t('admin.cancel') || 'Cancel'}">${iconX()}</button>
+                </div>
+                <div class="mtn-search-results" data-role="results"></div>
+            `;
+            document.body.appendChild(searchOverlayEl);
+            searchOverlayEl.querySelector('[data-role="close"]').addEventListener('click', closeSearch);
+            const input = searchOverlayEl.querySelector('[data-role="input"]');
+            input.addEventListener('input', () => runSearch(input.value));
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && !searchOverlayEl.hidden) closeSearch();
+            });
+            return searchOverlayEl;
+        }
+        // Every real row's own path, cached once per search session (cleared
+        // each time the overlay opens, right after expandAllForSearch --
+        // building it fresh means a row created/renamed since the last
+        // search is never stale).
+        function runSearch(query) {
+            const overlay = ensureSearchOverlay();
+            const results = overlay.querySelector('[data-role="results"]');
+            const q = query.trim().toLowerCase();
+            results.innerHTML = '';
+            if (!q) return;
+            const matches = allRows().filter((row) => labelOf(row).toLowerCase().includes(q)).slice(0, 40);
+            if (!matches.length) {
+                const empty = document.createElement('p');
+                empty.className = 'mtn-empty';
+                empty.textContent = t('admin.masterTreeNavEmpty');
+                results.appendChild(empty);
+                return;
+            }
+            matches.forEach((row) => {
+                const path = pathToRow(row);
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'mtn-search-result';
+                const crumbText = path.slice(0, -1).map((s) => s.label).join(' › ');
+                card.innerHTML = `
+                    <span class="mtn-name"></span>
+                    ${crumbText ? '<span class="mtn-search-result-path"></span>' : ''}
+                `;
+                card.querySelector('.mtn-name').textContent = labelOf(row);
+                const pathEl = card.querySelector('.mtn-search-result-path');
+                if (pathEl) pathEl.textContent = crumbText;
+                card.addEventListener('click', () => {
+                    closeSearch();
+                    openPath(path);
+                });
+                results.appendChild(card);
+            });
+        }
+        function openSearch() {
+            const overlay = ensureSearchOverlay();
+            const input = overlay.querySelector('[data-role="input"]');
+            input.value = '';
+            overlay.querySelector('[data-role="results"]').innerHTML = '';
+            overlay.hidden = false;
+            // One render() call (see expandAllForSearch's own comment) --
+            // fast even on a real master tree, unlike the old per-toggle
+            // click loop this replaced.
+            expandAllForSearch();
+            input.focus();
         }
 
         function render() {

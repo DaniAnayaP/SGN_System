@@ -445,7 +445,14 @@ let draggedId = null;
 // by request. It is still remembered within the session, so a re-render (a
 // save, a reorder, a color pick) never folds the rows you had open.
 let expandedRows = new Set();
-function isExpanded(key) { return expandedRows.has(key); }
+// Bypasses expandedRows without touching it -- see PermissionTree.js's own
+// identical forceExpandAll (same full-tree-search hang this fixes: clicking
+// every chevron one at a time re-renders the whole list after each click,
+// an O(n) full rebuild per click that measured as a multi-minute hang on a
+// real tree). Toggling it off and re-rendering restores the real state
+// exactly, since nothing here was ever mutated.
+let forceExpandAll = false;
+function isExpanded(key) { return forceExpandAll || expandedRows.has(key); }
 // The old persisted state would otherwise sit in localStorage forever.
 try { localStorage.removeItem('saasMasterTreeCollapsed'); } catch { /* storage blocked -- nothing to clean */ }
 
@@ -2625,6 +2632,14 @@ window.SaasMasterTree = {
         } catch (err) {
             console.error('Admin (Árbol Maestro SaaS) failed to initialize:', err);
         }
+    },
+    // Full-tree search's bulk expand/collapse (see MobileTreeNav.js) -- one
+    // renderList() call regardless of flag, so flipping it then rendering
+    // shows either everything expanded or the user's real collapse state,
+    // never N re-renders for N rows.
+    setForceExpandAll(flag) {
+        forceExpandAll = !!flag;
+        renderList();
     },
 };
 

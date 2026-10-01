@@ -1260,6 +1260,7 @@ async function loadMasterTree(token) {
             rootLabel: t('menu.masterPermissionsTree'),
             pinsKey: 'mtnPinsMaster',
             onSave: () => saveBtn.click(),
+            expandAll: (flag) => masterTree.setForceExpandAll(flag),
         });
     } catch {
         if (token !== renderToken) return;
@@ -1304,6 +1305,7 @@ async function loadSaasMasterTree(token) {
         rootLabel: t('menu.saasMasterTree'),
         pinsKey: 'mtnPinsSaas',
         onSave: () => saveBtn && saveBtn.click(),
+        expandAll: (flag) => window.SaasMasterTree.setForceExpandAll(flag),
     });
 }
 
@@ -1569,6 +1571,7 @@ function renderSectorTree(sector) {
                 rootLabel: t('admin.giroAccesosGlobalesTitle'),
                 pinsKey: `mtnPinsGiro:${sector.id}`,
                 onSave: () => saveBtn.click(),
+                expandAll: (flag) => sectorTreeInstance.setForceExpandAll(flag),
             });
         } catch {
             treeWrap.innerHTML = '';
@@ -1951,6 +1954,7 @@ function renderSectorOrder(sector) {
                 rootLabel: t('admin.giroReordenPersonalizadoTitle'),
                 pinsKey: `mtnPinsGiroOrder:${sector.id}`,
                 onSave: () => saveBtn.click(),
+                expandAll: (flag) => sectorOrderInstance.setForceExpandAll(flag),
             });
         } catch {
             treeWrap.innerHTML = '';
