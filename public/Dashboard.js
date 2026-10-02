@@ -6757,7 +6757,23 @@ function collectSearchEditorFilter() {
     return { columnFilters, columnRules };
 }
 
+// Un doble clic en Guardar mandaba dos veces la misma búsqueda: mientras una
+// se guarda, el botón queda apagado y otro clic no hace nada.
+let savedSearchSaving = false;
 async function saveSavedSearch() {
+    if (savedSearchSaving) return;
+    savedSearchSaving = true;
+    searchEditorModal._refs.saveBtn.disabled = true;
+    try {
+        await submitSavedSearch();
+    } finally {
+        savedSearchSaving = false;
+        // Si falló, el editor sigue abierto y el botón vuelve a lo que le toca.
+        if (searchEditorState) updateSearchEditorGating();
+    }
+}
+
+async function submitSavedSearch() {
     const { nameInput, errorEl } = searchEditorModal._refs;
     const { tableId, editingId, preservedFields } = searchEditorState;
     errorEl.hidden = true;
@@ -7212,7 +7228,21 @@ function applyColumnLayoutConfig(tableId, rawLayout) {
     applyDataTableColumnLayout(tableId);
 }
 
+// Mismo candado que saveSavedSearch: un doble clic no guarda dos acomodos.
+let savedLayoutSaving = false;
 async function saveSavedLayout() {
+    if (savedLayoutSaving) return;
+    savedLayoutSaving = true;
+    savedLayoutSaveBtn.disabled = true;
+    try {
+        await submitSavedLayout();
+    } finally {
+        savedLayoutSaving = false;
+        if (columnArrangeState) updateColumnArrangeGating();
+    }
+}
+
+async function submitSavedLayout() {
     savedLayoutErrorEl.hidden = true;
     const name = savedLayoutNameInput.value.trim();
     if (!name) {
