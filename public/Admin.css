@@ -4447,37 +4447,192 @@ body.dark-mode .admin-save-status{
    .data-table-vis-panel, pero con una 3ra franja fija al fondo para la
    vista previa en vivo + los botones con candado, que nunca deben
    desaparecer al hacer scroll por una lista larga de columnas. */
+/* Dos pasos dentro del mismo modal: lista de guardados + "+ Agregar", y el
+   flujo de acomodar. Todo el panel hace scroll (base .modal-panel) para que
+   la vista previa y los botones de abajo nunca queden cortados en una
+   pantalla baja -- solo la lista de columnas tiene su propia altura tope. */
 .data-table-arrange-panel{
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    max-width: 44rem;
+    max-width: 34rem;
 }
-.data-table-arrange-fixed-top{
-    flex-shrink: 0;
+.data-table-arrange-panel h3{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.data-table-arrange-back{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 0.1rem;
+    font-size: 1.25rem;
+    color: var(--color-text-primary);
+    cursor: pointer;
+}
+.data-table-arrange-back[hidden]{ display: none; }
+.data-table-arrange-panel [hidden]{ display: none !important; }
+.data-table-arrange-add{
+    width: 100%;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 700;
+    padding: 0.75rem;
+    border: 1.5px dashed var(--color-accent);
+    border-radius: 0.6rem;
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+    color: var(--color-accent);
+    cursor: pointer;
+}
+.data-table-arrange-add:hover{
+    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+.data-table-arrange-empty{
+    margin: 0.4rem 0 0.9rem;
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    text-align: center;
+}
+.data-table-arrange-panel [data-role="view-list"] .saved-view-list{
+    margin: 0.7rem 0 1rem;
+}
+.data-table-arrange-label{
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 600;
+    margin: 0 0 0.35rem;
+}
+.data-table-arrange-name{
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.8rem;
+    border-radius: 0.6rem;
+    font-size: 0.86rem;
+    margin-bottom: 0.9rem;
+}
+/* Panel gris de columnas: "partiendo del acomodo actual", búsqueda,
+   pestañas por clasificación real y la lista de columnas. */
+.data-table-arrange-colpanel{
+    background: var(--color-bg);
+    border-radius: 0.8rem;
+    padding: 0.85rem;
+    margin-bottom: 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
 }
-.data-table-arrange-list{
-    flex: 1;
-    min-height: 8rem;
-    overflow-y: auto;
-    margin: 0.75rem 0;
+.data-table-arrange-live{
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #0f8a6b;
+    background: color-mix(in srgb, #0f8a6b 14%, transparent);
+    border-radius: 999px;
+    padding: 0.25rem 0.6rem;
 }
-.data-table-arrange-fixed-bottom{
+.data-table-arrange-section-label{
+    margin: 0;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+}
+.data-table-arrange-tabs{
+    margin: 0;
+}
+.data-table-arrange-tab-count{
+    font-size: 0.58rem;
+    font-weight: 700;
+    background: rgba(0, 0, 0, 0.08);
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+}
+.sector-icon-picker-chip.active .data-table-arrange-tab-count{
+    background: rgba(255, 255, 255, 0.22);
+}
+.data-table-arrange-list{
+    margin: 0;
+    gap: 0.3rem;
+    max-height: 12.5rem;
+    overflow-y: auto;
+    padding-right: 0.3rem;
+}
+.data-table-arrange-row{
+    padding: 0.4rem 0.55rem;
+    border-radius: 0.55rem;
+    background: var(--color-surface);
+    gap: 0.45rem;
     flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid var(--color-border);
+}
+.data-table-arrange-row .admin-module-name{
+    font-size: 0.74rem;
 }
 /* Cada fila de columna -- nombre + punto de clasificación + control de 3
    vías. "pending" (aún sin tocar en esta sesión de edición) se atenúa
    SOLO aquí, nunca en la banda/tabla real -- ver Dashboard.js. */
 .data-table-arrange-row.data-table-row-pending{
     opacity: 0.55;
+}
+.data-table-arrange-caption{
+    margin: 0.5rem 0 1rem;
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
+    display: flex;
+    gap: 0.3rem;
+    align-items: flex-start;
+}
+.data-table-arrange-block-btn{
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem;
+    border-radius: 0.7rem;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.9rem;
+}
+.data-table-arrange-assign-btn{
+    background: color-mix(in srgb, #6d3fc0 14%, transparent);
+    color: #6d3fc0;
+}
+.data-table-arrange-segmented{
+    display: inline-flex;
+    background: var(--color-bg);
+    border-radius: 0.6rem;
+    padding: 0.2rem;
+    gap: 0.2rem;
+    margin-bottom: 0.9rem;
+}
+.data-table-arrange-segmented label{
+    position: relative;
+    padding: 0.4rem 0.8rem;
+    border-radius: 0.4rem;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.data-table-arrange-segmented input{
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.data-table-arrange-segmented label:has(input:checked){
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.data-table-arrange-panel [data-role="audience-panel"]{
+    margin-bottom: 0.9rem;
+}
+.data-table-arrange-panel [data-role="save-block-2"] .saved-view-default-row{
+    margin-bottom: 0.9rem;
 }
 .data-table-tri-control{
     display: inline-flex;
@@ -4489,12 +4644,12 @@ body.dark-mode .admin-save-status{
 }
 .data-table-tri-control button{
     font: inherit;
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-size: 0.66rem;
+    font-weight: 700;
     border: none;
     background: transparent;
     color: var(--color-text-secondary);
-    padding: 0.3rem 0.6rem;
+    padding: 0.3rem 0.5rem;
     border-radius: 0.35rem;
     cursor: pointer;
     display: inline-flex;
@@ -4541,9 +4696,9 @@ body.dark-mode .admin-save-status{
    real, solo agrega el grip de arrastre por encabezado. */
 .data-table-arrange-preview{
     border: 1px solid var(--color-border);
-    border-radius: 0.5rem;
+    border-radius: 0.7rem;
     overflow-x: auto;
-    max-height: 9rem;
+    margin-top: 0.5rem;
 }
 .data-table-arrange-preview table{
     border-collapse: collapse;

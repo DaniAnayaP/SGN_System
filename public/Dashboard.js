@@ -3995,38 +3995,56 @@ function ensureColumnArrangeModal() {
     columnArrangeModal.hidden = true;
     columnArrangeModal.innerHTML = `
         <div class="modal-panel data-table-arrange-panel" role="dialog" aria-modal="true" aria-labelledby="data-table-arrange-title">
-            <div class="data-table-arrange-fixed-top">
-                <h3 id="data-table-arrange-title">${t('main.savedLayoutTitle')}</h3>
-                <div data-role="save-block">
-                    <div data-role="list" class="saved-view-list"></div>
-                    <p data-role="empty" class="admin-hint" hidden>${t('main.savedLayoutEmpty')}</p>
-                    <p class="admin-hint">${t('main.savedLayoutSaveHint')}</p>
-                    <input type="text" data-role="name" class="saved-view-name-input" placeholder="${t('main.savedLayoutNamePlaceholder')}">
-                </div>
-                <div class="sector-icon-picker-search">
-                    <i class="bx bx-search" aria-hidden="true"></i>
-                    <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
-                </div>
-                <div class="sector-icon-picker-chips" data-role="tabs"></div>
-            </div>
-            <div class="admin-module-list data-table-arrange-list" data-role="rows"></div>
-            <div class="data-table-arrange-fixed-bottom">
-                <div class="data-table-arrange-preview" data-role="preview-wrap"><table data-role="preview-table"></table></div>
-                <button type="button" class="btn" data-role="terminar-acomodo">${t('main.arrangeTerminar')}</button>
-                <div data-role="save-block-2">
-                    <div data-role="admin-section" class="saved-view-audience-radios" hidden>
-                        <label><input type="radio" name="saved-layout-audience" value="self" checked> ${t('main.savedSearchAudienceSelf')}</label>
-                        <label><input type="radio" name="saved-layout-audience" value="assign"> ${t('main.savedSearchAudienceAssign')}</label>
-                    </div>
-                    <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
-                    <button type="button" class="btn" data-role="terminar-asignacion" hidden>${t('main.arrangeTerminarAsignacion')}</button>
-                    <label class="saved-view-default-row"><input type="checkbox" data-role="default"> ${t('main.savedLayoutSetDefault')}</label>
-                    <p data-role="error" class="admin-error" role="alert" hidden></p>
-                    <button type="button" class="btn data-table-arrange-save-btn" data-role="save" disabled>${t('admin.save')}</button>
-                    <p data-role="lock-note" class="data-table-arrange-lock-note"></p>
-                </div>
+            <h3 id="data-table-arrange-title">
+                <button type="button" class="data-table-arrange-back" data-role="back" aria-label="${t('main.arrangeBack')}" hidden><i class="bx bx-arrow-back" aria-hidden="true"></i></button>
+                <span data-role="title">${t('main.savedLayoutTitle')}</span>
+            </h3>
+
+            <div data-role="view-list">
+                <button type="button" class="data-table-arrange-add" data-role="add">${t('main.arrangeAddNew')}</button>
+                <div data-role="list" class="saved-view-list"></div>
+                <p data-role="empty" class="data-table-arrange-empty" hidden>${t('main.savedLayoutEmpty')}</p>
                 <div class="admin-form-actions">
                     <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+                </div>
+            </div>
+
+            <div data-role="view-edit" hidden>
+                <label class="data-table-arrange-label" for="data-table-arrange-name">${t('main.arrangeNameLabel')}</label>
+                <input type="text" id="data-table-arrange-name" data-role="name" class="saved-view-name-input data-table-arrange-name" placeholder="${t('main.savedLayoutNamePlaceholder')}">
+
+                <div class="data-table-arrange-colpanel">
+                    <span class="data-table-arrange-live"><i class="bx bx-revision" aria-hidden="true"></i> ${t('main.arrangeStartsFromCurrent')}</span>
+                    <div class="sector-icon-picker-search">
+                        <i class="bx bx-search" aria-hidden="true"></i>
+                        <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
+                    </div>
+                    <p class="data-table-arrange-section-label">${t('main.arrangeClassHint')}</p>
+                    <div class="sector-icon-picker-chips data-table-arrange-tabs" data-role="tabs"></div>
+                    <div class="admin-module-list data-table-arrange-list" data-role="rows"></div>
+                </div>
+
+                <p class="data-table-arrange-section-label">${t('main.arrangePreviewLabel')}</p>
+                <div class="data-table-arrange-preview" data-role="preview-wrap"><table data-role="preview-table"></table></div>
+                <p class="data-table-arrange-caption"><i class="bx bx-info-circle" aria-hidden="true"></i> ${t('main.arrangePreviewCaption')}</p>
+
+                <button type="button" class="btn data-table-arrange-block-btn" data-role="terminar-acomodo">${t('main.arrangeTerminar')}</button>
+
+                <div data-role="save-block-2">
+                    <div data-role="admin-section" class="data-table-arrange-segmented" hidden>
+                        <label><input type="radio" name="saved-layout-audience" value="self" checked> <span>${t('main.savedSearchAudienceSelf')}</span></label>
+                        <label><input type="radio" name="saved-layout-audience" value="assign"> <span>${t('main.savedSearchAudienceAssign')}</span></label>
+                    </div>
+                    <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
+                    <button type="button" class="btn data-table-arrange-block-btn data-table-arrange-assign-btn" data-role="terminar-asignacion" hidden>${t('main.arrangeTerminarAsignacion')}</button>
+                    <label class="saved-view-default-row"><input type="checkbox" data-role="default"> ${t('main.savedLayoutSetDefault')}</label>
+                    <p data-role="error" class="admin-error" role="alert" hidden></p>
+                    <button type="button" class="btn data-table-arrange-block-btn data-table-arrange-save-btn" data-role="save" disabled>${t('admin.save')}</button>
+                    <p data-role="lock-note" class="data-table-arrange-lock-note"></p>
+                </div>
+
+                <div class="admin-form-actions">
+                    <button type="button" class="btn btn-secondary" data-role="cancel-edit">${t('admin.cancel')}</button>
                 </div>
             </div>
         </div>
@@ -4050,8 +4068,10 @@ function ensureColumnArrangeModal() {
     savedLayoutSaveBtn = columnArrangeModal.querySelector('[data-role="save"]');
 
     const refs = {
-        saveBlock: columnArrangeModal.querySelector('[data-role="save-block"]'),
-        saveBlock2: columnArrangeModal.querySelector('[data-role="save-block-2"]'),
+        viewList: columnArrangeModal.querySelector('[data-role="view-list"]'),
+        viewEdit: columnArrangeModal.querySelector('[data-role="view-edit"]'),
+        backBtn: columnArrangeModal.querySelector('[data-role="back"]'),
+        titleEl: columnArrangeModal.querySelector('[data-role="title"]'),
         searchInput: columnArrangeModal.querySelector('[data-role="search"]'),
         tabsEl: columnArrangeModal.querySelector('[data-role="tabs"]'),
         rowsEl: columnArrangeModal.querySelector('[data-role="rows"]'),
@@ -4065,6 +4085,13 @@ function ensureColumnArrangeModal() {
     const close = () => { columnArrangeModal.hidden = true; columnArrangeState = null; };
     columnArrangeModal.querySelector('[data-role="close"]').addEventListener('click', close);
     wireModalDismiss(columnArrangeModal, close);
+
+    // Paso 1 = lista de acomodos guardados + "+ Agregar"; paso 2 = el
+    // flujo de acomodar (nombre, pestañas, lista, vista previa, botones).
+    columnArrangeModal.querySelector('[data-role="add"]').addEventListener('click', startColumnArrangeEdit);
+    const backToList = () => showColumnArrangeView('list');
+    refs.backBtn.addEventListener('click', backToList);
+    columnArrangeModal.querySelector('[data-role="cancel-edit"]').addEventListener('click', backToList);
 
     refs.searchInput.addEventListener('input', () => {
         columnArrangeState.query = refs.searchInput.value;
@@ -4154,6 +4181,10 @@ function renderColumnArrangeTabs() {
             tab.appendChild(dot);
         }
         tab.appendChild(document.createTextNode(groupKey === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(groupKey)));
+        const count = document.createElement('span');
+        count.className = 'data-table-arrange-tab-count';
+        count.textContent = String(state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === groupKey).length);
+        tab.appendChild(count);
         tab.addEventListener('click', () => {
             columnArrangeState.activeTab = groupKey;
             columnArrangeState.query = '';
@@ -4378,10 +4409,32 @@ function enablePreviewHeaderDragReorder(headRow) {
 // solo se muestra si esta cuenta puede llegar al servidor que lo persiste
 // (ver canPersistSavedLayout, junto a renderDataTableColumnControls) --
 // sin ese permiso, el modal igual sirve para acomodar y aplicar en vivo.
+function showColumnArrangeView(view) {
+    const refs = columnArrangeModal._refs;
+    const isList = view === 'list';
+    refs.viewList.hidden = !isList;
+    refs.viewEdit.hidden = isList;
+    refs.backBtn.hidden = isList;
+    refs.titleEl.textContent = t(isList ? 'main.savedLayoutTitle' : 'main.arrangeNewTitle');
+    columnArrangeModal.querySelector('.modal-panel').scrollTop = 0;
+}
+
 async function openColumnArrangeModal(tableId) {
+    if (!dataTableColumnState.get(tableId)) return;
+    ensureColumnArrangeModal();
+    columnArrangeState = null;
+    savedLayoutTableId = tableId;
+    showColumnArrangeView('list');
+    columnArrangeModal.hidden = false;
+    await loadSavedLayoutList();
+}
+
+// "+ Agregar": arranca un acomodo nuevo, partiendo del acomodo que la tabla
+// tiene en este momento (el borrador se descarta si se regresa a la lista).
+function startColumnArrangeEdit() {
+    const tableId = savedLayoutTableId;
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
-    ensureColumnArrangeModal();
     const refs = columnArrangeModal._refs;
     columnArrangeState = {
         tableId,
@@ -4399,10 +4452,6 @@ async function openColumnArrangeModal(tableId) {
     const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
     columnArrangeState.activeTab = presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED;
 
-    const canPersist = canPersistSavedLayout(tableId);
-    refs.saveBlock.hidden = !canPersist;
-    refs.saveBlock2.hidden = !canPersist;
-    savedLayoutTableId = tableId;
     savedLayoutNameInput.value = '';
     savedLayoutDefaultCheckbox.checked = false;
     savedLayoutErrorEl.hidden = true;
@@ -4417,8 +4466,7 @@ async function openColumnArrangeModal(tableId) {
     renderColumnArrangeRows();
     renderColumnArrangePreview();
     updateColumnArrangeGating();
-    columnArrangeModal.hidden = false;
-    if (canPersist) await loadSavedLayoutList();
+    showColumnArrangeView('edit');
 }
 
 // --- Reglas de Orden de Llenado modal ---------------------------------
@@ -5753,6 +5801,7 @@ async function saveSavedLayout() {
         savedLayoutNameInput.value = '';
         savedLayoutDefaultCheckbox.checked = false;
         await loadSavedLayoutList();
+        showColumnArrangeView('list');
     } catch {
         savedLayoutErrorEl.textContent = t('admin.saveError');
         savedLayoutErrorEl.hidden = false;
