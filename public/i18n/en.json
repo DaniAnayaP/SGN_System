@@ -1040,7 +1040,6 @@
     "savedSearchKeepsPanel": "This search also uses {count} filters from the panel above; they are kept as they are.",
     "filterAdvancedBtn": "Advanced filter",
     "filterAdvancedCount": "{count} of {total} columns",
-    "filterAdvancedAdded": "Added with Advanced filter",
     "filterAdvancedHint": "Tap a column to add its filter to the panel",
     "filterAdvancedInPanel": "In the panel",
     "filterAdvancedRemove": "Remove from panel",

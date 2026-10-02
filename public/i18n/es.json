@@ -1039,7 +1039,6 @@
     "savedSearchKeepsPanel": "Esta búsqueda también usa {count} filtros del panel de arriba; se conservan tal cual.",
     "filterAdvancedBtn": "Filtro avanzado",
     "filterAdvancedCount": "{count} de {total} columnas",
-    "filterAdvancedAdded": "Agregados con Filtro avanzado",
     "filterAdvancedHint": "Toca una columna para agregar su filtro al panel",
     "filterAdvancedInPanel": "En el panel",
     "filterAdvancedRemove": "Quitar del panel",

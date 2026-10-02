@@ -5723,14 +5723,21 @@ button.data-table-layout-item{
     align-items: center;
     gap: 0.35rem 0.5rem;
 }
-.filter-field-divider{
-    grid-column: 1 / -1;
-    margin: 0.2rem 0 0;
-    font-size: 0.62rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-secondary);
+/* Los campos con Desde–Hasta ocupan dos columnas, con sus dos fechas lado a
+   lado, para que su fila no quede más alta que las demás; el flujo "dense"
+   rellena con los campos que siguen cualquier hueco que eso deje. Solo cuando
+   el panel mide lo suficiente para tener dos columnas. */
+.filter-bar.filter-bar-expanded .filter-bar-fields{
+    container-type: inline-size;
+    grid-auto-flow: row dense;
+}
+@container (min-width: 26rem){
+    .filter-field-range{
+        grid-column: span 2;
+    }
+    .filter-field-range .filter-col-range{
+        grid-template-columns: auto 1fr auto 1fr;
+    }
 }
 .filter-advanced-btn{
     display: inline-flex;

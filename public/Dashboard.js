@@ -4886,7 +4886,7 @@ function clearActiveSavedLayout(tableId) {
 // con uno, queda como píldora con su nombre escrito y la ✕ para limpiarlo.
 // Abierto el menú, el nombre le cede su lugar al buscador.
 function refreshSavedLayoutPill(pill) {
-    const active = getActiveSavedLayout(pill.dataset.tableId);
+    const active = getActiveSavedLayout(pill.dataset.pillTableId);
     const nameEl = pill.querySelector('.data-table-layout-pill-name');
     nameEl.textContent = active ? active.name : '';
     nameEl.hidden = !active || pill.classList.contains('open');
@@ -4895,7 +4895,7 @@ function refreshSavedLayoutPill(pill) {
 }
 
 function refreshSavedLayoutPillForTable(tableId) {
-    const pill = document.querySelector(`.data-table-layout-pill[data-table-id="${CSS.escape(tableId)}"]`);
+    const pill = document.querySelector(`.data-table-layout-pill[data-pill-table-id="${CSS.escape(tableId)}"]`);
     if (pill) refreshSavedLayoutPill(pill);
 }
 
@@ -5856,7 +5856,7 @@ function clearActiveSavedSearch(tableId) {
 }
 
 function refreshSavedSearchPill(pill) {
-    const active = getActiveSavedSearch(pill.dataset.tableId);
+    const active = getActiveSavedSearch(pill.dataset.pillTableId);
     const nameEl = pill.querySelector('.data-table-layout-pill-name');
     nameEl.textContent = active ? active.name : '';
     nameEl.hidden = !active || pill.classList.contains('open');
@@ -5865,7 +5865,7 @@ function refreshSavedSearchPill(pill) {
 }
 
 function refreshSavedSearchPillForTable(tableId) {
-    const pill = document.querySelector(`.data-table-search-pill[data-table-id="${CSS.escape(tableId)}"]`);
+    const pill = document.querySelector(`.data-table-search-pill[data-pill-table-id="${CSS.escape(tableId)}"]`);
     if (pill) refreshSavedSearchPill(pill);
 }
 
@@ -7556,7 +7556,7 @@ function renderDataTableColumnControls() {
                 // aplicada y la ✕ que la limpia.
                 const searchPill = document.createElement('span');
                 searchPill.className = 'data-table-search-pill';
-                searchPill.dataset.tableId = tableKey;
+                searchPill.dataset.pillTableId = tableKey; // NO data-table-id: choca con el de la tabla
                 const searchName = document.createElement('span');
                 searchName.className = 'data-table-layout-pill-name';
                 searchName.dataset.helpKey = 'savedSearch';
@@ -7607,7 +7607,7 @@ function renderDataTableColumnControls() {
                 // toggleSavedLayoutMenu).
                 const pill = document.createElement('span');
                 pill.className = 'data-table-layout-pill';
-                pill.dataset.tableId = tableKey;
+                pill.dataset.pillTableId = tableKey; // NO data-table-id: choca con el de la tabla
                 const layoutName = document.createElement('span');
                 layoutName.className = 'data-table-layout-pill-name';
                 layoutName.dataset.helpKey = 'savedLayout';
@@ -7666,7 +7666,8 @@ function renderDataTableColumnControls() {
             // zoom's previous sibling at this point.
             const filterBar = zoom.previousElementSibling;
             if (filterBar?.classList?.contains('filter-bar')) {
-                filterBar.dataset.tableId = tableKey;
+                // Atributo propio: NO data-table-id (ver el comentario en el handler de Buscar).
+                filterBar.dataset.filterTableId = tableKey;
                 const filterToAppend = [];
                 let filterBtn = null;
                 if (resolveIconGrant(tableKey, 'iconFilter')) {
@@ -8005,6 +8006,7 @@ function buildPanelField(tableId, key, removable) {
     }
     field.appendChild(head);
     if (draft.inline) {
+        field.classList.add('filter-field-range');
         const box = document.createElement('div');
         box.className = 'filter-col-range';
         buildRangeFields(box, draft.rule, () => { draft.touched = true; });
@@ -8152,18 +8154,12 @@ function renderPanelColumnFilters(tableId) {
     const actionsEl = filterBar.querySelector('.filter-bar-actions');
     if (!fieldsEl || !actionsEl) return;
     if (panelPopoverAnchor && !panelPopoverAnchor.isConnected) closePanelPopover();
-    fieldsEl.querySelectorAll('.filter-field-col, .filter-field-divider').forEach((el) => el.remove());
+    fieldsEl.querySelectorAll('.filter-field-col').forEach((el) => el.remove());
     const { defaults, added } = panelFieldKeys(tableId, filterBar);
     syncPanelDrafts(tableId, [...defaults, ...added]);
     state.panelBuilt = true;
     defaults.forEach((key) => fieldsEl.appendChild(buildPanelField(tableId, key, false)));
-    if (added.length) {
-        const divider = document.createElement('p');
-        divider.className = 'filter-field-divider';
-        divider.textContent = t('main.filterAdvancedAdded');
-        fieldsEl.appendChild(divider);
-        added.forEach((key) => fieldsEl.appendChild(buildPanelField(tableId, key, true)));
-    }
+    added.forEach((key) => fieldsEl.appendChild(buildPanelField(tableId, key, true)));
 
     let advBtn = actionsEl.querySelector('.filter-advanced-btn');
     if (!advBtn) {
@@ -8249,7 +8245,10 @@ document.querySelectorAll('.filter-bar').forEach((bar) => {
     searchBtn?.addEventListener('click', () => {
         closePanelPopover();
         // Los campos de columna del panel se aplican junto con los de la pantalla.
-        if (bar.dataset.tableId) commitPanelColumnFilters(bar.dataset.tableId);
+        // La barra no puede llevar data-table-id: casi todas las pantallas buscan su
+        // tabla con [data-table-id="..."] y encontrarían la barra (que va antes) en
+        // lugar de la tabla.
+        if (bar.dataset.filterTableId) commitPanelColumnFilters(bar.dataset.filterTableId);
         bar.dispatchEvent(new CustomEvent('data-table:filter-apply'));
         bar.classList.remove('filter-bar-expanded');
         bar.nextElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'false');
