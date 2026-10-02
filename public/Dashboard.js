@@ -753,10 +753,19 @@ function hasSaasScreenAccess(activePage) {
 // do something at runtime; before this it was purely cosmetic. Returns null
 // (not a SaaS table) so callers fall back to hasIconGrant for every other
 // table -- resolveIconGrant below is that fallback dispatcher.
+// Every SaaS-admin screen whose table is modeled in the SaaS tree (a
+// tablaApartado in SaasAdminCatalog.js carries the Iconos Personalización
+// leaves) -- extended 2026-10-02 from the first 3 to all 7, so the same
+// icons (Acomodo Guardado included) work, and obey the tree, on every SaaS
+// table, not just some.
 const SAAS_TABLE_ICON_SCREENS = {
     'equipo-saas': { screenItemId: 'saas-team', apartadoId: 'tabla' },
     'nuestros-clientes': { screenItemId: 'saas-clients', apartadoId: 'tabla' },
     'mis-planes': { screenItemId: 'saas-plans', apartadoId: 'tabla' },
+    'nuestras-apps': { screenItemId: 'saas-apps', apartadoId: 'catalogo' },
+    'business-sectors': { screenItemId: 'saas-business-sectors', apartadoId: 'tabla' },
+    'admin-nuestros-respaldos': { screenItemId: 'saas-backups', apartadoId: 'tabla' },
+    'admin-material-apoyo': { screenItemId: 'saas-material-apoyo', apartadoId: 'tabla' },
 };
 function isSaasTableKey(tableId) {
     return !!SAAS_TABLE_ICON_SCREENS[tableId];
@@ -2541,6 +2550,50 @@ function applyRowColumnState(tr, tableId) {
     });
 }
 
+// Ancho final de cada columna visible, para que la tabla nunca deje espacio
+// en blanco a la derecha: las columnas FIJAS conservan su ancho (el que se
+// les dio o que el usuario arrastró -- nunca se estiran), y las NORMALES se
+// reparten lo que sobra en proporción a su ancho normal. Si las normales ya
+// no caben en su ancho normal, no se encogen: empieza el scroll horizontal.
+// Se vuelve a correr al cambiar el ancho de la tabla (ver el
+// ResizeObserver en initDataTableColumns).
+function distributeDataTableColumnWidths(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const { table, colgroup, config, wrapper } = state;
+    const hiddenSet = new Set(config.hidden);
+    const visible = getVisualColumnOrder(config).filter((k) => !hiddenSet.has(k));
+    const pinnedSet = new Set(state.visiblePinned);
+    const baseOf = (k) => config.widths[k] || DATA_TABLE_COL_MIN_WIDTH;
+    const sumOf = (keys) => keys.reduce((total, k) => total + baseOf(k), 0);
+    const normals = visible.filter((k) => !pinnedSet.has(k));
+    const normalSum = sumOf(normals);
+    // 1px de margen: con bordes/escala fraccionarios clientWidth puede
+    // redondear hacia arriba y un píxel de más basta para sacar un scroll
+    // horizontal que nadie pidió.
+    const room = wrapper.clientWidth - 1 - sumOf(visible.filter((k) => pinnedSet.has(k)));
+    const widths = {};
+    visible.forEach((k) => { widths[k] = baseOf(k); });
+    // Un exceso de hasta 3px es ruido de redondeo, no "ya no caben": se
+    // ajusta en vez de abrir un scroll horizontal de 1px.
+    if (normals.length && wrapper.clientWidth > 0 && normalSum < room + 3) {
+        let used = 0;
+        normals.forEach((k, i) => {
+            const w = i === normals.length - 1 ? room - used : Math.floor((baseOf(k) * room) / normalSum);
+            widths[k] = Math.max(DATA_TABLE_COL_MIN_WIDTH, w);
+            used += w;
+        });
+    }
+    Array.from(colgroup.children).forEach((col) => {
+        col.style.width = `${widths[col.dataset.col] ?? baseOf(col.dataset.col)}px`;
+    });
+    const total = visible.reduce((sum, k) => sum + widths[k], 0);
+    table.style.width = `${total}px`;
+    table.style.minWidth = `${total}px`;
+    state.displayWidths = widths;
+    state.distributedFor = wrapper.clientWidth;
+}
+
 function applyDataTableColumnLayout(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
@@ -2598,23 +2651,15 @@ function applyDataTableColumnLayout(tableId) {
         td.colSpan = visibleCount;
     });
 
-    const totalWidth = visualOrder.filter((k) => !hiddenSet.has(k))
-        .reduce((sum, k) => sum + (config.widths[k] || DATA_TABLE_COL_MIN_WIDTH), 0);
     table.style.tableLayout = 'fixed';
-    // A short table (few columns, e.g. Equipo SaaS's 6) left a blank strip
-    // between the table's own right edge and the wrapper's -- table-layout:
-    // fixed plus a table width fixed to the SUM of its own column widths
-    // never stretches past that sum, no matter how much wider the wrapper
-    // actually is. Confirmed live, 2026-09-30: "Ninguna tabla se debe ver
-    // cortada... se debe ajustar el ancho de las columnas al espacio de la
-    // tabla". Growing to the wrapper's own width when there's room lets the
-    // browser's own fixed-layout algorithm redistribute the extra space
-    // across columns proportionally (confirmed empirically -- setting a
-    // wider width than the sum of <col> widths grows every column, not just
-    // the last one); a wide table (more columns than fit) still gets exactly
-    // totalWidth as before, so it scrolls horizontally same as always.
-    table.style.width = `${Math.max(totalWidth, state.wrapper.clientWidth)}px`;
-    table.style.minWidth = `${totalWidth}px`;
+    // A short table (few columns, e.g. Equipo SaaS's 6, or a saved layout
+    // that hides most columns) used to leave a blank strip between the
+    // table's own right edge and the wrapper's. Confirmed live, 2026-09-30:
+    // "Ninguna tabla se debe ver cortada... se debe ajustar el ancho de las
+    // columnas al espacio de la tabla"; and again 2026-10-02: fixed columns
+    // keep their width, normal ones fill the rest, scroll only starts once
+    // the normal ones no longer fit. See distributeDataTableColumnWidths.
+    distributeDataTableColumnWidths(tableId);
 
     Array.from(table.tBodies[0]?.rows || []).forEach((tr) => {
         if (!tr.querySelector('td.data-table-empty-cell')) applyRowColumnState(tr, tableId);
@@ -2969,15 +3014,25 @@ function attachResizeHandle(th, tableId) {
         const state = dataTableColumnState.get(tableId);
         if (!state) return;
         const startX = event.clientX;
-        const startWidth = state.config.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
+        // Parte del ancho que la columna tiene EN PANTALLA (una columna
+        // normal puede estar estirada para llenar la tabla), no del ancho
+        // guardado.
+        const startWidth = state.displayWidths?.[key] || state.config.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
         handle.classList.add('data-table-col-resizing');
         let pendingWidth = startWidth;
+        let moved = false;
         let rafId = null;
         const applyPending = () => {
             rafId = null;
             liveResizeColumn(tableId, key, pendingWidth);
         };
         const onMove = (moveEvent) => {
+            if (!moved) {
+                // Las demás columnas se quedan como se ven ahora: así soltar
+                // el borde no las reacomoda.
+                moved = true;
+                Object.entries(state.displayWidths || {}).forEach(([k, w]) => { state.config.widths[k] = w; });
+            }
             pendingWidth = Math.max(DATA_TABLE_COL_MIN_WIDTH, startWidth + (moveEvent.clientX - startX));
             if (rafId == null) rafId = requestAnimationFrame(applyPending);
         };
@@ -2986,6 +3041,7 @@ function attachResizeHandle(th, tableId) {
             document.removeEventListener('mouseup', onUp);
             handle.classList.remove('data-table-col-resizing');
             if (rafId != null) cancelAnimationFrame(rafId);
+            if (!moved) return;
             state.config.widths[key] = pendingWidth;
             saveDataTableConfig(tableId, state.config);
             applyDataTableColumnLayout(tableId);
@@ -3498,6 +3554,13 @@ function initDataTableColumns(wrapper, index) {
         columnFilters: new Map(),
     });
     applyDataTableColumnLayout(tableId);
+    // Una tabla cambia de ancho por más que la ventana (el menú lateral, la
+    // escala de la interfaz, una barra de scroll, un panel que se abre): cada
+    // vez que cambie, se vuelve a repartir el ancho de sus columnas.
+    new ResizeObserver(() => {
+        const current = dataTableColumnState.get(tableId);
+        if (current && wrapper.clientWidth !== current.distributedFor) distributeDataTableColumnWidths(tableId);
+    }).observe(wrapper);
     if (hadNoStoredLayout) maybeApplyDefaultSavedLayout(tableId);
     enableHeaderDragReorder(table, tableId);
     Array.from(getHeaderRow(table).cells).forEach((th) => {
@@ -6178,9 +6241,25 @@ function openColumnLegend(tableId) {
 function renderDataTableColumnControls() {
     document.querySelectorAll('.data-table-wrapper').forEach((wrapper, index) => {
         const zoom = wrapper.previousElementSibling;
-        if (zoom?.classList?.contains('data-table-zoom') && !zoom.querySelector('[data-col-action]')) {
+        // A page may hand-place a button of its own in the bar (Equipo SaaS
+        // has its own "history" -- see Admin-EquipoSaaS.html); the generic
+        // icons still fill in around it, skipping only an action that's
+        // already there. Buttons added here carry data-col-injected so a
+        // later call doesn't add them twice.
+        if (zoom?.classList?.contains('data-table-zoom') && !zoom.querySelector('[data-col-injected]')) {
             const tableKey = getTableId(wrapper, index);
             const toAppend = [];
+            const existingActions = new Set(Array.from(zoom.querySelectorAll('[data-col-action]')).map((b) => b.dataset.colAction));
+            const addControls = (nodes) => {
+                nodes.forEach((node) => {
+                    const btn = node.matches('[data-col-action]') ? node : node.querySelector('[data-col-action]');
+                    const action = btn?.dataset.colAction;
+                    if (action && existingActions.has(action)) return;
+                    if (btn) btn.dataset.colInjected = '1';
+                    zoom.append(node);
+                    if (action) existingActions.add(action);
+                });
+            };
 
             if (resolveIconGrant(tableKey, 'iconPin')) {
                 const pinBtn = document.createElement('button');
@@ -6311,7 +6390,7 @@ function renderDataTableColumnControls() {
                 toAppend.push(rulesBtn);
             }
 
-            zoom.append(...toAppend);
+            addControls(toAppend);
 
             // Filtrar/Limpiar — only for tables that actually have a
             // .filter-bar (see the wiring block below this function for
@@ -6375,7 +6454,7 @@ function renderDataTableColumnControls() {
                     filterToAppend.push(clearBtn);
                 }
 
-                zoom.append(...filterToAppend);
+                addControls(filterToAppend);
             }
         }
 
@@ -9177,7 +9256,7 @@ function hasIconGrant(tableKey, iconId) {
 // directly -- hasSaasTableIconGrant returns null for a tableKey it doesn't
 // recognize (any client table), so this transparently falls back to the
 // original client-side check there, and only diverts to the SaaS Estatus
-// check for the 4 SaaS admin tables that need it.
+// check for the SaaS admin tables (SAAS_TABLE_ICON_SCREENS).
 function resolveIconGrant(tableKey, iconId) {
     const saasResult = hasSaasTableIconGrant(tableKey, iconId);
     return saasResult !== null ? saasResult : hasIconGrant(tableKey, iconId);
