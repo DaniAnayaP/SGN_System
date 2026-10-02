@@ -5617,6 +5617,36 @@ function validateSavedViewAudience(audience) {
     return true;
 }
 
+// Un guardado (búsqueda o acomodo) no se repite: dos con el mismo nombre en lo
+// que una misma persona ve junta ("Prueba" y "Prueba") no se pueden distinguir,
+// y un doble clic o un navegador con una versión vieja los creaba idénticos.
+// Mismo nombre (sin importar mayúsculas ni espacios) dentro de lo propio de quien
+// lo guarda -- sus personales y los globales de la tabla; un global, contra los
+// globales:
+//   - si además trae EXACTAMENTE lo mismo, el POST no crea otro: devuelve el que ya
+//     existe (así un doble clic termina igual que uno solo);
+//   - si trae algo distinto, 409 y que elija otro nombre.
+function normalizeSavedName(name) {
+    return String(name || '').trim().toLowerCase();
+}
+
+function stableStringify(value) {
+    if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+    if (value && typeof value === 'object') {
+        return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+}
+
+function findSavedNameClash(rows, { scope, ownerUserId, name, ignoreId }) {
+    const wanted = normalizeSavedName(name);
+    return (rows || []).find((r) => r.id !== ignoreId
+        && normalizeSavedName(r.name) === wanted
+        && (scope === 'global' ? r.scope === 'global' : (r.scope === 'global' || r.ownerUserId === ownerUserId)));
+}
+
+const savedNameTakenMessage = (noun) => `Ya existe ${noun} con ese nombre. Elige otro nombre.`;
+
 // Shared by every saved-view GET route (saved-searches, saved-layouts) --
 // the context matchesSavedViewAudience needs to decide if a 'global' row
 // applies to this particular user.
@@ -5656,6 +5686,12 @@ app.post('/api/business/saved-searches', requireAuth, (req, res) => {
             return res.status(400).json({ message: 'Elige al menos un usuario, puesto o centro de costo.' });
         }
     }
+    const clash = findSavedNameClash(getSavedSearchesForClientTable(req.user.clientId, tableKey),
+        { scope: finalScope, ownerUserId: req.user.sub, name });
+    if (clash) {
+        if (stableStringify(clash.filter) === stableStringify(filter)) return res.status(200).json({ search: clash });
+        return res.status(409).json({ message: savedNameTakenMessage('una búsqueda guardada') });
+    }
     const row = createSavedSearch({
         clientId: req.user.clientId, tableKey, name: name.trim(), filter,
         scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
@@ -5675,6 +5711,10 @@ app.put('/api/business/saved-searches/:id', requireAuth, (req, res) => {
     const { name, filter } = req.body || {};
     if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
     if (!filter || typeof filter !== 'object') return res.status(400).json({ message: 'Missing filter.' });
+    if (findSavedNameClash(getSavedSearchesForClientTable(row.clientId, row.tableKey),
+        { scope: row.scope, ownerUserId: row.ownerUserId, name, ignoreId: row.id })) {
+        return res.status(409).json({ message: savedNameTakenMessage('una búsqueda guardada') });
+    }
     res.json({ search: updateSavedSearch(row.id, { name: name.trim(), filter }) });
 });
 
@@ -5712,6 +5752,12 @@ app.post('/api/admin/saas-saved-searches', requireAuth, requireAdmin, (req, res)
         if (!req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'Solo el super admin SaaS puede crear una búsqueda guardada global.' });
         if (!audience?.userIds?.length) return res.status(400).json({ message: 'Elige al menos un integrante de Equipo SaaS.' });
     }
+    const clash = findSavedNameClash(getSaasSavedSearchesForTable(tableKey),
+        { scope: finalScope, ownerUserId: req.user.sub, name });
+    if (clash) {
+        if (stableStringify(clash.filter) === stableStringify(filter)) return res.status(200).json({ search: clash });
+        return res.status(409).json({ message: savedNameTakenMessage('una búsqueda guardada') });
+    }
     const row = createSaasSavedSearch({
         tableKey, name: name.trim(), filter,
         scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
@@ -5728,6 +5774,10 @@ app.put('/api/admin/saas-saved-searches/:id', requireAuth, requireAdmin, (req, r
     const { name, filter } = req.body || {};
     if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
     if (!filter || typeof filter !== 'object') return res.status(400).json({ message: 'Missing filter.' });
+    if (findSavedNameClash(getSaasSavedSearchesForTable(row.tableKey),
+        { scope: row.scope, ownerUserId: row.ownerUserId, name, ignoreId: row.id })) {
+        return res.status(409).json({ message: savedNameTakenMessage('una búsqueda guardada') });
+    }
     res.json({ search: updateSaasSavedSearch(row.id, { name: name.trim(), filter }) });
 });
 
@@ -5780,6 +5830,12 @@ app.post('/api/business/saved-layouts', requireAuth, (req, res) => {
             return res.status(400).json({ message: 'Elige al menos un usuario, puesto o centro de costo.' });
         }
     }
+    const clash = findSavedNameClash(getSavedLayoutsForClientTable(req.user.clientId, tableKey),
+        { scope: finalScope, ownerUserId: req.user.sub, name });
+    if (clash) {
+        if (stableStringify(clash.layout) === stableStringify(layout)) return res.status(200).json({ layout: clash });
+        return res.status(409).json({ message: savedNameTakenMessage('un acomodo guardado') });
+    }
     const row = createSavedLayout({
         clientId: req.user.clientId, tableKey, name: name.trim(), layout, isDefault: !!isDefault,
         scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
@@ -5799,6 +5855,10 @@ app.put('/api/business/saved-layouts/:id', requireAuth, (req, res) => {
     const { name, layout } = req.body || {};
     if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
     if (!validateSavedLayoutPayload(layout)) return res.status(400).json({ message: 'Invalid layout.' });
+    if (findSavedNameClash(getSavedLayoutsForClientTable(row.clientId, row.tableKey),
+        { scope: row.scope, ownerUserId: row.ownerUserId, name, ignoreId: row.id })) {
+        return res.status(409).json({ message: savedNameTakenMessage('un acomodo guardado') });
+    }
     res.json({ layout: updateSavedLayout(row.id, { name: name.trim(), layout }) });
 });
 
@@ -5839,6 +5899,12 @@ app.post('/api/admin/saas-saved-layouts', requireAuth, requireAdmin, (req, res) 
         if (!req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'Solo el super admin SaaS puede crear un acomodo guardado global.' });
         if (!audience?.userIds?.length) return res.status(400).json({ message: 'Elige al menos un integrante de Equipo SaaS.' });
     }
+    const clash = findSavedNameClash(getSaasSavedLayoutsForTable(tableKey),
+        { scope: finalScope, ownerUserId: req.user.sub, name });
+    if (clash) {
+        if (stableStringify(clash.layout) === stableStringify(layout)) return res.status(200).json({ layout: clash });
+        return res.status(409).json({ message: savedNameTakenMessage('un acomodo guardado') });
+    }
     const row = createSaasSavedLayout({
         tableKey, name: name.trim(), layout, isDefault: !!isDefault,
         scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
@@ -5855,6 +5921,10 @@ app.put('/api/admin/saas-saved-layouts/:id', requireAuth, requireAdmin, (req, re
     const { name, layout } = req.body || {};
     if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
     if (!validateSavedLayoutPayload(layout)) return res.status(400).json({ message: 'Invalid layout.' });
+    if (findSavedNameClash(getSaasSavedLayoutsForTable(row.tableKey),
+        { scope: row.scope, ownerUserId: row.ownerUserId, name, ignoreId: row.id })) {
+        return res.status(409).json({ message: savedNameTakenMessage('un acomodo guardado') });
+    }
     res.json({ layout: updateSaasSavedLayout(row.id, { name: name.trim(), layout }) });
 });
 
