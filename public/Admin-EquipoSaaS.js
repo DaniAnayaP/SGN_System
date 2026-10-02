@@ -49,78 +49,16 @@ let pendingVisibleStatuses = ['habilitado'];
 let saasUsers = [];
 let selectedUserId = null;
 
-// The SaaS permission catalog: one branch per SaaS screen (kept in sync by
-// hand with SAAS_SCREEN_GRANT_PATHS in Dashboard.js), each with its own
-// independent per-action leaves — same itemId/subItemId tuples
-// hasSaasGrant checks server-side throughout server.js. A bare
-// {itemId, subItemId: null} row (the "Ver" leaf here) is what
-// hasSaasScreenGrant in Dashboard.js also checks for sidebar/page
-// visibility — granting ANY other leaf under a screen implies Ver too (see
-// hasSaasGrant's own comment), so Ver alone means "can see it, nothing
-// else". Costo Accesos-Permisos has no Crear/Activar leaves — there's
-// nothing to create or activate on that screen, plans are created and
-// activated from Nuestros Planes. Nuestros Planes' Activar leaf keeps the
-// pre-existing 'activate' subItemId (not 'activar') since it's the same
-// grant POST /api/admin/plans/:id/activate already checks — renamed only
-// in its on-screen label ("Autorizar Planes" -> "Activar/Desactivar") to
-// match the other 2 screens' naming.
-const SAAS_PERMISSION_CATALOG = [
-    {
-        itemId: 'saas-clients', labelKey: 'menu.clientesRegistrados',
-        actions: [
-            { subItemId: null, labelKey: 'admin.saasActionView' },
-            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
-            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
-            { subItemId: 'activar', labelKey: 'admin.saasActionActivate' },
-            // Deliberately its own leaf, separate from editar/activar --
-            // hard-deletes a client and everything under it (see POST
-            // /api/admin/clients/:id/reset), only for resetting a TEST
-            // client back to zero. Nobody gets this just by already having
-            // Editar/Activar.
-            { subItemId: 'reset', labelKey: 'admin.saasActionReset' },
-        ],
-    },
-    {
-        itemId: 'saas-plans', labelKey: 'menu.plansRegistered',
-        actions: [
-            { subItemId: null, labelKey: 'admin.saasActionView' },
-            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
-            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
-            { subItemId: 'activate', labelKey: 'admin.saasActionActivate' },
-        ],
-    },
-    {
-        itemId: 'saas-apps', labelKey: 'menu.ourApps',
-        actions: [
-            { subItemId: null, labelKey: 'admin.saasActionView' },
-            { subItemId: 'editar', labelKey: 'admin.saasActionEdit' },
-            { subItemId: 'crear', labelKey: 'admin.saasActionCreate' },
-        ],
-    },
-    {
-        // Ver = puede entrar a la pantalla y ver la lista de archivos;
-        // Descargar es su propio leaf, separado, igual que "reset" en
-        // saas-clients -- ver QUÉ evidencia existe es mucho menos sensible
-        // que poder abrir la foto/documento real.
-        itemId: 'saas-backups', labelKey: 'menu.ourBackups',
-        actions: [
-            { subItemId: null, labelKey: 'admin.saasActionView' },
-            { subItemId: 'descargar', labelKey: 'admin.saasActionDownload' },
-        ],
-    },
-    {
-        // Ver = puede ver el listado de material de apoyo de cualquier
-        // cliente y descargarlo (leer un manual no es sensible); Subir es
-        // su propio leaf, ya que ese sí modifica el material real que ve
-        // el cliente -- misma separación que saas-backups arriba usa entre
-        // Ver y Descargar.
-        itemId: 'saas-material-apoyo', labelKey: 'menu.ourSupportMaterial',
-        actions: [
-            { subItemId: null, labelKey: 'admin.saasActionView' },
-            { subItemId: 'subir', labelKey: 'admin.saasActionUpload' },
-        ],
-    },
-];
+// The real access tree (replaces the old flat SAAS_PERMISSION_CATALOG,
+// 2026-10-02): walks window.SAAS_ADMIN_CATALOG (SaasAdminCatalog.js), the
+// SAME deep catalog Admin-ArbolMaestroSaaS.js uses for its own Estatus
+// tree, down to real columns/acciones/tableActions. A leaf's sub_item_id
+// is "<apartadoId>::<sufijo>" (c#/ta#/a# by position, same leafKey
+// convention that file already uses, minus its itemId prefix since itemId
+// is saas_user_grants' own column) -- see db.js's one-time migration
+// comment for the full old->new mapping and why the ORDER of
+// columnas/acciones/tableActions in SaasAdminCatalog.js must not change in
+// production (same accepted risk as the Estatus tree).
 
 function showError(el, message) {
     el.textContent = message;
@@ -794,17 +732,18 @@ newForm.addEventListener('submit', async (event) => {
 });
 
 // --- Access tree per SaaS account ----------------------------------------
-// Same .perm-tree-row markup PermissionTree.js/PermissionCostTree.js use
-// for every other checkbox tree in the app (chevron toggle + checkbox,
-// indented by depth) — NOT that component itself, since this tree's shape
-// is fixed (3 screens, up to 4 actions each) rather than read from
-// menu.json, so a small purpose-built renderer is simpler here than
-// reusing the department/área/apartado/pantalla/columna machinery built
-// for the much bigger client-side tree. Depth 0 = screen (its checkbox
-// checks/unchecks every action under it at once, indeterminate when only
-// some are), depth 1 = one action leaf.
+// Same .perm-tree-row markup PermissionTree.js/PermissionCostTree.js/
+// Admin-ArbolMaestroSaaS.js use for every other checkbox/chevron tree in
+// the app (chevron toggle + checkbox, indented by depth) -- NOT those
+// components themselves, same "small purpose-built renderer, not the
+// bigger shared machinery" reasoning Admin-ArbolMaestroSaaS.js's own
+// header comment gives for not reusing PermissionTree.js. hasGrant/
+// setGrant/buildPermTreeRow stay generic over plain {itemId, subItemId}
+// pairs regardless of which catalog is walked -- only renderTreeList and
+// its helpers below changed when this moved from the flat catalog to the
+// real tree.
 let treeGrants = [];
-let expandedScreens = new Set();
+let expandedRealNodes = new Set();
 
 function hasGrant(itemId, subItemId) {
     return treeGrants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : !g.subItemId));
@@ -850,27 +789,123 @@ function buildPermTreeRow(labelText, depth, toggle, checked, indeterminate, onCh
     return row;
 }
 
+// --- Real-tree walking helpers ------------------------------------------
+// Pure functions over SAAS_ADMIN_CATALOG -- same algorithm
+// Admin-ArbolMaestroSaaS.js already uses for its own Estatus tree
+// (nestedChildrenOf/buildNestedByColumn there), copied rather than
+// imported since that file is deliberately its own small renderer with no
+// shared module to pull from (see its own header comment). A modal
+// apartado only ever nests under the real column/acción that pops it up
+// (nestUnder.column, matched by exact label) -- the rare
+// nestUnder.classification case (just modal-tipo-giro today) has no
+// classification bands in THIS simpler tree, so it renders as a plain
+// extra child at the end of its host apartado's own leaf list instead.
+function nestedChildrenOf(screen, apartado) {
+    return screen.apartados.filter((a) => a.nestUnder && a.nestUnder.host === apartado.id);
+}
+function buildNestedByColumn(screen, apartado) {
+    const map = new Map();
+    nestedChildrenOf(screen, apartado).forEach((child) => {
+        if (!child.nestUnder.column) return;
+        const arr = map.get(child.nestUnder.column) || [];
+        arr.push(child);
+        map.set(child.nestUnder.column, arr);
+    });
+    return map;
+}
+function nestedWithoutColumn(screen, apartado) {
+    return nestedChildrenOf(screen, apartado).filter((a) => !a.nestUnder.column);
+}
+// columnas/tableActions/acciones each get their own position-stable suffix
+// prefix (c#/ta#/a#) -- same shape leafKey builds in Admin-ArbolMaestroSaaS.js.
+function buildRealLeaves(apartado) {
+    const leaves = [];
+    (apartado.columnas || []).forEach((label, idx) => leaves.push({ suffix: `c${idx}`, label }));
+    (apartado.tableActions || []).forEach((label, idx) => leaves.push({ suffix: `ta${idx}`, label }));
+    (apartado.acciones || []).forEach((label, idx) => leaves.push({ suffix: `a${idx}`, label }));
+    return leaves;
+}
+function realLeafSubItemId(apartado, leaf) {
+    return `${apartado.id}::${leaf.suffix}`;
+}
+// Recurses into nested modals so a host apartado's own rollup checkbox
+// covers everything nested under it too (same "a container's checkbox
+// reflects its whole subtree" expectation every other tree in this app
+// already has).
+function collectRealSubItemIds(screen, apartado) {
+    const own = buildRealLeaves(apartado).map((leaf) => realLeafSubItemId(apartado, leaf));
+    const nested = nestedChildrenOf(screen, apartado).flatMap((child) => collectRealSubItemIds(screen, child));
+    return [...own, ...nested];
+}
+
+// Renders `apartado`'s own header row (chevron + rollup checkbox) into
+// `rows`, recursing into its body when expanded. Used identically for a
+// screen's top-level apartados and for a nested modal popping up from one
+// of their columns/acciones -- both are just "an apartado with a label".
+function renderApartadoNode(screen, apartado, depth, rows) {
+    const nodeKey = `${screen.itemId}::${apartado.id}`;
+    const expanded = expandedRealNodes.has(nodeKey);
+    const subItemIds = collectRealSubItemIds(screen, apartado);
+    const checkedCount = subItemIds.filter((s) => hasGrant(screen.itemId, s)).length;
+    rows.push(buildPermTreeRow(
+        apartado.label, depth,
+        { expanded, onToggle: () => { if (expanded) expandedRealNodes.delete(nodeKey); else expandedRealNodes.add(nodeKey); renderTreeList(); } },
+        subItemIds.length > 0 && checkedCount === subItemIds.length, checkedCount > 0 && checkedCount < subItemIds.length,
+        (checked) => subItemIds.forEach((s) => setGrant(screen.itemId, s, checked)),
+    ));
+    if (!expanded) return;
+    renderApartadoLeaves(screen, apartado, depth + 1, rows);
+}
+
+function renderApartadoLeaves(screen, apartado, depth, rows) {
+    const nestedByColumn = buildNestedByColumn(screen, apartado);
+    buildRealLeaves(apartado).forEach((leaf) => {
+        const subItemId = realLeafSubItemId(apartado, leaf);
+        const childApartados = nestedByColumn.get(leaf.label) || [];
+        const nodeKey = `${screen.itemId}::${subItemId}`;
+        const hasChildren = childApartados.length > 0;
+        const expanded = expandedRealNodes.has(nodeKey);
+        rows.push(buildPermTreeRow(
+            leaf.label, depth,
+            hasChildren ? { expanded, onToggle: () => { if (expanded) expandedRealNodes.delete(nodeKey); else expandedRealNodes.add(nodeKey); renderTreeList(); } } : null,
+            hasGrant(screen.itemId, subItemId), false,
+            (checked) => setGrant(screen.itemId, subItemId, checked),
+        ));
+        if (hasChildren && expanded) {
+            childApartados.forEach((child) => renderApartadoNode(screen, child, depth + 1, rows));
+        }
+    });
+    nestedWithoutColumn(screen, apartado).forEach((child) => renderApartadoNode(screen, child, depth, rows));
+}
+
 function renderTreeList() {
     treeList.innerHTML = '';
-    SAAS_PERMISSION_CATALOG.forEach((screen) => {
-        const subItemIds = screen.actions.map((a) => a.subItemId);
-        const checkedCount = subItemIds.filter((subItemId) => hasGrant(screen.itemId, subItemId)).length;
-        const expanded = expandedScreens.has(screen.itemId);
-        treeList.appendChild(buildPermTreeRow(
-            Dashboard.t(screen.labelKey), 0,
-            { expanded, onToggle: () => (expanded ? expandedScreens.delete(screen.itemId) : expandedScreens.add(screen.itemId)) },
-            checkedCount === subItemIds.length, checkedCount > 0 && checkedCount < subItemIds.length,
-            (checked) => subItemIds.forEach((subItemId) => setGrant(screen.itemId, subItemId, checked)),
-        ));
-        if (!expanded) return;
-        screen.actions.forEach((action) => {
-            treeList.appendChild(buildPermTreeRow(
-                Dashboard.t(action.labelKey), 1, null,
-                hasGrant(screen.itemId, action.subItemId), false,
-                (checked) => setGrant(screen.itemId, action.subItemId, checked),
+    const rows = [];
+    (window.SAAS_ADMIN_CATALOG || []).forEach((group) => {
+        const groupHeader = document.createElement('div');
+        groupHeader.className = 'perm-tree-row perm-tree-depth-0 perm-tree-row-static';
+        const groupLabel = document.createElement('span');
+        groupLabel.className = 'perm-tree-static-label';
+        groupLabel.textContent = Dashboard.t(group.labelKey);
+        groupHeader.appendChild(groupLabel);
+        rows.push(groupHeader);
+
+        group.screens.forEach((screen) => {
+            const nodeKey = screen.itemId;
+            const expanded = expandedRealNodes.has(nodeKey);
+            const topApartados = screen.apartados.filter((a) => !a.nestUnder);
+            const subItemIds = topApartados.flatMap((a) => collectRealSubItemIds(screen, a));
+            const checkedCount = subItemIds.filter((s) => hasGrant(screen.itemId, s)).length;
+            rows.push(buildPermTreeRow(
+                Dashboard.t(screen.labelKey), 1,
+                { expanded, onToggle: () => { if (expanded) expandedRealNodes.delete(nodeKey); else expandedRealNodes.add(nodeKey); renderTreeList(); } },
+                subItemIds.length > 0 && checkedCount === subItemIds.length, checkedCount > 0 && checkedCount < subItemIds.length,
+                (checked) => subItemIds.forEach((s) => setGrant(screen.itemId, s, checked)),
             ));
+            if (expanded) topApartados.forEach((apartado) => renderApartadoNode(screen, apartado, 2, rows));
         });
     });
+    rows.forEach((row) => treeList.appendChild(row));
 }
 
 async function openTreeModal(user) {
@@ -884,7 +919,7 @@ async function openTreeModal(user) {
         const data = await res.json();
         treeGrants = data.grants || [];
         pendingVisibleStatuses = data.visibleStatuses && data.visibleStatuses.length ? data.visibleStatuses : ['habilitado'];
-        expandedScreens = new Set();
+        expandedRealNodes = new Set();
         renderTreeList();
         window.VisibleStatusesChips.render(treeVisibleStatuses, pendingVisibleStatuses, (next) => { pendingVisibleStatuses = next; });
         treeModal.hidden = false;

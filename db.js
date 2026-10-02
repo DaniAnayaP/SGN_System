@@ -2307,6 +2307,47 @@ const SAAS_TEST_USERNAME = 'Pruebas_SGN';
 // the client side's own Pruebas_<Abreviatura> pattern. Renaming (not
 // delete+recreate) keeps its id, password, is_test_account,
 // visible_statuses and any grants/history already on it intact -- only the
+// One-time migration, 2026-10-02: Equipo SaaS's "Accesos de esta cuenta"
+// moved from a flat 5-screen catalog (SAAS_PERMISSION_CATALOG in
+// Admin-EquipoSaaS.js, sub_item_id values like 'editar'/'crear'/'activar')
+// to the real deep tree (SAAS_ADMIN_CATALOG in SaasAdminCatalog.js),
+// sub_item_id now shaped "<apartadoId>::<sufijo>" (same leafKey convention
+// Admin-ArbolMaestroSaaS.js already uses for its own Estatus tree, minus
+// the itemId prefix since itemId is its own column here). Every row below
+// is the real leaf that used to be meant by the old flat value -- see
+// SaasAdminCatalog.js for the exact acciones/tableActions arrays each one
+// resolves against (index-stable, same risk already accepted for the
+// Estatus tree: don't reorder those arrays in production). Without this,
+// every GEIPSA staff account's real access silently drops to zero the
+// moment server.js starts checking the new leaf keys instead (empty =
+// no access, 2026-09-28 policy) -- this is live, daily-used data, not a
+// cosmetic migration.
+const SAAS_GRANT_LEGACY_TO_REAL_TREE = [
+    ['saas-clients', 'crear', 'tabla::a0'],
+    ['saas-clients', 'editar', 'tabla::ta2'],
+    ['saas-clients', 'activar', 'tabla::ta3'],
+    ['saas-clients', 'reset', 'tabla::ta5'],
+    ['saas-plans', 'crear', 'tabla::a0'],
+    ['saas-plans', 'editar', 'tabla::ta2'],
+    ['saas-plans', 'activate', 'tabla::ta3'],
+    ['saas-business-sectors', 'editar', 'tabla::ta3'],
+    ['saas-apps', 'crear', 'catalogo::a0'],
+    ['saas-apps', 'editar', 'catalogo::a1'],
+    ['saas-backups', 'descargar', 'tabla::a1'],
+    ['saas-material-apoyo', 'subir', 'tabla::a1'],
+    // 'saas-*' rows with sub_item_id IS NULL ("Ver") need no translation --
+    // hasSaasGrant treats a null/falsy subItemId as "any grant under this
+    // itemId", which the new tree's leaves still satisfy unchanged.
+];
+{
+    const migrate = db.prepare('UPDATE saas_user_grants SET sub_item_id = ? WHERE item_id = ? AND sub_item_id = ?');
+    let migrated = 0;
+    for (const [itemId, oldSubItemId, newSubItemId] of SAAS_GRANT_LEGACY_TO_REAL_TREE) {
+        migrated += migrate.run(newSubItemId, itemId, oldSubItemId).changes;
+    }
+    if (migrated > 0) console.log(`[db] Migrated ${migrated} saas_user_grants row(s) to the real-tree leaf keys.`);
+}
+
 // username/email/name change. Must run before the block below, or that
 // block would see "no Pruebas_SGN yet" and insert a brand-new row while
 // this one still exists under its old name, then collide with it here.
