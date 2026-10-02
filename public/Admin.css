@@ -4716,13 +4716,113 @@ button.data-table-layout-item{
     position: sticky;
     bottom: -1.5rem;
     z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
     margin: 0.5rem -1.5rem -1.5rem;
     padding: 0.7rem 1.5rem 1rem;
     background: var(--color-surface);
     border-top: 1px solid var(--color-border);
 }
-.data-table-search-footer .data-table-arrange-save-btn{
-    margin-top: 0;
+.data-table-search-footer > *{
+    margin: 0;
+}
+.data-table-search-footer .data-table-arrange-block-btn,
+.data-table-search-footer .data-table-arrange-segmented{
+    margin: 0;
+}
+.data-table-search-footer-row{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+.data-table-search-cancel{
+    margin-left: auto;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.76rem;
+}
+.data-table-search-applied{
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid color-mix(in srgb, var(--color-success, #0f8a6b) 45%, var(--color-border));
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, var(--color-success, #0f8a6b) 9%, var(--color-surface));
+    font-size: 0.72rem;
+    color: var(--color-text-primary);
+}
+.data-table-search-applied i{
+    color: var(--color-success, #0f8a6b);
+    font-size: 1rem;
+}
+.data-table-search-applied span{
+    color: var(--color-text-secondary);
+}
+/* La regla escrita en la tarjeta de un filtro, y cuántas filas la cumplen hoy. */
+.data-table-search-rule{
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.45rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--color-success, #0f8a6b) 45%, var(--color-border));
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, var(--color-success, #0f8a6b) 9%, var(--color-surface));
+    font-size: 0.72rem;
+    color: var(--color-text-primary);
+}
+.data-table-search-rule i{
+    color: var(--color-success, #0f8a6b);
+    font-size: 1rem;
+}
+.data-table-search-rule-count{
+    margin-left: auto;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-success, #0f8a6b);
+}
+.data-table-search-rule-count.zero{
+    color: #b7791f;
+}
+.data-table-search-rule-zero{
+    margin: 0.4rem 0 0;
+    padding: 0.45rem 0.6rem;
+    border: 1px dashed color-mix(in srgb, #b7791f 55%, var(--color-border));
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, #b7791f 8%, var(--color-surface));
+    font-size: 0.7rem;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+}
+.data-table-search-rule-zero b{
+    color: var(--color-text-primary);
+}
+.data-table-search-optlabel{
+    margin: 0.55rem 0 0.1rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+}
+.data-table-search-optlabel i{
+    font-style: normal;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.data-table-search-empty-list{
+    padding: 0.5rem;
+    border: 1px dashed var(--color-border);
+    border-radius: 0.5rem;
+    text-align: center;
+    font-size: 0.68rem;
+    color: var(--color-text-secondary);
 }
 .data-table-search-empty{
     margin: 0;

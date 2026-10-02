@@ -3200,10 +3200,34 @@ function textRuleMatches(mode, query, value) {
     return mode === 'startsWith' ? v.startsWith(q) : v.includes(q);
 }
 
+// Las fechas de la tabla se ven como 2026-10-01 (la mayoría) o como
+// 01/oct/2026 (la columna Fecha de Control Interno); las dos se comparan como
+// ISO contra el Desde/Hasta.
+const RULE_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const RULE_MONTH_ENGLISH = { jan: 0, apr: 3, aug: 7, dec: 11 };
+
+function cellDateToIso(value) {
+    const v = String(value ?? '').trim();
+    if (ISO_DATE_RE.test(v)) return v;
+    const m = v.match(/^(\d{1,2})\/([A-Za-zÀ-ÿ]{3,4})\.?\/(\d{4})$/);
+    if (!m) return null;
+    const abbr = m[2].toLowerCase().slice(0, 3);
+    let month = RULE_MONTHS.indexOf(abbr);
+    if (month === -1) month = RULE_MONTH_ENGLISH[abbr] ?? -1;
+    if (month === -1) return null;
+    return `${m[3]}-${String(month + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
+function formatRuleDate(iso) {
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}/${RULE_MONTHS[Number(m[2]) - 1]}/${m[1]}` : String(iso);
+}
+
 function rangeRuleMatches(from, to, value) {
     if (!from && !to) return true;
-    if (!ISO_DATE_RE.test(value)) return false; // sin fecha no entra a un rango
-    return !(from && value < from) && !(to && value > to);
+    const iso = cellDateToIso(value);
+    if (!iso) return false; // sin fecha no entra a un rango
+    return !(from && iso < from) && !(to && iso > to);
 }
 
 function isColumnRuleActive(rule) {
@@ -3220,11 +3244,47 @@ function columnRuleMatches(rule, value) {
 
 function describeColumnRule(rule) {
     if (rule.kind === 'range') {
-        if (rule.from && rule.to) return `${rule.from} – ${rule.to}`;
-        return rule.from ? `${t('main.filterDateFrom')} ${rule.from}` : `${t('main.filterDateTo')} ${rule.to}`;
+        if (rule.from && rule.to) return `${formatRuleDate(rule.from)} – ${formatRuleDate(rule.to)}`;
+        return rule.from
+            ? `${t('main.filterDateFrom')} ${formatRuleDate(rule.from)}`
+            : `${t('main.filterDateTo')} ${formatRuleDate(rule.to)}`;
     }
     const modeKey = { startsWith: 'main.filterModeStartsWith', equals: 'main.filterModeEquals' }[rule.mode] || 'main.filterModeContains';
     return `${t(modeKey)} "${String(rule.text).trim()}"`;
+}
+
+// La regla como frase: "contiene «ADMIN»", "del 01/oct/2026 al 31/oct/2026".
+function describeRuleLine(rule) {
+    if (rule.kind === 'range') {
+        if (rule.from && rule.to) return t('main.savedSearchRuleFromTo', { from: formatRuleDate(rule.from), to: formatRuleDate(rule.to) });
+        return rule.from
+            ? t('main.savedSearchRuleFrom', { from: formatRuleDate(rule.from) })
+            : t('main.savedSearchRuleTo', { to: formatRuleDate(rule.to) });
+    }
+    const modeKey = { startsWith: 'main.filterModeStartsWith', equals: 'main.filterModeEquals' }[rule.mode] || 'main.filterModeContains';
+    return `${t(modeKey).toLowerCase()} «${String(rule.text).trim()}»`;
+}
+
+// Columna de fecha para el editor: la de Control Interno aunque aún no tenga
+// registros, o cualquiera cuyos valores sean todos fechas (2026-10-01 o
+// 01/oct/2026).
+function isEditorDateColumn(key, values) {
+    if (key === 'colSysFecha') return true;
+    const filled = values.filter((v) => v !== '' && v !== '—');
+    return filled.length > 0 && filled.every((v) => cellDateToIso(v));
+}
+
+// Cuántas filas de la tabla cumplen hoy la regla (y las casillas, si hay).
+function countRuleRows(tableId, key, rule, selected) {
+    const state = dataTableColumnState.get(tableId);
+    const rows = Array.from(state?.table.tBodies[0]?.rows || []).filter((tr) => !tr.querySelector('td.data-table-empty-cell'));
+    let matching = 0;
+    rows.forEach((tr) => {
+        const td = tr.querySelector(`[data-col="${key}"]`);
+        const value = td ? td.textContent.trim() : '';
+        if ((!selected.size || selected.has(value)) && columnRuleMatches(rule, value)) matching += 1;
+    });
+    return { matching, total: rows.length };
 }
 
 // Rows hide via a CSS class (see .data-table-row-col-filtered), never the
@@ -5911,10 +5971,16 @@ let searchEditorModal = null;
 //   preservedFields, activeTab, query, scope }
 let searchEditorState = null;
 
-function closeSavedSearchEditor() {
+function closeSavedSearchEditor(saved) {
     if (!searchEditorModal) return;
+    const state = searchEditorState;
     searchEditorModal.hidden = true;
     searchEditorState = null;
+    // Terminar Filtrado deja los filtros puestos en la tabla de atrás; si se
+    // cierra sin guardar, la tabla vuelve a como estaba.
+    if (state?.previewApplied && saved !== true) {
+        setTableColumnFilters(state.tableId, state.restore.columnFilters, state.restore.columnRules);
+    }
 }
 
 function ensureSearchEditorModal() {
@@ -5948,20 +6014,23 @@ function ensureSearchEditorModal() {
                 <p class="data-table-arrange-section-label">${t('main.savedSearchFiltersLabel')}</p>
                 <div class="data-table-search-filters" data-role="filters"></div>
 
-                <div data-role="scope-block">
-                    <div data-role="admin-section" class="data-table-arrange-segmented" hidden>
-                        <label><input type="radio" name="saved-search-audience" value="self" checked> <span>${t('main.savedSearchAudienceSelf')}</span></label>
-                        <label><input type="radio" name="saved-search-audience" value="assign"> <span>${t('main.savedSearchAudienceAssign')}</span></label>
-                    </div>
-                    <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
-                </div>
+                <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
                 <div class="data-table-search-footer">
                     <p data-role="error" class="admin-error" role="alert" hidden></p>
+                    <div data-role="applied" class="data-table-search-applied" hidden></div>
+                    <button type="button" class="btn data-table-arrange-block-btn" data-role="terminar" disabled>${t('main.savedSearchTerminar')}</button>
+                    <div class="data-table-search-footer-row">
+                        <div data-role="scope-block">
+                            <div data-role="admin-section" class="data-table-arrange-segmented" hidden>
+                                <label><input type="radio" name="saved-search-audience" value="self" checked> <span>${t('main.savedSearchAudienceSelf')}</span></label>
+                                <label><input type="radio" name="saved-search-audience" value="assign"> <span>${t('main.savedSearchAudienceAssign')}</span></label>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary data-table-search-cancel" data-role="close">${t('admin.cancel')}</button>
+                    </div>
+                    <button type="button" class="btn data-table-arrange-block-btn data-table-arrange-assign-btn" data-role="terminar-asignacion" hidden>${t('main.arrangeTerminarAsignacion')}</button>
                     <button type="button" class="btn data-table-arrange-block-btn data-table-arrange-save-btn" data-role="save" disabled>${t('main.savedSearchSaveBtn')}</button>
                     <p data-role="lock-note" class="data-table-arrange-lock-note"></p>
-                    <div class="admin-form-actions">
-                        <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -5972,7 +6041,8 @@ function ensureSearchEditorModal() {
         titleEl: q('title'), nameLabel: q('name-label'), nameInput: q('name'), searchInput: q('search'),
         tabsEl: q('tabs'), rowsEl: q('rows'), filtersEl: q('filters'), scopeBlock: q('scope-block'),
         adminSection: q('admin-section'), audiencePanel: q('audience-panel'), errorEl: q('error'),
-        saveBtn: q('save'), lockNote: q('lock-note'),
+        saveBtn: q('save'), lockNote: q('lock-note'), applied: q('applied'),
+        terminarBtn: q('terminar'), terminarAsignacionBtn: q('terminar-asignacion'),
     };
     const refs = searchEditorModal._refs;
 
@@ -5993,10 +6063,46 @@ function ensureSearchEditorModal() {
                 refs.audiencePanel.hidden = false;
                 if (isSaasTableKey(searchEditorState.tableId)) buildSaasLayoutAudiencePanel(refs.audiencePanel);
                 else buildSavedViewAudiencePanel(refs.audiencePanel);
+                refs.terminarAsignacionBtn.hidden = false;
             } else {
                 refs.audiencePanel.hidden = true;
+                refs.terminarAsignacionBtn.hidden = true;
             }
+            searchEditorState.terminarAsignacionDone = false;
+            updateSearchEditorGating();
         });
+    });
+
+    // Terminar Filtrado: pone los filtros en la tabla de atrás (aunque quede
+    // vacía) para ver cómo queda, y habilita el paso siguiente.
+    refs.terminarBtn.addEventListener('click', () => {
+        const { tableId } = searchEditorState;
+        const { columnFilters, columnRules } = collectSearchEditorFilter();
+        setTableColumnFilters(tableId, columnFilters, columnRules);
+        searchEditorState.previewApplied = true;
+        searchEditorState.terminarFiltradoDone = true;
+        const { shown, total } = countVisibleTableRows(tableId);
+        refs.applied.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+        const title = document.createElement('b');
+        title.textContent = t('main.savedSearchApplied');
+        const count = document.createElement('span');
+        count.textContent = '· ' + t('main.savedSearchAppliedCount', { count: String(shown), total: String(total) });
+        refs.applied.append(title, count);
+        refs.applied.hidden = false;
+        refs.errorEl.hidden = true;
+        updateSearchEditorGating();
+    });
+
+    refs.terminarAsignacionBtn.addEventListener('click', () => {
+        if (!hasAnyAudienceTarget()) {
+            refs.errorEl.textContent = t(isSaasTableKey(searchEditorState.tableId)
+                ? 'main.savedSearchAudienceSummaryEmptySaas' : 'main.savedSearchAudienceSummaryEmpty');
+            refs.errorEl.hidden = false;
+            return;
+        }
+        refs.errorEl.hidden = true;
+        searchEditorState.terminarAsignacionDone = true;
+        updateSearchEditorGating();
     });
     refs.saveBtn.addEventListener('click', saveSavedSearch);
 }
@@ -6090,7 +6196,17 @@ function renderSearchEditorRows() {
     });
 }
 
+// Cualquier cambio en los filtros obliga a volver a tocar Terminar Filtrado.
+function onSearchEditorFilterChange() {
+    if (!searchEditorState) return;
+    searchEditorState.terminarFiltradoDone = false;
+    searchEditorModal._refs.applied.hidden = true;
+    updateSearchEditorGating();
+}
+
 function toggleSearchEditorFilter(key) {
+    searchEditorState.terminarFiltradoDone = false;
+    searchEditorModal._refs.applied.hidden = true;
     const { filters, expanded } = searchEditorState;
     if (filters.has(key)) {
         filters.delete(key);
@@ -6129,7 +6245,7 @@ function summarizeFilterCard(selected, total, rule) {
 function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
     const distinctValues = [...new Set([...getColumnDistinctValues(tableId, key), ...selected])]
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-    const asRange = rule.kind ? rule.kind === 'range' : isDateColumn(distinctValues);
+    const asRange = rule.kind ? rule.kind === 'range' : isEditorDateColumn(key, distinctValues);
     rule.kind = asRange ? 'range' : 'text';
     const body = document.createElement('div');
     body.className = 'data-table-search-filter-body';
@@ -6157,8 +6273,8 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
         toLabel.textContent = t('main.filterDateTo');
         searchRow.append(fromLabel, fromField, toLabel, toField);
         rowMatches = (value) => rangeRuleMatches(rule.from, rule.to, value);
-        fromField.addEventListener('input', () => { rule.from = fromField.value; refreshList(); onChange(); });
-        toField.addEventListener('input', () => { rule.to = toField.value; refreshList(); onChange(); });
+        fromField.addEventListener('input', () => { rule.from = fromField.value; refreshList(); change(); });
+        toField.addEventListener('input', () => { rule.to = toField.value; refreshList(); change(); });
     } else {
         const MODES = [
             { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
@@ -6201,7 +6317,7 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
                 current.textContent = t(m.labelKey);
                 modeMenu.hidden = true;
                 refreshList();
-                onChange();
+                change();
             });
             modeMenu.appendChild(btn);
             return btn;
@@ -6209,9 +6325,31 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
         searchRow.appendChild(modeMenu);
         modeBtn.addEventListener('click', () => { modeMenu.hidden = !modeMenu.hidden; });
         rowMatches = (value) => textRuleMatches(mode, searchInput.value, value);
-        searchInput.addEventListener('input', () => { rule.text = searchInput.value; refreshList(); onChange(); });
+        searchInput.addEventListener('input', () => { rule.text = searchInput.value; refreshList(); change(); });
     }
     body.appendChild(searchRow);
+
+    // Lo escrito (o el rango) ES el filtro: aquí se ve la regla tal cual y
+    // cuántas filas la cumplen hoy, aunque sean cero.
+    const ruleLine = document.createElement('div');
+    ruleLine.className = 'data-table-search-rule';
+    ruleLine.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+    const ruleText = document.createElement('span');
+    const ruleCount = document.createElement('span');
+    ruleCount.className = 'data-table-search-rule-count';
+    ruleLine.append(ruleText, ruleCount);
+    const zeroBox = document.createElement('p');
+    zeroBox.className = 'data-table-search-rule-zero';
+    const zeroTitle = document.createElement('b');
+    zeroTitle.textContent = t('main.savedSearchRuleZeroTitle');
+    zeroBox.append(zeroTitle, document.createTextNode(' ' + t('main.savedSearchRuleZeroBody')));
+    const optLabel = document.createElement('p');
+    optLabel.className = 'data-table-search-optlabel';
+    const optHint = document.createElement('i');
+    optHint.textContent = ' ' + t('main.savedSearchOptionalHint');
+    optLabel.append(document.createTextNode(t('main.savedSearchOptionalValues')), optHint);
+    body.append(ruleLine, zeroBox, optLabel);
+    const columnLabel = dataTableColumnState.get(tableId)?.labels[key] || key;
 
     const allRow = document.createElement('label');
     allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
@@ -6239,7 +6377,7 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
         cb.addEventListener('change', () => {
             if (cb.checked) selected.add(value); else selected.delete(value);
             syncAll();
-            onChange();
+            change();
         });
         const span = document.createElement('span');
         span.textContent = value || '—';
@@ -6248,6 +6386,30 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
         checkboxes.push(cb);
     });
     body.appendChild(list);
+    const emptyList = document.createElement('div');
+    emptyList.className = 'data-table-search-empty-list';
+    emptyList.textContent = t('main.savedSearchNoValuesYet');
+    emptyList.hidden = true;
+    body.appendChild(emptyList);
+    function updateRuleInfo() {
+        const active = isColumnRuleActive(rule);
+        ruleLine.hidden = !active;
+        optLabel.hidden = !active;
+        zeroBox.hidden = true;
+        emptyList.hidden = true;
+        if (!active) return;
+        const line = describeRuleLine(rule);
+        ruleText.textContent = t('main.savedSearchRuleLine', { rule: rule.kind === 'range' ? line : `${columnLabel} ${line}` });
+        const { matching, total } = countRuleRows(tableId, key, rule, selected);
+        ruleCount.textContent = t('main.savedSearchRuleCount', { count: String(matching), total: String(total) });
+        ruleCount.classList.toggle('zero', matching === 0);
+        zeroBox.hidden = matching !== 0;
+        emptyList.hidden = [...list.querySelectorAll('.data-table-col-filter-option')].some((row) => !row.hidden);
+    }
+    function change() {
+        updateRuleInfo();
+        onChange();
+    }
     refreshList = () => {
         list.querySelectorAll('.data-table-col-filter-option').forEach((row) => { row.hidden = !rowMatches(row.dataset.searchValue); });
     };
@@ -6257,10 +6419,11 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
             if (allCheckbox.checked) selected.add(distinctValues[i]); else selected.delete(distinctValues[i]);
         });
         allCheckbox.indeterminate = false;
-        onChange();
+        change();
     });
     syncAll();
     refreshList();
+    updateRuleInfo();
     return { body, total: distinctValues.length };
 }
 
@@ -6314,7 +6477,7 @@ function renderSearchEditorFilters() {
             searchEditorState.rules.set(key, { kind: null, mode: 'contains', text: '', from: '', to: '' });
         }
         const rule = searchEditorState.rules.get(key);
-        const { body, total } = buildSearchFilterBody(searchEditorState.tableId, key, selected, updateSearchEditorGating, rule);
+        const { body, total } = buildSearchFilterBody(searchEditorState.tableId, key, selected, onSearchEditorFilterChange, rule);
         if (open) {
             card.appendChild(body);
         } else {
@@ -6334,19 +6497,26 @@ function renderSearchEditorFilters() {
     updateSearchEditorGating();
 }
 
-// Guardar se habilita con nombre, al menos un filtro, y en cada filtro un
-// texto/rango escrito o al menos un valor marcado.
+// Igual que Acomodo: "Terminar Filtrado" se habilita cuando hay al menos un
+// filtro y cada uno tiene un texto, un rango o valores marcados; Guardar, hasta
+// haberlo tocado (y, con "Asignar a…", "Terminar Asignación") y haber nombrado
+// la búsqueda.
 function updateSearchEditorGating() {
     if (!searchEditorState) return;
-    const { nameInput, saveBtn, lockNote } = searchEditorModal._refs;
-    const filters = [...searchEditorState.filters.entries()];
+    const state = searchEditorState;
+    const { nameInput, saveBtn, lockNote, terminarBtn } = searchEditorModal._refs;
+    const filters = [...state.filters.entries()];
     const hasFilter = filters.length > 0;
-    const allHaveValues = filters.every(([key, set]) => set.size > 0 || isColumnRuleActive(searchEditorState.rules.get(key)));
+    const allDefined = filters.every(([key, set]) => set.size > 0 || isColumnRuleActive(state.rules.get(key)));
     const hasName = nameInput.value.trim() !== '';
-    saveBtn.disabled = !(hasFilter && allHaveValues && hasName);
+    const needsAssignment = state.scope === 'global';
+    terminarBtn.disabled = !(hasFilter && allDefined);
+    saveBtn.disabled = !(hasName && state.terminarFiltradoDone && (!needsAssignment || state.terminarAsignacionDone));
     let note = '';
     if (!hasFilter) note = t('main.savedSearchNeedFilter');
-    else if (!allHaveValues) note = t('main.savedSearchNeedValues');
+    else if (!allDefined) note = t('main.savedSearchNeedValues');
+    else if (!state.terminarFiltradoDone) note = t('main.savedSearchGuardarLockedHint');
+    else if (needsAssignment && !state.terminarAsignacionDone) note = t('main.arrangeGuardarLockedHintAssign');
     else if (!hasName) note = t('main.savedSearchNameRequired');
     lockNote.textContent = note;
     lockNote.hidden = !note;
@@ -6375,6 +6545,10 @@ function openSavedSearchEditor(tableId, search = null) {
         editingId: editing ? search.id : null,
         filters,
         rules,
+        terminarFiltradoDone: false,
+        terminarAsignacionDone: false,
+        previewApplied: false,
+        restore: collectCurrentFilterSnapshot(tableId),
         expanded: new Set(),
         preservedFields: editing ? { ...(search.filter?.fields || {}) } : {},
         activeTab: presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED,
@@ -6392,6 +6566,8 @@ function openSavedSearchEditor(tableId, search = null) {
     savedViewAudienceSelection = new Map(SAVED_VIEW_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
     refs.adminSection.hidden = isSaasTableKey(tableId) ? !currentUser?.isSaasSuperAdmin : !currentUser?.isClientAdmin;
     refs.audiencePanel.hidden = true;
+    refs.applied.hidden = true;
+    refs.terminarAsignacionBtn.hidden = true;
     searchEditorModal.querySelectorAll('input[name="saved-search-audience"]').forEach((r) => { r.checked = r.value === 'self'; });
 
     renderSearchEditorTabs();
@@ -6401,16 +6577,9 @@ function openSavedSearchEditor(tableId, search = null) {
     searchEditorModal.hidden = false;
 }
 
-async function saveSavedSearch() {
-    const { nameInput, errorEl } = searchEditorModal._refs;
-    const { tableId, editingId, filters, rules, preservedFields } = searchEditorState;
-    errorEl.hidden = true;
-    const name = nameInput.value.trim();
-    if (!name) {
-        errorEl.textContent = t('main.savedSearchNameRequired');
-        errorEl.hidden = false;
-        return;
-    }
+// Lo que el editor tiene armado, en el formato que se guarda y se aplica.
+function collectSearchEditorFilter() {
+    const { tableId, filters, rules } = searchEditorState;
     const columnFilters = {};
     const columnRules = {};
     filters.forEach((set, key) => {
@@ -6428,11 +6597,25 @@ async function saveSavedSearch() {
         }
         if (values.length) columnFilters[key] = values;
     });
+    return { columnFilters, columnRules };
+}
+
+async function saveSavedSearch() {
+    const { nameInput, errorEl } = searchEditorModal._refs;
+    const { tableId, editingId, preservedFields } = searchEditorState;
+    errorEl.hidden = true;
+    const name = nameInput.value.trim();
+    if (!name) {
+        errorEl.textContent = t('main.savedSearchNameRequired');
+        errorEl.hidden = false;
+        return;
+    }
+    const { columnFilters, columnRules } = collectSearchEditorFilter();
     const filter = { fields: preservedFields, columnFilters, columnRules };
     const showError = (message) => { errorEl.textContent = message; errorEl.hidden = false; };
     const finish = (saved) => {
         // Queda aplicada: la tabla ya se ve filtrada y el nombre se escribe en el icono.
-        closeSavedSearchEditor();
+        closeSavedSearchEditor(true);
         applySavedSearch(tableId, saved);
         showToast(t('main.changeSaved'), 'success');
     };
@@ -6510,6 +6693,35 @@ function getSavedSearchFilterBar(tableId) {
     return bar?.classList?.contains('filter-bar') ? bar : null;
 }
 
+// Pone estos filtros por columna en la tabla (los que ya no existan se
+// ignoran) y marca los encabezados que quedan filtrados.
+function setTableColumnFilters(tableId, columnFilters, columnRules) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const existingKeys = new Set(getDataTableColumnKeys(state.table));
+    const newFilters = new Map();
+    Object.entries(columnFilters || {}).forEach(([key, values]) => {
+        if (existingKeys.has(key)) newFilters.set(key, new Set(values));
+    });
+    const newRules = new Map();
+    Object.entries(columnRules || {}).forEach(([key, rule]) => {
+        if (existingKeys.has(key) && isColumnRuleActive(rule)) newRules.set(key, { ...rule });
+    });
+    state.columnFilters = newFilters;
+    state.columnRules = newRules;
+    applyColumnValueFilters(tableId);
+    getHeaderRow(state.table).querySelectorAll('th[data-col]').forEach((th) => {
+        updateColumnFilterIndicator(th, newFilters.has(th.dataset.col) || newRules.has(th.dataset.col));
+    });
+}
+
+// Filas de la tabla que se ven con los filtros por columna puestos.
+function countVisibleTableRows(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const rows = Array.from(state?.table.tBodies[0]?.rows || []).filter((tr) => !tr.querySelector('td.data-table-empty-cell'));
+    return { shown: rows.filter((tr) => !tr.classList.contains('data-table-row-col-filtered')).length, total: rows.length };
+}
+
 function collectCurrentFilterSnapshot(tableId) {
     const fields = {};
     getSavedSearchFilterBar(tableId)?.querySelectorAll('input[id], select[id]').forEach((el) => { fields[el.id] = el.value; });
@@ -6543,21 +6755,7 @@ function applySavedSearch(tableId, search) {
     }
     const state = dataTableColumnState.get(tableId);
     if (state) {
-        const existingKeys = new Set(getDataTableColumnKeys(state.table));
-        const newFilters = new Map();
-        Object.entries(search.filter?.columnFilters || {}).forEach(([key, values]) => {
-            if (existingKeys.has(key)) newFilters.set(key, new Set(values));
-        });
-        state.columnFilters = newFilters;
-        const newRules = new Map();
-        Object.entries(search.filter?.columnRules || {}).forEach(([key, rule]) => {
-            if (existingKeys.has(key) && isColumnRuleActive(rule)) newRules.set(key, { ...rule });
-        });
-        state.columnRules = newRules;
-        applyColumnValueFilters(tableId);
-        getHeaderRow(state.table).querySelectorAll('th[data-col]').forEach((th) => {
-            updateColumnFilterIndicator(th, newFilters.has(th.dataset.col) || newRules.has(th.dataset.col));
-        });
+        setTableColumnFilters(tableId, search.filter?.columnFilters, search.filter?.columnRules);
         if (usesPanel) state.wrapper?.previousElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'true');
     }
     sizeDataTableWrappers();
