@@ -4816,6 +4816,24 @@ button.data-table-layout-item{
     text-transform: none;
     letter-spacing: 0;
 }
+/* Desde–Hasta: los campos van en la misma fila del buscador, y si no caben
+   (celular, semana + año) la fila baja. */
+.data-table-search-filter-body .data-table-col-filter-search-row{
+    flex-wrap: wrap;
+}
+.data-table-search-range{
+    display: contents;
+}
+.data-table-search-week{
+    display: flex;
+    flex: 1 1 0;
+    gap: 0.25rem;
+    min-width: 0;
+}
+.data-table-search-week input{
+    flex: 1 1 0;
+    min-width: 0;
+}
 .data-table-search-empty-list{
     padding: 0.5rem;
     border: 1px dashed var(--color-border);

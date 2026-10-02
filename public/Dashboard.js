@@ -3181,12 +3181,15 @@ function isDateColumn(distinctValues) {
     return nonEmpty.length > 0 && nonEmpty.every((v) => ISO_DATE_RE.test(v));
 }
 
-// Regla de una columna (texto o rango de fechas): la otra forma de filtrar,
-// además de marcar valores uno por uno. "Contiene GRUPO" sigue valiendo para
-// los registros que lleguen después. La crea el editor de Búsqueda Guardada;
-// el embudo del encabezado la muestra como los valores que cumplen hoy y, en
-// cuanto se toca una casilla, la convierte en esa selección.
-// Forma: { kind: 'text', mode, text } | { kind: 'range', from, to }.
+// Regla de una columna: la otra forma de filtrar, además de marcar valores uno
+// por uno. "Contiene GRUPO" o "de 10 a 50" siguen valiendo para los registros
+// que lleguen después. La crea el editor de Búsqueda Guardada; el embudo del
+// encabezado la muestra como los valores que cumplen hoy y, en cuanto se toca
+// una casilla, la convierte en esa selección.
+// Forma: { kind: 'text', mode, text } | { kind: 'range', rtype, from, to }.
+// rtype = qué se compara: 'date' (fecha completa, la de antes), 'number',
+// 'dayname' (Lun…Dom), 'monthname' (Ene…Dic), 'time' (hh:mm:ss) o 'week'
+// (Sem12_2026). Un rango sin rtype es una fecha.
 function textRuleMatches(mode, query, value) {
     const q = String(query || '').trim().toLowerCase();
     if (q === '') return true;
@@ -3204,7 +3207,15 @@ function textRuleMatches(mode, query, value) {
 // 01/oct/2026 (la columna Fecha de Control Interno); las dos se comparan como
 // ISO contra el Desde/Hasta.
 const RULE_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const RULE_MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const RULE_MONTH_ENGLISH = { jan: 0, apr: 3, aug: 7, dec: 11 };
+// La semana va de lunes a domingo.
+const RULE_DAYS = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'];
+const RULE_DAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const RULE_RANGE_TYPE_BY_KEY = {
+    colSysFecha: 'date', colSysDiaNum: 'number', colSysDiaTexto: 'dayname', colSysMesNum: 'number',
+    colSysMesTexto: 'monthname', colSysAnio: 'number', colSysSemana: 'week', colSysHora: 'time',
+};
 
 function cellDateToIso(value) {
     const v = String(value ?? '').trim();
@@ -3223,31 +3234,91 @@ function formatRuleDate(iso) {
     return m ? `${m[3]}/${RULE_MONTHS[Number(m[2]) - 1]}/${m[1]}` : String(iso);
 }
 
-function rangeRuleMatches(from, to, value) {
-    if (!from && !to) return true;
-    const iso = cellDateToIso(value);
-    if (!iso) return false; // sin fecha no entra a un rango
-    return !(from && iso < from) && !(to && iso > to);
+// "$1,250.00" -> 1250. Solo números: nada de letras sueltas.
+function parseRuleNumber(value) {
+    const s = String(value ?? '').trim().replace(/[$,\s%]/g, '');
+    if (s === '' || !/^-?\d+(\.\d+)?$/.test(s)) return null;
+    return Number(s);
+}
+
+function foldRuleText(value) {
+    return String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// Lo que se compara en un rango: un número según el tipo (la fecha como días,
+// la hora como segundos, la semana como año*100+semana, el día/mes por su
+// lugar en la lista). null = no es un valor de ese tipo.
+function rangeSortKey(rtype, raw) {
+    const v = String(raw ?? '').trim();
+    if (v === '') return null;
+    switch (rtype) {
+        case 'number':
+            return parseRuleNumber(v);
+        case 'dayname': {
+            const i = RULE_DAYS.indexOf(foldRuleText(v).slice(0, 3));
+            return i === -1 ? null : i;
+        }
+        case 'monthname': {
+            const i = RULE_MONTHS.indexOf(foldRuleText(v).slice(0, 3));
+            return i === -1 ? null : i;
+        }
+        case 'time': {
+            const m = v.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+            return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] || 0) : null;
+        }
+        case 'week': {
+            const m = v.match(/^Sem(\d{1,2})_(\d{4})$/i);
+            return m ? Number(m[2]) * 100 + Number(m[1]) : null;
+        }
+        default: {
+            const iso = cellDateToIso(v);
+            if (!iso) return null;
+            const [y, mo, d] = iso.split('-').map(Number);
+            return Date.UTC(y, mo - 1, d) / 86400000;
+        }
+    }
+}
+
+function rangeRuleMatches(rule, value) {
+    const lo = rangeSortKey(rule.rtype, rule.from);
+    const hi = rangeSortKey(rule.rtype, rule.to);
+    if (lo === null && hi === null) return true;
+    const k = rangeSortKey(rule.rtype, value);
+    if (k === null) return false; // sin valor de ese tipo no entra a un rango
+    return !(lo !== null && k < lo) && !(hi !== null && k > hi);
 }
 
 function isColumnRuleActive(rule) {
     if (!rule) return false;
-    return rule.kind === 'range' ? !!(rule.from || rule.to) : String(rule.text || '').trim() !== '';
+    if (rule.kind === 'range') return rangeSortKey(rule.rtype, rule.from) !== null || rangeSortKey(rule.rtype, rule.to) !== null;
+    return String(rule.text || '').trim() !== '';
 }
 
 function columnRuleMatches(rule, value) {
     if (!isColumnRuleActive(rule)) return true;
-    return rule.kind === 'range'
-        ? rangeRuleMatches(rule.from, rule.to, value)
-        : textRuleMatches(rule.mode, rule.text, value);
+    return rule.kind === 'range' ? rangeRuleMatches(rule, value) : textRuleMatches(rule.mode, rule.text, value);
+}
+
+// Un extremo del rango como se lee: fecha como 01/oct/2026, monto con $.
+function formatRuleBound(rule, raw) {
+    const v = String(raw ?? '').trim();
+    if (rangeSortKey(rule.rtype, v) === null) return '';
+    if (rule.rtype === 'number') {
+        const n = parseRuleNumber(v);
+        return rule.currency
+            ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : v;
+    }
+    if (!rule.rtype || rule.rtype === 'date') return formatRuleDate(cellDateToIso(v));
+    return v;
 }
 
 function describeColumnRule(rule) {
     if (rule.kind === 'range') {
-        if (rule.from && rule.to) return `${formatRuleDate(rule.from)} – ${formatRuleDate(rule.to)}`;
-        return rule.from
-            ? `${t('main.filterDateFrom')} ${formatRuleDate(rule.from)}`
-            : `${t('main.filterDateTo')} ${formatRuleDate(rule.to)}`;
+        const from = formatRuleBound(rule, rule.from);
+        const to = formatRuleBound(rule, rule.to);
+        if (from && to) return `${from} – ${to}`;
+        return from ? t('main.savedSearchRuleFrom', { from }) : t('main.savedSearchRuleTo', { to });
     }
     const modeKey = { startsWith: 'main.filterModeStartsWith', equals: 'main.filterModeEquals' }[rule.mode] || 'main.filterModeContains';
     return `${t(modeKey)} "${String(rule.text).trim()}"`;
@@ -3256,22 +3327,101 @@ function describeColumnRule(rule) {
 // La regla como frase: "contiene «ADMIN»", "del 01/oct/2026 al 31/oct/2026".
 function describeRuleLine(rule) {
     if (rule.kind === 'range') {
-        if (rule.from && rule.to) return t('main.savedSearchRuleFromTo', { from: formatRuleDate(rule.from), to: formatRuleDate(rule.to) });
-        return rule.from
-            ? t('main.savedSearchRuleFrom', { from: formatRuleDate(rule.from) })
-            : t('main.savedSearchRuleTo', { to: formatRuleDate(rule.to) });
+        const from = formatRuleBound(rule, rule.from);
+        const to = formatRuleBound(rule, rule.to);
+        if (from && to) {
+            const isDate = !rule.rtype || rule.rtype === 'date';
+            return t(isDate ? 'main.savedSearchRuleFromTo' : 'main.savedSearchRuleFromToPlain', { from, to });
+        }
+        return from ? t('main.savedSearchRuleFrom', { from }) : t('main.savedSearchRuleTo', { to });
     }
     const modeKey = { startsWith: 'main.filterModeStartsWith', equals: 'main.filterModeEquals' }[rule.mode] || 'main.filterModeContains';
     return `${t(modeKey).toLowerCase()} «${String(rule.text).trim()}»`;
 }
 
-// Columna de fecha para el editor: la de Control Interno aunque aún no tenga
-// registros, o cualquiera cuyos valores sean todos fechas (2026-10-01 o
-// 01/oct/2026).
-function isEditorDateColumn(key, values) {
-    if (key === 'colSysFecha') return true;
+// Qué se compara en el "Desde–Hasta" de una columna, o null si no tiene (texto
+// normal: ahí solo van los tres modos de siempre). Las de Control Interno se
+// reconocen por su nombre aunque la tabla aún no tenga registros; las demás
+// por sus valores: todas fechas, o todos números.
+function detectRangeType(key, values) {
+    if (RULE_RANGE_TYPE_BY_KEY[key]) return RULE_RANGE_TYPE_BY_KEY[key];
     const filled = values.filter((v) => v !== '' && v !== '—');
-    return filled.length > 0 && filled.every((v) => cellDateToIso(v));
+    if (!filled.length) return null;
+    if (filled.every((v) => cellDateToIso(v))) return 'date';
+    if (filled.every((v) => parseRuleNumber(v) !== null)) return 'number';
+    return null;
+}
+
+// Los dos campos de "Desde–Hasta", del tipo que toca: fecha, hora, número,
+// lista de días o de meses, o semana + año. Escriben en rule.from / rule.to.
+function buildRangeFields(container, rule, onInput) {
+    const makeLabel = (key) => {
+        const span = document.createElement('span');
+        span.className = 'data-table-col-filter-date-label';
+        span.textContent = t(key);
+        return span;
+    };
+    const makeBound = (which) => {
+        const ariaKey = which === 'from' ? 'main.savedSearchRangeFrom' : 'main.savedSearchRangeTo';
+        if (rule.rtype === 'dayname' || rule.rtype === 'monthname') {
+            const select = document.createElement('select');
+            select.className = 'data-table-col-filter-date';
+            select.setAttribute('aria-label', t(ariaKey));
+            ['', ...(rule.rtype === 'dayname' ? RULE_DAY_LABELS : RULE_MONTH_LABELS)].forEach((label) => {
+                select.add(new Option(label || '—', label));
+            });
+            select.value = rule[which] || '';
+            select.addEventListener('change', () => { rule[which] = select.value; onInput(); });
+            return select;
+        }
+        if (rule.rtype === 'week') {
+            const wrap = document.createElement('span');
+            wrap.className = 'data-table-search-week';
+            wrap.setAttribute('aria-label', t(ariaKey));
+            const week = document.createElement('input');
+            week.type = 'number';
+            week.min = '1';
+            week.max = '53';
+            week.placeholder = t('main.savedSearchWeekPlaceholder');
+            const year = document.createElement('input');
+            year.type = 'number';
+            year.min = '2000';
+            year.max = '2100';
+            year.placeholder = t('main.savedSearchYearPlaceholder');
+            [week, year].forEach((el) => { el.className = 'data-table-col-filter-date'; });
+            const m = String(rule[which] || '').match(/^Sem(\d{1,2})_(\d{4})$/i);
+            if (m) { week.value = String(Number(m[1])); year.value = m[2]; }
+            const sync = () => {
+                rule[which] = week.value && year.value ? `Sem${Number(week.value)}_${year.value}` : '';
+                onInput();
+            };
+            week.addEventListener('input', sync);
+            year.addEventListener('input', sync);
+            wrap.append(week, year);
+            return wrap;
+        }
+        const input = document.createElement('input');
+        input.className = 'data-table-col-filter-date';
+        input.setAttribute('aria-label', t(ariaKey));
+        if (rule.rtype === 'number') {
+            input.type = 'text';
+            input.inputMode = 'decimal';
+            input.placeholder = '0';
+        } else if (rule.rtype === 'time') {
+            input.type = 'time';
+            input.step = '1';
+        } else {
+            input.type = 'date';
+        }
+        input.value = rule[which] || '';
+        input.addEventListener('input', () => {
+            const v = input.value.trim();
+            rule[which] = rule.rtype === 'time' && /^\d{2}:\d{2}$/.test(v) ? `${v}:00` : v;
+            onInput();
+        });
+        return input;
+    };
+    container.append(makeLabel('main.savedSearchRangeFrom'), makeBound('from'), makeLabel('main.savedSearchRangeTo'), makeBound('to'));
 }
 
 // Cuántas filas de la tabla cumplen hoy la regla (y las casillas, si hay).
@@ -5665,7 +5815,7 @@ function normalizeSavedFilter(filter) {
     const rules = Object.entries(filter?.columnRules || {})
         .filter(([, rule]) => isColumnRuleActive(rule))
         .map(([key, rule]) => [key, rule.kind === 'range'
-            ? ['range', rule.from || '', rule.to || '']
+            ? ['range', rule.from || '', rule.to || '', ...(rule.rtype && rule.rtype !== 'date' ? [rule.rtype] : [])]
             : ['text', rule.mode || 'contains', String(rule.text).trim().toLowerCase()]])
         .sort(([a], [b]) => a.localeCompare(b));
     // Sin reglas queda la misma firma de antes: lo ya aplicado no se pierde.
@@ -6236,97 +6386,91 @@ function summarizeFilterCard(selected, total, rule) {
 }
 
 // El mismo control del embudo de un encabezado (openColumnFilterMenu): modo +
-// buscador, o Desde/Hasta si es una fecha; "Todos"; y la lista de valores con
-// casillas. A diferencia del embudo, lo que se escribe en el buscador (o el
-// rango de fechas) no es solo un recorte de la lista: queda como regla de la
-// columna (`rule`), así que "Contiene GRUPO" vale sin marcar nada y también
-// para los registros que lleguen después. Marcar casillas (`selected`) sigue
-// siendo válido; si hay las dos cosas, se piden las dos.
+// buscador, "Todos" y la lista de valores con casillas. Las columnas que son
+// una fecha, parte de una fecha, una hora o números suman un cuarto modo,
+// "Desde–Hasta", con dos campos del tipo que toca. A diferencia del embudo, lo
+// que se escribe (o el rango) no es solo un recorte de la lista: queda como
+// regla de la columna (`rule`), así que "Contiene GRUPO" o "de 10 a 50" valen
+// sin marcar nada y también para los registros que lleguen después. Marcar
+// casillas (`selected`) sigue siendo válido; si hay las dos cosas, se piden las
+// dos.
 function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
     const distinctValues = [...new Set([...getColumnDistinctValues(tableId, key), ...selected])]
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-    const asRange = rule.kind ? rule.kind === 'range' : isEditorDateColumn(key, distinctValues);
-    rule.kind = asRange ? 'range' : 'text';
-    const body = document.createElement('div');
-    body.className = 'data-table-search-filter-body';
-    const searchRow = document.createElement('div');
-    searchRow.className = 'data-table-col-filter-search-row';
-    let rowMatches = () => true;
+    const rangeType = rule.rtype || detectRangeType(key, distinctValues);
+    rule.rtype = rangeType;
+    if (rangeType === 'number') {
+        rule.currency = distinctValues.some((v) => String(v).trim().startsWith('$'));
+    }
+    const MODES = [
+        { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
+        { id: 'contains', labelKey: 'main.filterModeContains' },
+        { id: 'equals', labelKey: 'main.filterModeEquals' },
+    ];
+    if (rangeType) MODES.push({ id: 'range', labelKey: 'main.filterModeRange' });
+    // La fecha completa abre directo en Desde–Hasta; lo demás, en Contiene.
+    let mode = MODES.some((m) => m.id === rule.mode) ? rule.mode : (rangeType === 'date' ? 'range' : 'contains');
+    rule.mode = mode;
+    rule.kind = mode === 'range' ? 'range' : 'text';
+    const rowMatches = (value) => columnRuleMatches(rule, value);
     let refreshList = () => {};
 
-    if (asRange) {
-        const fromField = document.createElement('input');
-        fromField.type = 'date';
-        fromField.className = 'data-table-col-filter-date';
-        fromField.setAttribute('aria-label', t('main.filterDateFrom'));
-        fromField.value = rule.from || '';
-        const toField = document.createElement('input');
-        toField.type = 'date';
-        toField.className = 'data-table-col-filter-date';
-        toField.setAttribute('aria-label', t('main.filterDateTo'));
-        toField.value = rule.to || '';
-        const fromLabel = document.createElement('span');
-        fromLabel.className = 'data-table-col-filter-date-label';
-        fromLabel.textContent = t('main.filterDateFrom');
-        const toLabel = document.createElement('span');
-        toLabel.className = 'data-table-col-filter-date-label';
-        toLabel.textContent = t('main.filterDateTo');
-        searchRow.append(fromLabel, fromField, toLabel, toField);
-        rowMatches = (value) => rangeRuleMatches(rule.from, rule.to, value);
-        fromField.addEventListener('input', () => { rule.from = fromField.value; refreshList(); change(); });
-        toField.addEventListener('input', () => { rule.to = toField.value; refreshList(); change(); });
-    } else {
-        const MODES = [
-            { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
-            { id: 'contains', labelKey: 'main.filterModeContains' },
-            { id: 'equals', labelKey: 'main.filterModeEquals' },
-        ];
-        let mode = MODES.some((m) => m.id === rule.mode) ? rule.mode : 'contains';
-        rule.mode = mode;
-        const current = document.createElement('div');
-        current.className = 'data-table-col-filter-mode-current';
+    const body = document.createElement('div');
+    body.className = 'data-table-search-filter-body';
+    const current = document.createElement('div');
+    current.className = 'data-table-col-filter-mode-current';
+    body.appendChild(current);
+    const searchRow = document.createElement('div');
+    searchRow.className = 'data-table-col-filter-search-row';
+    const modeBtn = document.createElement('button');
+    modeBtn.type = 'button';
+    modeBtn.className = 'data-table-col-filter-mode-btn';
+    modeBtn.setAttribute('aria-label', t('main.filterModeLabel'));
+    modeBtn.title = t('main.filterModeLabel');
+    modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
+    searchRow.appendChild(modeBtn);
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.className = 'data-table-col-filter-search';
+    searchInput.placeholder = t('main.filterSearchPlaceholder');
+    searchInput.value = rule.text || '';
+    searchRow.appendChild(searchInput);
+    const rangeBox = document.createElement('div');
+    rangeBox.className = 'data-table-search-range';
+    if (rangeType) buildRangeFields(rangeBox, rule, () => { refreshList(); change(); });
+    searchRow.appendChild(rangeBox);
+    const modeMenu = document.createElement('div');
+    modeMenu.className = 'data-table-col-filter-mode-menu';
+    modeMenu.hidden = true;
+    const showMode = () => {
         current.textContent = t(MODES.find((m) => m.id === mode).labelKey);
-        body.appendChild(current);
-        const modeBtn = document.createElement('button');
-        modeBtn.type = 'button';
-        modeBtn.className = 'data-table-col-filter-mode-btn';
-        modeBtn.setAttribute('aria-label', t('main.filterModeLabel'));
-        modeBtn.title = t('main.filterModeLabel');
-        modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
-        searchRow.appendChild(modeBtn);
-        const searchInput = document.createElement('input');
-        searchInput.type = 'search';
-        searchInput.className = 'data-table-col-filter-search';
-        searchInput.placeholder = t('main.filterSearchPlaceholder');
-        searchInput.value = rule.text || '';
-        searchRow.appendChild(searchInput);
-        const modeMenu = document.createElement('div');
-        modeMenu.className = 'data-table-col-filter-mode-menu';
-        modeMenu.hidden = true;
-        const modeButtons = MODES.map((m) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'data-table-col-filter-mode-option';
-            btn.textContent = t(m.labelKey);
-            btn.classList.toggle('data-table-col-filter-mode-option-active', m.id === mode);
-            btn.addEventListener('click', () => {
-                mode = m.id;
-                rule.mode = mode;
-                modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
-                btn.classList.add('data-table-col-filter-mode-option-active');
-                current.textContent = t(m.labelKey);
-                modeMenu.hidden = true;
-                refreshList();
-                change();
-            });
-            modeMenu.appendChild(btn);
-            return btn;
+        searchInput.hidden = mode === 'range';
+        rangeBox.hidden = mode !== 'range';
+    };
+    const modeButtons = MODES.map((m) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'data-table-col-filter-mode-option';
+        btn.textContent = t(m.labelKey);
+        btn.classList.toggle('data-table-col-filter-mode-option-active', m.id === mode);
+        btn.addEventListener('click', () => {
+            mode = m.id;
+            rule.mode = mode;
+            rule.kind = mode === 'range' ? 'range' : 'text';
+            modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
+            btn.classList.add('data-table-col-filter-mode-option-active');
+            modeMenu.hidden = true;
+            showMode();
+            refreshList();
+            change();
         });
-        searchRow.appendChild(modeMenu);
-        modeBtn.addEventListener('click', () => { modeMenu.hidden = !modeMenu.hidden; });
-        rowMatches = (value) => textRuleMatches(mode, searchInput.value, value);
-        searchInput.addEventListener('input', () => { rule.text = searchInput.value; refreshList(); change(); });
-    }
+        modeMenu.appendChild(btn);
+        return btn;
+    });
+    searchRow.appendChild(modeMenu);
+    modeBtn.addEventListener('click', () => { modeMenu.hidden = !modeMenu.hidden; });
+    searchInput.addEventListener('input', () => { rule.text = searchInput.value; refreshList(); change(); });
+    showMode();
     body.appendChild(searchRow);
 
     // Lo escrito (o el rango) ES el filtro: aquí se ve la regla tal cual y
@@ -6399,7 +6543,8 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
         emptyList.hidden = true;
         if (!active) return;
         const line = describeRuleLine(rule);
-        ruleText.textContent = t('main.savedSearchRuleLine', { rule: rule.kind === 'range' ? line : `${columnLabel} ${line}` });
+        const isFullDate = rule.kind === 'range' && (!rule.rtype || rule.rtype === 'date');
+        ruleText.textContent = t('main.savedSearchRuleLine', { rule: isFullDate ? line : `${columnLabel} ${line}` });
         const { matching, total } = countRuleRows(tableId, key, rule, selected);
         ruleCount.textContent = t('main.savedSearchRuleCount', { count: String(matching), total: String(total) });
         ruleCount.classList.toggle('zero', matching === 0);
@@ -6474,7 +6619,7 @@ function renderSearchEditorFilters() {
         card.appendChild(head);
 
         if (!searchEditorState.rules.has(key)) {
-            searchEditorState.rules.set(key, { kind: null, mode: 'contains', text: '', from: '', to: '' });
+            searchEditorState.rules.set(key, { kind: null, mode: null, text: '', from: '', to: '', rtype: null, currency: false });
         }
         const rule = searchEditorState.rules.get(key);
         const { body, total } = buildSearchFilterBody(searchEditorState.tableId, key, selected, onSearchEditorFilterChange, rule);
@@ -6536,7 +6681,15 @@ function openSavedSearchEditor(tableId, search = null) {
     const rules = new Map();
     Object.entries(search?.filter?.columnRules || {}).forEach(([key, rule]) => {
         if (!existingKeys.has(key) || !isColumnRuleActive(rule)) return;
-        rules.set(key, { kind: rule.kind, mode: rule.mode || 'contains', text: rule.text || '', from: rule.from || '', to: rule.to || '' });
+        rules.set(key, {
+            kind: rule.kind,
+            mode: rule.kind === 'range' ? 'range' : (rule.mode || 'contains'),
+            text: rule.text || '',
+            from: rule.from || '',
+            to: rule.to || '',
+            rtype: rule.kind === 'range' ? (rule.rtype || 'date') : null,
+            currency: !!rule.currency,
+        });
         if (!filters.has(key)) filters.set(key, new Set());
     });
     const presentGroupKeys = [...new Set(searchEditorKeys(state).map((k) => state.groupKeys.get(k)).filter(Boolean))];
@@ -6586,8 +6739,12 @@ function collectSearchEditorFilter() {
         const draft = rules.get(key);
         let values = [...set];
         if (isColumnRuleActive(draft)) {
+            const keepBound = (v) => (rangeSortKey(draft.rtype, v) !== null ? String(v).trim() : '');
             const rule = draft.kind === 'range'
-                ? { kind: 'range', from: draft.from || '', to: draft.to || '' }
+                ? {
+                    kind: 'range', rtype: draft.rtype || 'date', from: keepBound(draft.from), to: keepBound(draft.to),
+                    ...(draft.currency ? { currency: true } : {}),
+                }
                 : { kind: 'text', mode: draft.mode || 'contains', text: String(draft.text).trim() };
             columnRules[key] = rule;
             // Si ya marcó todo lo que la regla deja pasar, las casillas sobran y
