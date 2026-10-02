@@ -2621,6 +2621,7 @@ function applyDataTableColumnLayout(tableId) {
     });
 
     renderColumnGroupBand(tableId);
+    refreshSavedLayoutPillForTable(tableId);
 }
 // Re-stretches every already-initialized table to its wrapper's current
 // width on resize (window resize, or the sidebar collapsing/expanding --
@@ -4011,18 +4012,23 @@ function ensureColumnArrangeModal() {
                 <input type="text" id="data-table-arrange-name" data-role="name" class="saved-view-name-input data-table-arrange-name" placeholder="${t('main.savedLayoutNamePlaceholder')}">
 
                 <div class="data-table-arrange-colpanel">
-                    <span class="data-table-arrange-live"><i class="bx bx-revision" aria-hidden="true"></i> <span data-role="live-text">${t('main.arrangeStartsFromCurrent')}</span></span>
+                    <span class="data-table-arrange-live" data-role="live-chip" hidden><i class="bx bx-revision" aria-hidden="true"></i> <span data-role="live-text">${t('main.arrangeStartsFromSaved')}</span></span>
                     <div class="sector-icon-picker-search">
                         <i class="bx bx-search" aria-hidden="true"></i>
                         <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
                     </div>
                     <p class="data-table-arrange-section-label">${t('main.arrangeClassHint')}</p>
                     <div class="sector-icon-picker-chips data-table-arrange-tabs" data-role="tabs"></div>
+                    <div class="data-table-arrange-legend">
+                        <span><i class="bx bx-x" aria-hidden="true"></i> ${t('main.arrangeModeX')}</span>
+                        <span><i class="bx bx-check" aria-hidden="true"></i> ${t('main.arrangeModeNormal')}</span>
+                        <span><i class="bx bx-pin" aria-hidden="true"></i> ${t('main.arrangeModeFija')}</span>
+                    </div>
                     <div class="admin-module-list data-table-arrange-list" data-role="rows"></div>
                 </div>
 
                 <p class="data-table-arrange-section-label">${t('main.arrangePreviewLabel')}</p>
-                <div class="data-table-arrange-preview" data-role="preview-wrap"><table data-role="preview-table"></table></div>
+                <div class="data-table-arrange-preview" data-role="preview-wrap"><table data-role="preview-table"></table><p class="data-table-arrange-preview-empty" data-role="preview-empty" hidden>${t('main.arrangePreviewEmpty')}</p></div>
                 <p class="data-table-arrange-caption"><i class="bx bx-info-circle" aria-hidden="true"></i> ${t('main.arrangePreviewCaption')}</p>
 
                 <button type="button" class="btn data-table-arrange-block-btn" data-role="terminar-acomodo">${t('main.arrangeTerminar')}</button>
@@ -4065,7 +4071,9 @@ function ensureColumnArrangeModal() {
     const refs = {
         titleEl: columnArrangeModal.querySelector('[data-role="title"]'),
         nameLabel: columnArrangeModal.querySelector('[data-role="name-label"]'),
-        liveText: columnArrangeModal.querySelector('[data-role="live-text"]'),
+        liveChip: columnArrangeModal.querySelector('[data-role="live-chip"]'),
+        previewWrap: columnArrangeModal.querySelector('[data-role="preview-wrap"]'),
+        previewEmpty: columnArrangeModal.querySelector('[data-role="preview-empty"]'),
         scopeBlock: columnArrangeModal.querySelector('[data-role="scope-block"]'),
         searchInput: columnArrangeModal.querySelector('[data-role="search"]'),
         tabsEl: columnArrangeModal.querySelector('[data-role="tabs"]'),
@@ -4104,7 +4112,7 @@ function ensureColumnArrangeModal() {
     });
 
     refs.terminarAcomodoBtn.addEventListener('click', () => {
-        applyColumnLayoutConfig(columnArrangeState.tableId, columnArrangeState.draftConfig);
+        applyColumnLayoutConfig(columnArrangeState.tableId, buildColumnArrangeFinalConfig());
         columnArrangeState.terminarAcomodoDone = true;
         updateColumnArrangeGating();
     });
@@ -4132,12 +4140,14 @@ function updateColumnArrangeGating() {
     const refs = columnArrangeModal._refs;
     if (!state) return;
     const needsAssignment = state.scope === 'global';
+    const hasChosen = columnArrangeChosenKeys().length > 0;
     const ready = state.terminarAcomodoDone && (!needsAssignment || state.terminarAsignacionDone);
+    refs.terminarAcomodoBtn.disabled = !hasChosen;
     savedLayoutSaveBtn.disabled = !ready;
     refs.lockNote.hidden = ready;
-    refs.lockNote.textContent = !state.terminarAcomodoDone
-        ? t('main.arrangeGuardarLockedHint')
-        : t('main.arrangeGuardarLockedHintAssign');
+    if (!hasChosen) refs.lockNote.textContent = t('main.arrangePickOne');
+    else if (!state.terminarAcomodoDone) refs.lockNote.textContent = t('main.arrangeGuardarLockedHint');
+    else refs.lockNote.textContent = t('main.arrangeGuardarLockedHintAssign');
     // Not pre-disabled off savedViewAudienceSelection -- buildSavedViewAudiencePanel
     // (shared with Búsqueda Guardada) owns its own checkboxes and doesn't expose
     // a "selection changed" hook to react to live, so this validates on click
@@ -4211,11 +4221,36 @@ function renderColumnArrangeRows() {
     });
 }
 
+// null = todavía sin marcar: ningún botón activo y la columna no entra a
+// la vista previa ni al acomodo.
 function columnArrangeMode(key) {
-    const { draftConfig } = columnArrangeState;
+    const { draftConfig, decidedKeys } = columnArrangeState;
+    if (!decidedKeys.has(key)) return null;
     if (draftConfig.hidden.includes(key)) return 'none';
     if (draftConfig.pinned.includes(key)) return 'fija';
     return 'normal';
+}
+
+// Las columnas que el acomodo en construcción realmente incluye: solo las
+// que ya marcaste Normal o Fija.
+function columnArrangeChosenKeys() {
+    const { draftConfig, decidedKeys, tableId } = columnArrangeState;
+    const state = dataTableColumnState.get(tableId);
+    return state.columnKeys.filter((k) => decidedKeys.has(k) && !draftConfig.hidden.includes(k));
+}
+
+// Lo que "Terminar Acomodo" aplica y guarda: solo lo marcado Normal/Fija; el
+// resto (x o sin marcar) queda oculto.
+function buildColumnArrangeFinalConfig() {
+    const { draftConfig, tableId } = columnArrangeState;
+    const state = dataTableColumnState.get(tableId);
+    const chosen = new Set(columnArrangeChosenKeys());
+    return {
+        order: [...draftConfig.order],
+        hidden: state.columnKeys.filter((k) => !chosen.has(k)),
+        pinned: draftConfig.pinned.filter((k) => chosen.has(k)),
+        widths: { ...draftConfig.widths },
+    };
 }
 
 // Control de 3 vías por columna -- x (no incluida) / Normal (incluida) /
@@ -4229,23 +4264,23 @@ function buildTriStateControl(key, groupKey) {
     const mode = columnArrangeMode(key);
     const activeColor = columnGroupColor(groupKey);
     const hasOwnColor = activeColor && activeColor !== 'var(--color-border)' && !activeColor.startsWith('var(');
+    // Solo íconos (la leyenda de arriba de la lista dice cuál es cuál): así
+    // caben dos columnas por renglón y se ven muchas a la vez.
     const options = [
         { mode: 'none', icon: 'bx-x', title: t('main.arrangeModeX') },
-        { mode: 'normal', label: t('main.arrangeModeNormal') },
-        { mode: 'fija', icon: 'bx-pin', label: t('main.arrangeModeFija') },
+        { mode: 'normal', icon: 'bx-check', title: t('main.arrangeModeNormal') },
+        { mode: 'fija', icon: 'bx-pin', title: t('main.arrangeModeFija') },
     ];
     options.forEach((opt) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.dataset.mode = opt.mode;
-        if (opt.icon) {
-            const icon = document.createElement('i');
-            icon.className = `bx ${opt.icon}`;
-            icon.setAttribute('aria-hidden', 'true');
-            btn.appendChild(icon);
-        }
-        if (opt.label) btn.appendChild(document.createTextNode(opt.label));
-        if (opt.title) btn.title = opt.title;
+        const icon = document.createElement('i');
+        icon.className = `bx ${opt.icon}`;
+        icon.setAttribute('aria-hidden', 'true');
+        btn.appendChild(icon);
+        btn.title = opt.title;
+        btn.setAttribute('aria-label', opt.title);
         const isActive = mode === opt.mode;
         btn.classList.toggle('active', isActive);
         if (isActive && groupKey) btn.dataset.groupKey = groupKey;
@@ -4267,10 +4302,6 @@ async function setColumnTriState(key, mode) {
     if (!state) return;
     const { draftConfig } = columnArrangeState;
     if (mode === 'none') {
-        // Never allow hiding the last remaining visible column, same guard
-        // the old visibility picker had.
-        const visibleCount = state.columnKeys.length - draftConfig.hidden.length;
-        if (!draftConfig.hidden.includes(key) && visibleCount <= 1) return;
         if (draftConfig.pinned.includes(key) && !(await confirmDialog(t('main.columnHidePinnedConfirm')))) return;
         if (!draftConfig.hidden.includes(key)) draftConfig.hidden = [...draftConfig.hidden, key];
         draftConfig.pinned = draftConfig.pinned.filter((k) => k !== key);
@@ -4283,8 +4314,12 @@ async function setColumnTriState(key, mode) {
         if (!draftConfig.pinned.includes(key)) draftConfig.pinned = [...draftConfig.pinned, key];
     }
     columnArrangeState.decidedKeys.add(key);
+    // Lo que "Terminar Acomodo" ya aplicó dejó de ser lo que se ve aquí:
+    // hay que volver a terminarlo antes de poder guardar.
+    columnArrangeState.terminarAcomodoDone = false;
     renderColumnArrangeRows();
     renderColumnArrangePreview();
+    updateColumnArrangeGating();
 }
 
 // Vista previa en vivo -- NO un motor de tabla paralelo: clona 1-2 filas
@@ -4295,9 +4330,11 @@ function renderColumnArrangePreview() {
     const state = dataTableColumnState.get(columnArrangeState.tableId);
     if (!state) return;
     const { draftConfig } = columnArrangeState;
-    const hiddenSet = new Set(draftConfig.hidden);
-    const visualOrder = getVisualColumnOrder(draftConfig).filter((k) => !hiddenSet.has(k));
-    const visiblePinned = draftConfig.pinned.filter((k) => !hiddenSet.has(k));
+    // Solo las columnas ya marcadas Normal/Fija: un acomodo nuevo empieza
+    // con la vista previa vacía y se va llenando.
+    const chosen = new Set(columnArrangeChosenKeys());
+    const visualOrder = getVisualColumnOrder(draftConfig).filter((k) => chosen.has(k));
+    const visiblePinned = draftConfig.pinned.filter((k) => chosen.has(k));
     const previewState = { visiblePinned, pinnedLeft: {} };
     let cumulative = 0;
     visiblePinned.forEach((key) => {
@@ -4305,8 +4342,13 @@ function renderColumnArrangePreview() {
         cumulative += draftConfig.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
     });
 
-    const table = columnArrangeModal._refs.previewTable;
+    const { previewTable: table, previewWrap, previewEmpty } = columnArrangeModal._refs;
+    const hasColumns = visualOrder.length > 0;
+    previewEmpty.hidden = hasColumns;
+    table.hidden = !hasColumns;
+    previewWrap.classList.toggle('empty', !hasColumns);
     table.innerHTML = '';
+    if (!hasColumns) return;
     const thead = table.createTHead();
     const bandRow = thead.insertRow();
     // Misma clase que la banda de la tabla real (renderColumnGroupBand) --
@@ -4382,7 +4424,9 @@ function enablePreviewHeaderDragReorder(headRow) {
         const rect = th.getBoundingClientRect();
         order.splice((event.clientX - rect.left) < rect.width / 2 ? idx : idx + 1, 0, key);
         draftConfig.order = order;
+        columnArrangeState.terminarAcomodoDone = false;
         renderColumnArrangePreview();
+        updateColumnArrangeGating();
     });
     headRow.addEventListener('dragend', () => {
         headRow.querySelectorAll('.data-table-col-dragging').forEach((el) => el.classList.remove('data-table-col-dragging'));
@@ -4406,12 +4450,14 @@ function openColumnArrangeEditor(tableId, layout = null) {
     columnArrangeState = {
         tableId,
         editingId: editing ? layout.id : null,
+        // Un acomodo nuevo empieza en blanco: ni ocultas ni fijas, y ninguna
+        // columna marcada (atenuadas, fuera de la vista previa) hasta que se
+        // marque Normal o Fija; solo el orden y los anchos parten de la
+        // tabla actual. Uno ya guardado trae todas sus columnas decididas.
         draftConfig: {
-            order: [...base.order], hidden: [...base.hidden],
-            pinned: [...base.pinned], widths: { ...base.widths },
+            order: [...base.order], hidden: editing ? [...base.hidden] : [],
+            pinned: editing ? [...base.pinned] : [], widths: { ...base.widths },
         },
-        // Un acomodo ya guardado trae todas sus columnas decididas; uno
-        // nuevo arranca con todas "pendientes" (atenuadas) hasta tocarlas.
         decidedKeys: new Set(editing ? state.columnKeys : []),
         activeTab: null,
         query: '',
@@ -4424,7 +4470,7 @@ function openColumnArrangeEditor(tableId, layout = null) {
 
     refs.titleEl.textContent = t(editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle');
     refs.nameLabel.textContent = t(editing ? 'main.arrangeNameLabelEdit' : 'main.arrangeNameLabel');
-    refs.liveText.textContent = t(editing ? 'main.arrangeStartsFromSaved' : 'main.arrangeStartsFromCurrent');
+    refs.liveChip.hidden = !editing;
     savedLayoutSaveBtn.textContent = t(editing ? 'main.arrangeSaveChanges' : 'admin.save');
     // Editar solo cambia nombre y columnas: alcance, audiencia y "default al
     // abrir" se quedan como se guardaron.
@@ -4456,6 +4502,81 @@ function openColumnArrangeEditor(tableId, layout = null) {
 let layoutMenuEl = null;
 let layoutMenuState = null; // { tableId, pill, input, layouts, loaded, query }
 
+// El acomodo guardado que la tabla tiene aplicado se recuerda por tabla en
+// localStorage junto con una "firma" de su orden/ocultas/fijas: si después
+// la tabla se cambia a mano (pines, visibilidad, arrastre...) la firma ya no
+// coincide y el nombre deja de mostrarse -- nunca presume un acomodo que la
+// tabla ya no tiene.
+function activeLayoutStorageKey(tableId) {
+    return `sgn_active_layout::${tableId}`;
+}
+
+function layoutConfigSignature(config) {
+    return JSON.stringify([config.order, config.hidden, config.pinned]);
+}
+
+function getActiveSavedLayout(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return null;
+    try {
+        const record = JSON.parse(localStorage.getItem(activeLayoutStorageKey(tableId)) || 'null');
+        if (record && record.sig === layoutConfigSignature(state.config)) return record;
+    } catch {
+        // Unreadable record -- same as having none.
+    }
+    return null;
+}
+
+function setActiveSavedLayout(tableId, layout) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    try {
+        localStorage.setItem(activeLayoutStorageKey(tableId), JSON.stringify({
+            id: layout.id, name: layout.name, sig: layoutConfigSignature(state.config),
+        }));
+    } catch {
+        // No storage -- the name just isn't remembered.
+    }
+}
+
+function clearActiveSavedLayout(tableId) {
+    try { localStorage.removeItem(activeLayoutStorageKey(tableId)); } catch { /* ignore */ }
+}
+
+// Dibuja el estado del icono: sin acomodo aplicado es el icono de siempre;
+// con uno, queda como píldora con su nombre escrito y la ✕ para limpiarlo.
+// Abierto el menú, el nombre le cede su lugar al buscador.
+function refreshSavedLayoutPill(pill) {
+    const active = getActiveSavedLayout(pill.dataset.tableId);
+    const nameEl = pill.querySelector('.data-table-layout-pill-name');
+    nameEl.textContent = active ? active.name : '';
+    nameEl.hidden = !active || pill.classList.contains('open');
+    pill.querySelector('.data-table-layout-pill-clear').hidden = !active;
+    pill.classList.toggle('named', !!active);
+}
+
+function refreshSavedLayoutPillForTable(tableId) {
+    const pill = document.querySelector(`.data-table-layout-pill[data-table-id="${CSS.escape(tableId)}"]`);
+    if (pill) refreshSavedLayoutPill(pill);
+}
+
+// ✕ en la píldora: quita el acomodo y regresa al default que le toca a esta
+// cuenta -- su acomodo por default asignado si lo hay (el personal gana al
+// global, igual que en la primera visita), y si no, el original de la tabla.
+async function clearSavedLayoutForTable(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    closeSavedLayoutMenu();
+    clearActiveSavedLayout(tableId);
+    try { localStorage.removeItem(dataTableConfigStorageKey(tableId)); } catch { /* ignore */ }
+    state.config = reconcileDataTableConfig(null, state.columnKeys);
+    state.columnKeys.forEach((key) => {
+        if (state.config.widths[key] == null) state.config.widths[key] = state.naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
+    });
+    applyDataTableColumnLayout(tableId);
+    await maybeApplyDefaultSavedLayout(tableId);
+}
+
 function closeSavedLayoutMenu() {
     if (!layoutMenuState) return;
     const { pill, input } = layoutMenuState;
@@ -4464,6 +4585,7 @@ function closeSavedLayoutMenu() {
     input.value = '';
     layoutMenuEl.hidden = true;
     layoutMenuState = null;
+    refreshSavedLayoutPill(pill);
 }
 
 function positionSavedLayoutMenu() {
@@ -4542,11 +4664,17 @@ function renderSavedLayoutMenu() {
     }
 
     const isAdminForThisTable = isSaasTableKey(state.tableId) ? !!currentUser?.isSaasSuperAdmin : !!currentUser?.isClientAdmin;
+    const activeId = getActiveSavedLayout(state.tableId)?.id;
     const list = document.createElement('div');
     list.className = 'data-table-layout-list';
     shown.forEach((layout) => {
         const row = document.createElement('div');
-        row.className = 'data-table-layout-item';
+        row.className = 'data-table-layout-item' + (layout.id === activeId ? ' on' : '');
+
+        const check = document.createElement('span');
+        check.className = 'data-table-layout-check';
+        if (layout.id === activeId) check.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+        row.appendChild(check);
 
         const nameBtn = document.createElement('button');
         nameBtn.type = 'button';
@@ -4555,6 +4683,7 @@ function renderSavedLayoutMenu() {
         appendHighlightedText(nameBtn, layout.name, lowerQuery);
         nameBtn.addEventListener('click', () => {
             applyColumnLayoutConfig(state.tableId, layout.layout);
+            setActiveSavedLayout(state.tableId, layout);
             closeSavedLayoutMenu();
         });
         row.appendChild(nameBtn);
@@ -4617,7 +4746,11 @@ async function refreshSavedLayoutMenu(state) {
 async function deleteSavedLayoutFromMenu(state, id) {
     try {
         const res = await fetch(`${savedLayoutApiBase(state.tableId)}/${id}`, { method: 'DELETE', credentials: 'include' });
-        if (res.ok) await refreshSavedLayoutMenu(state);
+        if (res.ok) {
+            if (getActiveSavedLayout(state.tableId)?.id === id) clearActiveSavedLayout(state.tableId);
+            refreshSavedLayoutPill(state.pill);
+            await refreshSavedLayoutMenu(state);
+        }
     } catch {
         // Leave the list as-is -- next open retries the fetch anyway.
     }
@@ -4634,6 +4767,7 @@ async function toggleSavedLayoutMenu(tableId, pill) {
     const state = { tableId, pill, input, layouts: [], loaded: false, query: '' };
     layoutMenuState = state;
     pill.classList.add('open');
+    refreshSavedLayoutPill(pill);
     input.hidden = false;
     input.value = '';
     layoutMenuEl.hidden = false;
@@ -5863,6 +5997,11 @@ async function saveSavedLayout() {
                 savedLayoutErrorEl.hidden = false;
                 return;
             }
+            // The table is already showing this layout (Terminar Acomodo
+            // applied it), so it becomes the one written on the icon.
+            const { layout: updated } = await res.json();
+            setActiveSavedLayout(savedLayoutTableId, updated);
+            refreshSavedLayoutPillForTable(savedLayoutTableId);
             closeColumnArrangeModal();
             showToast(t('main.changeSaved'), 'success');
         } catch {
@@ -5913,6 +6052,9 @@ async function saveSavedLayout() {
             savedLayoutErrorEl.hidden = false;
             return;
         }
+        const { layout: created } = await res.json();
+        setActiveSavedLayout(savedLayoutTableId, created);
+        refreshSavedLayoutPillForTable(savedLayoutTableId);
         closeColumnArrangeModal();
         showToast(t('main.changeSaved'), 'success');
     } catch {
@@ -5937,7 +6079,11 @@ async function maybeApplyDefaultSavedLayout(tableId) {
         const personalDefault = (layouts || []).find((l) => l.scope === 'personal' && l.isDefault);
         const globalDefault = (layouts || []).find((l) => l.scope === 'global' && l.isDefault);
         const winner = personalDefault || globalDefault;
-        if (winner) applyColumnLayoutConfig(tableId, winner.layout);
+        if (winner) {
+            applyColumnLayoutConfig(tableId, winner.layout);
+            setActiveSavedLayout(tableId, winner);
+            refreshSavedLayoutPillForTable(tableId);
+        }
     } catch {
         // No default reachable -- the table keeps whatever loadDataTableConfig already rendered.
     }
@@ -6118,6 +6264,19 @@ function renderDataTableColumnControls() {
                 // toggleSavedLayoutMenu).
                 const pill = document.createElement('span');
                 pill.className = 'data-table-layout-pill';
+                pill.dataset.tableId = tableKey;
+                const layoutName = document.createElement('span');
+                layoutName.className = 'data-table-layout-pill-name';
+                layoutName.hidden = true;
+                layoutName.addEventListener('click', () => toggleSavedLayoutMenu(tableKey, pill));
+                const layoutClear = document.createElement('button');
+                layoutClear.type = 'button';
+                layoutClear.className = 'data-table-layout-pill-clear';
+                layoutClear.setAttribute('aria-label', t('main.savedLayoutClearBtn'));
+                layoutClear.title = t('main.savedLayoutClearBtn');
+                layoutClear.hidden = true;
+                layoutClear.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+                layoutClear.addEventListener('click', () => clearSavedLayoutForTable(tableKey));
                 const layoutSearch = document.createElement('input');
                 layoutSearch.type = 'text';
                 layoutSearch.className = 'data-table-layout-pill-input';
@@ -6129,8 +6288,9 @@ function renderDataTableColumnControls() {
                     layoutMenuState.query = layoutSearch.value;
                     renderSavedLayoutMenu();
                 });
-                pill.append(savedLayoutBtn, layoutSearch);
-                savedLayoutBtn.addEventListener('click', () => toggleSavedLayoutMenu(getTableId(wrapper, index), pill));
+                pill.append(savedLayoutBtn, layoutName, layoutSearch, layoutClear);
+                savedLayoutBtn.addEventListener('click', () => toggleSavedLayoutMenu(tableKey, pill));
+                refreshSavedLayoutPill(pill);
                 toAppend.push(pill);
             }
 
