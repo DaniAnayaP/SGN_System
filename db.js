@@ -1503,6 +1503,24 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_saas_saved_layouts_table ON saas_saved_layouts(table_key);
 
+    -- Búsqueda Guardada, SaaS side -- same "duplicate, don't share" reasoning
+    -- as saas_saved_layouts just above: no client_id (an internal SaaS table
+    -- has no client org to scope within), "global" = visible to the Equipo
+    -- SaaS members listed in audience_json ({userIds:[...]}). filter_json has
+    -- the exact shape saved_searches uses ({fields, columnFilters}).
+    CREATE TABLE IF NOT EXISTS saas_saved_searches (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_key           TEXT NOT NULL,
+        name                TEXT NOT NULL,
+        filter_json         TEXT NOT NULL,
+        scope               TEXT NOT NULL DEFAULT 'personal',
+        owner_user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_by_user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        audience_json       TEXT,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_saved_searches_table ON saas_saved_searches(table_key);
+
     -- client_permission_grants: the client-level counterpart of
     -- plan_grants — a "+ adicional" sold to THIS client beyond what their
     -- plan already includes, at the exact same {sectionId, itemId,
@@ -3065,6 +3083,75 @@ function createSavedSearch({ clientId, tableKey, name, filter, scope, ownerUserI
 
 function deleteSavedSearch(id) {
     db.prepare('DELETE FROM saved_searches WHERE id = ?').run(id);
+}
+
+// Editar una búsqueda ya guardada: solo nombre y filtros. Su alcance y
+// audiencia se quedan como estaban.
+function updateSavedSearch(id, { name, filter }) {
+    db.prepare('UPDATE saved_searches SET name = @name, filter_json = @filterJson WHERE id = @id').run({
+        id, name, filterJson: JSON.stringify(filter),
+    });
+    return getSavedSearchById(id);
+}
+
+// saved_searches' CRUD, mirrored 1:1 for saas_saved_searches -- no clientId
+// anywhere here, see that table's own schema comment above.
+function deserializeSaasSavedSearch(row) {
+    if (!row) return null;
+    let filter = { fields: {}, columnFilters: {} };
+    try { filter = JSON.parse(row.filter_json) || filter; } catch { /* keep default */ }
+    let audience = null;
+    if (row.audience_json) {
+        try { audience = JSON.parse(row.audience_json); } catch { audience = null; }
+    }
+    return {
+        id: row.id,
+        tableKey: row.table_key,
+        name: row.name,
+        filter,
+        scope: row.scope,
+        ownerUserId: row.owner_user_id,
+        createdByUserId: row.created_by_user_id,
+        audience,
+        createdAt: row.created_at,
+    };
+}
+
+function getSaasSavedSearchesForTable(tableKey) {
+    return db
+        .prepare('SELECT * FROM saas_saved_searches WHERE table_key = ? ORDER BY created_at ASC, id ASC')
+        .all(tableKey)
+        .map(deserializeSaasSavedSearch);
+}
+
+function getSaasSavedSearchById(id) {
+    return deserializeSaasSavedSearch(db.prepare('SELECT * FROM saas_saved_searches WHERE id = ?').get(id));
+}
+
+function createSaasSavedSearch({ tableKey, name, filter, scope, ownerUserId, createdByUserId, audience }) {
+    const info = db.prepare(`
+        INSERT INTO saas_saved_searches (table_key, name, filter_json, scope, owner_user_id, created_by_user_id, audience_json)
+        VALUES (@tableKey, @name, @filterJson, @scope, @ownerUserId, @createdByUserId, @audienceJson)
+    `).run({
+        tableKey, name,
+        filterJson: JSON.stringify(filter || { fields: {}, columnFilters: {} }),
+        scope: scope === 'global' ? 'global' : 'personal',
+        ownerUserId: scope === 'global' ? null : ownerUserId,
+        createdByUserId,
+        audienceJson: scope === 'global' ? JSON.stringify(audience || {}) : null,
+    });
+    return getSaasSavedSearchById(info.lastInsertRowid);
+}
+
+function updateSaasSavedSearch(id, { name, filter }) {
+    db.prepare('UPDATE saas_saved_searches SET name = @name, filter_json = @filterJson WHERE id = @id').run({
+        id, name, filterJson: JSON.stringify(filter),
+    });
+    return getSaasSavedSearchById(id);
+}
+
+function deleteSaasSavedSearch(id) {
+    db.prepare('DELETE FROM saas_saved_searches WHERE id = ?').run(id);
 }
 
 // Acomodo Guardado -- CRUD for saved_layouts (schema above), calcada de
@@ -8085,6 +8172,12 @@ module.exports = {
     getSavedSearchById,
     createSavedSearch,
     deleteSavedSearch,
+    updateSavedSearch,
+    getSaasSavedSearchesForTable,
+    getSaasSavedSearchById,
+    createSaasSavedSearch,
+    updateSaasSavedSearch,
+    deleteSaasSavedSearch,
     getSavedLayoutsForClientTable,
     getSavedLayoutById,
     createSavedLayout,

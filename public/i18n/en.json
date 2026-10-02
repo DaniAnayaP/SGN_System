@@ -988,10 +988,8 @@
     "savedSearchBtn": "Saved Search",
     "savedSearchTitle": "Saved Search",
     "savedSearchEmpty": "No saved searches yet.",
-    "savedSearchApply": "Apply",
     "savedSearchScopeGlobal": "Global",
     "savedSearchScopePersonal": "Personal",
-    "savedSearchSaveHint": "Save the filter you have applied right now:",
     "savedSearchNamePlaceholder": "Search name",
     "savedSearchAudienceSelf": "Just me",
     "savedSearchAudienceAssign": "Assign to...",
@@ -1023,6 +1021,23 @@
     "arrangePreviewEmpty": "No columns yet. Mark Normal or Pinned in the list and they show up here.",
     "arrangePickOne": "Mark at least one column to continue",
     "savedLayoutClearBtn": "Clear layout",
+    "savedSearchEditorNewTitle": "New search",
+    "savedSearchEditorEditTitle": "Edit search",
+    "savedSearchEditorNameLabel": "Name this search",
+    "savedSearchEditorNameLabelEdit": "Search name",
+    "savedSearchEditorLegend": "Tap a column to add its filter",
+    "savedSearchFiltersLabel": "Filters — they show up here when you pick a column",
+    "savedSearchFiltersEmpty": "No filters yet. Tap a column above and its filter shows up here.",
+    "savedSearchRemoveFilter": "Remove filter",
+    "savedSearchSaveBtn": "Save search",
+    "savedSearchNeedFilter": "Add at least one filter to continue",
+    "savedSearchNeedValues": "Pick at least one value in every filter",
+    "savedSearchSearchPlaceholder": "Search saved search…",
+    "savedSearchClearBtn": "Clear search",
+    "savedSearchPanelFilters": "{count} panel filters",
+    "savedSearchValuesSummary": "{count} of {total}: {list}",
+    "savedSearchPickValues": "Pick at least one value",
+    "savedSearchKeepsPanel": "This search also uses {count} filters from the panel above; they are kept as they are.",
     "savedLayoutSearchPlaceholder": "Search layout…",
     "savedLayoutNoResults": "No results for \"{query}\"",
     "savedLayoutEditBtn": "Edit",
@@ -2136,8 +2151,8 @@
       "example": "you save \"Supervisors view\" with only the columns you use and apply it every morning with one click."
     },
     "savedSearch": {
-      "what": "Saves the filters you have set so you can reuse them later without typing them again.",
-      "example": "you save \"Active this month\" and next time you apply it with one click."
+      "what": "Opens your list of saved searches: pick one and the table filters instantly, or add a new one by choosing the columns and their filters. While one is applied, its name is written on this icon.",
+      "example": "you save \"Active this month\" and apply it every morning with one click."
     },
     "filterToggle": {
       "what": "Opens or closes the filter panel above the table, to look for records by several fields at once.",
@@ -2146,6 +2161,10 @@
     "filterClear": {
       "what": "Clears every filter and leaves the table as it started: all records and the columns in their original order.",
       "example": "after searching for one client, you tap Clear to see everyone again."
+    },
+    "clearSearch": {
+      "what": "Removes the saved search you have applied and leaves the table with no filters, showing every record.",
+      "example": "you applied \"Active this month\" and want to see everything again: tap the ✕."
     },
     "clearLayout": {
       "what": "Removes the saved layout you have applied and returns the table to its default layout: the one assigned to you, or the table's original if you have none.",

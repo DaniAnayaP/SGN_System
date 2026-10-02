@@ -4475,7 +4475,8 @@ body.dark-mode .admin-save-status{
 /* Icono de Acomodo Guardado en la barra: al abrir el menú se estira como
    una píldora con el buscador a su derecha (Dashboard.js:
    toggleSavedLayoutMenu), y de ahí cuelga .data-table-layout-menu. */
-.data-table-layout-pill{
+.data-table-layout-pill,
+.data-table-search-pill{
     display: inline-flex;
     align-items: center;
     height: 1.7rem;
@@ -4485,15 +4486,21 @@ body.dark-mode .admin-save-status{
    escrito y la ✕ para limpiarlo; con el menú abierto, el buscador toma el
    lugar del nombre. */
 .data-table-layout-pill.open,
-.data-table-layout-pill.named{
+.data-table-layout-pill.named,
+.data-table-search-pill.open,
+.data-table-search-pill.named{
     border: 1px solid var(--color-text-primary);
     background: var(--color-surface);
     box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3px var(--color-text-primary);
 }
-.data-table-layout-pill.open{ width: 13rem; }
-.data-table-layout-pill.named:not(.open){ max-width: 14rem; }
+.data-table-layout-pill.open,
+.data-table-search-pill.open{ width: 13rem; }
+.data-table-layout-pill.named:not(.open),
+.data-table-search-pill.named:not(.open){ max-width: 14rem; }
 .data-table-layout-pill.open .data-table-zoom-btn,
-.data-table-layout-pill.named .data-table-zoom-btn{
+.data-table-layout-pill.named .data-table-zoom-btn,
+.data-table-search-pill.open .data-table-zoom-btn,
+.data-table-search-pill.named .data-table-zoom-btn{
     border: none;
     background: none;
     color: var(--color-text-primary);
@@ -4663,6 +4670,114 @@ button.data-table-layout-item{
     padding: 0.45rem 0.7rem 0.7rem;
     font-size: 0.74rem;
     color: var(--color-text-secondary);
+}
+/* Búsqueda Guardada: cada búsqueda del menú trae debajo del nombre un
+   resumen de sus filtros. */
+.data-table-layout-name-two{
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.05rem;
+    white-space: normal;
+}
+.data-table-layout-name-two > span:first-child{
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.data-table-layout-sum{
+    max-width: 100%;
+    font-size: 0.62rem;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Editor de Búsqueda Guardada: misma pantalla de Acomodo (pestañas + lista),
+   con las tarjetas de filtro donde allá va la vista previa. */
+.data-table-search-row{
+    cursor: pointer;
+}
+.data-table-arrange-row.has-filter{
+    border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+    background: color-mix(in srgb, var(--color-column-system-band-bg, var(--color-bg)) 45%, var(--color-surface));
+}
+.data-table-search-filters{
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0.5rem 0 1rem;
+}
+.data-table-search-empty{
+    margin: 0;
+    padding: 0.9rem;
+    border: 1px dashed var(--color-border);
+    border-radius: 0.6rem;
+    text-align: center;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+}
+.data-table-search-card{
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.7rem;
+    padding: 0.55rem 0.65rem;
+}
+.data-table-search-card-head{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+}
+.data-table-search-card-title{
+    flex: 1;
+    min-width: 0;
+    font-weight: 700;
+    font-size: 0.76rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.data-table-search-card-class{
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+}
+.data-table-search-card-remove{
+    width: 1.4rem;
+    height: 1.4rem;
+    display: grid;
+    place-items: center;
+    border: none;
+    border-radius: 0.4rem;
+    background: none;
+    color: #c23b3b;
+    font-size: 1rem;
+    cursor: pointer;
+}
+.data-table-search-card-summary{
+    margin: 0.3rem 0 0;
+    font-size: 0.66rem;
+    color: var(--color-text-secondary);
+}
+.data-table-search-filter-body{
+    margin-top: 0.45rem;
+}
+.data-table-search-filter-body .data-table-col-filter-search-row,
+.data-table-search-filter-body .data-table-col-filter-mode-current,
+.data-table-search-filter-body .data-table-col-filter-option{
+    padding-left: 0;
+    padding-right: 0;
+}
+.data-table-search-filter-body .data-table-col-filter-mode-menu{
+    left: 0;
+}
+.data-table-search-filter-body .data-table-col-filter-list{
+    max-height: 9rem;
 }
 .data-table-arrange-label{
     display: block;

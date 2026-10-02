@@ -3192,6 +3192,7 @@ function applyColumnValueFilters(tableId) {
     const rows = Array.from(state.table.tBodies[0]?.rows || []).filter((tr) => !tr.querySelector('td.data-table-empty-cell'));
     if (!state.columnFilters.size) {
         rows.forEach((tr) => tr.classList.remove('data-table-row-col-filtered'));
+        refreshSavedSearchPillForTable(tableId);
         return;
     }
     rows.forEach((tr) => {
@@ -3202,6 +3203,7 @@ function applyColumnValueFilters(tableId) {
         });
         tr.classList.toggle('data-table-row-col-filtered', !visible);
     });
+    refreshSavedSearchPillForTable(tableId);
 }
 
 function updateColumnFilterIndicator(th, active) {
@@ -4825,6 +4827,7 @@ async function toggleSavedLayoutMenu(tableId, pill) {
         return;
     }
     closeSavedLayoutMenu();
+    closeSavedSearchMenu();
     ensureSavedLayoutMenu();
     const input = pill.querySelector('input');
     const state = { tableId, pill, input, layouts: [], loaded: false, query: '' };
@@ -5508,142 +5511,880 @@ function hasAnyAudienceTarget() {
     return [...savedViewAudienceSelection.values()].some((groupMap) => groupMap.size > 0);
 }
 
-let savedSearchModal = null;
-let savedSearchListEl = null;
-let savedSearchEmptyEl = null;
-let savedSearchErrorEl = null;
-let savedSearchNameInput = null;
-let savedSearchAdminSection = null;
-let savedSearchAudiencePanel = null;
-let savedSearchSaveBtn = null;
-let savedSearchTableId = null;
-
-function ensureSavedSearchModal() {
-    if (savedSearchModal) return;
-    savedSearchModal = document.createElement('div');
-    savedSearchModal.className = 'modal-overlay';
-    savedSearchModal.hidden = true;
-    savedSearchModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 32rem;" role="dialog" aria-modal="true" aria-labelledby="saved-search-title">
-            <h3 id="saved-search-title">${t('main.savedSearchTitle')}</h3>
-            <div data-role="list" class="saved-view-list"></div>
-            <p data-role="empty" class="admin-hint" hidden>${t('main.savedSearchEmpty')}</p>
-            <div class="saved-view-save-block">
-                <p class="admin-hint">${t('main.savedSearchSaveHint')}</p>
-                <input type="text" data-role="name" class="saved-view-name-input" placeholder="${t('main.savedSearchNamePlaceholder')}">
-                <div data-role="admin-section" class="saved-view-audience-radios" hidden>
-                    <label><input type="radio" name="saved-search-audience" value="self" checked> ${t('main.savedSearchAudienceSelf')}</label>
-                    <label><input type="radio" name="saved-search-audience" value="assign"> ${t('main.savedSearchAudienceAssign')}</label>
-                </div>
-                <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
-                <p data-role="error" class="admin-error" role="alert" hidden></p>
-                <div class="admin-form-actions">
-                    <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
-                    <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(savedSearchModal);
-    savedSearchListEl = savedSearchModal.querySelector('[data-role="list"]');
-    savedSearchEmptyEl = savedSearchModal.querySelector('[data-role="empty"]');
-    savedSearchErrorEl = savedSearchModal.querySelector('[data-role="error"]');
-    savedSearchNameInput = savedSearchModal.querySelector('[data-role="name"]');
-    savedSearchAdminSection = savedSearchModal.querySelector('[data-role="admin-section"]');
-    savedSearchAudiencePanel = savedSearchModal.querySelector('[data-role="audience-panel"]');
-    savedSearchSaveBtn = savedSearchModal.querySelector('[data-role="save"]');
-    const close = () => { savedSearchModal.hidden = true; };
-    savedSearchModal.querySelector('[data-role="close"]').addEventListener('click', close);
-    wireModalDismiss(savedSearchModal, close);
-    savedSearchModal.querySelectorAll('input[name="saved-search-audience"]').forEach((radio) => {
-        radio.addEventListener('change', () => {
-            if (radio.checked && radio.value === 'assign') {
-                savedSearchAudiencePanel.hidden = false;
-                buildSavedViewAudiencePanel(savedSearchAudiencePanel);
-            } else if (radio.checked) {
-                savedSearchAudiencePanel.hidden = true;
-            }
-        });
-    });
-    savedSearchSaveBtn.addEventListener('click', saveSavedSearch);
+// Búsqueda Guardada = un nombre + un conjunto de filtros por columna (la misma
+// lista de valores con casillas del embudo de cada encabezado) + a quién se
+// la compartes. Se usa igual que Acomodo Guardado: el icono se abre como
+// píldora con buscador y una lista (renderSavedSearchMenu), el nombre de la
+// búsqueda aplicada queda escrito en el icono con una ✕ que la limpia, y
+// "Agregar"/el lápiz abren este editor (openSavedSearchEditor): las mismas
+// pestañas por clasificación y lista de columnas que Acomodo, pero en vez de
+// la vista previa en forma de tabla, abajo van los filtros -- al tocar una
+// columna se agrega su filtro. Lo guardado conserva el formato de siempre
+// ({fields, columnFilters}); "fields" (los campos del panel de filtros de
+// arriba) ya no se arma desde aquí, pero una búsqueda vieja que los traiga
+// los conserva al editarla.
+function canPersistSavedSearch(tableId) {
+    return !!currentUser?.clientId || isSaasTableKey(tableId);
 }
 
-async function openSavedSearchPicker(tableId) {
-    ensureSavedSearchModal();
-    savedSearchTableId = tableId;
-    savedSearchNameInput.value = '';
-    savedSearchErrorEl.hidden = true;
-    savedViewAudienceSelection = new Map(SAVED_VIEW_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
-    savedSearchAdminSection.hidden = !currentUser?.isClientAdmin;
-    savedSearchAudiencePanel.hidden = true;
-    savedSearchModal.querySelectorAll('input[name="saved-search-audience"]').forEach((r) => { r.checked = r.value === 'self'; });
-    savedSearchModal.hidden = false;
-    await loadSavedSearchList();
+function savedSearchApiBase(tableId) {
+    return isSaasTableKey(tableId) ? '/api/admin/saas-saved-searches' : '/api/business/saved-searches';
 }
 
-async function loadSavedSearchList() {
-    savedSearchListEl.innerHTML = '';
-    savedSearchEmptyEl.hidden = true;
+// Misma forma para comparar "lo que está puesto ahora" con "lo que guardó una
+// búsqueda": sin campos vacíos y con los valores ordenados.
+function normalizeSavedFilter(filter) {
+    const fields = Object.entries(filter?.fields || {})
+        .filter(([, value]) => value !== '' && value != null)
+        .sort(([a], [b]) => a.localeCompare(b));
+    const columns = Object.entries(filter?.columnFilters || {})
+        .map(([key, values]) => [key, [...values].sort()])
+        .sort(([a], [b]) => a.localeCompare(b));
+    return JSON.stringify([fields, columns]);
+}
+
+function activeSearchStorageKey(tableId) {
+    return `sgn_active_search::${tableId}`;
+}
+
+// Igual que getActiveSavedLayout: la búsqueda aplicada se recuerda con una
+// firma de los filtros que dejó puestos; si después se cambia un filtro a
+// mano la firma ya no coincide y el nombre deja de mostrarse.
+function getActiveSavedSearch(tableId) {
     try {
-        const res = await fetch(`/api/business/saved-searches/${encodeURIComponent(savedSearchTableId)}`, { credentials: 'include' });
-        if (!res.ok) return;
-        const { searches } = await res.json();
-        renderSavedSearchList(searches || []);
+        const record = JSON.parse(localStorage.getItem(activeSearchStorageKey(tableId)) || 'null');
+        if (record && record.sig === normalizeSavedFilter(collectCurrentFilterSnapshot(tableId))) return record;
     } catch {
-        // Leave the empty-state message in place -- no network/parse errors surfaced here.
+        // Unreadable record -- same as having none.
+    }
+    return null;
+}
+
+function setActiveSavedSearch(tableId, search) {
+    try {
+        localStorage.setItem(activeSearchStorageKey(tableId), JSON.stringify({
+            id: search.id, name: search.name, sig: normalizeSavedFilter(collectCurrentFilterSnapshot(tableId)),
+        }));
+    } catch {
+        // No storage -- the name just isn't remembered.
     }
 }
 
-// Built with createElement/textContent, not innerHTML -- search.name is
-// free text a user typed, same reasoning renderChangeHistoryRow already
-// follows for its own user-provided cell values.
-function renderSavedSearchList(searches) {
-    savedSearchListEl.innerHTML = '';
-    savedSearchEmptyEl.hidden = searches.length > 0;
-    searches.forEach((search) => {
-        const row = document.createElement('div');
-        row.className = 'saved-view-row';
+function clearActiveSavedSearch(tableId) {
+    try { localStorage.removeItem(activeSearchStorageKey(tableId)); } catch { /* ignore */ }
+}
 
+function refreshSavedSearchPill(pill) {
+    const active = getActiveSavedSearch(pill.dataset.tableId);
+    const nameEl = pill.querySelector('.data-table-layout-pill-name');
+    nameEl.textContent = active ? active.name : '';
+    nameEl.hidden = !active || pill.classList.contains('open');
+    pill.querySelector('.data-table-layout-pill-clear').hidden = !active;
+    pill.classList.toggle('named', !!active);
+}
+
+function refreshSavedSearchPillForTable(tableId) {
+    const pill = document.querySelector(`.data-table-search-pill[data-table-id="${CSS.escape(tableId)}"]`);
+    if (pill) refreshSavedSearchPill(pill);
+}
+
+// Deja la tabla sin ningún filtro (panel de arriba + por columna), igual que
+// el botón Limpiar de los filtros pero SIN tocar el acomodo de columnas.
+function resetTableFilters(tableId) {
+    const filterBar = getSavedSearchFilterBar(tableId);
+    if (filterBar) {
+        filterBar.querySelectorAll('input').forEach((input) => { input.value = ''; });
+        filterBar.querySelectorAll('select').forEach((select) => { select.selectedIndex = 0; });
+        filterBar.classList.remove('filter-bar-expanded');
+        filterBar.dispatchEvent(new CustomEvent('data-table:filter-clear'));
+    }
+    const state = dataTableColumnState.get(tableId);
+    if (state) {
+        state.columnFilters.clear();
+        applyColumnValueFilters(tableId);
+        getHeaderRow(state.table).querySelectorAll('th.data-table-col-filter-active')
+            .forEach((th) => th.classList.remove('data-table-col-filter-active'));
+        state.wrapper?.previousElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'false');
+    }
+    closeColumnFilterMenu();
+    sizeDataTableWrappers();
+}
+
+// ✕ en la píldora: quita la búsqueda aplicada y deja la tabla sin filtros.
+function clearSavedSearchForTable(tableId) {
+    closeSavedSearchMenu();
+    clearActiveSavedSearch(tableId);
+    resetTableFilters(tableId);
+    refreshSavedSearchPillForTable(tableId);
+}
+
+// "Estatus: Activo, En pausa +1 · Fecha: 3" -- resumen corto de lo que filtra
+// una búsqueda, para la lista del menú.
+function summarizeSavedSearch(tableId, filter) {
+    const state = dataTableColumnState.get(tableId);
+    const parts = Object.entries(filter?.columnFilters || {})
+        .filter(([key]) => !state || state.labels[key] !== undefined)
+        .map(([key, values]) => {
+            const label = state?.labels[key] || key;
+            const shown = values.slice(0, 2).join(', ');
+            return `${label}: ${shown}${values.length > 2 ? ` +${values.length - 2}` : ''}`;
+        });
+    const panelCount = Object.values(filter?.fields || {}).filter((v) => v !== '' && v != null).length;
+    if (panelCount) parts.push(t('main.savedSearchPanelFilters', { count: String(panelCount) }));
+    return parts.join(' · ');
+}
+
+// --- Menú de Búsqueda Guardada (mismo diseño que el de Acomodo Guardado) ---
+let searchMenuEl = null;
+let searchMenuState = null; // { tableId, pill, input, searches, loaded, query }
+
+function closeSavedSearchMenu() {
+    if (!searchMenuState) return;
+    const { pill, input } = searchMenuState;
+    pill.classList.remove('open');
+    input.hidden = true;
+    input.value = '';
+    searchMenuEl.hidden = true;
+    searchMenuState = null;
+    refreshSavedSearchPill(pill);
+}
+
+function positionSavedSearchMenu() {
+    if (!searchMenuState) return;
+    const pillRect = searchMenuState.pill.getBoundingClientRect();
+    const iconRect = searchMenuState.pill.querySelector('button').getBoundingClientRect();
+    const margin = 8;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const width = Math.min(23 * rem, window.innerWidth - margin * 2);
+    const left = Math.max(margin, Math.min(pillRect.left, window.innerWidth - width - margin));
+    searchMenuEl.style.width = `${width}px`;
+    searchMenuEl.style.left = `${left}px`;
+    searchMenuEl.style.top = `${pillRect.bottom + margin}px`;
+    searchMenuEl.style.setProperty('--caret-left', `${iconRect.left + iconRect.width / 2 - left - 6}px`);
+}
+
+function ensureSavedSearchMenu() {
+    if (searchMenuEl) return;
+    searchMenuEl = document.createElement('div');
+    searchMenuEl.className = 'data-table-layout-menu';
+    searchMenuEl.setAttribute('role', 'menu');
+    searchMenuEl.setAttribute('aria-label', t('main.savedSearchTitle'));
+    searchMenuEl.hidden = true;
+    document.body.appendChild(searchMenuEl);
+    document.addEventListener('mousedown', (event) => {
+        if (!searchMenuState) return;
+        if (searchMenuEl.contains(event.target) || searchMenuState.pill.contains(event.target)) return;
+        closeSavedSearchMenu();
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeSavedSearchMenu(); });
+    window.addEventListener('resize', positionSavedSearchMenu);
+    window.addEventListener('scroll', positionSavedSearchMenu, true);
+}
+
+function renderSavedSearchMenu() {
+    const state = searchMenuState;
+    if (!state) return;
+    searchMenuEl.innerHTML = '';
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'data-table-layout-item data-table-layout-add';
+    add.setAttribute('role', 'menuitem');
+    add.innerHTML = '<span class="data-table-layout-plus"><i class="bx bx-plus" aria-hidden="true"></i></span>';
+    const addLabel = document.createElement('span');
+    addLabel.textContent = t('main.arrangeAddNew');
+    add.appendChild(addLabel);
+    add.addEventListener('click', () => {
+        closeSavedSearchMenu();
+        openSavedSearchEditor(state.tableId);
+    });
+    searchMenuEl.appendChild(add);
+    if (!state.loaded) return;
+
+    const sep = document.createElement('div');
+    sep.className = 'data-table-layout-sep';
+    searchMenuEl.appendChild(sep);
+
+    const query = state.query.trim();
+    const lowerQuery = query.toLowerCase();
+    const shown = lowerQuery ? state.searches.filter((s) => s.name.toLowerCase().includes(lowerQuery)) : state.searches;
+    if (!shown.length) {
+        const empty = document.createElement('p');
+        empty.className = 'data-table-layout-empty';
+        empty.textContent = state.searches.length ? t('main.savedLayoutNoResults', { query }) : t('main.savedSearchEmpty');
+        searchMenuEl.appendChild(empty);
+        return;
+    }
+
+    const isAdminForThisTable = isSaasTableKey(state.tableId) ? !!currentUser?.isSaasSuperAdmin : !!currentUser?.isClientAdmin;
+    const activeId = getActiveSavedSearch(state.tableId)?.id;
+    const list = document.createElement('div');
+    list.className = 'data-table-layout-list';
+    shown.forEach((search) => {
+        const row = document.createElement('div');
+        row.className = 'data-table-layout-item' + (search.id === activeId ? ' on' : '');
+
+        const check = document.createElement('span');
+        check.className = 'data-table-layout-check';
+        if (search.id === activeId) check.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+        row.appendChild(check);
+
+        const nameBtn = document.createElement('button');
+        nameBtn.type = 'button';
+        nameBtn.className = 'data-table-layout-name data-table-layout-name-two';
+        nameBtn.setAttribute('role', 'menuitem');
         const nameEl = document.createElement('span');
-        nameEl.className = 'saved-view-row-name';
-        nameEl.textContent = search.name;
-        row.appendChild(nameEl);
+        appendHighlightedText(nameEl, search.name, lowerQuery);
+        nameBtn.appendChild(nameEl);
+        const summary = summarizeSavedSearch(state.tableId, search.filter);
+        if (summary) {
+            const sumEl = document.createElement('span');
+            sumEl.className = 'data-table-layout-sum';
+            sumEl.textContent = summary;
+            nameBtn.appendChild(sumEl);
+        }
+        nameBtn.addEventListener('click', () => {
+            applySavedSearch(state.tableId, search);
+            closeSavedSearchMenu();
+        });
+        row.appendChild(nameBtn);
 
         const badge = document.createElement('span');
         badge.className = `saved-view-scope-badge saved-view-scope-${search.scope}`;
         badge.textContent = t(search.scope === 'global' ? 'main.savedSearchScopeGlobal' : 'main.savedSearchScopePersonal');
         row.appendChild(badge);
 
-        const applyBtn = document.createElement('button');
-        applyBtn.type = 'button';
-        applyBtn.className = 'btn-link';
-        applyBtn.textContent = t('main.savedSearchApply');
-        applyBtn.addEventListener('click', () => applySavedSearch(savedSearchTableId, search));
-        row.appendChild(applyBtn);
-
-        // A 'personal' row only ever appears in the viewer's OWN list (the
-        // server already scopes it to its owner) -- no need to separately
-        // compare ownerUserId against the current user here.
-        const canDelete = !!currentUser?.isClientAdmin || search.scope === 'personal';
-        if (canDelete) {
+        // Same rule the server enforces on PUT/DELETE: a 'personal' row only
+        // ever shows in its owner's own list, so personal rows plus every
+        // row for an admin can be edited/deleted.
+        if (isAdminForThisTable || search.scope === 'personal') {
+            const acts = document.createElement('span');
+            acts.className = 'data-table-layout-acts';
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'data-table-layout-act data-table-layout-act-edit';
+            editBtn.setAttribute('aria-label', t('main.savedLayoutEditBtn'));
+            editBtn.title = t('main.savedLayoutEditBtn');
+            editBtn.innerHTML = '<i class="bx bx-pencil" aria-hidden="true"></i>';
+            editBtn.addEventListener('click', () => {
+                closeSavedSearchMenu();
+                openSavedSearchEditor(state.tableId, search);
+            });
             const delBtn = document.createElement('button');
             delBtn.type = 'button';
-            delBtn.className = 'btn-link-danger';
+            delBtn.className = 'data-table-layout-act data-table-layout-act-del';
             delBtn.setAttribute('aria-label', t('admin.delete'));
+            delBtn.title = t('admin.delete');
             delBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-            delBtn.addEventListener('click', () => deleteSavedSearchRow(search.id));
-            row.appendChild(delBtn);
+            delBtn.addEventListener('click', () => deleteSavedSearchFromMenu(state, search.id));
+            acts.append(editBtn, delBtn);
+            row.appendChild(acts);
         }
-        savedSearchListEl.appendChild(row);
+        list.appendChild(row);
+    });
+    searchMenuEl.appendChild(list);
+}
+
+async function refreshSavedSearchMenu(state) {
+    try {
+        const res = await fetch(`${savedSearchApiBase(state.tableId)}/${encodeURIComponent(state.tableId)}`, { credentials: 'include' });
+        if (res.ok) state.searches = (await res.json()).searches || [];
+    } catch {
+        // Leave the list as it was -- the next open retries the fetch anyway.
+    }
+    state.loaded = true;
+    if (searchMenuState === state) renderSavedSearchMenu();
+}
+
+async function deleteSavedSearchFromMenu(state, id) {
+    try {
+        const res = await fetch(`${savedSearchApiBase(state.tableId)}/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (res.ok) {
+            if (getActiveSavedSearch(state.tableId)?.id === id) clearActiveSavedSearch(state.tableId);
+            refreshSavedSearchPill(state.pill);
+            await refreshSavedSearchMenu(state);
+        }
+    } catch {
+        // Leave the list as-is -- next open retries the fetch anyway.
+    }
+}
+
+async function toggleSavedSearchMenu(tableId, pill) {
+    if (searchMenuState?.pill === pill) {
+        closeSavedSearchMenu();
+        return;
+    }
+    closeSavedSearchMenu();
+    closeSavedLayoutMenu();
+    ensureSavedSearchMenu();
+    const input = pill.querySelector('input');
+    const state = { tableId, pill, input, searches: [], loaded: false, query: '' };
+    searchMenuState = state;
+    pill.classList.add('open');
+    refreshSavedSearchPill(pill);
+    input.hidden = false;
+    input.value = '';
+    searchMenuEl.hidden = false;
+    renderSavedSearchMenu();
+    positionSavedSearchMenu();
+    input.focus({ preventScroll: true });
+    await refreshSavedSearchMenu(state);
+}
+
+// --- Editor: nombre + pestañas/columnas + los filtros de cada columna -------
+let searchEditorModal = null;
+// { tableId, editingId, filters: Map<colKey, Set<value>>, expanded: Set<colKey>,
+//   preservedFields, activeTab, query, scope }
+let searchEditorState = null;
+
+function closeSavedSearchEditor() {
+    if (!searchEditorModal) return;
+    searchEditorModal.hidden = true;
+    searchEditorState = null;
+}
+
+function ensureSearchEditorModal() {
+    if (searchEditorModal) return;
+    searchEditorModal = document.createElement('div');
+    searchEditorModal.className = 'modal-overlay';
+    searchEditorModal.hidden = true;
+    searchEditorModal.innerHTML = `
+        <div class="modal-panel data-table-arrange-panel" role="dialog" aria-modal="true" aria-labelledby="data-table-search-title">
+            <h3 id="data-table-search-title">
+                <button type="button" class="data-table-arrange-back" data-role="back" aria-label="${t('main.arrangeBack')}"><i class="bx bx-arrow-back" aria-hidden="true"></i></button>
+                <span data-role="title">${t('main.savedSearchEditorNewTitle')}</span>
+            </h3>
+            <div>
+                <label class="data-table-arrange-label" for="data-table-search-name" data-role="name-label">${t('main.savedSearchEditorNameLabel')}</label>
+                <input type="text" id="data-table-search-name" data-role="name" class="saved-view-name-input data-table-arrange-name" placeholder="${t('main.savedSearchNamePlaceholder')}">
+
+                <div class="data-table-arrange-colpanel">
+                    <div class="sector-icon-picker-search">
+                        <i class="bx bx-search" aria-hidden="true"></i>
+                        <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
+                    </div>
+                    <p class="data-table-arrange-section-label">${t('main.arrangeClassHint')}</p>
+                    <div class="sector-icon-picker-chips data-table-arrange-tabs" data-role="tabs"></div>
+                    <div class="data-table-arrange-legend">
+                        <span><i class="bx bx-filter-alt" aria-hidden="true"></i> ${t('main.savedSearchEditorLegend')}</span>
+                    </div>
+                    <div class="admin-module-list data-table-arrange-list" data-role="rows"></div>
+                </div>
+
+                <p class="data-table-arrange-section-label">${t('main.savedSearchFiltersLabel')}</p>
+                <div class="data-table-search-filters" data-role="filters"></div>
+
+                <div data-role="scope-block">
+                    <div data-role="admin-section" class="data-table-arrange-segmented" hidden>
+                        <label><input type="radio" name="saved-search-audience" value="self" checked> <span>${t('main.savedSearchAudienceSelf')}</span></label>
+                        <label><input type="radio" name="saved-search-audience" value="assign"> <span>${t('main.savedSearchAudienceAssign')}</span></label>
+                    </div>
+                    <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
+                </div>
+                <p data-role="error" class="admin-error" role="alert" hidden></p>
+                <button type="button" class="btn data-table-arrange-block-btn data-table-arrange-save-btn" data-role="save" disabled>${t('main.savedSearchSaveBtn')}</button>
+                <p data-role="lock-note" class="data-table-arrange-lock-note"></p>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(searchEditorModal);
+    const q = (role) => searchEditorModal.querySelector(`[data-role="${role}"]`);
+    searchEditorModal._refs = {
+        titleEl: q('title'), nameLabel: q('name-label'), nameInput: q('name'), searchInput: q('search'),
+        tabsEl: q('tabs'), rowsEl: q('rows'), filtersEl: q('filters'), scopeBlock: q('scope-block'),
+        adminSection: q('admin-section'), audiencePanel: q('audience-panel'), errorEl: q('error'),
+        saveBtn: q('save'), lockNote: q('lock-note'),
+    };
+    const refs = searchEditorModal._refs;
+
+    q('close').addEventListener('click', closeSavedSearchEditor);
+    q('back').addEventListener('click', closeSavedSearchEditor);
+    wireModalDismiss(searchEditorModal, closeSavedSearchEditor);
+
+    refs.nameInput.addEventListener('input', updateSearchEditorGating);
+    refs.searchInput.addEventListener('input', () => {
+        searchEditorState.query = refs.searchInput.value;
+        renderSearchEditorRows();
+    });
+    searchEditorModal.querySelectorAll('input[name="saved-search-audience"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            searchEditorState.scope = radio.value === 'assign' ? 'global' : 'personal';
+            if (radio.value === 'assign') {
+                refs.audiencePanel.hidden = false;
+                if (isSaasTableKey(searchEditorState.tableId)) buildSaasLayoutAudiencePanel(refs.audiencePanel);
+                else buildSavedViewAudiencePanel(refs.audiencePanel);
+            } else {
+                refs.audiencePanel.hidden = true;
+            }
+        });
+    });
+    refs.saveBtn.addEventListener('click', saveSavedSearch);
+}
+
+// Columnas que se pueden filtrar: las mismas que tienen embudo en su
+// encabezado (todas menos la de acciones).
+function searchEditorKeys(state) {
+    return state.columnKeys.filter((k) => k !== 'actions');
+}
+
+function renderSearchEditorTabs() {
+    const state = dataTableColumnState.get(searchEditorState.tableId);
+    if (!state) return;
+    const { tabsEl, searchInput } = searchEditorModal._refs;
+    tabsEl.innerHTML = '';
+    const keys = searchEditorKeys(state);
+    const presentGroupKeys = [...new Set(keys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
+    const hasUnclassified = keys.some((k) => !state.groupKeys.get(k));
+    const tabs = hasUnclassified ? [...presentGroupKeys, COLUMN_ARRANGE_UNCLASSIFIED] : presentGroupKeys;
+    tabs.forEach((groupKey) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'sector-icon-picker-chip' + (searchEditorState.activeTab === groupKey ? ' active' : '');
+        if (groupKey !== COLUMN_ARRANGE_UNCLASSIFIED) {
+            const dot = document.createElement('span');
+            dot.className = 'data-table-col-dot data-table-col-dot-chip';
+            dot.style.backgroundColor = columnGroupColor(groupKey);
+            tab.appendChild(dot);
+        }
+        tab.appendChild(document.createTextNode(groupKey === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(groupKey)));
+        const count = document.createElement('span');
+        count.className = 'data-table-arrange-tab-count';
+        count.textContent = String(keys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === groupKey).length);
+        tab.appendChild(count);
+        tab.addEventListener('click', () => {
+            searchEditorState.activeTab = groupKey;
+            searchEditorState.query = '';
+            searchInput.value = '';
+            renderSearchEditorTabs();
+            renderSearchEditorRows();
+        });
+        tabsEl.appendChild(tab);
     });
 }
 
-async function deleteSavedSearchRow(id) {
+function searchEditorVisibleKeys(state) {
+    const keys = searchEditorKeys(state);
+    const q = searchEditorState.query.trim().toLowerCase();
+    if (q) return keys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q));
+    return keys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === searchEditorState.activeTab);
+}
+
+// Botón de embudo de una columna: marcado (con el mismo tinte de su
+// clasificación que usa el Normal/Fija de Acomodo) cuando ya tiene filtro.
+function buildSearchFilterToggle(key, groupKey, label) {
+    const wrap = document.createElement('div');
+    wrap.className = 'data-table-tri-control';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    const active = searchEditorState.filters.has(key);
+    btn.classList.toggle('active', active);
+    if (active && groupKey) btn.dataset.groupKey = groupKey;
+    const color = columnGroupColor(groupKey);
+    if (active && color && color !== 'var(--color-border)' && !color.startsWith('var(')) {
+        btn.style.backgroundColor = `color-mix(in srgb, ${color} 16%, var(--color-surface))`;
+        btn.style.color = color;
+    }
+    wrap.appendChild(btn);
+    return wrap;
+}
+
+function renderSearchEditorRows() {
+    const state = dataTableColumnState.get(searchEditorState.tableId);
+    if (!state) return;
+    const rowsEl = searchEditorModal._refs.rowsEl;
+    rowsEl.innerHTML = '';
+    searchEditorVisibleKeys(state).forEach((key) => {
+        const groupKey = state.groupKeys.get(key);
+        const label = state.labels[key] || key;
+        const { row } = buildArrangeRowShell(key, label, {
+            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : t('menu.classNone'),
+        });
+        row.classList.toggle('has-filter', searchEditorState.filters.has(key));
+        row.classList.add('data-table-search-row');
+        row.appendChild(buildSearchFilterToggle(key, groupKey, label));
+        row.addEventListener('click', () => toggleSearchEditorFilter(key));
+        rowsEl.appendChild(row);
+    });
+}
+
+function toggleSearchEditorFilter(key) {
+    const { filters, expanded } = searchEditorState;
+    if (filters.has(key)) {
+        filters.delete(key);
+        expanded.delete(key);
+    } else {
+        // Un filtro nuevo empieza sin valores elegidos (hay que marcar cuáles
+        // sí), y es el único abierto: los anteriores se resumen.
+        filters.set(key, new Set());
+        expanded.clear();
+        expanded.add(key);
+    }
+    renderSearchEditorRows();
+    renderSearchEditorFilters();
+}
+
+function summarizeSelection(selected, total) {
+    if (!selected.size) return t('main.savedSearchPickValues');
+    const shown = [...selected].slice(0, 3).join(', ');
+    return t('main.savedSearchValuesSummary', {
+        count: String(selected.size), total: String(total), list: `${shown}${selected.size > 3 ? '…' : ''}`,
+    });
+}
+
+// El mismo control del embudo de un encabezado (openColumnFilterMenu): modo +
+// buscador, o Desde/Hasta si es una fecha; "Todos"; y la lista de valores con
+// casillas. El buscador/modo/rango solo acotan lo que se ve en la lista; lo
+// que cuenta es qué casillas quedan marcadas (`selected`).
+function buildSearchFilterBody(tableId, key, selected, onChange) {
+    const distinctValues = [...new Set([...getColumnDistinctValues(tableId, key), ...selected])]
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    const body = document.createElement('div');
+    body.className = 'data-table-search-filter-body';
+    const searchRow = document.createElement('div');
+    searchRow.className = 'data-table-col-filter-search-row';
+    let rowMatches = () => true;
+    let refreshList = () => {};
+
+    if (isDateColumn(distinctValues)) {
+        const fromField = document.createElement('input');
+        fromField.type = 'date';
+        fromField.className = 'data-table-col-filter-date';
+        fromField.setAttribute('aria-label', t('main.filterDateFrom'));
+        const toField = document.createElement('input');
+        toField.type = 'date';
+        toField.className = 'data-table-col-filter-date';
+        toField.setAttribute('aria-label', t('main.filterDateTo'));
+        const fromLabel = document.createElement('span');
+        fromLabel.className = 'data-table-col-filter-date-label';
+        fromLabel.textContent = t('main.filterDateFrom');
+        const toLabel = document.createElement('span');
+        toLabel.className = 'data-table-col-filter-date-label';
+        toLabel.textContent = t('main.filterDateTo');
+        searchRow.append(fromLabel, fromField, toLabel, toField);
+        rowMatches = (value) => !(fromField.value && value < fromField.value) && !(toField.value && value > toField.value);
+        fromField.addEventListener('input', () => refreshList());
+        toField.addEventListener('input', () => refreshList());
+    } else {
+        const MODES = [
+            { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
+            { id: 'contains', labelKey: 'main.filterModeContains' },
+            { id: 'equals', labelKey: 'main.filterModeEquals' },
+        ];
+        let mode = 'contains';
+        const current = document.createElement('div');
+        current.className = 'data-table-col-filter-mode-current';
+        current.textContent = t('main.filterModeContains');
+        body.appendChild(current);
+        const modeBtn = document.createElement('button');
+        modeBtn.type = 'button';
+        modeBtn.className = 'data-table-col-filter-mode-btn';
+        modeBtn.setAttribute('aria-label', t('main.filterModeLabel'));
+        modeBtn.title = t('main.filterModeLabel');
+        modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
+        searchRow.appendChild(modeBtn);
+        const searchInput = document.createElement('input');
+        searchInput.type = 'search';
+        searchInput.className = 'data-table-col-filter-search';
+        searchInput.placeholder = t('main.filterSearchPlaceholder');
+        searchRow.appendChild(searchInput);
+        const modeMenu = document.createElement('div');
+        modeMenu.className = 'data-table-col-filter-mode-menu';
+        modeMenu.hidden = true;
+        const modeButtons = MODES.map((m) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'data-table-col-filter-mode-option';
+            btn.textContent = t(m.labelKey);
+            btn.classList.toggle('data-table-col-filter-mode-option-active', m.id === mode);
+            btn.addEventListener('click', () => {
+                mode = m.id;
+                modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
+                btn.classList.add('data-table-col-filter-mode-option-active');
+                current.textContent = t(m.labelKey);
+                modeMenu.hidden = true;
+                refreshList();
+            });
+            modeMenu.appendChild(btn);
+            return btn;
+        });
+        searchRow.appendChild(modeMenu);
+        modeBtn.addEventListener('click', () => { modeMenu.hidden = !modeMenu.hidden; });
+        rowMatches = (value) => {
+            const query = searchInput.value.trim().toLowerCase();
+            if (query === '') return true;
+            const v = value.toLowerCase();
+            if (mode === 'equals') {
+                const queryTerms = query.split(',').map((s) => s.trim()).filter(Boolean);
+                const valueTerms = v.split(',').map((s) => s.trim());
+                return queryTerms.some((term) => valueTerms.includes(term));
+            }
+            return mode === 'startsWith' ? v.startsWith(query) : v.includes(query);
+        };
+        searchInput.addEventListener('input', () => refreshList());
+    }
+    body.appendChild(searchRow);
+
+    const allRow = document.createElement('label');
+    allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
+    const allCheckbox = document.createElement('input');
+    allCheckbox.type = 'checkbox';
+    const allLabel = document.createElement('span');
+    allLabel.textContent = t('main.filterAll');
+    allRow.append(allCheckbox, allLabel);
+    body.appendChild(allRow);
+
+    const list = document.createElement('div');
+    list.className = 'data-table-col-filter-list';
+    const checkboxes = [];
+    const syncAll = () => {
+        allCheckbox.checked = distinctValues.length > 0 && selected.size === distinctValues.length;
+        allCheckbox.indeterminate = selected.size > 0 && selected.size < distinctValues.length;
+    };
+    distinctValues.forEach((value) => {
+        const row = document.createElement('label');
+        row.className = 'data-table-col-filter-option';
+        row.dataset.searchValue = value;
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = selected.has(value);
+        cb.addEventListener('change', () => {
+            if (cb.checked) selected.add(value); else selected.delete(value);
+            syncAll();
+            onChange();
+        });
+        const span = document.createElement('span');
+        span.textContent = value || '—';
+        row.append(cb, span);
+        list.appendChild(row);
+        checkboxes.push(cb);
+    });
+    body.appendChild(list);
+    refreshList = () => {
+        list.querySelectorAll('.data-table-col-filter-option').forEach((row) => { row.hidden = !rowMatches(row.dataset.searchValue); });
+    };
+    allCheckbox.addEventListener('change', () => {
+        checkboxes.forEach((cb, i) => {
+            cb.checked = allCheckbox.checked;
+            if (allCheckbox.checked) selected.add(distinctValues[i]); else selected.delete(distinctValues[i]);
+        });
+        allCheckbox.indeterminate = false;
+        onChange();
+    });
+    syncAll();
+    return { body, total: distinctValues.length };
+}
+
+function renderSearchEditorFilters() {
+    const state = dataTableColumnState.get(searchEditorState.tableId);
+    if (!state) return;
+    const { filtersEl } = searchEditorModal._refs;
+    filtersEl.innerHTML = '';
+    if (!searchEditorState.filters.size) {
+        const empty = document.createElement('p');
+        empty.className = 'data-table-search-empty';
+        empty.textContent = t('main.savedSearchFiltersEmpty');
+        filtersEl.appendChild(empty);
+    }
+    searchEditorState.filters.forEach((selected, key) => {
+        const groupKey = state.groupKeys.get(key);
+        const open = searchEditorState.expanded.has(key);
+        const card = document.createElement('div');
+        card.className = 'data-table-search-card';
+
+        const head = document.createElement('div');
+        head.className = 'data-table-search-card-head';
+        const dot = document.createElement('span');
+        dot.className = 'data-table-col-dot';
+        dot.style.backgroundColor = columnGroupColor(groupKey);
+        const title = document.createElement('span');
+        title.className = 'data-table-search-card-title';
+        title.textContent = state.labels[key] || key;
+        const cls = document.createElement('span');
+        cls.className = 'data-table-search-card-class';
+        cls.textContent = groupKey ? resolveGroupLabel(groupKey) : t('menu.classNone');
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'data-table-search-card-remove';
+        remove.setAttribute('aria-label', t('main.savedSearchRemoveFilter'));
+        remove.title = t('main.savedSearchRemoveFilter');
+        remove.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+        remove.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggleSearchEditorFilter(key);
+        });
+        head.append(dot, title, cls, remove);
+        head.addEventListener('click', () => {
+            if (searchEditorState.expanded.has(key)) searchEditorState.expanded.delete(key);
+            else searchEditorState.expanded.add(key);
+            renderSearchEditorFilters();
+        });
+        card.appendChild(head);
+
+        const { body, total } = buildSearchFilterBody(searchEditorState.tableId, key, selected, updateSearchEditorGating);
+        if (open) {
+            card.appendChild(body);
+        } else {
+            const summary = document.createElement('p');
+            summary.className = 'data-table-search-card-summary';
+            summary.textContent = summarizeSelection(selected, total);
+            card.appendChild(summary);
+        }
+        filtersEl.appendChild(card);
+    });
+    if (Object.keys(searchEditorState.preservedFields).length) {
+        const kept = document.createElement('p');
+        kept.className = 'data-table-arrange-caption';
+        kept.textContent = t('main.savedSearchKeepsPanel', { count: String(Object.values(searchEditorState.preservedFields).filter((v) => v !== '' && v != null).length) });
+        filtersEl.appendChild(kept);
+    }
+    updateSearchEditorGating();
+}
+
+// Guardar se habilita con nombre, al menos un filtro y al menos un valor
+// marcado en cada filtro.
+function updateSearchEditorGating() {
+    if (!searchEditorState) return;
+    const { nameInput, saveBtn, lockNote } = searchEditorModal._refs;
+    const filters = [...searchEditorState.filters.values()];
+    const hasFilter = filters.length > 0;
+    const allHaveValues = filters.every((set) => set.size > 0);
+    const hasName = nameInput.value.trim() !== '';
+    saveBtn.disabled = !(hasFilter && allHaveValues && hasName);
+    let note = '';
+    if (!hasFilter) note = t('main.savedSearchNeedFilter');
+    else if (!allHaveValues) note = t('main.savedSearchNeedValues');
+    else if (!hasName) note = t('main.savedSearchNameRequired');
+    lockNote.textContent = note;
+    lockNote.hidden = !note;
+}
+
+function openSavedSearchEditor(tableId, search = null) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    ensureSearchEditorModal();
+    const refs = searchEditorModal._refs;
+    const editing = !!search;
+    const existingKeys = new Set(searchEditorKeys(state));
+    const filters = new Map();
+    Object.entries(search?.filter?.columnFilters || {}).forEach(([key, values]) => {
+        if (existingKeys.has(key)) filters.set(key, new Set(values));
+    });
+    const presentGroupKeys = [...new Set(searchEditorKeys(state).map((k) => state.groupKeys.get(k)).filter(Boolean))];
+    searchEditorState = {
+        tableId,
+        editingId: editing ? search.id : null,
+        filters,
+        expanded: new Set(),
+        preservedFields: editing ? { ...(search.filter?.fields || {}) } : {},
+        activeTab: presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED,
+        query: '',
+        scope: 'personal',
+    };
+    refs.titleEl.textContent = t(editing ? 'main.savedSearchEditorEditTitle' : 'main.savedSearchEditorNewTitle');
+    refs.nameLabel.textContent = t(editing ? 'main.savedSearchEditorNameLabelEdit' : 'main.savedSearchEditorNameLabel');
+    refs.saveBtn.textContent = t(editing ? 'main.arrangeSaveChanges' : 'main.savedSearchSaveBtn');
+    refs.nameInput.value = editing ? search.name : '';
+    refs.searchInput.value = '';
+    refs.errorEl.hidden = true;
+    // Editar solo cambia nombre y filtros: alcance y audiencia se quedan.
+    refs.scopeBlock.hidden = editing;
+    savedViewAudienceSelection = new Map(SAVED_VIEW_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
+    refs.adminSection.hidden = isSaasTableKey(tableId) ? !currentUser?.isSaasSuperAdmin : !currentUser?.isClientAdmin;
+    refs.audiencePanel.hidden = true;
+    searchEditorModal.querySelectorAll('input[name="saved-search-audience"]').forEach((r) => { r.checked = r.value === 'self'; });
+
+    renderSearchEditorTabs();
+    renderSearchEditorRows();
+    renderSearchEditorFilters();
+    searchEditorModal.querySelector('.modal-panel').scrollTop = 0;
+    searchEditorModal.hidden = false;
+}
+
+async function saveSavedSearch() {
+    const { nameInput, errorEl } = searchEditorModal._refs;
+    const { tableId, editingId, filters, preservedFields } = searchEditorState;
+    errorEl.hidden = true;
+    const name = nameInput.value.trim();
+    if (!name) {
+        errorEl.textContent = t('main.savedSearchNameRequired');
+        errorEl.hidden = false;
+        return;
+    }
+    const columnFilters = {};
+    filters.forEach((set, key) => { columnFilters[key] = [...set]; });
+    const filter = { fields: preservedFields, columnFilters };
+    const showError = (message) => { errorEl.textContent = message; errorEl.hidden = false; };
+    const finish = (saved) => {
+        // Queda aplicada: la tabla ya se ve filtrada y el nombre se escribe en el icono.
+        closeSavedSearchEditor();
+        applySavedSearch(tableId, saved);
+        showToast(t('main.changeSaved'), 'success');
+    };
+
+    if (editingId) {
+        try {
+            const res = await fetch(`${savedSearchApiBase(tableId)}/${editingId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ name, filter }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                showError(body?.message || t('admin.saveError'));
+                return;
+            }
+            finish((await res.json()).search);
+        } catch {
+            showError(t('admin.saveError'));
+        }
+        return;
+    }
+
+    const isSaasTable = isSaasTableKey(tableId);
+    const canAssign = isSaasTable ? !!currentUser?.isSaasSuperAdmin : !!currentUser?.isClientAdmin;
+    const isAssign = searchEditorModal.querySelector('input[name="saved-search-audience"][value="assign"]')?.checked;
+    const scope = (canAssign && isAssign) ? 'global' : 'personal';
+    let audience;
+    if (scope === 'global') {
+        if (isSaasTable) {
+            audience = { userIds: [...savedViewAudienceSelection.get('userIds').keys()] };
+            if (!audience.userIds.length) {
+                showError(t('main.savedSearchAudienceSummaryEmptySaas'));
+                return;
+            }
+        } else {
+            audience = {};
+            SAVED_VIEW_AUDIENCE_GROUPS.forEach((group) => {
+                const groupMap = savedViewAudienceSelection.get(group.key);
+                if (!groupMap.size) return;
+                if (group.key === 'userIds') audience.userIds = [...groupMap.keys()];
+                else audience[group.key] = [...groupMap.entries()].map(([id, exceptSet]) => ({ id, exceptUserIds: [...exceptSet] }));
+            });
+            if (!audience.userIds?.length && !audience.jobPositions?.length && !audience.costCenters?.length) {
+                showError(t('main.savedSearchAudienceSummaryEmpty'));
+                return;
+            }
+        }
+    }
     try {
-        const res = await fetch(`/api/business/saved-searches/${id}`, { method: 'DELETE', credentials: 'include' });
-        if (res.ok) await loadSavedSearchList();
+        const res = await fetch(savedSearchApiBase(tableId), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ tableKey: tableId, name, filter, scope, audience }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            showError(body?.message || t('admin.saveError'));
+            return;
+        }
+        finish((await res.json()).search);
     } catch {
-        // Leave the list as-is -- next open retries the fetch anyway.
+        showError(t('admin.saveError'));
     }
 }
 
@@ -5675,13 +6416,19 @@ function collectCurrentFilterSnapshot(tableId) {
 // this was saved just drops out silently rather than erroring.
 function applySavedSearch(tableId, search) {
     const filterBar = getSavedSearchFilterBar(tableId);
+    const usesPanel = Object.values(search.filter?.fields || {}).some((v) => v !== '' && v != null);
     if (filterBar) {
+        // Parte de cero: lo que hubiera en el panel de arriba no se mezcla con
+        // lo que esta búsqueda guardó.
+        filterBar.querySelectorAll('input[id], select[id]').forEach((el) => {
+            if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
+        });
         Object.entries(search.filter?.fields || {}).forEach(([id, value]) => {
             const el = filterBar.querySelector(`#${CSS.escape(id)}`);
             if (el) el.value = value;
         });
         filterBar.dispatchEvent(new CustomEvent('data-table:filter-apply'));
-        filterBar.classList.add('filter-bar-expanded');
+        if (usesPanel) filterBar.classList.add('filter-bar-expanded');
     }
     const state = dataTableColumnState.get(tableId);
     if (state) {
@@ -5695,10 +6442,11 @@ function applySavedSearch(tableId, search) {
         getHeaderRow(state.table).querySelectorAll('th[data-col]').forEach((th) => {
             updateColumnFilterIndicator(th, newFilters.has(th.dataset.col));
         });
-        state.wrapper?.previousElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'true');
+        if (usesPanel) state.wrapper?.previousElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'true');
     }
     sizeDataTableWrappers();
-    savedSearchModal.hidden = true;
+    setActiveSavedSearch(tableId, search);
+    refreshSavedSearchPillForTable(tableId);
 }
 
 // Shared by Búsqueda Guardada AND Acomodo Guardado from here down -- see
@@ -5922,51 +6670,6 @@ async function buildSaasLayoutAudiencePanel(panelEl) {
     panelEl.appendChild(chipsEl);
     panelEl.appendChild(summaryEl);
     updateSummary();
-}
-
-async function saveSavedSearch() {
-    savedSearchErrorEl.hidden = true;
-    const name = savedSearchNameInput.value.trim();
-    if (!name) {
-        savedSearchErrorEl.textContent = t('main.savedSearchNameRequired');
-        savedSearchErrorEl.hidden = false;
-        return;
-    }
-    const isAssign = savedSearchModal.querySelector('input[name="saved-search-audience"][value="assign"]')?.checked;
-    const scope = (currentUser?.isClientAdmin && isAssign) ? 'global' : 'personal';
-    let audience;
-    if (scope === 'global') {
-        audience = {};
-        SAVED_VIEW_AUDIENCE_GROUPS.forEach((group) => {
-            const groupMap = savedViewAudienceSelection.get(group.key);
-            if (!groupMap.size) return;
-            if (group.key === 'userIds') audience.userIds = [...groupMap.keys()];
-            else audience[group.key] = [...groupMap.entries()].map(([id, exceptSet]) => ({ id, exceptUserIds: [...exceptSet] }));
-        });
-        if (!audience.userIds?.length && !audience.jobPositions?.length && !audience.costCenters?.length) {
-            savedSearchErrorEl.textContent = t('main.savedSearchAudienceSummaryEmpty');
-            savedSearchErrorEl.hidden = false;
-            return;
-        }
-    }
-    const filter = collectCurrentFilterSnapshot(savedSearchTableId);
-    try {
-        const res = await fetch('/api/business/saved-searches', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-            body: JSON.stringify({ tableKey: savedSearchTableId, name, filter, scope, audience }),
-        });
-        if (!res.ok) {
-            const body = await res.json().catch(() => null);
-            savedSearchErrorEl.textContent = body?.message || t('admin.saveError');
-            savedSearchErrorEl.hidden = false;
-            return;
-        }
-        savedSearchNameInput.value = '';
-        await loadSavedSearchList();
-    } catch {
-        savedSearchErrorEl.textContent = t('admin.saveError');
-        savedSearchErrorEl.hidden = false;
-    }
 }
 
 // --- Acomodo Guardado ------------------------------------------------------
@@ -6309,16 +7012,10 @@ function renderDataTableColumnControls() {
                 toAppend.push(legendBtn);
             }
 
-            // Client-side only -- the whole feature (server routes, audience
-            // picker) is keyed off req.user.clientId, which SaaS-admin
-            // accounts never have. SAAS_TABLE_ICON_SCREENS' 3 internal
-            // tables (Nuestros Clientes/Nuestros Planes/Equipo SaaS) fall
-            // through to hasIconGrant's "no TABLE_GRANT_PATHS entry = show
-            // it" default otherwise, which is how this leaked into
-            // production: the icon rendered there but "Guardar" 404'd
-            // ("No client for this account.") since those screens have no
-            // client to scope a saved search/layout to in the first place.
-            if (currentUser?.clientId && resolveIconGrant(tableKey, 'iconSavedSearch')) {
+            // Client accounts (saved_searches, scoped by client) and the internal
+            // SaaS tables (saas_saved_searches) -- see canPersistSavedSearch. Any
+            // other table would render the icon and 404 on save.
+            if (canPersistSavedSearch(tableKey) && resolveIconGrant(tableKey, 'iconSavedSearch')) {
                 const savedSearchBtn = document.createElement('button');
                 savedSearchBtn.type = 'button';
                 savedSearchBtn.className = 'data-table-zoom-btn';
@@ -6326,8 +7023,47 @@ function renderDataTableColumnControls() {
                 savedSearchBtn.setAttribute('aria-label', t('main.savedSearchBtn'));
                 savedSearchBtn.title = t('main.savedSearchBtn');
                 savedSearchBtn.innerHTML = '<i class="bx bx-bookmark" aria-hidden="true"></i>';
-                savedSearchBtn.addEventListener('click', () => openSavedSearchPicker(getTableId(wrapper, index)));
-                toAppend.push(savedSearchBtn);
+                // Mismo armado que la píldora de Acomodo Guardado: el icono +
+                // un buscador escondido a su derecha, el nombre de la búsqueda
+                // aplicada y la ✕ que la limpia.
+                const searchPill = document.createElement('span');
+                searchPill.className = 'data-table-search-pill';
+                searchPill.dataset.tableId = tableKey;
+                const searchName = document.createElement('span');
+                searchName.className = 'data-table-layout-pill-name';
+                searchName.dataset.helpKey = 'savedSearch';
+                searchName.hidden = true;
+                searchName.addEventListener('click', () => toggleSavedSearchMenu(tableKey, searchPill));
+                const searchClear = document.createElement('button');
+                searchClear.type = 'button';
+                searchClear.className = 'data-table-layout-pill-clear';
+                searchClear.dataset.helpKey = 'clearSearch';
+                searchClear.setAttribute('aria-label', t('main.savedSearchClearBtn'));
+                searchClear.title = t('main.savedSearchClearBtn');
+                searchClear.hidden = true;
+                searchClear.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+                searchClear.addEventListener('click', () => clearSavedSearchForTable(tableKey));
+                const searchField = document.createElement('input');
+                searchField.type = 'text';
+                searchField.className = 'data-table-layout-pill-input';
+                searchField.placeholder = t('main.savedSearchSearchPlaceholder');
+                searchField.setAttribute('aria-label', t('main.savedSearchSearchPlaceholder'));
+                searchField.hidden = true;
+                searchField.addEventListener('input', () => {
+                    if (searchMenuState?.input !== searchField) return;
+                    searchMenuState.query = searchField.value;
+                    renderSavedSearchMenu();
+                });
+                searchPill.append(savedSearchBtn, searchName, searchField, searchClear);
+                savedSearchBtn.addEventListener('click', () => toggleSavedSearchMenu(tableKey, searchPill));
+                refreshSavedSearchPill(searchPill);
+                // The panel's own fields (Buscar/Limpiar) change what's filtered
+                // without going through applyColumnValueFilters.
+                const searchFilterBar = zoom.previousElementSibling?.classList?.contains('filter-bar') ? zoom.previousElementSibling : null;
+                ['data-table:filter-apply', 'data-table:filter-clear', 'input', 'change'].forEach((evt) => {
+                    searchFilterBar?.addEventListener(evt, () => refreshSavedSearchPill(searchPill));
+                });
+                toAppend.push(searchPill);
             }
 
             if (canPersistSavedLayout(tableKey) && resolveIconGrant(tableKey, 'iconSavedLayout')) {

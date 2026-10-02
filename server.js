@@ -189,6 +189,12 @@ const {
     getSavedSearchById,
     createSavedSearch,
     deleteSavedSearch,
+    updateSavedSearch,
+    getSaasSavedSearchesForTable,
+    getSaasSavedSearchById,
+    createSaasSavedSearch,
+    updateSaasSavedSearch,
+    deleteSaasSavedSearch,
     getSavedLayoutsForClientTable,
     getSavedLayoutById,
     createSavedLayout,
@@ -5658,6 +5664,20 @@ app.post('/api/business/saved-searches', requireAuth, (req, res) => {
     res.status(201).json({ search: row });
 });
 
+// Editar = nombre + filtros; alcance y audiencia no cambian. Mismo permiso que
+// borrar: el dueño de una personal, o un admin del cliente.
+app.put('/api/business/saved-searches/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const row = getSavedSearchById(Number(req.params.id));
+    if (!row || row.clientId !== req.user.clientId) return res.status(404).json({ message: 'Not found.' });
+    const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
+    if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para editar esta búsqueda guardada.' });
+    const { name, filter } = req.body || {};
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
+    if (!filter || typeof filter !== 'object') return res.status(400).json({ message: 'Missing filter.' });
+    res.json({ search: updateSavedSearch(row.id, { name: name.trim(), filter }) });
+});
+
 app.delete('/api/business/saved-searches/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const row = getSavedSearchById(Number(req.params.id));
@@ -5665,6 +5685,58 @@ app.delete('/api/business/saved-searches/:id', requireAuth, (req, res) => {
     const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
     if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar esta búsqueda guardada.' });
     deleteSavedSearch(row.id);
+    res.json({ ok: true });
+});
+
+// Búsqueda Guardada's SaaS-side sibling -- same /api/admin/ + requireAuth/
+// requireAdmin shape as saas-saved-layouts below, no clientId anywhere (see
+// saas_saved_searches' schema comment in db.js). "global" here means Equipo
+// SaaS members listed in audience.userIds, gated on isSaasSuperAdmin.
+app.get('/api/admin/saas-saved-searches/:tableKey', requireAuth, requireAdmin, (req, res) => {
+    const userId = req.user.sub;
+    const all = getSaasSavedSearchesForTable(req.params.tableKey);
+    const visible = all.filter((row) => {
+        if (row.scope === 'personal') return row.ownerUserId === userId;
+        return !!req.user.isSaasSuperAdmin || (row.audience?.userIds || []).includes(userId);
+    });
+    res.json({ searches: visible });
+});
+
+app.post('/api/admin/saas-saved-searches', requireAuth, requireAdmin, (req, res) => {
+    const { tableKey, name, filter, scope, audience } = req.body || {};
+    if (!tableKey || typeof tableKey !== 'string') return res.status(400).json({ message: 'Missing tableKey.' });
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
+    if (!filter || typeof filter !== 'object') return res.status(400).json({ message: 'Missing filter.' });
+    const finalScope = scope === 'global' ? 'global' : 'personal';
+    if (finalScope === 'global') {
+        if (!req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'Solo el super admin SaaS puede crear una búsqueda guardada global.' });
+        if (!audience?.userIds?.length) return res.status(400).json({ message: 'Elige al menos un integrante de Equipo SaaS.' });
+    }
+    const row = createSaasSavedSearch({
+        tableKey, name: name.trim(), filter,
+        scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
+        audience: finalScope === 'global' ? { userIds: audience.userIds } : undefined,
+    });
+    res.status(201).json({ search: row });
+});
+
+app.put('/api/admin/saas-saved-searches/:id', requireAuth, requireAdmin, (req, res) => {
+    const row = getSaasSavedSearchById(Number(req.params.id));
+    if (!row) return res.status(404).json({ message: 'Not found.' });
+    const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
+    if (!isOwner && !req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'No tienes permiso para editar esta búsqueda guardada.' });
+    const { name, filter } = req.body || {};
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
+    if (!filter || typeof filter !== 'object') return res.status(400).json({ message: 'Missing filter.' });
+    res.json({ search: updateSaasSavedSearch(row.id, { name: name.trim(), filter }) });
+});
+
+app.delete('/api/admin/saas-saved-searches/:id', requireAuth, requireAdmin, (req, res) => {
+    const row = getSaasSavedSearchById(Number(req.params.id));
+    if (!row) return res.status(404).json({ message: 'Not found.' });
+    const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
+    if (!isOwner && !req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar esta búsqueda guardada.' });
+    deleteSaasSavedSearch(row.id);
     res.json({ ok: true });
 });
 
