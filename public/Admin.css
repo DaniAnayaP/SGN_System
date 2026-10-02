@@ -4714,10 +4714,14 @@ body.dark-mode .admin-save-status{
     cursor: pointer;
 }
 
-/* Búsqueda Guardada -- the icon's own modal (see Dashboard.js), plus the
-   admin-only audience picker (Usuarios/Puestos/Centros de Costo, each a
-   chip list with a 3-state "seleccionar todos" and, for Puestos/CC, a
-   per-chip "excepto" exclusion block). A plain inline text button
+/* Búsqueda Guardada AND Acomodo Guardado -- both icons' own modals (see
+   Dashboard.js) share this ".saved-view-*" chrome (list/row/scope badge/
+   save block/audience picker) since the two are visually identical aside
+   from what each row does -- only their list/apply/save logic differs.
+   The admin-only audience picker (Usuarios/Puestos/Centros de Costo, each
+   a chip list with a 3-state "seleccionar todos" and, for Puestos/CC, a
+   per-chip "excepto" exclusion block) is the actual shared code, per
+   SavedView* in Dashboard.js. A plain inline text button
    (.btn-link/-danger) didn't exist yet -- every other "Aplicar"/"Eliminar"
    in this app is either a full .btn pill or an icon-only button, neither
    fitting a dense list row. */
@@ -4744,7 +4748,7 @@ body.dark-mode .admin-save-status{
 }
 .btn-link-danger:hover{ color: #c23b3b; }
 
-.saved-search-list{
+.saved-view-list{
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
@@ -4752,7 +4756,7 @@ body.dark-mode .admin-save-status{
     overflow-y: auto;
     margin: 0.5rem 0;
 }
-.saved-search-row{
+.saved-view-row{
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -4760,7 +4764,7 @@ body.dark-mode .admin-save-status{
     border: 1px solid var(--color-border);
     border-radius: 0.4rem;
 }
-.saved-search-row-name{
+.saved-view-row-name{
     flex: 1;
     min-width: 0;
     font-size: 0.85rem;
@@ -4768,7 +4772,7 @@ body.dark-mode .admin-save-status{
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.saved-search-scope-badge{
+.saved-view-scope-badge{
     font-size: 0.62rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -4777,22 +4781,22 @@ body.dark-mode .admin-save-status{
     padding: 0.1rem 0.5rem;
     white-space: nowrap;
 }
-.saved-search-scope-global{
+.saved-view-scope-global{
     background-color: color-mix(in srgb, #6d3fc0 18%, transparent);
     color: #6d3fc0;
 }
-.saved-search-scope-personal{
+.saved-view-scope-personal{
     background-color: color-mix(in srgb, #0f8a6b 18%, transparent);
     color: #0f8a6b;
 }
-.saved-search-save-block{
+.saved-view-save-block{
     border-top: 1px solid var(--color-border);
     padding-top: 0.75rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
 }
-.saved-search-name-input{
+.saved-view-name-input{
     font: inherit;
     font-size: 0.85rem;
     padding: 0.5rem 0.6rem;
@@ -4801,19 +4805,19 @@ body.dark-mode .admin-save-status{
     background: var(--color-bg-elevated, var(--color-bg));
     color: var(--color-text-primary);
 }
-.saved-search-audience-radios{
+.saved-view-audience-radios{
     display: flex;
     gap: 1rem;
     font-size: 0.82rem;
 }
-.saved-search-audience-radios[hidden]{ display: none; }
-.saved-search-audience-radios label{
+.saved-view-audience-radios[hidden]{ display: none; }
+.saved-view-audience-radios label{
     display: flex;
     align-items: center;
     gap: 0.35rem;
     cursor: pointer;
 }
-.saved-search-audience-panel{
+.saved-view-audience-panel{
     border: 1px dashed var(--color-accent);
     border-radius: 0.5rem;
     padding: 0.6rem;
@@ -4821,8 +4825,8 @@ body.dark-mode .admin-save-status{
     flex-direction: column;
     gap: 0.7rem;
 }
-.saved-search-audience-panel[hidden]{ display: none; }
-.saved-search-audience-group-label{
+.saved-view-audience-panel[hidden]{ display: none; }
+.saved-view-audience-group-label{
     display: flex;
     align-items: center;
     gap: 0.4rem;
@@ -4834,12 +4838,12 @@ body.dark-mode .admin-save-status{
     cursor: pointer;
     margin-bottom: 0.3rem;
 }
-.saved-search-chips{
+.saved-view-chips{
     display: flex;
     flex-wrap: wrap;
     gap: 0.3rem;
 }
-.saved-search-chip{
+.saved-view-chip{
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -4849,36 +4853,57 @@ body.dark-mode .admin-save-status{
     padding: 0.2rem 0.6rem 0.2rem 0.4rem;
     cursor: pointer;
 }
-.saved-search-chip-on{
+.saved-view-chip-on{
     border-color: var(--color-accent);
     background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
     font-weight: 600;
 }
-.saved-search-chip-exclude.saved-search-chip-on{
+.saved-view-chip-exclude.saved-view-chip-on{
     border-color: #c23b3b;
     background-color: color-mix(in srgb, #c23b3b 12%, transparent);
     color: #c23b3b;
 }
-.saved-search-exclusions{
+.saved-view-exclusions{
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
     margin-top: 0.4rem;
 }
-.saved-search-exclude-block{
+.saved-view-exclude-block{
     border-left: 2px solid #c23b3b;
     padding-left: 0.5rem;
 }
-.saved-search-exclude-label{
+.saved-view-exclude-label{
     font-size: 0.68rem;
     color: var(--color-text-secondary);
     margin-bottom: 0.25rem;
 }
-.saved-search-audience-summary{
+.saved-view-audience-summary{
     font-size: 0.74rem;
     color: var(--color-text-secondary);
     background: var(--color-bg);
     border-radius: 0.4rem;
     padding: 0.5rem 0.6rem;
     margin: 0;
+}
+
+/* Acomodo Guardado only -- the "★ Default al abrir" tag on a layout row,
+   and the checkbox row that sets it while saving. */
+.saved-view-default-tag{
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    white-space: nowrap;
+    background-color: color-mix(in srgb, #2c8f4a 18%, transparent);
+    color: #2c8f4a;
+}
+.saved-view-default-row{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
 }

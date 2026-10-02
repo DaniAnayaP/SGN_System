@@ -189,6 +189,10 @@ const {
     getSavedSearchById,
     createSavedSearch,
     deleteSavedSearch,
+    getSavedLayoutsForClientTable,
+    getSavedLayoutById,
+    createSavedLayout,
+    deleteSavedLayout,
     getJobPositionIdForUser,
     getColumnGrantLevel,
     canAuthorizeColumn,
@@ -5571,17 +5575,19 @@ app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
     res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey, recordId) });
 });
 
-// --- Búsqueda Guardada --------------------------------------------------
-// A 'global' row matches a user if ANY of its 3 criteria matches (OR
-// across criteria), each with its own exceptUserIds (Puestos/Centros de
-// Costo only -- Usuarios has none, excluding a user from a literal user
-// list is just not picking them). Cost-center access comes from the
-// user's own real grants (the same 'cc-<id>' leaves Dashboard.js's
-// hasCostCenterPermission checks client-side), not job_positions.
-// cost_center_scope -- grants are the already-resolved source of truth
-// everywhere else in this app. No "sites" criterion yet -- see db.js's
-// schema comment on saved_searches.
-function matchesSavedSearchAudience(audience, { userId, jobPositionId, costCenterIds }) {
+// --- Búsqueda Guardada / Acomodo Guardado -------------------------------
+// Shared audience matching for BOTH "saved view" features (saved_searches
+// and saved_layouts, db.js) -- identical visibility rules, so one pair of
+// functions serves both instead of two copies. A 'global' row matches a
+// user if ANY of its 3 criteria matches (OR across criteria), each with
+// its own exceptUserIds (Puestos/Centros de Costo only -- Usuarios has
+// none, excluding a user from a literal user list is just not picking
+// them). Cost-center access comes from the user's own real grants (the
+// same 'cc-<id>' leaves Dashboard.js's hasCostCenterPermission checks
+// client-side), not job_positions.cost_center_scope -- grants are the
+// already-resolved source of truth everywhere else in this app. No
+// "sites" criterion yet -- see db.js's schema comment on saved_searches.
+function matchesSavedViewAudience(audience, { userId, jobPositionId, costCenterIds }) {
     if (!audience) return false;
     if ((audience.userIds || []).includes(userId)) return true;
     if (jobPositionId && (audience.jobPositions || []).some((jp) => jp.id === jobPositionId && !(jp.exceptUserIds || []).includes(userId))) return true;
@@ -5589,7 +5595,7 @@ function matchesSavedSearchAudience(audience, { userId, jobPositionId, costCente
     return false;
 }
 
-function validateSavedSearchAudience(audience) {
+function validateSavedViewAudience(audience) {
     if (!audience || typeof audience !== 'object') return false;
     const isIdArray = (v) => Array.isArray(v) && v.every((x) => Number.isInteger(x));
     const isExceptGroup = (arr) => Array.isArray(arr) && arr.every((e) => e && Number.isInteger(e.id) && (e.exceptUserIds === undefined || isIdArray(e.exceptUserIds)));
@@ -5599,19 +5605,27 @@ function validateSavedSearchAudience(audience) {
     return true;
 }
 
-app.get('/api/business/saved-searches/:tableKey', requireAuth, (req, res) => {
-    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const userId = req.user.sub;
+// Shared by every saved-view GET route (saved-searches, saved-layouts) --
+// the context matchesSavedViewAudience needs to decide if a 'global' row
+// applies to this particular user.
+function resolveUserAudienceContext(userId) {
     const jobPositionId = getJobPositionIdForUser(userId);
     const grants = getUserEffectiveGrants(userId);
     const costCenterIds = grants
         .filter((g) => g.sectionId === 'main' && g.itemId === 'cc-list' && g.submenuId?.startsWith('cc-'))
         .map((g) => Number(g.submenuId.slice(3)))
         .filter((id) => Number.isFinite(id));
+    return { jobPositionId, costCenterIds };
+}
+
+app.get('/api/business/saved-searches/:tableKey', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const userId = req.user.sub;
+    const { jobPositionId, costCenterIds } = resolveUserAudienceContext(userId);
     const all = getSavedSearchesForClientTable(req.user.clientId, req.params.tableKey);
     const visible = all.filter((row) => {
         if (row.scope === 'personal') return row.ownerUserId === userId;
-        return !!req.user.isClientAdmin || matchesSavedSearchAudience(row.audience, { userId, jobPositionId, costCenterIds });
+        return !!req.user.isClientAdmin || matchesSavedViewAudience(row.audience, { userId, jobPositionId, costCenterIds });
     });
     res.json({ searches: visible });
 });
@@ -5626,7 +5640,7 @@ app.post('/api/business/saved-searches', requireAuth, (req, res) => {
     if (finalScope === 'global') {
         if (!req.user.isClientAdmin) return res.status(403).json({ message: 'Solo un administrador puede crear una búsqueda guardada global.' });
         const hasAnyTarget = (audience?.userIds?.length || audience?.jobPositions?.length || audience?.costCenters?.length);
-        if (!validateSavedSearchAudience(audience) || !hasAnyTarget) {
+        if (!validateSavedViewAudience(audience) || !hasAnyTarget) {
             return res.status(400).json({ message: 'Elige al menos un usuario, puesto o centro de costo.' });
         }
     }
@@ -5645,6 +5659,64 @@ app.delete('/api/business/saved-searches/:id', requireAuth, (req, res) => {
     const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
     if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar esta búsqueda guardada.' });
     deleteSavedSearch(row.id);
+    res.json({ ok: true });
+});
+
+// --- Acomodo Guardado ----------------------------------------------------
+// Búsqueda Guardada's sibling -- same visibility rules (matchesSavedViewAudience/
+// validateSavedViewAudience above), same admin-only gate on scope:'global'.
+// The client resolves "which one is MY default" from this same list (its
+// own personal isDefault row first, else the first matching global
+// isDefault row) -- no separate /default endpoint needed.
+function validateSavedLayoutPayload(layout) {
+    if (!layout || typeof layout !== 'object') return false;
+    const isStringArray = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+    if (!isStringArray(layout.order) || !isStringArray(layout.hidden) || !isStringArray(layout.pinned)) return false;
+    if (layout.widths !== undefined && (typeof layout.widths !== 'object' || layout.widths === null)) return false;
+    return true;
+}
+
+app.get('/api/business/saved-layouts/:tableKey', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const userId = req.user.sub;
+    const { jobPositionId, costCenterIds } = resolveUserAudienceContext(userId);
+    const all = getSavedLayoutsForClientTable(req.user.clientId, req.params.tableKey);
+    const visible = all.filter((row) => {
+        if (row.scope === 'personal') return row.ownerUserId === userId;
+        return !!req.user.isClientAdmin || matchesSavedViewAudience(row.audience, { userId, jobPositionId, costCenterIds });
+    });
+    res.json({ layouts: visible });
+});
+
+app.post('/api/business/saved-layouts', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { tableKey, name, layout, scope, isDefault, audience } = req.body || {};
+    if (!tableKey || typeof tableKey !== 'string') return res.status(400).json({ message: 'Missing tableKey.' });
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
+    if (!validateSavedLayoutPayload(layout)) return res.status(400).json({ message: 'Invalid layout.' });
+    const finalScope = scope === 'global' ? 'global' : 'personal';
+    if (finalScope === 'global') {
+        if (!req.user.isClientAdmin) return res.status(403).json({ message: 'Solo un administrador puede crear un acomodo guardado global.' });
+        const hasAnyTarget = (audience?.userIds?.length || audience?.jobPositions?.length || audience?.costCenters?.length);
+        if (!validateSavedViewAudience(audience) || !hasAnyTarget) {
+            return res.status(400).json({ message: 'Elige al menos un usuario, puesto o centro de costo.' });
+        }
+    }
+    const row = createSavedLayout({
+        clientId: req.user.clientId, tableKey, name: name.trim(), layout, isDefault: !!isDefault,
+        scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
+        audience: finalScope === 'global' ? audience : undefined,
+    });
+    res.status(201).json({ layout: row });
+});
+
+app.delete('/api/business/saved-layouts/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const row = getSavedLayoutById(Number(req.params.id));
+    if (!row || row.clientId !== req.user.clientId) return res.status(404).json({ message: 'Not found.' });
+    const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
+    if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar este acomodo guardado.' });
+    deleteSavedLayout(row.id);
     res.json({ ok: true });
 });
 

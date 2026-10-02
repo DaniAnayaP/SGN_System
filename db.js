@@ -1452,6 +1452,34 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_saved_searches_client_table ON saved_searches(client_id, table_key);
 
+    -- Acomodo Guardado -- saved_searches' sibling (same shape, same
+    -- audience_json format, see matchesSavedViewAudience/
+    -- validateSavedViewAudience in server.js, shared by both), a
+    -- SEPARATE table rather than a generalized one (same reasoning
+    -- sector_permission_cost_adjust/plan_permission_cost_adjust already
+    -- use: saved_searches is already shipped, don't migrate it).
+    -- layout_json = {order, hidden, pinned, widths} -- the exact shape of
+    -- a .data-table's own state.config (Dashboard.js), minus "signature"
+    -- (recomputed fresh against whatever columns exist at apply time, see
+    -- reconcileDataTableConfig). Several global rows may have
+    -- is_default=1 at once (different audiences, e.g. one default per
+    -- Puesto) -- not validated for overlap; the oldest matching one wins
+    -- if two ever do overlap for the same viewer.
+    CREATE TABLE IF NOT EXISTS saved_layouts (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id           INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        table_key           TEXT NOT NULL,
+        name                TEXT NOT NULL,
+        layout_json         TEXT NOT NULL,
+        scope               TEXT NOT NULL DEFAULT 'personal',
+        is_default          INTEGER NOT NULL DEFAULT 0,
+        owner_user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_by_user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        audience_json       TEXT,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saved_layouts_client_table ON saved_layouts(client_id, table_key);
+
     -- client_permission_grants: the client-level counterpart of
     -- plan_grants — a "+ adicional" sold to THIS client beyond what their
     -- plan already includes, at the exact same {sectionId, itemId,
@@ -2973,6 +3001,62 @@ function createSavedSearch({ clientId, tableKey, name, filter, scope, ownerUserI
 
 function deleteSavedSearch(id) {
     db.prepare('DELETE FROM saved_searches WHERE id = ?').run(id);
+}
+
+// Acomodo Guardado -- CRUD for saved_layouts (schema above), calcada de
+// saved_searches' own (see its comment for why this is a separate table).
+function deserializeSavedLayout(row) {
+    if (!row) return null;
+    let layout = { order: [], hidden: [], pinned: [], widths: {} };
+    try { layout = JSON.parse(row.layout_json) || layout; } catch { /* keep default */ }
+    let audience = null;
+    if (row.audience_json) {
+        try { audience = JSON.parse(row.audience_json); } catch { audience = null; }
+    }
+    return {
+        id: row.id,
+        clientId: row.client_id,
+        tableKey: row.table_key,
+        name: row.name,
+        layout,
+        scope: row.scope,
+        isDefault: !!row.is_default,
+        ownerUserId: row.owner_user_id,
+        createdByUserId: row.created_by_user_id,
+        audience,
+        createdAt: row.created_at,
+    };
+}
+
+function getSavedLayoutsForClientTable(clientId, tableKey) {
+    return db
+        .prepare('SELECT * FROM saved_layouts WHERE client_id = ? AND table_key = ? ORDER BY created_at ASC, id ASC')
+        .all(clientId, tableKey)
+        .map(deserializeSavedLayout);
+}
+
+function getSavedLayoutById(id) {
+    return deserializeSavedLayout(db.prepare('SELECT * FROM saved_layouts WHERE id = ?').get(id));
+}
+
+function createSavedLayout({ clientId, tableKey, name, layout, scope, isDefault, ownerUserId, createdByUserId, audience }) {
+    const info = db.prepare(`
+        INSERT INTO saved_layouts (client_id, table_key, name, layout_json, scope, is_default, owner_user_id, created_by_user_id, audience_json)
+        VALUES (@clientId, @tableKey, @name, @layoutJson, @scope, @isDefault, @ownerUserId, @createdByUserId, @audienceJson)
+    `).run({
+        clientId, tableKey, name,
+        layoutJson: JSON.stringify(layout || { order: [], hidden: [], pinned: [], widths: {} }),
+        scope: scope === 'global' ? 'global' : 'personal',
+        isDefault: isDefault ? 1 : 0,
+        ownerUserId: scope === 'global' ? null : ownerUserId,
+        createdByUserId,
+        audienceJson: scope === 'global' ? JSON.stringify(audience || {}) : null,
+    });
+    return getSavedLayoutById(info.lastInsertRowid);
+}
+
+function deleteSavedLayout(id) {
+    db.prepare('DELETE FROM saved_layouts WHERE id = ?').run(id);
 }
 
 // Who most recently touched this exact field -- used by the offline-queue
@@ -7866,6 +7950,10 @@ module.exports = {
     getSavedSearchById,
     createSavedSearch,
     deleteSavedSearch,
+    getSavedLayoutsForClientTable,
+    getSavedLayoutById,
+    createSavedLayout,
+    deleteSavedLayout,
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,

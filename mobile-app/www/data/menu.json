@@ -102,7 +102,8 @@
                     { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
                     { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
                     { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
-                    { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+                    { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+                    { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
                   ]
                 }
               ]
@@ -319,7 +320,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         { "id": "cat-catalogos-transporte-vol-tipos-aditamentos", "labelKey": "menu.catTransVolTiposAditamentos", "icon": "bx-window", "href": "#" },
@@ -363,7 +365,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         }
       ],
@@ -419,7 +422,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -477,7 +481,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -529,7 +534,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -613,7 +619,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -666,7 +673,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         { "id": "cat-operaciones-transporte-vol-ingresos", "labelKey": "menu.opTransVolIngresos", "icon": "bx-window", "href": "#" },
@@ -722,7 +730,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -766,7 +775,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -810,7 +820,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -854,7 +865,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -898,7 +910,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -942,7 +955,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -986,7 +1000,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         },
         {
@@ -1030,7 +1045,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         }
       ],
@@ -1097,7 +1113,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         }
       ]
@@ -1163,7 +1180,8 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true }
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
         }
       ]

@@ -2444,6 +2444,29 @@ function dataTableColumnsSignature(columnKeys) {
 // resets that ONE table back to its natural, correct layout for everyone,
 // same as a first-ever visit. A no-op (same signature) still behaves
 // exactly as before: nothing about someone's customization changes.
+// Reconciles a raw {order,hidden,pinned,widths} object against the columns
+// that exist RIGHT NOW -- shared by the localStorage-backed per-device
+// layout (loadDataTableConfig below) and by replaying an Acomodo Guardado
+// (applySavedLayout), which arrives with no "signature" of its own to
+// pre-check (saved_layouts doesn't store one, see db.js's schema comment).
+// A column dropped/renamed since the layout was captured just falls out of
+// order/hidden/widths; a newly added column lands at the end of order,
+// same as loadDataTableConfig's own default-from-scratch behavior.
+function reconcileDataTableConfig(raw, columnKeys) {
+    const keySet = new Set(columnKeys);
+    const order = Array.isArray(raw?.order) ? raw.order.filter((k) => keySet.has(k)) : [];
+    columnKeys.forEach((k) => { if (!order.includes(k)) order.push(k); });
+    const hidden = Array.isArray(raw?.hidden) ? raw.hidden.filter((k) => keySet.has(k)) : [];
+    const widths = (raw?.widths && typeof raw.widths === 'object') ? { ...raw.widths } : {};
+    Object.keys(widths).forEach((k) => { if (!keySet.has(k)) delete widths[k]; });
+    let pinned = Array.isArray(raw?.pinned) ? raw.pinned.filter((k) => keySet.has(k)) : null;
+    // Default: pin just the first column, reproducing the old hardcoded
+    // :first-child behavior until the user customizes it via the picker.
+    if (!pinned) pinned = columnKeys[0] ? [columnKeys[0]] : [];
+    pinned = pinned.slice(0, DATA_TABLE_PIN_MAX);
+    return { order, hidden, widths, pinned, signature: dataTableColumnsSignature(columnKeys) };
+}
+
 function loadDataTableConfig(tableId, columnKeys) {
     let stored = null;
     try {
@@ -2454,18 +2477,7 @@ function loadDataTableConfig(tableId, columnKeys) {
     if (stored && stored.signature !== dataTableColumnsSignature(columnKeys)) {
         stored = null;
     }
-    const keySet = new Set(columnKeys);
-    const order = Array.isArray(stored?.order) ? stored.order.filter((k) => keySet.has(k)) : [];
-    columnKeys.forEach((k) => { if (!order.includes(k)) order.push(k); });
-    const hidden = Array.isArray(stored?.hidden) ? stored.hidden.filter((k) => keySet.has(k)) : [];
-    const widths = (stored?.widths && typeof stored.widths === 'object') ? { ...stored.widths } : {};
-    Object.keys(widths).forEach((k) => { if (!keySet.has(k)) delete widths[k]; });
-    let pinned = Array.isArray(stored?.pinned) ? stored.pinned.filter((k) => keySet.has(k)) : null;
-    // Default: pin just the first column, reproducing the old hardcoded
-    // :first-child behavior until the user customizes it via the picker.
-    if (!pinned) pinned = columnKeys[0] ? [columnKeys[0]] : [];
-    pinned = pinned.slice(0, DATA_TABLE_PIN_MAX);
-    return { order, hidden, widths, pinned, signature: dataTableColumnsSignature(columnKeys) };
+    return reconcileDataTableConfig(stored, columnKeys);
 }
 
 function saveDataTableConfig(tableId, config) {
@@ -3464,6 +3476,12 @@ function initDataTableColumns(wrapper, index) {
             colgroup.appendChild(col);
         }
     });
+    // Acomodo Guardado's own "default al abrir" only ever applies on a
+    // genuinely first-ever visit (nothing in localStorage for this table on
+    // this device yet) -- captured BEFORE loadDataTableConfig runs, since
+    // that call itself is what would populate it going forward. See
+    // maybeApplyDefaultSavedLayout below.
+    const hadNoStoredLayout = localStorage.getItem(dataTableConfigStorageKey(tableId)) == null;
     const config = loadDataTableConfig(tableId, columnKeys);
     const naturalWidths = measureNaturalColumnWidths(table);
     columnKeys.forEach((key) => {
@@ -3475,6 +3493,7 @@ function initDataTableColumns(wrapper, index) {
         columnFilters: new Map(),
     });
     applyDataTableColumnLayout(tableId);
+    if (hadNoStoredLayout) maybeApplyDefaultSavedLayout(tableId);
     enableHeaderDragReorder(table, tableId);
     Array.from(getHeaderRow(table).cells).forEach((th) => {
         attachResizeHandle(th, tableId);
@@ -4560,7 +4579,9 @@ async function openChangeHistory(tableId, recordId) {
 // 'global' one (visible to a chosen audience instead of just its owner) is
 // admin-only -- a non-admin only ever sees "Solo yo", same split
 // "Reglas de Orden de Llenado" already uses elsewhere in this file.
-const SAVED_SEARCH_AUDIENCE_GROUPS = [
+// Shared by Búsqueda Guardada AND Acomodo Guardado (identical audience
+// semantics for both) -- see SavedView* functions below.
+const SAVED_VIEW_AUDIENCE_GROUPS = [
     { key: 'userIds', labelKey: 'main.savedSearchAudienceUsers', excludable: false },
     { key: 'jobPositions', labelKey: 'main.savedSearchAudienceJobPositions', excludable: true },
     { key: 'costCenters', labelKey: 'main.savedSearchAudienceCostCenters', excludable: true },
@@ -4568,6 +4589,14 @@ const SAVED_SEARCH_AUDIENCE_GROUPS = [
     // Sucursal entity -- same {key, labelKey, excludable:true} shape,
     // nothing else in this block needs to change.
 ];
+let savedViewAudienceCatalog = null; // {userIds:[{id,label}], jobPositions:[...], costCenters:[...]} -- shared cache
+// Live selection while WHICHEVER saved-view picker is open -- Map<groupKey,
+// Map<optionId, Set<exceptUserId>>>. Safe as one shared global: Búsqueda
+// Guardada and Acomodo Guardado modals are never open at the same time,
+// and each openX() resets this fresh. userIds' own inner Set is always
+// empty/unused -- excluding a user from a literal user list is just not
+// picking them in the first place.
+let savedViewAudienceSelection = new Map();
 
 let savedSearchModal = null;
 let savedSearchListEl = null;
@@ -4578,11 +4607,6 @@ let savedSearchAdminSection = null;
 let savedSearchAudiencePanel = null;
 let savedSearchSaveBtn = null;
 let savedSearchTableId = null;
-let savedSearchAudienceCatalog = null; // {userIds:[{id,label}], jobPositions:[...], costCenters:[...]}
-// Live selection while the picker is open -- Map<groupKey, Map<optionId, Set<exceptUserId>>>.
-// userIds' own inner Set is always empty/unused -- excluding a user from a
-// literal user list is just not picking them in the first place.
-let savedSearchAudienceSelection = new Map();
 
 function ensureSavedSearchModal() {
     if (savedSearchModal) return;
@@ -4592,16 +4616,16 @@ function ensureSavedSearchModal() {
     savedSearchModal.innerHTML = `
         <div class="modal-panel" style="max-width: 32rem;" role="dialog" aria-modal="true" aria-labelledby="saved-search-title">
             <h3 id="saved-search-title">${t('main.savedSearchTitle')}</h3>
-            <div data-role="list" class="saved-search-list"></div>
+            <div data-role="list" class="saved-view-list"></div>
             <p data-role="empty" class="admin-hint" hidden>${t('main.savedSearchEmpty')}</p>
-            <div class="saved-search-save-block">
+            <div class="saved-view-save-block">
                 <p class="admin-hint">${t('main.savedSearchSaveHint')}</p>
-                <input type="text" data-role="name" class="saved-search-name-input" placeholder="${t('main.savedSearchNamePlaceholder')}">
-                <div data-role="admin-section" class="saved-search-audience-radios" hidden>
+                <input type="text" data-role="name" class="saved-view-name-input" placeholder="${t('main.savedSearchNamePlaceholder')}">
+                <div data-role="admin-section" class="saved-view-audience-radios" hidden>
                     <label><input type="radio" name="saved-search-audience" value="self" checked> ${t('main.savedSearchAudienceSelf')}</label>
                     <label><input type="radio" name="saved-search-audience" value="assign"> ${t('main.savedSearchAudienceAssign')}</label>
                 </div>
-                <div data-role="audience-panel" class="saved-search-audience-panel" hidden></div>
+                <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
                 <p data-role="error" class="admin-error" role="alert" hidden></p>
                 <div class="admin-form-actions">
                     <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
@@ -4625,7 +4649,7 @@ function ensureSavedSearchModal() {
         radio.addEventListener('change', () => {
             if (radio.checked && radio.value === 'assign') {
                 savedSearchAudiencePanel.hidden = false;
-                buildSavedSearchAudiencePanel();
+                buildSavedViewAudiencePanel(savedSearchAudiencePanel);
             } else if (radio.checked) {
                 savedSearchAudiencePanel.hidden = true;
             }
@@ -4639,7 +4663,7 @@ async function openSavedSearchPicker(tableId) {
     savedSearchTableId = tableId;
     savedSearchNameInput.value = '';
     savedSearchErrorEl.hidden = true;
-    savedSearchAudienceSelection = new Map(SAVED_SEARCH_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
+    savedViewAudienceSelection = new Map(SAVED_VIEW_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
     savedSearchAdminSection.hidden = !currentUser?.isClientAdmin;
     savedSearchAudiencePanel.hidden = true;
     savedSearchModal.querySelectorAll('input[name="saved-search-audience"]').forEach((r) => { r.checked = r.value === 'self'; });
@@ -4668,15 +4692,15 @@ function renderSavedSearchList(searches) {
     savedSearchEmptyEl.hidden = searches.length > 0;
     searches.forEach((search) => {
         const row = document.createElement('div');
-        row.className = 'saved-search-row';
+        row.className = 'saved-view-row';
 
         const nameEl = document.createElement('span');
-        nameEl.className = 'saved-search-row-name';
+        nameEl.className = 'saved-view-row-name';
         nameEl.textContent = search.name;
         row.appendChild(nameEl);
 
         const badge = document.createElement('span');
-        badge.className = `saved-search-scope-badge saved-search-scope-${search.scope}`;
+        badge.className = `saved-view-scope-badge saved-view-scope-${search.scope}`;
         badge.textContent = t(search.scope === 'global' ? 'main.savedSearchScopeGlobal' : 'main.savedSearchScopePersonal');
         row.appendChild(badge);
 
@@ -4767,8 +4791,11 @@ function applySavedSearch(tableId, search) {
     savedSearchModal.hidden = true;
 }
 
-async function fetchSavedSearchAudienceCatalog() {
-    if (savedSearchAudienceCatalog) return savedSearchAudienceCatalog;
+// Shared by Búsqueda Guardada AND Acomodo Guardado from here down -- see
+// SAVED_VIEW_AUDIENCE_GROUPS/savedViewAudienceCatalog/
+// savedViewAudienceSelection above.
+async function fetchSavedViewAudienceCatalog() {
+    if (savedViewAudienceCatalog) return savedViewAudienceCatalog;
     try {
         const [usersRes, jpRes, ccRes] = await Promise.all([
             fetch('/api/business/users', { credentials: 'include' }),
@@ -4776,22 +4803,22 @@ async function fetchSavedSearchAudienceCatalog() {
             fetch('/api/business/cost-centers', { credentials: 'include' }),
         ]);
         const [usersData, jpData, ccData] = await Promise.all([usersRes.json(), jpRes.json(), ccRes.json()]);
-        savedSearchAudienceCatalog = {
+        savedViewAudienceCatalog = {
             userIds: (usersData.users || []).map((u) => ({ id: u.id, label: u.name || u.username })),
             jobPositions: (jpData.jobPositions || []).map((jp) => ({ id: jp.id, label: jp.name })),
             costCenters: (ccData.costCenters || []).map((cc) => ({ id: cc.id, label: `${cc.code} - ${cc.name}` })),
         };
     } catch {
-        savedSearchAudienceCatalog = { userIds: [], jobPositions: [], costCenters: [] };
+        savedViewAudienceCatalog = { userIds: [], jobPositions: [], costCenters: [] };
     }
-    return savedSearchAudienceCatalog;
+    return savedViewAudienceCatalog;
 }
 
 // 3-state "seleccionar todos" rollup per group -- same indeterminate-dash
 // convention the permission tree's own container checkboxes use: checked
 // only if EVERY option is on, a dash the moment even one is missing.
-function updateSavedSearchGroupAllCheckbox(group, options, allCb) {
-    const groupMap = savedSearchAudienceSelection.get(group.key);
+function updateSavedViewGroupAllCheckbox(group, options, allCb) {
+    const groupMap = savedViewAudienceSelection.get(group.key);
     const onCount = options.filter((opt) => groupMap.has(opt.id)).length;
     allCb.checked = onCount > 0 && onCount === options.length;
     allCb.indeterminate = onCount > 0 && onCount < options.length;
@@ -4799,17 +4826,17 @@ function updateSavedSearchGroupAllCheckbox(group, options, allCb) {
 
 // One exclusion block per currently-selected chip in an excludable group --
 // each keeps its own independent "excepto" list of users.
-function renderSavedSearchExclusions(group, options, container) {
-    const groupMap = savedSearchAudienceSelection.get(group.key);
-    const users = savedSearchAudienceCatalog?.userIds || [];
+function renderSavedViewExclusions(group, options, container) {
+    const groupMap = savedViewAudienceSelection.get(group.key);
+    const users = savedViewAudienceCatalog?.userIds || [];
     container.innerHTML = '';
     options.filter((opt) => groupMap.has(opt.id)).forEach((opt) => {
         const exceptSet = groupMap.get(opt.id);
         const block = document.createElement('div');
-        block.className = 'saved-search-exclude-block';
+        block.className = 'saved-view-exclude-block';
 
         const label = document.createElement('div');
-        label.className = 'saved-search-exclude-label';
+        label.className = 'saved-view-exclude-label';
         const strong = document.createElement('b');
         strong.textContent = opt.label;
         label.appendChild(strong);
@@ -4817,11 +4844,11 @@ function renderSavedSearchExclusions(group, options, container) {
         block.appendChild(label);
 
         const chipsEl = document.createElement('div');
-        chipsEl.className = 'saved-search-chips';
+        chipsEl.className = 'saved-view-chips';
         users.forEach((u) => {
             const chip = document.createElement('label');
-            chip.className = 'saved-search-chip saved-search-chip-exclude';
-            chip.classList.toggle('saved-search-chip-on', exceptSet.has(u.id));
+            chip.className = 'saved-view-chip saved-view-chip-exclude';
+            chip.classList.toggle('saved-view-chip-on', exceptSet.has(u.id));
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked = exceptSet.has(u.id);
@@ -4831,7 +4858,7 @@ function renderSavedSearchExclusions(group, options, container) {
                 event.preventDefault();
                 if (exceptSet.has(u.id)) exceptSet.delete(u.id); else exceptSet.add(u.id);
                 cb.checked = exceptSet.has(u.id);
-                chip.classList.toggle('saved-search-chip-on', exceptSet.has(u.id));
+                chip.classList.toggle('saved-view-chip-on', exceptSet.has(u.id));
             });
             chipsEl.appendChild(chip);
         });
@@ -4840,11 +4867,11 @@ function renderSavedSearchExclusions(group, options, container) {
     });
 }
 
-function updateSavedSearchAudienceSummary(summaryEl) {
-    const catalog = savedSearchAudienceCatalog;
+function updateSavedViewAudienceSummary(summaryEl) {
+    const catalog = savedViewAudienceCatalog;
     const parts = [];
-    SAVED_SEARCH_AUDIENCE_GROUPS.forEach((group) => {
-        const groupMap = savedSearchAudienceSelection.get(group.key);
+    SAVED_VIEW_AUDIENCE_GROUPS.forEach((group) => {
+        const groupMap = savedViewAudienceSelection.get(group.key);
         const options = catalog?.[group.key] || [];
         groupMap.forEach((exceptSet, id) => {
             const opt = options.find((o) => o.id === id);
@@ -4860,19 +4887,22 @@ function updateSavedSearchAudienceSummary(summaryEl) {
     summaryEl.textContent = parts.length ? `${t('main.savedSearchAudienceWillSee')} ${parts.join(', ')}` : t('main.savedSearchAudienceSummaryEmpty');
 }
 
-async function buildSavedSearchAudiencePanel() {
-    const catalog = await fetchSavedSearchAudienceCatalog();
-    savedSearchAudiencePanel.innerHTML = '';
+// Renders into `panelEl` (either feature's own audience-panel element) --
+// the only thing that differs between Búsqueda Guardada and Acomodo
+// Guardado's audience pickers is which DOM node they live in.
+async function buildSavedViewAudiencePanel(panelEl) {
+    const catalog = await fetchSavedViewAudienceCatalog();
+    panelEl.innerHTML = '';
     const summaryEl = document.createElement('p');
-    summaryEl.className = 'saved-search-audience-summary';
+    summaryEl.className = 'saved-view-audience-summary';
 
-    SAVED_SEARCH_AUDIENCE_GROUPS.forEach((group) => {
+    SAVED_VIEW_AUDIENCE_GROUPS.forEach((group) => {
         const options = catalog[group.key] || [];
         const groupEl = document.createElement('div');
-        groupEl.className = 'saved-search-audience-group';
+        groupEl.className = 'saved-view-audience-group';
 
         const groupLabel = document.createElement('label');
-        groupLabel.className = 'saved-search-audience-group-label';
+        groupLabel.className = 'saved-view-audience-group-label';
         const allCb = document.createElement('input');
         allCb.type = 'checkbox';
         groupLabel.appendChild(allCb);
@@ -4880,26 +4910,26 @@ async function buildSavedSearchAudiencePanel() {
         groupEl.appendChild(groupLabel);
 
         const chipsEl = document.createElement('div');
-        chipsEl.className = 'saved-search-chips';
+        chipsEl.className = 'saved-view-chips';
         const exclusionsEl = group.excludable ? document.createElement('div') : null;
-        if (exclusionsEl) exclusionsEl.className = 'saved-search-exclusions';
+        if (exclusionsEl) exclusionsEl.className = 'saved-view-exclusions';
 
         options.forEach((opt) => {
             const chip = document.createElement('label');
-            chip.className = 'saved-search-chip';
+            chip.className = 'saved-view-chip';
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             chip.appendChild(cb);
             chip.appendChild(document.createTextNode(' ' + opt.label));
             chip.addEventListener('click', (event) => {
                 event.preventDefault();
-                const groupMap = savedSearchAudienceSelection.get(group.key);
+                const groupMap = savedViewAudienceSelection.get(group.key);
                 if (groupMap.has(opt.id)) groupMap.delete(opt.id); else groupMap.set(opt.id, new Set());
                 cb.checked = groupMap.has(opt.id);
-                chip.classList.toggle('saved-search-chip-on', groupMap.has(opt.id));
-                if (exclusionsEl) renderSavedSearchExclusions(group, options, exclusionsEl);
-                updateSavedSearchGroupAllCheckbox(group, options, allCb);
-                updateSavedSearchAudienceSummary(summaryEl);
+                chip.classList.toggle('saved-view-chip-on', groupMap.has(opt.id));
+                if (exclusionsEl) renderSavedViewExclusions(group, options, exclusionsEl);
+                updateSavedViewGroupAllCheckbox(group, options, allCb);
+                updateSavedViewAudienceSummary(summaryEl);
             });
             chipsEl.appendChild(chip);
         });
@@ -4908,24 +4938,24 @@ async function buildSavedSearchAudiencePanel() {
 
         allCb.addEventListener('click', (event) => {
             event.preventDefault();
-            const groupMap = savedSearchAudienceSelection.get(group.key);
+            const groupMap = savedViewAudienceSelection.get(group.key);
             const allOn = options.every((opt) => groupMap.has(opt.id));
-            chipsEl.querySelectorAll('.saved-search-chip').forEach((chip, i) => {
+            chipsEl.querySelectorAll('.saved-view-chip').forEach((chip, i) => {
                 const opt = options[i];
                 const cb = chip.querySelector('input');
-                if (allOn) { groupMap.delete(opt.id); cb.checked = false; chip.classList.remove('saved-search-chip-on'); }
-                else { groupMap.set(opt.id, new Set()); cb.checked = true; chip.classList.add('saved-search-chip-on'); }
+                if (allOn) { groupMap.delete(opt.id); cb.checked = false; chip.classList.remove('saved-view-chip-on'); }
+                else { groupMap.set(opt.id, new Set()); cb.checked = true; chip.classList.add('saved-view-chip-on'); }
             });
-            if (exclusionsEl) renderSavedSearchExclusions(group, options, exclusionsEl);
-            updateSavedSearchGroupAllCheckbox(group, options, allCb);
-            updateSavedSearchAudienceSummary(summaryEl);
+            if (exclusionsEl) renderSavedViewExclusions(group, options, exclusionsEl);
+            updateSavedViewGroupAllCheckbox(group, options, allCb);
+            updateSavedViewAudienceSummary(summaryEl);
         });
 
-        savedSearchAudiencePanel.appendChild(groupEl);
+        panelEl.appendChild(groupEl);
     });
 
-    savedSearchAudiencePanel.appendChild(summaryEl);
-    updateSavedSearchAudienceSummary(summaryEl);
+    panelEl.appendChild(summaryEl);
+    updateSavedViewAudienceSummary(summaryEl);
 }
 
 async function saveSavedSearch() {
@@ -4941,8 +4971,8 @@ async function saveSavedSearch() {
     let audience;
     if (scope === 'global') {
         audience = {};
-        SAVED_SEARCH_AUDIENCE_GROUPS.forEach((group) => {
-            const groupMap = savedSearchAudienceSelection.get(group.key);
+        SAVED_VIEW_AUDIENCE_GROUPS.forEach((group) => {
+            const groupMap = savedViewAudienceSelection.get(group.key);
             if (!groupMap.size) return;
             if (group.key === 'userIds') audience.userIds = [...groupMap.keys()];
             else audience[group.key] = [...groupMap.entries()].map(([id, exceptSet]) => ({ id, exceptUserIds: [...exceptSet] }));
@@ -4970,6 +5000,262 @@ async function saveSavedSearch() {
     } catch {
         savedSearchErrorEl.textContent = t('admin.saveError');
         savedSearchErrorEl.hidden = false;
+    }
+}
+
+// --- Acomodo Guardado ------------------------------------------------------
+// Búsqueda Guardada's sibling -- same modal/list/admin-audience pattern
+// (SavedView* functions above are the actual shared code), saving/applying
+// a table's own column order/hidden/pinned/widths (state.config) instead of
+// a filter snapshot. A layout can also be marked "default al abrir" -- see
+// maybeApplyDefaultSavedLayout, wired in once per table at the bottom of
+// the init loop above.
+let savedLayoutModal = null;
+let savedLayoutListEl = null;
+let savedLayoutEmptyEl = null;
+let savedLayoutErrorEl = null;
+let savedLayoutNameInput = null;
+let savedLayoutAdminSection = null;
+let savedLayoutAudiencePanel = null;
+let savedLayoutDefaultCheckbox = null;
+let savedLayoutSaveBtn = null;
+let savedLayoutTableId = null;
+
+function ensureSavedLayoutModal() {
+    if (savedLayoutModal) return;
+    savedLayoutModal = document.createElement('div');
+    savedLayoutModal.className = 'modal-overlay';
+    savedLayoutModal.hidden = true;
+    savedLayoutModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 32rem;" role="dialog" aria-modal="true" aria-labelledby="saved-layout-title">
+            <h3 id="saved-layout-title">${t('main.savedLayoutTitle')}</h3>
+            <div data-role="list" class="saved-view-list"></div>
+            <p data-role="empty" class="admin-hint" hidden>${t('main.savedLayoutEmpty')}</p>
+            <div class="saved-view-save-block">
+                <p class="admin-hint">${t('main.savedLayoutSaveHint')}</p>
+                <input type="text" data-role="name" class="saved-view-name-input" placeholder="${t('main.savedLayoutNamePlaceholder')}">
+                <label class="saved-view-default-row"><input type="checkbox" data-role="default"> ${t('main.savedLayoutSetDefault')}</label>
+                <div data-role="admin-section" class="saved-view-audience-radios" hidden>
+                    <label><input type="radio" name="saved-layout-audience" value="self" checked> ${t('main.savedSearchAudienceSelf')}</label>
+                    <label><input type="radio" name="saved-layout-audience" value="assign"> ${t('main.savedSearchAudienceAssign')}</label>
+                </div>
+                <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
+                <p data-role="error" class="admin-error" role="alert" hidden></p>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
+                    <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(savedLayoutModal);
+    savedLayoutListEl = savedLayoutModal.querySelector('[data-role="list"]');
+    savedLayoutEmptyEl = savedLayoutModal.querySelector('[data-role="empty"]');
+    savedLayoutErrorEl = savedLayoutModal.querySelector('[data-role="error"]');
+    savedLayoutNameInput = savedLayoutModal.querySelector('[data-role="name"]');
+    savedLayoutAdminSection = savedLayoutModal.querySelector('[data-role="admin-section"]');
+    savedLayoutAudiencePanel = savedLayoutModal.querySelector('[data-role="audience-panel"]');
+    savedLayoutDefaultCheckbox = savedLayoutModal.querySelector('[data-role="default"]');
+    savedLayoutSaveBtn = savedLayoutModal.querySelector('[data-role="save"]');
+    const close = () => { savedLayoutModal.hidden = true; };
+    savedLayoutModal.querySelector('[data-role="close"]').addEventListener('click', close);
+    wireModalDismiss(savedLayoutModal, close);
+    savedLayoutModal.querySelectorAll('input[name="saved-layout-audience"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (radio.checked && radio.value === 'assign') {
+                savedLayoutAudiencePanel.hidden = false;
+                buildSavedViewAudiencePanel(savedLayoutAudiencePanel);
+            } else if (radio.checked) {
+                savedLayoutAudiencePanel.hidden = true;
+            }
+        });
+    });
+    savedLayoutSaveBtn.addEventListener('click', saveSavedLayout);
+}
+
+async function openSavedLayoutPicker(tableId) {
+    ensureSavedLayoutModal();
+    savedLayoutTableId = tableId;
+    savedLayoutNameInput.value = '';
+    savedLayoutDefaultCheckbox.checked = false;
+    savedLayoutErrorEl.hidden = true;
+    savedViewAudienceSelection = new Map(SAVED_VIEW_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
+    savedLayoutAdminSection.hidden = !currentUser?.isClientAdmin;
+    savedLayoutAudiencePanel.hidden = true;
+    savedLayoutModal.querySelectorAll('input[name="saved-layout-audience"]').forEach((r) => { r.checked = r.value === 'self'; });
+    savedLayoutModal.hidden = false;
+    await loadSavedLayoutList();
+}
+
+async function loadSavedLayoutList() {
+    savedLayoutListEl.innerHTML = '';
+    savedLayoutEmptyEl.hidden = true;
+    try {
+        const res = await fetch(`/api/business/saved-layouts/${encodeURIComponent(savedLayoutTableId)}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const { layouts } = await res.json();
+        renderSavedLayoutList(layouts || []);
+    } catch {
+        // Leave the empty-state message in place -- no network/parse errors surfaced here.
+    }
+}
+
+function renderSavedLayoutList(layouts) {
+    savedLayoutListEl.innerHTML = '';
+    savedLayoutEmptyEl.hidden = layouts.length > 0;
+    layouts.forEach((layout) => {
+        const row = document.createElement('div');
+        row.className = 'saved-view-row';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'saved-view-row-name';
+        nameEl.textContent = layout.name;
+        row.appendChild(nameEl);
+
+        if (layout.isDefault) {
+            const tag = document.createElement('span');
+            tag.className = 'saved-view-default-tag';
+            tag.textContent = t('main.savedLayoutDefaultTag');
+            row.appendChild(tag);
+        }
+
+        const badge = document.createElement('span');
+        badge.className = `saved-view-scope-badge saved-view-scope-${layout.scope}`;
+        badge.textContent = t(layout.scope === 'global' ? 'main.savedSearchScopeGlobal' : 'main.savedSearchScopePersonal');
+        row.appendChild(badge);
+
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'btn-link';
+        applyBtn.textContent = t('main.savedLayoutApply');
+        applyBtn.addEventListener('click', () => applySavedLayout(savedLayoutTableId, layout));
+        row.appendChild(applyBtn);
+
+        // A 'personal' row only ever appears in the viewer's OWN list (the
+        // server already scopes it to its owner) -- no need to separately
+        // compare ownerUserId against the current user here.
+        const canDelete = !!currentUser?.isClientAdmin || layout.scope === 'personal';
+        if (canDelete) {
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn-link-danger';
+            delBtn.setAttribute('aria-label', t('admin.delete'));
+            delBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+            delBtn.addEventListener('click', () => deleteSavedLayoutRow(layout.id));
+            row.appendChild(delBtn);
+        }
+        savedLayoutListEl.appendChild(row);
+    });
+}
+
+async function deleteSavedLayoutRow(id) {
+    try {
+        const res = await fetch(`/api/business/saved-layouts/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (res.ok) await loadSavedLayoutList();
+    } catch {
+        // Leave the list as-is -- next open retries the fetch anyway.
+    }
+}
+
+// Snapshot of state.config's own order/hidden/pinned/widths -- no
+// "signature" (see db.js's saved_layouts schema comment and
+// reconcileDataTableConfig, which recomputes one fresh at apply time).
+function collectCurrentLayoutSnapshot(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return { order: [], hidden: [], pinned: [], widths: {} };
+    const { order, hidden, pinned, widths } = state.config;
+    return { order: [...order], hidden: [...hidden], pinned: [...pinned], widths: { ...widths } };
+}
+
+// The actual "apply" primitive -- reconcile + saveDataTableConfig +
+// applyDataTableColumnLayout, the same 3 calls openPinPicker/
+// openVisibilityPicker/drag-reorder/resize already make after mutating
+// state.config, so this writes through to localStorage and survives a
+// reload exactly like any manual rearrangement. Kept separate from
+// applySavedLayout below (which also closes the modal) so
+// maybeApplyDefaultSavedLayout can call this without a modal having ever
+// been opened.
+function applyColumnLayoutConfig(tableId, rawLayout) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    state.config = reconcileDataTableConfig(rawLayout, state.columnKeys);
+    state.columnKeys.forEach((key) => {
+        if (state.config.widths[key] == null) state.config.widths[key] = state.naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
+    });
+    saveDataTableConfig(tableId, state.config);
+    applyDataTableColumnLayout(tableId);
+}
+
+function applySavedLayout(tableId, layout) {
+    applyColumnLayoutConfig(tableId, layout.layout);
+    savedLayoutModal.hidden = true;
+}
+
+async function saveSavedLayout() {
+    savedLayoutErrorEl.hidden = true;
+    const name = savedLayoutNameInput.value.trim();
+    if (!name) {
+        savedLayoutErrorEl.textContent = t('main.savedLayoutNameRequired');
+        savedLayoutErrorEl.hidden = false;
+        return;
+    }
+    const isAssign = savedLayoutModal.querySelector('input[name="saved-layout-audience"][value="assign"]')?.checked;
+    const scope = (currentUser?.isClientAdmin && isAssign) ? 'global' : 'personal';
+    let audience;
+    if (scope === 'global') {
+        audience = {};
+        SAVED_VIEW_AUDIENCE_GROUPS.forEach((group) => {
+            const groupMap = savedViewAudienceSelection.get(group.key);
+            if (!groupMap.size) return;
+            if (group.key === 'userIds') audience.userIds = [...groupMap.keys()];
+            else audience[group.key] = [...groupMap.entries()].map(([id, exceptSet]) => ({ id, exceptUserIds: [...exceptSet] }));
+        });
+        if (!audience.userIds?.length && !audience.jobPositions?.length && !audience.costCenters?.length) {
+            savedLayoutErrorEl.textContent = t('main.savedSearchAudienceSummaryEmpty');
+            savedLayoutErrorEl.hidden = false;
+            return;
+        }
+    }
+    const layout = collectCurrentLayoutSnapshot(savedLayoutTableId);
+    try {
+        const res = await fetch('/api/business/saved-layouts', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ tableKey: savedLayoutTableId, name, layout, scope, isDefault: savedLayoutDefaultCheckbox.checked, audience }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            savedLayoutErrorEl.textContent = body?.message || t('admin.saveError');
+            savedLayoutErrorEl.hidden = false;
+            return;
+        }
+        savedLayoutNameInput.value = '';
+        savedLayoutDefaultCheckbox.checked = false;
+        await loadSavedLayoutList();
+    } catch {
+        savedLayoutErrorEl.textContent = t('admin.saveError');
+        savedLayoutErrorEl.hidden = false;
+    }
+}
+
+// Fired once per table, only on a genuine first-ever visit on this device
+// (see hadNoStoredLayout in the init loop above) -- never gated by
+// resolveIconGrant('iconSavedLayout'): a profile without that icon (can't
+// manage layouts) should still receive whatever default the admin
+// assigned -- the icon only gates being able to browse/save/delete them.
+// The server's own list already filters to what THIS user can see, so a
+// personal default (if the user happens to already have one) wins over a
+// global one, matching the plan's stated precedence.
+async function maybeApplyDefaultSavedLayout(tableId) {
+    try {
+        const res = await fetch(`/api/business/saved-layouts/${encodeURIComponent(tableId)}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const { layouts } = await res.json();
+        const personalDefault = (layouts || []).find((l) => l.scope === 'personal' && l.isDefault);
+        const globalDefault = (layouts || []).find((l) => l.scope === 'global' && l.isDefault);
+        const winner = personalDefault || globalDefault;
+        if (winner) applyColumnLayoutConfig(tableId, winner.layout);
+    } catch {
+        // No default reachable -- the table keeps whatever loadDataTableConfig already rendered.
     }
 }
 
@@ -5124,6 +5410,18 @@ function renderDataTableColumnControls() {
                 savedSearchBtn.innerHTML = '<i class="bx bx-bookmark-star" aria-hidden="true"></i>';
                 savedSearchBtn.addEventListener('click', () => openSavedSearchPicker(getTableId(wrapper, index)));
                 toAppend.push(savedSearchBtn);
+            }
+
+            if (resolveIconGrant(tableKey, 'iconSavedLayout')) {
+                const savedLayoutBtn = document.createElement('button');
+                savedLayoutBtn.type = 'button';
+                savedLayoutBtn.className = 'data-table-zoom-btn';
+                savedLayoutBtn.dataset.colAction = 'saved-layout';
+                savedLayoutBtn.setAttribute('aria-label', t('main.savedLayoutBtn'));
+                savedLayoutBtn.title = t('main.savedLayoutBtn');
+                savedLayoutBtn.innerHTML = '<i class="bx bx-columns" aria-hidden="true"></i>';
+                savedLayoutBtn.addEventListener('click', () => openSavedLayoutPicker(getTableId(wrapper, index)));
+                toAppend.push(savedLayoutBtn);
             }
 
             // Reglas de Orden de Llenado — admin-only (it's a configuration
