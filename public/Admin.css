@@ -4472,29 +4472,152 @@ body.dark-mode .admin-save-status{
 }
 .data-table-arrange-back[hidden]{ display: none; }
 .data-table-arrange-panel [hidden]{ display: none !important; }
-.data-table-arrange-add{
-    width: 100%;
+/* Icono de Acomodo Guardado en la barra: al abrir el menú se estira como
+   una píldora con el buscador a su derecha (Dashboard.js:
+   toggleSavedLayoutMenu), y de ahí cuelga .data-table-layout-menu. */
+.data-table-layout-pill{
+    display: inline-flex;
+    align-items: center;
+    height: 1.7rem;
+    border-radius: 999px;
+}
+.data-table-layout-pill.open{
+    width: 11.5rem;
+    border: 1px solid var(--color-text-primary);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3px var(--color-text-primary);
+}
+.data-table-layout-pill.open .data-table-zoom-btn{
+    border: none;
+    background: none;
+    color: var(--color-text-primary);
+    height: 100%;
+}
+.data-table-layout-pill-input{
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
     font: inherit;
-    font-size: 0.88rem;
-    font-weight: 700;
-    padding: 0.75rem;
-    border: 1.5px dashed var(--color-accent);
-    border-radius: 0.6rem;
-    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
-    color: var(--color-accent);
+    font-size: 0.74rem;
+    color: var(--color-text-primary);
+    padding: 0 0.7rem 0 0;
+}
+.data-table-layout-pill-input[hidden]{ display: none; }
+.data-table-layout-menu{
+    position: fixed;
+    z-index: 120;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    box-shadow: 0 14px 34px -10px rgba(21, 24, 43, 0.3), 0 2px 6px rgba(21, 24, 43, 0.1);
+    padding: 0.35rem;
+    font-size: 0.8rem;
+}
+.data-table-layout-menu[hidden]{ display: none; }
+.data-table-layout-menu::before{
+    content: "";
+    position: absolute;
+    top: -0.42rem;
+    left: var(--caret-left, 1rem);
+    width: 0.8rem;
+    height: 0.8rem;
+    background: var(--color-surface);
+    border-left: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    transform: rotate(45deg);
+}
+.data-table-layout-item{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 0.5rem;
+}
+.data-table-layout-item:hover{
+    background: color-mix(in srgb, var(--color-accent) 11%, transparent);
+}
+button.data-table-layout-item{
+    width: 100%;
+    border: none;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
     cursor: pointer;
 }
-.data-table-arrange-add:hover{
-    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+.data-table-layout-add{
+    color: var(--color-accent);
+    font-weight: 700;
 }
-.data-table-arrange-empty{
-    margin: 0.4rem 0 0.9rem;
+.data-table-layout-plus{
+    width: 1.2rem;
+    height: 1.2rem;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
     font-size: 0.8rem;
-    color: var(--color-text-secondary);
-    text-align: center;
 }
-.data-table-arrange-panel [data-role="view-list"] .saved-view-list{
-    margin: 0.7rem 0 1rem;
+.data-table-layout-sep{
+    height: 1px;
+    background: var(--color-border);
+    margin: 0.3rem 0.4rem;
+}
+.data-table-layout-list{
+    max-height: 15rem;
+    overflow-y: auto;
+}
+.data-table-layout-name{
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.data-table-layout-name mark{
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    color: inherit;
+    border-radius: 0.2rem;
+    padding: 0 0.05rem;
+}
+.data-table-layout-acts{
+    display: flex;
+    gap: 0.15rem;
+    flex: none;
+}
+.data-table-layout-act{
+    width: 1.5rem;
+    height: 1.5rem;
+    display: grid;
+    place-items: center;
+    border: none;
+    border-radius: 0.4rem;
+    background: none;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+.data-table-layout-act:hover{ filter: brightness(0.9); }
+.data-table-layout-act-edit{
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+.data-table-layout-act-del{ color: #c23b3b; }
+.data-table-layout-empty{
+    margin: 0;
+    padding: 0.45rem 0.7rem 0.7rem;
+    font-size: 0.74rem;
+    color: var(--color-text-secondary);
 }
 .data-table-arrange-label{
     display: block;

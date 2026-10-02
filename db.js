@@ -3123,6 +3123,15 @@ function deleteSavedLayout(id) {
     db.prepare('DELETE FROM saved_layouts WHERE id = ?').run(id);
 }
 
+// Editar un acomodo ya guardado: solo nombre y columnas. Su alcance,
+// audiencia y "default al abrir" se quedan como estaban.
+function updateSavedLayout(id, { name, layout }) {
+    db.prepare('UPDATE saved_layouts SET name = @name, layout_json = @layoutJson WHERE id = @id').run({
+        id, name, layoutJson: JSON.stringify(layout),
+    });
+    return getSavedLayoutById(id);
+}
+
 // saved_layouts' CRUD, mirrored 1:1 for saas_saved_layouts -- no clientId
 // parameter anywhere here, see that table's own schema comment above.
 function deserializeSaasSavedLayout(row) {
@@ -3176,6 +3185,13 @@ function createSaasSavedLayout({ tableKey, name, layout, scope, isDefault, owner
 
 function deleteSaasSavedLayout(id) {
     db.prepare('DELETE FROM saas_saved_layouts WHERE id = ?').run(id);
+}
+
+function updateSaasSavedLayout(id, { name, layout }) {
+    db.prepare('UPDATE saas_saved_layouts SET name = @name, layout_json = @layoutJson WHERE id = @id').run({
+        id, name, layoutJson: JSON.stringify(layout),
+    });
+    return getSaasSavedLayoutById(id);
 }
 
 // Who most recently touched this exact field -- used by the offline-queue
@@ -8073,10 +8089,12 @@ module.exports = {
     getSavedLayoutById,
     createSavedLayout,
     deleteSavedLayout,
+    updateSavedLayout,
     getSaasSavedLayoutsForTable,
     getSaasSavedLayoutById,
     createSaasSavedLayout,
     deleteSaasSavedLayout,
+    updateSaasSavedLayout,
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,

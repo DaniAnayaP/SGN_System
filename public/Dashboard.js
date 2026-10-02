@@ -2451,7 +2451,7 @@ function dataTableColumnsSignature(columnKeys) {
 // Reconciles a raw {order,hidden,pinned,widths} object against the columns
 // that exist RIGHT NOW -- shared by the localStorage-backed per-device
 // layout (loadDataTableConfig below) and by replaying an Acomodo Guardado
-// (applySavedLayout), which arrives with no "signature" of its own to
+// (applyColumnLayoutConfig), which arrives with no "signature" of its own to
 // pre-check (saved_layouts doesn't store one, see db.js's schema comment).
 // A column dropped/renamed since the layout was captured just falls out of
 // order/hidden/widths; a newly added column lands at the end of order,
@@ -3988,6 +3988,12 @@ function openVisibilityPicker(tableId) {
     visibilityPickerModal.hidden = false;
 }
 
+function closeColumnArrangeModal() {
+    if (!columnArrangeModal) return;
+    columnArrangeModal.hidden = true;
+    columnArrangeState = null;
+}
+
 function ensureColumnArrangeModal() {
     if (columnArrangeModal) return;
     columnArrangeModal = document.createElement('div');
@@ -3996,25 +4002,16 @@ function ensureColumnArrangeModal() {
     columnArrangeModal.innerHTML = `
         <div class="modal-panel data-table-arrange-panel" role="dialog" aria-modal="true" aria-labelledby="data-table-arrange-title">
             <h3 id="data-table-arrange-title">
-                <button type="button" class="data-table-arrange-back" data-role="back" aria-label="${t('main.arrangeBack')}" hidden><i class="bx bx-arrow-back" aria-hidden="true"></i></button>
-                <span data-role="title">${t('main.savedLayoutTitle')}</span>
+                <button type="button" class="data-table-arrange-back" data-role="back" aria-label="${t('main.arrangeBack')}"><i class="bx bx-arrow-back" aria-hidden="true"></i></button>
+                <span data-role="title">${t('main.arrangeNewTitle')}</span>
             </h3>
 
-            <div data-role="view-list">
-                <button type="button" class="data-table-arrange-add" data-role="add">${t('main.arrangeAddNew')}</button>
-                <div data-role="list" class="saved-view-list"></div>
-                <p data-role="empty" class="data-table-arrange-empty" hidden>${t('main.savedLayoutEmpty')}</p>
-                <div class="admin-form-actions">
-                    <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
-                </div>
-            </div>
-
-            <div data-role="view-edit" hidden>
-                <label class="data-table-arrange-label" for="data-table-arrange-name">${t('main.arrangeNameLabel')}</label>
+            <div>
+                <label class="data-table-arrange-label" for="data-table-arrange-name" data-role="name-label">${t('main.arrangeNameLabel')}</label>
                 <input type="text" id="data-table-arrange-name" data-role="name" class="saved-view-name-input data-table-arrange-name" placeholder="${t('main.savedLayoutNamePlaceholder')}">
 
                 <div class="data-table-arrange-colpanel">
-                    <span class="data-table-arrange-live"><i class="bx bx-revision" aria-hidden="true"></i> ${t('main.arrangeStartsFromCurrent')}</span>
+                    <span class="data-table-arrange-live"><i class="bx bx-revision" aria-hidden="true"></i> <span data-role="live-text">${t('main.arrangeStartsFromCurrent')}</span></span>
                     <div class="sector-icon-picker-search">
                         <i class="bx bx-search" aria-hidden="true"></i>
                         <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
@@ -4031,35 +4028,33 @@ function ensureColumnArrangeModal() {
                 <button type="button" class="btn data-table-arrange-block-btn" data-role="terminar-acomodo">${t('main.arrangeTerminar')}</button>
 
                 <div data-role="save-block-2">
-                    <div data-role="admin-section" class="data-table-arrange-segmented" hidden>
-                        <label><input type="radio" name="saved-layout-audience" value="self" checked> <span>${t('main.savedSearchAudienceSelf')}</span></label>
-                        <label><input type="radio" name="saved-layout-audience" value="assign"> <span>${t('main.savedSearchAudienceAssign')}</span></label>
+                    <div data-role="scope-block">
+                        <div data-role="admin-section" class="data-table-arrange-segmented" hidden>
+                            <label><input type="radio" name="saved-layout-audience" value="self" checked> <span>${t('main.savedSearchAudienceSelf')}</span></label>
+                            <label><input type="radio" name="saved-layout-audience" value="assign"> <span>${t('main.savedSearchAudienceAssign')}</span></label>
+                        </div>
+                        <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
+                        <button type="button" class="btn data-table-arrange-block-btn data-table-arrange-assign-btn" data-role="terminar-asignacion" hidden>${t('main.arrangeTerminarAsignacion')}</button>
+                        <label class="saved-view-default-row"><input type="checkbox" data-role="default"> ${t('main.savedLayoutSetDefault')}</label>
                     </div>
-                    <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
-                    <button type="button" class="btn data-table-arrange-block-btn data-table-arrange-assign-btn" data-role="terminar-asignacion" hidden>${t('main.arrangeTerminarAsignacion')}</button>
-                    <label class="saved-view-default-row"><input type="checkbox" data-role="default"> ${t('main.savedLayoutSetDefault')}</label>
                     <p data-role="error" class="admin-error" role="alert" hidden></p>
                     <button type="button" class="btn data-table-arrange-block-btn data-table-arrange-save-btn" data-role="save" disabled>${t('admin.save')}</button>
                     <p data-role="lock-note" class="data-table-arrange-lock-note"></p>
                 </div>
 
                 <div class="admin-form-actions">
-                    <button type="button" class="btn btn-secondary" data-role="cancel-edit">${t('admin.cancel')}</button>
+                    <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
                 </div>
             </div>
         </div>
     `;
     document.body.appendChild(columnArrangeModal);
     // Re-use the exact same module-level refs/functions Acomodo Guardado's
-    // save/list/apply/delete flow already had (saveSavedLayout,
-    // loadSavedLayoutList, renderSavedLayoutList, applySavedLayout,
-    // collectCurrentLayoutSnapshot, maybeApplyDefaultSavedLayout, further
-    // below) -- they only ever touch these variables + dataTableColumnState,
-    // so pointing them at this modal's DOM instead of their old standalone
-    // one preserves their behavior exactly.
+    // save flow already had (saveSavedLayout, collectCurrentLayoutSnapshot,
+    // further below) -- they only ever touch these variables +
+    // dataTableColumnState, so pointing them at this modal's DOM instead of
+    // their old standalone one preserves their behavior exactly.
     savedLayoutModal = columnArrangeModal;
-    savedLayoutListEl = columnArrangeModal.querySelector('[data-role="list"]');
-    savedLayoutEmptyEl = columnArrangeModal.querySelector('[data-role="empty"]');
     savedLayoutErrorEl = columnArrangeModal.querySelector('[data-role="error"]');
     savedLayoutNameInput = columnArrangeModal.querySelector('[data-role="name"]');
     savedLayoutAdminSection = columnArrangeModal.querySelector('[data-role="admin-section"]');
@@ -4068,10 +4063,10 @@ function ensureColumnArrangeModal() {
     savedLayoutSaveBtn = columnArrangeModal.querySelector('[data-role="save"]');
 
     const refs = {
-        viewList: columnArrangeModal.querySelector('[data-role="view-list"]'),
-        viewEdit: columnArrangeModal.querySelector('[data-role="view-edit"]'),
-        backBtn: columnArrangeModal.querySelector('[data-role="back"]'),
         titleEl: columnArrangeModal.querySelector('[data-role="title"]'),
+        nameLabel: columnArrangeModal.querySelector('[data-role="name-label"]'),
+        liveText: columnArrangeModal.querySelector('[data-role="live-text"]'),
+        scopeBlock: columnArrangeModal.querySelector('[data-role="scope-block"]'),
         searchInput: columnArrangeModal.querySelector('[data-role="search"]'),
         tabsEl: columnArrangeModal.querySelector('[data-role="tabs"]'),
         rowsEl: columnArrangeModal.querySelector('[data-role="rows"]'),
@@ -4082,16 +4077,9 @@ function ensureColumnArrangeModal() {
     };
     columnArrangeModal._refs = refs;
 
-    const close = () => { columnArrangeModal.hidden = true; columnArrangeState = null; };
-    columnArrangeModal.querySelector('[data-role="close"]').addEventListener('click', close);
-    wireModalDismiss(columnArrangeModal, close);
-
-    // Paso 1 = lista de acomodos guardados + "+ Agregar"; paso 2 = el
-    // flujo de acomodar (nombre, pestañas, lista, vista previa, botones).
-    columnArrangeModal.querySelector('[data-role="add"]').addEventListener('click', startColumnArrangeEdit);
-    const backToList = () => showColumnArrangeView('list');
-    refs.backBtn.addEventListener('click', backToList);
-    columnArrangeModal.querySelector('[data-role="cancel-edit"]').addEventListener('click', backToList);
+    columnArrangeModal.querySelector('[data-role="close"]').addEventListener('click', closeColumnArrangeModal);
+    columnArrangeModal.querySelector('[data-role="back"]').addEventListener('click', closeColumnArrangeModal);
+    wireModalDismiss(columnArrangeModal, closeColumnArrangeModal);
 
     refs.searchInput.addEventListener('input', () => {
         columnArrangeState.query = refs.searchInput.value;
@@ -4402,47 +4390,29 @@ function enablePreviewHeaderDragReorder(headRow) {
     });
 }
 
-// Solo el icono de Acomodo Guardado (iconSavedLayout) abre este modal --
-// iconPin/iconVisibility siguen abriendo sus propios modales de siempre
-// (openPinPicker/openVisibilityPicker, arriba), sin cambios. El bloque de
-// "Guardar como..." (nombrar/listar/aplicar/borrar un acomodo con nombre)
-// solo se muestra si esta cuenta puede llegar al servidor que lo persiste
-// (ver canPersistSavedLayout, junto a renderDataTableColumnControls) --
-// sin ese permiso, el modal igual sirve para acomodar y aplicar en vivo.
-function showColumnArrangeView(view) {
-    const refs = columnArrangeModal._refs;
-    const isList = view === 'list';
-    refs.viewList.hidden = !isList;
-    refs.viewEdit.hidden = isList;
-    refs.backBtn.hidden = isList;
-    refs.titleEl.textContent = t(isList ? 'main.savedLayoutTitle' : 'main.arrangeNewTitle');
-    columnArrangeModal.querySelector('.modal-panel').scrollTop = 0;
-}
-
-async function openColumnArrangeModal(tableId) {
-    if (!dataTableColumnState.get(tableId)) return;
-    ensureColumnArrangeModal();
-    columnArrangeState = null;
-    savedLayoutTableId = tableId;
-    showColumnArrangeView('list');
-    columnArrangeModal.hidden = false;
-    await loadSavedLayoutList();
-}
-
-// "+ Agregar": arranca un acomodo nuevo, partiendo del acomodo que la tabla
-// tiene en este momento (el borrador se descarta si se regresa a la lista).
-function startColumnArrangeEdit() {
-    const tableId = savedLayoutTableId;
+// Solo el icono de Acomodo Guardado (iconSavedLayout) llega aquí, desde el
+// menú que cuelga del icono (toggleSavedLayoutMenu, más abajo): "Agregar"
+// abre este editor vacío y el lápiz de un acomodo lo abre con ese acomodo
+// ya cargado. iconPin/iconVisibility siguen abriendo sus propios modales
+// de siempre (openPinPicker/openVisibilityPicker, arriba), sin cambios.
+function openColumnArrangeEditor(tableId, layout = null) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    ensureColumnArrangeModal();
+    savedLayoutTableId = tableId;
     const refs = columnArrangeModal._refs;
+    const editing = !!layout;
+    const base = editing ? reconcileDataTableConfig(layout.layout, state.columnKeys) : state.config;
     columnArrangeState = {
         tableId,
+        editingId: editing ? layout.id : null,
         draftConfig: {
-            order: [...state.config.order], hidden: [...state.config.hidden],
-            pinned: [...state.config.pinned], widths: { ...state.config.widths },
+            order: [...base.order], hidden: [...base.hidden],
+            pinned: [...base.pinned], widths: { ...base.widths },
         },
-        decidedKeys: new Set(),
+        // Un acomodo ya guardado trae todas sus columnas decididas; uno
+        // nuevo arranca con todas "pendientes" (atenuadas) hasta tocarlas.
+        decidedKeys: new Set(editing ? state.columnKeys : []),
         activeTab: null,
         query: '',
         scope: 'personal',
@@ -4452,7 +4422,14 @@ function startColumnArrangeEdit() {
     const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
     columnArrangeState.activeTab = presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED;
 
-    savedLayoutNameInput.value = '';
+    refs.titleEl.textContent = t(editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle');
+    refs.nameLabel.textContent = t(editing ? 'main.arrangeNameLabelEdit' : 'main.arrangeNameLabel');
+    refs.liveText.textContent = t(editing ? 'main.arrangeStartsFromSaved' : 'main.arrangeStartsFromCurrent');
+    savedLayoutSaveBtn.textContent = t(editing ? 'main.arrangeSaveChanges' : 'admin.save');
+    // Editar solo cambia nombre y columnas: alcance, audiencia y "default al
+    // abrir" se quedan como se guardaron.
+    refs.scopeBlock.hidden = editing;
+    savedLayoutNameInput.value = editing ? layout.name : '';
     savedLayoutDefaultCheckbox.checked = false;
     savedLayoutErrorEl.hidden = true;
     savedViewAudienceSelection = new Map(SAVED_VIEW_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
@@ -4466,7 +4443,204 @@ function startColumnArrangeEdit() {
     renderColumnArrangeRows();
     renderColumnArrangePreview();
     updateColumnArrangeGating();
-    showColumnArrangeView('edit');
+    columnArrangeModal.querySelector('.modal-panel').scrollTop = 0;
+    columnArrangeModal.hidden = false;
+}
+
+// --- Menú de Acomodo Guardado ------------------------------------------
+// El icono de la barra se abre como una píldora con un buscador a su
+// derecha, y de ahí cuelga la lista de acomodos guardados (position:fixed
+// en <body>, para que el overflow de la tabla no lo recorte). Clic en un
+// nombre lo aplica; "Agregar" y el lápiz abren el editor de arriba; el bote
+// borra.
+let layoutMenuEl = null;
+let layoutMenuState = null; // { tableId, pill, input, layouts, loaded, query }
+
+function closeSavedLayoutMenu() {
+    if (!layoutMenuState) return;
+    const { pill, input } = layoutMenuState;
+    pill.classList.remove('open');
+    input.hidden = true;
+    input.value = '';
+    layoutMenuEl.hidden = true;
+    layoutMenuState = null;
+}
+
+function positionSavedLayoutMenu() {
+    if (!layoutMenuState) return;
+    const pillRect = layoutMenuState.pill.getBoundingClientRect();
+    const iconRect = layoutMenuState.pill.querySelector('button').getBoundingClientRect();
+    const margin = 8;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const width = Math.min(21 * rem, window.innerWidth - margin * 2);
+    const left = Math.max(margin, Math.min(pillRect.left, window.innerWidth - width - margin));
+    layoutMenuEl.style.width = `${width}px`;
+    layoutMenuEl.style.left = `${left}px`;
+    layoutMenuEl.style.top = `${pillRect.bottom + margin}px`;
+    layoutMenuEl.style.setProperty('--caret-left', `${iconRect.left + iconRect.width / 2 - left - 6}px`);
+}
+
+function ensureSavedLayoutMenu() {
+    if (layoutMenuEl) return;
+    layoutMenuEl = document.createElement('div');
+    layoutMenuEl.className = 'data-table-layout-menu';
+    layoutMenuEl.setAttribute('role', 'menu');
+    layoutMenuEl.setAttribute('aria-label', t('main.savedLayoutTitle'));
+    layoutMenuEl.hidden = true;
+    document.body.appendChild(layoutMenuEl);
+    document.addEventListener('mousedown', (event) => {
+        if (!layoutMenuState) return;
+        if (layoutMenuEl.contains(event.target) || layoutMenuState.pill.contains(event.target)) return;
+        closeSavedLayoutMenu();
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeSavedLayoutMenu(); });
+    window.addEventListener('resize', positionSavedLayoutMenu);
+    window.addEventListener('scroll', positionSavedLayoutMenu, true);
+}
+
+function appendHighlightedText(el, text, lowerQuery) {
+    const at = lowerQuery ? text.toLowerCase().indexOf(lowerQuery) : -1;
+    if (at < 0) { el.textContent = text; return; }
+    const mark = document.createElement('mark');
+    mark.textContent = text.slice(at, at + lowerQuery.length);
+    el.append(text.slice(0, at), mark, text.slice(at + lowerQuery.length));
+}
+
+function renderSavedLayoutMenu() {
+    const state = layoutMenuState;
+    if (!state) return;
+    layoutMenuEl.innerHTML = '';
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'data-table-layout-item data-table-layout-add';
+    add.setAttribute('role', 'menuitem');
+    add.innerHTML = '<span class="data-table-layout-plus"><i class="bx bx-plus" aria-hidden="true"></i></span>';
+    const addLabel = document.createElement('span');
+    addLabel.textContent = t('main.arrangeAddNew');
+    add.appendChild(addLabel);
+    add.addEventListener('click', () => {
+        closeSavedLayoutMenu();
+        openColumnArrangeEditor(state.tableId);
+    });
+    layoutMenuEl.appendChild(add);
+    if (!state.loaded) return;
+
+    const sep = document.createElement('div');
+    sep.className = 'data-table-layout-sep';
+    layoutMenuEl.appendChild(sep);
+
+    const query = state.query.trim();
+    const lowerQuery = query.toLowerCase();
+    const shown = lowerQuery ? state.layouts.filter((l) => l.name.toLowerCase().includes(lowerQuery)) : state.layouts;
+    if (!shown.length) {
+        const empty = document.createElement('p');
+        empty.className = 'data-table-layout-empty';
+        empty.textContent = state.layouts.length ? t('main.savedLayoutNoResults', { query }) : t('main.savedLayoutEmpty');
+        layoutMenuEl.appendChild(empty);
+        return;
+    }
+
+    const isAdminForThisTable = isSaasTableKey(state.tableId) ? !!currentUser?.isSaasSuperAdmin : !!currentUser?.isClientAdmin;
+    const list = document.createElement('div');
+    list.className = 'data-table-layout-list';
+    shown.forEach((layout) => {
+        const row = document.createElement('div');
+        row.className = 'data-table-layout-item';
+
+        const nameBtn = document.createElement('button');
+        nameBtn.type = 'button';
+        nameBtn.className = 'data-table-layout-name';
+        nameBtn.setAttribute('role', 'menuitem');
+        appendHighlightedText(nameBtn, layout.name, lowerQuery);
+        nameBtn.addEventListener('click', () => {
+            applyColumnLayoutConfig(state.tableId, layout.layout);
+            closeSavedLayoutMenu();
+        });
+        row.appendChild(nameBtn);
+
+        if (layout.isDefault) {
+            const tag = document.createElement('span');
+            tag.className = 'saved-view-default-tag';
+            tag.textContent = '★';
+            tag.title = t('main.savedLayoutDefaultTag');
+            row.appendChild(tag);
+        }
+        const badge = document.createElement('span');
+        badge.className = `saved-view-scope-badge saved-view-scope-${layout.scope}`;
+        badge.textContent = t(layout.scope === 'global' ? 'main.savedSearchScopeGlobal' : 'main.savedSearchScopePersonal');
+        row.appendChild(badge);
+
+        // A 'personal' row only ever appears in the viewer's OWN list (the
+        // server already scopes it to its owner), so editing/deleting is
+        // allowed for those plus every row for an admin -- the server
+        // enforces the same rule again on PUT/DELETE.
+        if (isAdminForThisTable || layout.scope === 'personal') {
+            const acts = document.createElement('span');
+            acts.className = 'data-table-layout-acts';
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'data-table-layout-act data-table-layout-act-edit';
+            editBtn.setAttribute('aria-label', t('main.savedLayoutEditBtn'));
+            editBtn.title = t('main.savedLayoutEditBtn');
+            editBtn.innerHTML = '<i class="bx bx-pencil" aria-hidden="true"></i>';
+            editBtn.addEventListener('click', () => {
+                closeSavedLayoutMenu();
+                openColumnArrangeEditor(state.tableId, layout);
+            });
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'data-table-layout-act data-table-layout-act-del';
+            delBtn.setAttribute('aria-label', t('admin.delete'));
+            delBtn.title = t('admin.delete');
+            delBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+            delBtn.addEventListener('click', () => deleteSavedLayoutFromMenu(state, layout.id));
+            acts.append(editBtn, delBtn);
+            row.appendChild(acts);
+        }
+        list.appendChild(row);
+    });
+    layoutMenuEl.appendChild(list);
+}
+
+async function refreshSavedLayoutMenu(state) {
+    try {
+        const res = await fetch(`${savedLayoutApiBase(state.tableId)}/${encodeURIComponent(state.tableId)}`, { credentials: 'include' });
+        if (res.ok) state.layouts = (await res.json()).layouts || [];
+    } catch {
+        // Leave the list as it was -- the next open retries the fetch anyway.
+    }
+    state.loaded = true;
+    if (layoutMenuState === state) renderSavedLayoutMenu();
+}
+
+async function deleteSavedLayoutFromMenu(state, id) {
+    try {
+        const res = await fetch(`${savedLayoutApiBase(state.tableId)}/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (res.ok) await refreshSavedLayoutMenu(state);
+    } catch {
+        // Leave the list as-is -- next open retries the fetch anyway.
+    }
+}
+
+async function toggleSavedLayoutMenu(tableId, pill) {
+    if (layoutMenuState?.pill === pill) {
+        closeSavedLayoutMenu();
+        return;
+    }
+    closeSavedLayoutMenu();
+    ensureSavedLayoutMenu();
+    const input = pill.querySelector('input');
+    const state = { tableId, pill, input, layouts: [], loaded: false, query: '' };
+    layoutMenuState = state;
+    pill.classList.add('open');
+    input.hidden = false;
+    input.value = '';
+    layoutMenuEl.hidden = false;
+    renderSavedLayoutMenu();
+    positionSavedLayoutMenu();
+    input.focus({ preventScroll: true });
+    await refreshSavedLayoutMenu(state);
 }
 
 // --- Reglas de Orden de Llenado modal ---------------------------------
@@ -5606,8 +5780,6 @@ async function saveSavedSearch() {
 // maybeApplyDefaultSavedLayout, wired in once per table at the bottom of
 // the init loop above.
 let savedLayoutModal = null;
-let savedLayoutListEl = null;
-let savedLayoutEmptyEl = null;
 let savedLayoutErrorEl = null;
 let savedLayoutNameInput = null;
 let savedLayoutAdminSection = null;
@@ -5616,82 +5788,9 @@ let savedLayoutDefaultCheckbox = null;
 let savedLayoutSaveBtn = null;
 let savedLayoutTableId = null;
 
-// ensureSavedLayoutModal/openSavedLayoutPicker used to build/open this
-// modal on their own; both are gone now -- ensureColumnArrangeModal builds
-// the (combined) DOM into these same savedLayout* variables, and
-// openColumnArrangeModal does the resetting, since Acomodo Guardado and
-// the old pin/visibility pickers are now one single modal/entry point.
-
-async function loadSavedLayoutList() {
-    savedLayoutListEl.innerHTML = '';
-    savedLayoutEmptyEl.hidden = true;
-    try {
-        const res = await fetch(`${savedLayoutApiBase(savedLayoutTableId)}/${encodeURIComponent(savedLayoutTableId)}`, { credentials: 'include' });
-        if (!res.ok) return;
-        const { layouts } = await res.json();
-        renderSavedLayoutList(layouts || []);
-    } catch {
-        // Leave the empty-state message in place -- no network/parse errors surfaced here.
-    }
-}
-
-function renderSavedLayoutList(layouts) {
-    savedLayoutListEl.innerHTML = '';
-    savedLayoutEmptyEl.hidden = layouts.length > 0;
-    layouts.forEach((layout) => {
-        const row = document.createElement('div');
-        row.className = 'saved-view-row';
-
-        const nameEl = document.createElement('span');
-        nameEl.className = 'saved-view-row-name';
-        nameEl.textContent = layout.name;
-        row.appendChild(nameEl);
-
-        if (layout.isDefault) {
-            const tag = document.createElement('span');
-            tag.className = 'saved-view-default-tag';
-            tag.textContent = t('main.savedLayoutDefaultTag');
-            row.appendChild(tag);
-        }
-
-        const badge = document.createElement('span');
-        badge.className = `saved-view-scope-badge saved-view-scope-${layout.scope}`;
-        badge.textContent = t(layout.scope === 'global' ? 'main.savedSearchScopeGlobal' : 'main.savedSearchScopePersonal');
-        row.appendChild(badge);
-
-        const applyBtn = document.createElement('button');
-        applyBtn.type = 'button';
-        applyBtn.className = 'btn-link';
-        applyBtn.textContent = t('main.savedLayoutApply');
-        applyBtn.addEventListener('click', () => applySavedLayout(savedLayoutTableId, layout));
-        row.appendChild(applyBtn);
-
-        // A 'personal' row only ever appears in the viewer's OWN list (the
-        // server already scopes it to its owner) -- no need to separately
-        // compare ownerUserId against the current user here.
-        const isAdminForThisTable = isSaasTableKey(savedLayoutTableId) ? !!currentUser?.isSaasSuperAdmin : !!currentUser?.isClientAdmin;
-        const canDelete = isAdminForThisTable || layout.scope === 'personal';
-        if (canDelete) {
-            const delBtn = document.createElement('button');
-            delBtn.type = 'button';
-            delBtn.className = 'btn-link-danger';
-            delBtn.setAttribute('aria-label', t('admin.delete'));
-            delBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-            delBtn.addEventListener('click', () => deleteSavedLayoutRow(layout.id));
-            row.appendChild(delBtn);
-        }
-        savedLayoutListEl.appendChild(row);
-    });
-}
-
-async function deleteSavedLayoutRow(id) {
-    try {
-        const res = await fetch(`${savedLayoutApiBase(savedLayoutTableId)}/${id}`, { method: 'DELETE', credentials: 'include' });
-        if (res.ok) await loadSavedLayoutList();
-    } catch {
-        // Leave the list as-is -- next open retries the fetch anyway.
-    }
-}
+// La lista de acomodos guardados ya no vive en este modal: la dibuja el
+// menú que cuelga del icono (renderSavedLayoutMenu), y este modal solo
+// crea o edita uno (openColumnArrangeEditor).
 
 // Whether this account can reach the server that actually persists a
 // named Acomodo Guardado for this table -- client accounts always can
@@ -5728,10 +5827,9 @@ function collectCurrentLayoutSnapshot(tableId) {
 // applyDataTableColumnLayout, the same call "Terminar Acomodo"/drag-reorder/
 // resize already make after mutating state.config, so this writes through
 // to localStorage and survives a reload exactly like any manual
-// rearrangement. Kept separate from
-// applySavedLayout below (which also closes the modal) so
-// maybeApplyDefaultSavedLayout can call this without a modal having ever
-// been opened.
+// rearrangement. Shared by the saved-layout menu, "Terminar Acomodo" and
+// maybeApplyDefaultSavedLayout, which calls it without any modal or menu
+// ever having been opened.
 function applyColumnLayoutConfig(tableId, rawLayout) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
@@ -5743,17 +5841,34 @@ function applyColumnLayoutConfig(tableId, rawLayout) {
     applyDataTableColumnLayout(tableId);
 }
 
-function applySavedLayout(tableId, layout) {
-    applyColumnLayoutConfig(tableId, layout.layout);
-    savedLayoutModal.hidden = true;
-}
-
 async function saveSavedLayout() {
     savedLayoutErrorEl.hidden = true;
     const name = savedLayoutNameInput.value.trim();
     if (!name) {
         savedLayoutErrorEl.textContent = t('main.savedLayoutNameRequired');
         savedLayoutErrorEl.hidden = false;
+        return;
+    }
+    // Editar un acomodo existente: solo nombre + columnas (el servidor deja
+    // su alcance, audiencia y default como estaban).
+    if (columnArrangeState?.editingId) {
+        try {
+            const res = await fetch(`${savedLayoutApiBase(savedLayoutTableId)}/${columnArrangeState.editingId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ name, layout: collectCurrentLayoutSnapshot(savedLayoutTableId) }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                savedLayoutErrorEl.textContent = body?.message || t('admin.saveError');
+                savedLayoutErrorEl.hidden = false;
+                return;
+            }
+            closeColumnArrangeModal();
+            showToast(t('main.changeSaved'), 'success');
+        } catch {
+            savedLayoutErrorEl.textContent = t('admin.saveError');
+            savedLayoutErrorEl.hidden = false;
+        }
         return;
     }
     const isSaasTable = isSaasTableKey(savedLayoutTableId);
@@ -5798,10 +5913,8 @@ async function saveSavedLayout() {
             savedLayoutErrorEl.hidden = false;
             return;
         }
-        savedLayoutNameInput.value = '';
-        savedLayoutDefaultCheckbox.checked = false;
-        await loadSavedLayoutList();
-        showColumnArrangeView('list');
+        closeColumnArrangeModal();
+        showToast(t('main.changeSaved'), 'success');
     } catch {
         savedLayoutErrorEl.textContent = t('admin.saveError');
         savedLayoutErrorEl.hidden = false;
@@ -6000,8 +6113,25 @@ function renderDataTableColumnControls() {
                 savedLayoutBtn.setAttribute('aria-label', t('main.savedLayoutBtn'));
                 savedLayoutBtn.title = t('main.savedLayoutBtn');
                 savedLayoutBtn.innerHTML = '<i class="bx bx-columns" aria-hidden="true"></i>';
-                savedLayoutBtn.addEventListener('click', () => openColumnArrangeModal(getTableId(wrapper, index)));
-                toAppend.push(savedLayoutBtn);
+                // El icono + un buscador escondido a su derecha: al abrir el
+                // menú el conjunto se estira como una píldora (ver
+                // toggleSavedLayoutMenu).
+                const pill = document.createElement('span');
+                pill.className = 'data-table-layout-pill';
+                const layoutSearch = document.createElement('input');
+                layoutSearch.type = 'text';
+                layoutSearch.className = 'data-table-layout-pill-input';
+                layoutSearch.placeholder = t('main.savedLayoutSearchPlaceholder');
+                layoutSearch.setAttribute('aria-label', t('main.savedLayoutSearchPlaceholder'));
+                layoutSearch.hidden = true;
+                layoutSearch.addEventListener('input', () => {
+                    if (layoutMenuState?.input !== layoutSearch) return;
+                    layoutMenuState.query = layoutSearch.value;
+                    renderSavedLayoutMenu();
+                });
+                pill.append(savedLayoutBtn, layoutSearch);
+                savedLayoutBtn.addEventListener('click', () => toggleSavedLayoutMenu(getTableId(wrapper, index), pill));
+                toAppend.push(pill);
             }
 
             // Reglas de Orden de Llenado — admin-only (it's a configuration

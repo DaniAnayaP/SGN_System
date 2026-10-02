@@ -193,10 +193,12 @@ const {
     getSavedLayoutById,
     createSavedLayout,
     deleteSavedLayout,
+    updateSavedLayout,
     getSaasSavedLayoutsForTable,
     getSaasSavedLayoutById,
     createSaasSavedLayout,
     deleteSaasSavedLayout,
+    updateSaasSavedLayout,
     getJobPositionIdForUser,
     getColumnGrantLevel,
     canAuthorizeColumn,
@@ -5714,6 +5716,20 @@ app.post('/api/business/saved-layouts', requireAuth, (req, res) => {
     res.status(201).json({ layout: row });
 });
 
+// Editar = nombre + columnas; alcance, audiencia y default no cambian. Mismo
+// permiso que borrar: el dueño de uno personal, o un admin del cliente.
+app.put('/api/business/saved-layouts/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const row = getSavedLayoutById(Number(req.params.id));
+    if (!row || row.clientId !== req.user.clientId) return res.status(404).json({ message: 'Not found.' });
+    const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
+    if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para editar este acomodo guardado.' });
+    const { name, layout } = req.body || {};
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
+    if (!validateSavedLayoutPayload(layout)) return res.status(400).json({ message: 'Invalid layout.' });
+    res.json({ layout: updateSavedLayout(row.id, { name: name.trim(), layout }) });
+});
+
 app.delete('/api/business/saved-layouts/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const row = getSavedLayoutById(Number(req.params.id));
@@ -5757,6 +5773,17 @@ app.post('/api/admin/saas-saved-layouts', requireAuth, requireAdmin, (req, res) 
         audience: finalScope === 'global' ? { userIds: audience.userIds } : undefined,
     });
     res.status(201).json({ layout: row });
+});
+
+app.put('/api/admin/saas-saved-layouts/:id', requireAuth, requireAdmin, (req, res) => {
+    const row = getSaasSavedLayoutById(Number(req.params.id));
+    if (!row) return res.status(404).json({ message: 'Not found.' });
+    const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
+    if (!isOwner && !req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'No tienes permiso para editar este acomodo guardado.' });
+    const { name, layout } = req.body || {};
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
+    if (!validateSavedLayoutPayload(layout)) return res.status(400).json({ message: 'Invalid layout.' });
+    res.json({ layout: updateSaasSavedLayout(row.id, { name: name.trim(), layout }) });
 });
 
 app.delete('/api/admin/saas-saved-layouts/:id', requireAuth, requireAdmin, (req, res) => {
