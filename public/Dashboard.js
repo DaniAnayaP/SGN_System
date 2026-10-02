@@ -8670,6 +8670,42 @@ document.addEventListener('dashboard:language-changed', applyHelpContentKeys);
 // nothing at all in Modo ayuda for exactly this reason. Resolving these maps
 // again HERE, at click time, is immune to that timing gap regardless of when
 // the element was actually created.
+// La descripción de cada pantalla ("Administra las empresas que usan esta
+// instancia de SGN.") ya no se lee arriba de la tabla: se ve en Modo ayuda, al
+// tocar el renglón de esa pantalla en la barra lateral. Pantalla (archivo del
+// href) -> clave de su descripción, la misma que traía su párrafo
+// .admin-subtitle.
+const SCREEN_DESCRIPTION_KEYS = {
+    'Admin-ArbolMaestro.html': 'admin.masterTreeSubtitle',
+    'Admin-ArbolMaestroSaaS.html': 'admin.saasMasterTreeSubtitle',
+    'Admin-BusinessSectors.html': 'admin.businessSectorsSubtitle',
+    'Admin-EquipoSaaS.html': 'admin.saasTeamSubtitle',
+    'Admin-MaterialApoyo.html': 'admin.materialApoyoSubtitle',
+    'Admin-NuestrasApps.html': 'admin.appsSubtitle',
+    'Admin-NuestrosRespaldos.html': 'admin.backupsSubtitle',
+    'Admin-Planes.html': 'admin.plansSubtitle',
+    'Admin-SaaS.html': 'admin.clientsSubtitle',
+    'BaseDatos-NuestrosCambios.html': 'admin.changesSubtitle',
+    'BaseDatos-Respaldos.html': 'admin.backupsSubtitle',
+    'BaseDatos-Solicitudes.html': 'main.databaseRequestsSubtitle',
+    'Business-Config.html': 'business.configSubtitle',
+    'Business-DatosCliente.html': 'business.clientDataSubtitle',
+    'Business-EstatusRH.html': 'business.hrStatusCatalogSubtitle',
+    'Business-EstructuraOrganizacional.html': 'business.orgChartSubtitle',
+    'Business-MisAccesos.html': 'business.myAccessSubtitle',
+    'Business-PuestosTrabajo.html': 'business.jobPositionsSubtitle',
+    'Business-ReglasOrden.html': 'main.fieldRulesSubtitle',
+    'Business-Roles.html': 'business.rolesSubtitle',
+    'Business-Usuarios.html': 'business.usersSubtitle',
+    'TrazTransVolCombustible.html': 'main.trazSubtitle',
+};
+function sidebarScreenDescription(link) {
+    const href = link.getAttribute?.('href');
+    if (!href) return null;
+    const page = href.split('#')[0].split('?')[0].split('/').pop();
+    const key = SCREEN_DESCRIPTION_KEYS[page];
+    return key ? t(key) : null;
+}
 function resolveGenericHelpKey(node) {
     return HELP_CONTENT_KEYS[node.id] || HELP_CONTENT_COLUMN_KEYS[node.getAttribute('data-col')]
         || HELP_CONTENT_ZOOM_KEYS[node.getAttribute('data-zoom')] || HELP_CONTENT_COL_ACTION_KEYS[node.getAttribute('data-col-action')]
@@ -8691,7 +8727,11 @@ function findHelpModeContent(startEl) {
             const header = col && node.closest('table')?.querySelector(`th[data-col="${col}"]`);
             const name = (header && header.textContent.trim()) || node.getAttribute('aria-label')
                 || node.getAttribute('title') || node.textContent.trim() || node.getAttribute('placeholder');
-            if (name) return { name, what: t(`help.${helpKey}.what`), example: t(`help.${helpKey}.example`) };
+            if (name) {
+                const screenDescription = helpKey === 'sidebarNavigation' ? sidebarScreenDescription(node) : null;
+                if (screenDescription) return { name, what: screenDescription, example: null };
+                return { name, what: t(`help.${helpKey}.what`), example: t(`help.${helpKey}.example`) };
+            }
         }
         // Cualquier otro encabezado o celda de una tabla (la mayoría de las
         // columnas no tiene su propia entrada help.*): se explica con el
@@ -8831,14 +8871,19 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
 // Removed that guard too, so switching language while the page is open
 // re-syncs the tooltip instead of leaving it stuck on whatever ran first.
 function migrateAdminSubtitleIntoHelpMode() {
-    const subtitle = document.querySelector('.admin-panel > .admin-subtitle');
+    // También las que van dentro del panel de una pestaña (Nuestros Clientes) o
+    // directo en .page-content (Base de Datos, Trazabilidad): antes esas se
+    // quedaban a la vista ocupando un renglón arriba de la tabla.
+    const subtitles = [...document.querySelectorAll(
+        '.admin-panel > .admin-subtitle, .admin-panel > .admin-tab-panel > .admin-subtitle, .page-content > .admin-subtitle',
+    )];
     const titleEl = document.querySelector('.top-bar-title .welcome-text');
-    if (!subtitle || !titleEl) return;
-    const text = subtitle.textContent.trim();
+    if (!subtitles.length || !titleEl) return;
+    const text = subtitles[0].textContent.trim();
     if (!text) return;
     titleEl.setAttribute('aria-label', text);
     titleEl.title = text;
-    subtitle.hidden = true;
+    subtitles.forEach((subtitle) => { subtitle.hidden = true; });
 }
 document.addEventListener('dashboard:language-changed', migrateAdminSubtitleIntoHelpMode);
 

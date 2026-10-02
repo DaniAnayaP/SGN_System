@@ -5788,3 +5788,11 @@ button.data-table-layout-item{
     font-size: 0.75rem;
     color: var(--color-text-secondary);
 }
+
+/* Sin la línea de descripción (ahora vive en la ayuda de la barra lateral), la
+   tarjeta de una tabla no necesita tanto margen arriba y abajo: 12 px y 14 px en
+   lugar de 24 px. */
+.admin-panel:has(.data-table-wrapper){
+    padding-top: 0.75rem;
+    padding-bottom: 0.875rem;
+}
