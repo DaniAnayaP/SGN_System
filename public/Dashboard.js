@@ -5407,7 +5407,7 @@ function renderDataTableColumnControls() {
                 savedSearchBtn.dataset.colAction = 'saved-search';
                 savedSearchBtn.setAttribute('aria-label', t('main.savedSearchBtn'));
                 savedSearchBtn.title = t('main.savedSearchBtn');
-                savedSearchBtn.innerHTML = '<i class="bx bx-bookmark-star" aria-hidden="true"></i>';
+                savedSearchBtn.innerHTML = '<i class="bx bx-bookmark" aria-hidden="true"></i>';
                 savedSearchBtn.addEventListener('click', () => openSavedSearchPicker(getTableId(wrapper, index)));
                 toAppend.push(savedSearchBtn);
             }
