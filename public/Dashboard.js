@@ -7699,9 +7699,13 @@ function renderDataTableColumnControls() {
             // data-table:filter-clear). The bar sits right before the
             // auto-inserted zoom toolbar in the HTML, so it's always
             // zoom's previous sibling at this point.
+            // Las tablas que no traen su propio panel de filtro (cada pantalla arma el
+            // suyo a mano, con sus campos) reciben uno vacío: lo llenan los campos de
+            // columna. Mismo marcado que los demás, así embudo, Buscar, Limpiar y
+            // Filtro avanzado funcionan igual.
+            ensureGeneratedFilterBar(zoom);
             const filterBar = zoom.previousElementSibling;
             if (filterBar?.classList?.contains('filter-bar')) {
-                // Atributo propio: NO data-table-id (ver el comentario en el handler de Buscar).
                 filterBar.dataset.filterTableId = tableKey;
                 const filterToAppend = [];
                 let filterBtn = null;
@@ -7719,8 +7723,12 @@ function renderDataTableColumnControls() {
                         filterBtn.setAttribute('aria-expanded', String(expanded));
                         // Al abrir, los campos de columna se arman con lo que hoy
                         // está aplicado; al cerrar, se cierra cualquier lista abierta.
-                        if (expanded) renderPanelColumnFilters(tableKey);
-                        else closePanelPopover();
+                        if (expanded) {
+                            renderPanelColumnFilters(tableKey);
+                            showPanelNoColumns(filterBar, tableKey);
+                        } else {
+                            closePanelPopover();
+                        }
                         sizeDataTableWrappers();
                     });
                     filterToAppend.push(filterBtn);
@@ -7806,6 +7814,12 @@ function renderDataTableColumnControls() {
 // (state.columnFilters / columnRules), así que el encabezado y Búsqueda
 // Guardada lo ven igual. Detrás de su propia hoja del árbol: iconFilterAdvanced.
 const FILTER_PANEL_MIN_FIELDS = 6;
+const PANEL_CODE_LABEL = /#|[uú]nic|unique|\bno\.|n[uú]mero|number|folio/i;
+const PANEL_PART_LABEL = /^(a[ñn]o|year|mes|month|d[ií]a|day|semana|week|hora|hour)\b/i;
+const PANEL_MEDIA_LABEL = /evidencia|evidence|icono|icon|logo|foto|photo|imagen|image|color/i;
+// Columnas del sistema (Control Interno) que completan los 6 campos de una tabla
+// con pocas columnas propias, en este orden.
+const PANEL_SYSTEM_FILL_KEYS = ['colSysFecha', 'colSysMesTexto', 'colSysAnio', 'colSysDiaTexto', 'colSysHora', 'colSysSemana', 'colSysCentroCostos'];
 let panelPopoverEl = null;
 let panelPopoverAnchor = null;
 // Al agregar una columna, el panel se desplaza solo para mostrar su campo nuevo;
@@ -7847,18 +7861,33 @@ function panelFieldKeys(tableId, filterBar) {
         // está dentro de) el de un campo propio -- "Fecha" frente a "Desde fecha",
         // "Unidad" frente a "Unidad, placas, chofer…" -- ya está cubierta.
         const ownLabels = own.map((f) => foldRuleText(f.querySelector('label')?.textContent || ''));
-        const coveredByPage = (label) => {
-            const l = foldRuleText(label);
-            return ownLabels.some((own) => own === l || (l.length >= 3 && own.includes(l)));
+        const label = (k) => state.labels[k] || k;
+        const coveredByPage = (text) => {
+            const l = foldRuleText(text);
+            return ownLabels.some((o) => o === l || (l.length >= 3 && o.includes(l)));
         };
-        const eligible = state.columnKeys.filter((k) => k !== 'actions' && !k.startsWith('colSys')
-            && !coveredByPage(state.labels[k] || k));
-        // Primero lo que se lee como dato (texto y fechas); al final los números y
-        // los códigos ("Único … #", "No.", "Folio"), que casi siempre son las
-        // primeras columnas de una tabla pero no las que más se filtran.
-        const isCode = (k) => detectRangeType(k, getColumnDistinctValues(tableId, k)) === 'number'
-            || /#|[uú]nic|unique|\bno\.|n[uú]mero|number|folio/i.test(state.labels[k] || k);
-        state.panelDefaultKeys = [...eligible.filter((k) => !isCode(k)), ...eligible.filter(isCode)].slice(0, need);
+        const business = state.columnKeys.filter((k) => k !== 'actions' && !k.startsWith('colSys') && !coveredByPage(label(k)));
+        // Primero lo que se lee como dato (texto y fechas); al final los códigos
+        // ("Único … #", "No.", "Folio"), las fotos/iconos y las partes sueltas de una
+        // fecha (año, mes, día…), que casi siempre son las primeras columnas de una
+        // tabla pero no las que más se filtran.
+        const isPart = (k) => PANEL_PART_LABEL.test(label(k));
+        const isMedia = (k) => PANEL_MEDIA_LABEL.test(label(k));
+        const isCode = (k) => detectRangeType(k, getColumnDistinctValues(tableId, k)) === 'number' || PANEL_CODE_LABEL.test(label(k));
+        const picked = [
+            ...business.filter((k) => !isCode(k) && !isPart(k) && !isMedia(k)),
+            ...business.filter((k) => isCode(k) && !isPart(k) && !isMedia(k)),
+            ...business.filter((k) => isPart(k) || isMedia(k)),
+        ].slice(0, need);
+        if (picked.length < need) {
+            // Una tabla con 3 o 4 columnas propias no llega a 6: se completa con
+            // columnas del sistema que sí varían de un registro a otro (la fecha
+            // completa solo si ninguna propia ya lo es).
+            const hasFullDate = picked.some((k) => /fecha|date/i.test(label(k)) && !isPart(k));
+            const pool = PANEL_SYSTEM_FILL_KEYS.filter((k) => state.columnKeys.includes(k) && !(hasFullDate && k === 'colSysFecha'));
+            picked.push(...pool.slice(0, need - picked.length));
+        }
+        state.panelDefaultKeys = picked;
     }
     const defaults = state.panelDefaultKeys;
     const exists = new Set(state.columnKeys);
@@ -7892,15 +7921,16 @@ function makePanelDraft(tableId, key) {
         rtype: isRange ? (applied.rtype || 'date') : null,
         currency: !!applied?.currency,
     };
-    if (rangeType) {
-        // Fechas, partes de fecha, horas y números: Desde–Hasta directo en el campo.
+    const inline = rangeType === 'date' || (rangeType === 'number' && !RULE_RANGE_TYPE_BY_KEY[key]);
+    if (inline) {
+        // La fecha completa y los números: Desde–Hasta directo en el campo.
         if (!isRange) { rule.from = ''; rule.to = ''; rule.rtype = rangeType; }
         rule.kind = 'range';
         rule.mode = 'range';
         if (rule.rtype === 'number') rule.currency = values.some((v) => String(v).trim().startsWith('$'));
     }
     return {
-        key, inline: !!rangeType, rule, selected: new Set(appliedValues || values), touched: false,
+        key, inline, rule, selected: new Set(appliedValues || values), touched: false,
         baseSig: panelAppliedSig(state, key),
     };
 }
@@ -8181,6 +8211,21 @@ function toggleAdvancedPicker(btn, tableId) {
 }
 
 // --- el panel: campos + botones ---
+// Sin columnas todavía (se arman al correr un reporte): el panel lo dice en vez de
+// quedarse vacío. Se quita solo en cuanto se arman los campos.
+function showPanelNoColumns(filterBar, tableId) {
+    const fieldsEl = filterBar.querySelector('.filter-bar-fields');
+    if (!fieldsEl) return;
+    const hasFields = !!fieldsEl.querySelector('.filter-field');
+    if (hasFields || dataTableColumnState.get(tableId)) return;
+    if (fieldsEl.querySelector('.filter-panel-empty')) return;
+    const note = document.createElement('p');
+    note.className = 'data-table-search-empty filter-panel-empty';
+    note.style.gridColumn = '1 / -1';
+    note.textContent = t('main.filterPanelNoColumns');
+    fieldsEl.appendChild(note);
+}
+
 function renderPanelColumnFilters(tableId) {
     const state = dataTableColumnState.get(tableId);
     const filterBar = getSavedSearchFilterBar(tableId);
@@ -8189,7 +8234,7 @@ function renderPanelColumnFilters(tableId) {
     const actionsEl = filterBar.querySelector('.filter-bar-actions');
     if (!fieldsEl || !actionsEl) return;
     if (panelPopoverAnchor && !panelPopoverAnchor.isConnected) closePanelPopover();
-    fieldsEl.querySelectorAll('.filter-field-col').forEach((el) => el.remove());
+    fieldsEl.querySelectorAll('.filter-field-col, .filter-panel-empty').forEach((el) => el.remove());
     const { defaults, added } = panelFieldKeys(tableId, filterBar);
     syncPanelDrafts(tableId, [...defaults, ...added]);
     state.panelBuilt = true;
@@ -8275,7 +8320,27 @@ function commitPanelColumnFilters(tableId) {
 // each page's own JS implements (data-table:filter-apply — the fields
 // differ per table, this file has no business knowing their meaning) and
 // collapses the panel; "Limpiar" is fully handled by the toolbar button.
-document.querySelectorAll('.filter-bar').forEach((bar) => {
+function ensureGeneratedFilterBar(zoom) {
+    if (zoom.previousElementSibling?.classList?.contains('filter-bar')) return;
+    // Solo las tablas de pantalla: la de un cuadro de diálogo (Historial de cambios
+    // de un anexo, por ejemplo) no lleva panel de filtro.
+    if (zoom.closest('.modal-overlay, .modal-panel')) return;
+    const bar = document.createElement('div');
+    bar.className = 'filter-bar';
+    bar.dataset.generated = '1';
+    bar.innerHTML = `
+        <div class="filter-bar-panel">
+            <h3 class="filter-bar-title" data-i18n="main.filterToggle">${t('main.filterToggle')}</h3>
+            <div class="filter-bar-fields"></div>
+            <div class="filter-bar-actions">
+                <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">${t('main.filterSearchBtn')}</button>
+            </div>
+        </div>`;
+    zoom.insertAdjacentElement('beforebegin', bar);
+    wireFilterBarSearch(bar);
+}
+
+function wireFilterBarSearch(bar) {
     const searchBtn = bar.querySelector('.filter-bar-search-btn');
     searchBtn?.addEventListener('click', () => {
         closePanelPopover();
@@ -8289,7 +8354,8 @@ document.querySelectorAll('.filter-bar').forEach((bar) => {
         bar.nextElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'false');
         sizeDataTableWrappers();
     });
-});
+}
+document.querySelectorAll('.filter-bar').forEach(wireFilterBarSearch);
 
 document.querySelectorAll('.lang-option').forEach((btn) => {
     btn.addEventListener('click', async () => {

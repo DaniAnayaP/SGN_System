@@ -1038,6 +1038,7 @@
     "savedSearchValuesSummary": "{count} of {total}: {list}",
     "savedSearchPickValues": "Type some text, a range or tick a value",
     "savedSearchKeepsPanel": "This search also uses {count} filters from the panel above; they are kept as they are.",
+    "filterPanelNoColumns": "There are no columns to filter yet. They show up as soon as the table has them.",
     "visibilityModeHidden": "Hidden",
     "visibilityModeVisible": "Visible",
     "filterAdvancedBtn": "Advanced filter",
