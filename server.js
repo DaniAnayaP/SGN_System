@@ -193,6 +193,10 @@ const {
     getSavedLayoutById,
     createSavedLayout,
     deleteSavedLayout,
+    getSaasSavedLayoutsForTable,
+    getSaasSavedLayoutById,
+    createSaasSavedLayout,
+    deleteSaasSavedLayout,
     getJobPositionIdForUser,
     getColumnGrantLevel,
     canAuthorizeColumn,
@@ -5717,6 +5721,50 @@ app.delete('/api/business/saved-layouts/:id', requireAuth, (req, res) => {
     const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
     if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar este acomodo guardado.' });
     deleteSavedLayout(row.id);
+    res.json({ ok: true });
+});
+
+// Acomodo Guardado's SaaS-side sibling -- same validateSavedLayoutPayload
+// (already generic/stateless, reused as-is), /api/admin/ namespace +
+// requireAuth/requireAdmin like every other SaaS-admin route, no clientId
+// anywhere (see saas_saved_layouts' own schema comment in db.js). "global"
+// here is scoped to Equipo SaaS members (audience.userIds only -- no
+// puestos/centros de costo on this side), gated on isSaasSuperAdmin
+// instead of isClientAdmin.
+app.get('/api/admin/saas-saved-layouts/:tableKey', requireAuth, requireAdmin, (req, res) => {
+    const userId = req.user.sub;
+    const all = getSaasSavedLayoutsForTable(req.params.tableKey);
+    const visible = all.filter((row) => {
+        if (row.scope === 'personal') return row.ownerUserId === userId;
+        return !!req.user.isSaasSuperAdmin || (row.audience?.userIds || []).includes(userId);
+    });
+    res.json({ layouts: visible });
+});
+
+app.post('/api/admin/saas-saved-layouts', requireAuth, requireAdmin, (req, res) => {
+    const { tableKey, name, layout, scope, isDefault, audience } = req.body || {};
+    if (!tableKey || typeof tableKey !== 'string') return res.status(400).json({ message: 'Missing tableKey.' });
+    if (!name || typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Missing name.' });
+    if (!validateSavedLayoutPayload(layout)) return res.status(400).json({ message: 'Invalid layout.' });
+    const finalScope = scope === 'global' ? 'global' : 'personal';
+    if (finalScope === 'global') {
+        if (!req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'Solo el super admin SaaS puede crear un acomodo guardado global.' });
+        if (!audience?.userIds?.length) return res.status(400).json({ message: 'Elige al menos un integrante de Equipo SaaS.' });
+    }
+    const row = createSaasSavedLayout({
+        tableKey, name: name.trim(), layout, isDefault: !!isDefault,
+        scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
+        audience: finalScope === 'global' ? { userIds: audience.userIds } : undefined,
+    });
+    res.status(201).json({ layout: row });
+});
+
+app.delete('/api/admin/saas-saved-layouts/:id', requireAuth, requireAdmin, (req, res) => {
+    const row = getSaasSavedLayoutById(Number(req.params.id));
+    if (!row) return res.status(404).json({ message: 'Not found.' });
+    const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
+    if (!isOwner && !req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar este acomodo guardado.' });
+    deleteSaasSavedLayout(row.id);
     res.json({ ok: true });
 });
 

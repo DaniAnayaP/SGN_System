@@ -758,6 +758,10 @@ const SAAS_TABLE_ICON_SCREENS = {
     'nuestros-clientes': { screenItemId: 'saas-clients', apartadoId: 'tabla' },
     'mis-planes': { screenItemId: 'saas-plans', apartadoId: 'tabla' },
 };
+function isSaasTableKey(tableId) {
+    return !!SAAS_TABLE_ICON_SCREENS[tableId];
+}
+
 function hasSaasTableIconGrant(tableId, iconId) {
     const mapping = SAAS_TABLE_ICON_SCREENS[tableId];
     if (!mapping) return null;
@@ -3643,32 +3647,33 @@ function wireModalDismiss(overlay, onClose) {
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !overlay.hidden) onClose(); });
 }
 
-let pinPickerModal = null;
-let pinPickerPinnedList = null;
-let pinPickerOtherList = null;
-let pinPickerLimitMsg = null;
-let pinPickerState = null; // { tableId, pinnedOrder: [key,...] }
+// Acomodo Guardado unificado -- reemplaza lo que antes eran 3 modales
+// separados (selector de pines, selector de visibilidad, "Acomodo
+// Guardado" para nombrar/guardar) con uno solo: pestañas por clasificación
+// real, un control de 3 vías por columna (x/Normal/Fija, sobre los mismos
+// state.config.hidden/pinned de siempre), vista previa en vivo con
+// arrastre en el encabezado, y un candado de botones (Terminar Acomodo ->
+// [Terminar Asignación] -> Guardar). Las funciones de guardar/aplicar/
+// listar/borrar un acomodo guardado (más abajo, alrededor de "Acomodo
+// Guardado") NO cambian -- solo se re-disparan desde este modal en vez de
+// desde su propio modal viejo.
+const COLUMN_ARRANGE_UNCLASSIFIED = '__sin_clasificar__';
+let columnArrangeModal = null;
+let columnArrangeState = null; // { tableId, draftConfig, decidedKeys: Set, activeTab, scope, terminarAcomodoDone, terminarAsignacionDone }
 
-function buildColumnPickerRow(key, label, { pinned = null, dotColor = undefined, dotTitle = '' } = {}) {
+// Cascarón de fila compartido por la lista de columnas del modal -- nombre
+// + punto de color de su clasificación real (mismos colores que
+// COLUMN_GROUP_META/columnGroupColor ya le dan a la "Leyenda de columnas"
+// y a la banda de la tabla real, nunca una paleta aparte). El llamador
+// agrega su propio control (antes un switch, ahora buildTriStateControl)
+// después de construir la fila.
+function buildColumnPickerRow(key, label, { dotColor = undefined, dotTitle = '' } = {}) {
     const row = document.createElement('div');
-    row.className = 'admin-module-row';
+    row.className = 'admin-module-row data-table-arrange-row';
     row.dataset.col = key;
     const name = document.createElement('span');
     name.className = 'admin-module-name';
     name.style.flex = '1';
-    if (pinned !== null) {
-        row.draggable = pinned;
-        if (pinned) {
-            const handle = document.createElement('i');
-            handle.className = 'bx bx-menu data-table-col-picker-handle';
-            handle.setAttribute('aria-hidden', 'true');
-            row.appendChild(handle);
-        }
-    }
-    // Visibility picker only (pinned picker never passes this) -- a small
-    // color dot naming which classification this column belongs to, same
-    // colors COLUMN_GROUP_META already gives the real "Leyenda de columnas"
-    // modal, so this isn't a second, inconsistent palette.
     if (dotColor !== undefined) {
         const dot = document.createElement('span');
         dot.className = 'data-table-col-dot';
@@ -3678,95 +3683,435 @@ function buildColumnPickerRow(key, label, { pinned = null, dotColor = undefined,
     }
     name.appendChild(document.createTextNode(label));
     row.appendChild(name);
-    const toggle = document.createElement('label');
-    toggle.className = 'admin-switch';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    const track = document.createElement('span');
-    track.className = 'admin-switch-track';
-    toggle.append(input, track);
-    row.appendChild(toggle);
-    return { row, input };
+    return { row };
 }
 
-function ensurePinPickerModal() {
-    if (pinPickerModal) return;
-    pinPickerModal = document.createElement('div');
-    pinPickerModal.className = 'modal-overlay';
-    pinPickerModal.hidden = true;
-    pinPickerModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-pin-title">
-            <h3 id="data-table-pin-title">${t('main.pinColumnsTitle')}</h3>
-            <p class="admin-hint">${t('main.pinColumnsHint')}</p>
-            <div class="admin-module-list" data-role="pinned-list"></div>
-            <p class="admin-hint" style="margin-top:1rem;">${t('main.pinColumnsOther')}</p>
-            <div class="admin-module-list" data-role="other-list"></div>
-            <p class="admin-hint" data-role="limit-msg" hidden>${t('main.pinColumnsLimitReached')}</p>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
-                <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
+function ensureColumnArrangeModal() {
+    if (columnArrangeModal) return;
+    columnArrangeModal = document.createElement('div');
+    columnArrangeModal.className = 'modal-overlay';
+    columnArrangeModal.hidden = true;
+    columnArrangeModal.innerHTML = `
+        <div class="modal-panel data-table-arrange-panel" role="dialog" aria-modal="true" aria-labelledby="data-table-arrange-title">
+            <div class="data-table-arrange-fixed-top">
+                <h3 id="data-table-arrange-title">${t('main.savedLayoutTitle')}</h3>
+                <div data-role="save-block">
+                    <div data-role="list" class="saved-view-list"></div>
+                    <p data-role="empty" class="admin-hint" hidden>${t('main.savedLayoutEmpty')}</p>
+                    <p class="admin-hint">${t('main.savedLayoutSaveHint')}</p>
+                    <input type="text" data-role="name" class="saved-view-name-input" placeholder="${t('main.savedLayoutNamePlaceholder')}">
+                </div>
+                <div class="sector-icon-picker-search">
+                    <i class="bx bx-search" aria-hidden="true"></i>
+                    <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
+                </div>
+                <div class="sector-icon-picker-chips" data-role="tabs"></div>
+            </div>
+            <div class="admin-module-list data-table-arrange-list" data-role="rows"></div>
+            <div class="data-table-arrange-fixed-bottom">
+                <div class="data-table-arrange-preview" data-role="preview-wrap"><table data-role="preview-table"></table></div>
+                <button type="button" class="btn" data-role="terminar-acomodo">${t('main.arrangeTerminar')}</button>
+                <div data-role="save-block-2">
+                    <div data-role="admin-section" class="saved-view-audience-radios" hidden>
+                        <label><input type="radio" name="saved-layout-audience" value="self" checked> ${t('main.savedSearchAudienceSelf')}</label>
+                        <label><input type="radio" name="saved-layout-audience" value="assign"> ${t('main.savedSearchAudienceAssign')}</label>
+                    </div>
+                    <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
+                    <button type="button" class="btn" data-role="terminar-asignacion" hidden>${t('main.arrangeTerminarAsignacion')}</button>
+                    <label class="saved-view-default-row"><input type="checkbox" data-role="default"> ${t('main.savedLayoutSetDefault')}</label>
+                    <p data-role="error" class="admin-error" role="alert" hidden></p>
+                    <button type="button" class="btn data-table-arrange-save-btn" data-role="save" disabled>${t('admin.save')}</button>
+                    <p data-role="lock-note" class="data-table-arrange-lock-note"></p>
+                </div>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+                </div>
             </div>
         </div>
     `;
-    document.body.appendChild(pinPickerModal);
-    pinPickerPinnedList = pinPickerModal.querySelector('[data-role="pinned-list"]');
-    pinPickerOtherList = pinPickerModal.querySelector('[data-role="other-list"]');
-    pinPickerLimitMsg = pinPickerModal.querySelector('[data-role="limit-msg"]');
-    const close = () => { pinPickerModal.hidden = true; pinPickerState = null; };
-    pinPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
-    pinPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
-        if (!pinPickerState) return;
-        const state = dataTableColumnState.get(pinPickerState.tableId);
-        if (state) {
-            state.config.pinned = [...pinPickerState.pinnedOrder];
-            saveDataTableConfig(pinPickerState.tableId, state.config);
-            applyDataTableColumnLayout(pinPickerState.tableId);
-        }
-        close();
-    });
-    wireModalDismiss(pinPickerModal, close);
-}
+    document.body.appendChild(columnArrangeModal);
+    // Re-use the exact same module-level refs/functions Acomodo Guardado's
+    // save/list/apply/delete flow already had (saveSavedLayout,
+    // loadSavedLayoutList, renderSavedLayoutList, applySavedLayout,
+    // collectCurrentLayoutSnapshot, maybeApplyDefaultSavedLayout, further
+    // below) -- they only ever touch these variables + dataTableColumnState,
+    // so pointing them at this modal's DOM instead of their old standalone
+    // one preserves their behavior exactly.
+    savedLayoutModal = columnArrangeModal;
+    savedLayoutListEl = columnArrangeModal.querySelector('[data-role="list"]');
+    savedLayoutEmptyEl = columnArrangeModal.querySelector('[data-role="empty"]');
+    savedLayoutErrorEl = columnArrangeModal.querySelector('[data-role="error"]');
+    savedLayoutNameInput = columnArrangeModal.querySelector('[data-role="name"]');
+    savedLayoutAdminSection = columnArrangeModal.querySelector('[data-role="admin-section"]');
+    savedLayoutAudiencePanel = columnArrangeModal.querySelector('[data-role="audience-panel"]');
+    savedLayoutDefaultCheckbox = columnArrangeModal.querySelector('[data-role="default"]');
+    savedLayoutSaveBtn = columnArrangeModal.querySelector('[data-role="save"]');
 
-function renderPinPickerLists() {
-    const state = dataTableColumnState.get(pinPickerState.tableId);
-    if (!state) return;
-    pinPickerPinnedList.innerHTML = '';
-    pinPickerState.pinnedOrder.forEach((key) => {
-        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, { pinned: true });
-        input.checked = true;
-        input.addEventListener('change', () => {
-            pinPickerState.pinnedOrder = pinPickerState.pinnedOrder.filter((k) => k !== key);
-            renderPinPickerLists();
-        });
-        pinPickerPinnedList.appendChild(row);
+    const refs = {
+        saveBlock: columnArrangeModal.querySelector('[data-role="save-block"]'),
+        saveBlock2: columnArrangeModal.querySelector('[data-role="save-block-2"]'),
+        searchInput: columnArrangeModal.querySelector('[data-role="search"]'),
+        tabsEl: columnArrangeModal.querySelector('[data-role="tabs"]'),
+        rowsEl: columnArrangeModal.querySelector('[data-role="rows"]'),
+        previewTable: columnArrangeModal.querySelector('[data-role="preview-table"]'),
+        terminarAcomodoBtn: columnArrangeModal.querySelector('[data-role="terminar-acomodo"]'),
+        terminarAsignacionBtn: columnArrangeModal.querySelector('[data-role="terminar-asignacion"]'),
+        lockNote: columnArrangeModal.querySelector('[data-role="lock-note"]'),
+    };
+    columnArrangeModal._refs = refs;
+
+    const close = () => { columnArrangeModal.hidden = true; columnArrangeState = null; };
+    columnArrangeModal.querySelector('[data-role="close"]').addEventListener('click', close);
+    wireModalDismiss(columnArrangeModal, close);
+
+    refs.searchInput.addEventListener('input', () => {
+        columnArrangeState.query = refs.searchInput.value;
+        renderColumnArrangeRows();
     });
-    pinPickerOtherList.innerHTML = '';
-    state.columnKeys.filter((k) => !pinPickerState.pinnedOrder.includes(k)).forEach((key) => {
-        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, { pinned: false });
-        const atMax = pinPickerState.pinnedOrder.length >= DATA_TABLE_PIN_MAX;
-        input.checked = false;
-        input.disabled = atMax;
-        input.addEventListener('change', () => {
-            if (pinPickerState.pinnedOrder.length < DATA_TABLE_PIN_MAX) {
-                pinPickerState.pinnedOrder = [...pinPickerState.pinnedOrder, key];
-                renderPinPickerLists();
+
+    columnArrangeModal.querySelectorAll('input[name="saved-layout-audience"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            columnArrangeState.scope = radio.value === 'assign' ? 'global' : 'personal';
+            if (radio.value === 'assign') {
+                savedLayoutAudiencePanel.hidden = false;
+                if (isSaasTableKey(columnArrangeState.tableId)) buildSaasLayoutAudiencePanel(savedLayoutAudiencePanel);
+                else buildSavedViewAudiencePanel(savedLayoutAudiencePanel);
+                refs.terminarAsignacionBtn.hidden = false;
+            } else {
+                savedLayoutAudiencePanel.hidden = true;
+                refs.terminarAsignacionBtn.hidden = true;
             }
+            updateColumnArrangeGating();
         });
-        pinPickerOtherList.appendChild(row);
     });
-    pinPickerLimitMsg.hidden = pinPickerState.pinnedOrder.length < DATA_TABLE_PIN_MAX;
-    enableListDragReorder(pinPickerPinnedList, (newOrder) => {
-        pinPickerState.pinnedOrder = newOrder;
+
+    refs.terminarAcomodoBtn.addEventListener('click', () => {
+        applyColumnLayoutConfig(columnArrangeState.tableId, columnArrangeState.draftConfig);
+        columnArrangeState.terminarAcomodoDone = true;
+        updateColumnArrangeGating();
+    });
+
+    refs.terminarAsignacionBtn.addEventListener('click', () => {
+        if (!hasAnyAudienceTarget()) {
+            savedLayoutErrorEl.textContent = t('main.savedSearchAudienceSummaryEmpty');
+            savedLayoutErrorEl.hidden = false;
+            return;
+        }
+        savedLayoutErrorEl.hidden = true;
+        columnArrangeState.terminarAsignacionDone = true;
+        updateColumnArrangeGating();
+    });
+
+    savedLayoutSaveBtn.addEventListener('click', saveSavedLayout);
+}
+
+// Candado de botones: "Terminar Acomodo" siempre disponible; "Terminar
+// Asignación" solo aplica (y solo se exige) cuando el alcance es "Asignar
+// a..." -- con "Solo yo" Guardar se habilita justo después de Terminar
+// Acomodo. Nunca pinta nada de esto sobre la tabla real.
+function updateColumnArrangeGating() {
+    const state = columnArrangeState;
+    const refs = columnArrangeModal._refs;
+    if (!state) return;
+    const needsAssignment = state.scope === 'global';
+    const ready = state.terminarAcomodoDone && (!needsAssignment || state.terminarAsignacionDone);
+    savedLayoutSaveBtn.disabled = !ready;
+    refs.lockNote.hidden = ready;
+    refs.lockNote.textContent = !state.terminarAcomodoDone
+        ? t('main.arrangeGuardarLockedHint')
+        : t('main.arrangeGuardarLockedHintAssign');
+    // Not pre-disabled off savedViewAudienceSelection -- buildSavedViewAudiencePanel
+    // (shared with Búsqueda Guardada) owns its own checkboxes and doesn't expose
+    // a "selection changed" hook to react to live, so this validates on click
+    // instead, same pattern saveSavedLayout's own audience check already uses.
+}
+
+// Pestañas de clasificación real (reemplaza los chips "solo filtran" del
+// selector de visibilidad viejo: aquí siempre hay EXACTAMENTE una pestaña
+// activa, nunca una vista "Todas"). Una columna sin clasificación cae en
+// la pestaña sentinela COLUMN_ARRANGE_UNCLASSIFIED, con la misma etiqueta
+// real "Por clasificar" (menu.classNone) que ya usan los árboles de
+// permisos -- aquí es la primera vez que se conecta a una tabla viva.
+function renderColumnArrangeTabs() {
+    const state = dataTableColumnState.get(columnArrangeState.tableId);
+    if (!state) return;
+    const refs = columnArrangeModal._refs;
+    refs.tabsEl.innerHTML = '';
+    const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
+    const hasUnclassified = state.columnKeys.some((k) => !state.groupKeys.get(k));
+    const tabs = hasUnclassified ? [...presentGroupKeys, COLUMN_ARRANGE_UNCLASSIFIED] : presentGroupKeys;
+    tabs.forEach((groupKey) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'sector-icon-picker-chip' + (columnArrangeState.activeTab === groupKey ? ' active' : '');
+        if (groupKey !== COLUMN_ARRANGE_UNCLASSIFIED) {
+            const dot = document.createElement('span');
+            dot.className = 'data-table-col-dot data-table-col-dot-chip';
+            dot.style.backgroundColor = columnGroupColor(groupKey);
+            tab.appendChild(dot);
+        }
+        tab.appendChild(document.createTextNode(groupKey === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(groupKey)));
+        tab.addEventListener('click', () => {
+            columnArrangeState.activeTab = groupKey;
+            columnArrangeState.query = '';
+            columnArrangeModal._refs.searchInput.value = '';
+            renderColumnArrangeTabs();
+            renderColumnArrangeRows();
+        });
+        refs.tabsEl.appendChild(tab);
     });
 }
 
-function openPinPicker(tableId) {
+function columnArrangeVisibleKeys(state) {
+    const q = columnArrangeState.query.trim().toLowerCase();
+    if (q) return state.columnKeys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q));
+    return state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === columnArrangeState.activeTab);
+}
+
+// Las filas SIEMPRE se listan en el orden natural de state.columnKeys,
+// filtradas por pestaña/búsqueda -- nunca se reordenan por tocar x/Normal/
+// Fija, solo cambia su control y su opacidad "pendiente vs ya decidido"
+// (decidedKeys, de solo esta sesión, nunca se guarda ni se pinta en la
+// tabla real).
+function renderColumnArrangeRows() {
+    const state = dataTableColumnState.get(columnArrangeState.tableId);
+    if (!state) return;
+    const rowsEl = columnArrangeModal._refs.rowsEl;
+    rowsEl.innerHTML = '';
+    columnArrangeVisibleKeys(state).forEach((key) => {
+        const groupKey = state.groupKeys.get(key);
+        const { row } = buildColumnPickerRow(key, state.labels[key] || key, {
+            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : t('menu.classNone'),
+        });
+        row.classList.toggle('data-table-row-pending', !columnArrangeState.decidedKeys.has(key));
+        row.appendChild(buildTriStateControl(key, groupKey));
+        rowsEl.appendChild(row);
+    });
+}
+
+function columnArrangeMode(key) {
+    const { draftConfig } = columnArrangeState;
+    if (draftConfig.hidden.includes(key)) return 'none';
+    if (draftConfig.pinned.includes(key)) return 'fija';
+    return 'normal';
+}
+
+// Control de 3 vías por columna -- x (no incluida) / Normal (incluida) /
+// Fija (incluida + fijada), sobre los mismos draftConfig.hidden/pinned de
+// siempre. El color de la opción activa es SIEMPRE el real de la
+// clasificación de esa columna (mismo color-mix que fillBandRow ya usa
+// para la banda) -- nunca un morado fijo para "Fija".
+function buildTriStateControl(key, groupKey) {
+    const wrap = document.createElement('div');
+    wrap.className = 'data-table-tri-control';
+    const mode = columnArrangeMode(key);
+    const activeColor = columnGroupColor(groupKey);
+    const hasOwnColor = activeColor && activeColor !== 'var(--color-border)' && !activeColor.startsWith('var(');
+    const options = [
+        { mode: 'none', icon: 'bx-x', title: t('main.arrangeModeX') },
+        { mode: 'normal', label: t('main.arrangeModeNormal') },
+        { mode: 'fija', icon: 'bx-pin', label: t('main.arrangeModeFija') },
+    ];
+    options.forEach((opt) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.mode = opt.mode;
+        if (opt.icon) {
+            const icon = document.createElement('i');
+            icon.className = `bx ${opt.icon}`;
+            icon.setAttribute('aria-hidden', 'true');
+            btn.appendChild(icon);
+        }
+        if (opt.label) btn.appendChild(document.createTextNode(opt.label));
+        if (opt.title) btn.title = opt.title;
+        const isActive = mode === opt.mode;
+        btn.classList.toggle('active', isActive);
+        if (isActive && hasOwnColor) {
+            btn.style.backgroundColor = `color-mix(in srgb, ${activeColor} 16%, var(--color-surface))`;
+            btn.style.color = activeColor;
+        }
+        if (opt.mode === 'fija') {
+            btn.disabled = columnArrangeState.draftConfig.pinned.length >= DATA_TABLE_PIN_MAX && !columnArrangeState.draftConfig.pinned.includes(key);
+        }
+        btn.addEventListener('click', () => setColumnTriState(key, opt.mode));
+        wrap.appendChild(btn);
+    });
+    return wrap;
+}
+
+async function setColumnTriState(key, mode) {
+    const state = dataTableColumnState.get(columnArrangeState.tableId);
+    if (!state) return;
+    const { draftConfig } = columnArrangeState;
+    if (mode === 'none') {
+        // Never allow hiding the last remaining visible column, same guard
+        // the old visibility picker had.
+        const visibleCount = state.columnKeys.length - draftConfig.hidden.length;
+        if (!draftConfig.hidden.includes(key) && visibleCount <= 1) return;
+        if (draftConfig.pinned.includes(key) && !(await confirmDialog(t('main.columnHidePinnedConfirm')))) return;
+        if (!draftConfig.hidden.includes(key)) draftConfig.hidden = [...draftConfig.hidden, key];
+        draftConfig.pinned = draftConfig.pinned.filter((k) => k !== key);
+    } else if (mode === 'normal') {
+        draftConfig.hidden = draftConfig.hidden.filter((k) => k !== key);
+        draftConfig.pinned = draftConfig.pinned.filter((k) => k !== key);
+    } else if (mode === 'fija') {
+        if (draftConfig.pinned.length >= DATA_TABLE_PIN_MAX && !draftConfig.pinned.includes(key)) return;
+        draftConfig.hidden = draftConfig.hidden.filter((k) => k !== key);
+        if (!draftConfig.pinned.includes(key)) draftConfig.pinned = [...draftConfig.pinned, key];
+    }
+    columnArrangeState.decidedKeys.add(key);
+    renderColumnArrangeRows();
+    renderColumnArrangePreview();
+}
+
+// Vista previa en vivo -- NO un motor de tabla paralelo: clona 1-2 filas
+// REALES de la tabla real (state.table), reordenadas/filtradas según el
+// borrador, con encabezado + banda de clasificación real (fillBandRow tal
+// cual) y un grip de arrastre por encabezado no-fijo.
+function renderColumnArrangePreview() {
+    const state = dataTableColumnState.get(columnArrangeState.tableId);
+    if (!state) return;
+    const { draftConfig } = columnArrangeState;
+    const hiddenSet = new Set(draftConfig.hidden);
+    const visualOrder = getVisualColumnOrder(draftConfig).filter((k) => !hiddenSet.has(k));
+    const visiblePinned = draftConfig.pinned.filter((k) => !hiddenSet.has(k));
+    const previewState = { visiblePinned, pinnedLeft: {} };
+    let cumulative = 0;
+    visiblePinned.forEach((key) => {
+        previewState.pinnedLeft[key] = cumulative;
+        cumulative += draftConfig.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
+    });
+
+    const table = columnArrangeModal._refs.previewTable;
+    table.innerHTML = '';
+    const thead = table.createTHead();
+    const bandRow = thead.insertRow();
+    fillBandRow(bandRow, visualOrder, state.groupKeys || new Map(), null, previewState, true);
+    const headRow = thead.insertRow();
+    visualOrder.forEach((key) => {
+        const th = document.createElement('th');
+        if (!visiblePinned.includes(key)) {
+            const grip = document.createElement('i');
+            grip.className = 'bx bx-menu data-table-preview-grip';
+            grip.setAttribute('aria-hidden', 'true');
+            th.appendChild(grip);
+            th.draggable = true;
+        }
+        th.appendChild(document.createTextNode(state.labels[key] || key));
+        th.dataset.col = key;
+        applyPinStyle(th, key, previewState);
+        headRow.appendChild(th);
+    });
+    const tbody = table.createTBody();
+    Array.from(state.table.tBodies[0]?.rows || [])
+        .filter((tr) => !tr.querySelector('td.data-table-empty-cell'))
+        .slice(0, 2)
+        .forEach((sourceTr) => {
+            const tr = tbody.insertRow();
+            visualOrder.forEach((key) => {
+                const sourceTd = sourceTr.querySelector(`[data-col="${CSS.escape(key)}"]`);
+                const td = document.createElement('td');
+                td.innerHTML = sourceTd ? sourceTd.innerHTML : '';
+                td.dataset.col = key;
+                applyPinStyle(td, key, previewState);
+                tr.appendChild(td);
+            });
+        });
+    enablePreviewHeaderDragReorder(headRow);
+}
+
+// Mismo algoritmo que enableHeaderDragReorder, pero mutando
+// columnArrangeState.draftConfig.order (nunca el state.config de la tabla
+// real) y volviendo a pintar solo la vista previa -- la tabla real recién
+// cambia al tocar "Terminar Acomodo".
+function enablePreviewHeaderDragReorder(headRow) {
+    let draggedKey = null;
+    headRow.addEventListener('dragstart', (event) => {
+        const th = event.target.closest('th');
+        if (!th || th.draggable !== true) return;
+        draggedKey = th.dataset.col;
+        th.classList.add('data-table-col-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+    });
+    headRow.addEventListener('dragover', (event) => {
+        if (!draggedKey) return;
+        const th = event.target.closest('th');
+        if (!th || th.dataset.col === draggedKey || columnArrangeState.draftConfig.pinned.includes(th.dataset.col)) return;
+        event.preventDefault();
+    });
+    headRow.addEventListener('drop', (event) => {
+        if (!draggedKey) return;
+        event.preventDefault();
+        const th = event.target.closest('th');
+        const key = draggedKey;
+        draggedKey = null;
+        if (!th || th.dataset.col === key) return;
+        const { draftConfig } = columnArrangeState;
+        if (draftConfig.pinned.includes(th.dataset.col)) return;
+        const order = draftConfig.order.filter((k) => k !== key);
+        let idx = order.indexOf(th.dataset.col);
+        if (idx === -1) idx = order.length;
+        const rect = th.getBoundingClientRect();
+        order.splice((event.clientX - rect.left) < rect.width / 2 ? idx : idx + 1, 0, key);
+        draftConfig.order = order;
+        renderColumnArrangePreview();
+    });
+    headRow.addEventListener('dragend', () => {
+        headRow.querySelectorAll('.data-table-col-dragging').forEach((el) => el.classList.remove('data-table-col-dragging'));
+        draggedKey = null;
+    });
+}
+
+// Un perfil puede tener cualquiera de los 3 permisos de icono (pin,
+// visibilidad, acomodo guardado) sin los otros dos -- los 3 abren este
+// mismo modal, pero el bloque de "Guardar como..." (nombrar/listar/
+// aplicar/borrar un acomodo con nombre) solo se muestra si esta cuenta
+// puede llegar al servidor que lo persiste (ver canPersistSavedLayout,
+// junto a renderDataTableColumnControls). Sin ese permiso, el modal igual
+// sirve para acomodar y aplicar en vivo -- exactamente lo que
+// iconPin/iconVisibility ya hacían por separado hoy.
+async function openColumnArrangeModal(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
-    ensurePinPickerModal();
-    pinPickerState = { tableId, pinnedOrder: [...state.config.pinned] };
-    renderPinPickerLists();
-    pinPickerModal.hidden = false;
+    ensureColumnArrangeModal();
+    const refs = columnArrangeModal._refs;
+    columnArrangeState = {
+        tableId,
+        draftConfig: {
+            order: [...state.config.order], hidden: [...state.config.hidden],
+            pinned: [...state.config.pinned], widths: { ...state.config.widths },
+        },
+        decidedKeys: new Set(),
+        activeTab: null,
+        query: '',
+        scope: 'personal',
+        terminarAcomodoDone: false,
+        terminarAsignacionDone: false,
+    };
+    const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
+    columnArrangeState.activeTab = presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED;
+
+    const canPersist = canPersistSavedLayout(tableId);
+    refs.saveBlock.hidden = !canPersist;
+    refs.saveBlock2.hidden = !canPersist;
+    savedLayoutTableId = tableId;
+    savedLayoutNameInput.value = '';
+    savedLayoutDefaultCheckbox.checked = false;
+    savedLayoutErrorEl.hidden = true;
+    savedViewAudienceSelection = new Map(SAVED_VIEW_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
+    savedLayoutAdminSection.hidden = isSaasTableKey(tableId) ? !currentUser?.isSaasSuperAdmin : !currentUser?.isClientAdmin;
+    savedLayoutAudiencePanel.hidden = true;
+    columnArrangeModal.querySelectorAll('input[name="saved-layout-audience"]').forEach((r) => { r.checked = r.value === 'self'; });
+    refs.terminarAsignacionBtn.hidden = true;
+    refs.searchInput.value = '';
+
+    renderColumnArrangeTabs();
+    renderColumnArrangeRows();
+    renderColumnArrangePreview();
+    updateColumnArrangeGating();
+    columnArrangeModal.hidden = false;
+    if (canPersist) await loadSavedLayoutList();
 }
 
 // --- Reglas de Orden de Llenado modal ---------------------------------
@@ -3950,13 +4295,6 @@ async function removeFieldRule(id) {
     }
 }
 
-let visibilityPickerModal = null;
-let visibilityPickerList = null;
-let visibilityPickerChips = null;
-let visibilityPickerSearch = null;
-let visibilityPickerCount = null;
-let visibilityPickerState = null; // { tableId, hiddenSet: Set<key>, query: string, activeGroupKey: string|null }
-
 // classificationId -> {label, color}, populated by refreshTableClassifications
 // below from GET /api/business/table-classifications -- global (not
 // per-table) since a classification's own label/color is the same
@@ -4016,168 +4354,6 @@ function columnGroupColor(groupKey) {
     const meta = groupKey && classificationMetaById.get(groupKey);
     if (meta && meta.color) return meta.color;
     return groupKey && COLUMN_GROUP_META[groupKey] ? COLUMN_GROUP_META[groupKey].swatch : 'var(--color-border)';
-}
-
-function ensureVisibilityPickerModal() {
-    if (visibilityPickerModal) return;
-    visibilityPickerModal = document.createElement('div');
-    visibilityPickerModal.className = 'modal-overlay';
-    visibilityPickerModal.hidden = true;
-    visibilityPickerModal.innerHTML = `
-        <div class="modal-panel data-table-vis-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-vis-title">
-            <div class="data-table-vis-fixed">
-                <h3 id="data-table-vis-title">${t('main.columnVisibilityTitle')}</h3>
-                <p class="admin-hint">${t('main.columnVisibilityHint')}</p>
-                <div class="admin-form-actions">
-                    <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
-                    <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
-                </div>
-                <div class="sector-icon-picker">
-                    <div class="sector-icon-picker-search">
-                        <i class="bx bx-search" aria-hidden="true"></i>
-                        <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
-                    </div>
-                    <div class="sector-icon-picker-chips" data-role="chips"></div>
-                    <p class="sector-icon-picker-count" data-role="count"></p>
-                </div>
-            </div>
-            <div class="admin-module-list data-table-vis-list" data-role="list"></div>
-        </div>
-    `;
-    document.body.appendChild(visibilityPickerModal);
-    visibilityPickerList = visibilityPickerModal.querySelector('[data-role="list"]');
-    visibilityPickerChips = visibilityPickerModal.querySelector('[data-role="chips"]');
-    visibilityPickerSearch = visibilityPickerModal.querySelector('[data-role="search"]');
-    visibilityPickerCount = visibilityPickerModal.querySelector('[data-role="count"]');
-    const close = () => { visibilityPickerModal.hidden = true; visibilityPickerState = null; };
-    visibilityPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
-    visibilityPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
-        if (!visibilityPickerState) return;
-        const state = dataTableColumnState.get(visibilityPickerState.tableId);
-        if (state) {
-            state.config.hidden = state.columnKeys.filter((k) => visibilityPickerState.hiddenSet.has(k));
-            saveDataTableConfig(visibilityPickerState.tableId, state.config);
-            applyDataTableColumnLayout(visibilityPickerState.tableId);
-        }
-        close();
-    });
-    visibilityPickerSearch.addEventListener('input', () => {
-        visibilityPickerState.query = visibilityPickerSearch.value;
-        renderVisibilityPickerChips();
-        renderVisibilityPickerList();
-    });
-    wireModalDismiss(visibilityPickerModal, close);
-}
-
-// Same interaction model as BusinessSectorIcons.js's own icon picker: chips
-// filter by classification, but typing in the search box always looks
-// across every column regardless of the active chip (confirmed there --
-// someone searching shouldn't get an empty grid just because an unrelated
-// chip was still selected from a moment ago).
-function visiblePickerColumns(state) {
-    const q = visibilityPickerState.query.trim().toLowerCase();
-    if (q) return state.columnKeys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q));
-    const groupKey = visibilityPickerState.activeGroupKey;
-    return groupKey ? state.columnKeys.filter((k) => state.groupKeys.get(k) === groupKey) : state.columnKeys;
-}
-
-function renderVisibilityPickerChips() {
-    const state = dataTableColumnState.get(visibilityPickerState.tableId);
-    if (!state) return;
-    visibilityPickerChips.innerHTML = '';
-    // Only classifications actually present on THIS table get a chip (same
-    // as the column legend) -- a table with none just shows no chip row.
-    const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
-    if (!presentGroupKeys.length) return;
-    const allChip = document.createElement('button');
-    allChip.type = 'button';
-    allChip.className = 'sector-icon-picker-chip' + (visibilityPickerState.activeGroupKey ? '' : ' active');
-    allChip.textContent = t('main.columnFilterAll');
-    allChip.addEventListener('click', () => {
-        visibilityPickerState.activeGroupKey = null;
-        visibilityPickerState.query = '';
-        visibilityPickerSearch.value = '';
-        renderVisibilityPickerChips();
-        renderVisibilityPickerList();
-    });
-    visibilityPickerChips.appendChild(allChip);
-    presentGroupKeys.forEach((groupKey) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'sector-icon-picker-chip' + (visibilityPickerState.activeGroupKey === groupKey ? ' active' : '');
-        const dot = document.createElement('span');
-        dot.className = 'data-table-col-dot data-table-col-dot-chip';
-        dot.style.backgroundColor = columnGroupColor(groupKey);
-        chip.appendChild(dot);
-        chip.appendChild(document.createTextNode(resolveGroupLabel(groupKey)));
-        chip.addEventListener('click', () => {
-            visibilityPickerState.activeGroupKey = visibilityPickerState.activeGroupKey === groupKey ? null : groupKey;
-            visibilityPickerState.query = '';
-            visibilityPickerSearch.value = '';
-            renderVisibilityPickerChips();
-            renderVisibilityPickerList();
-        });
-        visibilityPickerChips.appendChild(chip);
-    });
-}
-
-function renderVisibilityPickerList() {
-    const state = dataTableColumnState.get(visibilityPickerState.tableId);
-    if (!state) return;
-    visibilityPickerList.innerHTML = '';
-    const keys = visiblePickerColumns(state);
-    visibilityPickerCount.textContent = t('main.columnFilterCount', {
-        count: String(keys.length), total: String(state.columnKeys.length),
-        scope: visibilityPickerState.query.trim()
-            ? `"${visibilityPickerState.query.trim()}"`
-            : (visibilityPickerState.activeGroupKey ? resolveGroupLabel(visibilityPickerState.activeGroupKey) : t('main.columnFilterAll')),
-    });
-    if (!keys.length) {
-        const empty = document.createElement('p');
-        empty.className = 'sector-icon-picker-empty';
-        empty.textContent = t('main.columnFilterNoResults', { query: visibilityPickerState.query.trim() });
-        visibilityPickerList.appendChild(empty);
-        return;
-    }
-    keys.forEach((key) => {
-        const groupKey = state.groupKeys.get(key);
-        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, {
-            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : '',
-        });
-        input.checked = !visibilityPickerState.hiddenSet.has(key);
-        input.addEventListener('change', async () => {
-            // Never allow hiding the last remaining visible column.
-            const visibleCount = state.columnKeys.length - visibilityPickerState.hiddenSet.size;
-            if (!input.checked && visibleCount <= 1) {
-                input.checked = true;
-                return;
-            }
-            // Hiding a PINNED column is easy to do by accident (it's still
-            // sitting right there, sticky-left) and leaves it fixed-but-
-            // invisible until someone remembers to check the pin picker too
-            // — confirm before letting that happen.
-            if (!input.checked && state.config.pinned.includes(key)) {
-                if (!(await confirmDialog(t('main.columnHidePinnedConfirm')))) {
-                    input.checked = true;
-                    return;
-                }
-            }
-            if (input.checked) visibilityPickerState.hiddenSet.delete(key);
-            else visibilityPickerState.hiddenSet.add(key);
-        });
-        visibilityPickerList.appendChild(row);
-    });
-}
-
-function openVisibilityPicker(tableId) {
-    const state = dataTableColumnState.get(tableId);
-    if (!state) return;
-    ensureVisibilityPickerModal();
-    visibilityPickerState = { tableId, hiddenSet: new Set(state.config.hidden), query: '', activeGroupKey: null };
-    visibilityPickerSearch.value = '';
-    renderVisibilityPickerChips();
-    renderVisibilityPickerList();
-    visibilityPickerModal.hidden = false;
 }
 
 // Historial de cambios ("control de cambios") — read-only modal listing
@@ -4598,6 +4774,14 @@ let savedViewAudienceCatalog = null; // {userIds:[{id,label}], jobPositions:[...
 // picking them in the first place.
 let savedViewAudienceSelection = new Map();
 
+// Shared by Búsqueda Guardada/Acomodo Guardado's own audience validation
+// AND Acomodo Guardado unificado's "Terminar Asignación" gate -- true once
+// at least one concrete target (a user, a puesto, a centro de costo) has
+// been picked in whichever picker is currently open.
+function hasAnyAudienceTarget() {
+    return [...savedViewAudienceSelection.values()].some((groupMap) => groupMap.size > 0);
+}
+
 let savedSearchModal = null;
 let savedSearchListEl = null;
 let savedSearchEmptyEl = null;
@@ -4958,6 +5142,62 @@ async function buildSavedViewAudiencePanel(panelEl) {
     updateSavedViewAudienceSummary(summaryEl);
 }
 
+// SaaS-side audience panel -- buildSavedViewAudiencePanel's catalog comes
+// from /api/business/* (users/job-positions/cost-centers), all clientId-
+// scoped and therefore unreachable for a SaaS-admin account, so this is a
+// deliberate, separate, much smaller sibling: one flat group (Equipo SaaS
+// members), no exclusions, no puestos/centros de costo (neither concept
+// exists on this side). Still writes into the SAME savedViewAudienceSelection
+// 'userIds' map, so hasAnyAudienceTarget/the "Terminar Asignación" gate
+// work unchanged either way.
+let saasLayoutAudienceCatalog = null;
+async function fetchSaasLayoutAudienceCatalog() {
+    if (saasLayoutAudienceCatalog) return saasLayoutAudienceCatalog;
+    try {
+        const res = await fetch('/api/admin/saas-users', { credentials: 'include' });
+        const data = res.ok ? await res.json() : { users: [] };
+        saasLayoutAudienceCatalog = (data.users || []).map((u) => ({ id: u.id, label: u.name || u.username }));
+    } catch {
+        saasLayoutAudienceCatalog = [];
+    }
+    return saasLayoutAudienceCatalog;
+}
+
+async function buildSaasLayoutAudiencePanel(panelEl) {
+    const options = await fetchSaasLayoutAudienceCatalog();
+    panelEl.innerHTML = '';
+    const groupMap = savedViewAudienceSelection.get('userIds');
+    const summaryEl = document.createElement('p');
+    summaryEl.className = 'saved-view-audience-summary';
+    const updateSummary = () => {
+        const labels = [...groupMap.keys()].map((id) => options.find((o) => o.id === id)?.label).filter(Boolean);
+        summaryEl.textContent = labels.length ? `${t('main.savedSearchAudienceWillSee')} ${labels.join(', ')}` : t('main.savedSearchAudienceSummaryEmptySaas');
+    };
+
+    const chipsEl = document.createElement('div');
+    chipsEl.className = 'saved-view-chips';
+    options.forEach((opt) => {
+        const chip = document.createElement('label');
+        chip.className = 'saved-view-chip' + (groupMap.has(opt.id) ? ' saved-view-chip-on' : '');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = groupMap.has(opt.id);
+        chip.appendChild(cb);
+        chip.appendChild(document.createTextNode(' ' + opt.label));
+        chip.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (groupMap.has(opt.id)) groupMap.delete(opt.id); else groupMap.set(opt.id, new Set());
+            cb.checked = groupMap.has(opt.id);
+            chip.classList.toggle('saved-view-chip-on', groupMap.has(opt.id));
+            updateSummary();
+        });
+        chipsEl.appendChild(chip);
+    });
+    panelEl.appendChild(chipsEl);
+    panelEl.appendChild(summaryEl);
+    updateSummary();
+}
+
 async function saveSavedSearch() {
     savedSearchErrorEl.hidden = true;
     const name = savedSearchNameInput.value.trim();
@@ -5021,77 +5261,17 @@ let savedLayoutDefaultCheckbox = null;
 let savedLayoutSaveBtn = null;
 let savedLayoutTableId = null;
 
-function ensureSavedLayoutModal() {
-    if (savedLayoutModal) return;
-    savedLayoutModal = document.createElement('div');
-    savedLayoutModal.className = 'modal-overlay';
-    savedLayoutModal.hidden = true;
-    savedLayoutModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 32rem;" role="dialog" aria-modal="true" aria-labelledby="saved-layout-title">
-            <h3 id="saved-layout-title">${t('main.savedLayoutTitle')}</h3>
-            <div data-role="list" class="saved-view-list"></div>
-            <p data-role="empty" class="admin-hint" hidden>${t('main.savedLayoutEmpty')}</p>
-            <div class="saved-view-save-block">
-                <p class="admin-hint">${t('main.savedLayoutSaveHint')}</p>
-                <input type="text" data-role="name" class="saved-view-name-input" placeholder="${t('main.savedLayoutNamePlaceholder')}">
-                <label class="saved-view-default-row"><input type="checkbox" data-role="default"> ${t('main.savedLayoutSetDefault')}</label>
-                <div data-role="admin-section" class="saved-view-audience-radios" hidden>
-                    <label><input type="radio" name="saved-layout-audience" value="self" checked> ${t('main.savedSearchAudienceSelf')}</label>
-                    <label><input type="radio" name="saved-layout-audience" value="assign"> ${t('main.savedSearchAudienceAssign')}</label>
-                </div>
-                <div data-role="audience-panel" class="saved-view-audience-panel" hidden></div>
-                <p data-role="error" class="admin-error" role="alert" hidden></p>
-                <div class="admin-form-actions">
-                    <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
-                    <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(savedLayoutModal);
-    savedLayoutListEl = savedLayoutModal.querySelector('[data-role="list"]');
-    savedLayoutEmptyEl = savedLayoutModal.querySelector('[data-role="empty"]');
-    savedLayoutErrorEl = savedLayoutModal.querySelector('[data-role="error"]');
-    savedLayoutNameInput = savedLayoutModal.querySelector('[data-role="name"]');
-    savedLayoutAdminSection = savedLayoutModal.querySelector('[data-role="admin-section"]');
-    savedLayoutAudiencePanel = savedLayoutModal.querySelector('[data-role="audience-panel"]');
-    savedLayoutDefaultCheckbox = savedLayoutModal.querySelector('[data-role="default"]');
-    savedLayoutSaveBtn = savedLayoutModal.querySelector('[data-role="save"]');
-    const close = () => { savedLayoutModal.hidden = true; };
-    savedLayoutModal.querySelector('[data-role="close"]').addEventListener('click', close);
-    wireModalDismiss(savedLayoutModal, close);
-    savedLayoutModal.querySelectorAll('input[name="saved-layout-audience"]').forEach((radio) => {
-        radio.addEventListener('change', () => {
-            if (radio.checked && radio.value === 'assign') {
-                savedLayoutAudiencePanel.hidden = false;
-                buildSavedViewAudiencePanel(savedLayoutAudiencePanel);
-            } else if (radio.checked) {
-                savedLayoutAudiencePanel.hidden = true;
-            }
-        });
-    });
-    savedLayoutSaveBtn.addEventListener('click', saveSavedLayout);
-}
-
-async function openSavedLayoutPicker(tableId) {
-    ensureSavedLayoutModal();
-    savedLayoutTableId = tableId;
-    savedLayoutNameInput.value = '';
-    savedLayoutDefaultCheckbox.checked = false;
-    savedLayoutErrorEl.hidden = true;
-    savedViewAudienceSelection = new Map(SAVED_VIEW_AUDIENCE_GROUPS.map((g) => [g.key, new Map()]));
-    savedLayoutAdminSection.hidden = !currentUser?.isClientAdmin;
-    savedLayoutAudiencePanel.hidden = true;
-    savedLayoutModal.querySelectorAll('input[name="saved-layout-audience"]').forEach((r) => { r.checked = r.value === 'self'; });
-    savedLayoutModal.hidden = false;
-    await loadSavedLayoutList();
-}
+// ensureSavedLayoutModal/openSavedLayoutPicker used to build/open this
+// modal on their own; both are gone now -- ensureColumnArrangeModal builds
+// the (combined) DOM into these same savedLayout* variables, and
+// openColumnArrangeModal does the resetting, since Acomodo Guardado and
+// the old pin/visibility pickers are now one single modal/entry point.
 
 async function loadSavedLayoutList() {
     savedLayoutListEl.innerHTML = '';
     savedLayoutEmptyEl.hidden = true;
     try {
-        const res = await fetch(`/api/business/saved-layouts/${encodeURIComponent(savedLayoutTableId)}`, { credentials: 'include' });
+        const res = await fetch(`${savedLayoutApiBase(savedLayoutTableId)}/${encodeURIComponent(savedLayoutTableId)}`, { credentials: 'include' });
         if (!res.ok) return;
         const { layouts } = await res.json();
         renderSavedLayoutList(layouts || []);
@@ -5134,7 +5314,8 @@ function renderSavedLayoutList(layouts) {
         // A 'personal' row only ever appears in the viewer's OWN list (the
         // server already scopes it to its owner) -- no need to separately
         // compare ownerUserId against the current user here.
-        const canDelete = !!currentUser?.isClientAdmin || layout.scope === 'personal';
+        const isAdminForThisTable = isSaasTableKey(savedLayoutTableId) ? !!currentUser?.isSaasSuperAdmin : !!currentUser?.isClientAdmin;
+        const canDelete = isAdminForThisTable || layout.scope === 'personal';
         if (canDelete) {
             const delBtn = document.createElement('button');
             delBtn.type = 'button';
@@ -5150,11 +5331,32 @@ function renderSavedLayoutList(layouts) {
 
 async function deleteSavedLayoutRow(id) {
     try {
-        const res = await fetch(`/api/business/saved-layouts/${id}`, { method: 'DELETE', credentials: 'include' });
+        const res = await fetch(`${savedLayoutApiBase(savedLayoutTableId)}/${id}`, { method: 'DELETE', credentials: 'include' });
         if (res.ok) await loadSavedLayoutList();
     } catch {
         // Leave the list as-is -- next open retries the fetch anyway.
     }
+}
+
+// Whether this account can reach the server that actually persists a
+// named Acomodo Guardado for this table -- client accounts always can
+// (saved_layouts.client_id); SaaS-admin accounts can too, but only for the
+// 3 internal tables saas_saved_layouts/the mirrored /api/admin/saas-saved-
+// layouts routes actually cover (SAAS_TABLE_ICON_SCREENS). Without this
+// gate the "Guardar como..." block would render and 404 on save, same
+// production bug this session already fixed once for the old
+// iconSavedLayout/iconSavedSearch toolbar buttons.
+function canPersistSavedLayout(tableId) {
+    return !!currentUser?.clientId || isSaasTableKey(tableId);
+}
+
+// Which backend namespace owns a table's saved layouts -- client tables
+// keep using /api/business/saved-layouts (clientId-scoped); the 3 SaaS-
+// internal tables use the separate, non-clientId-scoped
+// /api/admin/saas-saved-layouts (see saas_saved_layouts' own schema
+// comment in db.js for why this is a sibling table, not a shared one).
+function savedLayoutApiBase(tableId) {
+    return isSaasTableKey(tableId) ? '/api/admin/saas-saved-layouts' : '/api/business/saved-layouts';
 }
 
 // Snapshot of state.config's own order/hidden/pinned/widths -- no
@@ -5168,10 +5370,10 @@ function collectCurrentLayoutSnapshot(tableId) {
 }
 
 // The actual "apply" primitive -- reconcile + saveDataTableConfig +
-// applyDataTableColumnLayout, the same 3 calls openPinPicker/
-// openVisibilityPicker/drag-reorder/resize already make after mutating
-// state.config, so this writes through to localStorage and survives a
-// reload exactly like any manual rearrangement. Kept separate from
+// applyDataTableColumnLayout, the same call "Terminar Acomodo"/drag-reorder/
+// resize already make after mutating state.config, so this writes through
+// to localStorage and survives a reload exactly like any manual
+// rearrangement. Kept separate from
 // applySavedLayout below (which also closes the modal) so
 // maybeApplyDefaultSavedLayout can call this without a modal having ever
 // been opened.
@@ -5199,26 +5401,39 @@ async function saveSavedLayout() {
         savedLayoutErrorEl.hidden = false;
         return;
     }
+    const isSaasTable = isSaasTableKey(savedLayoutTableId);
+    const canAssign = isSaasTable ? !!currentUser?.isSaasSuperAdmin : !!currentUser?.isClientAdmin;
     const isAssign = savedLayoutModal.querySelector('input[name="saved-layout-audience"][value="assign"]')?.checked;
-    const scope = (currentUser?.isClientAdmin && isAssign) ? 'global' : 'personal';
+    const scope = (canAssign && isAssign) ? 'global' : 'personal';
     let audience;
     if (scope === 'global') {
-        audience = {};
-        SAVED_VIEW_AUDIENCE_GROUPS.forEach((group) => {
-            const groupMap = savedViewAudienceSelection.get(group.key);
-            if (!groupMap.size) return;
-            if (group.key === 'userIds') audience.userIds = [...groupMap.keys()];
-            else audience[group.key] = [...groupMap.entries()].map(([id, exceptSet]) => ({ id, exceptUserIds: [...exceptSet] }));
-        });
-        if (!audience.userIds?.length && !audience.jobPositions?.length && !audience.costCenters?.length) {
-            savedLayoutErrorEl.textContent = t('main.savedSearchAudienceSummaryEmpty');
-            savedLayoutErrorEl.hidden = false;
-            return;
+        if (isSaasTable) {
+            // SaaS side: one flat group (Equipo SaaS members), no puestos/
+            // centros de costo -- see buildSaasLayoutAudiencePanel.
+            audience = { userIds: [...savedViewAudienceSelection.get('userIds').keys()] };
+            if (!audience.userIds.length) {
+                savedLayoutErrorEl.textContent = t('main.savedSearchAudienceSummaryEmptySaas');
+                savedLayoutErrorEl.hidden = false;
+                return;
+            }
+        } else {
+            audience = {};
+            SAVED_VIEW_AUDIENCE_GROUPS.forEach((group) => {
+                const groupMap = savedViewAudienceSelection.get(group.key);
+                if (!groupMap.size) return;
+                if (group.key === 'userIds') audience.userIds = [...groupMap.keys()];
+                else audience[group.key] = [...groupMap.entries()].map(([id, exceptSet]) => ({ id, exceptUserIds: [...exceptSet] }));
+            });
+            if (!audience.userIds?.length && !audience.jobPositions?.length && !audience.costCenters?.length) {
+                savedLayoutErrorEl.textContent = t('main.savedSearchAudienceSummaryEmpty');
+                savedLayoutErrorEl.hidden = false;
+                return;
+            }
         }
     }
     const layout = collectCurrentLayoutSnapshot(savedLayoutTableId);
     try {
-        const res = await fetch('/api/business/saved-layouts', {
+        const res = await fetch(savedLayoutApiBase(savedLayoutTableId), {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
             body: JSON.stringify({ tableKey: savedLayoutTableId, name, layout, scope, isDefault: savedLayoutDefaultCheckbox.checked, audience }),
         });
@@ -5247,7 +5462,7 @@ async function saveSavedLayout() {
 // global one, matching the plan's stated precedence.
 async function maybeApplyDefaultSavedLayout(tableId) {
     try {
-        const res = await fetch(`/api/business/saved-layouts/${encodeURIComponent(tableId)}`, { credentials: 'include' });
+        const res = await fetch(`${savedLayoutApiBase(tableId)}/${encodeURIComponent(tableId)}`, { credentials: 'include' });
         if (!res.ok) return;
         const { layouts } = await res.json();
         const personalDefault = (layouts || []).find((l) => l.scope === 'personal' && l.isDefault);
@@ -5360,7 +5575,7 @@ function renderDataTableColumnControls() {
                 pinBtn.setAttribute('aria-label', t('main.pinColumns'));
                 pinBtn.title = t('main.pinColumns');
                 pinBtn.innerHTML = '<i class="bx bx-pin" aria-hidden="true"></i>';
-                pinBtn.addEventListener('click', () => openPinPicker(getTableId(wrapper, index)));
+                pinBtn.addEventListener('click', () => openColumnArrangeModal(getTableId(wrapper, index)));
                 toAppend.push(pinBtn);
             }
 
@@ -5372,7 +5587,7 @@ function renderDataTableColumnControls() {
                 visBtn.setAttribute('aria-label', t('main.columnVisibility'));
                 visBtn.title = t('main.columnVisibility');
                 visBtn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
-                visBtn.addEventListener('click', () => openVisibilityPicker(getTableId(wrapper, index)));
+                visBtn.addEventListener('click', () => openColumnArrangeModal(getTableId(wrapper, index)));
                 toAppend.push(visBtn);
             }
 
@@ -5421,7 +5636,7 @@ function renderDataTableColumnControls() {
                 toAppend.push(savedSearchBtn);
             }
 
-            if (currentUser?.clientId && resolveIconGrant(tableKey, 'iconSavedLayout')) {
+            if (canPersistSavedLayout(tableKey) && resolveIconGrant(tableKey, 'iconSavedLayout')) {
                 const savedLayoutBtn = document.createElement('button');
                 savedLayoutBtn.type = 'button';
                 savedLayoutBtn.className = 'data-table-zoom-btn';
@@ -5429,7 +5644,7 @@ function renderDataTableColumnControls() {
                 savedLayoutBtn.setAttribute('aria-label', t('main.savedLayoutBtn'));
                 savedLayoutBtn.title = t('main.savedLayoutBtn');
                 savedLayoutBtn.innerHTML = '<i class="bx bx-columns" aria-hidden="true"></i>';
-                savedLayoutBtn.addEventListener('click', () => openSavedLayoutPicker(getTableId(wrapper, index)));
+                savedLayoutBtn.addEventListener('click', () => openColumnArrangeModal(getTableId(wrapper, index)));
                 toAppend.push(savedLayoutBtn);
             }
 

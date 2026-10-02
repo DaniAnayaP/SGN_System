@@ -1480,6 +1480,29 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_saved_layouts_client_table ON saved_layouts(client_id, table_key);
 
+    -- saved_layouts' SaaS-side sibling, same "duplicate, don't share"
+    -- criteria the project already applies to classification
+    -- (saas_classification_overrides/-colors are separate from the client
+    -- ones for the exact same reason) -- Acomodo Guardado on an internal
+    -- SaaS table (Nuestros Clientes/Equipo SaaS/Nuestros Planes) has no
+    -- client org to scope within, so there's no client_id here at all;
+    -- "global" here means "visible to the Equipo SaaS members listed in
+    -- audience_json" instead of a client's own puestos/centros de costo.
+    -- Same layout_json shape as saved_layouts (no SaaS-specific fields).
+    CREATE TABLE IF NOT EXISTS saas_saved_layouts (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_key           TEXT NOT NULL,
+        name                TEXT NOT NULL,
+        layout_json         TEXT NOT NULL,
+        scope               TEXT NOT NULL DEFAULT 'personal',
+        is_default          INTEGER NOT NULL DEFAULT 0,
+        owner_user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_by_user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        audience_json       TEXT,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_saved_layouts_table ON saas_saved_layouts(table_key);
+
     -- client_permission_grants: the client-level counterpart of
     -- plan_grants — a "+ adicional" sold to THIS client beyond what their
     -- plan already includes, at the exact same {sectionId, itemId,
@@ -3098,6 +3121,61 @@ function createSavedLayout({ clientId, tableKey, name, layout, scope, isDefault,
 
 function deleteSavedLayout(id) {
     db.prepare('DELETE FROM saved_layouts WHERE id = ?').run(id);
+}
+
+// saved_layouts' CRUD, mirrored 1:1 for saas_saved_layouts -- no clientId
+// parameter anywhere here, see that table's own schema comment above.
+function deserializeSaasSavedLayout(row) {
+    if (!row) return null;
+    let layout = { order: [], hidden: [], pinned: [], widths: {} };
+    try { layout = JSON.parse(row.layout_json) || layout; } catch { /* keep default */ }
+    let audience = null;
+    if (row.audience_json) {
+        try { audience = JSON.parse(row.audience_json); } catch { audience = null; }
+    }
+    return {
+        id: row.id,
+        tableKey: row.table_key,
+        name: row.name,
+        layout,
+        scope: row.scope,
+        isDefault: !!row.is_default,
+        ownerUserId: row.owner_user_id,
+        createdByUserId: row.created_by_user_id,
+        audience,
+        createdAt: row.created_at,
+    };
+}
+
+function getSaasSavedLayoutsForTable(tableKey) {
+    return db
+        .prepare('SELECT * FROM saas_saved_layouts WHERE table_key = ? ORDER BY created_at ASC, id ASC')
+        .all(tableKey)
+        .map(deserializeSaasSavedLayout);
+}
+
+function getSaasSavedLayoutById(id) {
+    return deserializeSaasSavedLayout(db.prepare('SELECT * FROM saas_saved_layouts WHERE id = ?').get(id));
+}
+
+function createSaasSavedLayout({ tableKey, name, layout, scope, isDefault, ownerUserId, createdByUserId, audience }) {
+    const info = db.prepare(`
+        INSERT INTO saas_saved_layouts (table_key, name, layout_json, scope, is_default, owner_user_id, created_by_user_id, audience_json)
+        VALUES (@tableKey, @name, @layoutJson, @scope, @isDefault, @ownerUserId, @createdByUserId, @audienceJson)
+    `).run({
+        tableKey, name,
+        layoutJson: JSON.stringify(layout || { order: [], hidden: [], pinned: [], widths: {} }),
+        scope: scope === 'global' ? 'global' : 'personal',
+        isDefault: isDefault ? 1 : 0,
+        ownerUserId: scope === 'global' ? null : ownerUserId,
+        createdByUserId,
+        audienceJson: scope === 'global' ? JSON.stringify(audience || {}) : null,
+    });
+    return getSaasSavedLayoutById(info.lastInsertRowid);
+}
+
+function deleteSaasSavedLayout(id) {
+    db.prepare('DELETE FROM saas_saved_layouts WHERE id = ?').run(id);
 }
 
 // Who most recently touched this exact field -- used by the offline-queue
@@ -7995,6 +8073,10 @@ module.exports = {
     getSavedLayoutById,
     createSavedLayout,
     deleteSavedLayout,
+    getSaasSavedLayoutsForTable,
+    getSaasSavedLayoutById,
+    createSaasSavedLayout,
+    deleteSaasSavedLayout,
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,

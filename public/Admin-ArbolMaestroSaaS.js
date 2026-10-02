@@ -200,6 +200,15 @@ const ICON_PERSONALIZATION_ITEMS = [
     { id: 'iconLegend', labelKey: 'main.columnLegendBtn' },
     { id: 'iconFilter', labelKey: 'main.filterToggle' },
     { id: 'iconFilterClear', labelKey: 'main.filterClearBtn' },
+    // Acomodo Guardado only -- it now has a real SaaS-side backend
+    // (saas_saved_layouts, /api/admin/saas-saved-layouts, see
+    // canPersistSavedLayout/isSaasTableKey in Dashboard.js). Búsqueda
+    // Guardada (iconSavedSearch) deliberately stays OUT for now -- it has
+    // no SaaS-side table/routes of its own yet, and Dashboard.js's own
+    // gate for it is still "currentUser?.clientId &&" unconditionally, so
+    // listing it here would add a tree toggle that does nothing (or worse,
+    // reintroduce the exact 404-on-save bug fixed earlier this session).
+    { id: 'iconSavedLayout', labelKey: 'main.savedLayoutBtn' },
 ];
 const CREATE_CLASSIFICATION_VALUE = '__create-classification__';
 const CLASSIFICATION_COLOR_FAMILIES = [
