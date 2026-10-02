@@ -5400,7 +5400,16 @@ function renderDataTableColumnControls() {
                 toAppend.push(legendBtn);
             }
 
-            if (resolveIconGrant(tableKey, 'iconSavedSearch')) {
+            // Client-side only -- the whole feature (server routes, audience
+            // picker) is keyed off req.user.clientId, which SaaS-admin
+            // accounts never have. SAAS_TABLE_ICON_SCREENS' 3 internal
+            // tables (Nuestros Clientes/Nuestros Planes/Equipo SaaS) fall
+            // through to hasIconGrant's "no TABLE_GRANT_PATHS entry = show
+            // it" default otherwise, which is how this leaked into
+            // production: the icon rendered there but "Guardar" 404'd
+            // ("No client for this account.") since those screens have no
+            // client to scope a saved search/layout to in the first place.
+            if (currentUser?.clientId && resolveIconGrant(tableKey, 'iconSavedSearch')) {
                 const savedSearchBtn = document.createElement('button');
                 savedSearchBtn.type = 'button';
                 savedSearchBtn.className = 'data-table-zoom-btn';
@@ -5412,7 +5421,7 @@ function renderDataTableColumnControls() {
                 toAppend.push(savedSearchBtn);
             }
 
-            if (resolveIconGrant(tableKey, 'iconSavedLayout')) {
+            if (currentUser?.clientId && resolveIconGrant(tableKey, 'iconSavedLayout')) {
                 const savedLayoutBtn = document.createElement('button');
                 savedLayoutBtn.type = 'button';
                 savedLayoutBtn.className = 'data-table-zoom-btn';
