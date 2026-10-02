@@ -1037,6 +1037,8 @@
     "savedSearchValuesSummary": "{count} de {total}: {list}",
     "savedSearchPickValues": "Escribe un texto, un rango o marca un valor",
     "savedSearchKeepsPanel": "Esta búsqueda también usa {count} filtros del panel de arriba; se conservan tal cual.",
+    "visibilityModeHidden": "Oculta",
+    "visibilityModeVisible": "Visible",
     "filterAdvancedBtn": "Filtro avanzado",
     "filterAdvancedCount": "{count} de {total} columnas",
     "filterAdvancedHint": "Toca una columna para agregar su filtro al panel",

@@ -5796,3 +5796,10 @@ button.data-table-layout-item{
     padding-top: 0.75rem;
     padding-bottom: 0.875rem;
 }
+
+/* Mostrar/ocultar columnas: el pie con Guardar y Cancelar va fijo abajo (mismo
+   pie que el editor de Búsqueda Guardada), con los dos botones en fila. */
+.data-table-vis-footer{
+    flex-direction: row;
+    align-items: center;
+}
