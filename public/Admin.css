@@ -4504,13 +4504,32 @@ body.dark-mode .admin-save-status{
 .data-table-tri-control button[data-mode="none"]{
     padding: 0.3rem 0.45rem;
 }
-/* El color de "activo" se fija inline desde JS (color-mix sobre el color
-   REAL de la clasificación de esa columna, igual que fillBandRow) -- esta
-   clase solo da el fondo/sombra base cuando no hay color propio todavía. */
+/* El color de "activo": una columna sin clasificar se queda con el fondo
+   neutral de abajo; una clasificada toma el mismo tinte "sistema" que
+   .data-table-group-band-classification th.data-table-group-band-cell ya
+   le da a esa banda en la tabla real (Inicio-en.css) -- Control Interno es
+   hoy la única clasificación con un tinte realmente distinto ahí, así que
+   es el default aquí también; reportColBase/reportColCalc reusan sus
+   propios pares de variables igual que esa misma banda. Un color propio
+   elegido por un admin (hasOwnColor en JS) pisa esto inline, igual que
+   fillBandRow hace con la banda. */
 .data-table-tri-control button.active{
     background: var(--color-surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     color: var(--color-text-primary);
+}
+.data-table-tri-control button.active[data-group-key]{
+    background: var(--color-column-system-band-bg);
+    color: var(--color-column-system-text);
+    box-shadow: none;
+}
+.data-table-tri-control button.active[data-group-key="main.reportColBase"]{
+    background: var(--color-report-base-band-bg);
+    color: var(--color-report-base-text);
+}
+.data-table-tri-control button.active[data-group-key="main.reportColCalc"]{
+    background: var(--color-report-calc-band-bg);
+    color: var(--color-report-calc-text);
 }
 .data-table-tri-control button[disabled]{
     opacity: 0.4;

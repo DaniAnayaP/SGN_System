@@ -3647,27 +3647,30 @@ function wireModalDismiss(overlay, onClose) {
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !overlay.hidden) onClose(); });
 }
 
-// Acomodo Guardado unificado -- reemplaza lo que antes eran 3 modales
-// separados (selector de pines, selector de visibilidad, "Acomodo
-// Guardado" para nombrar/guardar) con uno solo: pestañas por clasificación
-// real, un control de 3 vías por columna (x/Normal/Fija, sobre los mismos
-// state.config.hidden/pinned de siempre), vista previa en vivo con
-// arrastre en el encabezado, y un candado de botones (Terminar Acomodo ->
-// [Terminar Asignación] -> Guardar). Las funciones de guardar/aplicar/
-// listar/borrar un acomodo guardado (más abajo, alrededor de "Acomodo
-// Guardado") NO cambian -- solo se re-disparan desde este modal en vez de
-// desde su propio modal viejo.
+// Acomodo Guardado rediseñado -- SOLO el modal detrás del icono de
+// Acomodo Guardado (iconSavedLayout). El selector de pines y el selector
+// de visibilidad (iconPin/iconVisibility, más abajo) siguen siendo sus
+// propios modales de siempre, sin tocar. Este modal nuevo trae: pestañas
+// por clasificación real, un control de 3 vías por columna (x/Normal/Fija,
+// sobre los mismos state.config.hidden/pinned de siempre), vista previa en
+// vivo con arrastre en el encabezado, y un candado de botones (Terminar
+// Acomodo -> [Terminar Asignación] -> Guardar). Las funciones de guardar/
+// aplicar/listar/borrar un acomodo guardado (más abajo, alrededor de
+// "Acomodo Guardado") NO cambian -- solo se re-disparan desde este modal
+// en vez de desde su propio modal viejo.
 const COLUMN_ARRANGE_UNCLASSIFIED = '__sin_clasificar__';
 let columnArrangeModal = null;
 let columnArrangeState = null; // { tableId, draftConfig, decidedKeys: Set, activeTab, scope, terminarAcomodoDone, terminarAsignacionDone }
 
-// Cascarón de fila compartido por la lista de columnas del modal -- nombre
-// + punto de color de su clasificación real (mismos colores que
-// COLUMN_GROUP_META/columnGroupColor ya le dan a la "Leyenda de columnas"
-// y a la banda de la tabla real, nunca una paleta aparte). El llamador
-// agrega su propio control (antes un switch, ahora buildTriStateControl)
-// después de construir la fila.
-function buildColumnPickerRow(key, label, { dotColor = undefined, dotTitle = '' } = {}) {
+// Cascarón de fila compartido por la lista de columnas del modal de
+// Acomodo Guardado -- nombre + punto de color de su clasificación real
+// (mismos colores que COLUMN_GROUP_META/columnGroupColor ya le dan a la
+// "Leyenda de columnas" y a la banda de la tabla real, nunca una paleta
+// aparte). El llamador agrega su propio control (buildTriStateControl)
+// después de construir la fila. Nombre distinto de buildColumnPickerRow
+// (de abajo) a propósito -- esa es la de los selectores de pines/
+// visibilidad de siempre, que NO cambiaron.
+function buildArrangeRowShell(key, label, { dotColor = undefined, dotTitle = '' } = {}) {
     const row = document.createElement('div');
     row.className = 'admin-module-row data-table-arrange-row';
     row.dataset.col = key;
@@ -3684,6 +3687,305 @@ function buildColumnPickerRow(key, label, { dotColor = undefined, dotTitle = '' 
     name.appendChild(document.createTextNode(label));
     row.appendChild(name);
     return { row };
+}
+
+// Selector de pines y selector de visibilidad -- como estaban antes de
+// Acomodo Guardado unificado, SIN cambios. Solo el icono de Acomodo
+// Guardado abre el modal nuevo de abajo; estos dos siguen siendo los
+// suyos propios, tal cual.
+let pinPickerModal = null;
+let pinPickerPinnedList = null;
+let pinPickerOtherList = null;
+let pinPickerLimitMsg = null;
+let pinPickerState = null; // { tableId, pinnedOrder: [key,...] }
+
+function buildColumnPickerRow(key, label, { pinned = null, dotColor = undefined, dotTitle = '' } = {}) {
+    const row = document.createElement('div');
+    row.className = 'admin-module-row';
+    row.dataset.col = key;
+    const name = document.createElement('span');
+    name.className = 'admin-module-name';
+    name.style.flex = '1';
+    if (pinned !== null) {
+        row.draggable = pinned;
+        if (pinned) {
+            const handle = document.createElement('i');
+            handle.className = 'bx bx-menu data-table-col-picker-handle';
+            handle.setAttribute('aria-hidden', 'true');
+            row.appendChild(handle);
+        }
+    }
+    // Visibility picker only (pinned picker never passes this) -- a small
+    // color dot naming which classification this column belongs to, same
+    // colors COLUMN_GROUP_META already gives the real "Leyenda de columnas"
+    // modal, so this isn't a second, inconsistent palette.
+    if (dotColor !== undefined) {
+        const dot = document.createElement('span');
+        dot.className = 'data-table-col-dot';
+        dot.style.backgroundColor = dotColor;
+        if (dotTitle) dot.title = dotTitle;
+        name.appendChild(dot);
+    }
+    name.appendChild(document.createTextNode(label));
+    row.appendChild(name);
+    const toggle = document.createElement('label');
+    toggle.className = 'admin-switch';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    const track = document.createElement('span');
+    track.className = 'admin-switch-track';
+    toggle.append(input, track);
+    row.appendChild(toggle);
+    return { row, input };
+}
+
+function ensurePinPickerModal() {
+    if (pinPickerModal) return;
+    pinPickerModal = document.createElement('div');
+    pinPickerModal.className = 'modal-overlay';
+    pinPickerModal.hidden = true;
+    pinPickerModal.innerHTML = `
+        <div class="modal-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-pin-title">
+            <h3 id="data-table-pin-title">${t('main.pinColumnsTitle')}</h3>
+            <p class="admin-hint">${t('main.pinColumnsHint')}</p>
+            <div class="admin-module-list" data-role="pinned-list"></div>
+            <p class="admin-hint" style="margin-top:1rem;">${t('main.pinColumnsOther')}</p>
+            <div class="admin-module-list" data-role="other-list"></div>
+            <p class="admin-hint" data-role="limit-msg" hidden>${t('main.pinColumnsLimitReached')}</p>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
+                <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(pinPickerModal);
+    pinPickerPinnedList = pinPickerModal.querySelector('[data-role="pinned-list"]');
+    pinPickerOtherList = pinPickerModal.querySelector('[data-role="other-list"]');
+    pinPickerLimitMsg = pinPickerModal.querySelector('[data-role="limit-msg"]');
+    const close = () => { pinPickerModal.hidden = true; pinPickerState = null; };
+    pinPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
+    pinPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
+        if (!pinPickerState) return;
+        const state = dataTableColumnState.get(pinPickerState.tableId);
+        if (state) {
+            state.config.pinned = [...pinPickerState.pinnedOrder];
+            saveDataTableConfig(pinPickerState.tableId, state.config);
+            applyDataTableColumnLayout(pinPickerState.tableId);
+        }
+        close();
+    });
+    wireModalDismiss(pinPickerModal, close);
+}
+
+function renderPinPickerLists() {
+    const state = dataTableColumnState.get(pinPickerState.tableId);
+    if (!state) return;
+    pinPickerPinnedList.innerHTML = '';
+    pinPickerState.pinnedOrder.forEach((key) => {
+        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, { pinned: true });
+        input.checked = true;
+        input.addEventListener('change', () => {
+            pinPickerState.pinnedOrder = pinPickerState.pinnedOrder.filter((k) => k !== key);
+            renderPinPickerLists();
+        });
+        pinPickerPinnedList.appendChild(row);
+    });
+    pinPickerOtherList.innerHTML = '';
+    state.columnKeys.filter((k) => !pinPickerState.pinnedOrder.includes(k)).forEach((key) => {
+        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, { pinned: false });
+        const atMax = pinPickerState.pinnedOrder.length >= DATA_TABLE_PIN_MAX;
+        input.checked = false;
+        input.disabled = atMax;
+        input.addEventListener('change', () => {
+            if (pinPickerState.pinnedOrder.length < DATA_TABLE_PIN_MAX) {
+                pinPickerState.pinnedOrder = [...pinPickerState.pinnedOrder, key];
+                renderPinPickerLists();
+            }
+        });
+        pinPickerOtherList.appendChild(row);
+    });
+    pinPickerLimitMsg.hidden = pinPickerState.pinnedOrder.length < DATA_TABLE_PIN_MAX;
+    enableListDragReorder(pinPickerPinnedList, (newOrder) => {
+        pinPickerState.pinnedOrder = newOrder;
+    });
+}
+
+function openPinPicker(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    ensurePinPickerModal();
+    pinPickerState = { tableId, pinnedOrder: [...state.config.pinned] };
+    renderPinPickerLists();
+    pinPickerModal.hidden = false;
+}
+
+let visibilityPickerModal = null;
+let visibilityPickerList = null;
+let visibilityPickerChips = null;
+let visibilityPickerSearch = null;
+let visibilityPickerCount = null;
+let visibilityPickerState = null; // { tableId, hiddenSet: Set<key>, query: string, activeGroupKey: string|null }
+
+function ensureVisibilityPickerModal() {
+    if (visibilityPickerModal) return;
+    visibilityPickerModal = document.createElement('div');
+    visibilityPickerModal.className = 'modal-overlay';
+    visibilityPickerModal.hidden = true;
+    visibilityPickerModal.innerHTML = `
+        <div class="modal-panel data-table-vis-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-vis-title">
+            <div class="data-table-vis-fixed">
+                <h3 id="data-table-vis-title">${t('main.columnVisibilityTitle')}</h3>
+                <p class="admin-hint">${t('main.columnVisibilityHint')}</p>
+                <div class="admin-form-actions">
+                    <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
+                    <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
+                </div>
+                <div class="sector-icon-picker">
+                    <div class="sector-icon-picker-search">
+                        <i class="bx bx-search" aria-hidden="true"></i>
+                        <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
+                    </div>
+                    <div class="sector-icon-picker-chips" data-role="chips"></div>
+                    <p class="sector-icon-picker-count" data-role="count"></p>
+                </div>
+            </div>
+            <div class="admin-module-list data-table-vis-list" data-role="list"></div>
+        </div>
+    `;
+    document.body.appendChild(visibilityPickerModal);
+    visibilityPickerList = visibilityPickerModal.querySelector('[data-role="list"]');
+    visibilityPickerChips = visibilityPickerModal.querySelector('[data-role="chips"]');
+    visibilityPickerSearch = visibilityPickerModal.querySelector('[data-role="search"]');
+    visibilityPickerCount = visibilityPickerModal.querySelector('[data-role="count"]');
+    const close = () => { visibilityPickerModal.hidden = true; visibilityPickerState = null; };
+    visibilityPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
+    visibilityPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
+        if (!visibilityPickerState) return;
+        const state = dataTableColumnState.get(visibilityPickerState.tableId);
+        if (state) {
+            state.config.hidden = state.columnKeys.filter((k) => visibilityPickerState.hiddenSet.has(k));
+            saveDataTableConfig(visibilityPickerState.tableId, state.config);
+            applyDataTableColumnLayout(visibilityPickerState.tableId);
+        }
+        close();
+    });
+    visibilityPickerSearch.addEventListener('input', () => {
+        visibilityPickerState.query = visibilityPickerSearch.value;
+        renderVisibilityPickerChips();
+        renderVisibilityPickerList();
+    });
+    wireModalDismiss(visibilityPickerModal, close);
+}
+
+// Same interaction model as BusinessSectorIcons.js's own icon picker: chips
+// filter by classification, but typing in the search box always looks
+// across every column regardless of the active chip (confirmed there --
+// someone searching shouldn't get an empty grid just because an unrelated
+// chip was still selected from a moment ago).
+function visiblePickerColumns(state) {
+    const q = visibilityPickerState.query.trim().toLowerCase();
+    if (q) return state.columnKeys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q));
+    const groupKey = visibilityPickerState.activeGroupKey;
+    return groupKey ? state.columnKeys.filter((k) => state.groupKeys.get(k) === groupKey) : state.columnKeys;
+}
+
+function renderVisibilityPickerChips() {
+    const state = dataTableColumnState.get(visibilityPickerState.tableId);
+    if (!state) return;
+    visibilityPickerChips.innerHTML = '';
+    // Only classifications actually present on THIS table get a chip (same
+    // as the column legend) -- a table with none just shows no chip row.
+    const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
+    if (!presentGroupKeys.length) return;
+    const allChip = document.createElement('button');
+    allChip.type = 'button';
+    allChip.className = 'sector-icon-picker-chip' + (visibilityPickerState.activeGroupKey ? '' : ' active');
+    allChip.textContent = t('main.columnFilterAll');
+    allChip.addEventListener('click', () => {
+        visibilityPickerState.activeGroupKey = null;
+        visibilityPickerState.query = '';
+        visibilityPickerSearch.value = '';
+        renderVisibilityPickerChips();
+        renderVisibilityPickerList();
+    });
+    visibilityPickerChips.appendChild(allChip);
+    presentGroupKeys.forEach((groupKey) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'sector-icon-picker-chip' + (visibilityPickerState.activeGroupKey === groupKey ? ' active' : '');
+        const dot = document.createElement('span');
+        dot.className = 'data-table-col-dot data-table-col-dot-chip';
+        dot.style.backgroundColor = columnGroupColor(groupKey);
+        chip.appendChild(dot);
+        chip.appendChild(document.createTextNode(resolveGroupLabel(groupKey)));
+        chip.addEventListener('click', () => {
+            visibilityPickerState.activeGroupKey = visibilityPickerState.activeGroupKey === groupKey ? null : groupKey;
+            visibilityPickerState.query = '';
+            visibilityPickerSearch.value = '';
+            renderVisibilityPickerChips();
+            renderVisibilityPickerList();
+        });
+        visibilityPickerChips.appendChild(chip);
+    });
+}
+
+function renderVisibilityPickerList() {
+    const state = dataTableColumnState.get(visibilityPickerState.tableId);
+    if (!state) return;
+    visibilityPickerList.innerHTML = '';
+    const keys = visiblePickerColumns(state);
+    visibilityPickerCount.textContent = t('main.columnFilterCount', {
+        count: String(keys.length), total: String(state.columnKeys.length),
+        scope: visibilityPickerState.query.trim()
+            ? `"${visibilityPickerState.query.trim()}"`
+            : (visibilityPickerState.activeGroupKey ? resolveGroupLabel(visibilityPickerState.activeGroupKey) : t('main.columnFilterAll')),
+    });
+    if (!keys.length) {
+        const empty = document.createElement('p');
+        empty.className = 'sector-icon-picker-empty';
+        empty.textContent = t('main.columnFilterNoResults', { query: visibilityPickerState.query.trim() });
+        visibilityPickerList.appendChild(empty);
+        return;
+    }
+    keys.forEach((key) => {
+        const groupKey = state.groupKeys.get(key);
+        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, {
+            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : '',
+        });
+        input.checked = !visibilityPickerState.hiddenSet.has(key);
+        input.addEventListener('change', async () => {
+            // Never allow hiding the last remaining visible column.
+            const visibleCount = state.columnKeys.length - visibilityPickerState.hiddenSet.size;
+            if (!input.checked && visibleCount <= 1) {
+                input.checked = true;
+                return;
+            }
+            // Hiding a PINNED column is easy to do by accident (it's still
+            // sitting right there, sticky-left) and leaves it fixed-but-
+            // invisible until someone remembers to check the pin picker too
+            // — confirm before letting that happen.
+            if (!input.checked && state.config.pinned.includes(key)) {
+                if (!(await confirmDialog(t('main.columnHidePinnedConfirm')))) {
+                    input.checked = true;
+                    return;
+                }
+            }
+            if (input.checked) visibilityPickerState.hiddenSet.delete(key);
+            else visibilityPickerState.hiddenSet.add(key);
+        });
+        visibilityPickerList.appendChild(row);
+    });
+}
+
+function openVisibilityPicker(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    ensureVisibilityPickerModal();
+    visibilityPickerState = { tableId, hiddenSet: new Set(state.config.hidden), query: '', activeGroupKey: null };
+    visibilityPickerSearch.value = '';
+    renderVisibilityPickerChips();
+    renderVisibilityPickerList();
+    visibilityPickerModal.hidden = false;
 }
 
 function ensureColumnArrangeModal() {
@@ -3881,7 +4183,7 @@ function renderColumnArrangeRows() {
     rowsEl.innerHTML = '';
     columnArrangeVisibleKeys(state).forEach((key) => {
         const groupKey = state.groupKeys.get(key);
-        const { row } = buildColumnPickerRow(key, state.labels[key] || key, {
+        const { row } = buildArrangeRowShell(key, state.labels[key] || key, {
             dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : t('menu.classNone'),
         });
         row.classList.toggle('data-table-row-pending', !columnArrangeState.decidedKeys.has(key));
@@ -3927,6 +4229,7 @@ function buildTriStateControl(key, groupKey) {
         if (opt.title) btn.title = opt.title;
         const isActive = mode === opt.mode;
         btn.classList.toggle('active', isActive);
+        if (isActive && groupKey) btn.dataset.groupKey = groupKey;
         if (isActive && hasOwnColor) {
             btn.style.backgroundColor = `color-mix(in srgb, ${activeColor} 16%, var(--color-surface))`;
             btn.style.color = activeColor;
@@ -3987,7 +4290,12 @@ function renderColumnArrangePreview() {
     table.innerHTML = '';
     const thead = table.createTHead();
     const bandRow = thead.insertRow();
-    fillBandRow(bandRow, visualOrder, state.groupKeys || new Map(), null, previewState, true);
+    // Misma clase que la banda de la tabla real (renderColumnGroupBand) --
+    // sin ella, fillBandRow sigue llenando las celdas pero el CSS que les
+    // da su color (.data-table-group-band-classification th.data-table-
+    // group-band-cell, en Inicio-en.css) nunca llega a aplicarse.
+    bandRow.className = 'data-table-group-band-classification';
+    fillBandRow(bandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', previewState, true);
     const headRow = thead.insertRow();
     visualOrder.forEach((key) => {
         const th = document.createElement('th');
@@ -4063,14 +4371,13 @@ function enablePreviewHeaderDragReorder(headRow) {
     });
 }
 
-// Un perfil puede tener cualquiera de los 3 permisos de icono (pin,
-// visibilidad, acomodo guardado) sin los otros dos -- los 3 abren este
-// mismo modal, pero el bloque de "Guardar como..." (nombrar/listar/
-// aplicar/borrar un acomodo con nombre) solo se muestra si esta cuenta
-// puede llegar al servidor que lo persiste (ver canPersistSavedLayout,
-// junto a renderDataTableColumnControls). Sin ese permiso, el modal igual
-// sirve para acomodar y aplicar en vivo -- exactamente lo que
-// iconPin/iconVisibility ya hacían por separado hoy.
+// Solo el icono de Acomodo Guardado (iconSavedLayout) abre este modal --
+// iconPin/iconVisibility siguen abriendo sus propios modales de siempre
+// (openPinPicker/openVisibilityPicker, arriba), sin cambios. El bloque de
+// "Guardar como..." (nombrar/listar/aplicar/borrar un acomodo con nombre)
+// solo se muestra si esta cuenta puede llegar al servidor que lo persiste
+// (ver canPersistSavedLayout, junto a renderDataTableColumnControls) --
+// sin ese permiso, el modal igual sirve para acomodar y aplicar en vivo.
 async function openColumnArrangeModal(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
@@ -5575,7 +5882,7 @@ function renderDataTableColumnControls() {
                 pinBtn.setAttribute('aria-label', t('main.pinColumns'));
                 pinBtn.title = t('main.pinColumns');
                 pinBtn.innerHTML = '<i class="bx bx-pin" aria-hidden="true"></i>';
-                pinBtn.addEventListener('click', () => openColumnArrangeModal(getTableId(wrapper, index)));
+                pinBtn.addEventListener('click', () => openPinPicker(getTableId(wrapper, index)));
                 toAppend.push(pinBtn);
             }
 
@@ -5587,7 +5894,7 @@ function renderDataTableColumnControls() {
                 visBtn.setAttribute('aria-label', t('main.columnVisibility'));
                 visBtn.title = t('main.columnVisibility');
                 visBtn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
-                visBtn.addEventListener('click', () => openColumnArrangeModal(getTableId(wrapper, index)));
+                visBtn.addEventListener('click', () => openVisibilityPicker(getTableId(wrapper, index)));
                 toAppend.push(visBtn);
             }
 
