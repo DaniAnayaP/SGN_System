@@ -6346,11 +6346,13 @@ function renderDataTableColumnControls() {
                 pill.dataset.tableId = tableKey;
                 const layoutName = document.createElement('span');
                 layoutName.className = 'data-table-layout-pill-name';
+                layoutName.dataset.helpKey = 'savedLayout';
                 layoutName.hidden = true;
                 layoutName.addEventListener('click', () => toggleSavedLayoutMenu(tableKey, pill));
                 const layoutClear = document.createElement('button');
                 layoutClear.type = 'button';
                 layoutClear.className = 'data-table-layout-pill-clear';
+                layoutClear.dataset.helpKey = 'clearLayout';
                 layoutClear.setAttribute('aria-label', t('main.savedLayoutClearBtn'));
                 layoutClear.title = t('main.savedLayoutClearBtn');
                 layoutClear.hidden = true;
@@ -6870,6 +6872,8 @@ const HELP_CONTENT_ZOOM_KEYS = { out: 'zoomOut', in: 'zoomIn' };
 const HELP_CONTENT_COL_ACTION_KEYS = {
     pin: 'pinColumns', visibility: 'columnVisibility', history: 'changeHistory',
     legend: 'columnLegend', 'field-rules': 'fieldRules',
+    'saved-layout': 'savedLayout', 'saved-search': 'savedSearch',
+    filter: 'filterToggle', 'filter-clear': 'filterClear',
 };
 function applyHelpContentKeys() {
     applyHelpKeysByAttr('id', HELP_CONTENT_KEYS);
@@ -6936,6 +6940,20 @@ function findHelpModeContent(startEl) {
             const name = (header && header.textContent.trim()) || node.getAttribute('aria-label')
                 || node.getAttribute('title') || node.textContent.trim() || node.getAttribute('placeholder');
             if (name) return { name, what: t(`help.${helpKey}.what`), example: t(`help.${helpKey}.example`) };
+        }
+        // Cualquier otro encabezado o celda de una tabla (la mayoría de las
+        // columnas no tiene su propia entrada help.*): se explica con el
+        // nombre de SU columna, así que ningún encabezado ni fila se queda
+        // sin ayuda aunque nadie la haya escrito a mano todavía.
+        const colKey = node.getAttribute('data-col');
+        if (colKey && (node.tagName === 'TH' || node.tagName === 'TD') && node.closest('table.data-table')) {
+            const header = node.tagName === 'TH' ? node : node.closest('table').querySelector(`th[data-col="${CSS.escape(colKey)}"]`);
+            const label = header?.textContent.trim();
+            if (label) {
+                return node.tagName === 'TH'
+                    ? { name: label, what: t('help.genericColumnHeader.what', { name: label }), example: t('help.genericColumnHeader.example', { name: label }) }
+                    : { name: label, what: t('help.genericColumnCell.what', { name: label }), example: null };
+            }
         }
         const name = node.getAttribute('aria-label') || node.getAttribute('title');
         if (name) return { name, what: null, example: null };

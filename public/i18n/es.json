@@ -2122,6 +2122,33 @@
     "createNewRecord": {
       "what": "Crea un registro nuevo para esta lista, con los campos listos para llenar.",
       "example": "tocas este botón para agregar un cliente, artículo o registro nuevo a la lista."
+    },
+    "genericColumnHeader": {
+      "what": "Esta columna muestra «{name}» de cada registro. Haz clic en el título para ordenar la tabla por ella, arrástralo para cambiarla de lugar, y usa el embudo para filtrar por esta columna.",
+      "example": "para encontrar un registro rápido, filtra «{name}» escribiendo una parte de su valor."
+    },
+    "genericColumnCell": {
+      "what": "Aquí se ve «{name}» de este registro."
+    },
+    "savedLayout": {
+      "what": "Abre tu lista de acomodos guardados: eliges uno y la tabla se acomoda al instante, o agregas uno nuevo. Mientras uno está aplicado, su nombre queda escrito en este icono.",
+      "example": "guardas \"Vista Supervisores\" con solo las columnas que usas y la aplicas cada mañana con un clic."
+    },
+    "savedSearch": {
+      "what": "Guarda los filtros que tienes puestos para volver a usarlos después, sin escribirlos otra vez.",
+      "example": "guardas \"Solo activos del mes\" y la próxima vez la aplicas con un clic."
+    },
+    "filterToggle": {
+      "what": "Abre o cierra el panel de filtros que está arriba de la tabla, para buscar registros por varios campos a la vez.",
+      "example": "abres el panel, eliges un Estatus, tocas Buscar y ves solo esos registros."
+    },
+    "filterClear": {
+      "what": "Borra todos los filtros y deja la tabla como al inicio: todos los registros y las columnas en su orden original.",
+      "example": "después de buscar un cliente, tocas Limpiar para volver a ver todos."
+    },
+    "clearLayout": {
+      "what": "Quita el acomodo guardado que tienes aplicado y regresa la tabla a su acomodo por default: el que te asignaron, o el original de la tabla si no tienes uno.",
+      "example": "aplicaste \"Vista Supervisores\" y quieres volver a como estaba: tocas la ✕."
     }
   }
 }

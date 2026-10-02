@@ -2123,6 +2123,33 @@
     "createNewRecord": {
       "what": "Creates a new record for this list, ready to fill in.",
       "example": "you tap this button to add a new client, item, or record to the list."
+    },
+    "genericColumnHeader": {
+      "what": "This column shows \"{name}\" for every record. Click the title to sort the table by it, drag it to move the column, and use the funnel to filter by this column.",
+      "example": "to find a record quickly, filter \"{name}\" by typing part of its value."
+    },
+    "genericColumnCell": {
+      "what": "This is the \"{name}\" of this record."
+    },
+    "savedLayout": {
+      "what": "Opens your list of saved layouts: pick one and the table rearranges instantly, or add a new one. While one is applied, its name is written on this icon.",
+      "example": "you save \"Supervisors view\" with only the columns you use and apply it every morning with one click."
+    },
+    "savedSearch": {
+      "what": "Saves the filters you have set so you can reuse them later without typing them again.",
+      "example": "you save \"Active this month\" and next time you apply it with one click."
+    },
+    "filterToggle": {
+      "what": "Opens or closes the filter panel above the table, to look for records by several fields at once.",
+      "example": "you open the panel, pick a Status, tap Search and see only those records."
+    },
+    "filterClear": {
+      "what": "Clears every filter and leaves the table as it started: all records and the columns in their original order.",
+      "example": "after searching for one client, you tap Clear to see everyone again."
+    },
+    "clearLayout": {
+      "what": "Removes the saved layout you have applied and returns the table to its default layout: the one assigned to you, or the table's original if you have none.",
+      "example": "you applied \"Supervisors view\" and want things back as they were: tap the ✕."
     }
   }
 }
