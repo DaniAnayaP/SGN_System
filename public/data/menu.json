@@ -320,6 +320,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -365,6 +366,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -422,6 +424,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -481,6 +484,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -534,6 +538,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -619,6 +624,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -673,6 +679,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -730,6 +737,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -775,6 +783,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -820,6 +829,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -865,6 +875,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -910,6 +921,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -955,6 +967,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -1000,6 +1013,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -1045,6 +1059,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -1113,6 +1128,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]
@@ -1180,6 +1196,7 @@
             { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
             { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
             { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true }
           ]

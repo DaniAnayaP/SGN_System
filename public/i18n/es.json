@@ -1037,6 +1037,15 @@
     "savedSearchValuesSummary": "{count} de {total}: {list}",
     "savedSearchPickValues": "Escribe un texto, un rango o marca un valor",
     "savedSearchKeepsPanel": "Esta búsqueda también usa {count} filtros del panel de arriba; se conservan tal cual.",
+    "filterAdvancedBtn": "Filtro avanzado",
+    "filterAdvancedCount": "{count} de {total} columnas",
+    "filterAdvancedAdded": "Agregados con Filtro avanzado",
+    "filterAdvancedHint": "Toca una columna para agregar su filtro al panel",
+    "filterAdvancedInPanel": "En el panel",
+    "filterAdvancedRemove": "Quitar del panel",
+    "filterPanelClear": "Limpiar",
+    "filterPanelSelectedCount": "{count} seleccionados",
+    "filterPanelNone": "Ninguno",
     "filterModeRange": "Desde–Hasta",
     "savedSearchRangeFrom": "Desde",
     "savedSearchRangeTo": "Hasta",
@@ -2184,6 +2193,18 @@
     "clearSearch": {
       "what": "Quita la búsqueda guardada que tienes aplicada y deja la tabla sin filtros, mostrando todos los registros.",
       "example": "aplicaste \"Activos del mes\" y quieres volver a ver todo: tocas la ✕."
+    },
+    "filterAdvanced": {
+      "what": "Agrega más filtros al panel: eliges cualquier columna de la tabla y su campo aparece aquí para filtrar. Puedes seguir hasta incluir todas las columnas; las que agregas se recuerdan en esta tabla.",
+      "example": "quieres filtrar por Costo contratado además de Plan: tocas Filtro avanzado y eliges esa columna."
+    },
+    "filterPanelClear": {
+      "what": "Quita todo lo filtrado, en los campos del panel y en las columnas, y vuelve a mostrar todos los registros. No cambia el acomodo de columnas.",
+      "example": "ya revisaste los clientes activos y quieres ver todos de nuevo."
+    },
+    "filterPanelField": {
+      "what": "Filtra la tabla por esta columna. Se aplica al tocar Buscar, igual que los demás campos del panel, y es el mismo filtro del encabezado de la columna.",
+      "example": "eliges los planes Básico y Profesional y tocas Buscar."
     },
     "clearLayout": {
       "what": "Quita el acomodo guardado que tienes aplicado y regresa la tabla a su acomodo por default: el que te asignaron, o el original de la tabla si no tienes uno.",

@@ -200,6 +200,7 @@ const ICON_PERSONALIZATION_ITEMS = [
     { id: 'iconLegend', labelKey: 'main.columnLegendBtn' },
     { id: 'iconFilter', labelKey: 'main.filterToggle' },
     { id: 'iconFilterClear', labelKey: 'main.filterClearBtn' },
+    { id: 'iconFilterAdvanced', labelKey: 'main.filterAdvancedBtn' },
     // Búsqueda Guardada and Acomodo Guardado both have a real SaaS-side
     // backend now (saas_saved_searches/saas_saved_layouts, see
     // canPersistSavedSearch/canPersistSavedLayout/isSaasTableKey in

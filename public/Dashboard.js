@@ -3449,6 +3449,7 @@ function applyColumnValueFilters(tableId) {
     if (!state.columnFilters.size && !state.columnRules.size) {
         rows.forEach((tr) => tr.classList.remove('data-table-row-col-filtered'));
         refreshSavedSearchPillForTable(tableId);
+        refreshPanelColumnFilters(tableId);
         return;
     }
     rows.forEach((tr) => {
@@ -3464,6 +3465,7 @@ function applyColumnValueFilters(tableId) {
         tr.classList.toggle('data-table-row-col-filtered', !visible);
     });
     refreshSavedSearchPillForTable(tableId);
+    refreshPanelColumnFilters(tableId);
 }
 
 function updateColumnFilterIndicator(th, active) {
@@ -5881,6 +5883,7 @@ function resetTableFilters(tableId) {
     if (state) {
         state.columnFilters.clear();
         state.columnRules.clear();
+        state.panelDrafts?.clear();
         applyColumnValueFilters(tableId);
         getHeaderRow(state.table).querySelectorAll('th.data-table-col-filter-active')
             .forEach((th) => th.classList.remove('data-table-col-filter-active'));
@@ -6394,7 +6397,7 @@ function summarizeFilterCard(selected, total, rule) {
 // sin marcar nada y también para los registros que lleguen después. Marcar
 // casillas (`selected`) sigue siendo válido; si hay las dos cosas, se piden las
 // dos.
-function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
+function buildSearchFilterBody(tableId, key, selected, onChange, rule, opts = {}) {
     const distinctValues = [...new Set([...getColumnDistinctValues(tableId, key), ...selected])]
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
     const rangeType = rule.rtype || detectRangeType(key, distinctValues);
@@ -6536,6 +6539,14 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule) {
     emptyList.hidden = true;
     body.appendChild(emptyList);
     function updateRuleInfo() {
+        // En el panel del embudo la lista va sola: el resumen lo da el propio campo.
+        if (opts.compact) {
+            ruleLine.hidden = true;
+            optLabel.hidden = true;
+            zeroBox.hidden = true;
+            emptyList.hidden = true;
+            return;
+        }
         const active = isColumnRuleActive(rule);
         ruleLine.hidden = !active;
         optLabel.hidden = !active;
@@ -6736,25 +6747,31 @@ function collectSearchEditorFilter() {
     const columnFilters = {};
     const columnRules = {};
     filters.forEach((set, key) => {
-        const draft = rules.get(key);
-        let values = [...set];
-        if (isColumnRuleActive(draft)) {
-            const keepBound = (v) => (rangeSortKey(draft.rtype, v) !== null ? String(v).trim() : '');
-            const rule = draft.kind === 'range'
-                ? {
-                    kind: 'range', rtype: draft.rtype || 'date', from: keepBound(draft.from), to: keepBound(draft.to),
-                    ...(draft.currency ? { currency: true } : {}),
-                }
-                : { kind: 'text', mode: draft.mode || 'contains', text: String(draft.text).trim() };
-            columnRules[key] = rule;
-            // Si ya marcó todo lo que la regla deja pasar, las casillas sobran y
-            // dejarían fuera a lo que llegue después.
-            const matching = getColumnDistinctValues(tableId, key).filter((v) => columnRuleMatches(rule, v));
-            if (values.length && matching.every((v) => set.has(v))) values = [];
-        }
+        const { values, rule } = resolveDraftFilter(tableId, key, set, rules.get(key));
+        if (rule) columnRules[key] = rule;
         if (values.length) columnFilters[key] = values;
     });
     return { columnFilters, columnRules };
+}
+
+// El filtro de una columna a partir de su borrador (casillas + regla): lo que
+// se guarda y se aplica. Si ya marcó todo lo que la regla deja pasar, las
+// casillas sobran y dejarían fuera a lo que llegue después.
+function resolveDraftFilter(tableId, key, set, draft) {
+    let values = [...set];
+    let rule = null;
+    if (isColumnRuleActive(draft)) {
+        const keepBound = (v) => (rangeSortKey(draft.rtype, v) !== null ? String(v).trim() : '');
+        rule = draft.kind === 'range'
+            ? {
+                kind: 'range', rtype: draft.rtype || 'date', from: keepBound(draft.from), to: keepBound(draft.to),
+                ...(draft.currency ? { currency: true } : {}),
+            }
+            : { kind: 'text', mode: draft.mode || 'contains', text: String(draft.text).trim() };
+        const matching = getColumnDistinctValues(tableId, key).filter((v) => columnRuleMatches(rule, v));
+        if (values.length && matching.every((v) => set.has(v))) values = [];
+    }
+    return { values, rule };
 }
 
 // Un doble clic en Guardar mandaba dos veces la misma búsqueda: mientras una
@@ -6880,8 +6897,17 @@ function setTableColumnFilters(tableId, columnFilters, columnRules) {
     Object.entries(columnRules || {}).forEach(([key, rule]) => {
         if (existingKeys.has(key) && isColumnRuleActive(rule)) newRules.set(key, { ...rule });
     });
+    setTableColumnFilterMaps(tableId, newFilters, newRules);
+}
+
+// Lo mismo, ya con los Maps armados. Los borradores del panel del embudo se
+// sueltan: lo aplicado manda y se vuelven a leer de ahí.
+function setTableColumnFilterMaps(tableId, newFilters, newRules) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
     state.columnFilters = newFilters;
     state.columnRules = newRules;
+    state.panelDrafts?.clear();
     applyColumnValueFilters(tableId);
     getHeaderRow(state.table).querySelectorAll('th[data-col]').forEach((th) => {
         updateColumnFilterIndicator(th, newFilters.has(th.dataset.col) || newRules.has(th.dataset.col));
@@ -6930,6 +6956,7 @@ function applySavedSearch(tableId, search) {
     if (state) {
         setTableColumnFilters(tableId, search.filter?.columnFilters, search.filter?.columnRules);
         if (usesPanel) state.wrapper?.previousElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'true');
+        if (usesPanel) renderPanelColumnFilters(tableId);
     }
     sizeDataTableWrappers();
     setActiveSavedSearch(tableId, search);
@@ -7639,6 +7666,7 @@ function renderDataTableColumnControls() {
             // zoom's previous sibling at this point.
             const filterBar = zoom.previousElementSibling;
             if (filterBar?.classList?.contains('filter-bar')) {
+                filterBar.dataset.tableId = tableKey;
                 const filterToAppend = [];
                 let filterBtn = null;
                 if (resolveIconGrant(tableKey, 'iconFilter')) {
@@ -7653,6 +7681,10 @@ function renderDataTableColumnControls() {
                     filterBtn.addEventListener('click', () => {
                         const expanded = filterBar.classList.toggle('filter-bar-expanded');
                         filterBtn.setAttribute('aria-expanded', String(expanded));
+                        // Al abrir, los campos de columna se arman con lo que hoy
+                        // está aplicado; al cerrar, se cierra cualquier lista abierta.
+                        if (expanded) renderPanelColumnFilters(tableKey);
+                        else closePanelPopover();
                         sizeDataTableWrappers();
                     });
                     filterToAppend.push(filterBtn);
@@ -7683,6 +7715,7 @@ function renderDataTableColumnControls() {
                         if (colState) {
                             colState.columnFilters.clear();
                             colState.columnRules.clear();
+                            colState.panelDrafts?.clear();
                             applyColumnValueFilters(colTableId);
                             getHeaderRow(colState.table).querySelectorAll('th.data-table-col-filter-active')
                                 .forEach((th) => th.classList.remove('data-table-col-filter-active'));
@@ -7726,6 +7759,485 @@ function renderDataTableColumnControls() {
     });
 }
 
+// ---------------------------------------------------------------------------
+// Filtro por columnas dentro del panel del embudo. El panel de siempre (los
+// campos propios de cada pantalla + Buscar) se queda igual; debajo de sus
+// campos se suman los de las columnas: mínimo FILTER_PANEL_MIN_FIELDS en total
+// y un "Filtro avanzado" para ir agregando más, hasta todas las columnas de la
+// tabla. Cada campo usa el mismo filtro del encabezado (modo + buscador +
+// lista, o Desde–Hasta en fechas, horas y números), pero se APLICA con
+// Buscar, junto con los campos de la pantalla; es el mismo filtro de siempre
+// (state.columnFilters / columnRules), así que el encabezado y Búsqueda
+// Guardada lo ven igual. Detrás de su propia hoja del árbol: iconFilterAdvanced.
+const FILTER_PANEL_MIN_FIELDS = 6;
+let panelPopoverEl = null;
+let panelPopoverAnchor = null;
+// Al agregar una columna, el panel se desplaza solo para mostrar su campo nuevo;
+// ese scroll no debe cerrar el selector, que sigue abierto para agregar más.
+let panelPopoverScrollGuardUntil = 0;
+
+// Las columnas que el usuario agrega con Filtro avanzado se recuerdan por
+// tabla, para que el panel aparezca como lo dejó.
+function panelAddedStorageKey(tableId) {
+    return `sgn_filter_cols::${tableId}`;
+}
+
+function loadPanelAddedKeys(tableId) {
+    try {
+        const stored = JSON.parse(localStorage.getItem(panelAddedStorageKey(tableId)) || '[]');
+        return Array.isArray(stored) ? stored.filter((k) => typeof k === 'string') : [];
+    } catch {
+        return [];
+    }
+}
+
+function savePanelAddedKeys(tableId, keys) {
+    try {
+        localStorage.setItem(panelAddedStorageKey(tableId), JSON.stringify(keys));
+    } catch {
+        // Sin almacenamiento: simplemente no se recuerdan.
+    }
+}
+
+// Qué columnas van en el panel: las que completan el mínimo (las primeras
+// de negocio, texto y fechas antes que números y códigos; sin repetir lo que
+// la pantalla ya filtra) y las que el usuario agregó.
+function panelFieldKeys(tableId, filterBar) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state.panelDefaultKeys) {
+        const own = [...filterBar.querySelectorAll('.filter-bar-fields > .filter-field:not(.filter-field-col)')];
+        const need = Math.max(0, FILTER_PANEL_MIN_FIELDS - own.length);
+        // Sin repetir lo que la pantalla ya filtra: una columna cuyo nombre es (o
+        // está dentro de) el de un campo propio -- "Fecha" frente a "Desde fecha",
+        // "Unidad" frente a "Unidad, placas, chofer…" -- ya está cubierta.
+        const ownLabels = own.map((f) => foldRuleText(f.querySelector('label')?.textContent || ''));
+        const coveredByPage = (label) => {
+            const l = foldRuleText(label);
+            return ownLabels.some((own) => own === l || (l.length >= 3 && own.includes(l)));
+        };
+        const eligible = state.columnKeys.filter((k) => k !== 'actions' && !k.startsWith('colSys')
+            && !coveredByPage(state.labels[k] || k));
+        // Primero lo que se lee como dato (texto y fechas); al final los números y
+        // los códigos ("Único … #", "No.", "Folio"), que casi siempre son las
+        // primeras columnas de una tabla pero no las que más se filtran.
+        const isCode = (k) => detectRangeType(k, getColumnDistinctValues(tableId, k)) === 'number'
+            || /#|[uú]nic|unique|\bno\.|n[uú]mero|number|folio/i.test(state.labels[k] || k);
+        state.panelDefaultKeys = [...eligible.filter((k) => !isCode(k)), ...eligible.filter(isCode)].slice(0, need);
+    }
+    const defaults = state.panelDefaultKeys;
+    const exists = new Set(state.columnKeys);
+    const added = loadPanelAddedKeys(tableId).filter((k) => exists.has(k) && k !== 'actions' && !defaults.includes(k));
+    return { defaults, added };
+}
+
+// Lo que hoy tiene aplicado una columna, para saber si su borrador sigue al día.
+function panelAppliedSig(state, key) {
+    return JSON.stringify([
+        state.columnFilters.has(key), [...(state.columnFilters.get(key) || [])].sort(), state.columnRules.get(key) || null,
+    ]);
+}
+
+// Borrador de un campo del panel: arranca igual a lo aplicado (o "Todos"),
+// se edita sin tocar la tabla y se aplica con Buscar. Solo lo que el usuario
+// tocó se aplica; lo demás se deja como está.
+function makePanelDraft(tableId, key) {
+    const state = dataTableColumnState.get(tableId);
+    const values = getColumnDistinctValues(tableId, key);
+    const rangeType = detectRangeType(key, values);
+    const appliedValues = state.columnFilters.get(key);
+    const applied = state.columnRules.get(key);
+    const isRange = applied?.kind === 'range';
+    const rule = {
+        kind: applied ? applied.kind : null,
+        mode: applied ? (isRange ? 'range' : (applied.mode || 'contains')) : null,
+        text: applied?.text || '',
+        from: applied?.from || '',
+        to: applied?.to || '',
+        rtype: isRange ? (applied.rtype || 'date') : null,
+        currency: !!applied?.currency,
+    };
+    if (rangeType) {
+        // Fechas, partes de fecha, horas y números: Desde–Hasta directo en el campo.
+        if (!isRange) { rule.from = ''; rule.to = ''; rule.rtype = rangeType; }
+        rule.kind = 'range';
+        rule.mode = 'range';
+        if (rule.rtype === 'number') rule.currency = values.some((v) => String(v).trim().startsWith('$'));
+    }
+    return {
+        key, inline: !!rangeType, rule, selected: new Set(appliedValues || values), touched: false,
+        baseSig: panelAppliedSig(state, key),
+    };
+}
+
+function syncPanelDrafts(tableId, keys) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state.panelDrafts) state.panelDrafts = new Map();
+    const keep = new Set(keys);
+    [...state.panelDrafts.keys()].forEach((k) => { if (!keep.has(k)) state.panelDrafts.delete(k); });
+    keys.forEach((key) => {
+        const draft = state.panelDrafts.get(key);
+        if (draft && (draft.touched || draft.baseSig === panelAppliedSig(state, key))) return;
+        state.panelDrafts.set(key, makePanelDraft(tableId, key));
+    });
+}
+
+// Lo que dice el campo cerrado: "Todos", "Contiene "GEI"", "2 seleccionados".
+function panelFieldSummary(tableId, draft) {
+    const bits = [];
+    const ruleActive = isColumnRuleActive(draft.rule);
+    if (ruleActive) bits.push(describeColumnRule(draft.rule));
+    const all = getColumnDistinctValues(tableId, draft.key);
+    const coversAll = all.every((v) => draft.selected.has(v));
+    // Con una regla, "sin casillas marcadas" no restringe nada más.
+    if (!coversAll && !(ruleActive && draft.selected.size === 0)) {
+        if (draft.selected.size === 0) bits.push(t('main.filterPanelNone'));
+        else if (draft.selected.size === 1) bits.push([...draft.selected][0] || '—');
+        else bits.push(t('main.filterPanelSelectedCount', { count: String(draft.selected.size) }));
+    }
+    return bits.length ? bits.join(', ') : t('main.filterAll');
+}
+
+// --- lista flotante de un campo (la del encabezado) o del Filtro avanzado ---
+function closePanelPopover() {
+    panelPopoverEl?.remove();
+    panelPopoverEl = null;
+    panelPopoverAnchor = null;
+    document.removeEventListener('click', onPanelPopoverOutside, true);
+    document.removeEventListener('keydown', onPanelPopoverKey, true);
+    window.removeEventListener('resize', closePanelPopover);
+    window.removeEventListener('scroll', onPanelPopoverScroll, true);
+}
+
+function onPanelPopoverOutside(event) {
+    if (!panelPopoverEl) return;
+    if (panelPopoverEl.contains(event.target) || panelPopoverAnchor?.contains(event.target)) return;
+    closePanelPopover();
+}
+
+function onPanelPopoverKey(event) {
+    if (event.key === 'Escape') closePanelPopover();
+}
+
+// Mover el panel (su propio scroll) cierra la lista; mover la lista por dentro no.
+function onPanelPopoverScroll(event) {
+    if (Date.now() < panelPopoverScrollGuardUntil) return;
+    if (panelPopoverEl && event.target instanceof Node && panelPopoverEl.contains(event.target)) return;
+    closePanelPopover();
+}
+
+function openPanelPopover(menu, anchor) {
+    // Se cuelga del body (no del panel, que recorta lo que se sale) y se acomoda
+    // junto al campo sin salirse de la pantalla: abajo si cabe, arriba si hay más
+    // lugar, y si aun así no cabe, con su propio scroll por dentro.
+    document.body.appendChild(menu);
+    const rect = anchor.getBoundingClientRect();
+    const menuWidth = menu.offsetWidth;
+    const spaceBelow = window.innerHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+    const natural = menu.offsetHeight;
+    const above = natural > spaceBelow && spaceAbove > spaceBelow;
+    const room = Math.max(140, above ? spaceAbove : spaceBelow);
+    if (natural > room) {
+        menu.style.maxHeight = `${room}px`;
+        menu.style.overflowY = 'auto';
+    }
+    const top = above ? rect.top - Math.min(natural, room) - 4 : rect.bottom + 4;
+    const left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - menuWidth - 8);
+    menu.style.top = `${top + window.scrollY}px`;
+    menu.style.left = `${Math.max(8, left)}px`;
+    panelPopoverEl = menu;
+    panelPopoverAnchor = anchor;
+    setTimeout(() => {
+        if (panelPopoverEl !== menu) return;
+        document.addEventListener('click', onPanelPopoverOutside, true);
+        document.addEventListener('keydown', onPanelPopoverKey, true);
+        window.addEventListener('resize', closePanelPopover);
+        window.addEventListener('scroll', onPanelPopoverScroll, true);
+    }, 0);
+}
+
+function togglePanelFieldPopover(ctl, tableId, draft, onChange) {
+    if (panelPopoverAnchor === ctl) { closePanelPopover(); return; }
+    closePanelPopover();
+    closeColumnFilterMenu();
+    const state = dataTableColumnState.get(tableId);
+    // Sin filtro puesto, "Todos" son los valores de HOY (pueden haber llegado nuevos).
+    if (!draft.touched && !state.columnFilters.has(draft.key)) {
+        draft.selected = new Set(getColumnDistinctValues(tableId, draft.key));
+    }
+    const { body } = buildSearchFilterBody(tableId, draft.key, draft.selected, () => {
+        draft.touched = true;
+        onChange();
+    }, draft.rule, { compact: true });
+    const menu = document.createElement('div');
+    menu.className = 'data-table-col-filter-menu filter-panel-popover';
+    menu.appendChild(body);
+    openPanelPopover(menu, ctl);
+    body.querySelector('.data-table-col-filter-search')?.focus();
+}
+
+// Un campo del panel: nombre de la columna + su control. Las fechas, horas y
+// números llevan Desde–Hasta ahí mismo; el resto, la lista del encabezado.
+function buildPanelField(tableId, key, removable) {
+    const state = dataTableColumnState.get(tableId);
+    const draft = state.panelDrafts.get(key);
+    const label = state.labels[key] || key;
+    const field = document.createElement('div');
+    field.className = 'filter-field filter-field-col';
+    // No data-col: Modo ayuda mapea ese atributo a la ayuda de la columna de la tabla.
+    field.dataset.panelCol = key;
+    field.dataset.helpKey = 'filterPanelField';
+    field.setAttribute('aria-label', label);
+    const head = document.createElement('div');
+    head.className = 'filter-col-head';
+    const labelEl = document.createElement('label');
+    labelEl.textContent = label;
+    head.appendChild(labelEl);
+    if (removable) {
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'filter-col-remove';
+        remove.setAttribute('aria-label', t('main.filterAdvancedRemove'));
+        remove.title = t('main.filterAdvancedRemove');
+        remove.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+        remove.addEventListener('click', () => removePanelColumn(tableId, key));
+        head.appendChild(remove);
+    }
+    field.appendChild(head);
+    if (draft.inline) {
+        const box = document.createElement('div');
+        box.className = 'filter-col-range';
+        buildRangeFields(box, draft.rule, () => { draft.touched = true; });
+        field.appendChild(box);
+    } else {
+        const ctl = document.createElement('button');
+        ctl.type = 'button';
+        ctl.className = 'filter-col-ctl';
+        const refresh = () => {
+            const summary = panelFieldSummary(tableId, draft);
+            ctl.textContent = summary;
+            ctl.classList.toggle('active', summary !== t('main.filterAll'));
+        };
+        refresh();
+        ctl.addEventListener('click', () => togglePanelFieldPopover(ctl, tableId, draft, refresh));
+        field.appendChild(ctl);
+    }
+    return field;
+}
+
+// --- Filtro avanzado: el selector de columnas de Acomodo, para agregar campos ---
+function addPanelColumn(tableId, key) {
+    const added = loadPanelAddedKeys(tableId);
+    if (!added.includes(key)) added.push(key);
+    savePanelAddedKeys(tableId, added);
+    renderPanelColumnFilters(tableId);
+    panelPopoverScrollGuardUntil = Date.now() + 600;
+    getSavedSearchFilterBar(tableId)?.querySelector(`.filter-field-col[data-panel-col="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' });
+}
+
+// ✕ de un campo agregado: se va del panel y su filtro (si tenía) también.
+function removePanelColumn(tableId, key) {
+    const state = dataTableColumnState.get(tableId);
+    savePanelAddedKeys(tableId, loadPanelAddedKeys(tableId).filter((k) => k !== key));
+    state.panelDrafts?.delete(key);
+    if (state.columnFilters.has(key) || state.columnRules.has(key)) {
+        const filters = new Map(state.columnFilters);
+        const rules = new Map(state.columnRules);
+        filters.delete(key);
+        rules.delete(key);
+        setTableColumnFilterMaps(tableId, filters, rules);
+    }
+    renderPanelColumnFilters(tableId);
+}
+
+function toggleAdvancedPicker(btn, tableId) {
+    if (panelPopoverAnchor === btn) { closePanelPopover(); return; }
+    closePanelPopover();
+    closeColumnFilterMenu();
+    const state = dataTableColumnState.get(tableId);
+    const filterBar = getSavedSearchFilterBar(tableId);
+    const keys = state.columnKeys.filter((k) => k !== 'actions');
+    const presentGroups = [...new Set(keys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
+    const hasUnclassified = keys.some((k) => !state.groupKeys.get(k));
+    const tabs = hasUnclassified ? [...presentGroups, COLUMN_ARRANGE_UNCLASSIFIED] : presentGroups;
+    // Abre en la primera clasificación que no sea Control Interno: ahí están
+    // las columnas propias de la tabla.
+    const picker = { tab: tabs.find((g) => g !== 'menu.classControlInterno') || tabs[0], query: '' };
+
+    const menu = document.createElement('div');
+    menu.className = 'data-table-col-filter-menu filter-panel-popover filter-advanced-picker';
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'sector-icon-picker-search';
+    searchWrap.innerHTML = '<i class="bx bx-search" aria-hidden="true"></i>';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'sector-icon-picker-search-input';
+    searchInput.placeholder = t('main.columnSearchPlaceholder');
+    searchWrap.appendChild(searchInput);
+    const tabsEl = document.createElement('div');
+    tabsEl.className = 'sector-icon-picker-chips data-table-arrange-tabs';
+    const hint = document.createElement('p');
+    hint.className = 'filter-advanced-hint';
+    hint.textContent = t('main.filterAdvancedHint');
+    const listEl = document.createElement('div');
+    listEl.className = 'admin-module-list data-table-arrange-list';
+    menu.append(searchWrap, tabsEl, hint, listEl);
+
+    const render = () => {
+        const { defaults, added } = panelFieldKeys(tableId, filterBar);
+        const inPanel = new Set([...defaults, ...added]);
+        tabsEl.innerHTML = '';
+        tabs.forEach((groupKey) => {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'sector-icon-picker-chip' + (picker.tab === groupKey ? ' active' : '');
+            if (groupKey !== COLUMN_ARRANGE_UNCLASSIFIED) {
+                const dot = document.createElement('span');
+                dot.className = 'data-table-col-dot data-table-col-dot-chip';
+                dot.style.backgroundColor = columnGroupColor(groupKey);
+                tab.appendChild(dot);
+            }
+            tab.appendChild(document.createTextNode(groupKey === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(groupKey)));
+            const count = document.createElement('span');
+            count.className = 'data-table-arrange-tab-count';
+            count.textContent = String(keys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === groupKey).length);
+            tab.appendChild(count);
+            tab.addEventListener('click', () => {
+                picker.tab = groupKey;
+                picker.query = '';
+                searchInput.value = '';
+                render();
+            });
+            tabsEl.appendChild(tab);
+        });
+        const q = picker.query.trim().toLowerCase();
+        const visible = q
+            ? keys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q))
+            : keys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === picker.tab);
+        listEl.innerHTML = '';
+        visible.forEach((key) => {
+            const groupKey = state.groupKeys.get(key);
+            const { row } = buildArrangeRowShell(key, state.labels[key] || key, {
+                dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : t('menu.classNone'),
+            });
+            if (inPanel.has(key)) {
+                row.classList.add('has-filter');
+                const tag = document.createElement('span');
+                tag.className = 'filter-advanced-tag';
+                tag.textContent = t('main.filterAdvancedInPanel');
+                row.appendChild(tag);
+            } else {
+                row.classList.add('data-table-search-row');
+                const plus = document.createElement('span');
+                plus.className = 'filter-advanced-plus';
+                plus.innerHTML = '<i class="bx bx-plus" aria-hidden="true"></i>';
+                row.appendChild(plus);
+                row.addEventListener('click', () => { addPanelColumn(tableId, key); render(); });
+            }
+            listEl.appendChild(row);
+        });
+    };
+    searchInput.addEventListener('input', () => { picker.query = searchInput.value; render(); });
+    render();
+    openPanelPopover(menu, btn);
+    searchInput.focus();
+}
+
+// --- el panel: campos + botones ---
+function renderPanelColumnFilters(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const filterBar = getSavedSearchFilterBar(tableId);
+    if (!state || !filterBar || !resolveIconGrant(tableId, 'iconFilterAdvanced')) return;
+    const fieldsEl = filterBar.querySelector('.filter-bar-fields');
+    const actionsEl = filterBar.querySelector('.filter-bar-actions');
+    if (!fieldsEl || !actionsEl) return;
+    if (panelPopoverAnchor && !panelPopoverAnchor.isConnected) closePanelPopover();
+    fieldsEl.querySelectorAll('.filter-field-col, .filter-field-divider').forEach((el) => el.remove());
+    const { defaults, added } = panelFieldKeys(tableId, filterBar);
+    syncPanelDrafts(tableId, [...defaults, ...added]);
+    state.panelBuilt = true;
+    defaults.forEach((key) => fieldsEl.appendChild(buildPanelField(tableId, key, false)));
+    if (added.length) {
+        const divider = document.createElement('p');
+        divider.className = 'filter-field-divider';
+        divider.textContent = t('main.filterAdvancedAdded');
+        fieldsEl.appendChild(divider);
+        added.forEach((key) => fieldsEl.appendChild(buildPanelField(tableId, key, true)));
+    }
+
+    let advBtn = actionsEl.querySelector('.filter-advanced-btn');
+    if (!advBtn) {
+        advBtn = document.createElement('button');
+        advBtn.type = 'button';
+        advBtn.className = 'btn btn-secondary filter-advanced-btn';
+        advBtn.dataset.helpKey = 'filterAdvanced';
+        advBtn.innerHTML = '<i class="bx bx-plus" aria-hidden="true"></i><span class="filter-advanced-label"></span><small></small>';
+        advBtn.addEventListener('click', () => toggleAdvancedPicker(advBtn, tableId));
+        actionsEl.appendChild(advBtn);
+    }
+    advBtn.querySelector('.filter-advanced-label').textContent = t('main.filterAdvancedBtn');
+    advBtn.querySelector('small').textContent = t('main.filterAdvancedCount', {
+        count: String(defaults.length + added.length), total: String(state.columnKeys.filter((k) => k !== 'actions').length),
+    });
+
+    if (resolveIconGrant(tableId, 'iconFilterClear') && !actionsEl.querySelector('.filter-panel-clear')) {
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'btn btn-secondary filter-panel-clear';
+        clearBtn.dataset.helpKey = 'filterPanelClear';
+        clearBtn.textContent = t('main.filterPanelClear');
+        // Quita todo lo filtrado (los campos de la pantalla y los de columna) sin
+        // tocar el acomodo de columnas; los campos agregados se quedan, vacíos.
+        clearBtn.addEventListener('click', () => {
+            closePanelPopover();
+            dataTableColumnState.get(tableId)?.panelDrafts?.clear();
+            clearSavedSearchForTable(tableId);
+            renderPanelColumnFilters(tableId);
+            sizeDataTableWrappers();
+        });
+        actionsEl.insertBefore(clearBtn, advBtn);
+    }
+    sizeDataTableWrappers();
+}
+
+// Si el panel ya está armado, lo pone al día con lo que hoy está aplicado
+// (cambió desde el encabezado o al aplicar una Búsqueda Guardada). No toca el
+// panel mientras alguien escribe en él o tiene una lista abierta.
+function refreshPanelColumnFilters(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state?.panelBuilt || panelPopoverEl) return;
+    const filterBar = getSavedSearchFilterBar(tableId);
+    if (!filterBar || filterBar.contains(document.activeElement)) return;
+    renderPanelColumnFilters(tableId);
+}
+
+// Buscar: aplica lo que se tocó en los campos de columna. Lo que no se tocó se
+// deja como estaba (un filtro puesto desde el encabezado no se pierde).
+function commitPanelColumnFilters(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state?.panelDrafts) return;
+    const filters = new Map(state.columnFilters);
+    const rules = new Map(state.columnRules);
+    let changed = false;
+    state.panelDrafts.forEach((draft, key) => {
+        if (!draft.touched) return;
+        changed = true;
+        filters.delete(key);
+        rules.delete(key);
+        const { values, rule } = resolveDraftFilter(tableId, key, draft.selected, draft.rule);
+        if (rule) {
+            rules.set(key, rule);
+            if (values.length) filters.set(key, new Set(values));
+        } else if (!draft.inline) {
+            const all = getColumnDistinctValues(tableId, key);
+            if (!all.every((v) => draft.selected.has(v))) filters.set(key, new Set(values));
+        }
+        draft.touched = false;
+    });
+    if (!changed) return;
+    setTableColumnFilterMaps(tableId, filters, rules);
+}
+
 // Filtro panel (see renderDataTableColumnControls above for the Filtrar/
 // Limpiar toggle buttons that live in the table's OWN toolbar now — this
 // bar no longer has its own open/close header). "Buscar" applies whatever
@@ -7735,6 +8247,9 @@ function renderDataTableColumnControls() {
 document.querySelectorAll('.filter-bar').forEach((bar) => {
     const searchBtn = bar.querySelector('.filter-bar-search-btn');
     searchBtn?.addEventListener('click', () => {
+        closePanelPopover();
+        // Los campos de columna del panel se aplican junto con los de la pantalla.
+        if (bar.dataset.tableId) commitPanelColumnFilters(bar.dataset.tableId);
         bar.dispatchEvent(new CustomEvent('data-table:filter-apply'));
         bar.classList.remove('filter-bar-expanded');
         bar.nextElementSibling?.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'false');
