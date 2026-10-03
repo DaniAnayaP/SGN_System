@@ -1050,6 +1050,7 @@
     "visClear": "Clear",
     "visClearConfirm": "Leave every column unmarked? Pinned ones are removed too.",
     "visCounts": "Visible {visible} · Pinned {pinned} of {max}",
+    "visCountsNoPin": "Visible {visible}",
     "visPreviewLabel": "Preview — it fills up with whatever you mark Visible or Pinned",
     "filterPanelNoColumns": "There are no columns to filter yet. They show up as soon as the table has them.",
     "visibilityModeHidden": "Hidden",
@@ -1354,12 +1355,12 @@
     "decreaseFontSize": "Decrease font size",
     "increaseFontSize": "Increase font size",
     "pinColumns": "Pin columns",
-    "pinColumnsTitle": "Pin columns",
+    "columnsBtn": "Customize columns",
+    "columnsEditorHint": "Search a column or filter by classification. Mark each one as hidden, visible or pinned (up to 4 pinned); pinned ones can be dragged to reorder.",
     "pinColumnsHint": "Choose up to 4 columns to pin to the left. Drag to reorder them.",
     "pinColumnsLimitReached": "You can pin up to 4 columns.",
     "pinColumnsOther": "Other columns",
     "columnVisibility": "Show/hide columns",
-    "columnVisibilityTitle": "Show/hide columns",
     "columnVisibilityHint": "Search a column or filter by classification.",
     "columnSearchPlaceholder": "Search column…",
     "columnFilterAll": "All classifications",
@@ -1923,13 +1924,9 @@
       "what": "Makes the table's text and rows bigger, so it's easier to read.",
       "example": "if small numbers are hard to read, you make it bigger."
     },
-    "pinColumns": {
-      "what": "Locks up to 4 columns on the left side, so they stay in place while you scroll the table to the right.",
-      "example": "you pin the \"Name\" column so you always know whose row it is, even looking at far-away columns."
-    },
-    "columnVisibility": {
-      "what": "Lets you hide the columns you don't need to see right now, without deleting their information.",
-      "example": "you hide the columns you don't use so the table looks simpler."
+    "columnsEditor": {
+      "what": "Lets you choose which columns are shown, which are hidden and which stay pinned on the left side (up to 4), without deleting any of their information.",
+      "example": "you hide the columns you don't use and pin \"Name\" so you always know whose row it is, even looking at far-away columns."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",

@@ -1049,6 +1049,7 @@
     "visClear": "Limpiar",
     "visClearConfirm": "¿Dejar todas las columnas sin marcar? También se quitan las fijas.",
     "visCounts": "Visibles {visible} · Fijas {pinned} de {max}",
+    "visCountsNoPin": "Visibles {visible}",
     "visPreviewLabel": "Vista previa — se va llenando con lo que marques Visible o Fija",
     "filterPanelNoColumns": "Todavía no hay columnas para filtrar. Aparecen en cuanto la tabla las tenga.",
     "visibilityModeHidden": "Oculta",
@@ -1353,12 +1354,12 @@
     "decreaseFontSize": "Reducir tamaño de letra",
     "increaseFontSize": "Aumentar tamaño de letra",
     "pinColumns": "Fijar columnas",
-    "pinColumnsTitle": "Fijar columnas",
+    "columnsBtn": "Personalizar columnas",
+    "columnsEditorHint": "Busca una columna o filtra por clasificación. Marca cada una como oculta, visible o fija (hasta 4 fijas); las fijas se arrastran para reordenarlas.",
     "pinColumnsHint": "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.",
     "pinColumnsLimitReached": "Puedes fijar hasta 4 columnas.",
     "pinColumnsOther": "Otras columnas",
     "columnVisibility": "Mostrar/ocultar columnas",
-    "columnVisibilityTitle": "Mostrar/ocultar columnas",
     "columnVisibilityHint": "Busca una columna o filtra por clasificación.",
     "columnSearchPlaceholder": "Buscar columna…",
     "columnFilterAll": "Todas las clasificaciones",
@@ -1922,13 +1923,9 @@
       "what": "Hace el texto y las filas de la tabla más grandes, para leer mejor.",
       "example": "si te cuesta leer los números pequeños, la agrandas."
     },
-    "pinColumns": {
-      "what": "Deja fijas hasta 4 columnas del lado izquierdo, para que no se muevan cuando avanzas la tabla hacia la derecha.",
-      "example": "fijas la columna \"Nombre\" para siempre saber de quién es la fila aunque veas columnas lejanas."
-    },
-    "columnVisibility": {
-      "what": "Te deja ocultar las columnas que no necesitas ver por ahora, sin borrar su información.",
-      "example": "ocultas las columnas que no usas para que la tabla se vea más simple."
+    "columnsEditor": {
+      "what": "Te deja elegir qué columnas se ven, cuáles se ocultan y cuáles quedan fijas del lado izquierdo (hasta 4), sin borrar nada de su información.",
+      "example": "ocultas las columnas que no usas y fijas \"Nombre\" para saber siempre de quién es la fila aunque veas columnas lejanas."
     },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",

@@ -354,7 +354,7 @@ const EMBEDDED_TRANSLATIONS = {
         main: { welcome: "Welcome", messages: "Messages", notifications: "Notifications", bookmarks: "Bookmarks", settings: "Settings", addUser: "Add user", language: "Language", style: "Style", others: "Others", languageEnglish: "English", languageSpanish: "Spanish", styleLight: "Light", styleDark: "Dark", styleInstitutional: "Institutional", inDevelopment: "Under development. We're working on a better experience.", chatbot: "Chatbot", chatbotTitle: "SGN Assistant", chatbotClose: "Close chat", chatbotPlaceholder: "Type a message...", chatbotSend: "Send", chatbotGreeting: "Hi! This assistant is still under construction — soon I'll be able to really help you here.", chatbotCannedReply: "Thanks for your message! I can't have real conversations yet — we're working on connecting me to an AI.", userInfo: "User Data", personalDataTitle: "Personal Data", nickname: "Nickname", businessEmail: "Business Email", fullName: "Full Name", phone: "Phone", address: "Address", birthDate: "Date of Birth", idNumber: "ID Number", noBusinessEmail: "No institutional email", notSet: "Not set", buttonConfig: "Button Settings", exitButton: "Exit Button", exitMenu: "Exit Menu", logoutModeConfirm: "Ask before exiting", logoutModeDirect: "Exit without asking", businessProfile: "Business User Data", position: "Position", role: "Role", hireDate: "Hire Date", reportsTo: "Reports To", permissions: "Permissions", assignedCostCenter: "Assigned Cost Center", assignedAreas: "Assigned Areas", assignedDepartments: "Assigned Departments", noRoleAssigned: "No profile assigned", noExtraPermissions: "No permissions granted", extraPermissionsCount: "{count} permissions granted", summaryDepartments: "Dept.", summaryAreas: "Areas", summaryCostCenters: "Cost Ctrs", summaryPermissions: "Permissions", noDepartmentsAssigned: "No departments assigned", noAreasAssigned: "No areas assigned", noCostCentersAssigned: "No cost centers assigned", defaultPickerDeptHint: "Pick the department that should open by default every time you log in.", defaultPickerAreaHint: "Pick the area that should open by default every time you log in.", defaultPickerAreaNoDept: "Select a department first.", defaultPickerCcHint: "Pick the cost centers that should be selected by default every time you log in.", search: "Search", filterToggle: "Filter", filterSearchPlaceholder: "Search...", filterStatus: "Status", filterAll: "All", filterActive: "Active", filterInactive: "Inactive", filterSort: "Sort by", filterSortRecent: "Most recent", filterSortName: "Name", filterSearchBtn: "Search", filterClearBtn: "Clear", filterColumn: "Filter by this column", filterModeLabel: "Filter type", filterModeStartsWith: "Starts with", filterModeContains: "Contains", filterModeEquals: "Equal to", filterDateFrom: "From date", filterDateTo: "To date", filterFuelSearchHint: "Unit, plates, driver, coordinator...", filterHrSearchHint: "Name, position, email, phone...", filterCcSearchHint: "Code, name, responsible, description...", filterClientsSearchHint: "RFC, nickname, owner, contact...", filterPlansSearchHint: "Name, description, created by...", filterSaasTeamSearchHint: "Username, name, email...", rowEditableLegend: "Row with at least one field you can still edit", emptyStateText: "No data yet.", breadcrumbLabel: "Path", breadcrumbExpand: "Expand breadcrumb", breadcrumbCollapse: "Collapse breadcrumb", colUniqueBigDate: "# Unique Big Date", colRegistro: "# Record", colAnio: "Year", colMes: "Month", colDiaNum: "Day (Num)", colDiaTexto: "Day (Text)", colNoSemCobro: "Collection Week No.", colFecha: "Date", colTipoServicios: "Service Type", colEstatus: "Status",
             colCliente: "Client", colTipoUnidadSolicitada: "Requested Unit Type", colCotizacionServicio: "Service Quote $", colRequisitosServicio: "Service Requirements", colRequisitosSeguridad: "Security Requirements", colRequisitosCobro: "Billing Requirements", colOrigen: "Origin", colHoraCita: "Appointment Time", colUbicacion: "Location", colLinkUbicacion: "Location Link", colEmpresaCliente: "Client's Company", colNomContactoOrigen: "Origin Contact Name", colNoContacto: "Contact No.", colNoColaboradorDriver: "Employee No. (Driver)", colNombreDriver: "Driver Name(s)", colNoColaboradorAuxiliar: "Employee No. (Assistant)", colNombreAuxiliar: "Assistant Name(s)", colRutaAsignada: "Assigned Route", colZona: "Zone", colCantPallets: "Pallet Qty.", colCantUdm: "UOM Qty.", colCantParadas: "Stop Qty.", colParadasVisitadas: "Stops Visited", colCantUmEntregadas: "Units Delivered Qty.", colPorcentajeVisitas: "% Visits", colPorcentajeEntrega: "% Delivery", colDevolucionCantUdm: "Return (UOM Qty.)", colPorcentajeDevolucion: "% Return", colCoordinador: "Coordinator", colEcoUnidad: "Unit Fleet No.", colPlacas: "License Plates", colRutaSubtotal: "Route Subtotal $", colPenalizacion: "Penalty $", colRutaSubtotalCobro: "Route Billing Subtotal $", colIva: "VAT $", colCobroTotalRuta: "Total Route Billing $", colNoFactura: "Invoice No.", colFechaGeneraFactura: "Invoice Generation Date",
             topBarExpand: "Expand top bar", topBarCollapse: "Collapse top bar", decreaseFontSize: "Decrease font size", increaseFontSize: "Increase font size",
-            pinColumns: "Pin columns", pinColumnsTitle: "Pin columns", pinColumnsHint: "Choose up to 4 columns to pin to the left. Drag to reorder them.", pinColumnsLimitReached: "You can pin up to 4 columns.", pinColumnsOther: "Other columns", columnVisibility: "Show/hide columns", columnVisibilityTitle: "Show/hide columns", columnVisibilityHint: "Choose which columns to show.", columnHidePinnedConfirm: "This column is pinned. Are you sure you want to hide it?", dragToReorder: "Drag to reorder",
+            pinColumns: "Pin columns", columnsBtn: "Customize columns", pinColumnsHint: "Choose up to 4 columns to pin to the left. Drag to reorder them.", pinColumnsLimitReached: "You can pin up to 4 columns.", pinColumnsOther: "Other columns", columnVisibility: "Show/hide columns", columnVisibilityHint: "Choose which columns to show.", columnHidePinnedConfirm: "This column is pinned. Are you sure you want to hide it?", dragToReorder: "Drag to reorder",
             uiScale: "System size", uiScaleIdeal: "Ideal", uiScaleDecrease: "Decrease size", uiScaleIncrease: "Increase size", newRecord: "New Record",
             newRecordHint: "The rest of the fields can be filled in later, directly from the table row.", fuelAddValue: "+ Add", fuelClickToEdit: "Click to edit", fuelSelectReason: "Select...", fuelUploadTicket: "Upload ticket evidence", fuelUploadTripKmBeforeEvidence: "Upload Trip KM before evidence", fuelUploadTripKmAfterEvidence: "Upload Trip KM after evidence", evidencePreviewTitle: "Evidence", close: "Close",
             colFuelDbId: "Unique Database #", colFuelRecordId: "Unique Consumption Record #", colFuelDate: "Date", colFuelYear: "Year", colFuelMonth: "Month", colFuelWeek: "Week #", colFuelDayNum: "Day #", colFuelDayText: "Day", colFuelEcoUnit: "Fleet Unit #", colFuelPlates: "Unit Plates", colFuelDriver: "Driver", colFuelCoordinator: "Coordinator", colFuelTicketEvidence: "Ticket Evidence", colFuelSubtotal: "Subtotal", colFuelVat: "VAT", colFuelTotal: "Total", colFuelReason: "Load Reason", colFuelTransferService: "Transfer Service", colFuelInternalMovement: "Internal Movement",
@@ -500,7 +500,7 @@ const EMBEDDED_TRANSLATIONS = {
         main: { welcome: "Bienvenido", messages: "Mensajes", notifications: "Notificaciones", bookmarks: "Marcadores", settings: "Configuración", addUser: "Agregar usuario", language: "Idioma", style: "Estilo", others: "Otros", languageEnglish: "Inglés", languageSpanish: "Español", styleLight: "Claro", styleDark: "Oscuro", styleInstitutional: "Institucional", inDevelopment: "En desarrollo, seguimos trabajando para una mejor experiencia", chatbot: "Chatbot", chatbotTitle: "Asistente SGN", chatbotClose: "Cerrar chat", chatbotPlaceholder: "Escribe un mensaje...", chatbotSend: "Enviar", chatbotGreeting: "¡Hola! Este asistente todavía está en construcción — pronto podré ayudarte de verdad por aquí.", chatbotCannedReply: "¡Gracias por tu mensaje! Aún no puedo tener conversaciones reales — estamos trabajando en conectarme con una IA.", userInfo: "Datos de Usuario", personalDataTitle: "Datos Personales", nickname: "Apodo", businessEmail: "Correo empresarial", fullName: "Nombre completo", phone: "Teléfono", address: "Dirección", birthDate: "Fecha de nacimiento", idNumber: "Número de identificación", noBusinessEmail: "Sin correo institucional", notSet: "No registrado", buttonConfig: "Configuración botones", exitButton: "Botón Salir", exitMenu: "Menú Salir", logoutModeConfirm: "Preguntar antes de salir", logoutModeDirect: "Salir sin preguntar", businessProfile: "Datos de Usuario del Negocio", position: "Puesto", role: "Rol", hireDate: "Fecha de ingreso", reportsTo: "Jefe directo", permissions: "Permisos", assignedCostCenter: "Centro de costo asignado", assignedAreas: "Áreas asignadas", assignedDepartments: "Departamentos asignados", noRoleAssigned: "Sin perfil asignado", noExtraPermissions: "Sin permisos otorgados", extraPermissionsCount: "{count} permisos otorgados", summaryDepartments: "Dep.", summaryAreas: "Áreas", summaryCostCenters: "C. Costos", summaryPermissions: "Permisos", noDepartmentsAssigned: "Sin Dep asignados", noAreasAssigned: "Sin Áreas asignados", noCostCentersAssigned: "Sin Centro de Costos asignados", defaultPickerDeptHint: "Elige el departamento que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaHint: "Elige el área que debe abrirse por defecto cada vez que inicies sesión.", defaultPickerAreaNoDept: "Primero selecciona un departamento.", defaultPickerCcHint: "Elige los centros de costo que deben quedar seleccionados por defecto cada vez que inicies sesión.", search: "Búsqueda", filterToggle: "Filtro", filterSearchPlaceholder: "Buscar...", filterStatus: "Estado", filterAll: "Todos", filterActive: "Activo", filterInactive: "Inactivo", filterSort: "Ordenar por", filterSortRecent: "Más reciente", filterSortName: "Nombre", filterSearchBtn: "Buscar", filterClearBtn: "Limpiar", filterColumn: "Filtrar por esta columna", filterModeLabel: "Tipo de Filtro", filterModeStartsWith: "Inicia con", filterModeContains: "Contiene", filterModeEquals: "Igual que", filterDateFrom: "Fecha desde", filterDateTo: "Fecha hasta", filterFuelSearchHint: "Unidad, placas, chofer, coordinador...", filterHrSearchHint: "Nombre, puesto, correo, teléfono...", filterCcSearchHint: "Código, nombre, responsable, descripción...", filterClientsSearchHint: "RFC, apodo, dueño, contacto...", filterPlansSearchHint: "Nombre, descripción, creado por...", filterSaasTeamSearchHint: "Usuario, nombre, correo...", rowEditableLegend: "Fila con al menos un campo que aún puedes editar", emptyStateText: "Aún no hay datos.", breadcrumbLabel: "Ruta", breadcrumbExpand: "Expandir ruta de acceso", breadcrumbCollapse: "Contraer ruta de acceso", colUniqueBigDate: "# Único Big Date", colRegistro: "# Registro", colAnio: "Año", colMes: "Mes", colDiaNum: "Día (Num)", colDiaTexto: "Día (texto)", colNoSemCobro: "No. Sem Cobro", colFecha: "Fecha", colTipoServicios: "Tipo Servicios", colEstatus: "Estatus",
             colCliente: "Cliente", colTipoUnidadSolicitada: "Tipo Unidad Solicitada", colCotizacionServicio: "Cotización $ Servicio", colRequisitosServicio: "Requisitos Servicio", colRequisitosSeguridad: "Requisitos Seguridad", colRequisitosCobro: "Requisitos Cobro", colOrigen: "Origen", colHoraCita: "Hora Cita", colUbicacion: "Ubicación", colLinkUbicacion: "Link Ubicación", colEmpresaCliente: "Empresa del cliente", colNomContactoOrigen: "Nom Contacto Origen", colNoContacto: "No. Contacto", colNoColaboradorDriver: "No. Colaborador", colNombreDriver: "Nombre(s) Driver", colNoColaboradorAuxiliar: "No. Colaborador", colNombreAuxiliar: "Nombre(s) Auxiliar", colRutaAsignada: "Ruta Asignada", colZona: "Zona", colCantPallets: "Cant. Pallets", colCantUdm: "Cant. UDM", colCantParadas: "Cant. Paradas", colParadasVisitadas: "Paradas visitadas", colCantUmEntregadas: "Cant UM Entregadas", colPorcentajeVisitas: "% Visitas", colPorcentajeEntrega: "% Entrega", colDevolucionCantUdm: "Devolución (Cant UDM)", colPorcentajeDevolucion: "% Devolución", colCoordinador: "Coordinador", colEcoUnidad: "Eco Unidad", colPlacas: "Placas", colRutaSubtotal: "$ Ruta Subtotal", colPenalizacion: "Penalización $", colRutaSubtotalCobro: "$ Ruta Subtotal Cobro", colIva: "$ IVA", colCobroTotalRuta: "$ Cobro Total Ruta", colNoFactura: "No. Factura", colFechaGeneraFactura: "F. Genera Factura",
             topBarExpand: "Expandir barra superior", topBarCollapse: "Contraer barra superior", decreaseFontSize: "Reducir tamaño de letra", increaseFontSize: "Aumentar tamaño de letra",
-            pinColumns: "Fijar columnas", pinColumnsTitle: "Fijar columnas", pinColumnsHint: "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.", pinColumnsLimitReached: "Puedes fijar hasta 4 columnas.", pinColumnsOther: "Otras columnas", columnVisibility: "Mostrar/ocultar columnas", columnVisibilityTitle: "Mostrar/ocultar columnas", columnVisibilityHint: "Elige qué columnas mostrar.", columnHidePinnedConfirm: "Esta columna está fijada. ¿Seguro que quieres ocultarla?", dragToReorder: "Arrastrar para reordenar",
+            pinColumns: "Fijar columnas", columnsBtn: "Personalizar columnas", pinColumnsHint: "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.", pinColumnsLimitReached: "Puedes fijar hasta 4 columnas.", pinColumnsOther: "Otras columnas", columnVisibility: "Mostrar/ocultar columnas", columnVisibilityHint: "Elige qué columnas mostrar.", columnHidePinnedConfirm: "Esta columna está fijada. ¿Seguro que quieres ocultarla?", dragToReorder: "Arrastrar para reordenar",
             uiScale: "Tamaño del sistema", uiScaleIdeal: "Ideal", uiScaleDecrease: "Disminuir tamaño", uiScaleIncrease: "Aumentar tamaño", newRecord: "Nuevo Registro",
             newRecordHint: "Los demás datos se pueden llenar después, directamente desde la fila en la tabla.", fuelAddValue: "+ Agregar", fuelClickToEdit: "Clic para editar", fuelSelectReason: "Seleccionar...", fuelUploadTicket: "Subir evidencia de ticket", fuelUploadTripKmBeforeEvidence: "Subir evidencia de Trip KM antes", fuelUploadTripKmAfterEvidence: "Subir evidencia de Trip KM después", evidencePreviewTitle: "Evidencia", close: "Cerrar",
             colFuelDbId: "# Único de Base de Datos", colFuelRecordId: "# Único de Registro de Consumo", colFuelDate: "Fecha", colFuelYear: "Año", colFuelMonth: "Mes", colFuelWeek: "# Semana", colFuelDayNum: "# Día", colFuelDayText: "Día", colFuelEcoUnit: "# Eco Unidad", colFuelPlates: "Placas Unidad", colFuelDriver: "Chofer", colFuelCoordinator: "Coordinador", colFuelTicketEvidence: "Evidencia Ticket", colFuelSubtotal: "Subtotal", colFuelVat: "IVA", colFuelTotal: "Total", colFuelReason: "Motivo Carga", colFuelTransferService: "Servicio Traslado", colFuelInternalMovement: "Movimiento Interno",
@@ -4208,21 +4208,16 @@ function buildArrangeRowShell(key, label, { dotColor = undefined, dotTitle = '' 
     return { row };
 }
 
-// Fijar columnas: el MISMO editor de columnas que Mostrar/ocultar (modo
-// "visibilidad", ver openColumnArrangeEditor): ✕ / ✓ / 📌 por columna, vista
-// previa de la tabla, Agregar todas y Limpiar. Solo cambian el título y la
-// pista. El tope de 4 fijas vale igual en los tres iconos que fijan columnas
-// (este, Mostrar/ocultar y Acomodo): es el mismo editor.
-function openPinPicker(tableId) {
-    openColumnArrangeEditor(tableId, null, { mode: 'visibility', variant: 'pin' });
-}
-
-// Mostrar/ocultar columnas: el MISMO editor de columnas de Acomodo (pestañas por
-// clasificación, ✕ / ✓ / 📌 por columna, vista previa de la tabla) en su modo
-// "visibilidad" -- ver openColumnArrangeEditor y las funciones de Mostrar/ocultar
-// justo antes de él.
-function openVisibilityPicker(tableId) {
-    openColumnArrangeEditor(tableId, null, { mode: 'visibility' });
+// Personalizar columnas: UN solo icono para lo que antes eran dos (Fijar columnas
+// y Mostrar/ocultar columnas), que abrían el mismo editor. Es el editor de
+// columnas de Acomodo (pestañas por clasificación, ✕ / ✓ / 📌 por columna, vista
+// previa de la tabla, Agregar todas y Limpiar) en su modo "visibilidad" -- ver
+// openColumnArrangeEditor. El icono aparece si el perfil tiene cualquiera de los
+// dos permisos del árbol (iconPin = fijar, iconVisibility = ocultar); con uno
+// solo, el editor deja hacer solo eso. El tope de 4 fijas vale igual que en
+// Acomodo: es el mismo editor.
+function openColumnsEditor(tableId, { canPin = true, canHide = true } = {}) {
+    openColumnArrangeEditor(tableId, null, { mode: 'visibility', canPin, canHide });
 }
 
 function closeColumnArrangeModal() {
@@ -4261,7 +4256,7 @@ function ensureColumnArrangeModal() {
                     <div class="data-table-arrange-legend">
                         <span><i class="bx bx-x" aria-hidden="true"></i> <span data-role="legend-x">${t('main.arrangeModeX')}</span></span>
                         <span><i class="bx bx-check" aria-hidden="true"></i> <span data-role="legend-normal">${t('main.arrangeModeNormal')}</span></span>
-                        <span><i class="bx bx-pin" aria-hidden="true"></i> ${t('main.arrangeModeFija')}</span>
+                        <span data-role="legend-pin-wrap"><i class="bx bx-pin" aria-hidden="true"></i> ${t('main.arrangeModeFija')}</span>
                         <span class="data-table-arrange-limit" data-role="pin-limit" hidden>${t('main.pinColumnsLimitReached')}</span>
                     </div>
                     <div class="data-table-vis-tools" data-role="vis-tools" hidden>
@@ -4347,6 +4342,7 @@ function ensureColumnArrangeModal() {
         previewLabel: columnArrangeModal.querySelector('[data-role="preview-label"]'),
         legendX: columnArrangeModal.querySelector('[data-role="legend-x"]'),
         legendNormal: columnArrangeModal.querySelector('[data-role="legend-normal"]'),
+        legendPinWrap: columnArrangeModal.querySelector('[data-role="legend-pin-wrap"]'),
         pinLimit: columnArrangeModal.querySelector('[data-role="pin-limit"]'),
     };
     columnArrangeModal._refs = refs;
@@ -4545,11 +4541,12 @@ function buildTriStateControl(key, groupKey) {
     // Solo íconos (la leyenda de arriba de la lista dice cuál es cuál): así
     // caben dos columnas por renglón y se ven muchas a la vez.
     const vis = columnArrangeState.mode === 'visibility';
+    // Con un solo permiso de los dos (ocultar / fijar) solo queda esa opción.
     const options = [
         { mode: 'none', icon: 'bx-x', title: t(vis ? 'main.visibilityModeHidden' : 'main.arrangeModeX') },
         { mode: 'normal', icon: 'bx-check', title: t(vis ? 'main.visibilityModeVisible' : 'main.arrangeModeNormal') },
         { mode: 'fija', icon: 'bx-pin', title: t('main.arrangeModeFija') },
-    ];
+    ].filter((opt) => (opt.mode === 'none' ? columnArrangeState.canHide : opt.mode === 'fija' ? columnArrangeState.canPin : true));
     options.forEach((opt) => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -4734,9 +4731,9 @@ function updateVisibilityToolsUi() {
     const refs = columnArrangeModal._refs;
     const chosen = columnArrangeChosenKeys();
     const pinned = columnArrangeState.draftConfig.pinned.filter((k) => chosen.includes(k));
-    refs.visCount.textContent = t('main.visCounts', {
-        visible: String(chosen.length), pinned: String(pinned.length), max: String(DATA_TABLE_PIN_MAX),
-    });
+    refs.visCount.textContent = columnArrangeState.canPin
+        ? t('main.visCounts', { visible: String(chosen.length), pinned: String(pinned.length), max: String(DATA_TABLE_PIN_MAX) })
+        : t('main.visCountsNoPin', { visible: String(chosen.length) });
     // Sin ninguna columna marcada no hay tabla que guardar.
     refs.visSave.disabled = chosen.length === 0;
     const tab = columnArrangeState.activeTab;
@@ -4784,8 +4781,9 @@ function saveVisibilityArrange() {
 // Solo el icono de Acomodo Guardado (iconSavedLayout) llega aquí con un acomodo
 // por nombrar, desde el menú que cuelga del icono (toggleSavedLayoutMenu, más
 // abajo): "Agregar" abre este editor vacío y el lápiz de un acomodo lo abre con
-// ese acomodo ya cargado. El icono de Mostrar/ocultar (iconVisibility) lo abre en
-// modo "visibilidad" (opts.mode, ver arriba); iconPin sigue con su propio selector.
+// ese acomodo ya cargado. El icono de Personalizar columnas lo abre en modo
+// "visibilidad" (opts.mode, ver arriba; opts.canPin / opts.canHide limitan lo que
+// se puede hacer según los permisos del perfil).
 function openColumnArrangeEditor(tableId, layout = null, opts = {}) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
@@ -4809,6 +4807,8 @@ function openColumnArrangeEditor(tableId, layout = null, opts = {}) {
         // Mostrar/ocultar parte de lo que la tabla tiene hoy: todas decididas.
         decidedKeys: new Set((editing || vis) ? state.columnKeys : []),
         mode: vis ? 'visibility' : 'layout',
+        canPin: opts.canPin !== false,
+        canHide: opts.canHide !== false,
         activeTab: null,
         query: '',
         scope: 'personal',
@@ -4818,9 +4818,13 @@ function openColumnArrangeEditor(tableId, layout = null, opts = {}) {
     const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
     columnArrangeState.activeTab = presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED;
 
-    const pinVariant = vis && opts.variant === 'pin';
-    refs.titleEl.textContent = t(vis ? (pinVariant ? 'main.pinColumnsTitle' : 'main.columnVisibilityTitle') : (editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle'));
-    refs.visHint.textContent = t(pinVariant ? 'main.pinColumnsHint' : 'main.columnVisibilityHint');
+    const { canPin, canHide } = columnArrangeState;
+    refs.titleEl.textContent = t(vis ? 'main.columnsBtn' : (editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle'));
+    refs.visHint.textContent = t(canPin && canHide ? 'main.columnsEditorHint' : (canPin ? 'main.pinColumnsHint' : 'main.columnVisibilityHint'));
+    refs.legendX.parentElement.hidden = !canHide;
+    refs.legendPinWrap.hidden = !canPin;
+    // Limpiar deja todo sin marcar (lo no marcado queda oculto): sin permiso de ocultar no aplica.
+    refs.visClear.hidden = vis && !canHide;
     refs.nameLabel.textContent = t(editing ? 'main.arrangeNameLabelEdit' : 'main.arrangeNameLabel');
     refs.liveChip.hidden = !editing || vis;
     // Modo visibilidad: sin nombre, sin Terminar Acomodo ni "asignar a", con los
@@ -7657,28 +7661,21 @@ function renderDataTableColumnControls() {
                 });
             };
 
-            if (resolveIconGrant(tableKey, 'iconPin')) {
-                const pinBtn = document.createElement('button');
-                pinBtn.type = 'button';
-                pinBtn.className = 'data-table-zoom-btn';
-                pinBtn.dataset.colAction = 'pin';
-                pinBtn.setAttribute('aria-label', t('main.pinColumns'));
-                pinBtn.title = t('main.pinColumns');
-                pinBtn.innerHTML = '<i class="bx bx-pin" aria-hidden="true"></i>';
-                pinBtn.addEventListener('click', () => openPinPicker(getTableId(wrapper, index)));
-                toAppend.push(pinBtn);
-            }
-
-            if (resolveIconGrant(tableKey, 'iconVisibility')) {
-                const visBtn = document.createElement('button');
-                visBtn.type = 'button';
-                visBtn.className = 'data-table-zoom-btn';
-                visBtn.dataset.colAction = 'visibility';
-                visBtn.setAttribute('aria-label', t('main.columnVisibility'));
-                visBtn.title = t('main.columnVisibility');
-                visBtn.innerHTML = '<i class="bx bx-show" aria-hidden="true"></i>';
-                visBtn.addEventListener('click', () => openVisibilityPicker(getTableId(wrapper, index)));
-                toAppend.push(visBtn);
+            // Fijar y Mostrar/ocultar abrían el mismo editor: ahora es un solo
+            // icono, Personalizar columnas, que aparece con cualquiera de los dos
+            // permisos y deja hacer solo lo que el perfil tenga.
+            const canPinColumns = resolveIconGrant(tableKey, 'iconPin');
+            const canHideColumns = resolveIconGrant(tableKey, 'iconVisibility');
+            if (canPinColumns || canHideColumns) {
+                const columnsBtn = document.createElement('button');
+                columnsBtn.type = 'button';
+                columnsBtn.className = 'data-table-zoom-btn';
+                columnsBtn.dataset.colAction = 'columns';
+                columnsBtn.setAttribute('aria-label', t('main.columnsBtn'));
+                columnsBtn.title = t('main.columnsBtn');
+                columnsBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
+                columnsBtn.addEventListener('click', () => openColumnsEditor(getTableId(wrapper, index), { canPin: canPinColumns, canHide: canHideColumns }));
+                toAppend.push(columnsBtn);
             }
 
             if (resolveIconGrant(tableKey, 'iconHistory')) {
@@ -7700,7 +7697,7 @@ function renderDataTableColumnControls() {
                 legendBtn.dataset.colAction = 'legend';
                 legendBtn.setAttribute('aria-label', t('main.columnLegendBtn'));
                 legendBtn.title = t('main.columnLegendBtn');
-                legendBtn.innerHTML = '<span class="data-table-legend-icon" aria-hidden="true"><span></span><span></span><span></span></span>';
+                legendBtn.innerHTML = '<i class="bx bx-info-circle" aria-hidden="true"></i>';
                 legendBtn.addEventListener('click', () => openColumnLegend(getTableId(wrapper, index)));
                 toAppend.push(legendBtn);
             }
@@ -8851,9 +8848,9 @@ const HELP_CONTENT_COLUMN_KEYS = {
 const HELP_CONTENT_ZOOM_KEYS = { out: 'zoomOut', in: 'zoomIn' };
 // data-col-action="..." -- the per-table toolbar buttons every .data-table
 // can get depending on its own icon grants (renderDataTableColumnControls):
-// Fijar/Mostrar-ocultar/Historial/Leyenda/Reglas de Orden.
+// Personalizar columnas/Historial/Simbología/Reglas de Orden.
 const HELP_CONTENT_COL_ACTION_KEYS = {
-    pin: 'pinColumns', visibility: 'columnVisibility', history: 'changeHistory',
+    columns: 'columnsEditor', history: 'changeHistory',
     legend: 'columnLegend', 'field-rules': 'fieldRules',
     'saved-layout': 'savedLayout', 'saved-search': 'savedSearch',
     filter: 'filterToggle', 'filter-clear': 'filterClear',
