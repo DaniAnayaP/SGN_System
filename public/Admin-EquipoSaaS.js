@@ -274,351 +274,15 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applySaasTeamFilters);
 
 // --- Control de Cambios -- generic (whole screen) + per-row -------------
-// Same 6-column dialog every other admin screen already shows
-// (Dashboard.js's own ensureChangeHistoryModal/openChangeHistory), rebuilt
-// here as its own small singleton instead of reused directly: that shared
-// one is hardwired to /api/business/table-changes/... (client-scoped, see
-// saas_user_changes' own DDL comment in db.js), which 404s for this
-// admin-only screen. Confirmed live, 2026-09-28: "debe tener los mismos
-// [campos] que todos los demás registros de cambios" -- same columns, same
-// look, just pointed at this screen's own /api/admin/saas-users/... routes.
-let saasChangesModal = null;
-let saasChangesList = null;
-// Column keys, in the same order renderSaasChangeRow's cells array is always
-// built -- shared by ensureSaasChangesModal (headers), renderSaasChangeRow
-// (cells) and the column-filter functions below (which column of a <tr> to
-// read). 'date' is the only one treated as a date range; every other column
-// gets the text mode+search filter, same split real .data-table columns use
-// (see isDateColumn/openColumnFilterMenu in Dashboard.js).
-const SAAS_CHANGES_COLUMNS = ['date', 'user', 'record', 'change', 'requestedBy', 'authorizedBy'];
-function ensureSaasChangesModal() {
-    if (saasChangesModal) return;
-    saasChangesModal = document.createElement('div');
-    saasChangesModal.className = 'modal-overlay';
-    saasChangesModal.hidden = true;
-    const headerCells = [
-        ['date', 'main.changeHistoryDate'], ['user', 'main.changeHistoryUser'], ['record', 'main.changeHistoryRecord'],
-        ['change', 'main.changeHistoryChange'], ['requestedBy', 'main.changeHistoryRequestedBy'], ['authorizedBy', 'main.changeHistoryAuthorizedBy'],
-    ].map(([col, key]) => `<th data-col="${col}" class="saas-changes-th">${Dashboard.t(key)}</th>`).join('');
-    saasChangesModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 62rem;" role="dialog" aria-modal="true" aria-labelledby="saas-user-history-title">
-            <h3 id="saas-user-history-title"></h3>
-            <div class="admin-table-wrap saas-changes-table-wrap admin-table-grid-wrap">
-                <table class="admin-table admin-table-grid">
-                    <thead>
-                        <tr>${headerCells}</tr>
-                    </thead>
-                    <tbody data-role="list"></tbody>
-                </table>
-            </div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn btn-secondary" data-role="close">${Dashboard.t('admin.cancel')}</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(saasChangesModal);
-    saasChangesList = saasChangesModal.querySelector('[data-role="list"]');
-    saasChangesModal.querySelectorAll('th[data-col]').forEach((th) => attachSaasChangesFilterTrigger(th, th.dataset.col));
-    const close = () => { saasChangesModal.hidden = true; closeSaasChangesFilterMenu(); };
-    saasChangesModal.querySelector('[data-role="close"]').addEventListener('click', close);
-    saasChangesModal.addEventListener('click', (event) => { if (event.target === saasChangesModal) close(); });
-}
-
-// stripeColor: same convention as Dashboard.js's own renderChangeHistoryRow
-// -- a hex string, '' for the neutral "sin clasificar" fallback, or
-// undefined to skip the stripe (the empty-state placeholder row).
-function renderSaasChangeRow(cells, stripeColor) {
-    const tr = document.createElement('tr');
-    if (stripeColor !== undefined) {
-        tr.classList.add('change-history-row');
-        tr.style.setProperty('--change-history-stripe-color', stripeColor || 'var(--color-border)');
-    }
-    cells.forEach((text, i) => {
-        const td = document.createElement('td');
-        td.dataset.col = SAAS_CHANGES_COLUMNS[i];
-        td.textContent = text;
-        tr.appendChild(td);
-    });
-    return tr;
-}
-
-// Estado vacío: una sola celda que abarca las seis columnas (ver
-// renderChangeHistoryEmptyRow en Dashboard.js, que es igual).
-function renderSaasChangesEmptyRow() {
-    const tr = document.createElement('tr');
-    tr.className = 'change-history-empty-row';
-    const td = document.createElement('td');
-    td.colSpan = SAAS_CHANGES_COLUMNS.length;
-    td.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-    td.appendChild(document.createTextNode(Dashboard.t('main.changeHistoryEmpty')));
-    tr.appendChild(td);
-    return tr;
-}
-
-// --- Per-column filter (Fecha = rango; el resto = modo + buscador + lista
-// de valores) -- mismo mecanismo visual y las mismas clases CSS que ya usa
-// cualquier .data-table del sitio (ver openColumnFilterMenu en Dashboard.js),
-// reimplementado aquí en chico porque este modal no es una tabla registrada
-// en dataTableColumnState (sin pin/orden/ancho -- solo filtrar, que es lo
-// único que tiene sentido en un historial de 6 columnas fijas). Confirmado
-// visualmente con el usuario, 2026-09-28, antes de construirlo.
-let saasChangesColumnFilters = new Map(); // colKey -> Set of selected values (ausente = todos seleccionados)
-let saasChangesFilterMenuEl = null;
-let saasChangesFilterMenuCol = null;
-const SAAS_CHANGES_DATE_COLUMNS = new Set(['date']);
-
-function getSaasChangesDistinctValues(colKey) {
-    const values = new Set();
-    saasChangesList.querySelectorAll(`td[data-col="${colKey}"]`).forEach((td) => values.add(td.textContent.trim()));
-    return Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-}
-
-function applySaasChangesColumnFilters() {
-    const rows = Array.from(saasChangesList.rows);
-    if (!saasChangesColumnFilters.size) {
-        rows.forEach((tr) => { tr.hidden = false; });
-        return;
-    }
-    rows.forEach((tr) => {
-        let visible = true;
-        saasChangesColumnFilters.forEach((selectedSet, key) => {
-            const td = tr.querySelector(`[data-col="${key}"]`);
-            if (!selectedSet.has(td ? td.textContent.trim() : '')) visible = false;
-        });
-        tr.hidden = !visible;
-    });
-}
-
-function closeSaasChangesFilterMenu() {
-    saasChangesFilterMenuEl?.remove();
-    saasChangesFilterMenuEl = null;
-    saasChangesFilterMenuCol = null;
-    document.removeEventListener('click', handleSaasChangesFilterOutsideClick, true);
-}
-function handleSaasChangesFilterOutsideClick(event) {
-    if (saasChangesFilterMenuEl && !saasChangesFilterMenuEl.contains(event.target) && !event.target.closest('.data-table-col-filter-trigger')) {
-        closeSaasChangesFilterMenu();
-    }
-}
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && saasChangesFilterMenuEl) closeSaasChangesFilterMenu();
-});
-
-// Adapted from openColumnFilterMenu in Dashboard.js -- same structure/CSS
-// classes, trimmed to just this modal's own state (saasChangesColumnFilters)
-// instead of dataTableColumnState, since there's no pin/reorder/width to
-// track here.
-function openSaasChangesFilterMenu(th, colKey) {
-    const reopening = saasChangesFilterMenuCol === colKey;
-    closeSaasChangesFilterMenu();
-    if (reopening) return;
-
-    const distinctValues = getSaasChangesDistinctValues(colKey);
-    const selected = saasChangesColumnFilters.get(colKey) || new Set(distinctValues);
-
-    const menu = document.createElement('div');
-    menu.className = 'data-table-col-filter-menu';
-
-    const searchRow = document.createElement('div');
-    searchRow.className = 'data-table-col-filter-search-row';
-    let applyRowSearch = () => true;
-
-    if (SAAS_CHANGES_DATE_COLUMNS.has(colKey)) {
-        const fromField = document.createElement('input');
-        fromField.type = 'date';
-        fromField.className = 'data-table-col-filter-date';
-        fromField.setAttribute('aria-label', Dashboard.t('main.filterDateFrom'));
-        fromField.addEventListener('click', (event) => event.stopPropagation());
-        const toField = document.createElement('input');
-        toField.type = 'date';
-        toField.className = 'data-table-col-filter-date';
-        toField.setAttribute('aria-label', Dashboard.t('main.filterDateTo'));
-        toField.addEventListener('click', (event) => event.stopPropagation());
-
-        const fromLabel = document.createElement('span');
-        fromLabel.className = 'data-table-col-filter-date-label';
-        fromLabel.textContent = Dashboard.t('main.filterDateFrom');
-        const toLabel = document.createElement('span');
-        toLabel.className = 'data-table-col-filter-date-label';
-        toLabel.textContent = Dashboard.t('main.filterDateTo');
-        searchRow.append(fromLabel, fromField, toLabel, toField);
-
-        applyRowSearch = (row) => {
-            const value = row.dataset.searchValue;
-            if (fromField.value && value < fromField.value) return false;
-            if (toField.value && value > toField.value) return false;
-            return true;
-        };
-        fromField.addEventListener('input', () => searchInputChanged());
-        toField.addEventListener('input', () => searchInputChanged());
-    } else {
-        const FILTER_MODES = [
-            { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
-            { id: 'contains', labelKey: 'main.filterModeContains' },
-            { id: 'equals', labelKey: 'main.filterModeEquals' },
-        ];
-        let searchMode = 'contains';
-
-        const modeCurrentLabel = document.createElement('div');
-        modeCurrentLabel.className = 'data-table-col-filter-mode-current';
-        modeCurrentLabel.textContent = Dashboard.t('main.filterModeContains');
-        menu.appendChild(modeCurrentLabel);
-
-        const modeBtn = document.createElement('button');
-        modeBtn.type = 'button';
-        modeBtn.className = 'data-table-col-filter-mode-btn';
-        modeBtn.setAttribute('aria-label', Dashboard.t('main.filterModeLabel'));
-        modeBtn.title = Dashboard.t('main.filterModeLabel');
-        modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
-        searchRow.appendChild(modeBtn);
-
-        const searchInput = document.createElement('input');
-        searchInput.type = 'search';
-        searchInput.className = 'data-table-col-filter-search';
-        searchInput.placeholder = Dashboard.t('main.filterSearchPlaceholder');
-        searchInput.addEventListener('click', (event) => event.stopPropagation());
-        searchRow.appendChild(searchInput);
-
-        const modeMenu = document.createElement('div');
-        modeMenu.className = 'data-table-col-filter-mode-menu';
-        modeMenu.hidden = true;
-        const modeButtons = FILTER_MODES.map((mode) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'data-table-col-filter-mode-option';
-            btn.textContent = Dashboard.t(mode.labelKey);
-            btn.classList.toggle('data-table-col-filter-mode-option-active', mode.id === searchMode);
-            btn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                searchMode = mode.id;
-                modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
-                btn.classList.add('data-table-col-filter-mode-option-active');
-                modeCurrentLabel.textContent = Dashboard.t(mode.labelKey);
-                modeMenu.hidden = true;
-                searchInputChanged();
-            });
-            modeMenu.appendChild(btn);
-            return btn;
-        });
-        searchRow.appendChild(modeMenu);
-
-        modeBtn.addEventListener('click', (event) => {
-            event.stopPropagation();
-            modeMenu.hidden = !modeMenu.hidden;
-        });
-        menu.addEventListener('click', (event) => {
-            if (!modeMenu.hidden && event.target !== modeBtn && !modeMenu.contains(event.target)) modeMenu.hidden = true;
-        });
-
-        applyRowSearch = (row) => {
-            const query = searchInput.value.trim().toLowerCase();
-            if (query === '') return true;
-            const value = row.dataset.searchValue;
-            if (searchMode === 'equals') return value === query;
-            return searchMode === 'startsWith' ? value.startsWith(query) : value.includes(query);
-        };
-        searchInput.addEventListener('input', () => searchInputChanged());
-    }
-    menu.appendChild(searchRow);
-
-    const allRow = document.createElement('label');
-    allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
-    const allCheckbox = document.createElement('input');
-    allCheckbox.type = 'checkbox';
-    allCheckbox.checked = selected.size === distinctValues.length;
-    allCheckbox.indeterminate = selected.size > 0 && selected.size < distinctValues.length;
-    const allLabel = document.createElement('span');
-    allLabel.textContent = Dashboard.t('main.filterAll');
-    allRow.append(allCheckbox, allLabel);
-    menu.appendChild(allRow);
-
-    const list = document.createElement('div');
-    list.className = 'data-table-col-filter-list';
-    const checkboxes = [];
-
-    function syncAllCheckbox() {
-        const current = saasChangesColumnFilters.get(colKey) || new Set(distinctValues);
-        allCheckbox.checked = current.size === distinctValues.length;
-        allCheckbox.indeterminate = current.size > 0 && current.size < distinctValues.length;
-    }
-
-    distinctValues.forEach((value) => {
-        const row = document.createElement('label');
-        row.className = 'data-table-col-filter-option';
-        row.dataset.searchValue = (value || '').toLowerCase();
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = selected.has(value);
-        cb.addEventListener('change', () => {
-            const current = new Set(saasChangesColumnFilters.get(colKey) || new Set(distinctValues));
-            if (cb.checked) current.add(value); else current.delete(value);
-            if (current.size === distinctValues.length) saasChangesColumnFilters.delete(colKey);
-            else saasChangesColumnFilters.set(colKey, current);
-            applySaasChangesColumnFilters();
-            th.classList.toggle('data-table-col-filter-active', saasChangesColumnFilters.has(colKey));
-            syncAllCheckbox();
-        });
-        const span = document.createElement('span');
-        span.textContent = value || '—';
-        row.append(cb, span);
-        list.appendChild(row);
-        checkboxes.push(cb);
-    });
-    menu.appendChild(list);
-
-    function searchInputChanged() {
-        list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
-            row.hidden = !applyRowSearch(row);
-        });
-    }
-
-    allCheckbox.addEventListener('change', () => {
-        checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
-        if (allCheckbox.checked) saasChangesColumnFilters.delete(colKey);
-        else saasChangesColumnFilters.set(colKey, new Set());
-        applySaasChangesColumnFilters();
-        th.classList.toggle('data-table-col-filter-active', saasChangesColumnFilters.has(colKey));
-        allCheckbox.indeterminate = false;
-    });
-
-    document.body.appendChild(menu);
-    const rect = th.getBoundingClientRect();
-    const menuWidth = menu.offsetWidth;
-    const left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - menuWidth - 8);
-    menu.style.position = 'absolute';
-    menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
-    menu.style.left = `${Math.max(8, left)}px`;
-    // .data-table-col-filter-menu's own z-index (50) is fine on a normal
-    // page, but this table lives INSIDE .modal-overlay (z-index: 100) --
-    // found live just now: the menu opened but rendered invisibly behind
-    // the modal. Bumped just for this instance, comfortably clear of the
-    // modal's own 100 without reaching into the 900+ range other portaled
-    // panels (perm-tree-color-popover, Vista Previa) use, since none of
-    // those can ever be open at the same time as this modal anyway.
-    menu.style.zIndex = '150';
-    saasChangesFilterMenuEl = menu;
-    saasChangesFilterMenuCol = colKey;
-    searchRow.querySelector('input')?.focus();
-    setTimeout(() => document.addEventListener('click', handleSaasChangesFilterOutsideClick, true), 0);
-}
-
-function attachSaasChangesFilterTrigger(th, colKey) {
-    if (th.querySelector('.data-table-col-filter-trigger')) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'data-table-col-filter-trigger';
-    btn.setAttribute('aria-label', Dashboard.t('main.filterColumn'));
-    btn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
-    btn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        openSaasChangesFilterMenu(th, colKey);
-    });
-    th.appendChild(btn);
-}
+// Mismo diálogo de Historial de cambios que todas las pantallas (Dashboard.js,
+// openChangeHistoryWithRows): tabla del sistema con su barra de iconos y los
+// embudos de cada columna. Aquí solo se piden los datos de esta pantalla
+// (/api/admin/saas-users/..., sin cliente) y la franja de color de la
+// clasificación de cada campo.
+//
 // Classification color stripe -- fixed, param-less endpoint (only 3 of the
 // 6 possible field_keys ever resolve, see getEffectiveSaasUserFieldClassifications
-// in db.js), so one cached promise is enough, no per-tableKey Map like
-// Dashboard.js's own fetchTableClassifications needs.
+// in db.js), so one cached promise is enough.
 let saasUserFieldClassificationsPromise = null;
 function fetchSaasUserFieldClassifications() {
     if (!saasUserFieldClassificationsPromise) {
@@ -629,47 +293,37 @@ function fetchSaasUserFieldClassifications() {
     return saasUserFieldClassificationsPromise;
 }
 // userId omitted = every account's history (toolbar button); passed = just
-// that one account's (per-row button) -- same "narrower scope, same
-// endpoint family" idea as Dashboard.js's own openChangeHistory.
-async function openSaasUserChanges(userId) {
-    ensureSaasChangesModal();
-    saasChangesModal.hidden = false;
-    saasChangesModal.querySelector('#saas-user-history-title').textContent = userId ? Dashboard.t('main.changeHistoryTitleRecord') : Dashboard.t('main.changeHistoryTitle');
-    // Fresh state every time it opens -- same convention the old search box
-    // used, avoids a stale filter silently hiding rows on a later open.
-    saasChangesColumnFilters = new Map();
-    closeSaasChangesFilterMenu();
-    saasChangesModal.querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
-    saasChangesList.innerHTML = '';
-    saasChangesList.appendChild(renderSaasChangesEmptyRow());
-    try {
-        const url = userId ? `/api/admin/saas-users/${userId}/changes` : '/api/admin/saas-users/changes';
-        const classificationsPromise = fetchSaasUserFieldClassifications();
-        const res = await fetch(url, { credentials: 'include' });
-        if (!res.ok) return;
-        const { changes } = await res.json();
-        if (!changes || !changes.length) return;
-        const fieldClassifications = (await classificationsPromise).fields || {};
-        saasChangesList.innerHTML = '';
-        changes.forEach((change) => {
-            let description;
-            let stripeColor = '';
-            if (change.action === 'create') {
-                description = Dashboard.t('main.changeHistoryCreated');
-            } else if (change.field_key === 'business.saasUserPassword') {
-                description = Dashboard.t('admin.saasResetPassword');
-            } else {
-                description = `${Dashboard.t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-                stripeColor = fieldClassifications[change.field_key]?.color || '';
-            }
-            saasChangesList.appendChild(renderSaasChangeRow([
-                change.changed_at, change.changed_by || '—', change.record_label || '—', description,
-                change.requested_by || '—', change.authorized_by || '—',
-            ], stripeColor));
-        });
-    } catch {
-        // Leave the empty-state row in place, same as the shared modal.
-    }
+// that one account's (per-row button).
+function openSaasUserChanges(userId) {
+    return Dashboard.openChangeHistoryWithRows(
+        Dashboard.t(userId ? 'main.changeHistoryTitleRecord' : 'main.changeHistoryTitle'),
+        async () => {
+            const url = userId ? `/api/admin/saas-users/${userId}/changes` : '/api/admin/saas-users/changes';
+            const [res, classifications] = await Promise.all([fetch(url, { credentials: 'include' }), fetchSaasUserFieldClassifications()]);
+            if (!res.ok) throw new Error('load failed');
+            const { changes } = await res.json();
+            const fieldClassifications = classifications.fields || {};
+            return (changes || []).map((change) => {
+                let description;
+                let stripe = '';
+                if (change.action === 'create') {
+                    description = Dashboard.t('main.changeHistoryCreated');
+                } else if (change.field_key === 'business.saasUserPassword') {
+                    description = Dashboard.t('admin.saasResetPassword');
+                } else {
+                    description = `${Dashboard.t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+                    stripe = fieldClassifications[change.field_key]?.color || '';
+                }
+                return {
+                    cells: [
+                        change.changed_at, change.changed_by || '—', change.record_label || '—', description,
+                        change.requested_by || '—', change.authorized_by || '—',
+                    ],
+                    stripe,
+                };
+            });
+        },
+    );
 }
 async function loadSaasUsers() {
     try {

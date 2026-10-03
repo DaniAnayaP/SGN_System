@@ -1260,64 +1260,21 @@
             const bool = (v) => (v === 'true' ? t('main.changeHistoryGranted') : t('main.changeHistoryNotGranted'));
             return `${bool(entry.oldValue)} → ${bool(entry.newValue)}`;
         }
-        function ensureHistoryDialog() {
-            if (historyDialogEl) return;
-            historyDialogEl = document.createElement('div');
-            historyDialogEl.className = 'modal-overlay';
-            historyDialogEl.hidden = true;
-            historyDialogEl.innerHTML = `
-                <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="perm-cost-tree-history-title">
-                    <h3 id="perm-cost-tree-history-title" data-role="title"></h3>
-                    <div class="admin-table-wrap">
-                        <table class="admin-table">
-                            <thead><tr>
-                                <th>${t('main.changeHistoryDate')}</th>
-                                <th>${t('main.changeHistoryUser')}</th>
-                                <th>${t('main.changeHistoryChange')}</th>
-                            </tr></thead>
-                            <tbody data-role="list"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                        <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(historyDialogEl);
-            const close = () => { historyDialogEl.hidden = true; };
-            historyDialogEl.querySelector('[data-role="close"]').addEventListener('click', close);
-            historyDialogEl.addEventListener('click', (event) => { if (event.target === historyDialogEl) close(); });
-            document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !historyDialogEl.hidden) close(); });
-        }
-        async function openHistoryDialog(nodeKey, label) {
-            ensureHistoryDialog();
-            historyDialogEl.querySelector('[data-role="title"]').textContent = `${t('main.changeHistory')} — ${label}`;
-            const list = historyDialogEl.querySelector('[data-role="list"]');
-            list.innerHTML = `<tr><td colspan="3">${t('admin.loading')}</td></tr>`;
-            historyDialogEl.hidden = false;
-            try {
+        // Mismo diálogo de Historial de cambios que todas las pantallas (tabla del
+        // sistema con su barra de iconos y los embudos de cada columna). Registro es el
+        // nombre del nodo; Solicitó/Autorizó, quien hizo el cambio, igual que en los
+        // historiales de los otros dos árboles.
+        function openHistoryDialog(nodeKey, label) {
+            return Dashboard.openChangeHistoryWithRows(`${t('main.changeHistory')} — ${label}`, async () => {
                 const params = new URLSearchParams({ ...historyParams, nodeKey });
                 const res = await fetch(`${historyEndpoint}?${params}`, { credentials: 'include' });
                 if (!res.ok) throw new Error('load failed');
                 const data = await res.json();
-                const entries = data.entries || [];
-                list.innerHTML = '';
-                if (!entries.length) {
-                    list.innerHTML = `<tr><td colspan="3">${t('main.changeHistoryEmpty')}</td></tr>`;
-                    return;
-                }
-                entries.forEach((entry) => {
-                    const tr = document.createElement('tr');
-                    [entry.changedAt || '', entry.changedBy || '', formatGrantChange(entry)].forEach((value) => {
-                        const td = document.createElement('td');
-                        td.textContent = value;
-                        tr.appendChild(td);
-                    });
-                    list.appendChild(tr);
-                });
-            } catch {
-                list.innerHTML = `<tr><td colspan="3">${t('admin.loadError')}</td></tr>`;
-            }
+                return (data.entries || []).map((entry) => [
+                    entry.changedAt || '', entry.changedBy || '', label, formatGrantChange(entry),
+                    entry.changedBy || '', entry.changedBy || '',
+                ]);
+            });
         }
 
         return {

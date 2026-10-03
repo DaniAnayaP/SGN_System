@@ -772,12 +772,9 @@ const SAAS_TABLE_ICON_SCREENS = {
 // de SaaS (sin clientId), cualquier otra tabla que vea -- Base de Datos, etc.
 // Esas rutas aceptan cualquier tableKey; antes solo estas siete tenían los iconos
 // de Búsqueda y Acomodo Guardado, y en las demás faltaban aunque se tuviera todo.
-// Las tablas dentro de un diálogo quedan fuera: no son una pantalla con filtros.
 function isSaasTableKey(tableId) {
     if (SAAS_TABLE_ICON_SCREENS[tableId]) return true;
-    if (!currentUser || currentUser.clientId) return false;
-    const wrapper = document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(String(tableId))}"]`);
-    return !!wrapper && !wrapper.closest('.modal-overlay, .modal-panel');
+    return !!currentUser && !currentUser.clientId;
 }
 
 function hasSaasTableIconGrant(tableId, iconId) {
@@ -2339,6 +2336,7 @@ document.querySelectorAll('.settings-dropdown-toggle').forEach((toggleBtn) => {
 // height (the filter-bar toggle/search/clear handlers below call this too).
 function sizeDataTableWrappers() {
     document.querySelectorAll('.data-table-wrapper').forEach((wrapper) => {
+        if (wrapper.dataset.maxHeight) { wrapper.style.maxHeight = wrapper.dataset.maxHeight; return; }
         const top = wrapper.getBoundingClientRect().top;
         const available = window.innerHeight - top - 24;
         wrapper.style.maxHeight = `${Math.max(available, 200)}px`;
@@ -3306,6 +3304,9 @@ const RULE_RANGE_TYPE_BY_KEY = {
 function cellDateToIso(value) {
     const v = String(value ?? '').trim();
     if (ISO_DATE_RE.test(v)) return v;
+    // Fecha con hora (historial de cambios): vale la fecha.
+    const withTime = v.match(/^(\d{4}-\d{2}-\d{2})[ T]\d{1,2}:\d{2}(:\d{2})?$/);
+    if (withTime && ISO_DATE_RE.test(withTime[1])) return withTime[1];
     const m = v.match(/^(\d{1,2})\/([A-Za-zÀ-ÿ]{3,4})\.?\/(\d{4})$/);
     if (!m) return null;
     const abbr = m[2].toLowerCase().slice(0, 3);
@@ -5434,6 +5435,7 @@ function renderChangeHistoryEmptyRow(colspan = CHANGE_HISTORY_COLUMNS.length, me
     const tr = document.createElement('tr');
     tr.className = 'change-history-empty-row';
     const td = document.createElement('td');
+    td.className = 'data-table-empty-cell';
     td.colSpan = colspan;
     td.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     td.appendChild(document.createTextNode(message));
@@ -5441,20 +5443,30 @@ function renderChangeHistoryEmptyRow(colspan = CHANGE_HISTORY_COLUMNS.length, me
     return tr;
 }
 
+// La tabla del diálogo es una tabla del sistema más (.data-table-wrapper con su
+// propio id), no una tabla suelta: por eso trae la misma barra de iconos que
+// cualquier otra -- zoom, Personalizar columnas, Simbología, Búsqueda y Acomodo
+// Guardado, Filtro y Limpiar -- y los embudos de sus columnas son los del motor.
+// Sin el icono de Historial: sería el historial del historial.
+const CHANGE_HISTORY_TABLE_ID = 'change-history';
+// Tablas que viven dentro de un diálogo abierto desde otra pantalla: no tienen un
+// nodo propio en el árbol de permisos, así que sus iconos acompañan al diálogo.
+const DIALOG_TABLE_KEYS = new Set([CHANGE_HISTORY_TABLE_ID]);
+
 function ensureChangeHistoryModal() {
     if (changeHistoryModal) return;
     changeHistoryModal = document.createElement('div');
-    changeHistoryModal.className = 'modal-overlay';
+    changeHistoryModal.className = 'modal-overlay change-history-overlay';
     changeHistoryModal.hidden = true;
     const headerCells = [
         ['date', 'main.changeHistoryDate'], ['user', 'main.changeHistoryUser'], ['record', 'main.changeHistoryRecord'],
         ['change', 'main.changeHistoryChange'], ['requestedBy', 'main.changeHistoryRequestedBy'], ['authorizedBy', 'main.changeHistoryAuthorizedBy'],
-    ].map(([col, key]) => `<th data-col="${col}" class="saas-changes-th">${t(key)}</th>`).join('');
+    ].map(([col, key]) => `<th data-col="${col}">${t(key)}</th>`).join('');
     changeHistoryModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 62rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-history-title">
+        <div class="modal-panel change-history-panel" style="max-width: 72rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-history-title">
             <h3 id="data-table-history-title">${t('main.changeHistoryTitle')}</h3>
-            <div class="admin-table-wrap saas-changes-table-wrap admin-table-grid-wrap">
-                <table class="admin-table admin-table-grid">
+            <div class="data-table-wrapper change-history-wrapper" data-table-id="${CHANGE_HISTORY_TABLE_ID}" data-no-history="1" data-max-height="min(26rem, 52vh)">
+                <table class="data-table change-history-table">
                     <thead>
                         <tr>${headerCells}</tr>
                     </thead>
@@ -5468,10 +5480,39 @@ function ensureChangeHistoryModal() {
     `;
     document.body.appendChild(changeHistoryModal);
     changeHistoryList = changeHistoryModal.querySelector('[data-role="list"]');
-    changeHistoryModal.querySelectorAll('th[data-col]').forEach((th) => attachChangeHistoryFilterTrigger(th, th.dataset.col));
-    const close = () => { changeHistoryModal.hidden = true; closeChangeHistoryFilterMenu(); };
+    const close = () => { changeHistoryModal.hidden = true; closeColumnFilterMenu(); closePanelPopover(); };
     changeHistoryModal.querySelector('[data-role="close"]').addEventListener('click', close);
-    wireModalDismiss(changeHistoryModal, close);
+    changeHistoryModal.addEventListener('click', (event) => { if (event.target === changeHistoryModal) close(); });
+    // Escape cierra primero el diálogo que esté encima (el editor de columnas, la
+    // Simbología...), no todo de golpe: se revisa en la fase de captura, antes de que
+    // esos diálogos se cierren con su propio Escape.
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape' || changeHistoryModal.hidden) return;
+        const otherOpen = Array.from(document.querySelectorAll('.modal-overlay')).some((o) => o !== changeHistoryModal && !o.hidden);
+        if (!otherOpen) close();
+    }, true);
+    // Su barra de iconos se arma igual que la de las tablas de la pantalla.
+    renderDataTableZoomControls();
+    renderDataTableColumnControls();
+    applyHelpContentKeys();
+}
+
+// Cada vez que se abre: título, filtros en blanco (un filtro de la vez anterior no
+// debe esconder filas en silencio), el panel de filtros cerrado y la tabla vacía.
+function resetChangeHistoryView() {
+    const state = dataTableColumnState.get(CHANGE_HISTORY_TABLE_ID);
+    if (state) {
+        state.columnFilters.clear();
+        state.columnRules.clear();
+        state.panelDrafts?.clear();
+        getHeaderRow(state.table).querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
+    }
+    closeColumnFilterMenu();
+    closePanelPopover();
+    changeHistoryModal.querySelector('.filter-bar')?.classList.remove('filter-bar-expanded');
+    changeHistoryModal.querySelector('[data-col-action="filter"]')?.setAttribute('aria-expanded', 'false');
+    changeHistoryList.innerHTML = '';
+    sizeDataTableWrappers();
 }
 
 // stripeColor: hex string (a real classification color), '' (no
@@ -5493,262 +5534,6 @@ function renderChangeHistoryRow(cells, stripeColor) {
     return tr;
 }
 
-// --- Per-column filter (Fecha = rango; el resto = modo + buscador + lista
-// de valores) -- same visual mechanism/CSS classes as any real .data-table
-// column (see openColumnFilterMenu below), reimplemented small here because
-// this modal isn't a registered .data-table in dataTableColumnState (no
-// pin/reorder/width — only filtering makes sense in a fixed 6-column
-// history dialog). Mirrors Admin-EquipoSaaS.js's own saasChanges* version
-// exactly, just under this modal's own state so the two never collide.
-let changeHistoryColumnFilters = new Map(); // colKey -> Set of selected values (ausente = todos seleccionados)
-let changeHistoryFilterMenuEl = null;
-let changeHistoryFilterMenuCol = null;
-const CHANGE_HISTORY_DATE_COLUMNS = new Set(['date']);
-
-function getChangeHistoryDistinctValues(colKey) {
-    const values = new Set();
-    changeHistoryList.querySelectorAll(`td[data-col="${colKey}"]`).forEach((td) => values.add(td.textContent.trim()));
-    return Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-}
-
-function applyChangeHistoryColumnFilters() {
-    const rows = Array.from(changeHistoryList.rows);
-    if (!changeHistoryColumnFilters.size) {
-        rows.forEach((tr) => { tr.hidden = false; });
-        return;
-    }
-    rows.forEach((tr) => {
-        let visible = true;
-        changeHistoryColumnFilters.forEach((selectedSet, key) => {
-            const td = tr.querySelector(`[data-col="${key}"]`);
-            if (!selectedSet.has(td ? td.textContent.trim() : '')) visible = false;
-        });
-        tr.hidden = !visible;
-    });
-}
-
-function closeChangeHistoryFilterMenu() {
-    changeHistoryFilterMenuEl?.remove();
-    changeHistoryFilterMenuEl = null;
-    changeHistoryFilterMenuCol = null;
-    document.removeEventListener('click', handleChangeHistoryFilterOutsideClick, true);
-}
-function handleChangeHistoryFilterOutsideClick(event) {
-    if (changeHistoryFilterMenuEl && !changeHistoryFilterMenuEl.contains(event.target) && !event.target.closest('.data-table-col-filter-trigger')) {
-        closeChangeHistoryFilterMenu();
-    }
-}
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && changeHistoryFilterMenuEl) closeChangeHistoryFilterMenu();
-});
-
-// Adapted from Admin-EquipoSaaS.js's own openSaasChangesFilterMenu (itself
-// adapted from openColumnFilterMenu below) -- same structure/CSS classes,
-// trimmed to just this modal's own state.
-function openChangeHistoryFilterMenu(th, colKey) {
-    const reopening = changeHistoryFilterMenuCol === colKey;
-    closeChangeHistoryFilterMenu();
-    if (reopening) return;
-
-    const distinctValues = getChangeHistoryDistinctValues(colKey);
-    const selected = changeHistoryColumnFilters.get(colKey) || new Set(distinctValues);
-
-    const menu = document.createElement('div');
-    menu.className = 'data-table-col-filter-menu';
-
-    const searchRow = document.createElement('div');
-    searchRow.className = 'data-table-col-filter-search-row';
-    let applyRowSearch = () => true;
-
-    if (CHANGE_HISTORY_DATE_COLUMNS.has(colKey)) {
-        const fromField = document.createElement('input');
-        fromField.type = 'date';
-        fromField.className = 'data-table-col-filter-date';
-        fromField.setAttribute('aria-label', t('main.filterDateFrom'));
-        fromField.addEventListener('click', (event) => event.stopPropagation());
-        const toField = document.createElement('input');
-        toField.type = 'date';
-        toField.className = 'data-table-col-filter-date';
-        toField.setAttribute('aria-label', t('main.filterDateTo'));
-        toField.addEventListener('click', (event) => event.stopPropagation());
-
-        const fromLabel = document.createElement('span');
-        fromLabel.className = 'data-table-col-filter-date-label';
-        fromLabel.textContent = t('main.filterDateFrom');
-        const toLabel = document.createElement('span');
-        toLabel.className = 'data-table-col-filter-date-label';
-        toLabel.textContent = t('main.filterDateTo');
-        searchRow.append(fromLabel, fromField, toLabel, toField);
-
-        applyRowSearch = (row) => {
-            const value = row.dataset.searchValue;
-            if (fromField.value && value < fromField.value) return false;
-            if (toField.value && value > toField.value) return false;
-            return true;
-        };
-        fromField.addEventListener('input', () => searchInputChanged());
-        toField.addEventListener('input', () => searchInputChanged());
-    } else {
-        const FILTER_MODES = [
-            { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
-            { id: 'contains', labelKey: 'main.filterModeContains' },
-            { id: 'equals', labelKey: 'main.filterModeEquals' },
-        ];
-        let searchMode = 'contains';
-
-        const modeCurrentLabel = document.createElement('div');
-        modeCurrentLabel.className = 'data-table-col-filter-mode-current';
-        modeCurrentLabel.textContent = t('main.filterModeContains');
-        menu.appendChild(modeCurrentLabel);
-
-        const modeBtn = document.createElement('button');
-        modeBtn.type = 'button';
-        modeBtn.className = 'data-table-col-filter-mode-btn';
-        modeBtn.setAttribute('aria-label', t('main.filterModeLabel'));
-        modeBtn.title = t('main.filterModeLabel');
-        modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
-        searchRow.appendChild(modeBtn);
-
-        const searchInput = document.createElement('input');
-        searchInput.type = 'search';
-        searchInput.className = 'data-table-col-filter-search';
-        searchInput.placeholder = t('main.filterSearchPlaceholder');
-        searchInput.addEventListener('click', (event) => event.stopPropagation());
-        searchRow.appendChild(searchInput);
-
-        const modeMenu = document.createElement('div');
-        modeMenu.className = 'data-table-col-filter-mode-menu';
-        modeMenu.hidden = true;
-        const modeButtons = FILTER_MODES.map((mode) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'data-table-col-filter-mode-option';
-            btn.textContent = t(mode.labelKey);
-            btn.classList.toggle('data-table-col-filter-mode-option-active', mode.id === searchMode);
-            btn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                searchMode = mode.id;
-                modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
-                btn.classList.add('data-table-col-filter-mode-option-active');
-                modeCurrentLabel.textContent = t(mode.labelKey);
-                modeMenu.hidden = true;
-                searchInputChanged();
-            });
-            modeMenu.appendChild(btn);
-            return btn;
-        });
-        searchRow.appendChild(modeMenu);
-
-        modeBtn.addEventListener('click', (event) => {
-            event.stopPropagation();
-            modeMenu.hidden = !modeMenu.hidden;
-        });
-        menu.addEventListener('click', (event) => {
-            if (!modeMenu.hidden && event.target !== modeBtn && !modeMenu.contains(event.target)) modeMenu.hidden = true;
-        });
-
-        applyRowSearch = (row) => {
-            const query = searchInput.value.trim().toLowerCase();
-            if (query === '') return true;
-            const value = row.dataset.searchValue;
-            if (searchMode === 'equals') return value === query;
-            return searchMode === 'startsWith' ? value.startsWith(query) : value.includes(query);
-        };
-        searchInput.addEventListener('input', () => searchInputChanged());
-    }
-    menu.appendChild(searchRow);
-
-    const allRow = document.createElement('label');
-    allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
-    const allCheckbox = document.createElement('input');
-    allCheckbox.type = 'checkbox';
-    allCheckbox.checked = selected.size === distinctValues.length;
-    allCheckbox.indeterminate = selected.size > 0 && selected.size < distinctValues.length;
-    const allLabel = document.createElement('span');
-    allLabel.textContent = t('main.filterAll');
-    allRow.append(allCheckbox, allLabel);
-    menu.appendChild(allRow);
-
-    const list = document.createElement('div');
-    list.className = 'data-table-col-filter-list';
-    const checkboxes = [];
-
-    function syncAllCheckbox() {
-        const current = changeHistoryColumnFilters.get(colKey) || new Set(distinctValues);
-        allCheckbox.checked = current.size === distinctValues.length;
-        allCheckbox.indeterminate = current.size > 0 && current.size < distinctValues.length;
-    }
-
-    distinctValues.forEach((value) => {
-        const row = document.createElement('label');
-        row.className = 'data-table-col-filter-option';
-        row.dataset.searchValue = (value || '').toLowerCase();
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = selected.has(value);
-        cb.addEventListener('change', () => {
-            const current = new Set(changeHistoryColumnFilters.get(colKey) || new Set(distinctValues));
-            if (cb.checked) current.add(value); else current.delete(value);
-            if (current.size === distinctValues.length) changeHistoryColumnFilters.delete(colKey);
-            else changeHistoryColumnFilters.set(colKey, current);
-            applyChangeHistoryColumnFilters();
-            th.classList.toggle('data-table-col-filter-active', changeHistoryColumnFilters.has(colKey));
-            syncAllCheckbox();
-        });
-        const span = document.createElement('span');
-        span.textContent = value || '—';
-        row.append(cb, span);
-        list.appendChild(row);
-        checkboxes.push(cb);
-    });
-    menu.appendChild(list);
-
-    function searchInputChanged() {
-        list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
-            row.hidden = !applyRowSearch(row);
-        });
-    }
-
-    allCheckbox.addEventListener('change', () => {
-        checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
-        if (allCheckbox.checked) changeHistoryColumnFilters.delete(colKey);
-        else changeHistoryColumnFilters.set(colKey, new Set());
-        applyChangeHistoryColumnFilters();
-        th.classList.toggle('data-table-col-filter-active', changeHistoryColumnFilters.has(colKey));
-        allCheckbox.indeterminate = false;
-    });
-
-    document.body.appendChild(menu);
-    const rect = th.getBoundingClientRect();
-    const menuWidth = menu.offsetWidth;
-    const left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - menuWidth - 8);
-    menu.style.position = 'absolute';
-    menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
-    menu.style.left = `${Math.max(8, left)}px`;
-    // Same z-index bump Admin-EquipoSaaS.js's own copy needs -- this table
-    // lives inside .modal-overlay (z-index: 100), above the shared
-    // .data-table-col-filter-menu's own default (50).
-    menu.style.zIndex = '150';
-    changeHistoryFilterMenuEl = menu;
-    changeHistoryFilterMenuCol = colKey;
-    searchRow.querySelector('input')?.focus();
-    setTimeout(() => document.addEventListener('click', handleChangeHistoryFilterOutsideClick, true), 0);
-}
-
-function attachChangeHistoryFilterTrigger(th, colKey) {
-    if (th.querySelector('.data-table-col-filter-trigger')) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'data-table-col-filter-trigger';
-    btn.setAttribute('aria-label', t('main.filterColumn'));
-    btn.setAttribute('data-help-key', 'filterColumn');
-    btn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
-    btn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        openChangeHistoryFilterMenu(th, colKey);
-    });
-    th.appendChild(btn);
-}
 
 // `recordId`, when passed (from a per-row history icon — see
 // buildHistoryButton below), scopes the same modal/endpoint to just that
@@ -5759,13 +5544,7 @@ async function openChangeHistory(tableId, recordId) {
     changeHistoryModal.hidden = false;
     const titleEl = changeHistoryModal.querySelector('#data-table-history-title');
     if (titleEl) titleEl.textContent = recordId ? t('main.changeHistoryTitleRecord') : t('main.changeHistoryTitle');
-    // Fresh filter state every time it opens -- avoids a stale filter
-    // silently hiding rows on a later open (same convention Admin-EquipoSaaS.js's
-    // own openSaasUserChanges follows).
-    changeHistoryColumnFilters = new Map();
-    closeChangeHistoryFilterMenu();
-    changeHistoryModal.querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
-    changeHistoryList.innerHTML = '';
+    resetChangeHistoryView();
     changeHistoryList.appendChild(renderChangeHistoryEmptyRow());
     try {
         const url = `/api/business/table-changes/${encodeURIComponent(tableId)}${recordId ? `?recordId=${encodeURIComponent(recordId)}` : ''}`;
@@ -7696,7 +7475,7 @@ function renderDataTableColumnControls() {
                 toAppend.push(columnsBtn);
             }
 
-            if (resolveIconGrant(tableKey, 'iconHistory')) {
+            if (!wrapper.dataset.noHistory && resolveIconGrant(tableKey, 'iconHistory')) {
                 const historyBtn = document.createElement('button');
                 historyBtn.type = 'button';
                 historyBtn.className = 'data-table-zoom-btn';
@@ -8467,9 +8246,6 @@ function commitPanelColumnFilters(tableId) {
 // collapses the panel; "Limpiar" is fully handled by the toolbar button.
 function ensureGeneratedFilterBar(zoom) {
     if (zoom.previousElementSibling?.classList?.contains('filter-bar')) return;
-    // Solo las tablas de pantalla: la de un cuadro de diálogo (Historial de cambios
-    // de un anexo, por ejemplo) no lleva panel de filtro.
-    if (zoom.closest('.modal-overlay, .modal-panel')) return;
     const bar = document.createElement('div');
     bar.className = 'filter-bar';
     bar.dataset.generated = '1';
@@ -11319,6 +11095,7 @@ function hasIconGrant(tableKey, iconId) {
 // original client-side check there, and only diverts to the SaaS Estatus
 // check for the SaaS admin tables (SAAS_TABLE_ICON_SCREENS).
 function resolveIconGrant(tableKey, iconId) {
+    if (DIALOG_TABLE_KEYS.has(tableKey)) return true;
     const saasResult = hasSaasTableIconGrant(tableKey, iconId);
     return saasResult !== null ? saasResult : hasIconGrant(tableKey, iconId);
 }
@@ -11533,11 +11310,7 @@ async function openChangeHistoryWithRows(title, loadRows, { htmlColumns = [] } =
     changeHistoryModal.hidden = false;
     const titleEl = changeHistoryModal.querySelector('#data-table-history-title');
     if (titleEl) titleEl.textContent = title;
-    // Filtros en blanco cada vez que se abre, igual que openChangeHistory.
-    changeHistoryColumnFilters = new Map();
-    closeChangeHistoryFilterMenu();
-    changeHistoryModal.querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
-    changeHistoryList.innerHTML = '';
+    resetChangeHistoryView();
     changeHistoryList.appendChild(renderChangeHistoryEmptyRow(undefined, t('admin.loading')));
     try {
         const rows = await loadRows();
@@ -11546,8 +11319,9 @@ async function openChangeHistoryWithRows(title, loadRows, { htmlColumns = [] } =
             changeHistoryList.appendChild(renderChangeHistoryEmptyRow());
             return;
         }
-        rows.forEach((cells) => {
-            const tr = renderChangeHistoryRow(cells.map((cell) => String(cell ?? '')));
+        rows.forEach((row) => {
+            const cells = Array.isArray(row) ? row : row.cells;
+            const tr = renderChangeHistoryRow(cells.map((cell) => String(cell ?? '')), Array.isArray(row) ? undefined : row.stripe);
             htmlColumns.forEach((index) => { tr.cells[index].innerHTML = String(cells[index] ?? ''); });
             changeHistoryList.appendChild(tr);
         });

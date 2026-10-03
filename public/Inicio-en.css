@@ -2245,12 +2245,6 @@
     .admin-table.admin-table-grid tbody tr:last-child td{
         border-bottom: none;
     }
-    /* Más especificidad que el sticky de .saas-changes-th (0,2,1): el
-       encabezado del historial conserva su embudo y su posición fija, solo
-       cambia el fondo para igualar al resto de la rejilla. */
-    .admin-table.admin-table-grid th.saas-changes-th{
-        background: var(--color-bg);
-    }
     /* Estado vacío del historial: una sola celda que abarca todas las columnas. */
     .change-history-empty-row td{
         padding: 1.4rem 0.7rem;
@@ -2263,6 +2257,36 @@
         margin-bottom: 0.3rem;
         font-size: 1.3rem;
         opacity: 0.6;
+    }
+    /* El historial vive en un diálogo y es una tabla del sistema (.data-table): por
+       debajo de los demás diálogos (z-index 100) para que el editor de columnas, la
+       Simbología o el de Búsqueda Guardada, que se abren desde su barra de iconos,
+       queden encima. */
+    .modal-overlay.change-history-overlay{
+        z-index: 90;
+    }
+    /* Los textos largos de "Cambio" se parten en líneas en vez de cortarse con "…"
+       (el ancho de cada columna se sigue pudiendo arrastrar como en cualquier tabla). */
+    /* Sin el mínimo "lo que mide el texto en una sola línea" de .data-table: el
+       historial se acomoda al ancho del diálogo y sus textos largos se parten, en vez
+       de abrir un scroll horizontal para leerlos. */
+    .data-table.change-history-table{
+        min-width: 0;
+    }
+    .data-table.change-history-table td{
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        line-height: 1.45;
+    }
+    .data-table.change-history-table td[data-col="date"]{
+        white-space: nowrap;
+    }
+    .change-history-table .change-history-empty-row td.data-table-empty-cell{
+        padding: 1.4rem 0.7rem;
+        text-align: center;
+        white-space: normal;
+        color: var(--color-text-secondary);
     }
     /* Leyenda: los dos subtítulos de sección y las celdas de las dos tablas. */
     .data-table-legend-section{
@@ -2773,7 +2797,7 @@
        getBoundingClientRect(). */
     .data-table-col-filter-menu{
         position: absolute;
-        z-index: 50;
+        z-index: 150;
         min-width: 12rem;
         max-width: 18rem;
         background-color: var(--color-surface);
