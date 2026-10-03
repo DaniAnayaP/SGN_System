@@ -300,6 +300,18 @@ function systemCell(value) {
     return td;
 }
 
+// Historial de cambios de Nuestros Clientes: el de una fila (Acciones) y el de toda
+// la tabla (icono de la barra). Salen de client_changes (ver server.js).
+function loadClientHistory(client) {
+    return async () => {
+        const res = await fetch(client ? `/api/admin/clients/${client.id}/changes` : '/api/admin/clients/changes', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { changes } = await res.json();
+        return (changes || []).map((change) => Dashboard.saasHistoryRow(change, client ? (client.company_name || change.record_label) : change.record_label));
+    };
+}
+Dashboard.registerSaasTableHistory('nuestros-clientes', 'main.changeHistoryTitle', loadClientHistory(null));
+
 function iconButton(iconClass, label, onClick, { disabled = false, title = '', danger = false, helpKey = '' } = {}) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -430,6 +442,9 @@ function renderClients() {
                 title: canEditClients ? '' : Dashboard.t('admin.clientEditNoPermission'),
                 helpKey: 'edit',
             }),
+            iconButton('bx-history', Dashboard.t('main.changeHistoryTitleRecord'), () => Dashboard.openChangeHistoryWithRows(
+                Dashboard.t('main.changeHistoryTitleRecord'), loadClientHistory(client),
+            ), { helpKey: 'changeHistory' }),
             iconButton(
                 client.status === 'inactivo' ? 'bx-check-circle' : 'bx-x-circle',
                 Dashboard.t(client.status === 'inactivo' ? 'admin.activate' : 'admin.deactivate'),

@@ -1364,6 +1364,23 @@ db.exec(`
         changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- client_changes: Historial de cambios de Nuestros Clientes (administración
+    -- de SaaS). Mismo molde que plan_changes, pero sin REFERENCES: un cliente de
+    -- prueba se puede reiniciar (se borra por completo) y su historial, con el
+    -- nombre guardado en record_label, tiene que seguir pudiéndose leer.
+    CREATE TABLE IF NOT EXISTS client_changes (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL,
+        record_label  TEXT NOT NULL DEFAULT '',
+        action        TEXT NOT NULL,
+        field_key     TEXT NOT NULL DEFAULT '',
+        old_value     TEXT NOT NULL DEFAULT '',
+        new_value     TEXT NOT NULL DEFAULT '',
+        changed_by    TEXT NOT NULL DEFAULT '',
+        changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_changes_client ON client_changes(client_id);
+
     -- Costo Accesos-Permisos: a price per plan per tree node, at EVERY
     -- level (Departamento/Área/Categoría/Pantalla/Columna), stored and
     -- summed independently per level ON PURPOSE (a priced Departamento AND
@@ -6298,6 +6315,14 @@ function updateBusinessSectorType(id, { name, iconCategory }) {
     return deserializeBusinessSectorType(db.prepare('SELECT * FROM business_sector_types WHERE id = ?').get(id));
 }
 
+function getAllBusinessSectorChanges(limit = 1000) {
+    return db.prepare(`
+        SELECT bc.*, COALESCE(bs.name, '') AS record_label
+        FROM business_sector_changes bc LEFT JOIN business_sectors bs ON bs.id = bc.business_sector_id
+        ORDER BY bc.changed_at DESC, bc.id DESC LIMIT ?
+    `).all(limit);
+}
+
 function getBusinessSectorChanges(sectorId) {
     return db
         .prepare('SELECT * FROM business_sector_changes WHERE business_sector_id = ? ORDER BY changed_at DESC, id DESC')
@@ -7719,6 +7744,38 @@ function getPlanChanges(planId) {
         .all(planId);
 }
 
+// Historial de la tabla completa (el icono de la barra): todos los cambios de
+// todos los planes, con el nombre del plan como "Registro". Tope de filas para
+// que el diálogo no cargue años de historia de golpe.
+function getAllPlanChanges(limit = 1000) {
+    return db.prepare(`
+        SELECT pc.*, COALESCE(p.name, '') AS record_label
+        FROM plan_changes pc LEFT JOIN plans p ON p.id = pc.plan_id
+        ORDER BY pc.changed_at DESC, pc.id DESC LIMIT ?
+    `).all(limit);
+}
+
+// Historial de Nuestros Clientes (ver client_changes).
+function getClientChanges(clientId) {
+    return db.prepare('SELECT * FROM client_changes WHERE client_id = ? ORDER BY changed_at DESC, id DESC').all(clientId);
+}
+
+function getAllClientChanges(limit = 1000) {
+    return db.prepare('SELECT * FROM client_changes ORDER BY changed_at DESC, id DESC LIMIT ?').all(limit);
+}
+
+function logClientChange({ clientId, recordLabel, action, fieldKey, oldValue, newValue, changedBy }) {
+    db.prepare(`
+        INSERT INTO client_changes (client_id, record_label, action, field_key, old_value, new_value, changed_by)
+        VALUES (@clientId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy)
+    `).run({
+        clientId, recordLabel: recordLabel || '', action, fieldKey: fieldKey || '',
+        oldValue: oldValue == null ? '' : String(oldValue),
+        newValue: newValue == null ? '' : String(newValue),
+        changedBy: changedBy || '',
+    });
+}
+
 function logPlanChange({ planId, action, fieldKey, oldValue, newValue, changedBy }) {
     db.prepare(`
         INSERT INTO plan_changes (plan_id, action, field_key, old_value, new_value, changed_by)
@@ -8383,6 +8440,7 @@ module.exports = {
     createBusinessSectorType,
     updateBusinessSectorType,
     getBusinessSectorChanges,
+    getAllBusinessSectorChanges,
     logBusinessSectorChange,
     BUSINESS_SECTOR_PATCHABLE_FIELDS,
     getSectorGrants,
@@ -8462,6 +8520,10 @@ module.exports = {
     isTupleGranted,
     syncClientModulesFromPermissionGrants,
     getPlanChanges,
+    getAllPlanChanges,
+    getClientChanges,
+    getAllClientChanges,
+    logClientChange,
     logPlanChange,
     listSaasAdmins,
     getSaasUserById,

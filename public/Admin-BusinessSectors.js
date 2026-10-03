@@ -605,16 +605,21 @@ sectorCostSaveBtn.addEventListener('click', async () => {
 // Dashboard.openChangeHistoryWithRows. Registro = this same Giro's own name on
 // every row (the dialog is already scoped to one sector); Solicitó/Autorizó are
 // always "—": business_sector_changes has no requested_by/authorized_by at all.
+// Historial del icono de la barra: los cambios de todos los giros.
+Dashboard.registerSaasTableHistory('business-sectors', 'main.changeHistoryTitle', async () => {
+    const res = await fetch('/api/admin/business-sectors/changes', { credentials: 'include' });
+    if (!res.ok) throw new Error('load failed');
+    const { changes } = await res.json();
+    return (changes || []).map((change) => Dashboard.saasHistoryRow(change));
+});
+
 function openSectorHistoryModal(sector) {
     return Dashboard.openChangeHistoryWithRows(Dashboard.t('admin.businessSectorChangeHistory'), async () => {
         const res = await fetch(`/api/admin/business-sectors/${sector.id}/changes`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { changes } = await res.json();
         return (changes || []).map((change) => {
-            let description;
-            if (change.action === 'create') description = Dashboard.t('main.changeHistoryCreated');
-            else description = `${Dashboard.t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-            return [change.changed_at, change.changed_by || '—', sector.name, description, '—', '—'];
+            return Dashboard.saasHistoryRow(change, sector.name);
         });
     });
 }

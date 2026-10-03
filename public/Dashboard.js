@@ -5788,7 +5788,9 @@ async function openChangeHistory(tableId, recordId) {
             if (change.action === 'create') description = t('main.changeHistoryCreated');
             else if (change.action === 'delete') description = t('main.changeHistoryDeleted');
             else {
-                description = `${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+                description = (!change.old_value && !change.new_value)
+                    ? t(change.field_key)
+                    : `${t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
                 // field_key is "<namespace>.<colId>" (see checkAndLogFieldChanges
                 // in server.js) -- the bare colId is exactly what
                 // getEffectiveColumnClassifications returns entries for.
@@ -7702,7 +7704,7 @@ function renderDataTableColumnControls() {
                 historyBtn.setAttribute('aria-label', t('main.changeHistory'));
                 historyBtn.title = t('main.changeHistory');
                 historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-                historyBtn.addEventListener('click', () => openChangeHistory(getTableId(wrapper, index)));
+                historyBtn.addEventListener('click', () => openTableHistory(getTableId(wrapper, index)));
                 toAppend.push(historyBtn);
             }
 
@@ -11555,6 +11557,41 @@ async function openChangeHistoryWithRows(title, loadRows, { htmlColumns = [] } =
     }
 }
 
+// Historial del icono de la barra para las tablas de SaaS: cada pantalla registra
+// aquí de dónde salen SUS cambios (rutas /api/admin/..., sin cliente) y el icono
+// abre el diálogo de siempre con eso. Sin registro, el icono usa el de clientes
+// (openChangeHistory), que para una tabla de SaaS no tiene nada que mostrar.
+const saasTableHistoryLoaders = new Map();
+function registerSaasTableHistory(tableId, titleKey, loadRows) {
+    saasTableHistoryLoaders.set(tableId, { titleKey, loadRows });
+}
+function openTableHistory(tableId) {
+    const loader = saasTableHistoryLoaders.get(tableId);
+    if (loader) return openChangeHistoryWithRows(t(loader.titleKey), loader.loadRows);
+    return openChangeHistory(tableId);
+}
+
+// Una fila del historial de SaaS, ya con el texto de "Cambio": el campo y de qué
+// a qué, o solo el nombre del campo / "Registro actualizado" cuando no hay valores.
+// Solicitó/Autorizó van en "—": estas tablas no tienen flujo de autorización.
+// Campos cuyo nuevo valor es una cantidad (permisos del árbol, costos, ajustes):
+// se leen como una frase, no como "campo: de → a".
+const SAAS_HISTORY_COUNT_FIELDS = {
+    'admin.activeTree': 'main.historyCountTree',
+    'admin.accessPermissionsCost': 'main.historyCountCosts',
+    'admin.sectorCostAdjust': 'main.historyCountSectorCosts',
+};
+function saasHistoryRow(change, recordLabel) {
+    let description;
+    if (change.action === 'create') description = t('main.changeHistoryCreated');
+    else if (change.action === 'delete') description = t('main.changeHistoryDeleted');
+    else if (SAAS_HISTORY_COUNT_FIELDS[change.field_key]) description = t(SAAS_HISTORY_COUNT_FIELDS[change.field_key], { count: change.new_value });
+    else if (!change.field_key) description = t('main.changeHistoryUpdated');
+    else if (!change.old_value && !change.new_value) description = t(change.field_key);
+    else description = `${t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+    return [change.changed_at, change.changed_by || '—', recordLabel ?? change.record_label ?? '', description, '—', '—'];
+}
+
 // Per-plan change history (plans are GEIPSA-wide, not client-scoped, so they
 // can't use openChangeHistory's client-scoped table-changes endpoint) -- used by
 // Admin-Planes.js's own Cambios icon per plan row, against
@@ -11566,15 +11603,7 @@ function openPlanChangeHistory(plan) {
         const res = await fetch(`/api/admin/plans/${plan.id}/changes`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { changes } = await res.json();
-        return (changes || []).map((change) => {
-            let description;
-            if (change.action === 'create') description = t('main.changeHistoryCreated');
-            else if (change.action === 'delete') description = t('main.changeHistoryDeleted');
-            else if (change.field_key === 'admin.activeTree') description = `${t('admin.planTreeTitle')}: ${change.new_value} permisos`;
-            else if (change.field_key === 'admin.accessPermissionsCost') description = `${t('admin.accessPermCostColumn')}: ${change.new_value} costos`;
-            else description = `${t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-            return [change.changed_at, change.changed_by || '—', plan.name, description, '—', '—'];
-        });
+        return (changes || []).map((change) => saasHistoryRow(change, plan.name));
     });
 }
 
@@ -11600,6 +11629,8 @@ window.Dashboard = {
     formatCurrency,
     openPlanChangeHistory,
     openChangeHistoryWithRows,
+    registerSaasTableHistory,
+    saasHistoryRow,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },

@@ -743,3 +743,11 @@ document.addEventListener('dashboard:language-changed', () => {
         console.error('Admin (Planes) failed to initialize:', err);
     }
 })();
+
+// Historial del icono de la barra: los cambios de todos los planes.
+Dashboard.registerSaasTableHistory('mis-planes', 'main.changeHistoryTitle', async () => {
+    const res = await fetch('/api/admin/plans/changes', { credentials: 'include' });
+    if (!res.ok) throw new Error('load failed');
+    const { changes } = await res.json();
+    return (changes || []).map((change) => Dashboard.saasHistoryRow(change));
+});

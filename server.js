@@ -259,6 +259,7 @@ const {
     createBusinessSectorType,
     updateBusinessSectorType,
     getBusinessSectorChanges,
+    getAllBusinessSectorChanges,
     logBusinessSectorChange,
     BUSINESS_SECTOR_PATCHABLE_FIELDS,
     getSectorGrants,
@@ -330,6 +331,10 @@ const {
     isTupleGranted,
     syncClientModulesFromPermissionGrants,
     getPlanChanges,
+    getAllPlanChanges,
+    getClientChanges,
+    getAllClientChanges,
+    logClientChange,
     logPlanChange,
     listSaasAdmins,
     getSaasUserById,
@@ -1098,6 +1103,7 @@ app.post('/api/admin/clients/:id/reset-training', requireAuth, requireAdmin, (re
     if (!client.training_user_id) return res.status(400).json({ message: 'This client has no training account yet.' });
     try {
         resetTrainingAccountData(req.params.id);
+        logClientChange({ clientId: client.id, recordLabel: client.company_name, action: 'update', fieldKey: 'admin.resetTrainingTitle', changedBy: changedByLabel(req) });
         res.json({ ok: true });
     } catch {
         res.status(500).json({ message: 'Reset failed.' });
@@ -1170,6 +1176,41 @@ function validateSectorNegocio(sectorNegocio) {
     return null;
 }
 
+// Historial de cambios de Nuestros Clientes (tabla client_changes): qué campo
+// del registro cambió, de qué a qué y quién. field_key es la clave de i18n del
+// nombre de la columna, así el diálogo lo muestra en el idioma de quien lo abre.
+const CLIENT_TRACKED_FIELDS = {
+    company_name: 'admin.companyName', rfc: 'admin.rfc', razon_social: 'admin.razonSocial',
+    company_nickname: 'admin.companyNickname', company_abbreviation: 'admin.companyAbbreviation',
+    owner_name: 'admin.ownerName', contact_name: 'admin.contactName', email: 'admin.email', phone: 'admin.phone',
+    billing_email: 'admin.billingEmail', contract_start_date: 'admin.contractStartDate',
+    contract_registered_date: 'admin.contractRegisteredDate', contract_end_date: 'admin.contractEndDate',
+    contract_file_name: 'admin.contractFile', contract_word_file_name: 'admin.contractWordFile',
+    plan: 'admin.plan', sector_negocio: 'menu.appSector', equipment_recommendations: 'admin.equipmentRecommendations',
+    initial_payment: 'admin.initialPayment', monthly_payment: 'admin.monthlyPayment', status: 'admin.status',
+    app_enabled: 'admin.clientAppEnabled',
+};
+function logClientFieldChanges(req, before, after) {
+    const label = after.company_name || before.company_name || '';
+    Object.entries(CLIENT_TRACKED_FIELDS).forEach(([column, fieldKey]) => {
+        const show = (v) => (column === 'app_enabled' ? (v ? 'Sí' : 'No') : (v ?? ''));
+        const oldValue = show(before[column]);
+        const newValue = show(after[column]);
+        if (String(oldValue) === String(newValue)) return;
+        logClientChange({ clientId: after.id, recordLabel: label, action: 'update', fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
+    });
+}
+
+// Historial de la tabla completa (icono de la barra) -- declarada antes de las
+// rutas con :id para que "changes" no se lea como un id.
+app.get('/api/admin/clients/changes', requireAuth, requireAdmin, (req, res) => {
+    res.json({ changes: getAllClientChanges() });
+});
+
+app.get('/api/admin/clients/:id/changes', requireAuth, requireAdmin, (req, res) => {
+    res.json({ changes: getClientChanges(req.params.id) });
+});
+
 app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-clients', 'tabla::a0', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para crear clientes.' });
@@ -1183,6 +1224,7 @@ app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
         return res.status(409).json({ message: 'A client with that RFC already exists.' });
     }
     const client = createClient(extractClientFields(req.body));
+    logClientChange({ clientId: client.id, recordLabel: client.company_name, action: 'create', changedBy: changedByLabel(req) });
     applyEffectiveEntitlements(client.id);
     const { generatedAdmin, generatedTrainingAccount } = await applyClientLifecycle(client);
     res.status(201).json({ client: getClientById(client.id), generatedAdmin, generatedTrainingAccount });
@@ -1223,6 +1265,7 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
         return res.status(400).json({ message: 'extraCostCenters must be a non-negative integer.' });
     }
     const client = updateClient(req.params.id, extractClientFields(req.body));
+    logClientFieldChanges(req, existing, client);
     if (extraCostCenters !== undefined) {
         setClientAddenda(req.params.id, { extraCostCenters, extraModules: getClientAddenda(req.params.id).extraModules });
     }
@@ -1264,6 +1307,7 @@ app.patch('/api/admin/clients/:id/app-enabled', requireAuth, requireAdmin, (req,
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     const client = setClientAppEnabled(req.params.id, !!req.body?.enabled);
+    logClientFieldChanges(req, existing, client);
     res.json({ client });
 });
 
@@ -1284,6 +1328,7 @@ app.post('/api/admin/clients/:id/reset', requireAuth, requireAdmin, (req, res) =
     if (req.body?.companyName !== existing.company_name) {
         return res.status(400).json({ message: 'El nombre de la empresa no coincide.' });
     }
+    logClientChange({ clientId: existing.id, recordLabel: existing.company_name, action: 'delete', changedBy: changedByLabel(req) });
     deleteClientCompletely(req.params.id);
     res.status(204).end();
 });
@@ -1908,6 +1953,11 @@ app.get('/api/admin/plans/:id/cascaded-costs', requireAuth, requireAdmin, (req, 
     res.json({ costs: getCascadedPlanCosts(req.params.id), currency: getMasterCostSettings().currency });
 });
 
+// Historial de la tabla completa (icono de la barra de Nuestros Planes).
+app.get('/api/admin/plans/changes', requireAuth, requireAdmin, (req, res) => {
+    res.json({ changes: getAllPlanChanges() });
+});
+
 app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) => {
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
@@ -2152,6 +2202,11 @@ app.patch('/api/admin/business-sectors/:id', requireAuth, requireAdmin, (req, re
         }
         throw err;
     }
+});
+
+// Historial de la tabla completa (icono de la barra de Giros de Negocio).
+app.get('/api/admin/business-sectors/changes', requireAuth, requireAdmin, (req, res) => {
+    res.json({ changes: getAllBusinessSectorChanges() });
 });
 
 app.get('/api/admin/business-sectors/:id/changes', requireAuth, requireAdmin, (req, res) => {
@@ -2898,6 +2953,20 @@ app.get('/api/business/users', requireAuth, requireClientAdmin, (req, res) => {
 // is auto-provisioned the moment its person is registered in Mi Recurso
 // Humano (see createHrWorker in db.js); this screen only enables/disables
 // the account and assigns its profiles/permissions below.
+// Historial de cambios de las pantallas de administración del negocio (Usuarios,
+// Roles, Estructura Organizacional, Reglas de Orden de Llenado): una fila de
+// data_table_changes por cambio, igual que las demás pantallas del cliente.
+// fieldKey es la clave de i18n del nombre del campo; sin valores, el diálogo
+// muestra solo ese nombre ("Rol reestablecido").
+function logBusinessChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue) {
+    logTableChange({
+        clientId: req.user.clientId, tableKey, recordId, recordLabel, action: 'update',
+        fieldKey, oldValue, newValue, changedBy: changedByLabel(req),
+    });
+}
+// Huella de una lista de permisos, sin importar el orden, para saber si cambió.
+const grantsSignature = (grants) => (grants || []).map((g) => JSON.stringify(g)).sort().join('|');
+
 app.patch('/api/business/users/:id', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
@@ -2907,6 +2976,9 @@ app.patch('/api/business/users/:id', requireAuth, requireClientAdmin, (req, res)
         return res.status(400).json({ message: 'active must be a boolean.' });
     }
     setUserActive(req.params.id, active);
+    if (!!user.active !== active) {
+        logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.accesosOperationalStatusCol', user.active ? 'Activo' : 'Inactivo', active ? 'Activo' : 'Inactivo');
+    }
     res.json({ user: { ...user, active: active ? 1 : 0 } });
 });
 
@@ -2960,7 +3032,12 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
-    res.json({ grants: setUserGrants(req.params.id, grants, changedByLabel(req)) });
+    const grantsBefore = getUserGrants(req.params.id);
+    const savedGrants = setUserGrants(req.params.id, grants, changedByLabel(req));
+    if (grantsSignature(grantsBefore) !== grantsSignature(savedGrants)) {
+        logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExtraGrants', grantsBefore.length, savedGrants.length);
+    }
+    res.json({ grants: savedGrants });
 });
 
 // Per-node "Cambios" for the tree above -- same reasoning as the client
@@ -2991,7 +3068,12 @@ app.put('/api/business/users/:id/visible-statuses', requireAuth, requireClientAd
     if (!Array.isArray(statuses) || statuses.some((s) => !ALL_ESTATUS_VALUES.includes(s))) {
         return res.status(400).json({ message: `statuses must be an array of: ${ALL_ESTATUS_VALUES.join(', ')}.` });
     }
-    res.json({ visibleStatuses: setUserVisibleStatuses(req.params.id, statuses) });
+    const statusesBefore = getUserVisibleStatuses(req.params.id);
+    const savedStatuses = setUserVisibleStatuses(req.params.id, statuses);
+    if ([...statusesBefore].sort().join(',') !== [...savedStatuses].sort().join(',')) {
+        logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyVisibleStatuses', statusesBefore.join(', '), savedStatuses.join(', '));
+    }
+    res.json({ visibleStatuses: savedStatuses });
 });
 
 // "Reestablecer Rol" -- wipes this user's Permisos Adicionales entirely, so
@@ -3004,6 +3086,7 @@ app.post('/api/business/users/:id/reset-role', requireAuth, requireClientAdmin, 
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
     if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
+    logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyResetRole', '', '');
     res.json({ grants: setUserGrants(req.params.id, []) });
 });
 
@@ -3013,7 +3096,10 @@ app.post('/api/business/users/:id/reset-role', requireAuth, requireClientAdmin, 
 // configuration exactly.
 app.post('/api/business/users/reset-all-roles', requireAuth, requireClientAdmin, (req, res) => {
     const affected = listBusinessUsers(req.user.clientId);
-    affected.forEach((u) => setUserGrants(u.id, []));
+    affected.forEach((u) => {
+        setUserGrants(u.id, []);
+        logBusinessChange(req, 'usuarios', u.id, u.name || u.username, 'business.historyResetRole', '', '');
+    });
     res.json({ count: affected.length });
 });
 
@@ -3034,7 +3120,12 @@ app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmi
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
-    res.json({ grants: setJobPositionGrants(req.params.id, grants) });
+    const roleGrantsBefore = getJobPositionGrants(req.params.id);
+    const savedRoleGrants = setJobPositionGrants(req.params.id, grants);
+    if (grantsSignature(roleGrantsBefore) !== grantsSignature(savedRoleGrants)) {
+        logBusinessChange(req, 'business-roles', existing.id, existing.name, 'business.historyRoleGrants', roleGrantsBefore.length, savedRoleGrants.length);
+    }
+    res.json({ grants: savedRoleGrants });
 });
 
 // Nuestra Estructura Organizacional's own "bosquejo" edge -- which OTHER
@@ -3060,7 +3151,13 @@ app.put('/api/business/job-positions/:id/reports-to', requireAuth, requireClient
             });
         }
     }
+    const reportsToName = (id) => (id ? (getJobPositionById(id, req.user.clientId)?.name || '') : '');
+    const reportsToBefore = reportsToName(existing.reports_to_job_position_id);
     const jobPosition = setJobPositionReportsTo(req.params.id, req.user.clientId, reportsToJobPositionId || null);
+    const reportsToAfter = reportsToName(jobPosition.reports_to_job_position_id);
+    if (reportsToBefore !== reportsToAfter) {
+        logBusinessChange(req, 'org-chart-positions', existing.id, existing.name, 'business.historyReportsTo', reportsToBefore, reportsToAfter);
+    }
     res.json({ jobPosition: mapJobPosition(jobPosition, getClientById(req.user.clientId)?.company_name) });
 });
 
@@ -3078,7 +3175,14 @@ app.put('/api/business/job-positions/:id/alt-supervisors', requireAuth, requireC
         if (altId === existing.id) return res.status(400).json({ message: 'A job position cannot be its own alternate supervisor.' });
         if (!getJobPositionById(altId, req.user.clientId)) return res.status(400).json({ message: 'altSupervisorIds must belong to this client.' });
     }
-    res.json({ altSupervisorIds: setJobPositionAltSupervisors(existing.id, uniqueIds) });
+    const altNames = (ids) => ids.map((id) => getJobPositionById(id, req.user.clientId)?.name || '').filter(Boolean).sort().join(', ');
+    const altBefore = altNames(getAltSupervisorIds(existing.id).map((row) => (typeof row === 'object' ? row.id : row)));
+    const savedAltIds = setJobPositionAltSupervisors(existing.id, uniqueIds);
+    const altAfter = altNames(savedAltIds.map((row) => (typeof row === 'object' ? row.id : row)));
+    if (altBefore !== altAfter) {
+        logBusinessChange(req, 'org-chart-positions', existing.id, existing.name, 'business.historyAltSupervisors', altBefore, altAfter);
+    }
+    res.json({ altSupervisorIds: savedAltIds });
 });
 
 // Read-only chart data: every active Puesto plus whichever real hr_workers
@@ -3497,6 +3601,10 @@ app.post('/api/business/field-fill-rules', requireAuth, requireClientAdmin, (req
     const rule = createFieldFillRule({
         clientId: req.user.clientId, tableKey, gateCol, gateLabel, dependentCol, dependentLabel, createdBy: req.user.name,
     });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'reglas-orden-llenado', recordId: rule.id,
+        recordLabel: `${rule.gate_label} → ${rule.dependent_label}`, action: 'create', changedBy: changedByLabel(req),
+    });
     res.status(201).json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
 });
 app.patch('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
@@ -3507,6 +3615,8 @@ app.patch('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin,
     const { gateCol, gateLabel, dependentCol, dependentLabel } = req.body;
     try {
         const rule = updateFieldFillRule(req.params.id, req.user.clientId, { gateCol, gateLabel, dependentCol, dependentLabel });
+        logBusinessChange(req, 'reglas-orden-llenado', rule.id, `${rule.gate_label} → ${rule.dependent_label}`, 'main.historyFillRule',
+            `${existing.gate_label} → ${existing.dependent_label}`, `${rule.gate_label} → ${rule.dependent_label}`);
         res.json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -3526,6 +3636,7 @@ app.post('/api/business/field-fill-rules/:id/authorize', requireAuth, (req, res)
         }
     }
     const rule = authorizeFieldFillRule(req.params.id, req.user.clientId, req.user.name);
+    logBusinessChange(req, 'reglas-orden-llenado', rule.id, `${rule.gate_label} → ${rule.dependent_label}`, 'main.historyRuleAuthorized', '', '');
     res.json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
 });
 app.delete('/api/business/field-fill-rules/:id', requireAuth, (req, res) => {
@@ -3536,7 +3647,14 @@ app.delete('/api/business/field-fill-rules/:id', requireAuth, (req, res) => {
             return res.status(403).json({ message: 'No tienes permiso para eliminar reglas.' });
         }
     }
+    const ruleToDelete = getFieldFillRuleById(req.params.id, req.user.clientId);
     deleteFieldFillRule(req.params.id, req.user.clientId);
+    if (ruleToDelete) {
+        logTableChange({
+            clientId: req.user.clientId, tableKey: 'reglas-orden-llenado', recordId: ruleToDelete.id,
+            recordLabel: `${ruleToDelete.gate_label} → ${ruleToDelete.dependent_label}`, action: 'delete', changedBy: changedByLabel(req),
+        });
+    }
     res.status(204).end();
 });
 

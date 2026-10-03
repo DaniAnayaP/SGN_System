@@ -411,6 +411,17 @@ function renderReports() {
         tdActions.dataset.col = 'actions';
         tdActions.className = 'admin-table-actions';
 
+        // Historial de cambios de ESTA fila (el servidor ya registra esta tabla).
+        const historyBtn = document.createElement('button');
+        historyBtn.type = 'button';
+        historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('data-help-key', 'changeHistory');
+        historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+        historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+        historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+        historyBtn.addEventListener('click', () => Dashboard.openChangeHistory('transacciones-inteligentes', report.id));
+        tdActions.appendChild(historyBtn);
+
         if (!report.authorized_by) {
             const authorizeBtn = document.createElement('button');
             authorizeBtn.type = 'button';
