@@ -154,7 +154,7 @@
       "hrAnalytics": "HR Analytics"
     },
     "clientesRegistrados": "Our Clients",
-    "addClientNew": "+ Add New Client",
+    "addClientNew": "Add New Client",
     "contrataciones": "Contracted Modules",
     "clientAdmin": "Client Administration",
     "clientAdminAbbr1": "Client Admin.",
@@ -820,7 +820,7 @@
     "ccNoneYet": "No cost centers yet. Add the first one above.",
     "ccCodeExists": "A cost center with that code already exists.",
     "ccDeleteConfirm": "Delete this cost center?",
-    "ccNew": "+ New Cost Center",
+    "ccNew": "New Cost Center",
     "ccModalTitleNew": "New Cost Center",
     "ccModalTitleEdit": "Edit Cost Center",
     "ccCompany": "Company",
@@ -984,7 +984,7 @@
     "filterSaasChangesSearchHint": "User, record, change, requested by, authorized by...",
     "rowEditableLegend": "Row with at least one field you can still edit",
     "rowEditableName": "Editable row",
-    "columnLegendBtn": "Color legend",
+    "columnLegendBtn": "Legend",
     "savedSearchBtn": "Saved Search",
     "savedSearchTitle": "Saved Search",
     "savedSearchEmpty": "No saved searches yet.",
@@ -1097,7 +1097,12 @@
     "fieldRulesSameColumnError": "Choose two different fields.",
     "fieldRuleLockedHint": "Locked — fill in \"{field}\" first.",
     "fieldRuleLockedGeneric": "This field is locked — fill in its gate field first.",
-    "columnLegendTitle": "Color legend",
+    "columnLegendTitle": "Legend",
+    "columnLegendColorsHeading": "Colors",
+    "columnLegendIconsHeading": "Icons on this table",
+    "columnLegendIcon": "Icon",
+    "columnLegendIconName": "Name",
+    "columnLegendIconWhat": "What it does",
     "columnLegendColor": "Color",
     "columnLegendClassification": "Classification",
     "columnLegendDescription": "Description",
@@ -1900,7 +1905,7 @@
       "example": "if small numbers are hard to read, you make it bigger."
     },
     "pinColumns": {
-      "what": "Locks one or more columns on the left side, so they stay in place while you scroll the table to the right.",
+      "what": "Locks up to 4 columns on the left side, so they stay in place while you scroll the table to the right.",
       "example": "you pin the \"Name\" column so you always know whose row it is, even looking at far-away columns."
     },
     "columnVisibility": {
@@ -1912,8 +1917,8 @@
       "example": "if a value changed and you don't know why, this shows who modified it and what it used to be."
     },
     "columnLegend": {
-      "what": "Explains what each color you see on the table's rows and columns means.",
-      "example": "a green row can mean that record is editable."
+      "what": "Explains what each color on the table means and what each of its icons does.",
+      "example": "a green row can mean that record is editable, and below you see what each toolbar icon is for."
     },
     "fieldRules": {
       "what": "This is where you set the order this table's fields must be filled in, and which ones are required.",

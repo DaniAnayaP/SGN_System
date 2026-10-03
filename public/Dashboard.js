@@ -239,7 +239,7 @@ const EMBEDDED_TRANSLATIONS = {
             certifications: "Certifications",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transportVolume: "Volume Transport", transportLastMile: "Last-Mile Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015", recruitment: "Recruitment and Selection", personnelAdmin: "Personnel Administration", trainingDevelopment: "Training and Development", compensationBenefits: "Compensation and Benefits", organizationalDevelopment: "Organizational Development", occupationalHealthSafety: "Occupational Health and Safety", hris: "HR Information System (HRIS)", hrAnalytics: "HR Analytics" },
-            clientesRegistrados: "Our Clients", addClientNew: "+ Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Our Plans", addPlanNew: "+ Add New Plan", moduleCosts: "Access & Permissions Cost", saasTeam: "SaaS Team", mainSection: "General",
+            clientesRegistrados: "Our Clients", addClientNew: "Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Our Plans", addPlanNew: "Add New Plan", moduleCosts: "Access & Permissions Cost", saasTeam: "SaaS Team", mainSection: "General",
             catCatalogos: "Catalogs", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operations", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clients", catTransVolSitiosOrigen: "Origin Sites", catTransVolSitiosDestino: "Destination Sites", catTransVolRutas: "Routes", catTransVolTiposServicio: "Service Types", catTransVolTiposTraslado: "Transfer Types", catTransVolContactos: "Contacts", catTransVolEmpresasAsociadas: "Partner Companies", catTransVolTiposUnidades: "Unit Types", catTransVolTiposAditamentos: "Attachment Types", catCentroDistCodigos: "Codes", catCentroDistCategorias: "Categories", catCentroDistUdm: "UOM",
@@ -385,7 +385,7 @@ const EMBEDDED_TRANSLATIONS = {
             certifications: "Certificaciones",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
             area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transportVolume: "Transporte Volumen", transportLastMile: "Transporte Última Milla", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015", recruitment: "Reclutamiento y Selección", personnelAdmin: "Administración de Personal", trainingDevelopment: "Formación y Desarrollo", compensationBenefits: "Compensaciones y Beneficios", organizationalDevelopment: "Desarrollo Organizacional", occupationalHealthSafety: "Seguridad y Salud Laboral", hris: "Sistema de Información de RRHH (SIRH)", hrAnalytics: "Analítica Recursos Humanos (RH Analytics)" },
-            clientesRegistrados: "Nuestros Clientes", addClientNew: "+ Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Nuestros Planes", addPlanNew: "+ Agregar Plan Nuevo", moduleCosts: "Costo Accesos-Permisos", saasTeam: "Equipo SaaS", mainSection: "General",
+            clientesRegistrados: "Nuestros Clientes", addClientNew: "Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Nuestros Planes", addPlanNew: "Agregar Plan Nuevo", moduleCosts: "Costo Accesos-Permisos", saasTeam: "Equipo SaaS", mainSection: "General",
             catCatalogos: "Catálogos", catCatalogosItem1: "Cat 1", catCatalogosItem2: "Cat 2",
             catOperaciones: "Operaciones", catOperacionesItem1: "Ope 1", catOperacionesItem2: "Ope 2",
             catTransVolClientes: "Clientes", catTransVolSitiosOrigen: "Sitios Origen", catTransVolSitiosDestino: "Sitios Destino", catTransVolRutas: "Rutas", catTransVolTiposServicio: "Tipos Servicio", catTransVolTiposTraslado: "Tipos Traslado", catTransVolContactos: "Contactos", catTransVolEmpresasAsociadas: "Empresas Asociadas", catTransVolTiposUnidades: "Tipos Unidades", catTransVolTiposAditamentos: "Tipos Aditamentos", catCentroDistCodigos: "Códigos", catCentroDistCategorias: "Categorías", catCentroDistUdm: "UDM",
@@ -3512,125 +3512,115 @@ function openColumnFilterMenu(th, tableId, key) {
     // Above "Todos" — only narrows which rows are VISIBLE in the checklist
     // below, never touches selection state, so searching to find one value
     // and clearing the search again always shows the filter exactly as it
-    // was left. Date columns (see isDateColumn) get a Desde:/Hasta: range
-    // instead of the text box — "starts with" a date is meaningless, a
-    // range is what's actually useful there. applyRowSearch (defined once
-    // list/checkboxes exist, further down) does the actual hiding either
-    // way.
-    const dateColumn = isDateColumn(distinctValues);
+    // was left. Las columnas que son una fecha, una parte de fecha, una hora o
+    // números suman un cuarto modo, "Desde–Hasta" (dos campos del tipo que
+    // toca), que SÍ filtra: guarda una regla de rango (state.columnRules) que se
+    // aplica al escribir y vale también para los registros que lleguen después.
+    // La fecha completa abre directo en ese modo. applyRowSearch (más abajo,
+    // cuando ya existen la lista y sus casillas) esconde las casillas que no
+    // cumplen en los otros tres modos.
+    const rangeType = detectRangeType(key, distinctValues);
+    const appliedRule = state.columnRules.get(key);
+    const canRange = !!rangeType || appliedRule?.kind === 'range';
+    const FILTER_MODES = [
+        { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
+        { id: 'contains', labelKey: 'main.filterModeContains' },
+        { id: 'equals', labelKey: 'main.filterModeEquals' },
+    ];
+    if (canRange) FILTER_MODES.push({ id: 'range', labelKey: 'main.filterModeRange' });
+    let searchMode = (appliedRule?.kind === 'range' || rangeType === 'date') ? 'range' : 'contains';
+    const rangeRule = appliedRule?.kind === 'range'
+        ? { ...appliedRule, rtype: appliedRule.rtype || 'date' }
+        : { kind: 'range', rtype: rangeType, from: '', to: '' };
+    if (rangeRule.rtype === 'number') rangeRule.currency = distinctValues.some((v) => String(v).trim().startsWith('$'));
     const searchRow = document.createElement('div');
     searchRow.className = 'data-table-col-filter-search-row';
-    let applyRowSearch = () => {};
+    let applyRowSearch = () => true;
 
-    if (dateColumn) {
-        const fromField = document.createElement('input');
-        fromField.type = 'date';
-        fromField.className = 'data-table-col-filter-date';
-        fromField.setAttribute('aria-label', t('main.filterDateFrom'));
-        fromField.addEventListener('click', (event) => event.stopPropagation());
-        const toField = document.createElement('input');
-        toField.type = 'date';
-        toField.className = 'data-table-col-filter-date';
-        toField.setAttribute('aria-label', t('main.filterDateTo'));
-        toField.addEventListener('click', (event) => event.stopPropagation());
+    // Shows which mode is active without having to reopen the dropdown
+    // to check — updated in the option click handler below.
+    const modeCurrentLabel = document.createElement('div');
+    modeCurrentLabel.className = 'data-table-col-filter-mode-current';
+    menu.appendChild(modeCurrentLabel);
 
-        const fromLabel = document.createElement('span');
-        fromLabel.className = 'data-table-col-filter-date-label';
-        fromLabel.textContent = t('main.filterDateFrom');
-        const toLabel = document.createElement('span');
-        toLabel.className = 'data-table-col-filter-date-label';
-        toLabel.textContent = t('main.filterDateTo');
-        searchRow.append(fromLabel, fromField, toLabel, toField);
+    const modeBtn = document.createElement('button');
+    modeBtn.type = 'button';
+    modeBtn.className = 'data-table-col-filter-mode-btn';
+    modeBtn.setAttribute('aria-label', t('main.filterModeLabel'));
+    modeBtn.title = t('main.filterModeLabel');
+    modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
+    searchRow.appendChild(modeBtn);
 
-        applyRowSearch = (row) => {
-            const value = row.dataset.searchValue;
-            if (fromField.value && value < fromField.value) return false;
-            if (toField.value && value > toField.value) return false;
-            return true;
-        };
-        fromField.addEventListener('input', () => searchInputChanged());
-        toField.addEventListener('input', () => searchInputChanged());
-    } else {
-        const FILTER_MODES = [
-            { id: 'startsWith', labelKey: 'main.filterModeStartsWith' },
-            { id: 'contains', labelKey: 'main.filterModeContains' },
-            { id: 'equals', labelKey: 'main.filterModeEquals' },
-        ];
-        let searchMode = 'contains';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.className = 'data-table-col-filter-search';
+    searchInput.placeholder = t('main.filterSearchPlaceholder');
+    searchInput.addEventListener('click', (event) => event.stopPropagation());
+    searchRow.appendChild(searchInput);
 
-        // Shows which mode is active without having to reopen the dropdown
-        // to check — updated in the option click handler below.
-        const modeCurrentLabel = document.createElement('div');
-        modeCurrentLabel.className = 'data-table-col-filter-mode-current';
-        modeCurrentLabel.textContent = t('main.filterModeContains');
-        menu.appendChild(modeCurrentLabel);
+    // Desde–Hasta: los dos campos del tipo que toca; cada cambio aplica la regla.
+    const rangeBox = document.createElement('div');
+    rangeBox.className = 'data-table-search-range';
+    if (canRange) buildRangeFields(rangeBox, rangeRule, () => applyRangeRule());
+    searchRow.appendChild(rangeBox);
 
-        const modeBtn = document.createElement('button');
-        modeBtn.type = 'button';
-        modeBtn.className = 'data-table-col-filter-mode-btn';
-        modeBtn.setAttribute('aria-label', t('main.filterModeLabel'));
-        modeBtn.title = t('main.filterModeLabel');
-        modeBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i>';
-        searchRow.appendChild(modeBtn);
-
-        const searchInput = document.createElement('input');
-        searchInput.type = 'search';
-        searchInput.className = 'data-table-col-filter-search';
-        searchInput.placeholder = t('main.filterSearchPlaceholder');
-        searchInput.addEventListener('click', (event) => event.stopPropagation());
-        searchRow.appendChild(searchInput);
-
-        const modeMenu = document.createElement('div');
-        modeMenu.className = 'data-table-col-filter-mode-menu';
-        modeMenu.hidden = true;
-        const modeButtons = FILTER_MODES.map((mode) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'data-table-col-filter-mode-option';
-            btn.textContent = t(mode.labelKey);
-            btn.classList.toggle('data-table-col-filter-mode-option-active', mode.id === searchMode);
-            btn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                searchMode = mode.id;
-                modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
-                btn.classList.add('data-table-col-filter-mode-option-active');
-                modeCurrentLabel.textContent = t(mode.labelKey);
-                modeMenu.hidden = true;
-                searchInputChanged();
-            });
-            modeMenu.appendChild(btn);
-            return btn;
-        });
-        searchRow.appendChild(modeMenu);
-
-        modeBtn.addEventListener('click', (event) => {
+    const modeMenu = document.createElement('div');
+    modeMenu.className = 'data-table-col-filter-mode-menu';
+    modeMenu.hidden = true;
+    const modeButtons = FILTER_MODES.map((mode) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'data-table-col-filter-mode-option';
+        btn.textContent = t(mode.labelKey);
+        btn.classList.toggle('data-table-col-filter-mode-option-active', mode.id === searchMode);
+        btn.addEventListener('click', (event) => {
             event.stopPropagation();
-            modeMenu.hidden = !modeMenu.hidden;
-        });
-        menu.addEventListener('click', (event) => {
-            if (!modeMenu.hidden && event.target !== modeBtn && !modeMenu.contains(event.target)) modeMenu.hidden = true;
-        });
-
-        applyRowSearch = (row) => {
-            const query = searchInput.value.trim().toLowerCase();
-            if (query === '') return true;
-            const value = row.dataset.searchValue;
-            if (searchMode === 'equals') {
-                // A cell can itself hold several comma-separated values (e.g.
-                // Centro de Costos' multi-select) -- "Igual que" splits BOTH
-                // sides on comma and matches if any filter term exactly
-                // matches any of the cell's own terms, so typing "GEA,
-                // TRAMET" matches a row tagged just "GEA" as well as one
-                // tagged "GEA,TRAMET,GSN,GEIPSA". A single term with no comma
-                // on either side behaves exactly like the old plain equality.
-                const queryTerms = query.split(',').map((s) => s.trim()).filter(Boolean);
-                const valueTerms = value.split(',').map((s) => s.trim());
-                return queryTerms.some((term) => valueTerms.includes(term));
+            const previous = searchMode;
+            searchMode = mode.id;
+            modeButtons.forEach((b) => b.classList.remove('data-table-col-filter-mode-option-active'));
+            btn.classList.add('data-table-col-filter-mode-option-active');
+            modeMenu.hidden = true;
+            showMode();
+            if (searchMode === 'range') {
+                applyRangeRule();
+            } else if (previous === 'range') {
+                // Al salir de Desde–Hasta su regla se quita y la lista vuelve a estar completa.
+                clearRangeRule();
             }
-            return searchMode === 'startsWith' ? value.startsWith(query) : value.includes(query);
-        };
-        searchInput.addEventListener('input', () => searchInputChanged());
-    }
+            searchInputChanged();
+        });
+        modeMenu.appendChild(btn);
+        return btn;
+    });
+    searchRow.appendChild(modeMenu);
+
+    modeBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        modeMenu.hidden = !modeMenu.hidden;
+    });
+    menu.addEventListener('click', (event) => {
+        if (!modeMenu.hidden && event.target !== modeBtn && !modeMenu.contains(event.target)) modeMenu.hidden = true;
+    });
+
+    applyRowSearch = (row) => {
+        const query = searchInput.value.trim().toLowerCase();
+        if (query === '') return true;
+        const value = row.dataset.searchValue;
+        if (searchMode === 'equals') {
+            // A cell can itself hold several comma-separated values (e.g.
+            // Centro de Costos' multi-select) -- "Igual que" splits BOTH
+            // sides on comma and matches if any filter term exactly
+            // matches any of the cell's own terms, so typing "GEA,
+            // TRAMET" matches a row tagged just "GEA" as well as one
+            // tagged "GEA,TRAMET,GSN,GEIPSA". A single term with no comma
+            // on either side behaves exactly like the old plain equality.
+            const queryTerms = query.split(',').map((s) => s.trim()).filter(Boolean);
+            const valueTerms = value.split(',').map((s) => s.trim());
+            return queryTerms.some((term) => valueTerms.includes(term));
+        }
+        return searchMode === 'startsWith' ? value.startsWith(query) : value.includes(query);
+    };
+    searchInput.addEventListener('input', () => searchInputChanged());
     menu.appendChild(searchRow);
 
     const allRow = document.createElement('label');
@@ -3679,6 +3669,41 @@ function openColumnFilterMenu(th, tableId, key) {
     });
     menu.appendChild(list);
 
+    // Qué se ve según el modo: buscador + lista con casillas, o los dos campos
+    // de Desde–Hasta (que no usan la lista).
+    function showMode() {
+        modeCurrentLabel.textContent = t(FILTER_MODES.find((m) => m.id === searchMode).labelKey);
+        const isRange = searchMode === 'range';
+        searchInput.hidden = isRange;
+        rangeBox.hidden = !isRange;
+        allRow.hidden = isRange;
+        list.hidden = isRange;
+    }
+    // Aplica en el momento lo escrito en Desde–Hasta como regla de rango de la
+    // columna; la regla reemplaza a las casillas. Sin nada escrito, se quita.
+    function applyRangeRule() {
+        const { rule } = resolveDraftFilter(tableId, key, new Set(), rangeRule);
+        if (rule) {
+            state.columnFilters.delete(key);
+            state.columnRules.set(key, rule);
+        } else if (state.columnRules.get(key)?.kind === 'range') {
+            state.columnRules.delete(key);
+        }
+        applyColumnValueFilters(tableId);
+        updateColumnFilterIndicator(th, state.columnFilters.has(key) || state.columnRules.has(key));
+    }
+    // Al salir de Desde–Hasta su regla se quita y las casillas vuelven a mostrar
+    // lo que de verdad está aplicado.
+    function clearRangeRule() {
+        if (state.columnRules.get(key)?.kind === 'range') state.columnRules.delete(key);
+        const sel = currentSelection();
+        checkboxes.forEach((cb, i) => { cb.checked = sel.has(distinctValues[i]); });
+        syncAllCheckbox();
+        applyColumnValueFilters(tableId);
+        updateColumnFilterIndicator(th, state.columnFilters.has(key) || state.columnRules.has(key));
+    }
+    showMode();
+
     // Hoisted (function declaration, not const) so the date/text branches
     // above can wire their own input listeners to call it even though it's
     // only defined here, once `list`'s rows actually exist.
@@ -3706,7 +3731,7 @@ function openColumnFilterMenu(th, tableId, key) {
     menu.style.left = `${Math.max(8, left)}px`;
     dataTableFilterMenuEl = menu;
     dataTableFilterMenuTableId = tableId;
-    searchRow.querySelector('input')?.focus();
+    (searchMode === 'range' ? rangeBox : searchRow).querySelector('input, select')?.focus();
     setTimeout(() => {
         document.addEventListener('click', handleColumnFilterOutsideClick, true);
         window.addEventListener('scroll', closeColumnFilterMenu, true);
@@ -5227,6 +5252,20 @@ let changeHistoryList = null;
 // just happened to be added there first.
 const CHANGE_HISTORY_COLUMNS = ['date', 'user', 'record', 'change', 'requestedBy', 'authorizedBy'];
 
+// Estado vacío del historial: una sola celda que abarca las columnas, centrada
+// y con el icono del historial. Sin data-col a propósito: así no cuenta como un
+// valor más de "Fecha" en el filtro de la columna.
+function renderChangeHistoryEmptyRow(colspan = CHANGE_HISTORY_COLUMNS.length) {
+    const tr = document.createElement('tr');
+    tr.className = 'change-history-empty-row';
+    const td = document.createElement('td');
+    td.colSpan = colspan;
+    td.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+    td.appendChild(document.createTextNode(t('main.changeHistoryEmpty')));
+    tr.appendChild(td);
+    return tr;
+}
+
 function ensureChangeHistoryModal() {
     if (changeHistoryModal) return;
     changeHistoryModal = document.createElement('div');
@@ -5237,10 +5276,10 @@ function ensureChangeHistoryModal() {
         ['change', 'main.changeHistoryChange'], ['requestedBy', 'main.changeHistoryRequestedBy'], ['authorizedBy', 'main.changeHistoryAuthorizedBy'],
     ].map(([col, key]) => `<th data-col="${col}" class="saas-changes-th">${t(key)}</th>`).join('');
     changeHistoryModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-history-title">
+        <div class="modal-panel" style="max-width: 62rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-history-title">
             <h3 id="data-table-history-title">${t('main.changeHistoryTitle')}</h3>
-            <div class="admin-table-wrap saas-changes-table-wrap">
-                <table class="admin-table">
+            <div class="admin-table-wrap saas-changes-table-wrap admin-table-grid-wrap">
+                <table class="admin-table admin-table-grid">
                     <thead>
                         <tr>${headerCells}</tr>
                     </thead>
@@ -5552,7 +5591,7 @@ async function openChangeHistory(tableId, recordId) {
     closeChangeHistoryFilterMenu();
     changeHistoryModal.querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
     changeHistoryList.innerHTML = '';
-    changeHistoryList.appendChild(renderChangeHistoryRow([t('main.changeHistoryEmpty'), '', '', '', '', '']));
+    changeHistoryList.appendChild(renderChangeHistoryEmptyRow());
     try {
         const url = `/api/business/table-changes/${encodeURIComponent(tableId)}${recordId ? `?recordId=${encodeURIComponent(recordId)}` : ''}`;
         // In parallel, not chained -- fetchTableClassifications already
@@ -7242,6 +7281,7 @@ const COLUMN_GROUP_META = {
 
 let columnLegendModal = null;
 let columnLegendList = null;
+let columnLegendIconList = null;
 
 function ensureColumnLegendModal() {
     if (columnLegendModal) return;
@@ -7249,18 +7289,32 @@ function ensureColumnLegendModal() {
     columnLegendModal.className = 'modal-overlay';
     columnLegendModal.hidden = true;
     columnLegendModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 36rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-legend-title">
+        <div class="modal-panel" style="max-width: 46rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-legend-title">
             <h3 id="data-table-legend-title">${t('main.columnLegendTitle')}</h3>
-            <div class="admin-table-wrap">
-                <table class="admin-table">
+            <p class="data-table-legend-section">${t('main.columnLegendColorsHeading')}</p>
+            <div class="admin-table-wrap admin-table-grid-wrap">
+                <table class="admin-table admin-table-grid data-table-legend-table">
                     <thead>
                         <tr>
-                            <th>${t('main.columnLegendColor')}</th>
-                            <th>${t('main.columnLegendClassification')}</th>
+                            <th class="data-table-legend-col-icon">${t('main.columnLegendColor')}</th>
+                            <th class="data-table-legend-col-name">${t('main.columnLegendClassification')}</th>
                             <th>${t('main.columnLegendDescription')}</th>
                         </tr>
                     </thead>
                     <tbody data-role="list"></tbody>
+                </table>
+            </div>
+            <p class="data-table-legend-section">${t('main.columnLegendIconsHeading')}</p>
+            <div class="admin-table-wrap admin-table-grid-wrap">
+                <table class="admin-table admin-table-grid data-table-legend-table">
+                    <thead>
+                        <tr>
+                            <th class="data-table-legend-col-icon">${t('main.columnLegendIcon')}</th>
+                            <th class="data-table-legend-col-name">${t('main.columnLegendIconName')}</th>
+                            <th>${t('main.columnLegendIconWhat')}</th>
+                        </tr>
+                    </thead>
+                    <tbody data-role="icons"></tbody>
                 </table>
             </div>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
@@ -7270,6 +7324,7 @@ function ensureColumnLegendModal() {
     `;
     document.body.appendChild(columnLegendModal);
     columnLegendList = columnLegendModal.querySelector('[data-role="list"]');
+    columnLegendIconList = columnLegendModal.querySelector('[data-role="icons"]');
     const close = () => { columnLegendModal.hidden = true; };
     columnLegendModal.querySelector('[data-role="close"]').addEventListener('click', close);
     wireModalDismiss(columnLegendModal, close);
@@ -7283,11 +7338,51 @@ function buildLegendRow(swatchColor, name, desc) {
     swatch.style.backgroundColor = swatchColor;
     swatchTd.appendChild(swatch);
     const nameTd = document.createElement('td');
+    nameTd.className = 'data-table-legend-name';
     nameTd.textContent = name;
     const descTd = document.createElement('td');
+    descTd.className = 'data-table-legend-desc';
     descTd.textContent = desc;
     tr.append(swatchTd, nameTd, descTd);
     return tr;
+}
+
+// Una fila de la tabla "Iconos de esta tabla": el icono tal como se ve en la
+// barra (se copia su marcado), su nombre y la misma explicación de Modo ayuda.
+function buildLegendIconRow(iconHtml, name, desc) {
+    const tr = document.createElement('tr');
+    const iconTd = document.createElement('td');
+    const ico = document.createElement('span');
+    ico.className = 'data-table-legend-ico';
+    ico.innerHTML = iconHtml;
+    iconTd.appendChild(ico);
+    const nameTd = document.createElement('td');
+    nameTd.className = 'data-table-legend-name';
+    nameTd.textContent = name;
+    const descTd = document.createElement('td');
+    descTd.className = 'data-table-legend-desc';
+    descTd.textContent = desc;
+    tr.append(iconTd, nameTd, descTd);
+    return tr;
+}
+
+// Los iconos que de verdad tiene ESA tabla y que el perfil puede usar: se leen
+// de su propia barra (.data-table-zoom), que ya se arma con los permisos del
+// árbol, en vez de repetir aquí la lista. El texto es el de Modo ayuda
+// (help.<clave>.what) para que se lea igual en los dos lados.
+function collectLegendIcons(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const wrapper = state?.wrapper || document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`);
+    const zoom = wrapper?.previousElementSibling;
+    if (!zoom?.classList?.contains('data-table-zoom')) return [];
+    const rows = [];
+    zoom.querySelectorAll('.data-table-zoom-btn').forEach((btn) => {
+        const helpKey = HELP_CONTENT_ZOOM_KEYS[btn.dataset.zoom] || HELP_CONTENT_COL_ACTION_KEYS[btn.dataset.colAction];
+        const name = btn.getAttribute('aria-label') || btn.title;
+        if (!helpKey || !name) return;
+        rows.push({ iconHtml: btn.innerHTML, name, desc: t(`help.${helpKey}.what`) });
+    });
+    return rows;
 }
 
 function openColumnLegend(tableId) {
@@ -7307,6 +7402,10 @@ function openColumnLegend(tableId) {
         seenGroups.add(groupKey);
         const desc = COLUMN_GROUP_META[groupKey] ? t(COLUMN_GROUP_META[groupKey].descKey) : '';
         columnLegendList.appendChild(buildLegendRow(columnGroupColor(groupKey), resolveGroupLabel(groupKey), desc));
+    });
+    columnLegendIconList.innerHTML = '';
+    collectLegendIcons(tableId).forEach(({ iconHtml, name, desc }) => {
+        columnLegendIconList.appendChild(buildLegendIconRow(iconHtml, name, desc));
     });
 }
 
@@ -11207,10 +11306,10 @@ function ensurePlanHistoryModal() {
     // (Planes has no approval workflow, same as every other screen's own
     // history shows "—" for any edit that didn't go through Autorizar).
     planHistoryModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 56rem;" role="dialog" aria-modal="true" aria-labelledby="plan-history-title">
+        <div class="modal-panel" style="max-width: 62rem;" role="dialog" aria-modal="true" aria-labelledby="plan-history-title">
             <h3 id="plan-history-title">${t('admin.planChangeHistory')}</h3>
-            <div class="admin-table-wrap">
-                <table class="admin-table">
+            <div class="admin-table-wrap admin-table-grid-wrap">
+                <table class="admin-table admin-table-grid">
                     <thead>
                         <tr>
                             <th>${t('main.changeHistoryDate')}</th>
@@ -11250,7 +11349,7 @@ async function openPlanChangeHistory(plan) {
     ensurePlanHistoryModal();
     planHistoryModal.hidden = false;
     planHistoryList.innerHTML = '';
-    planHistoryList.appendChild(planHistoryRow([t('main.changeHistoryEmpty'), '', '', '', '', '']));
+    planHistoryList.appendChild(renderChangeHistoryEmptyRow(6));
     try {
         const res = await fetch(`/api/admin/plans/${plan.id}/changes`, { credentials: 'include' });
         if (!res.ok) return;

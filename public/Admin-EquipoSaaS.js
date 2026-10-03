@@ -301,10 +301,10 @@ function ensureSaasChangesModal() {
         ['change', 'main.changeHistoryChange'], ['requestedBy', 'main.changeHistoryRequestedBy'], ['authorizedBy', 'main.changeHistoryAuthorizedBy'],
     ].map(([col, key]) => `<th data-col="${col}" class="saas-changes-th">${Dashboard.t(key)}</th>`).join('');
     saasChangesModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="saas-user-history-title">
+        <div class="modal-panel" style="max-width: 62rem;" role="dialog" aria-modal="true" aria-labelledby="saas-user-history-title">
             <h3 id="saas-user-history-title"></h3>
-            <div class="admin-table-wrap saas-changes-table-wrap">
-                <table class="admin-table">
+            <div class="admin-table-wrap saas-changes-table-wrap admin-table-grid-wrap">
+                <table class="admin-table admin-table-grid">
                     <thead>
                         <tr>${headerCells}</tr>
                     </thead>
@@ -339,6 +339,19 @@ function renderSaasChangeRow(cells, stripeColor) {
         td.textContent = text;
         tr.appendChild(td);
     });
+    return tr;
+}
+
+// Estado vacío: una sola celda que abarca las seis columnas (ver
+// renderChangeHistoryEmptyRow en Dashboard.js, que es igual).
+function renderSaasChangesEmptyRow() {
+    const tr = document.createElement('tr');
+    tr.className = 'change-history-empty-row';
+    const td = document.createElement('td');
+    td.colSpan = SAAS_CHANGES_COLUMNS.length;
+    td.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+    td.appendChild(document.createTextNode(Dashboard.t('main.changeHistoryEmpty')));
+    tr.appendChild(td);
     return tr;
 }
 
@@ -628,7 +641,7 @@ async function openSaasUserChanges(userId) {
     closeSaasChangesFilterMenu();
     saasChangesModal.querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
     saasChangesList.innerHTML = '';
-    saasChangesList.appendChild(renderSaasChangeRow([Dashboard.t('main.changeHistoryEmpty'), '', '', '', '', '']));
+    saasChangesList.appendChild(renderSaasChangesEmptyRow());
     try {
         const url = userId ? `/api/admin/saas-users/${userId}/changes` : '/api/admin/saas-users/changes';
         const classificationsPromise = fetchSaasUserFieldClassifications();

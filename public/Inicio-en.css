@@ -2225,10 +2225,97 @@
     .data-table-legend-icon span:nth-child(3){ background-color: #639922; }
     .data-table-legend-swatch{
         display: inline-block;
-        width: 14px;
-        height: 14px;
+        width: 18px;
+        height: 18px;
         border-radius: 4px;
         border: 1px solid var(--color-border);
+        vertical-align: middle;
+    }
+    /* Tabla con el aspecto de las tablas del sistema (Leyenda e Historial de
+       cambios): rejilla completa y encabezado en mayúsculas sobre el fondo
+       "hundido" de la página. border-collapse:separate (no collapse) para que
+       el encabezado fijo no pierda sus bordes al desplazar las filas. Todo
+       cuelga de .admin-table.admin-table-grid (0,2,0) para ganarle a las reglas
+       sueltas de .admin-table th/td (Admin.css) sin depender del orden. */
+    .admin-table-wrap.admin-table-grid-wrap{
+        margin-top: 0.4rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.5rem;
+    }
+    .admin-table.admin-table-grid{
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .admin-table.admin-table-grid th{
+        background: var(--color-bg);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        border-right: 1px solid var(--color-border);
+    }
+    .admin-table.admin-table-grid td{
+        border-right: 1px solid var(--color-border);
+        vertical-align: middle;
+        line-height: 1.45;
+    }
+    .admin-table.admin-table-grid th:last-child,
+    .admin-table.admin-table-grid td:last-child{
+        border-right: none;
+    }
+    .admin-table.admin-table-grid tbody tr:last-child td{
+        border-bottom: none;
+    }
+    /* Más especificidad que el sticky de .saas-changes-th (0,2,1): el
+       encabezado del historial conserva su embudo y su posición fija, solo
+       cambia el fondo para igualar al resto de la rejilla. */
+    .admin-table.admin-table-grid th.saas-changes-th{
+        background: var(--color-bg);
+    }
+    /* Estado vacío del historial: una sola celda que abarca todas las columnas. */
+    .change-history-empty-row td{
+        padding: 1.4rem 0.7rem;
+        text-align: center;
+        color: var(--color-text-secondary);
+        border-right: none;
+    }
+    .change-history-empty-row i{
+        display: block;
+        margin-bottom: 0.3rem;
+        font-size: 1.3rem;
+        opacity: 0.6;
+    }
+    /* Leyenda: los dos subtítulos de sección y las celdas de las dos tablas. */
+    .data-table-legend-section{
+        margin: 1rem 0 0;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+    }
+    .admin-table.data-table-legend-table .data-table-legend-col-icon{
+        width: 4rem;
+    }
+    .admin-table.data-table-legend-table .data-table-legend-col-name{
+        width: 13rem;
+    }
+    .data-table-legend-name{
+        font-weight: 600;
+    }
+    .data-table-legend-desc{
+        color: var(--color-text-secondary);
+    }
+    .data-table-legend-ico{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.7rem;
+        height: 1.7rem;
+        border: 1px solid var(--color-border);
+        border-radius: 50%;
+        background-color: var(--color-surface);
+        color: var(--color-text-secondary);
+        font-size: 0.9rem;
     }
     /* "+ Nuevo Registro"-style button — same toolbar row as the zoom/pin/
        visibility controls, but pinned to the LEFT via margin-right:auto

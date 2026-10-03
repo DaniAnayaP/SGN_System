@@ -5850,3 +5850,14 @@ button.data-table-layout-item{
     font-weight: 700;
     color: var(--color-accent, var(--color-text-primary));
 }
+
+/* Desde–Hasta en el embudo de un encabezado: la fila del buscador baja de renglón
+   si no caben y cada campo de rango conserva un ancho legible. */
+.data-table-col-filter-menu .data-table-col-filter-search-row{
+    flex-wrap: wrap;
+}
+.data-table-col-filter-menu .data-table-search-range .data-table-col-filter-date,
+.data-table-col-filter-menu .data-table-search-range .data-table-search-week{
+    flex: 1 1 6rem;
+    min-width: 6rem;
+}

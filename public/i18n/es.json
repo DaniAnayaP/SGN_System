@@ -154,7 +154,7 @@
       "hrAnalytics": "Analítica Recursos Humanos (RH Analytics)"
     },
     "clientesRegistrados": "Nuestros Clientes",
-    "addClientNew": "+ Agregar Cliente Nuevo",
+    "addClientNew": "Agregar Cliente Nuevo",
     "contrataciones": "Contrataciones",
     "clientAdmin": "Administración de Clientes",
     "clientAdminAbbr1": "Admón. de Clientes",
@@ -819,7 +819,7 @@
     "ccNoneYet": "Aún no hay centros de costo. Agrega el primero arriba.",
     "ccCodeExists": "Ya existe un centro de costo con ese código.",
     "ccDeleteConfirm": "¿Eliminar este centro de costo?",
-    "ccNew": "+ Nuevo Centro Costos",
+    "ccNew": "Nuevo Centro Costos",
     "ccModalTitleNew": "Nuevo Centro Costos",
     "ccModalTitleEdit": "Editar Centro Costos",
     "ccCompany": "Empresa",
@@ -983,7 +983,7 @@
     "filterSaasChangesSearchHint": "Usuario, registro, cambio, solicitó, autorizó...",
     "rowEditableLegend": "Fila con al menos un campo que aún puedes editar",
     "rowEditableName": "Fila editable",
-    "columnLegendBtn": "Leyenda de colores",
+    "columnLegendBtn": "Leyenda",
     "savedSearchBtn": "Búsqueda Guardada",
     "savedSearchTitle": "Búsqueda Guardada",
     "savedSearchEmpty": "Aún no hay búsquedas guardadas.",
@@ -1096,7 +1096,12 @@
     "fieldRulesSameColumnError": "Elige dos campos distintos.",
     "fieldRuleLockedHint": "Bloqueado — completa \"{field}\" primero.",
     "fieldRuleLockedGeneric": "Este campo está bloqueado — completa su campo requisito primero.",
-    "columnLegendTitle": "Leyenda de colores",
+    "columnLegendTitle": "Leyenda",
+    "columnLegendColorsHeading": "Colores",
+    "columnLegendIconsHeading": "Iconos de esta tabla",
+    "columnLegendIcon": "Icono",
+    "columnLegendIconName": "Nombre",
+    "columnLegendIconWhat": "Qué hace",
     "columnLegendColor": "Color",
     "columnLegendClassification": "Clasificación",
     "columnLegendDescription": "Descripción",
@@ -1899,7 +1904,7 @@
       "example": "si te cuesta leer los números pequeños, la agrandas."
     },
     "pinColumns": {
-      "what": "Deja fija una o varias columnas del lado izquierdo, para que no se muevan cuando avanzas la tabla hacia la derecha.",
+      "what": "Deja fijas hasta 4 columnas del lado izquierdo, para que no se muevan cuando avanzas la tabla hacia la derecha.",
       "example": "fijas la columna \"Nombre\" para siempre saber de quién es la fila aunque veas columnas lejanas."
     },
     "columnVisibility": {
@@ -1911,8 +1916,8 @@
       "example": "si un dato cambió y no sabes por qué, aquí ves quién lo modificó y qué valor tenía antes."
     },
     "columnLegend": {
-      "what": "Explica qué significa cada color que ves en las filas y columnas de la tabla.",
-      "example": "un color verde en una fila puede significar que ese registro se puede editar."
+      "what": "Explica qué significa cada color de la tabla y qué hace cada uno de sus iconos.",
+      "example": "un color verde en una fila puede significar que ese registro se puede editar, y abajo ves para qué sirve cada icono de la barra."
     },
     "fieldRules": {
       "what": "Aquí defines en qué orden se deben llenar los campos de esta tabla, y cuáles son obligatorios.",
