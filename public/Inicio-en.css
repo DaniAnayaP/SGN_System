@@ -1974,26 +1974,32 @@
         border-radius: 0.6rem;
         margin-bottom: 1.5rem;
     }
+    /* Título del panel de filtros en una franja gris (el mismo fondo y la misma línea
+       que el título de un diálogo y el encabezado de una tabla), de borde a borde de
+       la tarjeta: los márgenes negativos cancelan el relleno lateral de
+       .filter-bar-panel y el overflow:hidden de .filter-bar redondea sus esquinas. */
     .filter-bar-title{
-        margin: 0;
-        padding: 1rem 1rem 0;
+        margin: 0 -1rem;
+        padding: 0.7rem 1rem;
         font-size: 0.95rem;
         font-weight: 700;
         color: var(--color-text-primary);
+        background-color: var(--color-bg);
+        border-bottom: 1px solid var(--color-border);
     }
     /* Dentro de un diálogo (el panel de filtros del Historial de cambios), el h3 del
        panel tomaba el estilo del TÍTULO del diálogo (.modal-panel h3: franja gris
        fija con márgenes negativos) y se veía cortado y pegado al borde. Aquí vuelve
-       a ser el título de su propia tarjeta. */
+       a ser el título de su propia tarjeta, con la misma franja que en una pantalla. */
     .modal-panel .filter-bar-title{
         position: static;
         top: auto;
         z-index: auto;
-        margin: 0;
-        padding: 1rem 1rem 0;
+        margin: 0 -1rem;
+        padding: 0.7rem 1rem;
         border-radius: 0;
-        border-bottom: none;
-        background: none;
+        border-bottom: 1px solid var(--color-border);
+        background-color: var(--color-bg);
         font-size: 0.95rem;
     }
     .filter-bar-panel{
@@ -2290,12 +2296,18 @@
     }
     .data-table.change-history-table td{
         white-space: normal;
-        overflow: visible;
+        overflow: hidden;
+        overflow-wrap: break-word;
         text-overflow: clip;
         line-height: 1.45;
     }
+    /* La fecha con hora se parte en el espacio (fecha / hora), nunca por la mitad de la fecha. */
+    .data-table.change-history-table th[data-col="date"],
+    .data-table.change-history-table th[data-col="record"]{
+        min-width: 8rem;
+    }
     .data-table.change-history-table td[data-col="date"]{
-        white-space: nowrap;
+        overflow-wrap: normal;
     }
     .change-history-table .change-history-empty-row td.data-table-empty-cell{
         padding: 1.4rem 0.7rem;
