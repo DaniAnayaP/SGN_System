@@ -3795,77 +3795,25 @@
             }
             return `${entry.oldValue || none} → ${entry.newValue || none}`;
         }
-        function ensureHistoryDialog() {
-            if (historyDialogEl) return;
-            historyDialogEl = document.createElement('div');
-            historyDialogEl.className = 'modal-overlay';
-            historyDialogEl.hidden = true;
-            historyDialogEl.innerHTML = `
-                <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="perm-tree-history-title">
-                    <h3 id="perm-tree-history-title" data-role="title"></h3>
-                    <div class="admin-table-wrap">
-                        <table class="admin-table">
-                            <thead><tr>
-                                <th>${t('main.changeHistoryDate')}</th>
-                                <th>${t('main.changeHistoryUser')}</th>
-                                <th>${t('main.changeHistoryRecord')}</th>
-                                <th>${t('main.changeHistoryChange')}</th>
-                                <th>${t('main.changeHistoryRequestedBy')}</th>
-                                <th>${t('main.changeHistoryAuthorizedBy')}</th>
-                            </tr></thead>
-                            <tbody data-role="list"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                        <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(historyDialogEl);
-            const close = () => { historyDialogEl.hidden = true; };
-            historyDialogEl.querySelector('[data-role="close"]').addEventListener('click', close);
-            historyDialogEl.addEventListener('click', (event) => { if (event.target === historyDialogEl) close(); });
-            document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !historyDialogEl.hidden) close(); });
-        }
-        async function openHistoryDialog(nodeKey, classificationId, label) {
-            ensureHistoryDialog();
-            historyDialogEl.querySelector('[data-role="title"]').textContent = `${t('main.changeHistory')} — ${label}`;
-            const list = historyDialogEl.querySelector('[data-role="list"]');
-            list.innerHTML = `<tr><td colspan="6">${t('admin.loading')}</td></tr>`;
-            historyDialogEl.hidden = false;
-            try {
+        // Mismo diálogo de Historial de cambios que todas las pantallas (rejilla +
+        // embudo de filtro en cada columna). La columna "Cambio" trae marcado propio
+        // (muestras de color), por eso va como HTML.
+        function openHistoryDialog(nodeKey, classificationId, label) {
+            return Dashboard.openChangeHistoryWithRows(`${t('main.changeHistory')} — ${label}`, async () => {
                 const params = new URLSearchParams({ nodeKey });
                 if (classificationId) params.set('classificationId', classificationId);
                 const res = await fetch(`/api/admin/master-permission-change-log?${params}`, { credentials: 'include' });
                 if (!res.ok) throw new Error('load failed');
                 const data = await res.json();
-                const entries = data.entries || [];
-                list.innerHTML = '';
-                if (!entries.length) {
-                    list.innerHTML = `<tr><td colspan="6">${t('main.changeHistoryEmpty')}</td></tr>`;
-                    return;
-                }
-                entries.forEach((entry) => {
-                    const tr = document.createElement('tr');
-                    const cells = [
-                        entry.changedAt || '',
-                        entry.changedBy || '',
-                        formatHistoryFieldName(entry.field),
-                        formatHistoryChange(entry),
-                        entry.changedBy || '',
-                        entry.changedBy || '',
-                    ];
-                    cells.forEach((value, i) => {
-                        const td = document.createElement('td');
-                        if (i === 3) td.innerHTML = value;
-                        else td.textContent = value;
-                        tr.appendChild(td);
-                    });
-                    list.appendChild(tr);
-                });
-            } catch {
-                list.innerHTML = `<tr><td colspan="6">${t('admin.loadError')}</td></tr>`;
-            }
+                return (data.entries || []).map((entry) => [
+                    entry.changedAt || '',
+                    entry.changedBy || '',
+                    formatHistoryFieldName(entry.field),
+                    formatHistoryChange(entry),
+                    entry.changedBy || '',
+                    entry.changedBy || '',
+                ]);
+            }, { htmlColumns: [3] });
         }
         // Structural levels (Departamento/Área/Apartado/Pantalla/Tabla/
         // Ícono) never had anything in the Clasificación column at all --

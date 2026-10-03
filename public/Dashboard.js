@@ -767,8 +767,17 @@ const SAAS_TABLE_ICON_SCREENS = {
     'admin-nuestros-respaldos': { screenItemId: 'saas-backups', apartadoId: 'tabla' },
     'admin-material-apoyo': { screenItemId: 'saas-material-apoyo', apartadoId: 'tabla' },
 };
+// Tablas que guardan sus búsquedas y acomodos del lado de SaaS (rutas
+// /api/admin/saas-saved-*, sin cliente): las siete de arriba y, para una cuenta
+// de SaaS (sin clientId), cualquier otra tabla que vea -- Base de Datos, etc.
+// Esas rutas aceptan cualquier tableKey; antes solo estas siete tenían los iconos
+// de Búsqueda y Acomodo Guardado, y en las demás faltaban aunque se tuviera todo.
+// Las tablas dentro de un diálogo quedan fuera: no son una pantalla con filtros.
 function isSaasTableKey(tableId) {
-    return !!SAAS_TABLE_ICON_SCREENS[tableId];
+    if (SAAS_TABLE_ICON_SCREENS[tableId]) return true;
+    if (!currentUser || currentUser.clientId) return false;
+    const wrapper = document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(String(tableId))}"]`);
+    return !!wrapper && !wrapper.closest('.modal-overlay, .modal-panel');
 }
 
 function hasSaasTableIconGrant(tableId, iconId) {
@@ -2375,10 +2384,16 @@ function setDataTableFontSize(size) {
 // generic, no-HTML-editing-required approach as the wrapper's own sizing.
 function renderDataTableZoomControls() {
     document.querySelectorAll('.data-table-wrapper').forEach((wrapper) => {
-        if (wrapper.previousElementSibling?.classList?.contains('data-table-zoom')) return;
+        // Una pantalla puede traer su propia barra armada a mano (Equipo SaaS, con su
+        // botón de historial): en ese caso no se crea otra, pero el − y el + sí se
+        // agregan a ella, al principio. Antes se saltaba la pantalla entera y se
+        // quedaba sin zoom.
+        const existing = wrapper.previousElementSibling?.classList?.contains('data-table-zoom') ? wrapper.previousElementSibling : null;
+        if (existing?.querySelector('[data-zoom]')) return;
         const tableKey = wrapper.dataset.tableId;
-        const zoom = document.createElement('div');
+        const zoom = existing || document.createElement('div');
         zoom.className = 'data-table-zoom';
+        const zoomButtons = [];
         if (resolveIconGrant(tableKey, 'iconZoomOut')) {
             const outBtn = document.createElement('button');
             outBtn.type = 'button';
@@ -2387,7 +2402,7 @@ function renderDataTableZoomControls() {
             outBtn.setAttribute('aria-label', t('main.decreaseFontSize'));
             outBtn.innerHTML = '<i class="bx bx-minus" aria-hidden="true"></i>';
             outBtn.addEventListener('click', () => setDataTableFontSize(getDataTableFontSize() - DATA_TABLE_FONT_STEP));
-            zoom.appendChild(outBtn);
+            zoomButtons.push(outBtn);
         }
         if (resolveIconGrant(tableKey, 'iconZoomIn')) {
             const inBtn = document.createElement('button');
@@ -2397,9 +2412,10 @@ function renderDataTableZoomControls() {
             inBtn.setAttribute('aria-label', t('main.increaseFontSize'));
             inBtn.innerHTML = '<i class="bx bx-plus" aria-hidden="true"></i>';
             inBtn.addEventListener('click', () => setDataTableFontSize(getDataTableFontSize() + DATA_TABLE_FONT_STEP));
-            zoom.appendChild(inBtn);
+            zoomButtons.push(inBtn);
         }
-        wrapper.insertAdjacentElement('beforebegin', zoom);
+        zoom.prepend(...zoomButtons);
+        if (!existing) wrapper.insertAdjacentElement('beforebegin', zoom);
     });
     setDataTableFontSize(getDataTableFontSize());
 }
@@ -5414,13 +5430,13 @@ const CHANGE_HISTORY_COLUMNS = ['date', 'user', 'record', 'change', 'requestedBy
 // Estado vacío del historial: una sola celda que abarca las columnas, centrada
 // y con el icono del historial. Sin data-col a propósito: así no cuenta como un
 // valor más de "Fecha" en el filtro de la columna.
-function renderChangeHistoryEmptyRow(colspan = CHANGE_HISTORY_COLUMNS.length) {
+function renderChangeHistoryEmptyRow(colspan = CHANGE_HISTORY_COLUMNS.length, message = t('main.changeHistoryEmpty')) {
     const tr = document.createElement('tr');
     tr.className = 'change-history-empty-row';
     const td = document.createElement('td');
     td.colSpan = colspan;
     td.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-    td.appendChild(document.createTextNode(t('main.changeHistoryEmpty')));
+    td.appendChild(document.createTextNode(message));
     tr.appendChild(td);
     return tr;
 }
@@ -11503,89 +11519,63 @@ function formatCurrency(amount, currency = 'MXN') {
     return `${symbol}${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 }
 
-// Per-plan change history (plans are GEIPSA-wide, not client-scoped, so
-// they can't use openChangeHistory's client-scoped table-changes endpoint)
-// — used by Admin-Planes.js's own Cambios icon per plan row, against
-// GET /api/admin/plans/:id/changes.
-let planHistoryModal = null;
-let planHistoryList = null;
-
-function ensurePlanHistoryModal() {
-    if (planHistoryModal) return;
-    planHistoryModal = document.createElement('div');
-    planHistoryModal.className = 'modal-overlay';
-    planHistoryModal.hidden = true;
-    // Same 6-column shape openChangeHistory's own canonical table uses
-    // everywhere else (Fecha/Usuario/Registro/Cambio/Solicitó/Autorizó) --
-    // confirmed with the user: no screen keeps a reduced 3-column version
-    // anymore. Registro is this same Plan's own name on every row (the
-    // modal is already scoped to one plan); Solicitó/Autorizó always "—"
-    // here since plan_changes has no requested_by/authorized_by at all
-    // (Planes has no approval workflow, same as every other screen's own
-    // history shows "—" for any edit that didn't go through Autorizar).
-    planHistoryModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 62rem;" role="dialog" aria-modal="true" aria-labelledby="plan-history-title">
-            <h3 id="plan-history-title">${t('admin.planChangeHistory')}</h3>
-            <div class="admin-table-wrap admin-table-grid-wrap">
-                <table class="admin-table admin-table-grid">
-                    <thead>
-                        <tr>
-                            <th>${t('main.changeHistoryDate')}</th>
-                            <th>${t('main.changeHistoryUser')}</th>
-                            <th>${t('main.changeHistoryRecord')}</th>
-                            <th>${t('main.changeHistoryChange')}</th>
-                            <th>${t('main.changeHistoryRequestedBy')}</th>
-                            <th>${t('main.changeHistoryAuthorizedBy')}</th>
-                        </tr>
-                    </thead>
-                    <tbody data-role="list"></tbody>
-                </table>
-            </div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(planHistoryModal);
-    planHistoryList = planHistoryModal.querySelector('[data-role="list"]');
-    const close = () => { planHistoryModal.hidden = true; };
-    planHistoryModal.querySelector('[data-role="close"]').addEventListener('click', close);
-    planHistoryModal.addEventListener('click', (event) => { if (event.target === planHistoryModal) close(); });
-}
-
-function planHistoryRow(cells) {
-    const tr = document.createElement('tr');
-    cells.forEach((text) => {
-        const td = document.createElement('td');
-        td.textContent = text;
-        tr.appendChild(td);
-    });
-    return tr;
-}
-
-async function openPlanChangeHistory(plan) {
-    ensurePlanHistoryModal();
-    planHistoryModal.hidden = false;
-    planHistoryList.innerHTML = '';
-    planHistoryList.appendChild(renderChangeHistoryEmptyRow(6));
+// El MISMO diálogo de Historial de cambios (rejilla, embudo de filtro en cada
+// columna, estado vacío) para los historiales que no pueden usar el endpoint de
+// openChangeHistory -- Planes, Giros y los dos árboles de permisos son de
+// administración de SaaS, sin cliente. `loadRows` devuelve una lista de filas
+// [fecha, usuario, registro, cambio, solicitó, autorizó]; `htmlColumns` son los
+// índices cuyo texto trae marcado propio (los colores del árbol). Antes cada uno
+// armaba su propia tabla, sin filtros y con otro aspecto.
+async function openChangeHistoryWithRows(title, loadRows, { htmlColumns = [] } = {}) {
+    ensureChangeHistoryModal();
+    changeHistoryModal.hidden = false;
+    const titleEl = changeHistoryModal.querySelector('#data-table-history-title');
+    if (titleEl) titleEl.textContent = title;
+    // Filtros en blanco cada vez que se abre, igual que openChangeHistory.
+    changeHistoryColumnFilters = new Map();
+    closeChangeHistoryFilterMenu();
+    changeHistoryModal.querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
+    changeHistoryList.innerHTML = '';
+    changeHistoryList.appendChild(renderChangeHistoryEmptyRow(undefined, t('admin.loading')));
     try {
+        const rows = await loadRows();
+        changeHistoryList.innerHTML = '';
+        if (!rows.length) {
+            changeHistoryList.appendChild(renderChangeHistoryEmptyRow());
+            return;
+        }
+        rows.forEach((cells) => {
+            const tr = renderChangeHistoryRow(cells.map((cell) => String(cell ?? '')));
+            htmlColumns.forEach((index) => { tr.cells[index].innerHTML = String(cells[index] ?? ''); });
+            changeHistoryList.appendChild(tr);
+        });
+    } catch {
+        changeHistoryList.innerHTML = '';
+        changeHistoryList.appendChild(renderChangeHistoryEmptyRow(undefined, t('admin.loadError')));
+    }
+}
+
+// Per-plan change history (plans are GEIPSA-wide, not client-scoped, so they
+// can't use openChangeHistory's client-scoped table-changes endpoint) -- used by
+// Admin-Planes.js's own Cambios icon per plan row, against
+// GET /api/admin/plans/:id/changes. Registro is this same Plan's own name on every
+// row (the dialog is already scoped to one plan); Solicitó/Autorizó always "—"
+// since plan_changes has no requested_by/authorized_by at all.
+function openPlanChangeHistory(plan) {
+    return openChangeHistoryWithRows(t('admin.planChangeHistory'), async () => {
         const res = await fetch(`/api/admin/plans/${plan.id}/changes`, { credentials: 'include' });
-        if (!res.ok) return;
+        if (!res.ok) throw new Error('load failed');
         const { changes } = await res.json();
-        if (!changes || !changes.length) return;
-        planHistoryList.innerHTML = '';
-        changes.forEach((change) => {
+        return (changes || []).map((change) => {
             let description;
             if (change.action === 'create') description = t('main.changeHistoryCreated');
             else if (change.action === 'delete') description = t('main.changeHistoryDeleted');
             else if (change.field_key === 'admin.activeTree') description = `${t('admin.planTreeTitle')}: ${change.new_value} permisos`;
             else if (change.field_key === 'admin.accessPermissionsCost') description = `${t('admin.accessPermCostColumn')}: ${change.new_value} costos`;
             else description = `${t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-            planHistoryList.appendChild(planHistoryRow([change.changed_at, change.changed_by || '—', plan.name, description, '—', '—']));
+            return [change.changed_at, change.changed_by || '—', plan.name, description, '—', '—'];
         });
-    } catch {
-        // Leave the empty-state row in place — no network/parse errors surfaced here.
-    }
+    });
 }
 
 window.Dashboard = {
@@ -11609,6 +11599,7 @@ window.Dashboard = {
     hasSaasScreenGrant,
     formatCurrency,
     openPlanChangeHistory,
+    openChangeHistoryWithRows,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },

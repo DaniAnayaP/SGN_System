@@ -1411,77 +1411,25 @@ function formatHistoryChange(entry) {
     }
     return `${entry.oldValue || none} → ${entry.newValue || none}`;
 }
-function ensureHistoryDialog() {
-    if (historyDialogEl) return;
-    historyDialogEl = document.createElement('div');
-    historyDialogEl.className = 'modal-overlay';
-    historyDialogEl.hidden = true;
-    historyDialogEl.innerHTML = `
-        <div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="perm-tree-history-title">
-            <h3 id="perm-tree-history-title" data-role="title"></h3>
-            <div class="admin-table-wrap">
-                <table class="admin-table">
-                    <thead><tr>
-                        <th>${Dashboard.t('main.changeHistoryDate')}</th>
-                        <th>${Dashboard.t('main.changeHistoryUser')}</th>
-                        <th>${Dashboard.t('main.changeHistoryRecord')}</th>
-                        <th>${Dashboard.t('main.changeHistoryChange')}</th>
-                        <th>${Dashboard.t('main.changeHistoryRequestedBy')}</th>
-                        <th>${Dashboard.t('main.changeHistoryAuthorizedBy')}</th>
-                    </tr></thead>
-                    <tbody data-role="list"></tbody>
-                </table>
-            </div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn btn-secondary" data-role="close">${Dashboard.t('admin.cancel')}</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(historyDialogEl);
-    const close = () => { historyDialogEl.hidden = true; };
-    historyDialogEl.querySelector('[data-role="close"]').addEventListener('click', close);
-    historyDialogEl.addEventListener('click', (event) => { if (event.target === historyDialogEl) close(); });
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !historyDialogEl.hidden) close(); });
-}
-async function openHistoryDialog(nodeKey, classificationId, label) {
-    ensureHistoryDialog();
-    historyDialogEl.querySelector('[data-role="title"]').textContent = `${Dashboard.t('main.changeHistory')} — ${label}`;
-    const list = historyDialogEl.querySelector('[data-role="list"]');
-    list.innerHTML = `<tr><td colspan="6">${Dashboard.t('admin.loading')}</td></tr>`;
-    historyDialogEl.hidden = false;
-    try {
+// El historial de un nodo del árbol usa el mismo diálogo de Historial de cambios
+// que todas las pantallas (rejilla + embudo de filtro en cada columna). La columna
+// "Cambio" trae marcado propio (muestras de color), por eso va como HTML.
+function openHistoryDialog(nodeKey, classificationId, label) {
+    return Dashboard.openChangeHistoryWithRows(`${Dashboard.t('main.changeHistory')} — ${label}`, async () => {
         const params = new URLSearchParams({ nodeKey });
         if (classificationId) params.set('classificationId', classificationId);
         const res = await fetch(`/api/admin/saas-master-change-log?${params}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
-        const entries = data.entries || [];
-        list.innerHTML = '';
-        if (!entries.length) {
-            list.innerHTML = `<tr><td colspan="6">${Dashboard.t('main.changeHistoryEmpty')}</td></tr>`;
-            return;
-        }
-        entries.forEach((entry) => {
-            const tr = document.createElement('tr');
-            const cells = [
-                entry.changedAt || '',
-                entry.changedBy || '',
-                formatHistoryFieldName(entry.field),
-                formatHistoryChange(entry),
-                entry.changedBy || '',
-                entry.changedBy || '',
-            ];
-            cells.forEach((value, i) => {
-                const td = document.createElement('td');
-                if (i === 3) td.innerHTML = value;
-                else td.textContent = value;
-                tr.appendChild(td);
-            });
-            list.appendChild(tr);
-        });
-    } catch {
-        list.innerHTML = `<tr><td colspan="6">${Dashboard.t('admin.loadError')}</td></tr>`;
-    }
+        return (data.entries || []).map((entry) => [
+            entry.changedAt || '',
+            entry.changedBy || '',
+            formatHistoryFieldName(entry.field),
+            formatHistoryChange(entry),
+            entry.changedBy || '',
+            entry.changedBy || '',
+        ]);
+    }, { htmlColumns: [3] });
 }
 
 function buildLevelBadgeCtx(level) {

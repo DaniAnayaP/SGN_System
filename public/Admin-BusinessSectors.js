@@ -600,50 +600,23 @@ sectorCostSaveBtn.addEventListener('click', async () => {
 
 // --- Registro de Cambios ----------------------------------------------------
 // business_sectors is GEIPSA-wide (no client_id), so it can't go through
-// Dashboard.openChangeHistory (client-scoped only) -- same reasoning
-// Nuestros Planes' own openPlanChangeHistory already established; this
-// mirrors that pattern rather than duplicating it (kept local to this
-// screen instead of generalizing Dashboard.js's plan-only version).
-const sectorHistoryModal = document.getElementById('sector-history-modal');
-const sectorHistoryList = document.getElementById('sector-history-list');
-const sectorHistoryClose = document.getElementById('sector-history-close');
-sectorHistoryClose.addEventListener('click', () => { sectorHistoryModal.hidden = true; });
-sectorHistoryModal.addEventListener('click', (event) => { if (event.target === sectorHistoryModal) sectorHistoryModal.hidden = true; });
-
-function historyRow(cells) {
-    const tr = document.createElement('tr');
-    cells.forEach((text) => {
-        const td = document.createElement('td');
-        td.textContent = text;
-        tr.appendChild(td);
-    });
-    return tr;
-}
-
-async function openSectorHistoryModal(sector) {
-    sectorHistoryModal.hidden = false;
-    sectorHistoryList.innerHTML = '';
-    sectorHistoryList.appendChild(historyRow([Dashboard.t('main.changeHistoryEmpty'), '', '', '', '', '']));
-    try {
+// Dashboard.openChangeHistory (client-scoped only): it uses the same dialog as
+// every other history (rejilla + embudo de filtro en cada columna) through
+// Dashboard.openChangeHistoryWithRows. Registro = this same Giro's own name on
+// every row (the dialog is already scoped to one sector); Solicitó/Autorizó are
+// always "—": business_sector_changes has no requested_by/authorized_by at all.
+function openSectorHistoryModal(sector) {
+    return Dashboard.openChangeHistoryWithRows(Dashboard.t('admin.businessSectorChangeHistory'), async () => {
         const res = await fetch(`/api/admin/business-sectors/${sector.id}/changes`, { credentials: 'include' });
-        if (!res.ok) return;
+        if (!res.ok) throw new Error('load failed');
         const { changes } = await res.json();
-        if (!changes || !changes.length) return;
-        sectorHistoryList.innerHTML = '';
-        changes.forEach((change) => {
+        return (changes || []).map((change) => {
             let description;
             if (change.action === 'create') description = Dashboard.t('main.changeHistoryCreated');
             else description = `${Dashboard.t(change.field_key) || change.field_key}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-            // Registro = this same Giro's own name on every row (the modal
-            // is already scoped to one sector, nothing to disambiguate) --
-            // Solicitó/Autorizó are always "—": business_sector_changes has
-            // no requested_by/authorized_by at all, same as the canonical
-            // table's own "—" for any edit outside the Autorizar flow.
-            sectorHistoryList.appendChild(historyRow([change.changed_at, change.changed_by || '—', sector.name, description, '—', '—']));
+            return [change.changed_at, change.changed_by || '—', sector.name, description, '—', '—'];
         });
-    } catch {
-        // Empty-state row above stays in place.
-    }
+    });
 }
 
 // --- "Permisos Asignados" — read-only counts (see the color-dot summary) ---
