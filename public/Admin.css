@@ -5843,3 +5843,10 @@ button.data-table-layout-item{
     font-size: 0.68rem;
     color: var(--color-text-secondary);
 }
+
+/* Aviso del tope de columnas fijas, al final de la leyenda del editor. */
+.data-table-arrange-limit{
+    margin-left: auto;
+    font-weight: 700;
+    color: var(--color-accent, var(--color-text-primary));
+}

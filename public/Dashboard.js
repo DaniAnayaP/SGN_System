@@ -4007,9 +4007,8 @@ let columnArrangeState = null; // { tableId, draftConfig, decidedKeys: Set, acti
 // (mismos colores que COLUMN_GROUP_META/columnGroupColor ya le dan a la
 // "Leyenda de columnas" y a la banda de la tabla real, nunca una paleta
 // aparte). El llamador agrega su propio control (buildTriStateControl)
-// después de construir la fila. Nombre distinto de buildColumnPickerRow
-// (de abajo) a propósito -- esa es la de los selectores de pines/
-// visibilidad de siempre, que NO cambiaron.
+// después de construir la fila. También la usan Mostrar/ocultar y Fijar
+// columnas (modo "visibilidad" de este mismo editor).
 function buildArrangeRowShell(key, label, { dotColor = undefined, dotTitle = '' } = {}) {
     const row = document.createElement('div');
     row.className = 'admin-module-row data-table-arrange-row';
@@ -4029,134 +4028,13 @@ function buildArrangeRowShell(key, label, { dotColor = undefined, dotTitle = '' 
     return { row };
 }
 
-// Selector de pines y selector de visibilidad -- como estaban antes de
-// Acomodo Guardado unificado, SIN cambios. Solo el icono de Acomodo
-// Guardado abre el modal nuevo de abajo; estos dos siguen siendo los
-// suyos propios, tal cual.
-let pinPickerModal = null;
-let pinPickerPinnedList = null;
-let pinPickerOtherList = null;
-let pinPickerLimitMsg = null;
-let pinPickerState = null; // { tableId, pinnedOrder: [key,...] }
-
-function buildColumnPickerRow(key, label, { pinned = null, dotColor = undefined, dotTitle = '' } = {}) {
-    const row = document.createElement('div');
-    row.className = 'admin-module-row';
-    row.dataset.col = key;
-    const name = document.createElement('span');
-    name.className = 'admin-module-name';
-    name.style.flex = '1';
-    if (pinned !== null) {
-        row.draggable = pinned;
-        if (pinned) {
-            const handle = document.createElement('i');
-            handle.className = 'bx bx-menu data-table-col-picker-handle';
-            handle.setAttribute('aria-hidden', 'true');
-            row.appendChild(handle);
-        }
-    }
-    // Visibility picker only (pinned picker never passes this) -- a small
-    // color dot naming which classification this column belongs to, same
-    // colors COLUMN_GROUP_META already gives the real "Leyenda de columnas"
-    // modal, so this isn't a second, inconsistent palette.
-    if (dotColor !== undefined) {
-        const dot = document.createElement('span');
-        dot.className = 'data-table-col-dot';
-        dot.style.backgroundColor = dotColor;
-        if (dotTitle) dot.title = dotTitle;
-        name.appendChild(dot);
-    }
-    name.appendChild(document.createTextNode(label));
-    row.appendChild(name);
-    const toggle = document.createElement('label');
-    toggle.className = 'admin-switch';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    const track = document.createElement('span');
-    track.className = 'admin-switch-track';
-    toggle.append(input, track);
-    row.appendChild(toggle);
-    return { row, input };
-}
-
-function ensurePinPickerModal() {
-    if (pinPickerModal) return;
-    pinPickerModal = document.createElement('div');
-    pinPickerModal.className = 'modal-overlay';
-    pinPickerModal.hidden = true;
-    pinPickerModal.innerHTML = `
-        <div class="modal-panel" style="max-width: 26rem;" role="dialog" aria-modal="true" aria-labelledby="data-table-pin-title">
-            <h3 id="data-table-pin-title">${t('main.pinColumnsTitle')}</h3>
-            <p class="admin-hint">${t('main.pinColumnsHint')}</p>
-            <div class="admin-module-list" data-role="pinned-list"></div>
-            <p class="admin-hint" style="margin-top:1rem;">${t('main.pinColumnsOther')}</p>
-            <div class="admin-module-list" data-role="other-list"></div>
-            <p class="admin-hint" data-role="limit-msg" hidden>${t('main.pinColumnsLimitReached')}</p>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
-                <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(pinPickerModal);
-    pinPickerPinnedList = pinPickerModal.querySelector('[data-role="pinned-list"]');
-    pinPickerOtherList = pinPickerModal.querySelector('[data-role="other-list"]');
-    pinPickerLimitMsg = pinPickerModal.querySelector('[data-role="limit-msg"]');
-    const close = () => { pinPickerModal.hidden = true; pinPickerState = null; };
-    pinPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
-    pinPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
-        if (!pinPickerState) return;
-        const state = dataTableColumnState.get(pinPickerState.tableId);
-        if (state) {
-            state.config.pinned = [...pinPickerState.pinnedOrder];
-            saveDataTableConfig(pinPickerState.tableId, state.config);
-            applyDataTableColumnLayout(pinPickerState.tableId);
-        }
-        close();
-    });
-    wireModalDismiss(pinPickerModal, close);
-}
-
-function renderPinPickerLists() {
-    const state = dataTableColumnState.get(pinPickerState.tableId);
-    if (!state) return;
-    pinPickerPinnedList.innerHTML = '';
-    pinPickerState.pinnedOrder.forEach((key) => {
-        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, { pinned: true });
-        input.checked = true;
-        input.addEventListener('change', () => {
-            pinPickerState.pinnedOrder = pinPickerState.pinnedOrder.filter((k) => k !== key);
-            renderPinPickerLists();
-        });
-        pinPickerPinnedList.appendChild(row);
-    });
-    pinPickerOtherList.innerHTML = '';
-    state.columnKeys.filter((k) => !pinPickerState.pinnedOrder.includes(k)).forEach((key) => {
-        const { row, input } = buildColumnPickerRow(key, state.labels[key] || key, { pinned: false });
-        const atMax = pinPickerState.pinnedOrder.length >= DATA_TABLE_PIN_MAX;
-        input.checked = false;
-        input.disabled = atMax;
-        input.addEventListener('change', () => {
-            if (pinPickerState.pinnedOrder.length < DATA_TABLE_PIN_MAX) {
-                pinPickerState.pinnedOrder = [...pinPickerState.pinnedOrder, key];
-                renderPinPickerLists();
-            }
-        });
-        pinPickerOtherList.appendChild(row);
-    });
-    pinPickerLimitMsg.hidden = pinPickerState.pinnedOrder.length < DATA_TABLE_PIN_MAX;
-    enableListDragReorder(pinPickerPinnedList, (newOrder) => {
-        pinPickerState.pinnedOrder = newOrder;
-    });
-}
-
+// Fijar columnas: el MISMO editor de columnas que Mostrar/ocultar (modo
+// "visibilidad", ver openColumnArrangeEditor): ✕ / ✓ / 📌 por columna, vista
+// previa de la tabla, Agregar todas y Limpiar. Solo cambian el título y la
+// pista. El tope de 4 fijas vale igual en los tres iconos que fijan columnas
+// (este, Mostrar/ocultar y Acomodo): es el mismo editor.
 function openPinPicker(tableId) {
-    const state = dataTableColumnState.get(tableId);
-    if (!state) return;
-    ensurePinPickerModal();
-    pinPickerState = { tableId, pinnedOrder: [...state.config.pinned] };
-    renderPinPickerLists();
-    pinPickerModal.hidden = false;
+    openColumnArrangeEditor(tableId, null, { mode: 'visibility', variant: 'pin' });
 }
 
 // Mostrar/ocultar columnas: el MISMO editor de columnas de Acomodo (pestañas por
@@ -4204,6 +4082,7 @@ function ensureColumnArrangeModal() {
                         <span><i class="bx bx-x" aria-hidden="true"></i> <span data-role="legend-x">${t('main.arrangeModeX')}</span></span>
                         <span><i class="bx bx-check" aria-hidden="true"></i> <span data-role="legend-normal">${t('main.arrangeModeNormal')}</span></span>
                         <span><i class="bx bx-pin" aria-hidden="true"></i> ${t('main.arrangeModeFija')}</span>
+                        <span class="data-table-arrange-limit" data-role="pin-limit" hidden>${t('main.pinColumnsLimitReached')}</span>
                     </div>
                     <div class="data-table-vis-tools" data-role="vis-tools" hidden>
                         <button type="button" class="data-table-vis-tool data-table-vis-tool-add" data-role="vis-add-all"><i class="bx bx-plus" aria-hidden="true"></i><span data-role="vis-add-all-text"></span></button>
@@ -4288,6 +4167,7 @@ function ensureColumnArrangeModal() {
         previewLabel: columnArrangeModal.querySelector('[data-role="preview-label"]'),
         legendX: columnArrangeModal.querySelector('[data-role="legend-x"]'),
         legendNormal: columnArrangeModal.querySelector('[data-role="legend-normal"]'),
+        pinLimit: columnArrangeModal.querySelector('[data-role="pin-limit"]'),
     };
     columnArrangeModal._refs = refs;
 
@@ -4435,6 +4315,8 @@ function renderColumnArrangeRows() {
         row.appendChild(buildTriStateControl(key, groupKey));
         rowsEl.appendChild(row);
     });
+    // Con 4 columnas fijas el 📌 de las demás se apaga: el aviso dice por qué.
+    columnArrangeModal._refs.pinLimit.hidden = columnArrangeState.draftConfig.pinned.length < DATA_TABLE_PIN_MAX;
 }
 
 // null = todavía sin marcar: ningún botón activo y la columna no entra a
@@ -4577,13 +4459,13 @@ function renderColumnArrangePreview() {
     const headRow = thead.insertRow();
     visualOrder.forEach((key) => {
         const th = document.createElement('th');
-        if (!visiblePinned.includes(key)) {
-            const grip = document.createElement('i');
-            grip.className = 'bx bx-menu data-table-preview-grip';
-            grip.setAttribute('aria-hidden', 'true');
-            th.appendChild(grip);
-            th.draggable = true;
-        }
+        // Todas se arrastran: las normales entre las normales y las fijas entre las
+        // fijas (el orden de las fijas es el de izquierda a derecha en la tabla).
+        const grip = document.createElement('i');
+        grip.className = 'bx bx-menu data-table-preview-grip';
+        grip.setAttribute('aria-hidden', 'true');
+        th.appendChild(grip);
+        th.draggable = true;
         th.appendChild(document.createTextNode(state.labels[key] || key));
         th.dataset.col = key;
         applyPinStyle(th, key, previewState);
@@ -4623,7 +4505,9 @@ function enablePreviewHeaderDragReorder(headRow) {
     headRow.addEventListener('dragover', (event) => {
         if (!draggedKey) return;
         const th = event.target.closest('th');
-        if (!th || th.dataset.col === draggedKey || columnArrangeState.draftConfig.pinned.includes(th.dataset.col)) return;
+        if (!th || th.dataset.col === draggedKey) return;
+        const { pinned } = columnArrangeState.draftConfig;
+        if (pinned.includes(draggedKey) !== pinned.includes(th.dataset.col)) return; // fijas con fijas, normales con normales
         event.preventDefault();
     });
     headRow.addEventListener('drop', (event) => {
@@ -4634,13 +4518,15 @@ function enablePreviewHeaderDragReorder(headRow) {
         draggedKey = null;
         if (!th || th.dataset.col === key) return;
         const { draftConfig } = columnArrangeState;
-        if (draftConfig.pinned.includes(th.dataset.col)) return;
-        const order = draftConfig.order.filter((k) => k !== key);
-        let idx = order.indexOf(th.dataset.col);
-        if (idx === -1) idx = order.length;
+        const pinnedGroup = draftConfig.pinned.includes(key);
+        if (draftConfig.pinned.includes(th.dataset.col) !== pinnedGroup) return;
+        const reordered = (pinnedGroup ? draftConfig.pinned : draftConfig.order).filter((k) => k !== key);
+        let idx = reordered.indexOf(th.dataset.col);
+        if (idx === -1) idx = reordered.length;
         const rect = th.getBoundingClientRect();
-        order.splice((event.clientX - rect.left) < rect.width / 2 ? idx : idx + 1, 0, key);
-        draftConfig.order = order;
+        reordered.splice((event.clientX - rect.left) < rect.width / 2 ? idx : idx + 1, 0, key);
+        if (pinnedGroup) draftConfig.pinned = reordered;
+        else draftConfig.order = reordered;
         columnArrangeState.terminarAcomodoDone = false;
         renderColumnArrangePreview();
         updateColumnArrangeGating();
@@ -4752,7 +4638,9 @@ function openColumnArrangeEditor(tableId, layout = null, opts = {}) {
     const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
     columnArrangeState.activeTab = presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED;
 
-    refs.titleEl.textContent = t(vis ? 'main.columnVisibilityTitle' : (editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle'));
+    const pinVariant = vis && opts.variant === 'pin';
+    refs.titleEl.textContent = t(vis ? (pinVariant ? 'main.pinColumnsTitle' : 'main.columnVisibilityTitle') : (editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle'));
+    refs.visHint.textContent = t(pinVariant ? 'main.pinColumnsHint' : 'main.columnVisibilityHint');
     refs.nameLabel.textContent = t(editing ? 'main.arrangeNameLabelEdit' : 'main.arrangeNameLabel');
     refs.liveChip.hidden = !editing || vis;
     // Modo visibilidad: sin nombre, sin Terminar Acomodo ni "asignar a", con los

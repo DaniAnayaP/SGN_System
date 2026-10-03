@@ -5800,6 +5800,8 @@ function validateSavedLayoutPayload(layout) {
     if (!layout || typeof layout !== 'object') return false;
     const isStringArray = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
     if (!isStringArray(layout.order) || !isStringArray(layout.hidden) || !isStringArray(layout.pinned)) return false;
+    // Hasta 4 columnas fijas, igual que en la pantalla (DATA_TABLE_PIN_MAX en Dashboard.js).
+    if (layout.pinned.length > 4) return false;
     if (layout.widths !== undefined && (typeof layout.widths !== 'object' || layout.widths === null)) return false;
     return true;
 }
