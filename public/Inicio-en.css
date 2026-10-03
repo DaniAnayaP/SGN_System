@@ -2305,6 +2305,83 @@
     .data-table-legend-desc{
         color: var(--color-text-secondary);
     }
+    .data-table-legend-note{
+        margin: 0.5rem 0 0;
+        font-size: 0.74rem;
+        line-height: 1.5;
+        color: var(--color-text-secondary);
+    }
+    .admin-table.data-table-legend-table .data-table-legend-col-mode{
+        width: 8rem;
+    }
+    .data-table-legend-code{
+        padding: 0.05rem 0.35rem;
+        border-radius: 0.3rem;
+        background: var(--color-bg);
+        font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        font-size: 0.74rem;
+        font-weight: 600;
+        white-space: pre;
+    }
+    /* Lo que cumple lo escrito, marcado dentro de la lista del filtro. */
+    .data-table-col-filter-option mark{
+        background: color-mix(in srgb, #f5c542 55%, transparent);
+        color: inherit;
+        border-radius: 0.2rem;
+        padding: 0 0.08rem;
+    }
+    /* Pastillas de las palabras de un filtro de texto ("VALE" o "ABI"). */
+    .data-table-term-chips{
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.3rem;
+        margin-top: 0.4rem;
+    }
+    .data-table-term-chip{
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.1rem 0.2rem 0.1rem 0.55rem;
+        border: 1px solid color-mix(in srgb, var(--color-text-secondary) 40%, var(--color-border));
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--color-text-secondary) 9%, var(--color-surface));
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--color-text-primary);
+    }
+    .data-table-term-chip button{
+        display: grid;
+        place-items: center;
+        width: 1rem;
+        height: 1rem;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: none;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        font-size: 0.8rem;
+    }
+    .data-table-term-chip button:hover{
+        background: color-mix(in srgb, var(--color-text-secondary) 18%, transparent);
+        color: var(--color-text-primary);
+    }
+    .data-table-term-or{
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--color-success, #0f8a6b);
+    }
+    .data-table-col-filter-hidden-note{
+        margin: 0.2rem 0 0 0.3rem;
+        font-size: 0.66rem;
+        color: var(--color-text-secondary);
+    }
+    .data-table-col-filter-menu .data-table-search-rule{
+        margin-top: 0.4rem;
+    }
     .data-table-legend-ico{
         display: flex;
         align-items: center;

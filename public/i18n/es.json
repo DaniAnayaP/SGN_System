@@ -704,6 +704,7 @@
     "masterTreeColorExampleSample": "Dato",
     "masterTreeColorReset": "Restablecer",
     "masterTreeColorResetHint": "Quitar el color guardado y volver al original",
+    "paletteResetRole": "Volver al color sugerido a partir del color representativo del cliente",
     "masterTreeColor_purple": "Morado",
     "masterTreeColor_teal": "Verde azulado",
     "masterTreeColor_coral": "Coral",
@@ -956,6 +957,13 @@
     "filterSearchPlaceholder": "Buscar...",
     "filterStatus": "Estado",
     "filterAll": "Todos",
+    "filterAllMatching": "Todos los que coinciden",
+    "filterRuleLine": "Filtrando: {rule}",
+    "filterRuleCount": "{count} de {total} filas",
+    "filterOthersHidden": "Los otros {count} valores quedan fuera de la lista",
+    "filterOthersHiddenOne": "El otro valor queda fuera de la lista",
+    "ruleTermsOr": "o",
+    "ruleTermRemove": "Quitar {term}",
     "panelEmptyCategory": "Aún no hay pantallas en esta categoría para esta área.",
     "panelNoArea": "Selecciona un área arriba para ver su Panel de Control.",
     "filterActive": "Activo",
@@ -983,7 +991,7 @@
     "filterSaasChangesSearchHint": "Usuario, registro, cambio, solicitó, autorizó...",
     "rowEditableLegend": "Fila con al menos un campo que aún puedes editar",
     "rowEditableName": "Fila editable",
-    "columnLegendBtn": "Leyenda",
+    "columnLegendBtn": "Simbología",
     "savedSearchBtn": "Búsqueda Guardada",
     "savedSearchTitle": "Búsqueda Guardada",
     "savedSearchEmpty": "Aún no hay búsquedas guardadas.",
@@ -1096,7 +1104,18 @@
     "fieldRulesSameColumnError": "Elige dos campos distintos.",
     "fieldRuleLockedHint": "Bloqueado — completa \"{field}\" primero.",
     "fieldRuleLockedGeneric": "Este campo está bloqueado — completa su campo requisito primero.",
-    "columnLegendTitle": "Leyenda",
+    "columnLegendTitle": "Simbología",
+    "legendTypingHeading": "Cómo se lee lo que escribes",
+    "legendTypingMode": "Modo",
+    "legendTypingTyped": "Escribes",
+    "legendTypingShows": "Se muestran los que…",
+    "legendTypingRow1": "contienen VALE",
+    "legendTypingRow2": "contienen VALE **o** contienen ABI",
+    "legendTypingRow3": "igual que arriba: no importan las mayúsculas ni los espacios junto a la coma",
+    "legendTypingRow4": "contienen VALE: una coma sin nada después se ignora",
+    "legendTypingRow5": "empiezan con VALE **o** empiezan con ABI",
+    "legendTypingRow6": "son exactamente GEA o TRAMET (así ya funcionaba)",
+    "legendTypingNote": "Es \"o\": suma resultados. Con la coma no se puede pedir \"VALE y ABI a la vez\".",
     "columnLegendColorsHeading": "Colores",
     "columnLegendIconsHeading": "Iconos de esta tabla",
     "columnLegendIcon": "Icono",
@@ -1916,8 +1935,8 @@
       "example": "si un dato cambió y no sabes por qué, aquí ves quién lo modificó y qué valor tenía antes."
     },
     "columnLegend": {
-      "what": "Explica qué significa cada color de la tabla y qué hace cada uno de sus iconos.",
-      "example": "un color verde en una fila puede significar que ese registro se puede editar, y abajo ves para qué sirve cada icono de la barra."
+      "what": "Explica qué significa cada color de la tabla, qué hace cada uno de sus iconos y cómo se lee lo que escribes en los filtros.",
+      "example": "un color verde en una fila puede significar que ese registro se puede editar, y abajo ves para qué sirve cada icono de la barra y qué pasa si escribes varias palabras separadas por coma."
     },
     "fieldRules": {
       "what": "Aquí defines en qué orden se deben llenar los campos de esta tabla, y cuáles son obligatorios.",
@@ -2120,7 +2139,7 @@
       "example": "revisas la vista previa antes de guardar, para confirmar que los colores se ven bien juntos."
     },
     "paletteEditColor": {
-      "what": "Abre el selector de color de tu computadora para cambiar este color en particular.",
+      "what": "Abre la paleta de colores para cambiar este color en particular: eliges uno del tema, uno estándar, uno reciente o cualquier otro desde \"Más colores...\".",
       "example": "el color de fondo quedó muy oscuro, lo abres aquí y eliges uno más claro."
     },
     "mobileNewRecord": {

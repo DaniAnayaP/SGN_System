@@ -3190,17 +3190,87 @@ function isDateColumn(distinctValues) {
 // rtype = qué se compara: 'date' (fecha completa, la de antes), 'number',
 // 'dayname' (Lun…Dom), 'monthname' (Ene…Dic), 'time' (hh:mm:ss) o 'week'
 // (Sem12_2026). Un rango sin rtype es una fecha.
+//
+// Lo escrito puede ser varias palabras separadas por coma ("VALE, ABI"): se
+// muestran las filas que cumplan CUALQUIERA de ellas (es un "o", nunca un "y").
+// Mayúsculas y espacios junto a la coma no cuentan, y una coma sin nada después
+// se ignora ("VALE, " es solo VALE). Vale igual para Contiene, Inicia con e
+// Igual que, en el embudo del encabezado, en el panel de filtro y en Búsqueda
+// Guardada, porque los tres pasan por esta misma función.
+function splitRuleTerms(text, keepCase = false) {
+    return String(text ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+        .map((s) => (keepCase ? s : s.toLowerCase()));
+}
+
 function textRuleMatches(mode, query, value) {
-    const q = String(query || '').trim().toLowerCase();
-    if (q === '') return true;
+    const terms = splitRuleTerms(query);
+    if (!terms.length) return true;
     const v = String(value ?? '').toLowerCase();
     if (mode === 'equals') {
-        // Igual que en el embudo: ambos lados se parten por coma.
-        const queryTerms = q.split(',').map((s) => s.trim()).filter(Boolean);
+        // Igual que en el embudo: ambos lados se parten por coma (una celda
+        // puede traer varios valores, p. ej. los Centros de Costos).
         const valueTerms = v.split(',').map((s) => s.trim());
-        return queryTerms.some((term) => valueTerms.includes(term));
+        return terms.some((term) => valueTerms.includes(term));
     }
-    return mode === 'startsWith' ? v.startsWith(q) : v.includes(q);
+    return terms.some((term) => (mode === 'startsWith' ? v.startsWith(term) : v.includes(term)));
+}
+
+// Marca en amarillo, dentro de un valor de la lista, lo que cumple lo escrito:
+// cada aparición de cualquier palabra (Contiene) o el arranque (Inicia con).
+function setRuleHighlightedText(el, value, mode, text) {
+    const label = value || '—';
+    el.textContent = '';
+    const terms = mode === 'equals' || mode === 'range' ? [] : splitRuleTerms(text);
+    if (!terms.length || !value) { el.textContent = label; return; }
+    const pattern = terms.sort((a, b) => b.length - a.length)
+        .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const re = new RegExp(mode === 'startsWith' ? `^(?:${pattern})` : pattern, 'gi');
+    let last = 0;
+    let match;
+    while ((match = re.exec(value)) !== null) {
+        if (match.index > last) el.appendChild(document.createTextNode(value.slice(last, match.index)));
+        const mark = document.createElement('mark');
+        mark.textContent = match[0];
+        el.appendChild(mark);
+        last = match.index + match[0].length;
+        if (mode === 'startsWith') break;
+    }
+    if (last < value.length) el.appendChild(document.createTextNode(value.slice(last)));
+}
+
+// Una pastilla por palabra escrita, unidas por "o", con una ✕ que quita esa
+// palabra. Solo se ve cuando hay dos o más: con una sola no aporta nada.
+function createRuleTermChips(getText, setText) {
+    const el = document.createElement('div');
+    el.className = 'data-table-term-chips';
+    el.hidden = true;
+    function refresh() {
+        const terms = splitRuleTerms(getText(), true);
+        el.innerHTML = '';
+        el.hidden = terms.length < 2;
+        terms.forEach((term, index) => {
+            if (index > 0) {
+                const or = document.createElement('span');
+                or.className = 'data-table-term-or';
+                or.textContent = t('main.ruleTermsOr');
+                el.appendChild(or);
+            }
+            const chip = document.createElement('span');
+            chip.className = 'data-table-term-chip';
+            chip.appendChild(document.createTextNode(term));
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.setAttribute('aria-label', t('main.ruleTermRemove', { term }));
+            remove.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+            remove.addEventListener('click', (event) => {
+                event.stopPropagation();
+                setText(terms.filter((_, i) => i !== index).join(', '));
+            });
+            chip.appendChild(remove);
+            el.appendChild(chip);
+        });
+    }
+    return { el, refresh };
 }
 
 // Las fechas de la tabla se ven como 2026-10-01 (la mayoría) o como
@@ -3291,7 +3361,7 @@ function rangeRuleMatches(rule, value) {
 function isColumnRuleActive(rule) {
     if (!rule) return false;
     if (rule.kind === 'range') return rangeSortKey(rule.rtype, rule.from) !== null || rangeSortKey(rule.rtype, rule.to) !== null;
-    return String(rule.text || '').trim() !== '';
+    return splitRuleTerms(rule.text).length > 0;
 }
 
 function columnRuleMatches(rule, value) {
@@ -3321,7 +3391,7 @@ function describeColumnRule(rule) {
         return from ? t('main.savedSearchRuleFrom', { from }) : t('main.savedSearchRuleTo', { to });
     }
     const modeKey = { startsWith: 'main.filterModeStartsWith', equals: 'main.filterModeEquals' }[rule.mode] || 'main.filterModeContains';
-    return `${t(modeKey)} "${String(rule.text).trim()}"`;
+    return `${t(modeKey)} ${splitRuleTerms(rule.text, true).map((term) => `"${term}"`).join(` ${t('main.ruleTermsOr')} `)}`;
 }
 
 // La regla como frase: "contiene «ADMIN»", "del 01/oct/2026 al 31/oct/2026".
@@ -3336,7 +3406,7 @@ function describeRuleLine(rule) {
         return from ? t('main.savedSearchRuleFrom', { from }) : t('main.savedSearchRuleTo', { to });
     }
     const modeKey = { startsWith: 'main.filterModeStartsWith', equals: 'main.filterModeEquals' }[rule.mode] || 'main.filterModeContains';
-    return `${t(modeKey).toLowerCase()} «${String(rule.text).trim()}»`;
+    return `${t(modeKey).toLowerCase()} ${splitRuleTerms(rule.text, true).map((term) => `«${term}»`).join(` ${t('main.ruleTermsOr')} `)}`;
 }
 
 // Qué se compara en el "Desde–Hasta" de una columna, o null si no tiene (texto
@@ -3528,7 +3598,11 @@ function openColumnFilterMenu(th, tableId, key) {
         { id: 'equals', labelKey: 'main.filterModeEquals' },
     ];
     if (canRange) FILTER_MODES.push({ id: 'range', labelKey: 'main.filterModeRange' });
-    let searchMode = (appliedRule?.kind === 'range' || rangeType === 'date') ? 'range' : 'contains';
+    // Una regla de texto ya aplicada (la de una Búsqueda Guardada o la que se
+    // escribió antes) se abre con su modo y sus palabras puestas.
+    const appliedText = appliedRule?.kind === 'text' ? appliedRule : null;
+    let searchMode = appliedRule?.kind === 'range' ? 'range'
+        : (appliedText ? (appliedText.mode || 'contains') : (rangeType === 'date' ? 'range' : 'contains'));
     const rangeRule = appliedRule?.kind === 'range'
         ? { ...appliedRule, rtype: appliedRule.rtype || 'date' }
         : { kind: 'range', rtype: rangeType, from: '', to: '' };
@@ -3555,6 +3629,7 @@ function openColumnFilterMenu(th, tableId, key) {
     searchInput.type = 'search';
     searchInput.className = 'data-table-col-filter-search';
     searchInput.placeholder = t('main.filterSearchPlaceholder');
+    if (appliedText) searchInput.value = appliedText.text || '';
     searchInput.addEventListener('click', (event) => event.stopPropagation());
     searchRow.appendChild(searchInput);
 
@@ -3583,10 +3658,12 @@ function openColumnFilterMenu(th, tableId, key) {
             showMode();
             if (searchMode === 'range') {
                 applyRangeRule();
-            } else if (previous === 'range') {
+            } else {
                 // Al salir de Desde–Hasta su regla se quita y la lista vuelve a estar completa.
-                clearRangeRule();
+                if (previous === 'range') clearRangeRule();
+                applyTextRule();
             }
+            refreshTextInfo();
             searchInputChanged();
         });
         modeMenu.appendChild(btn);
@@ -3602,26 +3679,33 @@ function openColumnFilterMenu(th, tableId, key) {
         if (!modeMenu.hidden && event.target !== modeBtn && !modeMenu.contains(event.target)) modeMenu.hidden = true;
     });
 
+    // "Igual que" parte AMBOS lados por coma (una celda puede traer varios
+    // valores, p. ej. el multi-select de Centro de Costos): "GEA, TRAMET"
+    // coincide con una fila que dice solo "GEA" y con "GEA,TRAMET,GSN,GEIPSA".
+    // Contiene e Inicia con aceptan varias palabras igual (ver textRuleMatches).
     applyRowSearch = (row) => {
-        const query = searchInput.value.trim().toLowerCase();
-        if (query === '') return true;
-        const value = row.dataset.searchValue;
-        if (searchMode === 'equals') {
-            // A cell can itself hold several comma-separated values (e.g.
-            // Centro de Costos' multi-select) -- "Igual que" splits BOTH
-            // sides on comma and matches if any filter term exactly
-            // matches any of the cell's own terms, so typing "GEA,
-            // TRAMET" matches a row tagged just "GEA" as well as one
-            // tagged "GEA,TRAMET,GSN,GEIPSA". A single term with no comma
-            // on either side behaves exactly like the old plain equality.
-            const queryTerms = query.split(',').map((s) => s.trim()).filter(Boolean);
-            const valueTerms = value.split(',').map((s) => s.trim());
-            return queryTerms.some((term) => valueTerms.includes(term));
-        }
-        return searchMode === 'startsWith' ? value.startsWith(query) : value.includes(query);
+        if (searchMode === 'range') return true;
+        return textRuleMatches(searchMode, searchInput.value, row.dataset.searchValue);
     };
-    searchInput.addEventListener('input', () => searchInputChanged());
+    searchInput.addEventListener('input', () => textInputChanged());
     menu.appendChild(searchRow);
+
+    // Cómo se leyó lo escrito: una pastilla por palabra, y el filtro con cuántas
+    // filas lo cumplen. Escribir ya filtra la tabla (ver applyTextRule).
+    const termChips = createRuleTermChips(
+        () => (searchMode === 'range' ? '' : searchInput.value),
+        (text) => { searchInput.value = text; textInputChanged(); },
+    );
+    menu.appendChild(termChips.el);
+    const ruleLine = document.createElement('div');
+    ruleLine.className = 'data-table-search-rule';
+    ruleLine.hidden = true;
+    ruleLine.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+    const ruleText = document.createElement('span');
+    const ruleCount = document.createElement('span');
+    ruleCount.className = 'data-table-search-rule-count';
+    ruleLine.append(ruleText, ruleCount);
+    menu.appendChild(ruleLine);
 
     const allRow = document.createElement('label');
     allRow.className = 'data-table-col-filter-option data-table-col-filter-all';
@@ -3638,10 +3722,13 @@ function openColumnFilterMenu(th, tableId, key) {
     list.className = 'data-table-col-filter-list';
     const checkboxes = [];
 
+    // Con una regla aplicada, "Todos" son todos los valores que la cumplen.
     function syncAllCheckbox() {
         const current = currentSelection();
-        allCheckbox.checked = current.size === distinctValues.length;
-        allCheckbox.indeterminate = current.size > 0 && current.size < distinctValues.length;
+        const rule = state.columnRules.get(key);
+        const pool = rule ? distinctValues.filter((v) => columnRuleMatches(rule, v)).length : distinctValues.length;
+        allCheckbox.checked = pool > 0 && current.size === pool;
+        allCheckbox.indeterminate = current.size > 0 && current.size < pool;
     }
 
     distinctValues.forEach((value) => {
@@ -3660,14 +3747,20 @@ function openColumnFilterMenu(th, tableId, key) {
             applyColumnValueFilters(tableId);
             updateColumnFilterIndicator(th, state.columnFilters.has(key));
             syncAllCheckbox();
+            refreshTextInfo();
         });
         const span = document.createElement('span');
         span.textContent = value || '—';
         row.append(cb, span);
+        row._value = value;
         list.appendChild(row);
         checkboxes.push(cb);
     });
     menu.appendChild(list);
+    const hiddenNote = document.createElement('div');
+    hiddenNote.className = 'data-table-col-filter-hidden-note';
+    hiddenNote.hidden = true;
+    menu.appendChild(hiddenNote);
 
     // Qué se ve según el modo: buscador + lista con casillas, o los dos campos
     // de Desde–Hasta (que no usan la lista).
@@ -3682,6 +3775,8 @@ function openColumnFilterMenu(th, tableId, key) {
     // Aplica en el momento lo escrito en Desde–Hasta como regla de rango de la
     // columna; la regla reemplaza a las casillas. Sin nada escrito, se quita.
     function applyRangeRule() {
+        // La regla de texto se va: aquí solo vale el rango.
+        if (state.columnRules.get(key)?.kind === 'text') state.columnRules.delete(key);
         const { rule } = resolveDraftFilter(tableId, key, new Set(), rangeRule);
         if (rule) {
             state.columnFilters.delete(key);
@@ -3704,24 +3799,84 @@ function openColumnFilterMenu(th, tableId, key) {
     }
     showMode();
 
+    // Escribir ya filtra la tabla: lo escrito (una o varias palabras separadas
+    // por coma) queda como regla de texto de la columna, con el modo elegido, y
+    // vale también para los registros que lleguen después. Las casillas que ya
+    // estuvieran marcadas se respetan (se piden las dos cosas); al borrar lo
+    // escrito la regla se quita y todo vuelve a como estaba.
+    function applyTextRule() {
+        const text = searchInput.value;
+        const active = searchMode !== 'range' && splitRuleTerms(text).length > 0;
+        if (active) state.columnRules.set(key, { kind: 'text', mode: searchMode, text: text.trim() });
+        else if (state.columnRules.get(key)?.kind === 'text') state.columnRules.delete(key);
+        applyColumnValueFilters(tableId);
+        updateColumnFilterIndicator(th, state.columnFilters.has(key) || state.columnRules.has(key));
+        const sel = currentSelection();
+        checkboxes.forEach((cb, i) => { cb.checked = sel.has(distinctValues[i]); });
+        syncAllCheckbox();
+    }
+    function refreshTextInfo() {
+        const rule = state.columnRules.get(key);
+        const textActive = rule?.kind === 'text';
+        termChips.refresh();
+        ruleLine.hidden = !textActive;
+        allLabel.textContent = t(textActive ? 'main.filterAllMatching' : 'main.filterAll');
+        if (textActive) {
+            ruleText.textContent = t('main.filterRuleLine', { rule: describeRuleLine(rule) });
+            // "Todos los que coinciden" apagado = una selección vacía: ninguna fila.
+            const picked = state.columnFilters.get(key);
+            const counted = countRuleRows(tableId, key, rule, picked || new Set());
+            const matching = picked && !picked.size ? 0 : counted.matching;
+            const total = counted.total;
+            ruleCount.textContent = t('main.filterRuleCount', { count: String(matching), total: String(total) });
+            ruleCount.classList.toggle('zero', matching === 0);
+        }
+    }
+    function textInputChanged() {
+        applyTextRule();
+        refreshTextInfo();
+        searchInputChanged();
+    }
+
     // Hoisted (function declaration, not const) so the date/text branches
     // above can wire their own input listeners to call it even though it's
     // only defined here, once `list`'s rows actually exist.
     function searchInputChanged() {
+        let hiddenCount = 0;
         list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
             row.hidden = !applyRowSearch(row);
+            if (row.hidden) hiddenCount += 1;
+            else setRuleHighlightedText(row.lastElementChild, row._value, searchMode, searchInput.value);
         });
+        const searching = searchMode !== 'range' && splitRuleTerms(searchInput.value).length > 0;
+        hiddenNote.hidden = !searching || hiddenCount === 0;
+        if (!hiddenNote.hidden) {
+            hiddenNote.textContent = hiddenCount === 1
+                ? t('main.filterOthersHiddenOne')
+                : t('main.filterOthersHidden', { count: String(hiddenCount) });
+        }
     }
 
     allCheckbox.addEventListener('change', () => {
-        checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
-        state.columnRules.delete(key);
+        // Con una regla de texto puesta, "Todos los que coinciden" no la quita:
+        // solo acepta o deja fuera a los que ya la cumplen.
+        const keepRule = state.columnRules.get(key)?.kind === 'text';
+        if (!keepRule) {
+            checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
+            state.columnRules.delete(key);
+        }
         if (allCheckbox.checked) state.columnFilters.delete(key);
         else state.columnFilters.set(key, new Set());
         applyColumnValueFilters(tableId);
-        updateColumnFilterIndicator(th, state.columnFilters.has(key));
-        allCheckbox.indeterminate = false;
+        updateColumnFilterIndicator(th, state.columnFilters.has(key) || state.columnRules.has(key));
+        const sel = currentSelection();
+        checkboxes.forEach((cb, i) => { cb.checked = sel.has(distinctValues[i]); });
+        syncAllCheckbox();
+        refreshTextInfo();
     });
+    syncAllCheckbox();
+    refreshTextInfo();
+    searchInputChanged();
 
     document.body.appendChild(menu);
     const rect = th.getBoundingClientRect();
@@ -6359,6 +6514,11 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule, opts = {}
     searchInput.addEventListener('input', () => { rule.text = searchInput.value; refreshList(); change(); });
     showMode();
     body.appendChild(searchRow);
+    const termChips = createRuleTermChips(
+        () => (mode === 'range' ? '' : searchInput.value),
+        (text) => { searchInput.value = text; rule.text = text; refreshList(); change(); },
+    );
+    body.appendChild(termChips.el);
 
     // Lo escrito (o el rango) ES el filtro: aquí se ve la regla tal cual y
     // cuántas filas la cumplen hoy, aunque sean cero.
@@ -6413,6 +6573,7 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule, opts = {}
         const span = document.createElement('span');
         span.textContent = value || '—';
         row.append(cb, span);
+        row._value = value;
         list.appendChild(row);
         checkboxes.push(cb);
     });
@@ -6451,7 +6612,11 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule, opts = {}
         onChange();
     }
     refreshList = () => {
-        list.querySelectorAll('.data-table-col-filter-option').forEach((row) => { row.hidden = !rowMatches(row.dataset.searchValue); });
+        list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
+            row.hidden = !rowMatches(row.dataset.searchValue);
+            if (!row.hidden) setRuleHighlightedText(row.lastElementChild, row._value, mode, searchInput.value);
+        });
+        termChips.refresh();
     };
     allCheckbox.addEventListener('change', () => {
         checkboxes.forEach((cb, i) => {
@@ -7283,6 +7448,31 @@ let columnLegendModal = null;
 let columnLegendList = null;
 let columnLegendIconList = null;
 
+// Ejemplos de la tabla "Cómo se lee lo que escribes": modo, lo que se escribe
+// (tal cual, en monoespaciado) y la clave de su explicación. En el texto, lo
+// que va entre ** se ve en negritas.
+const LEGEND_TYPING_ROWS = [
+    ['main.filterModeContains', 'VALE', 'main.legendTypingRow1'],
+    ['main.filterModeContains', 'VALE, ABI', 'main.legendTypingRow2'],
+    ['main.filterModeContains', 'vale,abi', 'main.legendTypingRow3'],
+    ['main.filterModeContains', 'VALE, ', 'main.legendTypingRow4'],
+    ['main.filterModeStartsWith', 'VALE, ABI', 'main.legendTypingRow5'],
+    ['main.filterModeEquals', 'GEA, TRAMET', 'main.legendTypingRow6'],
+];
+
+function setBoldMarkup(el, text) {
+    String(text).split('**').forEach((part, index) => {
+        if (!part) return;
+        if (index % 2 === 1) {
+            const b = document.createElement('b');
+            b.textContent = part;
+            el.appendChild(b);
+        } else {
+            el.appendChild(document.createTextNode(part));
+        }
+    });
+}
+
 function ensureColumnLegendModal() {
     if (columnLegendModal) return;
     columnLegendModal = document.createElement('div');
@@ -7317,6 +7507,20 @@ function ensureColumnLegendModal() {
                     <tbody data-role="icons"></tbody>
                 </table>
             </div>
+            <p class="data-table-legend-section">${t('main.legendTypingHeading')}</p>
+            <div class="admin-table-wrap admin-table-grid-wrap">
+                <table class="admin-table admin-table-grid data-table-legend-table">
+                    <thead>
+                        <tr>
+                            <th class="data-table-legend-col-icon data-table-legend-col-mode">${t('main.legendTypingMode')}</th>
+                            <th class="data-table-legend-col-name">${t('main.legendTypingTyped')}</th>
+                            <th>${t('main.legendTypingShows')}</th>
+                        </tr>
+                    </thead>
+                    <tbody data-role="typing"></tbody>
+                </table>
+            </div>
+            <p class="data-table-legend-note">${t('main.legendTypingNote')}</p>
             <div class="admin-form-actions" style="margin-top: 1.25rem;">
                 <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
             </div>
@@ -7325,6 +7529,23 @@ function ensureColumnLegendModal() {
     document.body.appendChild(columnLegendModal);
     columnLegendList = columnLegendModal.querySelector('[data-role="list"]');
     columnLegendIconList = columnLegendModal.querySelector('[data-role="icons"]');
+    const typingList = columnLegendModal.querySelector('[data-role="typing"]');
+    LEGEND_TYPING_ROWS.forEach(([modeKey, typed, descKey]) => {
+        const tr = document.createElement('tr');
+        const modeTd = document.createElement('td');
+        modeTd.className = 'data-table-legend-name';
+        modeTd.textContent = t(modeKey);
+        const typedTd = document.createElement('td');
+        const code = document.createElement('code');
+        code.className = 'data-table-legend-code';
+        code.textContent = typed;
+        typedTd.appendChild(code);
+        const descTd = document.createElement('td');
+        descTd.className = 'data-table-legend-desc';
+        setBoldMarkup(descTd, t(descKey));
+        tr.append(modeTd, typedTd, descTd);
+        typingList.appendChild(tr);
+    });
     const close = () => { columnLegendModal.hidden = true; };
     columnLegendModal.querySelector('[data-role="close"]').addEventListener('click', close);
     wireModalDismiss(columnLegendModal, close);

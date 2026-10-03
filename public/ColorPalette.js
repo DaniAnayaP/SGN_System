@@ -124,6 +124,228 @@
         return window.Dashboard ? window.Dashboard.t(key) : key;
     }
 
+    // --- Paleta emergente de un color ----------------------------------------------
+    // Misma paleta que el árbol de permisos (Colores del tema / Estándar /
+    // Recientes / Más colores... / Restablecer), con las mismas clases CSS
+    // (.perm-tree-color-*, Admin.css), para que las dos pantallas se vean y se
+    // usen igual. Las 8 familias son las del árbol (de claro a oscuro; la 4.ª es
+    // la "base" de cada una); lo que se guarda es el hex, no un id, así que
+    // "Más colores..." puede devolver cualquier color.
+    const COLOR_FAMILIES = [
+        { id: 'purple', shades: ['#EEEDFE', '#CECBF6', '#AFA9EC', '#7F77DD', '#534AB7', '#3C3489'] },
+        { id: 'teal', shades: ['#E1F5EE', '#9FE1CB', '#5DCAA5', '#1D9E75', '#0F6E56', '#085041'] },
+        { id: 'coral', shades: ['#FAECE7', '#F5C4B3', '#F0997B', '#D85A30', '#993C1D', '#712B13'] },
+        { id: 'pink', shades: ['#FBEAF0', '#F4C0D1', '#ED93B1', '#D4537E', '#993556', '#72243E'] },
+        { id: 'blue', shades: ['#E6F1FB', '#B5D4F4', '#85B7EB', '#378ADD', '#185FA5', '#0C447C'] },
+        { id: 'green', shades: ['#EAF3DE', '#C0DD97', '#97C459', '#639922', '#3B6D11', '#27500A'] },
+        { id: 'amber', shades: ['#FAEEDA', '#FAC775', '#EF9F27', '#BA7517', '#854F0B', '#633806'] },
+        { id: 'gray', shades: ['#F1EFE8', '#D3D1C7', '#B4B2A9', '#888780', '#5F5E5A', '#444441'] },
+    ];
+    // Más recientes primero, sin repetir, máximo 8 -- compartidos por todas las
+    // paletas abiertas en la página, igual que en el árbol.
+    const recentColors = [];
+    let popoverState = null; // { key, close }
+
+    function sameHex(a, b) {
+        return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
+    }
+
+    function normalizeHex(value) {
+        const clean = String(value || '').trim().replace(/^#/, '');
+        if (/^[0-9a-f]{3}$/i.test(clean)) return '#' + clean.split('').map((c) => c + c).join('').toLowerCase();
+        if (/^[0-9a-f]{6}$/i.test(clean)) return '#' + clean.toLowerCase();
+        return null;
+    }
+
+    function closePalettePopover() {
+        if (popoverState) { popoverState.close(); popoverState = null; }
+    }
+
+    // anchors: los botones que la abren (el círculo y Editar); un clic en ellos
+    // no la cierra por fuera, así el propio botón la alterna.
+    function openPalettePopover({ key, anchors, getCurrent, resetTo, onPick }) {
+        closePalettePopover();
+        const panel = document.createElement('div');
+        panel.className = 'perm-tree-color-popover palette-popover';
+        let customOpen = false;
+
+        function pick(hex) {
+            const idx = recentColors.findIndex((c) => sameHex(c, hex));
+            if (idx !== -1) recentColors.splice(idx, 1);
+            recentColors.unshift(hex);
+            if (recentColors.length > 8) recentColors.length = 8;
+            onPick(hex);
+        }
+
+        function render() {
+            const current = getCurrent();
+            panel.innerHTML = '';
+            const addSection = (labelKey) => {
+                const label = document.createElement('div');
+                label.className = 'perm-tree-color-section-label';
+                label.textContent = t(labelKey);
+                panel.appendChild(label);
+            };
+            const addSwatch = (container, hex, small) => {
+                const swatch = document.createElement('button');
+                swatch.type = 'button';
+                swatch.className = small ? 'perm-tree-color-swatch perm-tree-color-swatch-sm' : 'perm-tree-color-swatch';
+                swatch.style.backgroundColor = hex;
+                swatch.setAttribute('aria-label', hex);
+                if (sameHex(current, hex)) {
+                    swatch.classList.add('perm-tree-color-swatch-selected');
+                    swatch.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+                }
+                swatch.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    pick(hex);
+                    render();
+                    place();
+                });
+                container.appendChild(swatch);
+            };
+
+            addSection('admin.masterTreeColorThemeColors');
+            const themeGrid = document.createElement('div');
+            themeGrid.className = 'perm-tree-color-theme-grid';
+            for (let row = 0; row < 6; row += 1) {
+                COLOR_FAMILIES.forEach((family) => addSwatch(themeGrid, family.shades[row], true));
+            }
+            panel.appendChild(themeGrid);
+
+            addSection('admin.masterTreeColorStandard');
+            const standardRow = document.createElement('div');
+            standardRow.className = 'perm-tree-color-standard-row';
+            COLOR_FAMILIES.forEach((family) => addSwatch(standardRow, family.shades[3], false));
+            panel.appendChild(standardRow);
+
+            if (recentColors.length) {
+                addSection('admin.masterTreeColorRecent');
+                const recentRow = document.createElement('div');
+                recentRow.className = 'perm-tree-color-standard-row';
+                recentColors.forEach((hex) => addSwatch(recentRow, hex, false));
+                panel.appendChild(recentRow);
+            }
+
+            // Más colores...: el selector del sistema y un campo de hex, a la vista
+            // dentro de la propia paleta (un clic directo en el selector, no uno
+            // disparado por código, que es lo que algunos navegadores bloquean).
+            if (customOpen) {
+                const custom = document.createElement('div');
+                custom.className = 'palette-popover-custom';
+                const native = document.createElement('input');
+                native.type = 'color';
+                native.value = normalizeHex(current) || '#000000';
+                native.setAttribute('aria-label', t('admin.masterTreeMoreColors'));
+                const hexField = document.createElement('input');
+                hexField.type = 'text';
+                hexField.className = 'palette-popover-hex';
+                hexField.maxLength = 7;
+                hexField.spellcheck = false;
+                hexField.value = (normalizeHex(current) || '').toUpperCase();
+                hexField.placeholder = '#RRGGBB';
+                hexField.setAttribute('aria-label', t('admin.masterTreeColorHex'));
+                // Sin volver a dibujar la paleta mientras se arrastra: se cerraría
+                // el selector del sistema que está abierto.
+                native.addEventListener('input', () => {
+                    hexField.value = native.value.toUpperCase();
+                    onPick(native.value);
+                });
+                native.addEventListener('change', () => pick(native.value));
+                const applyHex = () => {
+                    const hex = normalizeHex(hexField.value);
+                    if (!hex) { hexField.value = (normalizeHex(getCurrent()) || '').toUpperCase(); return; }
+                    native.value = hex;
+                    hexField.value = hex.toUpperCase();
+                    if (!sameHex(hex, getCurrent())) pick(hex);
+                };
+                hexField.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') { event.preventDefault(); applyHex(); render(); place(); }
+                });
+                hexField.addEventListener('blur', applyHex);
+                custom.append(native, hexField);
+                panel.appendChild(custom);
+            }
+
+            const footer = document.createElement('div');
+            footer.className = 'perm-tree-color-footer';
+            const moreBtn = document.createElement('button');
+            moreBtn.type = 'button';
+            moreBtn.className = 'perm-tree-color-more-btn';
+            moreBtn.textContent = t('admin.masterTreeMoreColors');
+            moreBtn.setAttribute('aria-expanded', String(customOpen));
+            moreBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                customOpen = !customOpen;
+                render();
+                place();
+            });
+            // Restablecer: este color vuelve al que se sugiere a partir del color
+            // representativo del cliente; apagado si ya es ese.
+            const resetBtn = document.createElement('button');
+            resetBtn.type = 'button';
+            resetBtn.className = 'perm-tree-color-reset-btn';
+            resetBtn.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
+            resetBtn.appendChild(document.createTextNode(t('admin.masterTreeColorReset')));
+            resetBtn.title = t('admin.paletteResetRole');
+            resetBtn.setAttribute('aria-label', resetBtn.title);
+            resetBtn.disabled = sameHex(current, resetTo());
+            resetBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                onPick(resetTo());
+                render();
+                place();
+            });
+            footer.append(moreBtn, resetBtn);
+            panel.appendChild(footer);
+        }
+
+        // Fija a <body> (la tabla y el modal se desplazan y recortan): debajo del
+        // botón, arriba si ahí hay más lugar, y siempre dentro de la ventana.
+        const host = anchors[0];
+        document.body.appendChild(panel);
+        function place() {
+            const r = host.getBoundingClientRect();
+            const w = panel.offsetWidth;
+            const h = panel.offsetHeight;
+            const margin = 8;
+            const below = window.innerHeight - r.bottom - margin;
+            const above = r.top - margin;
+            const top = (below >= h || below >= above) ? r.bottom + 4 : r.top - h - 4;
+            panel.style.top = `${Math.max(margin, Math.min(top, window.innerHeight - h - margin))}px`;
+            panel.style.left = `${Math.max(margin, Math.min(r.left, window.innerWidth - w - margin))}px`;
+        }
+        render();
+        place();
+
+        const onDocClick = (event) => {
+            if (panel.contains(event.target) || anchors.some((a) => a.contains(event.target))) return;
+            closePalettePopover();
+        };
+        // Escape cierra solo la paleta, no el diálogo que la contiene (el
+        // cierre por Escape del modal está en la fase de burbujeo del document):
+        // por eso esta escucha va en la fase de captura y corta el evento.
+        const onKey = (event) => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            closePalettePopover();
+        };
+        window.addEventListener('resize', place);
+        document.addEventListener('scroll', place, true);
+        document.addEventListener('click', onDocClick, true);
+        document.addEventListener('keydown', onKey, true);
+        popoverState = {
+            key,
+            close() {
+                panel.remove();
+                window.removeEventListener('resize', place);
+                document.removeEventListener('scroll', place, true);
+                document.removeEventListener('click', onDocClick, true);
+                document.removeEventListener('keydown', onKey, true);
+            },
+        };
+    }
+
     // --- UI widget --------------------------------------------------------------
     function create(container, { initial } = {}) {
         let palette = { ...DEFAULT_PALETTE, ...(initial || {}) };
@@ -207,6 +429,7 @@
         }
 
         function renderGrid() {
+            closePalettePopover();
             grid.innerHTML = '';
             const table = document.createElement('table');
             table.className = 'palette-table';
@@ -227,10 +450,10 @@
                 const tdRole = document.createElement('td');
                 tdRole.textContent = t(labelKey);
 
-                // Hidden (visually, not functionally) native color input —
-                // still the actual OS color picker, just triggered by the
-                // swatch or the Editar button instead of being the only
-                // visible control in its own grid cell like before.
+                // Native color input kept (hidden) only as this row's value
+                // holder -- it normalizes the hex and the rest of the widget
+                // reads it back. Editing goes through the quick palette
+                // popover (openPalettePopover) opened by the swatch / Editar.
                 const input = document.createElement('input');
                 input.type = 'color';
                 input.className = 'palette-color-input';
@@ -261,14 +484,24 @@
                 }
                 syncValueDisplay();
 
-                const openPicker = () => input.click();
-                swatch.addEventListener('click', openPicker);
-                editBtn.addEventListener('click', openPicker);
-                input.addEventListener('input', () => {
+                function applyColor(hex) {
+                    input.value = hex;
                     palette = { ...palette, [key]: input.value };
                     syncValueDisplay();
                     renderPreview();
-                });
+                }
+                const openPicker = () => {
+                    if (popoverState && popoverState.key === key) { closePalettePopover(); return; }
+                    openPalettePopover({
+                        key,
+                        anchors: [swatch, editBtn],
+                        getCurrent: () => input.value,
+                        resetTo: () => suggestPalette(seedInput.value)[key],
+                        onPick: applyColor,
+                    });
+                };
+                swatch.addEventListener('click', openPicker);
+                editBtn.addEventListener('click', openPicker);
 
                 fieldInputs[key] = input;
                 tr.append(tdRole, tdValue, tdEdit);

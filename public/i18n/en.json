@@ -704,6 +704,7 @@
     "masterTreeColorExampleNeighbor": "ID",
     "masterTreeColorExampleSample": "Data",
     "masterTreeColorReset": "Reset",
+    "paletteResetRole": "Go back to the color suggested from the client's representative color",
     "masterTreeColorResetHint": "Remove the saved color and go back to the original",
     "masterTreeColor_purple": "Purple",
     "masterTreeColor_teal": "Teal",
@@ -957,6 +958,13 @@
     "filterSearchPlaceholder": "Search...",
     "filterStatus": "Status",
     "filterAll": "All",
+    "filterAllMatching": "All matching",
+    "filterRuleLine": "Filtering: {rule}",
+    "filterRuleCount": "{count} of {total} rows",
+    "filterOthersHidden": "The other {count} values are left out of the list",
+    "filterOthersHiddenOne": "The other value is left out of the list",
+    "ruleTermsOr": "or",
+    "ruleTermRemove": "Remove {term}",
     "panelEmptyCategory": "No screens yet in this category for this area.",
     "panelNoArea": "Select an area above to see its Control Panel.",
     "filterActive": "Active",
@@ -984,7 +992,7 @@
     "filterSaasChangesSearchHint": "User, record, change, requested by, authorized by...",
     "rowEditableLegend": "Row with at least one field you can still edit",
     "rowEditableName": "Editable row",
-    "columnLegendBtn": "Legend",
+    "columnLegendBtn": "Symbology",
     "savedSearchBtn": "Saved Search",
     "savedSearchTitle": "Saved Search",
     "savedSearchEmpty": "No saved searches yet.",
@@ -1097,7 +1105,18 @@
     "fieldRulesSameColumnError": "Choose two different fields.",
     "fieldRuleLockedHint": "Locked — fill in \"{field}\" first.",
     "fieldRuleLockedGeneric": "This field is locked — fill in its gate field first.",
-    "columnLegendTitle": "Legend",
+    "columnLegendTitle": "Symbology",
+    "legendTypingHeading": "How what you type is read",
+    "legendTypingMode": "Mode",
+    "legendTypingTyped": "You type",
+    "legendTypingShows": "Shows the ones that…",
+    "legendTypingRow1": "contain VALE",
+    "legendTypingRow2": "contain VALE **or** contain ABI",
+    "legendTypingRow3": "same as above: capital letters and spaces next to the comma don't matter",
+    "legendTypingRow4": "contain VALE: a comma with nothing after it is ignored",
+    "legendTypingRow5": "start with VALE **or** start with ABI",
+    "legendTypingRow6": "are exactly GEA or TRAMET (this already worked)",
+    "legendTypingNote": "It is \"or\": it adds results together. The comma can't ask for \"VALE and ABI at once\".",
     "columnLegendColorsHeading": "Colors",
     "columnLegendIconsHeading": "Icons on this table",
     "columnLegendIcon": "Icon",
@@ -1917,8 +1936,8 @@
       "example": "if a value changed and you don't know why, this shows who modified it and what it used to be."
     },
     "columnLegend": {
-      "what": "Explains what each color on the table means and what each of its icons does.",
-      "example": "a green row can mean that record is editable, and below you see what each toolbar icon is for."
+      "what": "Explains what each color on the table means, what each of its icons does, and how what you type in the filters is read.",
+      "example": "a green row can mean that record is editable, and below you see what each toolbar icon is for and what happens if you type several words separated by commas."
     },
     "fieldRules": {
       "what": "This is where you set the order this table's fields must be filled in, and which ones are required.",
@@ -2121,7 +2140,7 @@
       "example": "you check the preview before saving, to confirm the colors look good together."
     },
     "paletteEditColor": {
-      "what": "Opens your computer's color picker so you can change this particular color.",
+      "what": "Opens the color palette so you can change this particular color: pick a theme color, a standard one, a recent one, or any other from \"More colors...\".",
       "example": "the background color turned out too dark, so you open it here and pick a lighter one."
     },
     "mobileNewRecord": {
