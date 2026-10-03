@@ -1981,6 +1981,21 @@
         font-weight: 700;
         color: var(--color-text-primary);
     }
+    /* Dentro de un diálogo (el panel de filtros del Historial de cambios), el h3 del
+       panel tomaba el estilo del TÍTULO del diálogo (.modal-panel h3: franja gris
+       fija con márgenes negativos) y se veía cortado y pegado al borde. Aquí vuelve
+       a ser el título de su propia tarjeta. */
+    .modal-panel .filter-bar-title{
+        position: static;
+        top: auto;
+        z-index: auto;
+        margin: 0;
+        padding: 1rem 1rem 0;
+        border-radius: 0;
+        border-bottom: none;
+        background: none;
+        font-size: 0.95rem;
+    }
     .filter-bar-panel{
         display: none;
         padding: 0 1rem 1rem;
