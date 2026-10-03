@@ -165,6 +165,18 @@ function renderApps() {
             event.stopPropagation();
             openEditModal(app);
         });
+        const historyBtn = document.createElement('button');
+        historyBtn.type = 'button';
+        historyBtn.className = 'admin-icon-btn';
+        historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+        historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+        historyBtn.setAttribute('data-help-key', 'changeHistory');
+        historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+        historyBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            Dashboard.openChangeHistoryWithRows(Dashboard.t('main.changeHistoryTitleRecord'), Dashboard.saasTableChangesLoader('nuestras-apps', app.id));
+        });
+        tdActions.appendChild(historyBtn);
         tr.appendChild(tdActions);
 
         tr.addEventListener('click', () => openDetail(app.id));
@@ -541,3 +553,6 @@ screenForm.addEventListener('submit', async (event) => {
         console.error('Admin (Nuestras APPs) failed to initialize:', err);
     }
 })();
+
+// Historial del icono de la barra: los cambios de todas las apps.
+Dashboard.registerSaasTableHistory('nuestras-apps', 'main.changeHistoryTitle', Dashboard.saasTableChangesLoader('nuestras-apps'));

@@ -11571,6 +11571,19 @@ function openTableHistory(tableId) {
     return openChangeHistory(tableId);
 }
 
+// Cargador del historial de las tablas de SaaS que guardan sus cambios en
+// saas_table_changes (Nuestras Apps, Nuestros Respaldos, Material de Apoyo): con
+// recordId, el de esa fila; sin él, el de toda la tabla.
+function saasTableChangesLoader(tableKey, recordId) {
+    return async () => {
+        const query = recordId != null ? `?recordId=${encodeURIComponent(recordId)}` : '';
+        const res = await fetch(`/api/admin/saas-table-changes/${encodeURIComponent(tableKey)}${query}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { changes } = await res.json();
+        return (changes || []).map((change) => saasHistoryRow(change));
+    };
+}
+
 // Una fila del historial de SaaS, ya con el texto de "Cambio": el campo y de qué
 // a qué, o solo el nombre del campo / "Registro actualizado" cuando no hay valores.
 // Solicitó/Autorizó van en "—": estas tablas no tienen flujo de autorización.
@@ -11631,6 +11644,7 @@ window.Dashboard = {
     openChangeHistoryWithRows,
     registerSaasTableHistory,
     saasHistoryRow,
+    saasTableChangesLoader,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },

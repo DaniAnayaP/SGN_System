@@ -35,6 +35,18 @@ function buildSystemCells(file) {
 function buildDownloadCell(file) {
     const td = document.createElement('td');
     td.className = 'admin-table-actions';
+    const historyBtn = document.createElement('button');
+    historyBtn.type = 'button';
+    historyBtn.className = 'admin-icon-btn';
+    historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+    historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+    historyBtn.setAttribute('data-help-key', 'changeHistory');
+    historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+    historyBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        Dashboard.openChangeHistoryWithRows(Dashboard.t('main.changeHistoryTitleRecord'), Dashboard.saasTableChangesLoader('admin-nuestros-respaldos', `${file.tableKey}:${file.recordId}:${file.fieldKey}`));
+    });
+    td.appendChild(historyBtn);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'admin-icon-btn';
@@ -146,3 +158,6 @@ document.getElementById('backups-client-select')?.addEventListener('change', (e)
         console.error('Nuestros Respaldos (SaaS) failed to initialize:', err);
     }
 })();
+
+// Historial del icono de la barra: quién descargó qué respaldo.
+Dashboard.registerSaasTableHistory('admin-nuestros-respaldos', 'main.changeHistoryTitle', Dashboard.saasTableChangesLoader('admin-nuestros-respaldos'));

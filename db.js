@@ -1381,6 +1381,24 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_client_changes_client ON client_changes(client_id);
 
+    -- saas_table_changes: historial de las tablas de SaaS que no tienen una tabla de
+    -- cambios propia (Nuestras Apps, Nuestros Respaldos, Material de Apoyo). Una sola
+    -- tabla con table_key en lugar de una por pantalla; record_id es texto porque la
+    -- fila de un respaldo se identifica por tabla + registro + campo.
+    CREATE TABLE IF NOT EXISTS saas_table_changes (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_key     TEXT NOT NULL,
+        record_id     TEXT NOT NULL DEFAULT '',
+        record_label  TEXT NOT NULL DEFAULT '',
+        action        TEXT NOT NULL,
+        field_key     TEXT NOT NULL DEFAULT '',
+        old_value     TEXT NOT NULL DEFAULT '',
+        new_value     TEXT NOT NULL DEFAULT '',
+        changed_by    TEXT NOT NULL DEFAULT '',
+        changed_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_table_changes_table ON saas_table_changes(table_key, record_id);
+
     -- Costo Accesos-Permisos: a price per plan per tree node, at EVERY
     -- level (Departamento/Área/Categoría/Pantalla/Columna), stored and
     -- summed independently per level ON PURPOSE (a priced Departamento AND
@@ -7764,6 +7782,29 @@ function getAllClientChanges(limit = 1000) {
     return db.prepare('SELECT * FROM client_changes ORDER BY changed_at DESC, id DESC LIMIT ?').all(limit);
 }
 
+// Historial de las tablas de SaaS sin tabla de cambios propia (ver saas_table_changes).
+// Con recordId, solo esa fila; sin él, toda la tabla.
+function getSaasTableChanges(tableKey, recordId, limit = 1000) {
+    if (recordId != null && recordId !== '') {
+        return db.prepare('SELECT * FROM saas_table_changes WHERE table_key = ? AND record_id = ? ORDER BY changed_at DESC, id DESC LIMIT ?')
+            .all(tableKey, String(recordId), limit);
+    }
+    return db.prepare('SELECT * FROM saas_table_changes WHERE table_key = ? ORDER BY changed_at DESC, id DESC LIMIT ?').all(tableKey, limit);
+}
+
+function logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy }) {
+    db.prepare(`
+        INSERT INTO saas_table_changes (table_key, record_id, record_label, action, field_key, old_value, new_value, changed_by)
+        VALUES (@tableKey, @recordId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy)
+    `).run({
+        tableKey, recordId: recordId == null ? '' : String(recordId), recordLabel: recordLabel || '', action,
+        fieldKey: fieldKey || '',
+        oldValue: oldValue == null ? '' : String(oldValue),
+        newValue: newValue == null ? '' : String(newValue),
+        changedBy: changedBy || '',
+    });
+}
+
 function logClientChange({ clientId, recordLabel, action, fieldKey, oldValue, newValue, changedBy }) {
     db.prepare(`
         INSERT INTO client_changes (client_id, record_label, action, field_key, old_value, new_value, changed_by)
@@ -8523,6 +8564,8 @@ module.exports = {
     getAllPlanChanges,
     getClientChanges,
     getAllClientChanges,
+    getSaasTableChanges,
+    logSaasTableChange,
     logClientChange,
     logPlanChange,
     listSaasAdmins,

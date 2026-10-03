@@ -41,6 +41,19 @@ function buildActionsCell(material) {
     const td = document.createElement('td');
     td.className = 'admin-table-actions';
 
+    const historyBtn = document.createElement('button');
+    historyBtn.type = 'button';
+    historyBtn.className = 'admin-icon-btn';
+    historyBtn.setAttribute('aria-label', Dashboard.t('main.changeHistoryTitleRecord'));
+    historyBtn.title = Dashboard.t('main.changeHistoryTitleRecord');
+    historyBtn.setAttribute('data-help-key', 'changeHistory');
+    historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+    historyBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        Dashboard.openChangeHistoryWithRows(Dashboard.t('main.changeHistoryTitleRecord'), Dashboard.saasTableChangesLoader('admin-material-apoyo', material.id));
+    });
+    td.appendChild(historyBtn);
+
     const downloadBtn = document.createElement('button');
     downloadBtn.type = 'button';
     downloadBtn.className = 'admin-icon-btn';
@@ -319,3 +332,6 @@ async function loadClientOptions() {
         console.error('Material Apoyo (SaaS) failed to initialize:', err);
     }
 })();
+
+// Historial del icono de la barra: altas y bajas de todo el Material de Apoyo.
+Dashboard.registerSaasTableHistory('admin-material-apoyo', 'main.changeHistoryTitle', Dashboard.saasTableChangesLoader('admin-material-apoyo'));

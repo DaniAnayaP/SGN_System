@@ -334,6 +334,8 @@ const {
     getAllPlanChanges,
     getClientChanges,
     getAllClientChanges,
+    getSaasTableChanges,
+    logSaasTableChange,
     logClientChange,
     logPlanChange,
     listSaasAdmins,
@@ -1504,6 +1506,10 @@ app.get('/api/admin/clients/:id/backups/download-url', requireAuth, requireAdmin
     const { tableKey, recordId, fieldKey } = req.query;
     const evidence = getEvidenceRawValue(req.params.id, tableKey, Number(recordId), fieldKey);
     if (!evidence) return res.status(404).json({ message: 'Evidence not found.' });
+    // Nuestros Respaldos es una lista de solo lectura; lo único que pasa en ella es
+    // que alguien descargue un archivo, y eso es lo que queda en su historial.
+    logSaasChange(req, 'admin-nuestros-respaldos', `${tableKey}:${recordId}:${fieldKey}`,
+        `${client.company_name} — ${tableKey}/${fieldKey} #${recordId}`, 'admin.historyBackupDownloaded', '', '');
     if (!evidence.migrated) return res.json({ url: evidence.value });
     try {
         const companyNickname = client.company_nickname || client.company_name || '';
@@ -1588,6 +1594,7 @@ app.post('/api/admin/clients/:id/material-apoyo', requireAuth, requireAdmin, (re
         category, title, originalFilename, storageKey: key, contentType, fileSize,
         uploadedByName: req.user.name, uploadedBySource: 'geipsa',
     });
+    logSaasChange(req, 'admin-material-apoyo', material.id, `${client.company_name} — ${title || originalFilename}`, '', '', '', 'create');
     res.status(201).json({ material });
 });
 
@@ -1597,6 +1604,8 @@ app.delete('/api/admin/clients/:id/material-apoyo/:materialId', requireAuth, req
     }
     const material = getSupportMaterialById(Number(req.params.materialId), req.params.id);
     if (!material) return res.status(404).json({ message: 'Material not found.' });
+    logSaasChange(req, 'admin-material-apoyo', material.id,
+        `${getClientById(req.params.id)?.company_name || ''} — ${material.title || material.original_filename}`, '', '', '', 'delete');
     deleteSupportMaterial(material.id, req.params.id);
     try { await deleteObject(material.storage_key); } catch (err) { console.error('admin material-apoyo R2 delete failed (ignored):', err.message); }
     res.json({ ok: true });
@@ -2023,6 +2032,17 @@ app.put('/api/admin/master-permission-costs/currency', requireAuth, requireAdmin
 // against Equipo SaaS's SAAS_PERMISSION_CATALOG.
 const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
+// Historial de cambios de las tablas de SaaS sin tabla propia (saas_table_changes):
+// Nuestras Apps, Nuestros Respaldos y Material de Apoyo. Con ?recordId=, solo esa fila.
+const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo'];
+function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue, action = 'update') {
+    logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
+}
+app.get('/api/admin/saas-table-changes/:tableKey', requireAuth, requireAdmin, (req, res) => {
+    if (!SAAS_TABLE_CHANGES_KEYS.includes(req.params.tableKey)) return res.status(404).json({ message: 'Unknown table.' });
+    res.json({ changes: getSaasTableChanges(req.params.tableKey, req.query.recordId) });
+});
+
 app.get('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
     res.json({ apps: listSaasApps() });
 });
@@ -2053,6 +2073,7 @@ app.post('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
             name: name.trim(), icon, colorFrom, colorTo,
             sector: (sector || '').trim(), status, createdBy: req.user.name,
         });
+        logSaasChange(req, 'nuestras-apps', app_.id, app_.name, '', '', '', 'create');
         res.status(201).json({ app: app_ });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -2077,6 +2098,16 @@ app.patch('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
             name, icon, colorFrom, colorTo,
             sector: sector !== undefined ? sector.trim() : undefined, status,
         });
+        [
+            ['name', 'admin.appName'], ['sector', 'menu.appSector'], ['status', 'admin.planStatus'], ['icon', 'admin.historyAppIcon'],
+        ].forEach(([field, fieldKey]) => {
+            if (String(existing[field] ?? '') !== String(app_[field] ?? '')) {
+                logSaasChange(req, 'nuestras-apps', app_.id, app_.name, fieldKey, existing[field], app_[field]);
+            }
+        });
+        if (`${existing.colorFrom}/${existing.colorTo}` !== `${app_.colorFrom}/${app_.colorTo}`) {
+            logSaasChange(req, 'nuestras-apps', app_.id, app_.name, 'admin.historyAppColors', `${existing.colorFrom} / ${existing.colorTo}`, `${app_.colorFrom} / ${app_.colorTo}`);
+        }
         res.json({ app: app_ });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -2092,6 +2123,7 @@ app.delete('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => 
     }
     const existing = getSaasAppById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'App not found.' });
+    logSaasChange(req, 'nuestras-apps', existing.id, existing.name, '', '', '', 'delete');
     deleteSaasApp(req.params.id);
     res.status(204).end();
 });
@@ -2110,7 +2142,9 @@ app.post('/api/admin/saas-apps/:id/screens', requireAuth, requireAdmin, (req, re
     if (!WEB_SCREEN_CATALOG.some((s) => s.key === webScreenKey)) {
         return res.status(400).json({ message: 'Selecciona a qué pantalla Web corresponde.' });
     }
-    res.status(201).json({ app: addSaasAppScreen(req.params.id, { name: name.trim(), screenType, webScreenKey }) });
+    const appWithScreen = addSaasAppScreen(req.params.id, { name: name.trim(), screenType, webScreenKey });
+    logSaasChange(req, 'nuestras-apps', existing.id, existing.name, 'admin.historyAppScreenAdded', '', name.trim());
+    res.status(201).json({ app: appWithScreen });
 });
 
 app.delete('/api/admin/saas-apps/:id/screens/:screenId', requireAuth, requireAdmin, (req, res) => {
@@ -2119,7 +2153,10 @@ app.delete('/api/admin/saas-apps/:id/screens/:screenId', requireAuth, requireAdm
     }
     const existing = getSaasAppById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'App not found.' });
-    res.json({ app: deleteSaasAppScreen(req.params.id, req.params.screenId) });
+    const removedScreen = existing.screens.find((s) => String(s.id) === req.params.screenId);
+    const appWithoutScreen = deleteSaasAppScreen(req.params.id, req.params.screenId);
+    if (removedScreen) logSaasChange(req, 'nuestras-apps', existing.id, existing.name, 'admin.historyAppScreenRemoved', removedScreen.name, '');
+    res.json({ app: appWithoutScreen });
 });
 
 // Read-only lookup behind an App screen's own field checklist — the full
@@ -2143,7 +2180,13 @@ app.put('/api/admin/saas-apps/:id/screens/:screenId/fields', requireAuth, requir
     if (!Array.isArray(fieldKeys) || fieldKeys.some((k) => typeof k !== 'string' || !k)) {
         return res.status(400).json({ message: 'fieldKeys must be an array of strings.' });
     }
-    res.json({ fieldKeys: setSaasAppScreenFields(req.params.screenId, fieldKeys) });
+    const fieldsBefore = (screen.fields || []).map((f) => (typeof f === 'object' ? (f.fieldKey ?? f.key ?? JSON.stringify(f)) : f));
+    const savedFields = setSaasAppScreenFields(req.params.screenId, fieldKeys);
+    const fieldsAfter = (savedFields || []).map((f) => (typeof f === 'object' ? (f.fieldKey ?? f.key ?? JSON.stringify(f)) : f));
+    if ([...fieldsBefore].sort().join('|') !== [...fieldsAfter].sort().join('|')) {
+        logSaasChange(req, 'nuestras-apps', existing.id, existing.name, 'admin.historyAppScreenFields', `${screen.name}: ${fieldsBefore.length}`, `${screen.name}: ${fieldsAfter.length}`);
+    }
+    res.json({ fieldKeys: savedFields });
 });
 
 // --- Nuestros Sectores de Negocio (catalog Nuestras APPs' Sector field ------
