@@ -4159,208 +4159,12 @@ function openPinPicker(tableId) {
     pinPickerModal.hidden = false;
 }
 
-let visibilityPickerModal = null;
-let visibilityPickerList = null;
-let visibilityPickerChips = null;
-let visibilityPickerSearch = null;
-let visibilityPickerCount = null;
-let visibilityPickerState = null; // { tableId, hiddenSet: Set<key>, query: string, activeGroupKey: string }
-
-// Mostrar/ocultar columnas con el mismo aspecto que el panel de columnas de
-// Acomodo Guardado: panel gris con buscador, pestañas por clasificación (cada
-// una con su conteo) y la lista de dos columnas con botones de solo icono. Aquí
-// cada columna solo tiene dos: oculta o visible.
-function ensureVisibilityPickerModal() {
-    if (visibilityPickerModal) return;
-    visibilityPickerModal = document.createElement('div');
-    visibilityPickerModal.className = 'modal-overlay';
-    visibilityPickerModal.hidden = true;
-    visibilityPickerModal.innerHTML = `
-        <div class="modal-panel data-table-arrange-panel" role="dialog" aria-modal="true" aria-labelledby="data-table-vis-title">
-            <h3 id="data-table-vis-title">${t('main.columnVisibilityTitle')}</h3>
-            <p class="admin-hint">${t('main.columnVisibilityHint')}</p>
-            <div class="data-table-arrange-colpanel">
-                <div class="sector-icon-picker-search">
-                    <i class="bx bx-search" aria-hidden="true"></i>
-                    <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
-                </div>
-                <p class="data-table-arrange-section-label">${t('main.arrangeClassHint')}</p>
-                <div class="sector-icon-picker-chips data-table-arrange-tabs" data-role="chips"></div>
-                <div class="data-table-arrange-legend">
-                    <span><i class="bx bx-x" aria-hidden="true"></i> ${t('main.visibilityModeHidden')}</span>
-                    <span><i class="bx bx-check" aria-hidden="true"></i> ${t('main.visibilityModeVisible')}</span>
-                </div>
-                <p class="sector-icon-picker-count" data-role="count"></p>
-                <div class="admin-module-list data-table-arrange-list" data-role="list"></div>
-            </div>
-            <div class="data-table-search-footer data-table-vis-footer">
-                <button type="button" class="btn" data-role="save">${t('admin.save')}</button>
-                <button type="button" class="btn btn-secondary" data-role="cancel">${t('admin.cancel')}</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(visibilityPickerModal);
-    visibilityPickerList = visibilityPickerModal.querySelector('[data-role="list"]');
-    visibilityPickerChips = visibilityPickerModal.querySelector('[data-role="chips"]');
-    visibilityPickerSearch = visibilityPickerModal.querySelector('[data-role="search"]');
-    visibilityPickerCount = visibilityPickerModal.querySelector('[data-role="count"]');
-    const close = () => { visibilityPickerModal.hidden = true; visibilityPickerState = null; };
-    visibilityPickerModal.querySelector('[data-role="cancel"]').addEventListener('click', close);
-    visibilityPickerModal.querySelector('[data-role="save"]').addEventListener('click', () => {
-        if (!visibilityPickerState) return;
-        const state = dataTableColumnState.get(visibilityPickerState.tableId);
-        if (state) {
-            state.config.hidden = state.columnKeys.filter((k) => visibilityPickerState.hiddenSet.has(k));
-            saveDataTableConfig(visibilityPickerState.tableId, state.config);
-            applyDataTableColumnLayout(visibilityPickerState.tableId);
-        }
-        close();
-    });
-    visibilityPickerSearch.addEventListener('input', () => {
-        visibilityPickerState.query = visibilityPickerSearch.value;
-        renderVisibilityPickerList();
-    });
-    wireModalDismiss(visibilityPickerModal, close);
-}
-
-// Las pestañas son las clasificaciones que de verdad hay en ESTA tabla (más
-// "Por clasificar" si alguna columna no tiene); siempre hay una activa.
-function visibilityPickerTabs(state) {
-    const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
-    const hasUnclassified = state.columnKeys.some((k) => !state.groupKeys.get(k));
-    return hasUnclassified ? [...presentGroupKeys, COLUMN_ARRANGE_UNCLASSIFIED] : presentGroupKeys;
-}
-
-// Escribir en el buscador siempre mira TODAS las columnas, sin importar la
-// pestaña que esté activa (quien busca no debe ver una lista vacía solo porque
-// quedó marcada una pestaña que no tiene nada que ver).
-function visiblePickerColumns(state) {
-    const q = visibilityPickerState.query.trim().toLowerCase();
-    if (q) return state.columnKeys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q));
-    return state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === visibilityPickerState.activeGroupKey);
-}
-
-function renderVisibilityPickerChips() {
-    const state = dataTableColumnState.get(visibilityPickerState.tableId);
-    if (!state) return;
-    visibilityPickerChips.innerHTML = '';
-    visibilityPickerTabs(state).forEach((groupKey) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'sector-icon-picker-chip' + (visibilityPickerState.activeGroupKey === groupKey ? ' active' : '');
-        if (groupKey !== COLUMN_ARRANGE_UNCLASSIFIED) {
-            const dot = document.createElement('span');
-            dot.className = 'data-table-col-dot data-table-col-dot-chip';
-            dot.style.backgroundColor = columnGroupColor(groupKey);
-            chip.appendChild(dot);
-        }
-        chip.appendChild(document.createTextNode(groupKey === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(groupKey)));
-        const count = document.createElement('span');
-        count.className = 'data-table-arrange-tab-count';
-        count.textContent = String(state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === groupKey).length);
-        chip.appendChild(count);
-        chip.addEventListener('click', () => {
-            visibilityPickerState.activeGroupKey = groupKey;
-            visibilityPickerState.query = '';
-            visibilityPickerSearch.value = '';
-            renderVisibilityPickerChips();
-            renderVisibilityPickerList();
-        });
-        visibilityPickerChips.appendChild(chip);
-    });
-}
-
-// Oculta/visible de una columna: dos botones de icono, el activo con el tinte
-// de la clasificación de esa columna (igual que Normal/Fija en Acomodo).
-function buildVisibilityToggle(groupKey, hidden, onSet) {
-    const wrap = document.createElement('div');
-    wrap.className = 'data-table-tri-control';
-    const activeColor = columnGroupColor(groupKey);
-    const hasOwnColor = activeColor && activeColor !== 'var(--color-border)' && !activeColor.startsWith('var(');
-    [
-        { hide: true, icon: 'bx-x', title: t('main.visibilityModeHidden') },
-        { hide: false, icon: 'bx-check', title: t('main.visibilityModeVisible') },
-    ].forEach((opt) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        const icon = document.createElement('i');
-        icon.className = `bx ${opt.icon}`;
-        icon.setAttribute('aria-hidden', 'true');
-        btn.appendChild(icon);
-        btn.title = opt.title;
-        btn.setAttribute('aria-label', opt.title);
-        const isActive = hidden === opt.hide;
-        btn.classList.toggle('active', isActive);
-        if (isActive && groupKey) btn.dataset.groupKey = groupKey;
-        if (isActive && hasOwnColor) {
-            btn.style.backgroundColor = `color-mix(in srgb, ${activeColor} 16%, var(--color-surface))`;
-            btn.style.color = activeColor;
-        }
-        btn.addEventListener('click', () => onSet(opt.hide));
-        wrap.appendChild(btn);
-    });
-    return wrap;
-}
-
-async function setVisibilityPickerHidden(key, hide) {
-    const state = dataTableColumnState.get(visibilityPickerState.tableId);
-    if (!state) return;
-    const isHidden = visibilityPickerState.hiddenSet.has(key);
-    if (hide === isHidden) return;
-    if (hide) {
-        // Never allow hiding the last remaining visible column.
-        const visibleCount = state.columnKeys.length - visibilityPickerState.hiddenSet.size;
-        if (visibleCount <= 1) return;
-        // Hiding a PINNED column is easy to do by accident (it's still sitting
-        // right there, sticky-left) and leaves it fixed-but-invisible until
-        // someone remembers to check the pin picker too -- confirm first.
-        if (state.config.pinned.includes(key) && !(await confirmDialog(t('main.columnHidePinnedConfirm')))) return;
-        visibilityPickerState.hiddenSet.add(key);
-    } else {
-        visibilityPickerState.hiddenSet.delete(key);
-    }
-    renderVisibilityPickerList();
-}
-
-function renderVisibilityPickerList() {
-    const state = dataTableColumnState.get(visibilityPickerState.tableId);
-    if (!state) return;
-    visibilityPickerList.innerHTML = '';
-    const keys = visiblePickerColumns(state);
-    const activeKey = visibilityPickerState.activeGroupKey;
-    visibilityPickerCount.textContent = t('main.columnFilterCount', {
-        count: String(keys.length), total: String(state.columnKeys.length),
-        scope: visibilityPickerState.query.trim()
-            ? `"${visibilityPickerState.query.trim()}"`
-            : (activeKey === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : (activeKey ? resolveGroupLabel(activeKey) : t('main.columnFilterAll'))),
-    });
-    if (!keys.length) {
-        const empty = document.createElement('p');
-        empty.className = 'sector-icon-picker-empty';
-        empty.textContent = t('main.columnFilterNoResults', { query: visibilityPickerState.query.trim() });
-        visibilityPickerList.appendChild(empty);
-        return;
-    }
-    keys.forEach((key) => {
-        const groupKey = state.groupKeys.get(key);
-        const { row } = buildArrangeRowShell(key, state.labels[key] || key, {
-            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : t('menu.classNone'),
-        });
-        row.appendChild(buildVisibilityToggle(groupKey, visibilityPickerState.hiddenSet.has(key), (hide) => setVisibilityPickerHidden(key, hide)));
-        visibilityPickerList.appendChild(row);
-    });
-}
-
+// Mostrar/ocultar columnas: el MISMO editor de columnas de Acomodo (pestañas por
+// clasificación, ✕ / ✓ / 📌 por columna, vista previa de la tabla) en su modo
+// "visibilidad" -- ver openColumnArrangeEditor y las funciones de Mostrar/ocultar
+// justo antes de él.
 function openVisibilityPicker(tableId) {
-    const state = dataTableColumnState.get(tableId);
-    if (!state) return;
-    ensureVisibilityPickerModal();
-    visibilityPickerState = { tableId, hiddenSet: new Set(state.config.hidden), query: '', activeGroupKey: visibilityPickerTabs(state)[0] };
-    visibilityPickerSearch.value = '';
-    renderVisibilityPickerChips();
-    renderVisibilityPickerList();
-    visibilityPickerModal.querySelector('.modal-panel').scrollTop = 0;
-    visibilityPickerModal.hidden = false;
+    openColumnArrangeEditor(tableId, null, { mode: 'visibility' });
 }
 
 function closeColumnArrangeModal() {
@@ -4380,10 +4184,13 @@ function ensureColumnArrangeModal() {
                 <button type="button" class="data-table-arrange-back" data-role="back" aria-label="${t('main.arrangeBack')}"><i class="bx bx-arrow-back" aria-hidden="true"></i></button>
                 <span data-role="title">${t('main.arrangeNewTitle')}</span>
             </h3>
+            <p class="admin-hint" data-role="vis-hint" hidden>${t('main.columnVisibilityHint')}</p>
 
             <div>
-                <label class="data-table-arrange-label" for="data-table-arrange-name" data-role="name-label">${t('main.arrangeNameLabel')}</label>
-                <input type="text" id="data-table-arrange-name" data-role="name" class="saved-view-name-input data-table-arrange-name" placeholder="${t('main.savedLayoutNamePlaceholder')}">
+                <div data-role="name-block">
+                    <label class="data-table-arrange-label" for="data-table-arrange-name" data-role="name-label">${t('main.arrangeNameLabel')}</label>
+                    <input type="text" id="data-table-arrange-name" data-role="name" class="saved-view-name-input data-table-arrange-name" placeholder="${t('main.savedLayoutNamePlaceholder')}">
+                </div>
 
                 <div class="data-table-arrange-colpanel">
                     <span class="data-table-arrange-live" data-role="live-chip" hidden><i class="bx bx-revision" aria-hidden="true"></i> <span data-role="live-text">${t('main.arrangeStartsFromSaved')}</span></span>
@@ -4394,14 +4201,19 @@ function ensureColumnArrangeModal() {
                     <p class="data-table-arrange-section-label">${t('main.arrangeClassHint')}</p>
                     <div class="sector-icon-picker-chips data-table-arrange-tabs" data-role="tabs"></div>
                     <div class="data-table-arrange-legend">
-                        <span><i class="bx bx-x" aria-hidden="true"></i> ${t('main.arrangeModeX')}</span>
-                        <span><i class="bx bx-check" aria-hidden="true"></i> ${t('main.arrangeModeNormal')}</span>
+                        <span><i class="bx bx-x" aria-hidden="true"></i> <span data-role="legend-x">${t('main.arrangeModeX')}</span></span>
+                        <span><i class="bx bx-check" aria-hidden="true"></i> <span data-role="legend-normal">${t('main.arrangeModeNormal')}</span></span>
                         <span><i class="bx bx-pin" aria-hidden="true"></i> ${t('main.arrangeModeFija')}</span>
+                    </div>
+                    <div class="data-table-vis-tools" data-role="vis-tools" hidden>
+                        <button type="button" class="data-table-vis-tool data-table-vis-tool-add" data-role="vis-add-all"><i class="bx bx-plus" aria-hidden="true"></i><span data-role="vis-add-all-text"></span></button>
+                        <button type="button" class="data-table-vis-tool data-table-vis-tool-clear" data-role="vis-clear"><i class="bx bx-trash" aria-hidden="true"></i><span>${t('main.visClear')}</span></button>
+                        <span class="data-table-vis-count" data-role="vis-count"></span>
                     </div>
                     <div class="admin-module-list data-table-arrange-list" data-role="rows"></div>
                 </div>
 
-                <p class="data-table-arrange-section-label">${t('main.arrangePreviewLabel')}</p>
+                <p class="data-table-arrange-section-label" data-role="preview-label">${t('main.arrangePreviewLabel')}</p>
                 <div class="data-table-arrange-preview" data-role="preview-wrap"><table data-role="preview-table"></table><p class="data-table-arrange-preview-empty" data-role="preview-empty" hidden>${t('main.arrangePreviewEmpty')}</p></div>
                 <p class="data-table-arrange-caption"><i class="bx bx-info-circle" aria-hidden="true"></i> ${t('main.arrangePreviewCaption')}</p>
 
@@ -4422,8 +4234,13 @@ function ensureColumnArrangeModal() {
                     <p data-role="lock-note" class="data-table-arrange-lock-note"></p>
                 </div>
 
-                <div class="admin-form-actions">
+                <div class="admin-form-actions" data-role="close-actions">
                     <button type="button" class="btn btn-secondary" data-role="close">${t('admin.cancel')}</button>
+                </div>
+
+                <div class="data-table-search-footer data-table-vis-footer" data-role="vis-footer" hidden>
+                    <button type="button" class="btn" data-role="vis-save">${t('admin.save')}</button>
+                    <button type="button" class="btn btn-secondary" data-role="vis-cancel">${t('admin.cancel')}</button>
                 </div>
             </div>
         </div>
@@ -4456,6 +4273,21 @@ function ensureColumnArrangeModal() {
         terminarAcomodoBtn: columnArrangeModal.querySelector('[data-role="terminar-acomodo"]'),
         terminarAsignacionBtn: columnArrangeModal.querySelector('[data-role="terminar-asignacion"]'),
         lockNote: columnArrangeModal.querySelector('[data-role="lock-note"]'),
+        nameBlock: columnArrangeModal.querySelector('[data-role="name-block"]'),
+        saveBlock2: columnArrangeModal.querySelector('[data-role="save-block-2"]'),
+        closeActions: columnArrangeModal.querySelector('[data-role="close-actions"]'),
+        visHint: columnArrangeModal.querySelector('[data-role="vis-hint"]'),
+        visTools: columnArrangeModal.querySelector('[data-role="vis-tools"]'),
+        visAddAll: columnArrangeModal.querySelector('[data-role="vis-add-all"]'),
+        visAddAllText: columnArrangeModal.querySelector('[data-role="vis-add-all-text"]'),
+        visClear: columnArrangeModal.querySelector('[data-role="vis-clear"]'),
+        visCount: columnArrangeModal.querySelector('[data-role="vis-count"]'),
+        visFooter: columnArrangeModal.querySelector('[data-role="vis-footer"]'),
+        visSave: columnArrangeModal.querySelector('[data-role="vis-save"]'),
+        visCancel: columnArrangeModal.querySelector('[data-role="vis-cancel"]'),
+        previewLabel: columnArrangeModal.querySelector('[data-role="preview-label"]'),
+        legendX: columnArrangeModal.querySelector('[data-role="legend-x"]'),
+        legendNormal: columnArrangeModal.querySelector('[data-role="legend-normal"]'),
     };
     columnArrangeModal._refs = refs;
 
@@ -4503,6 +4335,12 @@ function ensureColumnArrangeModal() {
     });
 
     savedLayoutSaveBtn.addEventListener('click', saveSavedLayout);
+
+    // Modo "visibilidad" (Mostrar/ocultar columnas)
+    refs.visSave.addEventListener('click', saveVisibilityArrange);
+    refs.visCancel.addEventListener('click', closeColumnArrangeModal);
+    refs.visAddAll.addEventListener('click', visibilityAddAllInTab);
+    refs.visClear.addEventListener('click', visibilityClearAll);
 }
 
 // Candado de botones: "Terminar Acomodo" siempre disponible; "Terminar
@@ -4513,6 +4351,10 @@ function updateColumnArrangeGating() {
     const state = columnArrangeState;
     const refs = columnArrangeModal._refs;
     if (!state) return;
+    if (state.mode === 'visibility') {
+        updateVisibilityToolsUi();
+        return;
+    }
     const needsAssignment = state.scope === 'global';
     const hasChosen = columnArrangeChosenKeys().length > 0;
     const ready = state.terminarAcomodoDone && (!needsAssignment || state.terminarAsignacionDone);
@@ -4640,9 +4482,10 @@ function buildTriStateControl(key, groupKey) {
     const hasOwnColor = activeColor && activeColor !== 'var(--color-border)' && !activeColor.startsWith('var(');
     // Solo íconos (la leyenda de arriba de la lista dice cuál es cuál): así
     // caben dos columnas por renglón y se ven muchas a la vez.
+    const vis = columnArrangeState.mode === 'visibility';
     const options = [
-        { mode: 'none', icon: 'bx-x', title: t('main.arrangeModeX') },
-        { mode: 'normal', icon: 'bx-check', title: t('main.arrangeModeNormal') },
+        { mode: 'none', icon: 'bx-x', title: t(vis ? 'main.visibilityModeHidden' : 'main.arrangeModeX') },
+        { mode: 'normal', icon: 'bx-check', title: t(vis ? 'main.visibilityModeVisible' : 'main.arrangeModeNormal') },
         { mode: 'fija', icon: 'bx-pin', title: t('main.arrangeModeFija') },
     ];
     options.forEach((opt) => {
@@ -4808,18 +4651,83 @@ function enablePreviewHeaderDragReorder(headRow) {
     });
 }
 
-// Solo el icono de Acomodo Guardado (iconSavedLayout) llega aquí, desde el
-// menú que cuelga del icono (toggleSavedLayoutMenu, más abajo): "Agregar"
-// abre este editor vacío y el lápiz de un acomodo lo abre con ese acomodo
-// ya cargado. iconPin/iconVisibility siguen abriendo sus propios modales
-// de siempre (openPinPicker/openVisibilityPicker, arriba), sin cambios.
-function openColumnArrangeEditor(tableId, layout = null) {
+// --- Mostrar/ocultar columnas: el editor de columnas de Acomodo en modo
+// "visibilidad" -------------------------------------------------------------
+// Mismas pestañas, misma lista con ✕ / ✓ / 📌 por columna y misma vista previa
+// de la tabla que Acomodo, pero parte de lo que la tabla tiene HOY (nada
+// atenuado), no pide nombre ni "asignar a", y Guardar lo aplica a esta tabla
+// para esta cuenta (applyColumnLayoutConfig, igual que Terminar Acomodo). Dos
+// botones más: Agregar todas las de la pestaña, y Limpiar.
+function columnArrangeTabKeys(state) {
+    return state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === columnArrangeState.activeTab);
+}
+
+function updateVisibilityToolsUi() {
+    const state = dataTableColumnState.get(columnArrangeState.tableId);
+    if (!state) return;
+    const refs = columnArrangeModal._refs;
+    const chosen = columnArrangeChosenKeys();
+    const pinned = columnArrangeState.draftConfig.pinned.filter((k) => chosen.includes(k));
+    refs.visCount.textContent = t('main.visCounts', {
+        visible: String(chosen.length), pinned: String(pinned.length), max: String(DATA_TABLE_PIN_MAX),
+    });
+    // Sin ninguna columna marcada no hay tabla que guardar.
+    refs.visSave.disabled = chosen.length === 0;
+    const tab = columnArrangeState.activeTab;
+    refs.visAddAllText.textContent = t('main.visAddAll', {
+        name: tab === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(tab),
+    });
+    refs.visAddAll.disabled = columnArrangeTabKeys(state).every((k) => chosen.includes(k));
+}
+
+// Marca Visible todas las columnas de la pestaña activa; las que ya eran Fija
+// siguen fijas y las de otras pestañas no se tocan.
+function visibilityAddAllInTab() {
+    const state = dataTableColumnState.get(columnArrangeState.tableId);
+    if (!state) return;
+    const { draftConfig, decidedKeys } = columnArrangeState;
+    columnArrangeTabKeys(state).forEach((key) => {
+        decidedKeys.add(key);
+        draftConfig.hidden = draftConfig.hidden.filter((k) => k !== key);
+    });
+    renderColumnArrangeRows();
+    renderColumnArrangePreview();
+    updateColumnArrangeGating();
+}
+
+// Deja todas las columnas sin marcar (también las fijas) y la vista previa
+// vacía, para armarla desde cero. Pide confirmación.
+async function visibilityClearAll() {
+    if (!(await confirmDialog(t('main.visClearConfirm')))) return;
+    if (!columnArrangeState) return;
+    columnArrangeState.decidedKeys.clear();
+    columnArrangeState.draftConfig.hidden = [];
+    columnArrangeState.draftConfig.pinned = [];
+    renderColumnArrangeRows();
+    renderColumnArrangePreview();
+    updateColumnArrangeGating();
+}
+
+function saveVisibilityArrange() {
+    if (!columnArrangeState || columnArrangeState.mode !== 'visibility') return;
+    if (columnArrangeChosenKeys().length === 0) return;
+    applyColumnLayoutConfig(columnArrangeState.tableId, buildColumnArrangeFinalConfig());
+    closeColumnArrangeModal();
+}
+
+// Solo el icono de Acomodo Guardado (iconSavedLayout) llega aquí con un acomodo
+// por nombrar, desde el menú que cuelga del icono (toggleSavedLayoutMenu, más
+// abajo): "Agregar" abre este editor vacío y el lápiz de un acomodo lo abre con
+// ese acomodo ya cargado. El icono de Mostrar/ocultar (iconVisibility) lo abre en
+// modo "visibilidad" (opts.mode, ver arriba); iconPin sigue con su propio selector.
+function openColumnArrangeEditor(tableId, layout = null, opts = {}) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
     ensureColumnArrangeModal();
     savedLayoutTableId = tableId;
     const refs = columnArrangeModal._refs;
     const editing = !!layout;
+    const vis = opts.mode === 'visibility';
     const base = editing ? reconcileDataTableConfig(layout.layout, state.columnKeys) : state.config;
     columnArrangeState = {
         tableId,
@@ -4829,10 +4737,12 @@ function openColumnArrangeEditor(tableId, layout = null) {
         // marque Normal o Fija; solo el orden y los anchos parten de la
         // tabla actual. Uno ya guardado trae todas sus columnas decididas.
         draftConfig: {
-            order: [...base.order], hidden: editing ? [...base.hidden] : [],
-            pinned: editing ? [...base.pinned] : [], widths: { ...base.widths },
+            order: [...base.order], hidden: (editing || vis) ? [...base.hidden] : [],
+            pinned: (editing || vis) ? [...base.pinned] : [], widths: { ...base.widths },
         },
-        decidedKeys: new Set(editing ? state.columnKeys : []),
+        // Mostrar/ocultar parte de lo que la tabla tiene hoy: todas decididas.
+        decidedKeys: new Set((editing || vis) ? state.columnKeys : []),
+        mode: vis ? 'visibility' : 'layout',
         activeTab: null,
         query: '',
         scope: 'personal',
@@ -4842,9 +4752,21 @@ function openColumnArrangeEditor(tableId, layout = null) {
     const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
     columnArrangeState.activeTab = presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED;
 
-    refs.titleEl.textContent = t(editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle');
+    refs.titleEl.textContent = t(vis ? 'main.columnVisibilityTitle' : (editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle'));
     refs.nameLabel.textContent = t(editing ? 'main.arrangeNameLabelEdit' : 'main.arrangeNameLabel');
-    refs.liveChip.hidden = !editing;
+    refs.liveChip.hidden = !editing || vis;
+    // Modo visibilidad: sin nombre, sin Terminar Acomodo ni "asignar a", con los
+    // botones propios (Agregar todas / Limpiar) y su pie Guardar / Cancelar.
+    refs.nameBlock.hidden = vis;
+    refs.terminarAcomodoBtn.hidden = vis;
+    refs.saveBlock2.hidden = vis;
+    refs.closeActions.hidden = vis;
+    refs.visHint.hidden = !vis;
+    refs.visTools.hidden = !vis;
+    refs.visFooter.hidden = !vis;
+    refs.legendX.textContent = t(vis ? 'main.visibilityModeHidden' : 'main.arrangeModeX');
+    refs.legendNormal.textContent = t(vis ? 'main.visibilityModeVisible' : 'main.arrangeModeNormal');
+    refs.previewLabel.textContent = t(vis ? 'main.visPreviewLabel' : 'main.arrangePreviewLabel');
     savedLayoutSaveBtn.textContent = t(editing ? 'main.arrangeSaveChanges' : 'admin.save');
     // Editar solo cambia nombre y columnas: alcance, audiencia y "default al
     // abrir" se quedan como se guardaron.
