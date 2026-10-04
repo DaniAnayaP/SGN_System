@@ -5890,3 +5890,62 @@ button.data-table-layout-item{
     flex: 1 1 6rem;
     min-width: 6rem;
 }
+
+/* Accesos de una cuenta SaaS (Admin-EquipoSaaS.js): el mismo árbol y las mismas columnas
+   del Árbol de Permisos Maestro SaaS (reusa .saas-master-status-list, las filas
+   .perm-tree-row y las celdas .perm-tree-mstatus-*); aquí solo van la casilla de cada
+   fila, la pastilla de Acceso en lugar del Estatus y los botones Todo / Nada. El
+   diálogo queda por debajo del de Historial (90) para que el Cambios de una fila se
+   abra encima. */
+#saas-user-tree-modal{
+    z-index: 85;
+}
+.saas-access-list{
+    max-height: min(62vh, 38rem);
+}
+.saas-access-list .perm-tree-mstatus-header{
+    top: -0.4rem;
+    margin: -0.4rem -0.4rem 0.4rem;
+}
+.saas-access-check{
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    margin: 0 0.4rem 0 0;
+    accent-color: var(--color-text-primary);
+    cursor: pointer;
+}
+.saas-access-pill{
+    display: inline-block;
+    min-width: 5.4rem;
+    padding: 0.2rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+}
+.saas-access-pill-all{ background-color: #e3f6e8; color: #1e7e34; }
+.saas-access-pill-part{ background-color: #fff2d9; color: #9a6b00; }
+.saas-access-pill-none{ background-color: #ececf1; color: #6b7089; }
+body.dark-mode .saas-access-pill-all{ background-color: #1c3324; color: #7fd99a; }
+body.dark-mode .saas-access-pill-part{ background-color: #3a2f12; color: #f0c24a; }
+body.dark-mode .saas-access-pill-none{ background-color: #2a2c38; color: #a3a8c0; }
+.saas-access-nest{
+    display: flex;
+    gap: 0.25rem;
+}
+.saas-access-nest-btn{
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    background-color: var(--color-surface-alt, #f2f2f5);
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: 0.62rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.saas-access-nest-btn:hover{
+    color: var(--color-text-primary);
+}
+body.dark-mode .saas-access-nest-btn{ background-color: #23242b; }

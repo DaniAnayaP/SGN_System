@@ -1637,6 +1637,11 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_saas_user_changes_user_id ON saas_user_changes(user_id);
 `);
+// node_key: de qué fila del árbol de accesos es un cambio de permiso ("saas-clients::tabla::ta2"),
+// para el icono de Cambios de cada fila de Accesos de una cuenta SaaS. Vacío en los demás cambios.
+if (!db.prepare('PRAGMA table_info(saas_user_changes)').all().some((col) => col.name === 'node_key')) {
+    db.exec("ALTER TABLE saas_user_changes ADD COLUMN node_key TEXT NOT NULL DEFAULT ''");
+}
 
 const MODULE_CATALOG = [
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee' },
@@ -7851,7 +7856,14 @@ function getSaasUserById(id) {
     return db.prepare("SELECT id, username, email, name, active, created_at FROM users WHERE id = ? AND role = 'admin'").get(id);
 }
 
-function getSaasUserChanges(userId) {
+// Con nodeKey, solo los cambios de esa fila del árbol de accesos y de todo lo que cuelga
+// de ella (una pantalla incluye sus apartados y sus hojas).
+function getSaasUserChanges(userId, nodeKey) {
+    if (nodeKey) {
+        const like = `${String(nodeKey).replace(/[\\%_]/g, (c) => `\\${c}`)}::%`;
+        return db.prepare("SELECT * FROM saas_user_changes WHERE user_id = ? AND (node_key = ? OR node_key LIKE ? ESCAPE '\\') ORDER BY changed_at DESC, id DESC")
+            .all(userId, nodeKey, like);
+    }
     return db.prepare('SELECT * FROM saas_user_changes WHERE user_id = ? ORDER BY changed_at DESC, id DESC').all(userId);
 }
 // The generic/toolbar version -- every account's history together, same
@@ -7868,12 +7880,12 @@ function getAllSaasUserChanges() {
 // blank for), so changedBy IS the real, true answer for all three unless
 // a caller has something more specific (see the creation backfill below,
 // which uses 'Sistema' for accounts nobody here actually created).
-function logSaasUserChange({ userId, recordLabel, action, fieldKey, oldValue, newValue, changedBy, requestedBy, authorizedBy, changedAt }) {
+function logSaasUserChange({ userId, recordLabel, action, fieldKey, nodeKey, oldValue, newValue, changedBy, requestedBy, authorizedBy, changedAt }) {
     db.prepare(`
-        INSERT INTO saas_user_changes (user_id, record_label, action, field_key, old_value, new_value, changed_by, requested_by, authorized_by${changedAt ? ', changed_at' : ''})
-        VALUES (@userId, @recordLabel, @action, @fieldKey, @oldValue, @newValue, @changedBy, @requestedBy, @authorizedBy${changedAt ? ', @changedAt' : ''})
+        INSERT INTO saas_user_changes (user_id, record_label, action, field_key, node_key, old_value, new_value, changed_by, requested_by, authorized_by${changedAt ? ', changed_at' : ''})
+        VALUES (@userId, @recordLabel, @action, @fieldKey, @nodeKey, @oldValue, @newValue, @changedBy, @requestedBy, @authorizedBy${changedAt ? ', @changedAt' : ''})
     `).run({
-        userId, recordLabel: recordLabel || '', action, fieldKey: fieldKey || '',
+        userId, recordLabel: recordLabel || '', action, fieldKey: fieldKey || '', nodeKey: nodeKey || '',
         oldValue: oldValue == null ? '' : String(oldValue),
         newValue: newValue == null ? '' : String(newValue),
         changedBy: changedBy || '',

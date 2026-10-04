@@ -2847,7 +2847,8 @@ app.get('/api/admin/saas-users/changes', requireAuth, requireAdmin, (req, res) =
     res.json({ changes: getAllSaasUserChanges() });
 });
 app.get('/api/admin/saas-users/:id/changes', requireAuth, requireAdmin, (req, res) => {
-    res.json({ changes: getSaasUserChanges(req.params.id) });
+    // ?nodeKey= : solo los cambios de una fila del árbol de accesos (y lo que cuelga de ella).
+    res.json({ changes: getSaasUserChanges(req.params.id, req.query.nodeKey) });
 });
 
 function validateSaasGrants(grants) {
@@ -2872,12 +2873,17 @@ app.put('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res
     const target = getSaasUserById(req.params.id);
     const before = getSaasUserGrants(req.params.id);
     const after = setSaasUserGrants(req.params.id, grants);
-    if (before.length !== after.length) {
-        logSaasUserChange({
-            userId: req.params.id, recordLabel: target?.username, action: 'update', fieldKey: 'business.saasUserGrants',
-            oldValue: before.length, newValue: after.length, changedBy: changedByLabel(req),
-        });
-    }
+    // Un registro por cada fila del árbol que se dio o se quitó (con su node_key), para
+    // que el icono de Cambios de cada fila diga quién la tocó y cuándo.
+    const grantNodeKey = (g) => (g.subItemId ? `${g.itemId}::${g.subItemId}` : g.itemId);
+    const beforeKeys = new Set(before.map(grantNodeKey));
+    const afterKeys = new Set(after.map(grantNodeKey));
+    const logGrantChange = (nodeKey, nowGranted) => logSaasUserChange({
+        userId: req.params.id, recordLabel: target?.username, action: 'update', fieldKey: 'business.saasUserGrant', nodeKey,
+        oldValue: String(!nowGranted), newValue: String(nowGranted), changedBy: changedByLabel(req),
+    });
+    afterKeys.forEach((key) => { if (!beforeKeys.has(key)) logGrantChange(key, true); });
+    beforeKeys.forEach((key) => { if (!afterKeys.has(key)) logGrantChange(key, false); });
     res.json({ grants: after });
 });
 

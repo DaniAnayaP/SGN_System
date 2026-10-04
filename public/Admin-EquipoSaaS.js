@@ -292,37 +292,70 @@ function fetchSaasUserFieldClassifications() {
     }
     return saasUserFieldClassificationsPromise;
 }
+// De una fila del árbol de accesos ("saas-clients::tabla::ta2") a su camino legible:
+// "Nuestros Clientes › Tabla principal › Editar".
+function describeGrantNode(nodeKey) {
+    const [itemId, apartadoId, suffix] = String(nodeKey || '').split('::');
+    for (const group of (window.SAAS_ADMIN_CATALOG || [])) {
+        const screen = group.screens.find((s) => s.itemId === itemId);
+        if (!screen) continue;
+        const parts = [Dashboard.t(screen.labelKey)];
+        const apartado = apartadoId ? screen.apartados.find((a) => a.id === apartadoId) : null;
+        if (apartado) {
+            parts.push(apartado.label);
+            const leaf = suffix ? buildRealLeaves(apartado).find((l) => l.suffix === suffix) : null;
+            if (leaf) parts.push(leaf.label);
+        }
+        return parts.join(' › ');
+    }
+    return nodeKey;
+}
+
+// nodeKey (opcional): solo los cambios de esa fila del árbol de accesos y de lo que cuelga de ella.
+async function loadSaasUserChangeRows(userId, nodeKey) {
+    const base = userId ? `/api/admin/saas-users/${userId}/changes` : '/api/admin/saas-users/changes';
+    const url = nodeKey ? `${base}?nodeKey=${encodeURIComponent(nodeKey)}` : base;
+    const [res, classifications] = await Promise.all([fetch(url, { credentials: 'include' }), fetchSaasUserFieldClassifications()]);
+    if (!res.ok) throw new Error('load failed');
+    const { changes } = await res.json();
+    const fieldClassifications = classifications.fields || {};
+    return (changes || []).map((change) => {
+        let description;
+        let stripe = '';
+        if (change.action === 'create') {
+            description = Dashboard.t('main.changeHistoryCreated');
+        } else if (change.field_key === 'business.saasUserPassword') {
+            description = Dashboard.t('admin.saasResetPassword');
+        } else if (change.field_key === 'business.saasUserGrant') {
+            const yesNo = (v) => Dashboard.t(v === 'true' ? 'admin.saasAccessYes' : 'admin.saasAccessNo');
+            description = Dashboard.t('admin.saasAccessChange', { node: describeGrantNode(change.node_key), from: yesNo(change.old_value), to: yesNo(change.new_value) });
+            stripe = fieldClassifications[change.field_key]?.color || '';
+        } else {
+            description = `${Dashboard.t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
+            stripe = fieldClassifications[change.field_key]?.color || '';
+        }
+        return {
+            cells: [
+                change.changed_at, change.changed_by || '—', change.record_label || '—', description,
+                change.requested_by || '—', change.authorized_by || '—',
+            ],
+            stripe,
+        };
+    });
+}
 // userId omitted = every account's history (toolbar button); passed = just
 // that one account's (per-row button).
 function openSaasUserChanges(userId) {
     return Dashboard.openChangeHistoryWithRows(
         Dashboard.t(userId ? 'main.changeHistoryTitleRecord' : 'main.changeHistoryTitle'),
-        async () => {
-            const url = userId ? `/api/admin/saas-users/${userId}/changes` : '/api/admin/saas-users/changes';
-            const [res, classifications] = await Promise.all([fetch(url, { credentials: 'include' }), fetchSaasUserFieldClassifications()]);
-            if (!res.ok) throw new Error('load failed');
-            const { changes } = await res.json();
-            const fieldClassifications = classifications.fields || {};
-            return (changes || []).map((change) => {
-                let description;
-                let stripe = '';
-                if (change.action === 'create') {
-                    description = Dashboard.t('main.changeHistoryCreated');
-                } else if (change.field_key === 'business.saasUserPassword') {
-                    description = Dashboard.t('admin.saasResetPassword');
-                } else {
-                    description = `${Dashboard.t(change.field_key)}: "${change.old_value || '—'}" → "${change.new_value || '—'}"`;
-                    stripe = fieldClassifications[change.field_key]?.color || '';
-                }
-                return {
-                    cells: [
-                        change.changed_at, change.changed_by || '—', change.record_label || '—', description,
-                        change.requested_by || '—', change.authorized_by || '—',
-                    ],
-                    stripe,
-                };
-            });
-        },
+        () => loadSaasUserChangeRows(userId),
+    );
+}
+// El reloj de una fila del árbol de accesos: solo lo que se dio o se quitó en esa fila.
+function openSaasAccessNodeHistory(nodeKey, label) {
+    return Dashboard.openChangeHistoryWithRows(
+        `${Dashboard.t('main.changeHistory')} — ${label}`,
+        () => loadSaasUserChangeRows(selectedUserId, nodeKey),
     );
 }
 async function loadSaasUsers() {
@@ -411,6 +444,8 @@ newForm.addEventListener('submit', async (event) => {
 // real tree.
 let treeGrants = [];
 let expandedRealNodes = new Set();
+// Los dos grupos (Servicio a Cliente / Configuración SaaS) abren desplegados; aquí se anotan los que se cierran.
+let collapsedAccessGroups = new Set();
 
 function hasGrant(itemId, subItemId) {
     return treeGrants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : !g.subItemId));
@@ -420,40 +455,196 @@ function setGrant(itemId, subItemId, checked) {
     if (checked) treeGrants.push({ itemId, subItemId: subItemId || null });
 }
 
-function buildPermTreeRow(labelText, depth, toggle, checked, indeterminate, onChange) {
+// --- Filas con las mismas clases del Árbol de Permisos Maestro SaaS -----------------
+// Admin-ArbolMaestroSaaS.js arma cada fila como: espacio de arrastre + chevron +
+// iconos + nombre + contador + celdas de control (Clasificación, Estatus, Aplicar a
+// anidados, ..., Cambios). Aquí es lo mismo, con la casilla de acceso donde el Maestro
+// pone los iconos Web/App y la pastilla de Acceso donde pone el Estatus; sin las
+// columnas Web · App y Navegar, que hablan de cómo está publicada una pantalla.
+const ACCESS_LEVELS = {
+    group: { labelKey: 'admin.masterTreeLevelApartado', color: '#9A6B00' },
+    screen: { labelKey: 'main.colSysPantalla', color: '#3A4BC9' },
+    tabla: { labelKey: 'main.tablePrefix', color: '#5C6079' },
+    modal: { labelKey: 'admin.masterTreeLevelApartado', color: '#9A6B00' },
+    column: { labelKey: 'admin.saasAccessLevelColumn', color: '#5C6079' },
+    action: { labelKey: 'admin.saasAccessLevelAction', color: '#0E7C86' },
+};
+
+function accessSpacer() {
+    const s = document.createElement('span');
+    s.className = 'perm-tree-toggle-spacer';
+    return s;
+}
+function accessToggleBtn(expanded, onToggle) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'perm-tree-toggle';
+    btn.setAttribute('aria-expanded', String(expanded));
+    btn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
+    btn.addEventListener('click', onToggle);
+    return btn;
+}
+function accessHistoryButton(nodeKey, label) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'perm-tree-mstatus-nest-btn';
+    btn.title = Dashboard.t('main.changeHistory');
+    btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('data-help-key', 'changeHistory');
+    btn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+    btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openSaasAccessNodeHistory(nodeKey, label);
+    });
+    return btn;
+}
+
+// pairs: [{ itemId, subItemId }] de todo lo que cuelga de la fila (o solo ella, si es una hoja).
+function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf }) {
+    const total = pairs.length;
+    const granted = pairs.filter((p) => hasGrant(p.itemId, p.subItemId)).length;
+    const state = total > 0 && granted === total ? 'all' : (granted > 0 ? 'part' : 'none');
     const row = document.createElement('div');
     row.className = `perm-tree-row perm-tree-depth-${depth}`;
+    row.dataset.nodeKey = nodeKey;
+    row.appendChild(accessSpacer());
+    row.appendChild(toggle ? accessToggleBtn(toggle.expanded, toggle.onToggle) : accessSpacer());
 
-    if (toggle) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'perm-tree-toggle';
-        btn.setAttribute('aria-expanded', String(toggle.expanded));
-        const icon = document.createElement('i');
-        icon.className = 'bx bx-chevron-down';
-        icon.setAttribute('aria-hidden', 'true');
-        btn.appendChild(icon);
-        btn.addEventListener('click', () => { toggle.onToggle(); renderTreeList(); });
-        row.appendChild(btn);
-    } else {
-        const spacer = document.createElement('span');
-        spacer.className = 'perm-tree-toggle-spacer';
-        row.appendChild(spacer);
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'saas-access-check';
+    check.checked = state === 'all';
+    check.indeterminate = state === 'part';
+    check.setAttribute('aria-label', label);
+    check.addEventListener('change', () => { pairs.forEach((p) => setGrant(p.itemId, p.subItemId, check.checked)); renderTreeList(); });
+    row.appendChild(check);
+
+    const labelNode = document.createElement('span');
+    labelNode.className = 'perm-tree-mstatus-label';
+    labelNode.textContent = label;
+    labelNode.title = label;
+    row.appendChild(labelNode);
+    const count = document.createElement('span');
+    count.className = 'perm-tree-mstatus-count-badge';
+    count.textContent = isLeaf ? '1' : `${granted}/${Math.max(1, total)}`;
+    row.appendChild(count);
+
+    const controls = document.createElement('div');
+    controls.className = 'perm-tree-mstatus-controls';
+
+    const classCell = document.createElement('div');
+    classCell.className = 'perm-tree-mstatus-class-cell';
+    const badgeInfo = ACCESS_LEVELS[level];
+    const badge = document.createElement('span');
+    badge.className = 'perm-tree-mstatus-class-badge';
+    badge.textContent = Dashboard.t(badgeInfo.labelKey);
+    badge.style.color = badgeInfo.color;
+    badge.style.borderColor = badgeInfo.color;
+    badge.style.backgroundColor = `color-mix(in srgb, ${badgeInfo.color} 14%, var(--color-bg))`;
+    classCell.appendChild(badge);
+    controls.appendChild(classCell);
+
+    const statusCell = document.createElement('div');
+    statusCell.className = 'perm-tree-mstatus-status-cell';
+    const pill = document.createElement('span');
+    pill.className = `saas-access-pill saas-access-pill-${state}`;
+    pill.textContent = Dashboard.t(isLeaf
+        ? (state === 'all' ? 'admin.saasAccessYes' : 'admin.saasAccessNo')
+        : (state === 'all' ? 'admin.saasAccessAll' : (state === 'part' ? 'admin.saasAccessPartial' : 'admin.saasAccessNone')));
+    statusCell.appendChild(pill);
+    controls.appendChild(statusCell);
+
+    const nestCell = document.createElement('div');
+    nestCell.className = 'perm-tree-mstatus-status-nest-cell';
+    if (!isLeaf && total > 0) {
+        const nest = document.createElement('div');
+        nest.className = 'saas-access-nest';
+        [['admin.saasAccessAllBtn', 'admin.saasAccessAllTitle', true], ['admin.saasAccessNoneBtn', 'admin.saasAccessNoneTitle', false]].forEach(([textKey, titleKey, value]) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'saas-access-nest-btn';
+            btn.textContent = Dashboard.t(textKey);
+            btn.title = Dashboard.t(titleKey);
+            btn.addEventListener('click', () => { pairs.forEach((p) => setGrant(p.itemId, p.subItemId, value)); renderTreeList(); });
+            nest.appendChild(btn);
+        });
+        nestCell.appendChild(nest);
     }
+    controls.appendChild(nestCell);
 
-    const label = document.createElement('label');
-    label.className = 'perm-tree-check';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = checked;
-    input.indeterminate = !!indeterminate;
-    input.addEventListener('change', () => { onChange(input.checked); renderTreeList(); });
-    const span = document.createElement('span');
-    span.textContent = labelText;
-    label.append(input, span);
-    row.appendChild(label);
+    const historyCell = document.createElement('div');
+    historyCell.className = 'perm-tree-mstatus-history-cell';
+    historyCell.appendChild(accessHistoryButton(nodeKey, label));
+    controls.appendChild(historyCell);
 
+    row.appendChild(controls);
     return row;
+}
+
+function buildAccessHeader() {
+    const header = document.createElement('div');
+    header.className = 'perm-tree-mstatus-header';
+    const spacerEl = document.createElement('span');
+    spacerEl.className = 'perm-tree-mstatus-header-spacer';
+    header.appendChild(spacerEl);
+    const labelHeader = document.createElement('span');
+    labelHeader.className = 'perm-tree-mstatus-header-label';
+    const labelText = document.createElement('span');
+    labelText.textContent = 'Pantalla / Apartado / Columna';
+    const labelCount = document.createElement('span');
+    labelCount.className = 'perm-tree-mstatus-header-count';
+    labelCount.textContent = Dashboard.t('admin.masterTreeColCount');
+    labelHeader.append(labelText, labelCount);
+    header.appendChild(labelHeader);
+    const controls = document.createElement('div');
+    controls.className = 'perm-tree-mstatus-header-controls';
+    const cols = [
+        ['perm-tree-mstatus-header-class', `<i class="bx bx-purchase-tag-alt" aria-hidden="true"></i> ${Dashboard.t('admin.masterTreeColClassification')}`],
+        ['perm-tree-mstatus-header-status', Dashboard.t('admin.saasAccessCol')],
+        ['perm-tree-mstatus-header-status-nest', `<i class="bx bx-copy" aria-hidden="true"></i> ${Dashboard.t('admin.masterTreeColApplyNested')}`],
+        ['perm-tree-mstatus-header-history', `<i class="bx bx-history" aria-hidden="true"></i> ${Dashboard.t('admin.masterTreeColHistory')}`],
+    ];
+    cols.forEach(([cls, html]) => {
+        const col = document.createElement('span');
+        col.className = `perm-tree-mstatus-header-col ${cls}`;
+        col.innerHTML = html;
+        controls.appendChild(col);
+    });
+    header.appendChild(controls);
+    return header;
+}
+
+// Mismo ajuste que alignLabelColumnWidth en Admin-ArbolMaestroSaaS.js: el nombre + el
+// contador de todas las filas visibles terminan en la misma x, sin importar la sangría.
+let accessMeasureCtx = null;
+function measureAccessText(text, font) {
+    if (!accessMeasureCtx) accessMeasureCtx = document.createElement('canvas').getContext('2d');
+    accessMeasureCtx.font = font;
+    return accessMeasureCtx.measureText(text).width;
+}
+function alignAccessLabelColumn() {
+    const labels = treeList.querySelectorAll('.perm-tree-mstatus-label');
+    if (!labels.length) return;
+    const treeLeft = treeList.getBoundingClientRect().left;
+    let maxRightEdge = 0;
+    const measured = [];
+    labels.forEach((label) => {
+        const labelRect = label.getBoundingClientRect();
+        const offsetLeft = labelRect.left - treeLeft;
+        const badge = label.nextElementSibling && label.nextElementSibling.classList.contains('perm-tree-mstatus-count-badge')
+            ? label.nextElementSibling : null;
+        const trailing = badge ? badge.getBoundingClientRect().right - labelRect.right : 0;
+        const rightEdge = offsetLeft + measureAccessText(label.textContent, getComputedStyle(label).font) + trailing;
+        if (rightEdge > maxRightEdge) maxRightEdge = rightEdge;
+        measured.push({ label, offsetLeft, trailing });
+    });
+    const target = Math.ceil(maxRightEdge) + 8;
+    const headerLabel = treeList.querySelector('.perm-tree-mstatus-header-label');
+    const headerOffsetLeft = headerLabel ? headerLabel.getBoundingClientRect().left - treeLeft : 0;
+    treeList.style.setProperty('--perm-tree-label-col-width', `${Math.max(0, target - headerOffsetLeft)}px`);
+    measured.forEach(({ label, offsetLeft, trailing }) => {
+        label.style.width = `${Math.max(0, target - offsetLeft - trailing)}px`;
+    });
 }
 
 // --- Real-tree walking helpers ------------------------------------------
@@ -505,21 +696,29 @@ function collectRealSubItemIds(screen, apartado) {
     return [...own, ...nested];
 }
 
-// Renders `apartado`'s own header row (chevron + rollup checkbox) into
-// `rows`, recursing into its body when expanded. Used identically for a
-// screen's top-level apartados and for a nested modal popping up from one
-// of their columns/acciones -- both are just "an apartado with a label".
+// Pares { itemId, subItemId } de todo lo que cuelga de una pantalla (o de uno de sus apartados).
+function pairsOfApartados(screen, apartados) {
+    return apartados.flatMap((a) => collectRealSubItemIds(screen, a)).map((subItemId) => ({ itemId: screen.itemId, subItemId }));
+}
+function apartadoLevel(apartado) {
+    return (apartado.id === 'tabla' || apartado.controlInterno) ? 'tabla' : 'modal';
+}
+function toggleAccessNode(nodeKey) {
+    if (expandedRealNodes.has(nodeKey)) expandedRealNodes.delete(nodeKey); else expandedRealNodes.add(nodeKey);
+    renderTreeList();
+}
+
+// Renders `apartado`'s own row (chevron + casilla de acceso del apartado completo) into
+// `rows`, recursing into its body when expanded. Used identically for a screen's top-level
+// apartados and for a nested modal popping up from one of their columns/acciones.
 function renderApartadoNode(screen, apartado, depth, rows) {
     const nodeKey = `${screen.itemId}::${apartado.id}`;
     const expanded = expandedRealNodes.has(nodeKey);
-    const subItemIds = collectRealSubItemIds(screen, apartado);
-    const checkedCount = subItemIds.filter((s) => hasGrant(screen.itemId, s)).length;
-    rows.push(buildPermTreeRow(
-        apartado.label, depth,
-        { expanded, onToggle: () => { if (expanded) expandedRealNodes.delete(nodeKey); else expandedRealNodes.add(nodeKey); renderTreeList(); } },
-        subItemIds.length > 0 && checkedCount === subItemIds.length, checkedCount > 0 && checkedCount < subItemIds.length,
-        (checked) => subItemIds.forEach((s) => setGrant(screen.itemId, s, checked)),
-    ));
+    rows.push(buildAccessRow({
+        depth, label: apartado.label, level: apartadoLevel(apartado),
+        pairs: pairsOfApartados(screen, [apartado]), nodeKey,
+        toggle: { expanded, onToggle: () => toggleAccessNode(nodeKey) },
+    }));
     if (!expanded) return;
     renderApartadoLeaves(screen, apartado, depth + 1, rows);
 }
@@ -532,12 +731,15 @@ function renderApartadoLeaves(screen, apartado, depth, rows) {
         const nodeKey = `${screen.itemId}::${subItemId}`;
         const hasChildren = childApartados.length > 0;
         const expanded = expandedRealNodes.has(nodeKey);
-        rows.push(buildPermTreeRow(
-            leaf.label, depth,
-            hasChildren ? { expanded, onToggle: () => { if (expanded) expandedRealNodes.delete(nodeKey); else expandedRealNodes.add(nodeKey); renderTreeList(); } } : null,
-            hasGrant(screen.itemId, subItemId), false,
-            (checked) => setGrant(screen.itemId, subItemId, checked),
-        ));
+        // Una columna que abre una ventana (modal) suma lo de esa ventana a su propia casilla.
+        const pairs = hasChildren
+            ? [{ itemId: screen.itemId, subItemId }, ...pairsOfApartados(screen, childApartados)]
+            : [{ itemId: screen.itemId, subItemId }];
+        rows.push(buildAccessRow({
+            depth, label: leaf.label, level: leaf.suffix.startsWith('c') ? 'column' : 'action',
+            pairs, nodeKey, isLeaf: !hasChildren,
+            toggle: hasChildren ? { expanded, onToggle: () => toggleAccessNode(nodeKey) } : null,
+        }));
         if (hasChildren && expanded) {
             childApartados.forEach((child) => renderApartadoNode(screen, child, depth + 1, rows));
         }
@@ -545,34 +747,65 @@ function renderApartadoLeaves(screen, apartado, depth, rows) {
     nestedWithoutColumn(screen, apartado).forEach((child) => renderApartadoNode(screen, child, depth, rows));
 }
 
+// Líneas punteadas que unen una fila abierta con lo que cuelga de ella -- las mismas que
+// dibuja drawGuides en Admin-ArbolMaestroSaaS.js.
+function drawAccessGuides() {
+    treeList.querySelectorAll('.perm-tree-nest-guide').forEach((el) => el.remove());
+    const rows = Array.from(treeList.children).filter((el) => el.classList.contains('perm-tree-row'));
+    const containerRect = treeList.getBoundingClientRect();
+    const depthOf = (el) => {
+        const m = el.className.match(/perm-tree-depth-(\d+)/);
+        return m ? Number(m[1]) : -1;
+    };
+    rows.forEach((row, i) => {
+        const toggle = row.querySelector(':scope > .perm-tree-toggle[aria-expanded="true"]');
+        if (!toggle) return;
+        const depth = depthOf(row);
+        let last = null;
+        for (let j = i + 1; j < rows.length; j++) {
+            if (depthOf(rows[j]) <= depth) break;
+            last = rows[j];
+        }
+        if (!last) return;
+        const anchorRect = toggle.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        const guide = document.createElement('div');
+        guide.className = 'perm-tree-nest-guide';
+        guide.style.left = `${anchorRect.left - containerRect.left - 4 + treeList.scrollLeft}px`;
+        guide.style.top = `${rowRect.bottom - containerRect.top + treeList.scrollTop}px`;
+        guide.style.height = `${Math.max(0, last.getBoundingClientRect().bottom - rowRect.bottom)}px`;
+        treeList.appendChild(guide);
+    });
+}
+
 function renderTreeList() {
     treeList.innerHTML = '';
+    treeList.appendChild(buildAccessHeader());
     const rows = [];
     (window.SAAS_ADMIN_CATALOG || []).forEach((group) => {
-        const groupHeader = document.createElement('div');
-        groupHeader.className = 'perm-tree-row perm-tree-depth-0 perm-tree-row-static';
-        const groupLabel = document.createElement('span');
-        groupLabel.className = 'perm-tree-static-label';
-        groupLabel.textContent = Dashboard.t(group.labelKey);
-        groupHeader.appendChild(groupLabel);
-        rows.push(groupHeader);
-
+        const groupKey = `group:${group.groupId}`;
+        const groupExpanded = !collapsedAccessGroups.has(groupKey);
+        const groupPairs = group.screens.flatMap((screen) => pairsOfApartados(screen, screen.apartados.filter((a) => !a.nestUnder)));
+        rows.push(buildAccessRow({
+            depth: 0, label: Dashboard.t(group.labelKey), level: 'group', pairs: groupPairs, nodeKey: groupKey,
+            toggle: { expanded: groupExpanded, onToggle: () => { if (groupExpanded) collapsedAccessGroups.add(groupKey); else collapsedAccessGroups.delete(groupKey); renderTreeList(); } },
+        }));
+        if (!groupExpanded) return;
         group.screens.forEach((screen) => {
             const nodeKey = screen.itemId;
             const expanded = expandedRealNodes.has(nodeKey);
             const topApartados = screen.apartados.filter((a) => !a.nestUnder);
-            const subItemIds = topApartados.flatMap((a) => collectRealSubItemIds(screen, a));
-            const checkedCount = subItemIds.filter((s) => hasGrant(screen.itemId, s)).length;
-            rows.push(buildPermTreeRow(
-                Dashboard.t(screen.labelKey), 1,
-                { expanded, onToggle: () => { if (expanded) expandedRealNodes.delete(nodeKey); else expandedRealNodes.add(nodeKey); renderTreeList(); } },
-                subItemIds.length > 0 && checkedCount === subItemIds.length, checkedCount > 0 && checkedCount < subItemIds.length,
-                (checked) => subItemIds.forEach((s) => setGrant(screen.itemId, s, checked)),
-            ));
+            rows.push(buildAccessRow({
+                depth: 1, label: Dashboard.t(screen.labelKey), level: 'screen',
+                pairs: pairsOfApartados(screen, topApartados), nodeKey,
+                toggle: { expanded, onToggle: () => toggleAccessNode(nodeKey) },
+            }));
             if (expanded) topApartados.forEach((apartado) => renderApartadoNode(screen, apartado, 2, rows));
         });
     });
     rows.forEach((row) => treeList.appendChild(row));
+    // Alinear y dibujar las guías solo con el diálogo a la vista (medir un diálogo oculto da 0).
+    if (!treeModal.hidden) { alignAccessLabelColumn(); drawAccessGuides(); }
 }
 
 async function openTreeModal(user) {
@@ -587,9 +820,10 @@ async function openTreeModal(user) {
         treeGrants = data.grants || [];
         pendingVisibleStatuses = data.visibleStatuses && data.visibleStatuses.length ? data.visibleStatuses : ['habilitado'];
         expandedRealNodes = new Set();
+        collapsedAccessGroups = new Set();
+        treeModal.hidden = false;
         renderTreeList();
         window.VisibleStatusesChips.render(treeVisibleStatuses, pendingVisibleStatuses, (next) => { pendingVisibleStatuses = next; });
-        treeModal.hidden = false;
     } catch {
         Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }

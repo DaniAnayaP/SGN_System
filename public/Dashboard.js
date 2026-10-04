@@ -5488,7 +5488,12 @@ function ensureChangeHistoryModal() {
     // esos diálogos se cierren con su propio Escape.
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape' || changeHistoryModal.hidden) return;
-        const otherOpen = Array.from(document.querySelectorAll('.modal-overlay')).some((o) => o !== changeHistoryModal && !o.hidden);
+        // Solo cuentan los diálogos que están por encima de este (el de abajo, por ejemplo
+        // Accesos de una cuenta SaaS, no debe impedir cerrarlo).
+        const myZ = Number(getComputedStyle(changeHistoryModal).zIndex) || 0;
+        const otherOpen = Array.from(document.querySelectorAll('.modal-overlay')).some((o) => (
+            o !== changeHistoryModal && !o.hidden && (Number(getComputedStyle(o).zIndex) || 0) >= myZ
+        ));
         if (!otherOpen) close();
     }, true);
     // Su barra de iconos se arma igual que la de las tablas de la pantalla.
