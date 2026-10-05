@@ -5949,3 +5949,30 @@ body.dark-mode .saas-access-pill-none{ background-color: #2a2c38; color: #a3a8c0
     color: var(--color-text-primary);
 }
 body.dark-mode .saas-access-nest-btn{ background-color: #23242b; }
+
+/* Fila bloqueada del diálogo de accesos: su estatus en el Árbol Maestro SaaS no está entre los que
+   esta cuenta puede ver (¿Qué Estatus puede ver?), así que no se le puede dar acceso. */
+.saas-access-row-blocked .perm-tree-mstatus-label,
+.saas-access-row-blocked .perm-tree-mstatus-count-badge,
+.saas-access-row-blocked .perm-tree-mstatus-class-cell{
+    opacity: 0.55;
+}
+.saas-access-check:disabled{
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.saas-access-nest-btn:disabled{
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.saas-access-nest-btn:disabled:hover{
+    color: var(--color-text-secondary);
+}
+.saas-access-pill-blocked{
+    background-color: transparent;
+    border: 1px dashed #b08a3a;
+    color: #9a6b00;
+    padding: calc(0.2rem - 1px) calc(0.8rem - 1px);
+    white-space: nowrap;
+}
+body.dark-mode .saas-access-pill-blocked{ border-color: #8f7432; color: #f0c24a; }

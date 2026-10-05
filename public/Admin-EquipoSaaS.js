@@ -461,6 +461,48 @@ function toggleAccessGroup(key) {
 // también, para que una cuenta vea sus accesos en el mismo orden que el Maestro y que la barra.
 // Sin él (no cargó o nunca se reordenó) cada nivel queda en el orden del catálogo.
 let masterOrder = null;
+// Estatus de cada nodo en el Árbol Maestro SaaS, solo los que no son Habilitado (sin fila = Habilitado):
+// [{ itemId, status }]. Solo lo Habilitado se le puede dar a una cuenta (también a las de prueba):
+// lo que está en otro estatus se muestra en tono suave y con la casilla bloqueada.
+let masterStatusOverrides = [];
+const MASTER_STATUS_LABEL_KEYS = {
+    habilitado: 'admin.masterTreeStatusHabilitadoMed',
+    inhabilitado: 'admin.masterTreeStatusInhabilitado',
+    construccion: 'admin.masterTreeStatusConstruccion',
+    mejoras: 'admin.masterTreeStatusMejoras',
+};
+function statusLabel(status) {
+    return Dashboard.t(MASTER_STATUS_LABEL_KEYS[status] || MASTER_STATUS_LABEL_KEYS.inhabilitado);
+}
+// Mismo cálculo que resolveSaasNodeStatus de Dashboard.js: gana el estatus del primer ancestro
+// (o del propio nodo) que el Maestro tenga fuera de Habilitado.
+function resolveMasterStatus(key) {
+    if (!masterStatusOverrides.length) return 'habilitado';
+    const parts = String(key).split('::');
+    for (let i = 1; i <= parts.length; i += 1) {
+        const prefix = parts.slice(0, i).join('::');
+        const hit = masterStatusOverrides.find((r) => r.itemId === prefix);
+        if (hit) return hit.status;
+    }
+    return 'habilitado';
+}
+function groupIdOfScreen(itemId) {
+    const group = (window.SAAS_ADMIN_CATALOG || []).find((g) => g.screens.some((s) => s.itemId === itemId));
+    return group ? group.groupId : null;
+}
+// El estatus que impide darle este acceso a la cuenta (el del propio nodo o el de su grupo, que
+// esconde todo lo que lleva dentro), o null si está Habilitado.
+function blockingStatus(pair) {
+    const key = pair.subItemId ? `${pair.itemId}::${pair.subItemId}` : pair.itemId;
+    const own = resolveMasterStatus(key);
+    if (own !== 'habilitado') return own;
+    const groupId = groupIdOfScreen(pair.itemId);
+    if (groupId) {
+        const groupStatus = resolveMasterStatus(groupId);
+        if (groupStatus !== 'habilitado') return groupStatus;
+    }
+    return null;
+}
 
 function hasGrant(itemId, subItemId) {
     return treeGrants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : !g.subItemId));
@@ -542,11 +584,22 @@ function accessHistoryButton(historyKeys, label) {
 
 // pairs: [{ itemId, subItemId }] de todo lo que cuelga de la fila (o solo ella, si es una hoja).
 function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, historyKeys }) {
-    const total = pairs.length;
-    const granted = pairs.filter((p) => hasGrant(p.itemId, p.subItemId)).length;
+    // Lo que el Maestro no tiene Habilitado no se puede dar: se cuenta aparte y su casilla queda
+    // bloqueada (un acceso viejo ya guardado sí se puede quitar).
+    const blockedStatuses = pairs.map(blockingStatus);
+    const openPairs = pairs.filter((_, i) => !blockedStatuses[i]);
+    const blockedCount = pairs.length - openPairs.length;
+    const fullyBlocked = openPairs.length === 0;
+    const statePairs = fullyBlocked ? pairs : openPairs;
+    const total = statePairs.length;
+    const granted = statePairs.filter((p) => hasGrant(p.itemId, p.subItemId)).length;
     const state = total > 0 && granted === total ? 'all' : (granted > 0 ? 'part' : 'none');
+    const locked = fullyBlocked && granted === 0;
+    const lockedStatuses = [...new Set(blockedStatuses.filter(Boolean))];
+    const lockTitle = fullyBlocked ? Dashboard.t('admin.saasAccessBlocked', { status: lockedStatuses.map(statusLabel).join(' / ') }) : '';
     const row = document.createElement('div');
     row.className = `perm-tree-row perm-tree-depth-${depth}`;
+    if (fullyBlocked) row.classList.add('saas-access-row-blocked');
     row.dataset.nodeKey = nodeKey;
     row.appendChild(accessSpacer());
     row.appendChild(toggle ? accessToggleBtn(toggle.expanded, toggle.onToggle) : accessSpacer());
@@ -556,8 +609,15 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
     check.className = 'saas-access-check';
     check.checked = state === 'all';
     check.indeterminate = state === 'part';
+    check.disabled = locked;
+    if (fullyBlocked) check.title = lockTitle;
     check.setAttribute('aria-label', label);
-    check.addEventListener('change', () => { pairs.forEach((p) => setGrant(p.itemId, p.subItemId, check.checked)); renderTreeList(); });
+    check.addEventListener('change', () => {
+        // Marcar solo da lo que está abierto; desmarcar quita todo lo de la fila, incluso un acceso viejo bloqueado.
+        if (check.checked && !fullyBlocked) openPairs.forEach((p) => setGrant(p.itemId, p.subItemId, true));
+        else pairs.forEach((p) => setGrant(p.itemId, p.subItemId, false));
+        renderTreeList();
+    });
     row.appendChild(check);
 
     const labelNode = document.createElement('span');
@@ -568,6 +628,7 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
     const count = document.createElement('span');
     count.className = 'perm-tree-mstatus-count-badge';
     count.textContent = isLeaf ? '1' : `${granted}/${Math.max(1, total)}`;
+    if (!fullyBlocked && blockedCount > 0) count.title = Dashboard.t('admin.saasAccessBlockedSome', { n: blockedCount });
     row.appendChild(count);
 
     const controls = document.createElement('div');
@@ -592,6 +653,11 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
     pill.textContent = Dashboard.t(isLeaf
         ? (state === 'all' ? 'admin.saasAccessYes' : 'admin.saasAccessNo')
         : (state === 'all' ? 'admin.saasAccessAll' : (state === 'part' ? 'admin.saasAccessPartial' : 'admin.saasAccessNone')));
+    if (fullyBlocked) {
+        pill.className = 'saas-access-pill saas-access-pill-blocked';
+        pill.textContent = lockedStatuses.length === 1 ? statusLabel(lockedStatuses[0]) : Dashboard.t('admin.saasAccessBlockedShort');
+        pill.title = lockTitle;
+    }
     statusCell.appendChild(pill);
     controls.appendChild(statusCell);
 
@@ -606,7 +672,9 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
             btn.className = 'saas-access-nest-btn';
             btn.textContent = Dashboard.t(textKey);
             btn.title = Dashboard.t(titleKey);
-            btn.addEventListener('click', () => { pairs.forEach((p) => setGrant(p.itemId, p.subItemId, value)); renderTreeList(); });
+            // "Todo" solo da lo abierto; "Nada" quita todo lo de la fila (y no hace falta si no hay nada).
+            btn.disabled = value ? fullyBlocked : locked;
+            btn.addEventListener('click', () => { (value ? openPairs : pairs).forEach((p) => setGrant(p.itemId, p.subItemId, value)); renderTreeList(); });
             nest.appendChild(btn);
         });
         nestCell.appendChild(nest);
@@ -916,12 +984,20 @@ async function openTreeModal(user) {
     treeSaveStatus.textContent = '';
     clearError(treeError);
     try {
-        const [res, orderRes] = await Promise.all([
+        const [res, orderRes, statusRes] = await Promise.all([
             fetch(`/api/admin/saas-users/${user.id}/grants`, { credentials: 'include' }),
             fetch('/api/admin/saas-master-order', { credentials: 'include' }).catch(() => null),
+            fetch('/api/admin/saas-master-status', { credentials: 'include' }).catch(() => null),
         ]);
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
+        masterStatusOverrides = [];
+        if (statusRes && statusRes.ok) {
+            const statusData = await statusRes.json().catch(() => null);
+            masterStatusOverrides = (statusData?.statuses || [])
+                .filter((s) => s && s.status !== 'habilitado')
+                .map((s) => ({ itemId: s.itemId, status: s.status }));
+        }
         masterOrder = null;
         if (orderRes && orderRes.ok) {
             const orderData = await orderRes.json().catch(() => null);
