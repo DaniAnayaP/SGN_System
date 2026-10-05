@@ -2008,6 +2008,10 @@
       "what": "The name of the screen you are on.",
       "example": "if it says “Welcome”, you are on the home screen; from there you reach the others with the menu on the left."
     },
+    "logout": {
+      "what": "Closes your session and takes you back to the sign-in screen. To use the system again you will have to type your username and password once more.",
+      "example": "you finish working on a shared computer, you tap “Log out” and nobody else can get in with your account."
+    },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",
       "example": "if a value changed and you don't know why, this shows who modified it and what it used to be."

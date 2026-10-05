@@ -8644,6 +8644,8 @@ const HELP_CONTENT_KEYS = {
     // Las dos flechas que contraen el menú lateral y la barra de arriba.
     'menu-btn': 'sidebarCollapse',
     'top-bar-collapse-toggle': 'topBarToggle',
+    // "Cerrar sesión" del pie del menú lateral.
+    'logout-link': 'logout',
 };
 // <th data-col="..."> -- the 13 Control Interno columns (see
 // getSystemColumnsForRecord in db.js), hardcoded static markup repeated

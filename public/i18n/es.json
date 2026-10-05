@@ -2007,6 +2007,10 @@
       "what": "Es el nombre de la pantalla en la que estás.",
       "example": "si dice «Bienvenido», estás en la pantalla de inicio; desde ahí llegas a las demás con el menú de la izquierda."
     },
+    "logout": {
+      "what": "Cierra tu sesión y te regresa a la pantalla de entrada. Para volver a usar el sistema tendrás que escribir tu usuario y tu contraseña otra vez.",
+      "example": "terminas de trabajar en una computadora compartida, tocas «Cerrar sesión» y nadie más puede entrar con tu cuenta."
+    },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",
       "example": "si un dato cambió y no sabes por qué, aquí ves quién lo modificó y qué valor tenía antes."
