@@ -2581,6 +2581,49 @@ app.get('/api/admin/saas-master-status', requireAuth, requireAdmin, (req, res) =
     res.json({ statuses: getSaasMasterStatuses() });
 });
 
+// Los controles de esta pantalla son accesos del catálogo (saas-master-tree > controles > a0..a7, ver
+// public/SaasAdminCatalog.js y canUse en Admin-ArbolMaestroSaaS.js): leer el árbol lo puede todo admin
+// (lo necesita cada pantalla para su barra lateral), pero cambiarlo pide el acceso de ese control.
+const SAAS_MASTER_TREE_CONTROLS = {
+    save: { sub: 'controles::a0', message: 'No tienes permiso para guardar el Árbol Maestro SaaS.' },
+    status: { sub: 'controles::a1', message: 'No tienes permiso para cambiar estatus en el Árbol Maestro SaaS.' },
+    platform: { sub: 'controles::a2', message: 'No tienes permiso para cambiar Web y App en el Árbol Maestro SaaS.' },
+    classify: { sub: 'controles::a3', message: 'No tienes permiso para cambiar clasificaciones en el Árbol Maestro SaaS.' },
+    colors: { sub: 'controles::a4', message: 'No tienes permiso para personalizar colores en el Árbol Maestro SaaS.' },
+    reorder: { sub: 'controles::a5', message: 'No tienes permiso para reordenar el Árbol Maestro SaaS.' },
+    history: { sub: 'controles::a7', message: 'No tienes permiso para ver los cambios del Árbol Maestro SaaS.' },
+};
+// true si respondió 403 (la ruta debe terminar ahí).
+function denySaasMasterTreeControl(req, res, ...controls) {
+    const grants = getSaasUserGrants(req.user.sub);
+    for (const control of controls) {
+        const { sub, message } = SAAS_MASTER_TREE_CONTROLS[control];
+        if (!hasSaasGrant(grants, 'saas-master-tree', sub, req.user.isSaasSuperAdmin)) {
+            res.status(403).json({ message });
+            return true;
+        }
+    }
+    return false;
+}
+// Qué cambió entre lo guardado y lo que llega (mismos valores por defecto que setSaasMasterStatuses).
+function diffSaasMasterStatuses(before, after) {
+    const norm = (r) => ({
+        status: (r && r.status) || 'habilitado',
+        web: r ? r.webEnabled !== false : true,
+        app: r ? r.appEnabled === true : false,
+    });
+    const b = new Map(before.map((r) => [r.itemId, r]));
+    const a = new Map(after.filter((r) => r && r.itemId).map((r) => [r.itemId, r]));
+    const diff = { status: false, platform: false };
+    for (const id of new Set([...b.keys(), ...a.keys()])) {
+        const x = norm(b.get(id));
+        const y = norm(a.get(id));
+        if (x.status !== y.status) diff.status = true;
+        if (x.web !== y.web || x.app !== y.app) diff.platform = true;
+    }
+    return diff;
+}
+
 app.put('/api/admin/saas-master-status', requireAuth, requireAdmin, (req, res) => {
     const { statuses } = req.body || {};
     if (!Array.isArray(statuses)) return res.status(400).json({ message: 'statuses must be an array.' });
@@ -2592,6 +2635,11 @@ app.put('/api/admin/saas-master-status', requireAuth, requireAdmin, (req, res) =
             return res.status(400).json({ message: `status must be one of ${MASTER_PERMISSION_STATUS_VALUES.join(', ')}.` });
         }
     }
+    const diff = diffSaasMasterStatuses(getSaasMasterStatuses(), statuses);
+    const needed = ['save'];
+    if (diff.status) needed.push('status');
+    if (diff.platform) needed.push('platform');
+    if (denySaasMasterTreeControl(req, res, ...needed)) return;
     res.json({ statuses: setSaasMasterStatuses(statuses, changedByLabel(req)) });
 });
 
@@ -2607,6 +2655,7 @@ app.put('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) =>
     if (!order || typeof order !== 'object' || Array.isArray(order)) {
         return res.status(400).json({ message: 'order must be an object.' });
     }
+    if (denySaasMasterTreeControl(req, res, 'save', 'reorder')) return;
     res.json({ order: setSaasMasterOrder(order, changedByLabel(req)) });
 });
 
@@ -2623,6 +2672,7 @@ app.put('/api/admin/saas-classification-overrides', requireAuth, requireAdmin, (
     if (typeof nodeKey !== 'string' || !nodeKey) {
         return res.status(400).json({ message: 'nodeKey is required.' });
     }
+    if (denySaasMasterTreeControl(req, res, 'classify')) return;
     if (!classificationId) {
         deleteSaasClassificationOverride(nodeKey, changedByLabel(req));
         return res.json({ override: null });
@@ -2644,6 +2694,7 @@ app.put('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (req
     if (typeof classificationId !== 'string' || !classificationId) {
         return res.status(400).json({ message: 'classificationId is required.' });
     }
+    if (denySaasMasterTreeControl(req, res, 'colors')) return;
     if (textColor !== undefined) {
         if (typeof textColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(textColor)) {
             return res.status(400).json({ message: 'textColor must be a hex color like #7f77dd.' });
@@ -2662,6 +2713,7 @@ app.delete('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (
     const kind = req.query.kind;
     if (!classificationId) return res.status(400).json({ message: 'classificationId is required.' });
     if (kind !== 'dot' && kind !== 'text') return res.status(400).json({ message: "kind must be 'dot' or 'text'." });
+    if (denySaasMasterTreeControl(req, res, 'colors')) return;
     res.json({ cleared: clearSaasClassificationColor(classificationId, kind, changedByLabel(req)) });
 });
 
@@ -2677,6 +2729,7 @@ app.get('/api/admin/saas-master-change-log', requireAuth, requireAdmin, (req, re
     const nodeKey = typeof req.query.nodeKey === 'string' ? req.query.nodeKey : '';
     if (!nodeKey) return res.status(400).json({ message: 'nodeKey is required.' });
     const classificationId = typeof req.query.classificationId === 'string' && req.query.classificationId ? req.query.classificationId : null;
+    if (denySaasMasterTreeControl(req, res, 'history')) return;
     res.json({ entries: getSaasMasterChangeLog(nodeKey, classificationId) });
 });
 

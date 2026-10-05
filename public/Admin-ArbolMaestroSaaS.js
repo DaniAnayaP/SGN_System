@@ -386,9 +386,18 @@ function apartadoItemCount(screen, apartado) {
 }
 // Only top-level apartados: the nested ones are already summed into their host.
 function screensItemCount(screens) {
-    return screens.reduce((sum, screen) => sum + screen.apartados
-        .filter((apartado) => !apartado.nestUnder)
-        .reduce((s, apartado) => s + apartadoItemCount(screen, apartado), 0), 0);
+    return screens.reduce((sum, screen) => {
+        const own = screen.apartados
+            .filter((apartado) => !apartado.nestUnder)
+            .reduce((s, apartado) => s + apartadoItemCount(screen, apartado), 0);
+        // Una pantalla hecha solo de botones (Árbol Maestro SaaS, Árbol de Permisos Maestro) no tiene
+        // columnas que contar: su total es la cantidad de botones de su fila "Botones", en vez de un 1
+        // que no decía nada ("tiene 1, si trae muchos anidados").
+        const buttons = own === 0
+            ? screen.apartados.reduce((s, apartado) => s + (apartado.acciones || []).length, 0)
+            : 0;
+        return sum + (own || buttons);
+    }, 0);
 }
 // One classification group: its own leaves (plus whatever modals pop up from
 // each of them) and the modals hanging off the classification itself.
@@ -423,6 +432,15 @@ function buildNestedByClassification(screen, apartado) {
         map.set(child.nestUnder.classification, arr);
     });
     return map;
+}
+
+// Los controles de esta pantalla son accesos propios del catálogo (saas-master-tree > controles > a0..a7,
+// ver SaasAdminCatalog.js): una cuenta solo usa los que tenga marcados y admin_saas (super admin) puede
+// todos. El servidor lo vuelve a revisar en cada ruta (requireSaasMasterTreeControl en server.js).
+const MASTER_TREE_ITEM_ID = 'saas-master-tree';
+const CONTROL_LEAF = { save: 0, status: 1, platform: 2, classify: 3, colors: 4, reorder: 5, navigate: 6, history: 7 };
+function canUse(control) {
+    return Dashboard.hasSaasScreenGrant(MASTER_TREE_ITEM_ID, `controles::a${CONTROL_LEAF[control]}`);
 }
 
 const listEl = document.getElementById('saas-master-status-list');
@@ -644,6 +662,7 @@ function orderedLeaves(screen, apartado) {
 }
 
 function makeDraggable(el, { list, id, onReorder }) {
+    if (!canUse('reorder')) return;
     el.classList.add('perm-tree-row-draggable');
     el.draggable = true;
     el.addEventListener('dragstart', (e) => { draggedId = { list, id }; el.classList.add('perm-tree-row-dragging'); e.stopPropagation(); });
@@ -686,6 +705,7 @@ function spacer() {
     return s;
 }
 function dragHandle() {
+    if (!canUse('reorder')) return spacer();
     const grip = document.createElement('span');
     grip.className = 'perm-tree-drag-handle';
     grip.setAttribute('aria-hidden', 'true');
@@ -1677,7 +1697,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         // customization is for classifications that group real COLUMNS
         // (Control Interno, Acciones, Por Definir, custom) and for
         // columns themselves, not for the Botones action-button grouping.
-        if (classificationCtx.classificationId && classificationCtx.classificationId !== SAAS_CLASS_BOTONES_ID) {
+        if (classificationCtx.classificationId && classificationCtx.classificationId !== SAAS_CLASS_BOTONES_ID && canUse('colors')) {
             classBadge.classList.add('perm-tree-mstatus-class-badge-with-actions');
             const labelSpan = document.createElement('span');
             labelSpan.className = 'perm-tree-mstatus-class-badge-label';
@@ -1749,6 +1769,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
             optionEl.style.color = optionEl.value === CREATE_CLASSIFICATION_VALUE
                 ? 'var(--color-text-secondary)' : classificationColor(optionEl.value);
         });
+        classSelect.disabled = !canUse('classify');
         classSelect.addEventListener('click', (e) => e.stopPropagation());
         classSelect.addEventListener('change', () => {
             if (classSelect.value === CREATE_CLASSIFICATION_VALUE) renderClassificationCreateUI(classificationCell, classificationCtx);
@@ -1756,7 +1777,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         });
         // Trigger first in DOM order so tab order matches the visual one
         // (icon at the pill's start, then the <select>).
-        selectWrap.appendChild(buildLeafColorGroup(key, label));
+        if (canUse('colors')) selectWrap.appendChild(buildLeafColorGroup(key, label));
         selectWrap.appendChild(classSelect);
         classificationCell.appendChild(selectWrap);
     }
@@ -1775,6 +1796,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         select.appendChild(optionEl);
     });
     select.value = state.status;
+    select.disabled = !canUse('status');
     select.title = Dashboard.t(STATUS_OPTIONS.find((opt) => opt.value === state.status).labelKey);
     select.addEventListener('change', () => {
         setState(key, { ...getState(key), status: select.value });
@@ -1793,7 +1815,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         // just the deepest columns/actions. See statusChildrenMap above.
         collectDescendantStatusKeys(key).forEach((k) => setState(k, { ...getState(k), status: select.value }));
         renderList();
-    }, !descendantKeys.length, 'masterTreeApplyNestedStatus'));
+    }, !descendantKeys.length || !canUse('status'), 'masterTreeApplyNestedStatus'));
     controls.appendChild(nestCell);
 
     const platformsCell = document.createElement('div');
@@ -1816,7 +1838,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         // Web that's now "en mejoras" still needs its own Web switch usable
         // during that work, not force-locked). APP still additionally needs
         // WEB on regardless of Estatus.
-        const locked = state.status === 'inhabilitado' || (platform === 'app' && !state.webEnabled);
+        const locked = state.status === 'inhabilitado' || (platform === 'app' && !state.webEnabled) || !canUse('platform');
         const box = document.createElement('span');
         box.className = 'perm-tree-mstatus-device-box';
         box.innerHTML = deviceIconSvg(platform, '');
@@ -1847,14 +1869,14 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
                 setState(k, platform === 'web' ? { ...s, webEnabled: value, appEnabled: value ? s.appEnabled : false } : { ...s, appEnabled: value });
             });
             renderList();
-        }, !descendantKeys.length, 'masterTreeApplyNestedPlatform'));
+        }, !descendantKeys.length || !canUse('platform'), 'masterTreeApplyNestedPlatform'));
         platformsCell.appendChild(group);
     });
     controls.appendChild(platformsCell);
 
     const navCell = document.createElement('div');
     navCell.className = 'perm-tree-mstatus-navigate-cell';
-    if (navigateHref) {
+    if (navigateHref && canUse('navigate')) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'perm-tree-mstatus-nest-btn';
@@ -1885,7 +1907,7 @@ function buildControls(key, descendantKeys, navigateHref, classificationCtx, lab
         event.stopPropagation();
         openHistoryDialog(key, classificationCtx?.classificationId || null, label);
     });
-    historyCell.appendChild(historyBtn);
+    if (canUse('history')) historyCell.appendChild(historyBtn);
     controls.appendChild(historyCell);
 
     return controls;
@@ -2612,6 +2634,7 @@ function renderList() {
 }
 
 async function load() {
+    saveBtn.hidden = !canUse('save');
     try {
         const [statusRes, orderRes, overridesRes, colorsRes] = await Promise.all([
             fetch('/api/admin/saas-master-status', { credentials: 'include' }),
@@ -2647,6 +2670,7 @@ async function load() {
 }
 
 saveBtn.addEventListener('click', async () => {
+    if (!canUse('save')) return;
     saveBtn.disabled = true;
     errorEl.hidden = true;
     try {
@@ -2657,12 +2681,15 @@ saveBtn.addEventListener('click', async () => {
                 credentials: 'include',
                 body: JSON.stringify({ statuses }),
             }),
-            fetch('/api/admin/saas-master-order', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ order }),
-            }),
+            // El orden solo lo manda quien puede reordenar (sin ese acceso el servidor lo rechazaría).
+            canUse('reorder')
+                ? fetch('/api/admin/saas-master-order', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ order }),
+                })
+                : Promise.resolve({ ok: true }),
         ]);
         if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
         const statusData = await statusRes.json();

@@ -160,7 +160,14 @@ window.SAAS_ADMIN_CATALOG = [
             {
                 itemId: 'saas-master-tree', labelKey: 'menu.saasMasterTree', href: 'Admin-ArbolMaestroSaaS.html',
                 apartados: [
-                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Guardar'] },
+                    // Los controles reales del Árbol Maestro SaaS, uno por acceso. El ORDEN no debe cambiar una vez
+                    // guardado en producción (cada posición es el id a0..a7 que usan las cuentas): Guardar
+                    // ya era a0, lo nuevo va al final. Admin-ArbolMaestroSaaS.js los revisa en pantalla
+                    // (canUse) y server.js en cada ruta (requireSaasMasterTreeControl).
+                    { id: 'controles', label: 'Controles del árbol', acciones: [
+                        'Guardar', 'Cambiar estatus', 'Cambiar Web y App', 'Cambiar clasificación',
+                        'Personalizar colores', 'Reordenar', 'Navegar', 'Ver cambios',
+                    ] },
                 ],
             },
         ],
