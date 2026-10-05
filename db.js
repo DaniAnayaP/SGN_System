@@ -6999,6 +6999,136 @@ function clearSaasClassificationColor(classificationId, kind, updatedBy) {
     return clearColorRow('saas_classification_colors', classificationId, kind, updatedBy, logSaasMasterChange);
 }
 
+// ---------------------------------------------------------------------------
+// Solicitudes de color de columna. El color de una columna (Encabezado = "col-own:<nodeKey>", Filas =
+// "col-nested:<nodeKey>") se elige en el Árbol Maestro, pero solo se aplica a las tablas reales cuando
+// lo autoriza quien tiene ese permiso: quien puede personalizar colores pero NO autorizarlos deja una
+// solicitud, que le llega a su jefe directo y, si este no tiene el acceso, al jefe del jefe, hasta
+// encontrar a alguien con "Autorizar colores" (admin_saas, que lo puede todo, es la raíz).
+// scope: 'saas' (árbol SaaS, saas_classification_colors) -- 'master' y 'client' llegan después
+// (árbol de permisos de clientes y colores propios de cada empresa, con client_id).
+// ---------------------------------------------------------------------------
+db.exec(`
+    CREATE TABLE IF NOT EXISTS column_color_requests (
+        id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope                 TEXT NOT NULL,
+        client_id             INTEGER,
+        color_id              TEXT NOT NULL,
+        action                TEXT NOT NULL,
+        value                 TEXT,
+        requested_by_user_id  INTEGER NOT NULL,
+        requested_by_label    TEXT NOT NULL DEFAULT '',
+        assigned_to_user_id   INTEGER,
+        status                TEXT NOT NULL DEFAULT 'pending',
+        decided_by_user_id    INTEGER,
+        decided_by_label      TEXT,
+        decided_at            TEXT,
+        created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_column_color_requests_scope_status ON column_color_requests(scope, status);
+`);
+
+const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text'];
+const SAAS_COLOR_AUTHORIZE_LEAF = 'controles::a8';
+
+// Jefe directo de una cuenta del equipo SaaS. Hoy todas dependen directo de admin_saas (no hay campo de
+// jefe); cuando exista la pantalla de Perfiles, solo hay que devolver aquí el user id del jefe y la
+// cadena de resolveSaasColorAuthorizer sube sola.
+function saasDirectBossOf(/* userId */) {
+    return null;
+}
+// ¿Esta cuenta SaaS puede autorizar colores? Super admin siempre; el resto, con "Autorizar colores" (a8)
+// marcado en su árbol de accesos.
+function userCanAuthorizeSaasColors(userId) {
+    const row = db.prepare('SELECT is_saas_super_admin AS superAdmin, active FROM users WHERE id = ? AND client_id IS NULL').get(userId);
+    if (!row || row.active === 0) return false;
+    if (row.superAdmin) return true;
+    return hasSaasGrant(getSaasUserGrants(userId), 'saas-master-tree', SAAS_COLOR_AUTHORIZE_LEAF, false);
+}
+function saasColorRootUserId() {
+    const named = db.prepare("SELECT id FROM users WHERE username = 'admin_saas' AND client_id IS NULL").get();
+    if (named) return named.id;
+    const anySuper = db.prepare('SELECT id FROM users WHERE is_saas_super_admin = 1 AND client_id IS NULL AND active != 0 ORDER BY id LIMIT 1').get();
+    return anySuper ? anySuper.id : null;
+}
+// A quién le llega la solicitud de `requesterId`: sube por la cadena de jefes hasta el primero que
+// pueda autorizar; sin nadie en la cadena (hoy, siempre), la raíz.
+function resolveSaasColorAuthorizer(requesterId) {
+    const seen = new Set([requesterId]);
+    let cursor = saasDirectBossOf(requesterId);
+    while (cursor && !seen.has(cursor)) {
+        seen.add(cursor);
+        if (userCanAuthorizeSaasColors(cursor)) return cursor;
+        cursor = saasDirectBossOf(cursor);
+    }
+    return saasColorRootUserId();
+}
+function getUserNameById(userId) {
+    const row = db.prepare('SELECT name, username FROM users WHERE id = ?').get(userId);
+    return row ? (row.name || row.username) : '';
+}
+
+function createColorRequest({ scope, clientId = null, colorId, action, value = null, requestedByUserId, requestedByLabel, assignedToUserId }) {
+    if (!COLOR_REQUEST_ACTIONS.includes(action)) throw new Error('invalid color request action');
+    const isText = action.endsWith('text') ? 1 : 0;
+    return db.transaction(() => {
+        // Una solicitud nueva de la misma persona sobre el mismo color y la misma mitad (fondo o letra)
+        // reemplaza a la que seguía pendiente.
+        db.prepare(`
+            UPDATE column_color_requests SET status = 'superseded', decided_at = datetime('now')
+            WHERE scope = ? AND IFNULL(client_id, 0) = IFNULL(?, 0) AND color_id = ? AND requested_by_user_id = ?
+              AND status = 'pending' AND (action LIKE '%text') = ?
+        `).run(scope, clientId, colorId, requestedByUserId, isText);
+        const info = db.prepare(`
+            INSERT INTO column_color_requests (scope, client_id, color_id, action, value, requested_by_user_id, requested_by_label, assigned_to_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(scope, clientId, colorId, action, value, requestedByUserId, requestedByLabel || '', assignedToUserId || null);
+        return Number(info.lastInsertRowid);
+    })();
+}
+const COLOR_REQUEST_SELECT = `
+    SELECT r.id, r.scope, r.client_id AS clientId, r.color_id AS colorId, r.action, r.value,
+           r.requested_by_user_id AS requestedById, COALESCE(NULLIF(r.requested_by_label, ''), u1.name, u1.username) AS requestedByName,
+           r.assigned_to_user_id AS assignedToId, COALESCE(u2.name, u2.username) AS assignedToName,
+           r.status, r.decided_by_user_id AS decidedById, r.decided_by_label AS decidedByName, r.decided_at AS decidedAt,
+           r.created_at AS createdAt
+    FROM column_color_requests r
+    LEFT JOIN users u1 ON u1.id = r.requested_by_user_id
+    LEFT JOIN users u2 ON u2.id = r.assigned_to_user_id
+`;
+function getColorRequest(id) {
+    return db.prepare(`${COLOR_REQUEST_SELECT} WHERE r.id = ?`).get(id) || null;
+}
+// Lo que ve cada quien: sus propias solicitudes, las pendientes que le tocan decidir, y (super admin)
+// todas las pendientes.
+function listColorRequestsForUser(scope, { userId, isSuperAdmin = false, limit = 100 }) {
+    return db.prepare(`
+        ${COLOR_REQUEST_SELECT}
+        WHERE r.scope = ?
+          AND (r.requested_by_user_id = ? OR (r.status = 'pending' AND (r.assigned_to_user_id = ? OR ? = 1)))
+        ORDER BY (r.status = 'pending') DESC, r.id DESC
+        LIMIT ?
+    `).all(scope, userId, userId, isSuperAdmin ? 1 : 0, limit);
+}
+function decideColorRequest(id, status, { userId, label }) {
+    db.prepare(`
+        UPDATE column_color_requests
+        SET status = ?, decided_by_user_id = ?, decided_by_label = ?, decided_at = datetime('now')
+        WHERE id = ? AND status = 'pending'
+    `).run(status, userId, label || '', id);
+    return getColorRequest(id);
+}
+// Aplica una solicitud autorizada a las tablas de colores del árbol SaaS.
+function applySaasColorRequest(request, updatedBy) {
+    switch (request.action) {
+        case 'set': return setSaasClassificationColor(request.colorId, request.value, updatedBy);
+        case 'set-text': return setSaasClassificationTextColor(request.colorId, request.value, updatedBy);
+        case 'clear-dot': return clearSaasClassificationColor(request.colorId, 'dot', updatedBy);
+        case 'clear-text': return clearSaasClassificationColor(request.colorId, 'text', updatedBy);
+        default: throw new Error('invalid color request action');
+    }
+}
+
 // Historial de cambios (Equipo SaaS) -- classification-color stripe.
 // `saas_user_changes.field_key` (see logSaasUserChange's own call sites in
 // server.js) has 6 values; only 3 correspond to a real Árbol Maestro SaaS
@@ -8534,6 +8664,14 @@ module.exports = {
     setSaasClassificationColor,
     setSaasClassificationTextColor,
     clearSaasClassificationColor,
+    createColorRequest,
+    getColorRequest,
+    listColorRequestsForUser,
+    decideColorRequest,
+    applySaasColorRequest,
+    resolveSaasColorAuthorizer,
+    userCanAuthorizeSaasColors,
+    getUserNameById,
     getEffectiveSaasUserFieldClassifications,
     getSaasMasterChangeLog,
     getMasterPermissionOrder,

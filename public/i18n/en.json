@@ -756,6 +756,32 @@
     "masterTreeColorStandard": "Standard colors",
     "masterTreeColorRecent": "Recent colors",
     "masterTreeColHistory": "Changes",
+    "colorRequestsBtn": "Color requests",
+    "colorRequestsTitle": "Column color requests",
+    "colorRequestsEmpty": "There are no color requests.",
+    "colorRequestColStatus": "Status",
+    "colorRequestColColumn": "Column",
+    "colorRequestColChange": "Change",
+    "colorRequestColBy": "Requested by",
+    "colorRequestColTo": "Approver",
+    "colorRequestColDate": "Date",
+    "colorRequestColActions": "Actions",
+    "colorRequestStatus_pending": "Pending",
+    "colorRequestStatus_approved": "Approved",
+    "colorRequestStatus_rejected": "Rejected",
+    "colorRequestStatus_superseded": "Replaced",
+    "colorRequestPartOwn": "Header",
+    "colorRequestPartNested": "Rows",
+    "colorRequestChangeFill": "Fill {hex}",
+    "colorRequestChangeText": "Text {hex}",
+    "colorRequestChangeClearFill": "Remove fill",
+    "colorRequestChangeClearText": "Remove text",
+    "colorRequestApprove": "Approve",
+    "colorRequestReject": "Reject",
+    "colorRequestSent": "Request sent to {name}: the color will apply once it is approved.",
+    "colorRequestApproved": "Color approved and applied",
+    "colorRequestRejectedMsg": "Request rejected",
+    "colorRequestError": "The request could not be completed",
     "masterTreeHistoryFieldStatus": "Status",
     "masterTreeHistoryFieldClassification": "Classification",
     "masterTreeHistoryFieldColor": "Color",
@@ -2031,6 +2057,18 @@
     "topBarActionsToggle": {
       "what": "On a phone not all the icons at the top fit; this button gathers them into a list that opens when you tap it.",
       "example": "you tap the three dots and see Messages, Notifications, Settings and the other icons in a list."
+    },
+    "masterTreeColorRequests": {
+      "what": "Shows the column color changes that were requested and are not applied yet: who asked, what the change is and who has to approve it. Whoever has permission can approve or reject them here.",
+      "example": "a person without permission to approve picks a color for “RFC”; it shows up here as pending and, once approved, the column is painted with that color."
+    },
+    "masterTreeColorApprove": {
+      "what": "Approves this color change: it is applied on the real tables.",
+      "example": "you tap Approve and the “RFC” column changes to the color they asked for."
+    },
+    "masterTreeColorReject": {
+      "what": "Rejects this color change: it is not applied and the column stays as it is.",
+      "example": "the requested color does not match; you tap Reject and everything stays the same."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",

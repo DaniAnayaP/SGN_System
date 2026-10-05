@@ -166,7 +166,7 @@ window.SAAS_ADMIN_CATALOG = [
                     // (canUse) y server.js en cada ruta (requireSaasMasterTreeControl).
                     { id: 'controles', label: 'Controles del árbol', acciones: [
                         'Guardar', 'Cambiar estatus', 'Cambiar Web y App', 'Cambiar clasificación',
-                        'Personalizar colores', 'Reordenar', 'Navegar', 'Ver cambios',
+                        'Personalizar colores', 'Reordenar', 'Navegar', 'Ver cambios', 'Autorizar colores',
                     ] },
                 ],
             },

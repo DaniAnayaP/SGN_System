@@ -290,6 +290,14 @@ const {
     setSaasClassificationColor,
     setSaasClassificationTextColor,
     clearSaasClassificationColor,
+    createColorRequest,
+    getColorRequest,
+    listColorRequestsForUser,
+    decideColorRequest,
+    applySaasColorRequest,
+    resolveSaasColorAuthorizer,
+    userCanAuthorizeSaasColors,
+    getUserNameById,
     getEffectiveSaasUserFieldClassifications,
     getSaasMasterChangeLog,
     getSaasPersonalOrder,
@@ -2592,6 +2600,7 @@ const SAAS_MASTER_TREE_CONTROLS = {
     colors: { sub: 'controles::a4', message: 'No tienes permiso para personalizar colores en el Árbol Maestro SaaS.' },
     reorder: { sub: 'controles::a5', message: 'No tienes permiso para reordenar el Árbol Maestro SaaS.' },
     history: { sub: 'controles::a7', message: 'No tienes permiso para ver los cambios del Árbol Maestro SaaS.' },
+    authorize: { sub: 'controles::a8', message: 'No tienes permiso para autorizar colores en el Árbol Maestro SaaS.' },
 };
 // true si respondió 403 (la ruta debe terminar ahí).
 function denySaasMasterTreeControl(req, res, ...controls) {
@@ -2689,22 +2698,39 @@ app.put('/api/admin/saas-classification-overrides', requireAuth, requireAdmin, (
 app.get('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (req, res) => {
     res.json({ colors: getSaasClassificationColors() });
 });
+// El color de una COLUMNA (Encabezado/Filas) se aplica a las tablas reales solo cuando lo autoriza quien
+// tiene "Autorizar colores" (o un super admin): quien solo puede personalizar deja una solicitud (202)
+// que le llega a su jefe directo, subiendo hasta quien pueda autorizar (ver resolveSaasColorAuthorizer
+// en db.js). El color de una clasificación completa se sigue aplicando directo.
+const isColumnColorId = (id) => /^col-(own|nested):/.test(id);
+function canApplySaasColorsDirectly(req) {
+    return !!req.user.isSaasSuperAdmin
+        || hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-master-tree', SAAS_MASTER_TREE_CONTROLS.authorize.sub, false);
+}
+function requestSaasColorChange(req, res, colorId, action, value) {
+    const assignedTo = resolveSaasColorAuthorizer(req.user.sub);
+    const requestId = createColorRequest({
+        scope: 'saas', colorId, action, value,
+        requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req), assignedToUserId: assignedTo,
+    });
+    res.status(202).json({ requested: true, requestId, assignedTo: { id: assignedTo, name: getUserNameById(assignedTo) } });
+}
 app.put('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (req, res) => {
     const { classificationId, color, textColor } = req.body || {};
     if (typeof classificationId !== 'string' || !classificationId) {
         return res.status(400).json({ message: 'classificationId is required.' });
     }
     if (denySaasMasterTreeControl(req, res, 'colors')) return;
-    if (textColor !== undefined) {
-        if (typeof textColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(textColor)) {
-            return res.status(400).json({ message: 'textColor must be a hex color like #7f77dd.' });
-        }
-        return res.json({ textColor: setSaasClassificationTextColor(classificationId, textColor, changedByLabel(req)) });
+    const isText = textColor !== undefined;
+    const value = isText ? textColor : color;
+    if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) {
+        return res.status(400).json({ message: `${isText ? 'textColor' : 'color'} must be a hex color like #7f77dd.` });
     }
-    if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) {
-        return res.status(400).json({ message: 'color must be a hex color like #7f77dd.' });
+    if (isColumnColorId(classificationId) && !canApplySaasColorsDirectly(req)) {
+        return requestSaasColorChange(req, res, classificationId, isText ? 'set-text' : 'set', value);
     }
-    res.json({ color: setSaasClassificationColor(classificationId, color, changedByLabel(req)) });
+    if (isText) return res.json({ textColor: setSaasClassificationTextColor(classificationId, value, changedByLabel(req)) });
+    res.json({ color: setSaasClassificationColor(classificationId, value, changedByLabel(req)) });
 });
 // "Restablecer" -- same as master-permission-classification-colors' DELETE
 // above, against this screen's own table/log.
@@ -2714,8 +2740,36 @@ app.delete('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (
     if (!classificationId) return res.status(400).json({ message: 'classificationId is required.' });
     if (kind !== 'dot' && kind !== 'text') return res.status(400).json({ message: "kind must be 'dot' or 'text'." });
     if (denySaasMasterTreeControl(req, res, 'colors')) return;
+    if (isColumnColorId(classificationId) && !canApplySaasColorsDirectly(req)) {
+        return requestSaasColorChange(req, res, classificationId, kind === 'text' ? 'clear-text' : 'clear-dot', null);
+    }
     res.json({ cleared: clearSaasClassificationColor(classificationId, kind, changedByLabel(req)) });
 });
+
+// Solicitudes de color de columna del Árbol Maestro SaaS: cada quien ve las suyas y las pendientes que le
+// tocan decidir (un super admin ve todas las pendientes); decide quien tenga "Autorizar colores" y a
+// quien le llegó (o un super admin).
+app.get('/api/admin/saas-color-requests', requireAuth, requireAdmin, (req, res) => {
+    const userId = req.user.sub;
+    const canAuthorize = !!req.user.isSaasSuperAdmin || userCanAuthorizeSaasColors(userId);
+    const requests = listColorRequestsForUser('saas', { userId, isSuperAdmin: !!req.user.isSaasSuperAdmin })
+        .map((r) => ({ ...r, canDecide: canAuthorize && r.status === 'pending' && (!!req.user.isSaasSuperAdmin || r.assignedToId === userId) }));
+    res.json({ requests, canAuthorize, toDecide: requests.filter((r) => r.canDecide).length });
+});
+function decideSaasColorRequest(req, res, approve) {
+    if (denySaasMasterTreeControl(req, res, 'authorize')) return;
+    const request = getColorRequest(Number(req.params.id));
+    if (!request || request.scope !== 'saas') return res.status(404).json({ message: 'Solicitud no encontrada.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya se resolvió.' });
+    if (!req.user.isSaasSuperAdmin && request.assignedToId !== req.user.sub) {
+        return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
+    }
+    const label = changedByLabel(req);
+    if (approve) applySaasColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+    res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
+}
+app.post('/api/admin/saas-color-requests/:id/approve', requireAuth, requireAdmin, (req, res) => decideSaasColorRequest(req, res, true));
+app.post('/api/admin/saas-color-requests/:id/reject', requireAuth, requireAdmin, (req, res) => decideSaasColorRequest(req, res, false));
 
 // Read-only -- feeds the classification-color stripe on Equipo SaaS's own
 // Historial de cambios (Admin-EquipoSaaS.js's openSaasUserChanges). Mirrors

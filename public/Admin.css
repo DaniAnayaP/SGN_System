@@ -5976,3 +5976,53 @@ body.dark-mode .saas-access-nest-btn{ background-color: #23242b; }
     white-space: nowrap;
 }
 body.dark-mode .saas-access-pill-blocked{ border-color: #8f7432; color: #f0c24a; }
+
+/* Solicitudes de color de columna (Árbol Maestro SaaS): el botón con su contador y la tabla del panel. */
+.saas-color-requests-badge{
+    display: inline-block;
+    min-width: 1.2rem;
+    margin-left: 0.4rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: var(--color-text-primary);
+    color: var(--color-surface);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.2rem;
+    text-align: center;
+}
+.saas-color-requests-list .admin-table-wrap{
+    margin-top: 0.75rem;
+    max-height: min(60vh, 32rem);
+    overflow: auto;
+}
+.color-request-swatch{
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.9rem;
+    margin-right: 0.35rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
+    vertical-align: -0.15rem;
+}
+.color-request-status{
+    display: inline-block;
+    padding: 0.12rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.color-request-status-pending{ background-color: #fff2d9; color: #9a6b00; }
+.color-request-status-approved{ background-color: #e3f6e8; color: #1e7e34; }
+.color-request-status-rejected{ background-color: #fbe4e1; color: #b3261e; }
+.color-request-status-superseded{ background-color: #ececf1; color: #6b7089; }
+body.dark-mode .color-request-status-pending{ background-color: #3a2f12; color: #f0c24a; }
+body.dark-mode .color-request-status-approved{ background-color: #1c3324; color: #7fd99a; }
+body.dark-mode .color-request-status-rejected{ background-color: #3e2422; color: #f08a82; }
+body.dark-mode .color-request-status-superseded{ background-color: #2a2c38; color: #a3a8c0; }
+.color-request-actions{
+    display: flex;
+    gap: 0.4rem;
+    white-space: nowrap;
+}

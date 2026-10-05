@@ -438,7 +438,7 @@ function buildNestedByClassification(screen, apartado) {
 // ver SaasAdminCatalog.js): una cuenta solo usa los que tenga marcados y admin_saas (super admin) puede
 // todos. El servidor lo vuelve a revisar en cada ruta (requireSaasMasterTreeControl en server.js).
 const MASTER_TREE_ITEM_ID = 'saas-master-tree';
-const CONTROL_LEAF = { save: 0, status: 1, platform: 2, classify: 3, colors: 4, reorder: 5, navigate: 6, history: 7 };
+const CONTROL_LEAF = { save: 0, status: 1, platform: 2, classify: 3, colors: 4, reorder: 5, navigate: 6, history: 7, authorize: 8 };
 function canUse(control) {
     return Dashboard.hasSaasScreenGrant(MASTER_TREE_ITEM_ID, `controles::a${CONTROL_LEAF[control]}`);
 }
@@ -799,6 +799,162 @@ function nestedColorTint(key) {
     const text = classificationTextColors.get(`col-nested:${key}`);
     return (bg || text) ? { bg, text } : null;
 }
+// --- Solicitudes de color de columna -------------------------------------------------
+// Quien puede personalizar colores pero no autorizarlos deja una solicitud (el servidor responde 202):
+// el color no se pinta hasta que lo autorice quien le toca (su jefe directo y, si ese no tiene el
+// acceso, el siguiente, hasta quien lo tenga; ver resolveSaasColorAuthorizer en db.js).
+const colorRequestsBtn = document.getElementById('saas-color-requests-btn');
+const colorRequestsBadge = document.getElementById('saas-color-requests-badge');
+const colorRequestsModal = document.getElementById('saas-color-requests-modal');
+const colorRequestsListEl = document.getElementById('saas-color-requests-list');
+let colorRequests = [];
+let colorRequestsCanAuthorize = false;
+
+async function loadColorRequests() {
+    try {
+        const res = await fetch('/api/admin/saas-color-requests', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const data = await res.json();
+        colorRequests = data.requests || [];
+        colorRequestsCanAuthorize = !!data.canAuthorize;
+        const waiting = colorRequestsCanAuthorize ? (data.toDecide || 0) : colorRequests.filter((r) => r.status === 'pending').length;
+        colorRequestsBadge.textContent = String(waiting);
+        colorRequestsBadge.hidden = waiting === 0;
+        colorRequestsBtn.hidden = !(canUse('colors') || colorRequestsCanAuthorize || colorRequests.length);
+        if (!colorRequestsModal.hidden) renderColorRequests();
+    } catch {
+        colorRequestsBtn.hidden = true;
+    }
+}
+async function notifyColorRequested(res) {
+    const data = await res.json().catch(() => ({}));
+    Dashboard.showToast(Dashboard.t('admin.colorRequestSent', { name: data.assignedTo?.name || '' }), 'info');
+    closeColorPanel();
+    await loadColorRequests();
+}
+// "col-own:saas-clients::tabla::c3" -> { part: 'Encabezado', path: 'Nuestros Clientes › Tabla principal › RFC' }
+function describeColorId(colorId) {
+    const m = /^col-(own|nested):(.*)$/.exec(colorId || '');
+    if (!m) return { part: '', path: colorId || '' };
+    const [screenId, apartadoId, suffix] = m[2].split('::');
+    const screen = CATALOG.flatMap((g) => g.screens).find((s) => s.itemId === screenId);
+    const apartado = screen && screen.apartados.find((a) => a.id === apartadoId);
+    const leaf = apartado && [...buildLeaves(apartado), ...buildActionLeaves(apartado)].find((l) => l.suffix === suffix);
+    const path = [screen && Dashboard.t(screen.labelKey), apartado && apartado.label, leaf && leaf.label].filter(Boolean).join(' › ') || m[2];
+    return { part: Dashboard.t(m[1] === 'own' ? 'admin.colorRequestPartOwn' : 'admin.colorRequestPartNested'), path };
+}
+function colorRequestChange(request) {
+    const swatch = (hex) => {
+        const sw = document.createElement('span');
+        sw.className = 'color-request-swatch';
+        sw.style.backgroundColor = hex;
+        return sw;
+    };
+    const wrap = document.createElement('span');
+    if (request.action === 'set' || request.action === 'set-text') {
+        wrap.appendChild(swatch(request.value));
+        wrap.append(Dashboard.t(request.action === 'set' ? 'admin.colorRequestChangeFill' : 'admin.colorRequestChangeText', { hex: request.value }));
+    } else {
+        wrap.append(Dashboard.t(request.action === 'clear-dot' ? 'admin.colorRequestChangeClearFill' : 'admin.colorRequestChangeClearText'));
+    }
+    return wrap;
+}
+async function decideColorRequest(request, approve) {
+    try {
+        const res = await fetch(`/api/admin/saas-color-requests/${request.id}/${approve ? 'approve' : 'reject'}`, { method: 'POST', credentials: 'include' });
+        if (!res.ok) throw new Error('decide failed');
+        Dashboard.showToast(Dashboard.t(approve ? 'admin.colorRequestApproved' : 'admin.colorRequestRejectedMsg'), 'success');
+        if (approve) await reloadClassificationColors();
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.colorRequestError'), 'error');
+    }
+    await loadColorRequests();
+}
+// Vuelve a leer solo los colores (no toca lo que se haya editado y aún no se guardó en el árbol).
+async function reloadClassificationColors() {
+    const res = await fetch('/api/admin/saas-classification-colors', { credentials: 'include' });
+    if (!res.ok) return;
+    const data = await res.json();
+    classificationColors = new Map();
+    classificationTextColors = new Map();
+    (data.colors || []).forEach((c) => {
+        if (c && c.classificationId && c.color) classificationColors.set(c.classificationId, c.color);
+        if (c && c.classificationId && c.textColor) classificationTextColors.set(c.classificationId, c.textColor);
+    });
+    renderList();
+}
+function renderColorRequests() {
+    colorRequestsListEl.innerHTML = '';
+    if (!colorRequests.length) {
+        const empty = document.createElement('p');
+        empty.className = 'admin-hint';
+        empty.textContent = Dashboard.t('admin.colorRequestsEmpty');
+        colorRequestsListEl.appendChild(empty);
+        return;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'admin-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'admin-table';
+    const head = document.createElement('tr');
+    ['Status', 'Column', 'Change', 'By', 'To', 'Date', 'Actions'].forEach((col) => {
+        const th = document.createElement('th');
+        th.textContent = Dashboard.t(`admin.colorRequestCol${col}`);
+        head.appendChild(th);
+    });
+    const thead = document.createElement('thead');
+    thead.appendChild(head);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    colorRequests.forEach((request) => {
+        const tr = document.createElement('tr');
+        const cell = (content) => {
+            const td = document.createElement('td');
+            if (content instanceof Node) td.appendChild(content); else td.textContent = content;
+            tr.appendChild(td);
+            return td;
+        };
+        const status = document.createElement('span');
+        status.className = `color-request-status color-request-status-${request.status}`;
+        status.textContent = Dashboard.t(`admin.colorRequestStatus_${request.status}`);
+        cell(status);
+        const { part, path } = describeColorId(request.colorId);
+        cell(part ? `${path} · ${part}` : path);
+        cell(colorRequestChange(request));
+        cell(request.requestedByName || '');
+        cell(request.assignedToName || '');
+        cell(request.createdAt ? new Date(request.createdAt.replace(' ', 'T') + 'Z').toLocaleString() : '');
+        const actions = document.createElement('div');
+        actions.className = 'color-request-actions';
+        if (request.canDecide) {
+            [[true, 'admin.colorRequestApprove', 'masterTreeColorApprove'], [false, 'admin.colorRequestReject', 'masterTreeColorReject']].forEach(([approve, labelKey, helpKey]) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = approve ? 'btn' : 'btn btn-secondary';
+                btn.textContent = Dashboard.t(labelKey);
+                btn.setAttribute('data-help-key', helpKey);
+                btn.addEventListener('click', () => decideColorRequest(request, approve));
+                actions.appendChild(btn);
+            });
+        }
+        cell(actions);
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    colorRequestsListEl.appendChild(wrap);
+}
+function closeColorRequests() { colorRequestsModal.hidden = true; }
+colorRequestsBtn.addEventListener('click', async () => {
+    await loadColorRequests();
+    renderColorRequests();
+    colorRequestsModal.hidden = false;
+});
+document.getElementById('saas-color-requests-close').addEventListener('click', closeColorRequests);
+colorRequestsModal.addEventListener('click', (event) => { if (event.target === colorRequestsModal) closeColorRequests(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !colorRequestsModal.hidden) closeColorRequests(); });
+document.addEventListener('dashboard:language-changed', () => { if (!colorRequestsModal.hidden) renderColorRequests(); });
+
 async function saveSaasClassificationColor(classificationId, hex, kind = 'dot') {
     const isText = kind === 'text';
     try {
@@ -810,6 +966,7 @@ async function saveSaasClassificationColor(classificationId, hex, kind = 'dot') 
             body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error('save failed');
+        if (res.status === 202) { await notifyColorRequested(res); return; }
         const targetMap = isText ? classificationTextColors : classificationColors;
         const recentList = isText ? recentTextColors : recentColors;
         targetMap.set(classificationId, hex);
@@ -830,6 +987,7 @@ async function resetSaasClassificationColor(classificationId, kind = 'dot') {
         const params = new URLSearchParams({ classificationId, kind: isText ? 'text' : 'dot' });
         const res = await fetch(`/api/admin/saas-classification-colors?${params}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) throw new Error('reset failed');
+        if (res.status === 202) { await notifyColorRequested(res); return; }
         (isText ? classificationTextColors : classificationColors).delete(classificationId);
         renderList();
     } catch {
@@ -2663,6 +2821,7 @@ async function load() {
             if (c && c.classificationId && c.textColor) classificationTextColors.set(c.classificationId, c.textColor);
         });
         renderList();
+        loadColorRequests();
     } catch {
         errorEl.textContent = Dashboard.t('admin.loadError');
         errorEl.hidden = false;

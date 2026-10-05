@@ -755,6 +755,32 @@
     "masterTreeColorStandard": "Colores estándar",
     "masterTreeColorRecent": "Colores recientes",
     "masterTreeColHistory": "Cambios",
+    "colorRequestsBtn": "Solicitudes de color",
+    "colorRequestsTitle": "Solicitudes de color de columnas",
+    "colorRequestsEmpty": "No hay solicitudes de color.",
+    "colorRequestColStatus": "Estado",
+    "colorRequestColColumn": "Columna",
+    "colorRequestColChange": "Cambio",
+    "colorRequestColBy": "Solicitó",
+    "colorRequestColTo": "Autoriza",
+    "colorRequestColDate": "Fecha",
+    "colorRequestColActions": "Acciones",
+    "colorRequestStatus_pending": "Pendiente",
+    "colorRequestStatus_approved": "Autorizada",
+    "colorRequestStatus_rejected": "Rechazada",
+    "colorRequestStatus_superseded": "Reemplazada",
+    "colorRequestPartOwn": "Encabezado",
+    "colorRequestPartNested": "Filas",
+    "colorRequestChangeFill": "Fondo {hex}",
+    "colorRequestChangeText": "Letra {hex}",
+    "colorRequestChangeClearFill": "Quitar fondo",
+    "colorRequestChangeClearText": "Quitar letra",
+    "colorRequestApprove": "Autorizar",
+    "colorRequestReject": "Rechazar",
+    "colorRequestSent": "Solicitud enviada a {name}: el color se aplicará cuando la autorice.",
+    "colorRequestApproved": "Color autorizado y aplicado",
+    "colorRequestRejectedMsg": "Solicitud rechazada",
+    "colorRequestError": "No se pudo completar la solicitud",
     "masterTreeHistoryFieldStatus": "Estatus",
     "masterTreeHistoryFieldClassification": "Clasificación",
     "masterTreeHistoryFieldColor": "Color",
@@ -2030,6 +2056,18 @@
     "topBarActionsToggle": {
       "what": "En el celular no caben todos los iconos de arriba; este botón los junta en una lista que se abre al tocarlo.",
       "example": "tocas los tres puntos y ves Mensajes, Notificaciones, Configuración y los demás iconos en una lista."
+    },
+    "masterTreeColorRequests": {
+      "what": "Muestra los cambios de color de columnas que se pidieron y todavía no se aplican: quién los pidió, cuál es el cambio y a quién le toca autorizarlos. Quien tiene permiso puede autorizarlos o rechazarlos aquí.",
+      "example": "una persona sin permiso para autorizar elige un color para «RFC»; aquí aparece pendiente y, al autorizarla, la columna se pinta de ese color."
+    },
+    "masterTreeColorApprove": {
+      "what": "Autoriza este cambio de color: se aplica en las tablas reales.",
+      "example": "tocas Autorizar y la columna «RFC» cambia al color que pidieron."
+    },
+    "masterTreeColorReject": {
+      "what": "Rechaza este cambio de color: no se aplica y la columna se queda como está.",
+      "example": "el color pedido no combina; tocas Rechazar y todo queda igual."
     },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",
