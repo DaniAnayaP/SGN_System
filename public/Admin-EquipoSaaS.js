@@ -589,10 +589,13 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
     const openPairs = pairs.filter((_, i) => !blockedStatuses[i]);
     const blockedCount = pairs.length - openPairs.length;
     const fullyBlocked = openPairs.length === 0;
-    const statePairs = fullyBlocked ? pairs : openPairs;
-    const total = statePairs.length;
-    const granted = statePairs.filter((p) => hasGrant(p.itemId, p.subItemId)).length;
+    // El total cuenta TODO lo que hay en la fila, también lo bloqueado (que no se puede dar): una fila con
+    // 9 opciones de las que solo 1 está Habilitada dice 1/9 y queda en Parcial, no 1/1.
+    const total = pairs.length;
+    const granted = pairs.filter((p) => hasGrant(p.itemId, p.subItemId)).length;
     const state = total > 0 && granted === total ? 'all' : (granted > 0 ? 'part' : 'none');
+    // Ya está dado todo lo que se puede dar: tocar la casilla lo quita (en vez de no hacer nada).
+    const openAllGranted = openPairs.length > 0 && openPairs.every((p) => hasGrant(p.itemId, p.subItemId));
     const locked = fullyBlocked && granted === 0;
     const lockedStatuses = [...new Set(blockedStatuses.filter(Boolean))];
     const lockTitle = fullyBlocked ? Dashboard.t('admin.saasAccessBlocked', { status: lockedStatuses.map(statusLabel).join(' / ') }) : '';
@@ -613,8 +616,9 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
     check.setAttribute('aria-label', label);
     check.setAttribute('data-help-key', 'saasAccessCheck');
     check.addEventListener('change', () => {
-        // Marcar solo da lo que está abierto; desmarcar quita todo lo de la fila, incluso un acceso viejo bloqueado.
-        if (check.checked && !fullyBlocked) openPairs.forEach((p) => setGrant(p.itemId, p.subItemId, true));
+        // Tocarla da lo que está abierto; si ya está dado todo eso (o solo queda un acceso viejo bloqueado),
+        // quita todo lo de la fila.
+        if (!fullyBlocked && !openAllGranted) openPairs.forEach((p) => setGrant(p.itemId, p.subItemId, true));
         else pairs.forEach((p) => setGrant(p.itemId, p.subItemId, false));
         renderTreeList();
     });

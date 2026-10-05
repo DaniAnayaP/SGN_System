@@ -1984,8 +1984,8 @@
       "example": "en «Servicio a Cliente», «Nada» le quita a la cuenta todas esas pantallas a la vez."
     },
     "saasAccessCount": {
-      "what": "Cuántos accesos tiene la cuenta de los que se le pueden dar en esta fila. Lo que no está Habilitado no se cuenta.",
-      "example": "«21/68» quiere decir que tiene 21 de los 68 que se le pueden dar."
+      "what": "Cuántos accesos tiene la cuenta de todos los que hay en esta fila. Lo que no está Habilitado también cuenta en el total, pero no se puede dar.",
+      "example": "«1/9» quiere decir que tiene 1 de los 9; los otros 8 todavía no están Habilitados."
     },
     "visibleStatuses": {
       "what": "Aquí eliges qué estatus puede ver esta persona. Lo que no esté encendido le queda invisible, aunque tenga el permiso. Solo el Usuario de Pruebas necesita los 4.",

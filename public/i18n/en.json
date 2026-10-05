@@ -1985,8 +1985,8 @@
       "example": "on “Customer Service”, “None” takes all of those screens away from the account at once."
     },
     "saasAccessCount": {
-      "what": "How many of the accesses that can be given in this row the account has. Anything not Enabled is not counted.",
-      "example": "“21/68” means it has 21 of the 68 that can be given."
+      "what": "How many of all the accesses in this row the account has. Anything not Enabled still counts in the total, but cannot be given.",
+      "example": "“1/9” means it has 1 of the 9; the other 8 are not Enabled yet."
     },
     "visibleStatuses": {
       "what": "Here you choose which statuses this person can see. Anything not turned on stays invisible to them, even with the permission. Only the Test User needs all 4.",
