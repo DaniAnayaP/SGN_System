@@ -298,6 +298,7 @@ const {
     resolveSaasColorAuthorizer,
     userCanAuthorizeSaasColors,
     getUserNameById,
+    getSaasTableColumnColors,
     getEffectiveSaasUserFieldClassifications,
     getSaasMasterChangeLog,
     getSaasPersonalOrder,
@@ -2562,6 +2563,13 @@ app.delete('/api/admin/master-permission-classification-colors', requireAuth, re
 // follow whatever an admin set in Árbol de Permisos Maestro, instead of
 // that reclassification staying purely cosmetic to the permission tree.
 // tableKey is the same key Dashboard.js's own TABLE_GRANT_PATHS uses.
+// Lo mismo para las tablas reales de SaaS (Nuestros Clientes, Equipo SaaS...): los colores de columna
+// (Encabezado/Filas) ya autorizados en el Árbol Maestro SaaS, por data-col.
+app.get('/api/admin/saas-table-column-colors', requireAuth, requireAdmin, (req, res) => {
+    const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';
+    if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
+    res.json({ columns: getSaasTableColumnColors(tableKey) });
+});
 app.get('/api/business/table-classifications', requireAuth, (req, res) => {
     const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';
     if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });

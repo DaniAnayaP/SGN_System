@@ -6807,7 +6807,14 @@ function getEffectiveColumnClassifications(tableKey) {
     });
     if (!columnIds.length) return {};
     const overridesByKey = new Map(getMasterPermissionClassificationOverrides().map((o) => [o.nodeKey, o]));
-    const colors = new Map(getClassificationColors().map((c) => [c.classificationId, c.color]));
+    const colorRows = new Map(getClassificationColors().map((c) => [c.classificationId, c]));
+    const colors = new Map([...colorRows].map(([id, c]) => [id, c.color]));
+    // Encabezado ("col-own:<nodeKey>") y Filas ("col-nested:<nodeKey>") de cada columna, ya autorizados:
+    // todo lo guardado en la tabla de colores es lo que se pinta en las tablas reales.
+    const colorPair = (id) => {
+        const row = colorRows.get(id);
+        return row && (row.color || row.textColor) ? { bg: row.color || null, text: row.textColor || null } : null;
+    };
     const classificationNode = (id) => (pantalla.submenu || []).find((e) => e.isClassification && e.id === id) || null;
     const result = {};
     columnIds.forEach((colId) => {
@@ -6825,8 +6832,62 @@ function getEffectiveColumnClassifications(tableKey) {
             labelParams: (node && node.labelParams) || null,
             label: node ? null : (override && override.classificationLabel) || null,
             color: color || null,
+            own: colorPair(`col-own:${nodeKey}`),
+            nested: colorPair(`col-nested:${nodeKey}`),
         };
     });
+    return result;
+}
+
+// Tablas reales de SaaS (mismos ids que SAAS_TABLE_ICON_SCREENS en Dashboard.js): pantalla y apartado del
+// catálogo del Árbol Maestro SaaS, y los data-col de sus columnas EN EL MISMO ORDEN que `columnas` en
+// public/SaasAdminCatalog.js (la posición es el id c0, c1, ... de cada hoja). Las columnas del Control
+// Interno no van aquí: su hoja es "ci-<data-col>". Una columna de la tabla que el catálogo no lista (el
+// Status de Equipo SaaS) no tiene hoja y por eso no puede llevar color.
+const SAAS_TABLE_COLUMN_LEAVES = {
+    'equipo-saas': { screenItemId: 'saas-team', apartadoId: 'tabla', columns: ['username', 'name', 'email', 'createdAt'] },
+    'nuestros-clientes': {
+        screenItemId: 'saas-clients', apartadoId: 'tabla',
+        columns: ['bigDateNumber', 'accountNumber', 'rfc', 'razonSocial', 'companyNickname', 'companyAbbreviation', 'logo',
+            'institutionalColor', 'ownerName', 'contactName', 'billingEmail', 'contractStartDate', 'contractFile', 'contractWordFile',
+            'plan', 'sectorNegocio', 'equipmentRecommendations', 'contractedCost', 'initialPayment', 'monthlyPayment', 'costCenters',
+            'costCentersContracted', 'anexoChanges', 'contractRegisteredDate', 'contractEndDate', 'contractTerm', 'permisosContratados',
+            'pagoPorAdicionales', 'username', 'status'],
+    },
+    'mis-planes': {
+        screenItemId: 'saas-plans', apartadoId: 'tabla',
+        columns: ['name', 'description', 'businessSector', 'createdAt', 'createdBy', 'costCentersLimit', 'accessPermCost', 'costCenterTotal',
+            'endDate', 'status', 'locked'],
+    },
+    'nuestras-apps': { screenItemId: 'saas-apps', apartadoId: 'catalogo', columns: ['name', 'sector', 'screens', 'status', 'createdAt', 'createdBy'] },
+    'business-sectors': {
+        screenItemId: 'saas-business-sectors', apartadoId: 'tabla',
+        columns: ['icon', 'name', 'type', 'description', 'permsAssigned', 'status', 'createdBy', 'createdAt'],
+    },
+    'admin-nuestros-respaldos': {
+        screenItemId: 'saas-backups', apartadoId: 'tabla',
+        columns: ['colBackupFileName', 'colBackupScreen', 'colBackupType', 'colBackupRecordDate'],
+    },
+    'admin-material-apoyo': {
+        screenItemId: 'saas-material-apoyo', apartadoId: 'tabla',
+        columns: ['materialTitle', 'materialFileName', 'materialUploadedBy', 'materialUploadDate'],
+    },
+};
+// {dataCol: {own: {bg,text}, nested: {bg,text}}} de una tabla real de SaaS, con lo ya autorizado.
+function getSaasTableColumnColors(tableKey) {
+    const map = SAAS_TABLE_COLUMN_LEAVES[tableKey];
+    if (!map) return {};
+    const prefix = `${map.screenItemId}::${map.apartadoId}::`;
+    const result = {};
+    for (const row of getSaasClassificationColors()) {
+        const m = /^col-(own|nested):(.+)$/.exec(row.classificationId);
+        if (!m || !m[2].startsWith(prefix) || !(row.color || row.textColor)) continue;
+        const suffix = m[2].slice(prefix.length);
+        const plain = /^c(\d+)$/.exec(suffix);
+        const dataCol = plain ? map.columns[Number(plain[1])] : (suffix.startsWith('ci-') ? suffix.slice(3) : null);
+        if (!dataCol) continue;
+        (result[dataCol] = result[dataCol] || {})[m[1]] = { bg: row.color || null, text: row.textColor || null };
+    }
     return result;
 }
 
@@ -8672,6 +8733,7 @@ module.exports = {
     resolveSaasColorAuthorizer,
     userCanAuthorizeSaasColors,
     getUserNameById,
+    getSaasTableColumnColors,
     getEffectiveSaasUserFieldClassifications,
     getSaasMasterChangeLog,
     getMasterPermissionOrder,

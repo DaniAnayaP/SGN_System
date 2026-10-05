@@ -2564,6 +2564,47 @@ function applyPinStyle(cell, key, state) {
     cell.classList.toggle('data-table-col-pinned', isPinned);
     cell.classList.toggle('data-table-col-pinned-edge', isPinned && key === state.visiblePinned[state.visiblePinned.length - 1]);
     cell.style.left = isPinned ? `${state.pinnedLeft[key]}px` : '';
+    applyColumnColor(cell, key, state);
+}
+
+// Color de una columna ya AUTORIZADO en el Árbol Maestro (Encabezado = el de su encabezado, Filas = el de
+// sus celdas). state.columnColors es null hasta que el servidor responde (y en la vista previa del
+// acomodo, que no lo trae): sin él no se toca nada. Pasa por aquí cada th y cada td, también las filas
+// que una pantalla agrega después (ver applyRowColumnState y observeTableBody).
+function applyColumnColor(cell, key, state) {
+    if (!state.columnColors) return;
+    const entry = state.columnColors[key];
+    const pair = entry && (cell.tagName === 'TH' ? entry.own : entry.nested);
+    if (pair && (pair.bg || pair.text)) {
+        cell.style.backgroundColor = pair.bg || '';
+        cell.style.color = pair.text || '';
+        cell.dataset.colColored = '1';
+    } else if (cell.dataset.colColored) {
+        cell.style.backgroundColor = '';
+        cell.style.color = '';
+        delete cell.dataset.colColored;
+    }
+}
+function paintColumnColors(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    Array.from(getHeaderRow(state.table).cells).forEach((th) => applyColumnColor(th, th.dataset.col, state));
+    Array.from(state.table.tBodies[0]?.rows || []).forEach((tr) => {
+        Array.from(tr.children).forEach((td) => { if (td.dataset.col) applyColumnColor(td, td.dataset.col, state); });
+    });
+}
+// Tablas de SaaS: sus colores salen de su propia ruta (la tabla de clientes viaja con las clasificaciones).
+async function refreshSaasColumnColors(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || !SAAS_TABLE_ICON_SCREENS[tableId]) return;
+    try {
+        const res = await fetch(`/api/admin/saas-table-column-colors?tableKey=${encodeURIComponent(tableId)}`, { credentials: 'include' });
+        if (!res.ok) return;
+        state.columnColors = (await res.json()).columns || {};
+        paintColumnColors(tableId);
+    } catch {
+        // sin colores: la tabla se ve como siempre
+    }
 }
 
 // Re-applies the current order/pin/hidden state to one row's cells, found
@@ -4073,6 +4114,7 @@ function initDataTableColumns(wrapper, index) {
     // static HTML carries; this only ever ADDS an Árbol de Permisos
     // Maestro reclassification/color on top, once the round trip resolves.
     refreshTableClassifications(tableId);
+    refreshSaasColumnColors(tableId);
 }
 
 // Shared by both band rows (see renderColumnGroupBand below): collapses
@@ -5401,15 +5443,19 @@ async function refreshTableClassifications(tableId) {
     const data = await fetchTableClassifications(tableId);
     const cols = data.columns || {};
     let changed = false;
+    const columnColors = {};
     state.columnKeys.forEach((key) => {
         const info = cols[key];
         if (!info || !info.classificationId) return;
+        if (info.own || info.nested) columnColors[key] = { own: info.own || null, nested: info.nested || null };
         const label = info.label || t(info.labelKey, info.labelParams || {});
         classificationMetaById.set(info.classificationId, { label, color: info.color || null });
         if (state.groupKeys.get(key) !== info.classificationId) changed = true;
         state.groupKeys.set(key, info.classificationId);
     });
     if (changed) renderColumnGroupBand(tableId);
+    state.columnColors = columnColors;
+    paintColumnColors(tableId);
 }
 function resolveGroupLabel(groupKey) {
     if (!groupKey) return '';
