@@ -448,8 +448,14 @@ newForm.addEventListener('submit', async (event) => {
 // real tree.
 let treeGrants = [];
 let expandedRealNodes = new Set();
-// Los dos grupos (Servicio a Cliente / Configuración SaaS) abren desplegados; aquí se anotan los que se cierran.
-let collapsedAccessGroups = new Set();
+// Igual que el Árbol Maestro, el diálogo abre todo contraído (General, Servicio a Cliente y
+// Configuración SaaS incluidos); aquí se anotan los que se abren, y se recuerdan mientras el
+// diálogo siga abierto para que guardar o marcar una casilla no los pliegue.
+let expandedAccessGroups = new Set();
+function toggleAccessGroup(key) {
+    if (expandedAccessGroups.has(key)) expandedAccessGroups.delete(key); else expandedAccessGroups.add(key);
+    renderTreeList();
+}
 // Orden real del Árbol Maestro SaaS (saas_master_order): {groups, screensByGroup, apartadosByScreen,
 // leavesByApartado}. El Maestro es quien manda el orden; la barra lateral ya lo aplica y este diálogo
 // también, para que una cuenta vea sus accesos en el mismo orden que el Maestro y que la barra.
@@ -842,16 +848,16 @@ function renderGeneralRows(rows) {
     const accessKey = 'general:access';
     const allPairs = [...looseGrantPairs(GENERAL_ACCESS_ITEMS), ...looseGrantPairs(NAV_ACCESS_ITEMS)];
     const allKeys = allPairs.map((p) => p.itemId);
-    const generalExpanded = !collapsedAccessGroups.has(generalKey);
+    const generalExpanded = expandedAccessGroups.has(generalKey);
     rows.push(buildAccessRow({
         depth: 0, label: Dashboard.t('admin.saasMasterTreeGeneral'), level: 'general', pairs: allPairs, nodeKey: generalKey, historyKeys: allKeys.join(','),
-        toggle: { expanded: generalExpanded, onToggle: () => { if (generalExpanded) collapsedAccessGroups.add(generalKey); else collapsedAccessGroups.delete(generalKey); renderTreeList(); } },
+        toggle: { expanded: generalExpanded, onToggle: () => toggleAccessGroup(generalKey) },
     }));
     if (!generalExpanded) return;
-    const accessExpanded = !collapsedAccessGroups.has(accessKey);
+    const accessExpanded = expandedAccessGroups.has(accessKey);
     rows.push(buildAccessRow({
         depth: 1, label: Dashboard.t('sidebar.generalAccess'), level: 'group', pairs: allPairs, nodeKey: accessKey, historyKeys: allKeys.join(','),
-        toggle: { expanded: accessExpanded, onToggle: () => { if (accessExpanded) collapsedAccessGroups.add(accessKey); else collapsedAccessGroups.delete(accessKey); renderTreeList(); } },
+        toggle: { expanded: accessExpanded, onToggle: () => toggleAccessGroup(accessKey) },
     }));
     if (!accessExpanded) return;
     GENERAL_ACCESS_ITEMS.forEach((item) => {
@@ -880,11 +886,11 @@ function renderTreeList() {
     renderGeneralRows(rows);
     orderedGroups().forEach((group) => {
         const groupKey = `group:${group.groupId}`;
-        const groupExpanded = !collapsedAccessGroups.has(groupKey);
+        const groupExpanded = expandedAccessGroups.has(groupKey);
         const groupPairs = group.screens.flatMap((screen) => pairsOfApartados(screen, screen.apartados.filter((a) => !a.nestUnder)));
         rows.push(buildAccessRow({
             depth: 0, label: Dashboard.t(group.labelKey), level: 'group', pairs: groupPairs, nodeKey: groupKey,
-            toggle: { expanded: groupExpanded, onToggle: () => { if (groupExpanded) collapsedAccessGroups.add(groupKey); else collapsedAccessGroups.delete(groupKey); renderTreeList(); } },
+            toggle: { expanded: groupExpanded, onToggle: () => toggleAccessGroup(groupKey) },
         }));
         if (!groupExpanded) return;
         orderedScreens(group).forEach((screen) => {
@@ -924,7 +930,7 @@ async function openTreeModal(user) {
         treeGrants = data.grants || [];
         pendingVisibleStatuses = data.visibleStatuses && data.visibleStatuses.length ? data.visibleStatuses : ['habilitado'];
         expandedRealNodes = new Set();
-        collapsedAccessGroups = new Set();
+        expandedAccessGroups = new Set();
         treeModal.hidden = false;
         renderTreeList();
         window.VisibleStatusesChips.render(treeVisibleStatuses, pendingVisibleStatuses, (next) => { pendingVisibleStatuses = next; });
