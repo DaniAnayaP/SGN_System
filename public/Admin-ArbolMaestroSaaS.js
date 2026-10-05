@@ -2314,7 +2314,7 @@ function buildHeader() {
     const labelHeader = document.createElement('span');
     labelHeader.className = 'perm-tree-mstatus-header-label';
     const labelHeaderText = document.createElement('span');
-    labelHeaderText.textContent = 'Pantalla / Apartado / Columna';
+    labelHeaderText.textContent = Dashboard.t('admin.masterTreeColScreenApartadoColumn');
     // Title for the count badge (see countBadge above) -- same treatment
     // as the client tree's own header, right-aligned inside this same box.
     const labelHeaderCount = document.createElement('span');

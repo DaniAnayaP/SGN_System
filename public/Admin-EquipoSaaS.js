@@ -705,7 +705,7 @@ function buildAccessHeader() {
     const labelHeader = document.createElement('span');
     labelHeader.className = 'perm-tree-mstatus-header-label';
     const labelText = document.createElement('span');
-    labelText.textContent = 'Pantalla / Apartado / Columna';
+    labelText.textContent = Dashboard.t('admin.masterTreeColScreenApartadoColumn');
     labelText.setAttribute('data-help-key', 'saasAccessDialog');
     const labelCount = document.createElement('span');
     labelCount.className = 'perm-tree-mstatus-header-count';

@@ -47,6 +47,9 @@
   },
   "sidebar": {
     "brand": "SGN",
+    "toggleMenu": "Show or hide the menu",
+    "moreActions": "More options",
+    "mainNav": "Main navigation",
     "collapseMenu": "Collapse sidebar",
     "expandMenu": "Expand sidebar",
     "searchPlaceholder": "Search",
@@ -695,6 +698,7 @@
     "masterTreeOff": "Off",
     "masterTreeChangeStatus": "Status",
     "masterTreeColScreen": "Screen / Function",
+    "masterTreeColScreenApartadoColumn": "Screen / Apartado / Column",
     "masterTreeColStatus": "Status",
     "masterTreeColPlatforms": "Web · App",
     "masterTreeColCostWeb": "$ Web",
@@ -2011,6 +2015,22 @@
     "logout": {
       "what": "Closes your session and takes you back to the sign-in screen. To use the system again you will have to type your username and password once more.",
       "example": "you finish working on a shared computer, you tap “Log out” and nobody else can get in with your account."
+    },
+    "sidebarMenu": {
+      "what": "The main menu on the left: from here you reach every screen in the system. Tap a screen name to open it, or the arrow at the top to shrink the menu.",
+      "example": "you tap “SaaS Team” and that screen opens; you tap “Log out” at the bottom and leave the system."
+    },
+    "brandRefresh": {
+      "what": "The logo and name at the top of the menu. Tapping it reloads the screen to bring the newest version of the system and shows “Update complete”.",
+      "example": "you are told there was an improvement, you tap the logo and the screen updates without closing the browser."
+    },
+    "sidebarsToggle": {
+      "what": "Shows or hides the menu on the left on a phone screen, so the screen is less crowded.",
+      "example": "you are looking at a table on your phone, you tap this button and the menu hides; you tap it again and it comes back."
+    },
+    "topBarActionsToggle": {
+      "what": "On a phone not all the icons at the top fit; this button gathers them into a list that opens when you tap it.",
+      "example": "you tap the three dots and see Messages, Notifications, Settings and the other icons in a list."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",

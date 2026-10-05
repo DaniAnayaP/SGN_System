@@ -573,6 +573,10 @@ async function loadLanguage(lang) {
 // La flecha que contrae el menú lateral: su aria-label venía escrito en inglés en el HTML de cada
 // pantalla; ahora dice la acción que haría (contraer o expandir) en el idioma elegido.
 function syncSidebarToggleLabel() {
+    document.getElementById('Sidebar')?.setAttribute('aria-label', t('sidebar.mainNav'));
+    // Botones del celular: su aria-label venía fijo en inglés en el HTML de cada pantalla.
+    document.getElementById('sidebars-btn')?.setAttribute('aria-label', t('sidebar.toggleMenu'));
+    document.getElementById('top-bar-actions-toggle')?.setAttribute('aria-label', t('sidebar.moreActions'));
     const menuBtn = document.getElementById('menu-btn');
     if (!menuBtn) return;
     const minimized = document.getElementById('Sidebar')?.classList.contains('minimize');
@@ -8646,6 +8650,12 @@ const HELP_CONTENT_KEYS = {
     'top-bar-collapse-toggle': 'topBarToggle',
     // "Cerrar sesión" del pie del menú lateral.
     'logout-link': 'logout',
+    // El propio menú lateral (cualquier hueco entre sus renglones) y el logo/nombre de arriba, que
+    // recarga la pantalla (ver el click de .brand).
+    'Sidebar': 'sidebarMenu',
+    // Los dos botones que solo se ven en pantalla de celular.
+    'sidebars-btn': 'sidebarsToggle',
+    'top-bar-actions-toggle': 'topBarActionsToggle',
 };
 // <th data-col="..."> -- the 13 Control Interno columns (see
 // getSystemColumnsForRecord in db.js), hardcoded static markup repeated
@@ -8767,7 +8777,8 @@ function resolveGenericHelpKey(node) {
         || (node.classList.contains('data-table-new-record-btn') ? 'createNewRecord' : null)
         // El título fijo de la pantalla ("Bienvenido", etc.) sin descripción propia: la que sí la
         // trae (migrateAdminSubtitleIntoHelpMode) ya la muestra por su title.
-        || (node.classList.contains('welcome-text') && !node.getAttribute('title') ? 'screenTitle' : null);
+        || (node.classList.contains('welcome-text') && !node.getAttribute('title') ? 'screenTitle' : null)
+        || (node.classList.contains('brand') ? 'brandRefresh' : null);
 }
 function findHelpModeContent(startEl) {
     let node = startEl;
@@ -10710,6 +10721,15 @@ function computeBreadcrumbCrumbs() {
 
 const BREADCRUMB_COLLAPSED_KEY = 'breadcrumbCollapsed';
 
+// true cuando initDashboard ya dibujó la ruta y la flecha de la barra superior; antes de eso el
+// evento de idioma no debe adelantarlas.
+let chromeLabelsReady = false;
+document.addEventListener('dashboard:language-changed', () => {
+    if (!chromeLabelsReady) return;
+    renderBreadcrumbBar();
+    setTopBarCollapsed(isTopBarCollapsed());
+});
+
 function isBreadcrumbCollapsed() {
     return localStorage.getItem(BREADCRUMB_COLLAPSED_KEY) === 'true';
 }
@@ -10981,6 +11001,7 @@ async function initDashboard({ activePage } = {}) {
     applyStyle(getStoredStyle());
     renderBreadcrumbBar();
     renderTopBarCollapseToggle();
+    chromeLabelsReady = true;
     renderDataTableZoomControls();
     renderDataTableColumnControls();
     // Both build their own buttons (data-zoom/data-col-action) fresh right

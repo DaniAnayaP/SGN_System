@@ -47,6 +47,9 @@
   },
   "sidebar": {
     "brand": "SGN",
+    "toggleMenu": "Mostrar u ocultar el menú",
+    "moreActions": "Más opciones",
+    "mainNav": "Menú principal",
     "collapseMenu": "Contraer menú lateral",
     "expandMenu": "Expandir menú lateral",
     "searchPlaceholder": "Buscar",
@@ -694,6 +697,7 @@
     "masterTreeOff": "Desactivado",
     "masterTreeChangeStatus": "Estatus",
     "masterTreeColScreen": "Pantalla / Función",
+    "masterTreeColScreenApartadoColumn": "Pantalla / Apartado / Columna",
     "masterTreeColStatus": "Estatus",
     "masterTreeColPlatforms": "Web · App",
     "masterTreeColCostWeb": "$ Web",
@@ -2010,6 +2014,22 @@
     "logout": {
       "what": "Cierra tu sesión y te regresa a la pantalla de entrada. Para volver a usar el sistema tendrás que escribir tu usuario y tu contraseña otra vez.",
       "example": "terminas de trabajar en una computadora compartida, tocas «Cerrar sesión» y nadie más puede entrar con tu cuenta."
+    },
+    "sidebarMenu": {
+      "what": "Es el menú principal, el de la izquierda: de aquí entras a todas las pantallas del sistema. Toca el nombre de una pantalla para abrirla o la flecha de arriba para encoger el menú.",
+      "example": "tocas «Equipo SaaS» y se abre esa pantalla; tocas «Cerrar sesión» al final y sales del sistema."
+    },
+    "brandRefresh": {
+      "what": "Es el logo y el nombre de arriba del menú. Al tocarlo, la pantalla se recarga para traer lo más nuevo del sistema y avisa «Actualización realizada».",
+      "example": "te avisan que hubo una mejora, tocas el logo y la pantalla se actualiza sin que tengas que cerrar el navegador."
+    },
+    "sidebarsToggle": {
+      "what": "Muestra o esconde el menú de la izquierda en la pantalla del celular, para que la pantalla quede más despejada.",
+      "example": "estás viendo una tabla en el celular, tocas este botón y el menú se esconde; lo tocas otra vez y regresa."
+    },
+    "topBarActionsToggle": {
+      "what": "En el celular no caben todos los iconos de arriba; este botón los junta en una lista que se abre al tocarlo.",
+      "example": "tocas los tres puntos y ves Mensajes, Notificaciones, Configuración y los demás iconos en una lista."
     },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",
