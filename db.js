@@ -7857,12 +7857,16 @@ function getSaasUserById(id) {
 }
 
 // Con nodeKey, solo los cambios de esa fila del árbol de accesos y de todo lo que cuelga
-// de ella (una pantalla incluye sus apartados y sus hojas).
+// de ella (una pantalla incluye sus apartados y sus hojas). nodeKey puede traer varias
+// claves separadas por coma: una fila que agrupa accesos sueltos (General) las pide todas.
 function getSaasUserChanges(userId, nodeKey) {
-    if (nodeKey) {
-        const like = `${String(nodeKey).replace(/[\\%_]/g, (c) => `\\${c}`)}::%`;
-        return db.prepare("SELECT * FROM saas_user_changes WHERE user_id = ? AND (node_key = ? OR node_key LIKE ? ESCAPE '\\') ORDER BY changed_at DESC, id DESC")
-            .all(userId, nodeKey, like);
+    const keys = nodeKey ? String(nodeKey).split(',').map((k) => k.trim()).filter(Boolean) : [];
+    if (keys.length) {
+        const escapeLike = (s) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+        const conditions = keys.map(() => "(node_key = ? OR node_key LIKE ? ESCAPE '\\')").join(' OR ');
+        const params = keys.flatMap((k) => [k, `${escapeLike(k)}::%`]);
+        return db.prepare(`SELECT * FROM saas_user_changes WHERE user_id = ? AND (${conditions}) ORDER BY changed_at DESC, id DESC`)
+            .all(userId, ...params);
     }
     return db.prepare('SELECT * FROM saas_user_changes WHERE user_id = ? ORDER BY changed_at DESC, id DESC').all(userId);
 }

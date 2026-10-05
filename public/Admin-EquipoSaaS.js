@@ -296,6 +296,10 @@ function fetchSaasUserFieldClassifications() {
 // "Nuestros Clientes › Tabla principal › Editar".
 function describeGrantNode(nodeKey) {
     const [itemId, apartadoId, suffix] = String(nodeKey || '').split('::');
+    const generalItem = GENERAL_ACCESS_ITEMS.find((i) => i.itemId === itemId);
+    if (generalItem) return [Dashboard.t('admin.saasMasterTreeGeneral'), Dashboard.t('sidebar.generalAccess'), Dashboard.t(generalItem.labelKey)].join(' › ');
+    const navItem = NAV_ACCESS_ITEMS.find((i) => i.itemId === itemId);
+    if (navItem) return [Dashboard.t('admin.saasMasterTreeGeneral'), Dashboard.t('menu.navIcons'), Dashboard.t(navItem.labelKey)].join(' › ');
     for (const group of (window.SAAS_ADMIN_CATALOG || [])) {
         const screen = group.screens.find((s) => s.itemId === itemId);
         if (!screen) continue;
@@ -352,10 +356,10 @@ function openSaasUserChanges(userId) {
     );
 }
 // El reloj de una fila del árbol de accesos: solo lo que se dio o se quitó en esa fila.
-function openSaasAccessNodeHistory(nodeKey, label) {
+function openSaasAccessNodeHistory(nodeKeys, label) {
     return Dashboard.openChangeHistoryWithRows(
         `${Dashboard.t('main.changeHistory')} — ${label}`,
-        () => loadSaasUserChangeRows(selectedUserId, nodeKey),
+        () => loadSaasUserChangeRows(selectedUserId, nodeKeys),
     );
 }
 async function loadSaasUsers() {
@@ -446,6 +450,11 @@ let treeGrants = [];
 let expandedRealNodes = new Set();
 // Los dos grupos (Servicio a Cliente / Configuración SaaS) abren desplegados; aquí se anotan los que se cierran.
 let collapsedAccessGroups = new Set();
+// Orden real del Árbol Maestro SaaS (saas_master_order): {groups, screensByGroup, apartadosByScreen,
+// leavesByApartado}. El Maestro es quien manda el orden; la barra lateral ya lo aplica y este diálogo
+// también, para que una cuenta vea sus accesos en el mismo orden que el Maestro y que la barra.
+// Sin él (no cargó o nunca se reordenó) cada nivel queda en el orden del catálogo.
+let masterOrder = null;
 
 function hasGrant(itemId, subItemId) {
     return treeGrants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : !g.subItemId));
@@ -461,7 +470,33 @@ function setGrant(itemId, subItemId, checked) {
 // anidados, ..., Cambios). Aquí es lo mismo, con la casilla de acceso donde el Maestro
 // pone los iconos Web/App y la pastilla de Acceso donde pone el Estatus; sin las
 // columnas Web · App y Navegar, que hablan de cómo está publicada una pantalla.
+// "General" del Maestro: lo que se ve en toda pantalla (Inicio, Tablero, Buscar y los iconos de
+// la barra superior). Dashboard.js lo controla por cuenta con hasSaasScreenGrant(itemId): sin su
+// acceso, la cuenta no ve ese elemento. Son accesos sueltos (itemId, sin subItemId). Panel y las
+// opciones del menú de Configuración que el Maestro también lista no se piden aquí: ninguna de las
+// dos se controla por cuenta (Configuración entra o sale completa, con su icono).
+const GENERAL_ACCESS_ITEMS = [
+    { itemId: 'saas-home', labelKey: 'menu.home' },
+    { itemId: 'saas-board', labelKey: 'menu.dashboard' },
+    { itemId: 'saas-search', labelKey: 'main.search' },
+];
+const NAV_ACCESS_ITEMS = [
+    { itemId: 'saas-nav-messages', labelKey: 'main.messages' },
+    { itemId: 'saas-nav-chatbot', labelKey: 'main.chatbot' },
+    { itemId: 'saas-nav-notifications', labelKey: 'main.notifications' },
+    { itemId: 'saas-nav-bookmarks', labelKey: 'main.bookmarks' },
+    { itemId: 'saas-nav-ui-scale', labelKey: 'main.uiScale' },
+    { itemId: 'saas-nav-settings', labelKey: 'main.settings' },
+    { itemId: 'saas-nav-user', labelKey: 'main.userInfo' },
+    { itemId: 'saas-nav-business', labelKey: 'main.businessProfile' },
+    { itemId: 'saas-nav-help', labelKey: 'main.helpMode' },
+];
+const looseGrantPairs = (items) => items.map((i) => ({ itemId: i.itemId, subItemId: null }));
+const GENERAL_NAV_KEY = 'general:nav';
+
 const ACCESS_LEVELS = {
+    general: { labelKey: 'admin.masterTreeGeneralClassification', color: '#9A6B00' },
+    icon: { labelKey: 'admin.masterTreeLevelIcono', color: '#B3261E' },
     group: { labelKey: 'admin.masterTreeLevelApartado', color: '#9A6B00' },
     screen: { labelKey: 'main.colSysPantalla', color: '#3A4BC9' },
     tabla: { labelKey: 'main.tablePrefix', color: '#5C6079' },
@@ -484,7 +519,7 @@ function accessToggleBtn(expanded, onToggle) {
     btn.addEventListener('click', onToggle);
     return btn;
 }
-function accessHistoryButton(nodeKey, label) {
+function accessHistoryButton(historyKeys, label) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'perm-tree-mstatus-nest-btn';
@@ -494,13 +529,13 @@ function accessHistoryButton(nodeKey, label) {
     btn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
-        openSaasAccessNodeHistory(nodeKey, label);
+        openSaasAccessNodeHistory(historyKeys, label);
     });
     return btn;
 }
 
 // pairs: [{ itemId, subItemId }] de todo lo que cuelga de la fila (o solo ella, si es una hoja).
-function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf }) {
+function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, historyKeys }) {
     const total = pairs.length;
     const granted = pairs.filter((p) => hasGrant(p.itemId, p.subItemId)).length;
     const state = total > 0 && granted === total ? 'all' : (granted > 0 ? 'part' : 'none');
@@ -574,7 +609,7 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf })
 
     const historyCell = document.createElement('div');
     historyCell.className = 'perm-tree-mstatus-history-cell';
-    historyCell.appendChild(accessHistoryButton(nodeKey, label));
+    historyCell.appendChild(accessHistoryButton(historyKeys || nodeKey, label));
     controls.appendChild(historyCell);
 
     row.appendChild(controls);
@@ -696,6 +731,28 @@ function collectRealSubItemIds(screen, apartado) {
     return [...own, ...nested];
 }
 
+// Lo guardado en el Maestro va primero y en su orden; lo que el Maestro no menciona (algo nuevo del
+// catálogo) se queda al final en su posición original -- nunca se pierde nada.
+function applySavedOrder(items, savedIds, idOf) {
+    if (!Array.isArray(savedIds) || !savedIds.length) return items;
+    const byId = new Map(items.map((item) => [idOf(item), item]));
+    const first = savedIds.map((id) => byId.get(id)).filter(Boolean);
+    const used = new Set(first);
+    return [...first, ...items.filter((item) => !used.has(item))];
+}
+function orderedGroups() {
+    return applySavedOrder(window.SAAS_ADMIN_CATALOG || [], masterOrder?.groups, (g) => g.groupId);
+}
+function orderedScreens(group) {
+    return applySavedOrder(group.screens, masterOrder?.screensByGroup?.[group.groupId], (s) => s.itemId);
+}
+function orderedApartados(screen, apartados) {
+    return applySavedOrder(apartados, masterOrder?.apartadosByScreen?.[screen.itemId], (a) => a.id);
+}
+function orderedRealLeaves(screen, apartado) {
+    return applySavedOrder(buildRealLeaves(apartado), masterOrder?.leavesByApartado?.[`${screen.itemId}::${apartado.id}`], (l) => l.suffix);
+}
+
 // Pares { itemId, subItemId } de todo lo que cuelga de una pantalla (o de uno de sus apartados).
 function pairsOfApartados(screen, apartados) {
     return apartados.flatMap((a) => collectRealSubItemIds(screen, a)).map((subItemId) => ({ itemId: screen.itemId, subItemId }));
@@ -725,7 +782,7 @@ function renderApartadoNode(screen, apartado, depth, rows) {
 
 function renderApartadoLeaves(screen, apartado, depth, rows) {
     const nestedByColumn = buildNestedByColumn(screen, apartado);
-    buildRealLeaves(apartado).forEach((leaf) => {
+    orderedRealLeaves(screen, apartado).forEach((leaf) => {
         const subItemId = realLeafSubItemId(apartado, leaf);
         const childApartados = nestedByColumn.get(leaf.label) || [];
         const nodeKey = `${screen.itemId}::${subItemId}`;
@@ -778,11 +835,50 @@ function drawAccessGuides() {
     });
 }
 
+// General > Accesos Generales > Inicio / Tablero / Buscar + Iconos de Navegación > los iconos de
+// la barra superior: el mismo orden y los mismos nombres que la fila General del Maestro.
+function renderGeneralRows(rows) {
+    const generalKey = 'general:main';
+    const accessKey = 'general:access';
+    const allPairs = [...looseGrantPairs(GENERAL_ACCESS_ITEMS), ...looseGrantPairs(NAV_ACCESS_ITEMS)];
+    const allKeys = allPairs.map((p) => p.itemId);
+    const generalExpanded = !collapsedAccessGroups.has(generalKey);
+    rows.push(buildAccessRow({
+        depth: 0, label: Dashboard.t('admin.saasMasterTreeGeneral'), level: 'general', pairs: allPairs, nodeKey: generalKey, historyKeys: allKeys.join(','),
+        toggle: { expanded: generalExpanded, onToggle: () => { if (generalExpanded) collapsedAccessGroups.add(generalKey); else collapsedAccessGroups.delete(generalKey); renderTreeList(); } },
+    }));
+    if (!generalExpanded) return;
+    const accessExpanded = !collapsedAccessGroups.has(accessKey);
+    rows.push(buildAccessRow({
+        depth: 1, label: Dashboard.t('sidebar.generalAccess'), level: 'group', pairs: allPairs, nodeKey: accessKey, historyKeys: allKeys.join(','),
+        toggle: { expanded: accessExpanded, onToggle: () => { if (accessExpanded) collapsedAccessGroups.add(accessKey); else collapsedAccessGroups.delete(accessKey); renderTreeList(); } },
+    }));
+    if (!accessExpanded) return;
+    GENERAL_ACCESS_ITEMS.forEach((item) => {
+        rows.push(buildAccessRow({
+            depth: 2, label: Dashboard.t(item.labelKey), level: 'screen', pairs: looseGrantPairs([item]), nodeKey: item.itemId, isLeaf: true,
+        }));
+    });
+    const navExpanded = expandedRealNodes.has(GENERAL_NAV_KEY);
+    rows.push(buildAccessRow({
+        depth: 2, label: Dashboard.t('menu.navIcons'), level: 'icon', pairs: looseGrantPairs(NAV_ACCESS_ITEMS), nodeKey: GENERAL_NAV_KEY,
+        historyKeys: NAV_ACCESS_ITEMS.map((i) => i.itemId).join(','),
+        toggle: { expanded: navExpanded, onToggle: () => toggleAccessNode(GENERAL_NAV_KEY) },
+    }));
+    if (!navExpanded) return;
+    NAV_ACCESS_ITEMS.forEach((item) => {
+        rows.push(buildAccessRow({
+            depth: 3, label: Dashboard.t(item.labelKey), level: 'icon', pairs: looseGrantPairs([item]), nodeKey: item.itemId, isLeaf: true,
+        }));
+    });
+}
+
 function renderTreeList() {
     treeList.innerHTML = '';
     treeList.appendChild(buildAccessHeader());
     const rows = [];
-    (window.SAAS_ADMIN_CATALOG || []).forEach((group) => {
+    renderGeneralRows(rows);
+    orderedGroups().forEach((group) => {
         const groupKey = `group:${group.groupId}`;
         const groupExpanded = !collapsedAccessGroups.has(groupKey);
         const groupPairs = group.screens.flatMap((screen) => pairsOfApartados(screen, screen.apartados.filter((a) => !a.nestUnder)));
@@ -791,10 +887,10 @@ function renderTreeList() {
             toggle: { expanded: groupExpanded, onToggle: () => { if (groupExpanded) collapsedAccessGroups.add(groupKey); else collapsedAccessGroups.delete(groupKey); renderTreeList(); } },
         }));
         if (!groupExpanded) return;
-        group.screens.forEach((screen) => {
+        orderedScreens(group).forEach((screen) => {
             const nodeKey = screen.itemId;
             const expanded = expandedRealNodes.has(nodeKey);
-            const topApartados = screen.apartados.filter((a) => !a.nestUnder);
+            const topApartados = orderedApartados(screen, screen.apartados.filter((a) => !a.nestUnder));
             rows.push(buildAccessRow({
                 depth: 1, label: Dashboard.t(screen.labelKey), level: 'screen',
                 pairs: pairsOfApartados(screen, topApartados), nodeKey,
@@ -814,9 +910,17 @@ async function openTreeModal(user) {
     treeSaveStatus.textContent = '';
     clearError(treeError);
     try {
-        const res = await fetch(`/api/admin/saas-users/${user.id}/grants`, { credentials: 'include' });
+        const [res, orderRes] = await Promise.all([
+            fetch(`/api/admin/saas-users/${user.id}/grants`, { credentials: 'include' }),
+            fetch('/api/admin/saas-master-order', { credentials: 'include' }).catch(() => null),
+        ]);
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
+        masterOrder = null;
+        if (orderRes && orderRes.ok) {
+            const orderData = await orderRes.json().catch(() => null);
+            if (orderData?.order && typeof orderData.order === 'object' && !Array.isArray(orderData.order)) masterOrder = orderData.order;
+        }
         treeGrants = data.grants || [];
         pendingVisibleStatuses = data.visibleStatuses && data.visibleStatuses.length ? data.visibleStatuses : ['habilitado'];
         expandedRealNodes = new Set();

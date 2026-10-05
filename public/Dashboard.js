@@ -805,11 +805,13 @@ async function loadSaasMasterOrder() {
 }
 // Maps a sidebar item's own `id` to the itemId SaasAdminCatalog.js (and so
 // saas_master_order.screensByGroup) actually uses -- the two namespaces
-// never lined up 1:1 (this sidebar predates that catalog). Admin-
-// ArbolMaestroSaaS.html itself has no entry here on purpose: it isn't one
-// of the catalog's own 9 screens (it's the tool that gates them), so it
-// keeps whatever fixed position it's coded at below instead of being
-// reordered.
+// never lined up 1:1 (this sidebar predates that catalog). Every
+// sidebar screen has an entry, Admin-ArbolMaestroSaaS.html included
+// (saas-master-tree, a catalog screen of Configuración SaaS since
+// 2026-09-30): the Árbol Maestro SaaS is the one that sets the real order,
+// so the sidebar, the tree itself and each account's access dialog
+// (Admin-EquipoSaaS.js) must all list screens in that same order -- a
+// screen pinned at a fixed slot here made the sidebar disagree with it.
 const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-clientes-registrados': 'saas-clients',
     'admin-planes-registrados': 'saas-plans',
@@ -818,6 +820,7 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-business-sectors': 'saas-business-sectors',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
+    'admin-saas-master-status': 'saas-master-tree',
     'admin-equipo-saas': 'saas-team',
     'admin-nuestros-respaldos': 'saas-backups',
     'admin-material-apoyo': 'saas-material-apoyo',
