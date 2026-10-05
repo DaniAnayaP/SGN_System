@@ -570,6 +570,15 @@ async function loadLanguage(lang) {
     document.dispatchEvent(new CustomEvent('dashboard:language-changed', { detail: { lang } }));
 }
 
+// La flecha que contrae el menú lateral: su aria-label venía escrito en inglés en el HTML de cada
+// pantalla; ahora dice la acción que haría (contraer o expandir) en el idioma elegido.
+function syncSidebarToggleLabel() {
+    const menuBtn = document.getElementById('menu-btn');
+    if (!menuBtn) return;
+    const minimized = document.getElementById('Sidebar')?.classList.contains('minimize');
+    menuBtn.setAttribute('aria-label', t(minimized ? 'sidebar.expandMenu' : 'sidebar.collapseMenu'));
+}
+
 function applyStaticTranslations() {
     document.querySelectorAll('[data-i18n]').forEach((el) => {
         el.textContent = t(el.dataset.i18n);
@@ -580,6 +589,12 @@ function applyStaticTranslations() {
     document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
         el.setAttribute('aria-label', t(el.dataset.i18nAria));
     });
+    // El icono de Ayuda lo crea un script (sin HTML estático) y su tooltip nativo (title) estaba
+    // escrito en inglés: se traduce aquí, junto con su aria-label, y sigue al cambiar de idioma.
+    document.querySelectorAll('#help-mode-toggle').forEach((el) => {
+        el.title = t('main.helpMode');
+    });
+    syncSidebarToggleLabel();
     const titleEl = document.querySelector('title[data-i18n]');
     if (titleEl) document.title = t(titleEl.dataset.i18n);
 }
@@ -1591,6 +1606,7 @@ function wireMenuInteractions() {
         menuBtn.addEventListener('click', () => {
             const isMinimized = Sidebar.classList.toggle('minimize');
             menuBtn.setAttribute('aria-expanded', String(!isMinimized));
+            syncSidebarToggleLabel();
             hideSidebarTooltip();
             applySubmenuAbbreviations();
             // The sidebar's own collapse/expand transition (.Sidebar's own
@@ -8621,6 +8637,13 @@ const HELP_CONTENT_KEYS = {
     'user-info-btn': 'userInfo',
     'business-profile-btn': 'businessProfile',
     'sidebar-search': 'sidebarSearch',
+    // La ruta de acceso (migas de pan) y el botón del mapa que la contrae; los crea
+    // ensureBreadcrumbBar en cada pantalla.
+    'breadcrumb-list': 'breadcrumbRoute',
+    'breadcrumb-toggle': 'breadcrumbToggle',
+    // Las dos flechas que contraen el menú lateral y la barra de arriba.
+    'menu-btn': 'sidebarCollapse',
+    'top-bar-collapse-toggle': 'topBarToggle',
 };
 // <th data-col="..."> -- the 13 Control Interno columns (see
 // getSystemColumnsForRecord in db.js), hardcoded static markup repeated
@@ -8739,7 +8762,10 @@ function sidebarScreenDescription(link) {
 function resolveGenericHelpKey(node) {
     return HELP_CONTENT_KEYS[node.id] || HELP_CONTENT_COLUMN_KEYS[node.getAttribute('data-col')]
         || HELP_CONTENT_ZOOM_KEYS[node.getAttribute('data-zoom')] || HELP_CONTENT_COL_ACTION_KEYS[node.getAttribute('data-col-action')]
-        || (node.classList.contains('data-table-new-record-btn') ? 'createNewRecord' : null);
+        || (node.classList.contains('data-table-new-record-btn') ? 'createNewRecord' : null)
+        // El título fijo de la pantalla ("Bienvenido", etc.) sin descripción propia: la que sí la
+        // trae (migrateAdminSubtitleIntoHelpMode) ya la muestra por su title.
+        || (node.classList.contains('welcome-text') && !node.getAttribute('title') ? 'screenTitle' : null);
 }
 function findHelpModeContent(startEl) {
     let node = startEl;
@@ -8859,7 +8885,6 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     // name showed the literal key until this.
     btn.setAttribute('data-i18n-aria', 'main.helpMode');
     btn.setAttribute('aria-label', 'Help mode');
-    btn.title = 'Help mode';
     btn.innerHTML = '<i class="bx bx-help-circle" aria-hidden="true"></i>';
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -10745,6 +10770,7 @@ function renderBreadcrumbBar() {
     if (!bar) return;
     const list = document.getElementById('breadcrumb-list');
     list.innerHTML = '';
+    list.setAttribute('aria-label', t('main.breadcrumbLabel'));
     const crumbList = computeBreadcrumbCrumbs();
     currentBreadcrumbLabel = crumbList[crumbList.length - 1]?.label || '';
     crumbList.forEach((crumb, index, crumbs) => {

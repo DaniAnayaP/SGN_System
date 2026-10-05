@@ -41,7 +41,6 @@ const treeVisibleStatuses = document.getElementById('saas-user-tree-visible-stat
 const treeError = document.getElementById('saas-user-tree-error');
 const treeSaveBtn = document.getElementById('saas-user-tree-save');
 const treeCloseBtn = document.getElementById('saas-user-tree-close');
-const treeSaveStatus = document.getElementById('saas-user-tree-save-status');
 // Same role as Business-Usuarios.js's own pendingVisibleStatuses -- where
 // the chip row's current selection lives while this modal is open.
 let pendingVisibleStatuses = ['habilitado'];
@@ -612,6 +611,7 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
     check.disabled = locked;
     if (fullyBlocked) check.title = lockTitle;
     check.setAttribute('aria-label', label);
+    check.setAttribute('data-help-key', 'saasAccessCheck');
     check.addEventListener('change', () => {
         // Marcar solo da lo que está abierto; desmarcar quita todo lo de la fila, incluso un acceso viejo bloqueado.
         if (check.checked && !fullyBlocked) openPairs.forEach((p) => setGrant(p.itemId, p.subItemId, true));
@@ -624,11 +624,14 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
     labelNode.className = 'perm-tree-mstatus-label';
     labelNode.textContent = label;
     labelNode.title = label;
+    labelNode.setAttribute('data-help-key', 'saasAccessCheck');
     row.appendChild(labelNode);
     const count = document.createElement('span');
     count.className = 'perm-tree-mstatus-count-badge';
     count.textContent = isLeaf ? '1' : `${granted}/${Math.max(1, total)}`;
     if (!fullyBlocked && blockedCount > 0) count.title = Dashboard.t('admin.saasAccessBlockedSome', { n: blockedCount });
+    count.setAttribute('data-help-key', 'saasAccessCount');
+    count.setAttribute('aria-label', Dashboard.t('admin.masterTreeColCount'));
     row.appendChild(count);
 
     const controls = document.createElement('div');
@@ -658,6 +661,8 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
         pill.textContent = lockedStatuses.length === 1 ? statusLabel(lockedStatuses[0]) : Dashboard.t('admin.saasAccessBlockedShort');
         pill.title = lockTitle;
     }
+    pill.setAttribute('data-help-key', 'saasAccessState');
+    pill.setAttribute('aria-label', pill.textContent);
     statusCell.appendChild(pill);
     controls.appendChild(statusCell);
 
@@ -672,6 +677,7 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
             btn.className = 'saas-access-nest-btn';
             btn.textContent = Dashboard.t(textKey);
             btn.title = Dashboard.t(titleKey);
+            btn.setAttribute('data-help-key', 'saasAccessAllNone');
             // "Todo" solo da lo abierto; "Nada" quita todo lo de la fila (y no hace falta si no hay nada).
             btn.disabled = value ? fullyBlocked : locked;
             btn.addEventListener('click', () => { (value ? openPairs : pairs).forEach((p) => setGrant(p.itemId, p.subItemId, value)); renderTreeList(); });
@@ -700,8 +706,10 @@ function buildAccessHeader() {
     labelHeader.className = 'perm-tree-mstatus-header-label';
     const labelText = document.createElement('span');
     labelText.textContent = 'Pantalla / Apartado / Columna';
+    labelText.setAttribute('data-help-key', 'saasAccessDialog');
     const labelCount = document.createElement('span');
     labelCount.className = 'perm-tree-mstatus-header-count';
+    labelCount.setAttribute('data-help-key', 'saasAccessCount');
     labelCount.textContent = Dashboard.t('admin.masterTreeColCount');
     labelHeader.append(labelText, labelCount);
     header.appendChild(labelHeader);
@@ -716,6 +724,8 @@ function buildAccessHeader() {
     cols.forEach(([cls, html]) => {
         const col = document.createElement('span');
         col.className = `perm-tree-mstatus-header-col ${cls}`;
+        const helpKey = { 'perm-tree-mstatus-header-status': 'saasAccessState', 'perm-tree-mstatus-header-status-nest': 'saasAccessAllNone' }[cls];
+        if (helpKey) col.setAttribute('data-help-key', helpKey);
         col.innerHTML = html;
         controls.appendChild(col);
     });
@@ -981,7 +991,6 @@ function renderTreeList() {
 async function openTreeModal(user) {
     selectedUserId = user.id;
     document.getElementById('saas-user-tree-modal-title').textContent = `${Dashboard.t('admin.saasTreeTitle')} — ${user.name}`;
-    treeSaveStatus.textContent = '';
     clearError(treeError);
     try {
         const [res, orderRes, statusRes] = await Promise.all([
@@ -1009,7 +1018,7 @@ async function openTreeModal(user) {
         expandedAccessGroups = new Set();
         treeModal.hidden = false;
         renderTreeList();
-        window.VisibleStatusesChips.render(treeVisibleStatuses, pendingVisibleStatuses, (next) => { pendingVisibleStatuses = next; });
+        window.VisibleStatusesChips.render(treeVisibleStatuses, pendingVisibleStatuses, (next) => { pendingVisibleStatuses = next; }, { hint: false, helpKey: 'visibleStatuses' });
     } catch {
         Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }

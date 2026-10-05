@@ -456,14 +456,12 @@
          Admin-EquipoSaaS.js. -->
     <div class="modal-overlay" id="saas-user-tree-modal" hidden>
         <div class="modal-panel" style="max-width: 72rem;" role="dialog" aria-modal="true" aria-labelledby="saas-user-tree-modal-title">
-            <h3 id="saas-user-tree-modal-title" data-i18n="admin.saasTreeTitle">Access for this SaaS account</h3>
+            <h3 id="saas-user-tree-modal-title" data-i18n="admin.saasTreeTitle" data-help-key="saasAccessDialog">Access for this SaaS account</h3>
             <div class="admin-form-actions">
                 <button type="button" class="btn" id="saas-user-tree-save" data-i18n="admin.save">Save</button>
                 <button type="button" class="btn btn-secondary" id="saas-user-tree-close" data-i18n="admin.cancel">Close</button>
             </div>
-            <p id="saas-user-tree-save-status" class="admin-save-status"></p>
-            <p class="admin-hint" data-i18n="admin.saasTreeHint">Check nothing to leave this account unrestricted (sees/does everything) — same as admin/admin today.</p>
-            <div id="saas-user-tree-list" class="saas-master-status-list saas-access-list">
+            <div id="saas-user-tree-list" class="saas-master-status-list saas-access-list" style="margin-top: 0.75rem;">
                 <!-- rendered at runtime -->
             </div>
             <div id="saas-user-tree-visible-statuses"></div>

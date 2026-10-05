@@ -21,24 +21,33 @@
     // never fewer than one status stays selected (an admin can still leave
     // a user seeing just 'habilitado', but never nothing at all, matching
     // setUserVisibleStatuses' own server-side fallback).
-    function render(container, current, onChange) {
+    // options.hint === false omite el párrafo explicativo (el diálogo que lo explica en Modo ayuda);
+    // options.helpKey marca el bloque con esa entrada help.<key> de Modo ayuda.
+    function render(container, current, onChange, options = {}) {
         const t = (window.Dashboard && window.Dashboard.t) || ((k) => k);
         const selected = new Set(current && current.length ? current : ['habilitado']);
         container.innerHTML = '';
 
         const field = document.createElement('div');
         field.className = 'visible-statuses-field';
+        if (options.helpKey) {
+            field.setAttribute('data-help-key', options.helpKey);
+            field.setAttribute('role', 'group');
+            field.setAttribute('aria-label', t('admin.visibleStatusesLabel'));
+        }
 
         const label = document.createElement('p');
         label.className = 'visible-statuses-label';
         label.textContent = t('admin.visibleStatusesLabel');
         field.appendChild(label);
 
-        const hint = document.createElement('p');
-        hint.className = 'admin-hint';
-        hint.style.padding = '0 0 0.5rem';
-        hint.textContent = t('admin.visibleStatusesHint');
-        field.appendChild(hint);
+        if (options.hint !== false) {
+            const hint = document.createElement('p');
+            hint.className = 'admin-hint';
+            hint.style.padding = '0 0 0.5rem';
+            hint.textContent = t('admin.visibleStatusesHint');
+            field.appendChild(hint);
+        }
 
         const row = document.createElement('div');
         row.className = 'visible-statuses-row';

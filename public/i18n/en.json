@@ -47,6 +47,8 @@
   },
   "sidebar": {
     "brand": "SGN",
+    "collapseMenu": "Collapse sidebar",
+    "expandMenu": "Expand sidebar",
     "searchPlaceholder": "Search",
     "searchNoResults": "No matches found.",
     "notifications": "Notifications",
@@ -523,7 +525,6 @@
     "noSaasUsers": "No other SaaS accounts yet.",
     "saasUserNewTitle": "New SaaS Admin",
     "saasTreeTitle": "Access for this SaaS account",
-    "saasTreeHint": "Check nothing and this account sees/does nothing — check exactly what it should have access to. Checking a row checks everything under it.",
     "saasAccessCol": "Access",
     "saasAccessAll": "Full",
     "saasAccessPartial": "Partial",
@@ -1962,6 +1963,50 @@
     "columnsEditor": {
       "what": "Lets you choose which columns are shown, which are hidden and which stay pinned on the left side (up to 4), without deleting any of their information.",
       "example": "you hide the columns you don't use and pin \"Name\" so you always know whose row it is, even looking at far-away columns."
+    },
+    "saasAccessDialog": {
+      "what": "Here you choose what this account can see and do. If you check nothing, the account sees and does nothing: check only what it should have.",
+      "example": "you check “Our Plans” and the account sees that whole screen, with all its columns and buttons."
+    },
+    "saasAccessCheck": {
+      "what": "This box gives or takes away this row's access for the account. If the row has things under it, checking it checks everything below; the dash means it only has part of it.",
+      "example": "you check “General” and the account gets Home, Dashboard, Search and the top icons that are Enabled."
+    },
+    "saasAccessState": {
+      "what": "Shows how much of this row the account has: Full, Partial or No access (Yes or No for a single button or column). If it says “Being improved”, “Under construction” or “Disabled”, that row is not Enabled in the Master Tree and cannot be given to anyone yet.",
+      "example": "“Partial” on a screen means the account has some of its columns and buttons, but not all of them."
+    },
+    "saasAccessAllNone": {
+      "what": "“All” checks everything under this row at once (only what is Enabled) and “None” removes it all.",
+      "example": "on “Customer Service”, “None” takes all of those screens away from the account at once."
+    },
+    "saasAccessCount": {
+      "what": "How many of the accesses that can be given in this row the account has. Anything not Enabled is not counted.",
+      "example": "“21/68” means it has 21 of the 68 that can be given."
+    },
+    "visibleStatuses": {
+      "what": "Here you choose which statuses this person can see. Anything not turned on stays invisible to them, even with the permission. Only the Test User needs all 4.",
+      "example": "with only “Enabled” turned on, they do not see what is under construction or being improved."
+    },
+    "breadcrumbRoute": {
+      "what": "Tells you where you are in the system: the places you went through to reach this screen. The names you can tap take you back to that place.",
+      "example": "you are on “SaaS Team”; you tap “Home” and go back to the home screen without using the left menu."
+    },
+    "breadcrumbToggle": {
+      "what": "The map that hides or shows the path above to give you more room on the screen. While the path is hidden, the name of the screen you are on stays here.",
+      "example": "you tap the map and the path hides; you tap it again and it comes back."
+    },
+    "sidebarCollapse": {
+      "what": "Shrinks the menu on the left so only its icons show and you get more room on the screen; tap it again and the menu opens fully.",
+      "example": "you tap the arrow, the menu gets narrow and the table gains room; you tap it again and the menu comes back."
+    },
+    "topBarToggle": {
+      "what": "Hides or shows the bar at the top (the title and the icons) to give you more room on the screen.",
+      "example": "you tap it and the bar shrinks to a small arrow; you tap it again and it comes back."
+    },
+    "screenTitle": {
+      "what": "The name of the screen you are on.",
+      "example": "if it says “Welcome”, you are on the home screen; from there you reach the others with the menu on the left."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",
