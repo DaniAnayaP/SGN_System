@@ -287,7 +287,8 @@ async function saveJobPositionGrants(saveBtn) {
         if (result.queued) {
             showToast(t('home.cargaSavedOffline'));
         } else if (!result.ok) {
-            showToast(t('admin.saveError'));
+            const body = result.body || {};
+            showToast(body.code === 'module-not-contracted' ? t('admin.limitModuleNotContracted', { department: body.labelKey ? t(body.labelKey) : body.sectionId }) : t('admin.saveError'));
         } else {
             showToast(t('main.changeSaved'));
         }

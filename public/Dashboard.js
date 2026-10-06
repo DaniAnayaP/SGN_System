@@ -87,6 +87,13 @@ function ensureToastContainer() {
     return container;
 }
 
+// El aviso con el motivo cuando el servidor rechaza un permiso por salirse de un límite (hoy: departamento no contratado); null si la
+// respuesta no es un rechazo de límite, y entonces quien llama usa su aviso de siempre.
+function limitErrorMessage(body) {
+    if (!body || body.code !== 'module-not-contracted') return null;
+    return t('admin.limitModuleNotContracted', { department: body.labelKey ? t(body.labelKey) : body.sectionId });
+}
+
 function showToast(message, type = 'info', { title, duration = TOAST_DEFAULT_DURATION } = {}) {
     const kind = TOAST_ICONS[type] ? type : 'info';
     const container = ensureToastContainer();
@@ -11634,6 +11641,7 @@ window.Dashboard = {
     initDataTableColumns,
     getVisibleTableSnapshot,
     showToast,
+    limitErrorMessage,
     confirm: confirmDialog,
     openCatalogRequestModal,
 };

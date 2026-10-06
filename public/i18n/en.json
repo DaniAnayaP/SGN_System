@@ -377,6 +377,7 @@
     "addendaPlanBase": "Plan \"{plan}\": {limit} cost centers included.",
     "adminAccessTitle": "Administrator Access",
     "adminAccessHint": "Read-only — what this client's administrator sees: what they have contracted (plan and extras) and, locked, what exists in their industry and they haven't contracted yet. Nothing here can be selected or saved.",
+    "limitModuleNotContracted": "Could not save: “{department}” is not contracted by this company.",
     "adminAccessEnabled": "Included in the plan",
     "adminAccessExtra": "Contracted extra",
     "adminAccessBlocked": "Not contracted",

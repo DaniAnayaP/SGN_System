@@ -160,11 +160,16 @@ permissionsSaveBtn.addEventListener('click', async () => {
             credentials: 'include',
             body: JSON.stringify({ grants: tree.getGrants() }),
         });
-        if (!res.ok) throw new Error('save failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            const err = new Error('save failed');
+            err.limitMessage = Dashboard.limitErrorMessage(body);
+            throw err;
+        }
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
         closePermissionsModal();
-    } catch {
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    } catch (err) {
+        Dashboard.showToast((err && err.limitMessage) || Dashboard.t('admin.saveError'), 'error');
     } finally {
         permissionsSaveBtn.disabled = false;
     }

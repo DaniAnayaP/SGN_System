@@ -164,11 +164,17 @@ grantAccessSaveBtn.addEventListener('click', async () => {
                 body: JSON.stringify({ statuses: pendingVisibleStatuses }),
             }),
         ]);
-        if (!grantsRes.ok || !statusesRes.ok) throw new Error('save failed');
+        if (!grantsRes.ok || !statusesRes.ok) {
+            const failed = !grantsRes.ok ? grantsRes : statusesRes;
+            const body = await failed.json().catch(() => ({}));
+            const err = new Error('save failed');
+            err.limitMessage = Dashboard.limitErrorMessage(body);
+            throw err;
+        }
         closeGrantAccessModal();
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
-    } catch {
-        grantAccessError.textContent = Dashboard.t('admin.saveError');
+    } catch (err) {
+        grantAccessError.textContent = (err && err.limitMessage) || Dashboard.t('admin.saveError');
         grantAccessError.hidden = false;
     } finally {
         grantAccessSaveBtn.disabled = false;

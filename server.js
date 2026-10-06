@@ -1460,6 +1460,7 @@ app.put('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, 
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
+    if (rejectUncontractedNewGrants(res, client.id, getUserGrants(client.admin_user_id), grants)) return;
     res.json({ grants: setUserGrants(client.admin_user_id, grants) });
 });
 
@@ -3789,6 +3790,25 @@ app.get('/api/me/saas-grants', requireAuth, requireAdmin, (req, res) => {
 // Access: requireAuth + requireClientAdmin — only the one auto-provisioned
 // admin for a client can reach these, and every query below is additionally
 // scoped to req.user.clientId so clients can never see each other's data.
+// Regla de límites 1 (módulo no contratado): un permiso NUEVO no puede ser de un departamento que la empresa no contrató. Solo revisa los
+// permisos que se agregan; los que ya estaban guardados se quedan como están (la Auditoría de Límites los cuenta). 'main' (General) no es
+// un departamento contratable. Responde 400 con el departamento y devuelve true si rechazó; el aviso en pantalla lo arma el cliente con labelKey.
+function rejectUncontractedNewGrants(res, clientId, grantsBefore, grantsAfter) {
+    const keyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const had = new Set(grantsBefore.map(keyOf));
+    const contracted = new Set(getClientModuleKeys(clientId));
+    const bad = grantsAfter.find((g) => g.sectionId !== 'main' && !contracted.has(g.sectionId) && !had.has(keyOf(g)));
+    if (!bad) return false;
+    const mod = MODULE_CATALOG.find((m) => m.key === bad.sectionId);
+    res.status(400).json({
+        message: `El departamento (${bad.sectionId}) no está contratado por esta empresa.`,
+        code: 'module-not-contracted',
+        sectionId: bad.sectionId,
+        labelKey: mod ? mod.labelKey : null,
+    });
+    return true;
+}
+
 function validateGrants(grants) {
     if (!Array.isArray(grants)) return 'grants must be an array.';
     for (const g of grants) {
@@ -3975,6 +3995,7 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
     const grantsBefore = getUserGrants(req.params.id);
+    if (rejectUncontractedNewGrants(res, req.user.clientId, grantsBefore, grants)) return;
     const savedGrants = setUserGrants(req.params.id, grants, changedByLabel(req));
     if (grantsSignature(grantsBefore) !== grantsSignature(savedGrants)) {
         logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExtraGrants', grantsBefore.length, savedGrants.length);
@@ -4068,6 +4089,7 @@ app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmi
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
     const roleGrantsBefore = getJobPositionGrants(req.params.id);
+    if (rejectUncontractedNewGrants(res, req.user.clientId, roleGrantsBefore, grants)) return;
     const savedRoleGrants = setJobPositionGrants(req.params.id, grants);
     if (grantsSignature(roleGrantsBefore) !== grantsSignature(savedRoleGrants)) {
         logBusinessChange(req, 'business-roles', existing.id, existing.name, 'business.historyRoleGrants', roleGrantsBefore.length, savedRoleGrants.length);
