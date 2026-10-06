@@ -323,6 +323,9 @@ const {
     getEffectiveOrdersForViewer,
     getCascadedColumnGroups,
     scanLimitViolations,
+    systemReset,
+    getSessionsValidAfter,
+    setSessionsValidAfter,
     getOrderTreeForTarget,
     getEffectiveClassificationOverridesForTarget,
     getEffectiveClassificationOverridesForViewer,
@@ -427,7 +430,8 @@ const {
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
 } = require('./db');
-const { getUploadUrl, getDownloadUrl, deleteObject } = require('./r2');
+const { getUploadUrl, getDownloadUrl, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
+const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
 const { buildEvidenceStorageKey, buildEvidenceDisplayName, extFromContentType } = require('./evidenceNaming');
 const { buildSupportMaterialStorageKey } = require('./supportMaterialNaming');
 
@@ -724,7 +728,10 @@ function requireAuth(req, res, next) {
     const token = req.cookies?.sgn_session || req.headers.authorization?.replace('Bearer ', '');
     if (!token) return res.status(401).json({ message: 'Not authenticated.' });
     try {
-        req.user = jwt.verify(token, JWT_SECRET);
+        const payload = jwt.verify(token, JWT_SECRET);
+        // Después de un Reinicio del Sistema, las sesiones anteriores ya no valen (ver system_state en db.js).
+        if (payload.iat && payload.iat < getSessionsValidAfter()) return res.status(401).json({ message: 'Invalid or expired session.' });
+        req.user = payload;
         next();
     } catch {
         return res.status(401).json({ message: 'Invalid or expired session.' });
@@ -3256,6 +3263,94 @@ app.get('/api/admin/limits-audit', requireAuth, requireAdmin, (req, res) => {
         return res.status(403).json({ message: 'No tienes acceso a la Auditoría de Límites.' });
     }
     res.json({ clients: scanLimitViolations() });
+});
+
+// Reinicio del Sistema: borra todos los registros de uso (clientes, usuarios de clientes, capturas, historiales) y deja la configuración, para
+// empezar de cero la creación de clientes. Solo el administrador principal (admin_saas). Tres seguros para borrar: un respaldo de la última
+// hora, la frase escrita y la variable ALLOW_SYSTEM_RESET=true (se pone en Railway solo mientras se usa). El respaldo, la vista previa y la
+// descarga no borran nada. Ver systemReset.js.
+const SYSTEM_RESET_PHRASE = 'BORRAR TODOS LOS REGISTROS';
+let systemResetRunning = false;
+
+function requireSystemResetAccess(req, res, next) {
+    if (!req.user?.isSaasSuperAdmin) return res.status(403).json({ message: 'Solo el administrador principal puede reiniciar el sistema.' });
+    next();
+}
+
+// Cuántos archivos de clientes hay en R2 (evidencias y material de apoyo); sin R2 configurado (local), cero.
+async function countClientFiles() {
+    if (!isR2Configured()) return { configured: false, count: 0, error: null };
+    try {
+        let count = 0;
+        for (const prefix of FILE_PREFIXES) count += (await listR2Keys(prefix)).length;
+        return { configured: true, count, error: null };
+    } catch (err) {
+        return { configured: true, count: 0, error: err.message };
+    }
+}
+
+app.get('/api/admin/system-reset/status', requireAuth, requireAdmin, requireSystemResetAccess, async (req, res) => {
+    const lastBackup = systemReset.lastBackup();
+    res.json({
+        enabled: process.env.ALLOW_SYSTEM_RESET === 'true',
+        phrase: SYSTEM_RESET_PHRASE,
+        preview: systemReset.preview(),
+        groups: { delete: GROUPS_TO_DELETE, keep: GROUPS_TO_KEEP },
+        lastBackup,
+        backupFresh: systemReset.backupIsFresh(lastBackup),
+        backupMaxAgeMinutes: MAX_BACKUP_AGE_MS / 60000,
+        files: await countClientFiles(),
+    });
+});
+
+app.post('/api/admin/system-reset/backup', requireAuth, requireAdmin, requireSystemResetAccess, (req, res) => {
+    try {
+        res.json({ backup: systemReset.createBackup() });
+    } catch (err) {
+        console.error('[system-reset] backup failed:', err.message);
+        res.status(500).json({ message: 'No se pudo crear el respaldo.' });
+    }
+});
+
+app.get('/api/admin/system-reset/backups/:id/download', requireAuth, requireAdmin, requireSystemResetAccess, (req, res) => {
+    const file = systemReset.backupFilePath(req.params.id);
+    if (!file) return res.status(404).json({ message: 'Respaldo no encontrado.' });
+    res.download(file, `${req.params.id}.sqlite`);
+});
+
+app.post('/api/admin/system-reset/run', requireAuth, requireAdmin, requireSystemResetAccess, async (req, res) => {
+    if (process.env.ALLOW_SYSTEM_RESET !== 'true') {
+        return res.status(403).json({ message: 'El reinicio está desactivado: falta la variable ALLOW_SYSTEM_RESET=true.', code: 'reset-disabled' });
+    }
+    if (req.body?.phrase !== SYSTEM_RESET_PHRASE) {
+        return res.status(400).json({ message: 'La frase de confirmación no coincide.', code: 'phrase-mismatch' });
+    }
+    if (systemResetRunning) return res.status(409).json({ message: 'Ya hay un reinicio en curso.', code: 'in-progress' });
+    systemResetRunning = true;
+    try {
+        const result = systemReset.run();
+        // Cierra todas las sesiones anteriores (también la de quien lo pidió): los usuarios borrados ya no existen.
+        setSessionsValidAfter(Math.ceil(Date.now() / 1000));
+        console.warn(`[system-reset] registros borrados por ${req.user.username}: ${result.totalRows} filas (respaldo ${result.backup.file})`);
+        const files = { deleted: 0, error: null };
+        if (isR2Configured()) {
+            try {
+                const keys = [];
+                for (const prefix of FILE_PREFIXES) keys.push(...await listR2Keys(prefix));
+                files.deleted = await deleteR2Keys(keys);
+            } catch (err) {
+                files.error = err.message;
+                console.error('[system-reset] no se pudieron borrar los archivos de R2:', err.message);
+            }
+        }
+        res.json({ ok: true, totalRows: result.totalRows, deleted: result.deleted, backup: result.backup.file, files });
+    } catch (err) {
+        if (err.code === 'backup-required' || err.code === 'unclassified-tables') return res.status(409).json({ message: err.message, code: err.code });
+        console.error('[system-reset] failed:', err);
+        res.status(500).json({ message: 'No se pudo completar el reinicio; no se borró nada.' });
+    } finally {
+        systemResetRunning = false;
+    }
 });
 
 // Árbol Maestro SaaS -- same shape as master-permission-status above, but

@@ -21,6 +21,7 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { hashPassword, hashPasswordSync } = require('./password');
 const { buildEvidenceDisplayName, buildEvidenceStorageKey, extFromDataUrl } = require('./evidenceNaming');
+const { createSystemReset } = require('./systemReset');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'storage', 'sgn.sqlite');
 const DATA_DIR = path.dirname(DB_PATH);
@@ -663,7 +664,28 @@ db.exec(`
         key         TEXT PRIMARY KEY,
         applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Estado del sistema (clave/valor): hoy solo "sessions_valid_after", el segundo desde el cual una sesión (JWT) vale. El Reinicio del
+    -- Sistema lo sube para cerrar de golpe las sesiones de los usuarios borrados: sin eso, el token de un usuario borrado seguiría
+    -- sirviendo hasta 8 horas y podría coincidir con el cliente nuevo que reutilice ese número.
+    CREATE TABLE IF NOT EXISTS system_state (
+        key    TEXT PRIMARY KEY,
+        value  TEXT NOT NULL
+    );
 `);
+
+let sessionsValidAfterCache = null;
+function getSessionsValidAfter() {
+    if (sessionsValidAfterCache === null) {
+        const row = db.prepare("SELECT value FROM system_state WHERE key = 'sessions_valid_after'").get();
+        sessionsValidAfterCache = row ? Number(row.value) || 0 : 0;
+    }
+    return sessionsValidAfterCache;
+}
+function setSessionsValidAfter(seconds) {
+    db.prepare("INSERT INTO system_state (key, value) VALUES ('sessions_valid_after', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(seconds));
+    sessionsValidAfterCache = seconds;
+}
 
 // A big, date-derived unique identifier shown as "No. Único de Big Date" on
 // records like clients (and, going forward, other record types that want
@@ -9309,8 +9331,13 @@ function setUserGrants(userId, grants, changedBy) {
 }
 
 // --- Query helpers: user <-> profile assignment -------------------------------
+const systemReset = createSystemReset(db, DATA_DIR);
+
 module.exports = {
     db,
+    systemReset,
+    getSessionsValidAfter,
+    setSessionsValidAfter,
     MODULE_CATALOG,
     findUserByUsername,
     usernameOrEmailExists,

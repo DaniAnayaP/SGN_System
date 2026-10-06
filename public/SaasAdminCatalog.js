@@ -194,6 +194,14 @@ window.SAAS_ADMIN_CATALOG = [
                     { id: 'controles', label: 'Controles de la pantalla', acciones: ['Ver la auditoría'] },
                 ],
             },
+            {
+                // Reinicio del Sistema: borra los registros de uso y deja la configuración (server.js /api/admin/system-reset/*). El servidor
+                // además exige ser admin_saas, así que este acceso solo decide quién VE la pantalla; por defecto solo admin_saas.
+                itemId: 'saas-system-reset', labelKey: 'menu.systemReset', href: 'Admin-ReinicioSistema.html',
+                apartados: [
+                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Ver el reinicio'] },
+                ],
+            },
         ],
     },
 ];

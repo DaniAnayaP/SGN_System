@@ -758,6 +758,7 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-business-sectors': 'saas-business-sectors',
     'admin-column-colors': 'saas-column-colors',
     'admin-limits-audit': 'saas-limits-audit',
+    'admin-system-reset': 'saas-system-reset',
     'admin-equipo-saas': 'saas-team',
     'admin-saas-master-status': 'saas-master-tree',
     'admin-nuestros-respaldos': 'saas-backups',
@@ -854,6 +855,7 @@ const SAAS_CONFIG_SAAS_ORDER_IDS = {
     'admin-nuestros-respaldos': 'saas-backups',
     'admin-material-apoyo': 'saas-material-apoyo',
     'admin-limits-audit': 'saas-limits-audit',
+    'admin-system-reset': 'saas-system-reset',
 };
 // Same "most specific wins, else keep original relative position" idea
 // PermissionTree.js's own applyOrder uses -- anything saas_master_order
@@ -953,6 +955,7 @@ function buildSidebarData(data, role, activePage) {
             abbrKeys: ['menu.ourSupportMaterialAbbr1', 'menu.ourSupportMaterialAbbr2', 'menu.ourSupportMaterialAbbr3'],
         },
         { id: 'admin-limits-audit', labelKey: 'menu.limitsAudit', href: 'Admin-AuditoriaLimites.html', icon: 'bx-shield-quarter', saasItemId: 'saas-limits-audit' },
+        { id: 'admin-system-reset', labelKey: 'menu.systemReset', href: 'Admin-ReinicioSistema.html', icon: 'bx-reset', saasItemId: 'saas-system-reset' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const saasConfigSubmenuOrdered = applySaasSidebarOrder(saasConfigSubmenu, 'saasConfig', SAAS_CONFIG_SAAS_ORDER_IDS);
     const customerServiceItem = {
@@ -8865,6 +8868,7 @@ const SCREEN_DESCRIPTION_KEYS = {
     'BaseDatos-Respaldos.html': 'admin.backupsSubtitle',
     'BaseDatos-Solicitudes.html': 'main.databaseRequestsSubtitle',
     'Admin-AuditoriaLimites.html': 'admin.limitsAuditSubtitle',
+    'Admin-ReinicioSistema.html': 'admin.systemResetSubtitle',
     'Admin-ColoresColumnas.html': 'admin.columnColorsLevelsSubtitle',
     'Business-ColoresColumnas.html': 'business.columnColorsSubtitle',
     'Business-Config.html': 'business.configSubtitle',

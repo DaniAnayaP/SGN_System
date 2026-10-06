@@ -12,7 +12,7 @@
 // even before those variables are set — only evidence upload/download fail,
 // with a clear error, until Paso 0 is done.
 // ---------------------------------------------------------------------------
-const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const SIGNED_URL_TTL_SECONDS = 300;
@@ -86,4 +86,35 @@ async function deleteObject(key) {
     await getClient().send(command);
 }
 
-module.exports = { getUploadUrl, getDownloadUrl, putObject, deleteObject };
+// ¿Están puestas las 4 variables de R2? Para saber si hay archivos que contar o borrar, sin lanzar el error de getClient().
+function isConfigured() {
+    const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME } = process.env;
+    return !!(R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME);
+}
+
+// Todas las llaves que empiezan con `prefix` (pagina de 1000 en 1000). Lo usa el Reinicio del Sistema para contar y borrar los archivos
+// de los clientes.
+async function listKeys(prefix) {
+    const keys = [];
+    let token;
+    do {
+        const out = await getClient().send(new ListObjectsV2Command({ Bucket: bucketName(), Prefix: prefix, ContinuationToken: token }));
+        (out.Contents || []).forEach((o) => keys.push(o.Key));
+        token = out.IsTruncated ? out.NextContinuationToken : undefined;
+    } while (token);
+    return keys;
+}
+
+// Borra las llaves dadas (hasta 1000 por llamada). Devuelve cuántas se pidió borrar; si R2 rechaza alguna, lanza el error con el detalle.
+async function deleteKeys(keys) {
+    let requested = 0;
+    for (let i = 0; i < keys.length; i += 1000) {
+        const chunk = keys.slice(i, i + 1000);
+        const out = await getClient().send(new DeleteObjectsCommand({ Bucket: bucketName(), Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true } }));
+        if (out.Errors && out.Errors.length) throw new Error(`R2 no pudo borrar ${out.Errors.length} archivos: ${out.Errors[0].Message}`);
+        requested += chunk.length;
+    }
+    return requested;
+}
+
+module.exports = { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured, listKeys, deleteKeys };
