@@ -1764,7 +1764,9 @@ function sanitizePlanModules(modules) {
 // false before launch, and every plan saved with a full access tree from
 // then on locks for real. Never read from an env var on purpose: this is a
 // one-time, deliberate release switch, not a per-environment setting.
-const DEV_MODE_ALLOW_LOCKED_PLAN_EDITS = true;
+// FLIPPED to false on 2026-10-06 (launch prep, Daniel approved): a plan can be edited freely only while it is in Revisión; once Activado
+// (locked) its definition no longer changes. Flip back to true only for a deliberate round of development, never in production.
+const DEV_MODE_ALLOW_LOCKED_PLAN_EDITS = false;
 
 app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
     const plans = listPlans().map((plan) => ({ ...plan, accessPermissionsCost: computeAccessCostTotal(plan.id) }));
