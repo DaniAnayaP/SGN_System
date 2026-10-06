@@ -6610,7 +6610,8 @@ function setMasterPermissionStatuses(rows, updatedBy) {
             if (!r) continue;
             const status = r.status || 'habilitado';
             const webEnabled = r.webEnabled !== false;
-            const appEnabled = r.appEnabled === true;
+            // La App no puede estar activa sin la Web (regla del producto): lo hace cumplir el servidor, no solo la pantalla.
+            const appEnabled = r.appEnabled === true && webEnabled;
             // Every column at its default needs no row -- keeps the table
             // down to just the exceptions, same reasoning as the DDL
             // comment above.
@@ -7354,7 +7355,7 @@ function setSaasMasterStatuses(rows, updatedBy) {
             if (!r || !r.itemId) continue;
             const status = r.status || 'habilitado';
             const webEnabled = r.webEnabled !== false;
-            const appEnabled = r.appEnabled === true;
+            const appEnabled = r.appEnabled === true && webEnabled; // la App no puede estar activa sin la Web
             if (status === 'habilitado' && webEnabled && !appEnabled) continue;
             insert.run({ itemId: r.itemId, status, webEnabled: webEnabled ? 1 : 0, appEnabled: appEnabled ? 1 : 0, updatedBy: updatedBy || '' });
         }

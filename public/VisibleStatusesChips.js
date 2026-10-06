@@ -25,7 +25,10 @@
     // options.helpKey marca el bloque con esa entrada help.<key> de Modo ayuda.
     function render(container, current, onChange, options = {}) {
         const t = (window.Dashboard && window.Dashboard.t) || ((k) => k);
-        const selected = new Set(current && current.length ? current : ['habilitado']);
+        // options.allowed: los únicos Estatus que se pueden elegir (los que ve quien los da); los demás se muestran apagados y bloqueados.
+        const allowedSet = Array.isArray(options.allowed) ? new Set(options.allowed) : null;
+        const initial = (current && current.length ? current : ['habilitado']).filter((s) => !allowedSet || allowedSet.has(s));
+        const selected = new Set(initial.length ? initial : ['habilitado']);
         container.innerHTML = '';
 
         const field = document.createElement('div');
@@ -59,7 +62,13 @@
             chip.setAttribute('aria-pressed', String(selected.has(status.value)));
             chip.innerHTML = `<span class="visible-status-dot" aria-hidden="true"></span><span></span>`;
             chip.querySelector('span:last-child').textContent = t(status.labelKey);
+            if (allowedSet && !allowedSet.has(status.value)) {
+                chip.disabled = true;
+                chip.classList.add('disabled');
+                chip.title = t('admin.visibleStatusesNotAllowed');
+            }
             chip.addEventListener('click', () => {
+                if (chip.disabled) return;
                 if (selected.has(status.value)) {
                     if (selected.size === 1) return; // always at least one -- see this function's own comment
                     selected.delete(status.value);

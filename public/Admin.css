@@ -6261,3 +6261,10 @@ body.dark-mode .col-colors-state-master{ background-color: #2a2c38; color: #a3a8
     white-space: nowrap;
 }
 body.dark-mode .perm-tree-class-origin{ background-color: #2a2c38; color: #a3a8c0; }
+
+/* "¿Qué Estatus puede ver?": un Estatus que la cuenta del administrador no ve no se puede dar a otro usuario. */
+.visible-status-chip.disabled,
+.visible-status-chip:disabled{
+    opacity: 0.4;
+    cursor: not-allowed;
+}

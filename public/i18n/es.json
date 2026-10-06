@@ -692,6 +692,7 @@
     "masterTreeStatusMejorasShort": "Mejoras",
     "masterTreeStatusMejorasIcon": "⬆",
     "visibleStatusesLabel": "¿Qué Estatus puede ver?",
+    "visibleStatusesNotAllowed": "No puedes dar este Estatus: tu propia cuenta no lo ve.",
     "visibleStatusesHint": "Lo que no esté encendido aquí queda invisible para esta persona, aunque tenga el permiso arriba. Solo el Usuario de Pruebas necesita los 4.",
     "masterTreePlatformWeb": "Web",
     "masterTreePlatformApp": "App",

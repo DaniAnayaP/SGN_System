@@ -693,6 +693,7 @@
     "masterTreeStatusMejorasShort": "Improving",
     "masterTreeStatusMejorasIcon": "⬆",
     "visibleStatusesLabel": "Which Estatus can they see?",
+    "visibleStatusesNotAllowed": "You can't give this Status: your own account can't see it.",
     "visibleStatusesHint": "Anything not turned on here stays invisible to this person, even if they have the permission above. Only the Usuario de Pruebas needs all 4.",
     "masterTreePlatformWeb": "Web",
     "masterTreePlatformApp": "App",

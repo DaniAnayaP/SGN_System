@@ -3913,6 +3913,8 @@ app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
         grants: getUserGrants(req.params.id),
         jobPositionGrants: getUserJobPositionGrants(req.params.id),
         visibleStatuses: getUserVisibleStatuses(req.params.id),
+        // Los Estatus que esta cuenta (la del administrador) puede dar: un nivel no da más de lo que ve el de arriba.
+        assignableStatuses: getUserVisibleStatuses(req.user.sub),
     });
 });
 
@@ -3958,6 +3960,11 @@ app.put('/api/business/users/:id/visible-statuses', requireAuth, requireClientAd
     const { statuses } = req.body || {};
     if (!Array.isArray(statuses) || statuses.some((s) => !ALL_ESTATUS_VALUES.includes(s))) {
         return res.status(400).json({ message: `statuses must be an array of: ${ALL_ESTATUS_VALUES.join(', ')}.` });
+    }
+    // El administrador solo puede dar los Estatus que su propia cuenta ve (ningún nivel da más de lo que le deja el de arriba).
+    const assignable = getUserVisibleStatuses(req.user.sub);
+    if (statuses.some((s) => !assignable.includes(s))) {
+        return res.status(403).json({ message: 'No puedes dar a un usuario un Estatus que tu propia cuenta no puede ver.' });
     }
     const statusesBefore = getUserVisibleStatuses(req.params.id);
     const savedStatuses = setUserVisibleStatuses(req.params.id, statuses);
