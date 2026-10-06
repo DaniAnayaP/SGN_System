@@ -784,6 +784,18 @@ function denySaasLeaf(req, res, itemId, subItemIds, message) {
     return true;
 }
 
+// Lectura de datos del lado SaaS: el administrador principal, o quien tenga algún acceso de las pantallas dadas (itemIds de su árbol de Equipo SaaS);
+// 'any' = cualquiera con al menos un acceso del equipo; [] = solo el administrador principal. Una lista que usan varias pantallas se abre a todas ellas.
+// Antes estas rutas solo pedían ser "admin": una cuenta sin accesos podía leer clientes, planes, giros y cuentas del equipo.
+function denySaasScreen(req, res, itemIds) {
+    if (req.user.isSaasSuperAdmin) return false;
+    const grants = getSaasUserGrants(req.user.sub);
+    const allowed = itemIds === 'any' ? grants.length > 0 : grants.some((g) => itemIds.includes(g.itemId));
+    if (allowed) return false;
+    res.status(403).json({ message: 'No tienes permiso para ver esto.' });
+    return true;
+}
+
 // Una cuenta del equipo que no es el administrador principal no puede darle a otra (ni a sí misma) más de lo que ella tiene: ningún nivel da más de lo que
 // le deja el de arriba. grantsAfter son los accesos que se piden; statuses, los Estatus que se piden (si aplica).
 function denySaasTeamEscalation(req, res, targetId, { grantsBefore = [], grantsAfter = [], statuses = null } = {}) {
@@ -1128,6 +1140,7 @@ function validateClientBody(body) {
 }
 
 app.get('/api/admin/modules', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     res.json({ modules: MODULE_CATALOG });
 });
 
@@ -1137,6 +1150,7 @@ app.get('/api/admin/modules', requireAuth, requireAdmin, (req, res) => {
 // Un cliente sin plan (o con un plan que ya no existe) da todo en 0, nunca
 // truena.
 app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients','saas-material-apoyo','saas-backups'])) return;
     const clients = listClients().map((client) => {
         const plan = client.plan ? getPlanByName(client.plan) : null;
         const planAccessPermissionsCost = plan ? computeAccessCostTotal(plan.id) : 0;
@@ -1340,10 +1354,12 @@ function logClientFieldChanges(req, before, after) {
 // Historial de la tabla completa (icono de la barra) -- declarada antes de las
 // rutas con :id para que "changes" no se lea como un id.
 app.get('/api/admin/clients/changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     res.json({ changes: getAllClientChanges() });
 });
 
 app.get('/api/admin/clients/:id/changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     res.json({ changes: getClientChanges(req.params.id) });
 });
 
@@ -1477,6 +1493,7 @@ app.post('/api/admin/clients/:id/reset', requireAuth, requireAdmin, (req, res) =
 });
 
 app.get('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     res.json({ modules: getClientModules(req.params.id), costCentersLimit: existing.cost_centers_limit });
@@ -1487,6 +1504,7 @@ app.get('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
 // client-scoped route (unlike /api/business/cost-centers, which relies on
 // the caller's own session clientId).
 app.get('/api/admin/clients/:id/cost-centers', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     res.json({ costCenters: listCostCenters(req.params.id) });
@@ -1517,12 +1535,14 @@ app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) 
 // diagnosing "I granted everything but the buttons still don't show" style
 // reports.
 app.get('/api/admin/clients/:id/business-users', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     res.json({ users: listBusinessUsers(req.params.id) });
 });
 
 app.get('/api/admin/clients/:id/business-users/:userId/access', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     const user = getUserById(req.params.userId, req.params.id);
@@ -1542,6 +1562,7 @@ app.get('/api/admin/clients/:id/business-users/:userId/access', requireAuth, req
 // from here. An empty grants array here means "no override" — Dashboard.js
 // treats that as full access to whatever's contracted, not "nothing".
 app.get('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     if (!client.admin_user_id) return res.status(404).json({ message: 'This client has no admin user yet.' });
@@ -1568,6 +1589,7 @@ app.put('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, 
 // plan del cliente para que el árbol pinte verde (plan) / amarillo
 // (adicional) / rojo (no contratado) del lado del navegador.
 app.get('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     const plan = client.plan ? getPlanByName(client.plan) : null;
@@ -1615,6 +1637,7 @@ app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
 // is what setClientPermissionGrants logged against), so one client can never
 // see another's grant history even by guessing a nodeKey.
 app.get('/api/admin/client-permission-change-log', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     const { clientId, nodeKey } = req.query || {};
     if (!clientId || !nodeKey) return res.status(400).json({ message: 'clientId and nodeKey are required.' });
     res.json({ entries: getClientPermissionChangeLog(clientId, nodeKey) });
@@ -1625,6 +1648,7 @@ app.get('/api/admin/client-permission-change-log', requireAuth, requireAdmin, (r
 // granted the old (flat, whole-module) way; the new permission-grants
 // route above doesn't write to this log (see its own comment).
 app.get('/api/admin/clients/:id/anexo-changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     res.json({ changes: getAnexoChanges(req.params.id) });
@@ -1766,6 +1790,7 @@ app.delete('/api/admin/clients/:id/material-apoyo/:materialId', requireAuth, req
 // completely separate from Planes y Paquetes, which only decides which
 // módulos a plan includes, not what any of them cost.
 app.get('/api/admin/module-costs', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, [])) return;
     const costByKey = new Map(getModuleCosts().map((c) => [c.module_key, c.cost]));
     res.json({ costs: MODULE_CATALOG.map((m) => ({ ...m, cost: costByKey.get(m.key) || 0 })) });
 });
@@ -1822,6 +1847,7 @@ function sanitizePlanModules(modules) {
 const DEV_MODE_ALLOW_LOCKED_PLAN_EDITS = false;
 
 app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-plans','saas-clients'])) return;
     const plans = listPlans().map((plan) => ({ ...plan, accessPermissionsCost: computeAccessCostTotal(plan.id) }));
     res.json({ plans, devModeOverride: DEV_MODE_ALLOW_LOCKED_PLAN_EDITS });
 });
@@ -1983,6 +2009,7 @@ app.delete('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
 // saves for a client's profiles, mounted here against a plan instead. The
 // first save locks the plan (see DEV_MODE_ALLOW_LOCKED_PLAN_EDITS above).
 app.get('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-plans','saas-clients'])) return;
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     // sectorGrants: this plan's OWN Sector's CURRENT defaults (live, not a
@@ -2053,6 +2080,7 @@ function validateCostAdjustOverrides(overrides) {
 }
 
 app.get('/api/admin/business-sectors/:id/cost-adjust', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors','saas-plans'])) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Business sector not found.' });
     res.json({
@@ -2084,6 +2112,7 @@ app.put('/api/admin/business-sectors/:id/cost-adjust', requireAuth, requireAdmin
 });
 
 app.get('/api/admin/plans/:id/cost-adjust', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-plans'])) return;
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     res.json({
@@ -2119,6 +2148,7 @@ app.put('/api/admin/plans/:id/cost-adjust', requireAuth, requireAdmin, (req, res
 // plan_permission_costs always returned, just computed live from the
 // cascade now.
 app.get('/api/admin/plans/:id/cascaded-costs', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-plans','saas-clients'])) return;
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     res.json({ costs: getCascadedPlanCosts(req.params.id), currency: getMasterCostSettings().currency });
@@ -2126,10 +2156,12 @@ app.get('/api/admin/plans/:id/cascaded-costs', requireAuth, requireAdmin, (req, 
 
 // Historial de la tabla completa (icono de la barra de Nuestros Planes).
 app.get('/api/admin/plans/changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-plans'])) return;
     res.json({ changes: getAllPlanChanges() });
 });
 
 app.get('/api/admin/plans/:id/changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-plans','saas-clients'])) return;
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     res.json({ changes: getPlanChanges(req.params.id) });
@@ -2151,6 +2183,7 @@ function validateMasterPermissionCosts(costs) {
 }
 
 app.get('/api/admin/master-permission-costs', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-master-permissions-tree','saas-business-sectors'])) return;
     res.json({ costs: getMasterPermissionCosts(), ...getMasterCostSettings() });
 });
 
@@ -2203,21 +2236,25 @@ function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue,
     logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
 }
 app.get('/api/admin/saas-table-changes/:tableKey', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, 'any')) return;
     if (!SAAS_TABLE_CHANGES_KEYS.includes(req.params.tableKey)) return res.status(404).json({ message: 'Unknown table.' });
     res.json({ changes: getSaasTableChanges(req.params.tableKey, req.query.recordId) });
 });
 
 app.get('/api/admin/saas-apps', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-apps'])) return;
     res.json({ apps: listSaasApps() });
 });
 
 // The fixed catalog of Web screens/tables an App screen can map to — same
 // keys as db.js's TABLE_GRANT_PATHS, see the "add screen" modal.
 app.get('/api/admin/web-screens-catalog', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-apps'])) return;
     res.json({ screens: WEB_SCREEN_CATALOG });
 });
 
 app.get('/api/admin/saas-apps/:id', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-apps'])) return;
     const app_ = getSaasAppById(req.params.id);
     if (!app_) return res.status(404).json({ message: 'App not found.' });
     res.json({ app: app_ });
@@ -2329,6 +2366,7 @@ app.delete('/api/admin/saas-apps/:id/screens/:screenId', requireAuth, requireAdm
 // App has actually curated yet (that's GET .../screens/:screenId/fields
 // below).
 app.get('/api/admin/web-screens-catalog/:webScreenKey/fields', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-apps'])) return;
     res.json(getWebScreenFieldsCatalog(req.params.webScreenKey));
 });
 
@@ -2356,6 +2394,7 @@ app.put('/api/admin/saas-apps/:id/screens/:screenId/fields', requireAuth, requir
 // --- Nuestros Sectores de Negocio (catalog Nuestras APPs' Sector field ------
 // picks from — see business_sectors in db.js) ---------------------------------
 app.get('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors','saas-apps','saas-plans','saas-clients'])) return;
     res.json({ sectors: listBusinessSectors() });
 });
 
@@ -2415,10 +2454,12 @@ app.patch('/api/admin/business-sectors/:id', requireAuth, requireAdmin, (req, re
 
 // Historial de la tabla completa (icono de la barra de Giros de Negocio).
 app.get('/api/admin/business-sectors/changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors'])) return;
     res.json({ changes: getAllBusinessSectorChanges() });
 });
 
 app.get('/api/admin/business-sectors/:id/changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors','saas-plans','saas-clients'])) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
     res.json({ changes: getBusinessSectorChanges(req.params.id) });
@@ -2428,6 +2469,7 @@ app.get('/api/admin/business-sectors/:id/changes', requireAuth, requireAdmin, (r
 // db.js's own comment for why this isn't the client-scoped
 // article_categories/catalog-request mechanism used elsewhere).
 app.get('/api/admin/business-sector-types', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors'])) return;
     res.json({ types: listBusinessSectorTypes() });
 });
 // One of BusinessSectorIcons.js's own 14 rubro ids (data/business-sector-
@@ -2494,6 +2536,7 @@ app.patch('/api/admin/business-sectors/:id/status', requireAuth, requireAdmin, (
 // copies this ONCE at creation time (see createPlan in db.js), then the two
 // evolve independently.
 app.get('/api/admin/business-sectors/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors','saas-plans','saas-clients'])) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
     res.json({ grants: getSectorGrants(req.params.id) });
@@ -2548,6 +2591,7 @@ function buildMasterOrdersByPrefix(prefix) {
 // Globales, filtered to what's granted, with reorder enabled at every
 // depth Árbol Maestro itself reorders at, not just Departamento/Área.
 app.get('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors'])) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
     const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
@@ -2623,6 +2667,7 @@ app.put('/api/admin/business-sectors/:id/department-order', requireAuth, require
 // unlike the Sector routes above there's no :id -- exactly one tree.
 const MASTER_PERMISSION_STATUS_VALUES = ['habilitado', 'inhabilitado', 'construccion', 'mejoras'];
 app.get('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-master-permissions-tree','saas-business-sectors'])) return;
     res.json({ statuses: getMasterPermissionStatuses() });
 });
 
@@ -2652,6 +2697,7 @@ app.put('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, 
 // One row at a time (unlike master-permission-status's whole-table
 // replace above) -- a picker on a single row calls this, not a bulk save.
 app.get('/api/admin/master-permission-classifications', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, 'any')) return;
     res.json({ overrides: getMasterPermissionClassificationOverrides() });
 });
 app.put('/api/admin/master-permission-classifications', requireAuth, requireAdmin, (req, res) => {
@@ -2680,6 +2726,7 @@ app.put('/api/admin/master-permission-classifications', requireAuth, requireAdmi
 // DDL comment in db.js. Same one-row-at-a-time shape as the overrides
 // route above.
 app.get('/api/admin/master-permission-classification-colors', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, 'any')) return;
     res.json({ colors: getClassificationColors() });
 });
 // Read-only twin of the route above, for the same global colors, reachable
@@ -2749,6 +2796,7 @@ app.delete('/api/admin/master-permission-classification-colors', requireAuth, re
 // Lo mismo para las tablas reales de SaaS (Nuestros Clientes, Equipo SaaS...): los colores de columna
 // (Encabezado/Filas) ya autorizados en el Árbol Maestro SaaS, por data-col.
 app.get('/api/admin/saas-table-column-colors', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, 'any')) return;
     const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';
     if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
     res.json({ columns: getSaasTableColumnColors(tableKey) });
@@ -2949,6 +2997,7 @@ function resolveSaasTreeTarget(req) {
     return { target: null, clientId: null };
 }
 app.get('/api/admin/permission-order', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors','saas-plans','saas-clients','saas-column-colors'])) return;
     const { target, clientId } = resolveSaasTreeTarget(req);
     if (!target) return res.status(404).json({ message: 'Not found.' });
     const { sources, ...orders } = getOrderTreeForTarget(target.level, target.entityId, clientId);
@@ -2956,6 +3005,7 @@ app.get('/api/admin/permission-order', requireAuth, requireAdmin, (req, res) => 
 });
 // Las clasificaciones de columna de ese nivel (Maestro y lo de cada nivel de arriba), para los árboles que las muestran.
 app.get('/api/admin/permission-classifications', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors','saas-plans','saas-clients','saas-column-colors'])) return;
     const { target, clientId } = resolveSaasTreeTarget(req);
     if (!target) return res.status(404).json({ message: 'Not found.' });
     res.json({ overrides: getEffectiveClassificationOverridesForTarget(target.level, target.entityId, clientId) });
@@ -3629,6 +3679,7 @@ app.put('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) =>
 // (see those tables' own DDL comments in db.js for why this screen never
 // shares state with the real Árbol de Permisos Maestro).
 app.get('/api/admin/saas-classification-overrides', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-master-tree'])) return;
     res.json({ overrides: getSaasClassificationOverrides() });
 });
 app.put('/api/admin/saas-classification-overrides', requireAuth, requireAdmin, (req, res) => {
@@ -3731,6 +3782,7 @@ app.post('/api/admin/saas-color-requests/:id/reject', requireAuth, requireAdmin,
 // /api/business/table-classifications' shape, keyed by field_key instead of
 // column id since that's what a saas_user_changes row already carries.
 app.get('/api/admin/saas-user-field-classifications', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-team'])) return;
     res.json({ fields: getEffectiveSaasUserFieldClassifications() });
 });
 
@@ -3774,6 +3826,7 @@ app.put('/api/me/saas-personal-order/:categoryId', requireAuth, requireAdmin, (r
 });
 
 app.get('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-master-permissions-tree'])) return;
     const row = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
     res.json({
         departmentOrder: row ? row.orderedKeys : [],
@@ -3836,6 +3889,7 @@ app.put('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, r
 // "can manage staff" grant — that would need a grant to bootstrap itself
 // out of, a chicken-and-egg problem this small a team doesn't need solved).
 app.get('/api/admin/saas-users', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, 'any')) return;
     res.json({ users: listSaasAdmins() });
 });
 
@@ -3912,9 +3966,11 @@ app.post('/api/admin/saas-users/:id/reset-password', requireAuth, requireAdmin, 
 // is its own table instead of reusing data_table_changes (that one's
 // client_id-scoped and its own route 404s for admin accounts).
 app.get('/api/admin/saas-users/changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-team'])) return;
     res.json({ changes: getAllSaasUserChanges() });
 });
 app.get('/api/admin/saas-users/:id/changes', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-team'])) return;
     // ?nodeKey= : solo los cambios de una fila del árbol de accesos (y lo que cuelga de ella).
     res.json({ changes: getSaasUserChanges(req.params.id, req.query.nodeKey) });
 });
@@ -3928,6 +3984,7 @@ function validateSaasGrants(grants) {
 }
 
 app.get('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-team'])) return;
     // visibleStatuses rides along here too -- the "¿Qué Estatus puede ver?"
     // chips live in this same edit-access modal (confirmed live,
     // 2026-09-27: "Sí, ahí mismo en el modal"), so both load in one trip.
