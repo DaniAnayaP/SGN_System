@@ -7208,6 +7208,31 @@ function getEffectiveColumnClassifications(tableKey, viewer = null) {
     return result;
 }
 
+// El orden de las columnas de una tabla real para esta persona: el del Árbol Maestro y, bajando, el de su Giro, Plan, Cliente,
+// Administrador, Perfil y Usuario (gana el más cercano). Devuelve una lista de grupos de ids de columna, cada uno en el orden que
+// le toca dentro de su clasificación estructural. Solo se devuelven los grupos que SÍ difieren del orden de menu.json: el Árbol Maestro
+// guarda copias completas del orden al guardar, y una copia igual a la de menu.json no debe mover columnas de una tabla que nadie
+// reordenó. Las tablas de General (main) no llevan orden de columnas.
+function getCascadedColumnGroups(tableKey, viewer) {
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path || path.sectionId === 'main') return [];
+    const pantalla = findPantallaNode(path.sectionId, path.itemId, path.submenuPrefix);
+    if (!pantalla) return [];
+    const segments = path.submenuPrefix.split('/');
+    const prefix = `${path.sectionId}::${path.itemId}::${segments[0]}::${segments[segments.length - 1]}::`;
+    const groups = [];
+    Object.entries(getEffectiveOrdersForViewer(viewer).columnOrders).forEach(([key, ids]) => {
+        if (!key.startsWith(prefix)) return;
+        const classId = key.slice(prefix.length);
+        const entry = (pantalla.submenu || []).find((e) => e.isClassification && e.id === classId);
+        if (!entry || classId === 'class-botones') return;
+        const defaults = (entry.submenu || []).map((c) => c.id);
+        const ordered = completeOrder(ids, defaults);
+        if (ordered.length > 1 && JSON.stringify(ordered) !== JSON.stringify(defaults)) groups.push(ordered);
+    });
+    return groups;
+}
+
 // Tablas reales de SaaS (mismos ids que SAAS_TABLE_ICON_SCREENS en Dashboard.js): pantalla y apartado del
 // catálogo del Árbol Maestro SaaS, y los data-col de sus columnas EN EL MISMO ORDEN que `columnas` en
 // public/SaasAdminCatalog.js (la posición es el id c0, c1, ... de cada hoja). Las columnas del Control
@@ -9477,6 +9502,7 @@ module.exports = {
     setClassificationTextColor,
     clearClassificationColor,
     getEffectiveColumnClassifications,
+    getCascadedColumnGroups,
     getLevelOrderLayers,
     resolveOrderRows,
     getEffectiveOrdersForViewer,

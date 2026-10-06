@@ -5491,6 +5491,26 @@ async function refreshTableClassifications(tableId) {
     if (changed) renderColumnGroupBand(tableId);
     state.columnColors = columnColors;
     paintColumnColors(tableId);
+    applyCascadedColumnOrder(tableId, data.columnGroups);
+}
+// Orden inicial de las columnas de una tabla: el del Árbol Maestro y, bajando, el de su Giro, Plan, Cliente, Administrador, Perfil y
+// Usuario (lo calcula el servidor: solo trae los grupos que difieren de menu.json). Solo vale mientras la persona no tenga un acomodo
+// propio guardado en este equipo (ni uno por defecto de Acomodo Guardado): cualquier acomodo suyo manda. Dentro de cada clasificación
+// las columnas conservan los mismos huecos de la tabla y solo se intercambian entre sí, así el resto de la tabla no se mueve.
+function applyCascadedColumnOrder(tableId, groups) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || state.cascadedOrderApplied || !Array.isArray(groups) || !groups.length) return;
+    if (localStorage.getItem(dataTableConfigStorageKey(tableId)) != null) return;
+    const order = [...state.config.order];
+    groups.forEach((ids) => {
+        const present = ids.filter((id) => order.includes(id));
+        const slots = present.map((id) => order.indexOf(id)).sort((a, b) => a - b);
+        present.forEach((id, i) => { order[slots[i]] = id; });
+    });
+    state.cascadedOrderApplied = true;
+    if (order.every((key, i) => key === state.config.order[i])) return;
+    state.config.order = order;
+    applyDataTableColumnLayout(tableId);
 }
 function resolveGroupLabel(groupKey) {
     if (!groupKey) return '';

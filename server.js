@@ -321,6 +321,7 @@ const {
     findColorColumnByColorId,
     getClientColorsForTarget,
     getEffectiveOrdersForViewer,
+    getCascadedColumnGroups,
     getOrderTreeForTarget,
     getEffectiveClassificationOverridesForTarget,
     setLevelOrders,
@@ -2650,7 +2651,9 @@ app.get('/api/business/table-classifications', requireAuth, (req, res) => {
     // Una persona de un cliente ve el color de cada columna ya resuelto hacia abajo (giro, plan, cliente,
     // administrador, perfil, usuario); una cuenta SaaS ve el del Maestro.
     const viewer = req.user.clientId ? { userId: req.user.sub, clientId: req.user.clientId } : null;
-    res.json({ columns: getEffectiveColumnClassifications(tableKey, viewer) });
+    // columnGroups: el orden de columnas que le toca a esta persona (solo los grupos que difieren de menu.json); la tabla real lo usa
+    // como orden inicial mientras la persona no haya guardado su propio acomodo.
+    res.json({ columns: getEffectiveColumnClassifications(tableKey, viewer), columnGroups: getCascadedColumnGroups(tableKey, viewer) });
 });
 
 // ---------------------------------------------------------------------------
