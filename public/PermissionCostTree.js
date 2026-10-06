@@ -185,6 +185,9 @@
         // para las vistas del Administrador (su Mis Accesos y "Accesos del Administrador" del equipo SaaS): él usa todo General. En la vista de
         // un usuario o perfil NO se pone, porque ahí General sale verde solo si se lo habilitaron.
         mainIncluded = false,
+        // clientTricolor interactivo: { reason(sectionId, itemId, submenuId) -> null | 'status' | 'contract' } (ver Dashboard.buildGrantLimits). Lo que no
+        // se puede dar (fuera del contrato o en un Estatus que no ves) sale con candado en vez de casilla, y "marcar todo" lo salta. Sin esto, igual que siempre.
+        grantLimits = null,
     } = {}) {
         let sectionsData = [];
         const classificationOverrides = new Map();
@@ -196,6 +199,18 @@
         // El conjunto del plan (verde); con mainIncluded, además toda llave de General cuenta como cubierta por el plan.
         class PlanSet extends Set {
             has(key) { return super.has(key) || (mainIncluded && String(key).startsWith('main::')); }
+        }
+        const limitReasonCache = new Map();
+        function limitReasonKey(key) {
+            if (!grantLimits) return null;
+            if (!limitReasonCache.has(key)) {
+                const [sectionId, itemId, submenuId] = key.split('::');
+                limitReasonCache.set(key, grantLimits.reason(sectionId, itemId || null, submenuId || null) || null);
+            }
+            return limitReasonCache.get(key);
+        }
+        function isLimitLocked(key) {
+            return !!limitReasonKey(key);
         }
         let planGrantSet = new PlanSet(); // clientTricolor: coverage granted by the client's PLAN (green)
         let clientGrantSet = new Set(); // clientTricolor: already-saved "+ adicionales" sold to THIS client (yellow)
@@ -452,7 +467,7 @@
                     row.appendChild(appCostWrap);
                 }
             } else if (mode === 'clientTricolor') {
-                const isRedInteractive = !!(colorSlot && colorSlot.color === 'red' && interactive);
+                const isRedInteractive = !!(colorSlot && colorSlot.color === 'red' && interactive && !colorSlot.limitReason);
                 if (isRedInteractive) {
                     const labelEl = document.createElement('label');
                     labelEl.className = 'perm-tree-check';
@@ -476,6 +491,10 @@
                     label.textContent = labelText;
                     applyClassificationColorTo(label, classificationId);
                     row.appendChild(label);
+                    if (colorSlot && colorSlot.limitReason) {
+                        row.classList.add('perm-tree-row-limit-locked');
+                        row.title = t(colorSlot.limitReason === 'status' ? 'main.limitLockedStatus' : 'main.limitLockedContract');
+                    }
                 }
                 // Interactive "+ Adicionales" only: shows what each row would
                 // cost (or already costs, if green/yellow) so the running
@@ -538,10 +557,13 @@
         function extraSlotArgs(ownKey, leafKeys) {
             if (mode !== 'clientTricolor') return [ownKey, undefined];
             const color = colorFor(leafKeys);
+            const stageable = grantLimits ? leafKeys.filter((k) => !isLimitLocked(k)) : leafKeys;
+            const lockedReason = grantLimits && leafKeys.length > 0 && stageable.length === 0 ? limitReasonKey(leafKeys[0]) : null;
             return [ownKey, {
                 color,
-                checked: color === 'red' && leafKeys.length > 0 && leafKeys.every((k) => pendingAdditions.has(k)),
-                onChange: (checked) => leafKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
+                limitReason: color === 'red' ? lockedReason : null,
+                checked: color === 'red' && stageable.length > 0 && stageable.every((k) => pendingAdditions.has(k)),
+                onChange: (checked) => stageable.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
             }];
         }
 
@@ -913,8 +935,10 @@
                 const colExpanded = expandedItems.has(colTreeKey);
                 const colorSlot = {
                     color: soloVerColor,
+                    limitReason: soloVerColor === 'red' ? limitReasonKey(soloVerKeyTri) : null,
                     checked: soloVerColor === 'red' && interactive && pendingAdditions.has(soloVerKeyTri),
                     onChange: (checked) => {
+                        if (checked && isLimitLocked(soloVerKeyTri)) return;
                         if (checked) pendingAdditions.add(soloVerKeyTri);
                         else {
                             pendingAdditions.delete(soloVerKeyTri);
@@ -940,7 +964,7 @@
                         icon: COLUMN_LEVEL_ICONS[level.id],
                         label: t(level.labelKey),
                         checked: locked || (interactive && pendingAdditions.has(levelKey)),
-                        disabled: locked || !interactive || !verGranted,
+                        disabled: locked || !interactive || !verGranted || isLimitLocked(levelKey),
                         lockedColor: locked ? levelColor : undefined,
                         onChange: (checked) => { if (checked) pendingAdditions.add(levelKey); else pendingAdditions.delete(levelKey); render(); },
                     };
@@ -952,10 +976,12 @@
             if (mode === 'clientTricolor') {
                 const levelKeys = [...COLUMN_LEVELS, COLUMN_AUTHORIZE, COLUMN_ELIMINAR].map((l) => keyOf(section.id, item.id, `${base}/${l.id}`));
                 const color = columnColorFor(levelKeys);
+                const columnLocked = isLimitLocked(keyOf(section.id, item.id, `${base}/solo-ver`));
                 const colorSlot = {
                     color,
-                    checked: color === 'red' && levelKeys.every((k) => pendingAdditions.has(k)),
-                    onChange: (checked) => levelKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
+                    limitReason: color === 'red' && columnLocked ? limitReasonKey(keyOf(section.id, item.id, `${base}/solo-ver`)) : null,
+                    checked: color === 'red' && !columnLocked && levelKeys.every((k) => pendingAdditions.has(k)),
+                    onChange: (checked) => { if (!columnLocked) levelKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))); },
                 };
                 const soloVerKeyTri = keyOf(section.id, item.id, `${base}/solo-ver`);
                 const { row } = buildRow(t(col.labelKey, col.labelParams), depth, null, colCostKey, colorSlot, appColumnExtraSlot(soloVerKeyTri, levelKeys), null, soloVerKeyTri);

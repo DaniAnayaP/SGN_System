@@ -131,7 +131,8 @@ async function selectJobPositionForPermissions(jp) {
         const data = await res.json();
         const order = await fetch(`/api/business/permission-order?level=perfil&entityId=${jp.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch(`/api/business/permission-classifications?level=perfil&entityId=${jp.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides });
+        const contractGrants = await fetch('/api/business/contract-grants', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d ? d.contractGrants : null)).catch(() => null);
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides, grantLimits: Dashboard.buildGrantLimits(contractGrants) });
         await tree.init(data.grants || []);
     } catch {
         permissionsSaveStatus.textContent = Dashboard.t('admin.loadError');

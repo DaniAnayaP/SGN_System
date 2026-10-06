@@ -4049,6 +4049,12 @@ app.get('/api/business/me/grants', requireAuth, (req, res) => {
     });
 });
 
+// Lo contratado por la empresa del administrador (plan + adicionales; null sin plan): los editores de Perfil y Usuario lo usan para mostrar con
+// candado lo que no se puede dar (las mismas reglas que clampNewGrantsToLimits aplica al guardar).
+app.get('/api/business/contract-grants', requireAuth, requireClientAdmin, (req, res) => {
+    res.json({ contractGrants: getClientContractGrants(req.user.clientId) });
+});
+
 // "Cambios" por nodo del árbol contratado del administrador (Mis Accesos): el historial del contrato de SU cliente, nunca el de otro.
 app.get('/api/business/me/contract-change-log', requireAuth, requireClientAdmin, (req, res) => {
     const { nodeKey } = req.query || {};

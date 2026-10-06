@@ -1806,6 +1806,8 @@
     "permEditar": "Editar",
     "permAutorizar": "Autorizar",
     "permEliminar": "Eliminar",
+    "limitLockedContract": "No está en lo que contrató la empresa: no se puede dar",
+    "limitLockedStatus": "Está en un Estatus que no puedes dar: no se puede dar",
     "appVisionColumn": "Visión APP",
     "appEqualizeRow": "Igualar Visión APP con Web para esta fila",
     "appEqualizeAll": "Igualar Visión APP con Web",
@@ -2455,6 +2457,10 @@
     "masterTreeEqualizeRow": {
       "what": "Copia el valor de esta fila en Web hacia la misma fila en App, para que ambos queden iguales.",
       "example": "pones el mismo costo en Web y en App sin tener que escribirlo dos veces."
+    },
+    "permTreeLimitLock": {
+      "what": "Un candado en una casilla quiere decir que ese permiso no se puede dar: no está en lo que contrató la empresa (plan y adicionales) o está en un Estatus que tu cuenta no ve. La casilla queda apagada y «marcar todo» la salta. Si ya estaba concedido de antes, puedes quitarlo pero no volver a ponerlo.",
+      "example": "una pantalla que la empresa no contrató sale con candado y, al marcar todo el departamento, el resto se marca y esa se queda sin marcar."
     },
     "masterTreeFillMissingRow": {
       "what": "Copia el valor de Web hacia App solo en las filas donde App todavía está vacío, sin tocar las que ya tienen su propio valor.",

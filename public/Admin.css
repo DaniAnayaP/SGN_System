@@ -6428,3 +6428,18 @@ body.dark-mode .limits-audit-bad{ color: #f08a82; }
 body.dark-mode .system-reset-chip-ok{ border-color: #6fcf8e; color: #6fcf8e; }
 body.dark-mode .system-reset-chip-warn, body.dark-mode .system-reset-banner{ border-color: #e3b567; color: #e3b567; }
 body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; }
+
+/* Editores de permisos: lo que no se puede dar (fuera del contrato o en un Estatus que no ves) sale en gris, con la casilla apagada y un candado. */
+.perm-tree-row-limit-locked{
+    opacity: 0.6;
+}
+.perm-tree-row-limit-locked input[type="checkbox"]:disabled{
+    cursor: not-allowed;
+}
+.perm-tree-limit-lock{
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.4rem;
+    color: var(--color-text-secondary);
+    cursor: help;
+}

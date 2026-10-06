@@ -1807,6 +1807,8 @@
     "permEditar": "Edit",
     "permAutorizar": "Authorize",
     "permEliminar": "Delete",
+    "limitLockedContract": "Not part of what the company contracted: it cannot be given",
+    "limitLockedStatus": "It is in a Status you cannot give: it cannot be given",
     "appVisionColumn": "APP visibility",
     "appEqualizeRow": "Match APP visibility to Web for this row",
     "appEqualizeAll": "Match APP visibility to Web",
@@ -2456,6 +2458,10 @@
     "masterTreeEqualizeRow": {
       "what": "Copies this row's Web value over to the same row in App, so both end up the same.",
       "example": "you set the same cost on Web and App without typing it twice."
+    },
+    "permTreeLimitLock": {
+      "what": "A padlock on a checkbox means that permission cannot be given: it is not part of what the company contracted (plan and extras) or it is in a Status your account does not see. The checkbox stays off and “select all” skips it. If it was already granted before, you can remove it but not put it back.",
+      "example": "a screen the company did not contract shows a padlock, and when you select the whole department the rest is checked and that one stays unchecked."
     },
     "masterTreeFillMissingRow": {
       "what": "Copies the Web value over to App only on rows where App is still empty, without touching the ones that already have their own value.",

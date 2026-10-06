@@ -94,6 +94,30 @@ function limitErrorMessage(body) {
     return t('admin.limitModuleNotContracted', { department: body.labelKey ? t(body.labelKey) : body.sectionId });
 }
 
+// Los límites al DAR permisos, con las mismas reglas que el servidor aplica al guardar (clampNewGrantsToLimits en db.js), para que los editores
+// de Perfil y Usuario muestren con candado lo que no se puede dar en vez de dejarte marcarlo y quitarlo después:
+//   'status'   : el nodo está en un Estatus que quien da el permiso (la cuenta que edita) no ve.
+//   'contract' : una pantalla o columna fuera del plan y los adicionales de la empresa (General, centros de costo y los permisos gruesos no
+//                cuentan; sin plan no se evalúa). El sufijo #app y el nivel de una columna se comparan contra la pantalla / el solo-ver.
+// Si cambias algo aquí, cámbialo también en el servidor: hay una prueba que compara los dos.
+const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar)$/;
+function buildGrantLimits(contractGrants) {
+    const contract = Array.isArray(contractGrants) ? contractGrants : null;
+    const keyOf = (s, i, sub) => `${s}::${i || ''}::${sub || ''}`;
+    const rawSet = contract ? new Set(contract.map((g) => keyOf(g.sectionId, g.itemId, g.submenuId))) : null;
+    const covered = (s, i, sub) => rawSet.has(keyOf(s, i, sub)) || (!!i && rawSet.has(keyOf(s, i, null))) || rawSet.has(keyOf(s, null, null));
+    return {
+        reason(sectionId, itemId, submenuId) {
+            if (!isEstatusVisible(sectionId, itemId, submenuId)) return 'status';
+            if (!rawSet || sectionId === 'main' || !submenuId) return null;
+            if (itemId === 'cc-list' || String(submenuId).startsWith('cc-')) return null;
+            const base = String(submenuId).replace(/#app$/, '');
+            const contractKey = GRANT_COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(GRANT_COLUMN_LEVEL_SUFFIX, '/solo-ver') : base;
+            return covered(sectionId, itemId, contractKey) ? null : 'contract';
+        },
+    };
+}
+
 // El aviso cuando el servidor guardó pero quitó permisos nuevos que no caben (fuera del contrato o en un Estatus que quien da el permiso no ve);
 // null si no se quitó nada.
 function limitDroppedMessage(dropped) {
@@ -11654,6 +11678,7 @@ window.Dashboard = {
     showToast,
     limitErrorMessage,
     limitDroppedMessage,
+    buildGrantLimits,
     confirm: confirmDialog,
     openCatalogRequestModal,
 };

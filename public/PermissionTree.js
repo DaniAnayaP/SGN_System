@@ -278,7 +278,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, grantLimits = null } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -772,9 +772,55 @@
         // of repeating the cascade at each of the checkbox handlers below.
         function setKeys(keys, checked) {
             keys.forEach((k) => {
-                if (checked) grantSet.add(k);
+                if (checked) { if (!isLimitLocked(k)) grantSet.add(k); }
                 else { grantSet.delete(k); grantSet.delete(k + APP_SUFFIX); }
             });
+        }
+
+        // ── Límites al dar permisos (Mis límites: contrato y Estatus) ─────────────────────────────────────────────
+        // grantLimits = { reason(sectionId, itemId, submenuId) -> null | 'status' | 'contract' } lo arma quien crea el árbol (ver
+        // Dashboard.buildGrantLimits) con las MISMAS reglas que el servidor aplica al guardar. Lo que no se puede dar sale con candado: la
+        // casilla apagada y gris, y "marcar todo" de un departamento, área o pantalla lo salta. Un permiso viejo que ya estaba concedido
+        // y hoy quedó fuera de los límites se puede QUITAR, pero no volver a poner. Sin grantLimits todo esto es transparente.
+        const limitReasonCache = new Map();
+        function limitReasonKey(key) {
+            if (!grantLimits) return null;
+            if (!limitReasonCache.has(key)) {
+                const [sectionId, itemId, submenuId] = key.split('::');
+                limitReasonCache.set(key, grantLimits.reason(sectionId, itemId || null, submenuId || null) || null);
+            }
+            return limitReasonCache.get(key);
+        }
+        function isLimitLocked(key) {
+            return !!limitReasonKey(key);
+        }
+        // Estado de una casilla contenedora (departamento, área, apartado...) contando solo lo que se puede marcar (más lo viejo ya concedido).
+        // Sin grantLimits da exactamente lo de siempre: marcada si todas sus hojas lo están, a medias si algunas.
+        function containerState(keys) {
+            const effective = grantLimits ? keys.filter((k) => !isLimitLocked(k) || grantSet.has(k)) : keys;
+            const granted = effective.filter((k) => grantSet.has(k)).length;
+            return {
+                checked: effective.length > 0 && granted === effective.length,
+                indeterminate: granted > 0 && granted < effective.length,
+                locked: !!grantLimits && keys.length > 0 && effective.length === 0,
+            };
+        }
+        function firstLimitReason(keys) {
+            for (const k of keys) { const r = limitReasonKey(k); if (r) return r; }
+            return null;
+        }
+        // Pinta la fila como bloqueada: gris, casilla apagada (viva solo si ya estaba concedida, para poder quitarla) y un candado que dice por qué.
+        function applyLimitLock(rowObj, reason, granted) {
+            if (!reason) return;
+            rowObj.row.classList.add('perm-tree-row-limit-locked');
+            if (rowObj.input && !granted) rowObj.input.disabled = true;
+            const badge = document.createElement('span');
+            badge.className = 'perm-tree-limit-lock';
+            badge.title = t(reason === 'status' ? 'main.limitLockedStatus' : 'main.limitLockedContract');
+            badge.setAttribute('data-help-key', 'permTreeLimitLock');
+            badge.innerHTML = '<i class="bx bx-lock-alt" aria-hidden="true"></i>';
+            const label = rowObj.row.querySelector('label.perm-tree-check');
+            if (label) label.appendChild(badge); else rowObj.row.appendChild(badge);
         }
 
         // "Solo Ver"/"Ver y Operar"/"Editar" are mutually exclusive (a
@@ -886,6 +932,7 @@
                     else expandedItems.add(colTreeKey);
                 },
             }, subBlocked, computeAppToggle([soloVerKey]));
+            const colLimitReason = limitReasonKey(soloVerKey);
             if (!readOnly) {
                 const levelKeys = COLUMN_LEVELS.map((level) => keyOf(section.id, item.id, `${base}/${level.id}`));
                 colRow.input.checked = levelKeys.some((k) => grantSet.has(k));
@@ -893,6 +940,7 @@
                     setKeys(colRow.input.checked ? [soloVerKey] : levelKeys, colRow.input.checked);
                     render();
                 });
+                applyLimitLock(colRow, colLimitReason, colRow.input.checked);
             }
             container.appendChild(colRow.row);
             if (!colExpanded) return;
@@ -906,7 +954,7 @@
                         icon: COLUMN_LEVEL_ICONS[level.id],
                         label: t(level.labelKey),
                         checked: grantSet.has(levelKey),
-                        disabled: subBlocked,
+                        disabled: subBlocked || (!!colLimitReason && !grantSet.has(levelKey)),
                         onChange: (checked) => {
                             if (checked) {
                                 // Uncheck the other 2 mutually-exclusive levels for this column.
@@ -932,14 +980,14 @@
                     icon: COLUMN_LEVEL_ICONS.autorizar,
                     label: t(COLUMN_AUTHORIZE.labelKey),
                     checked: grantSet.has(authKey),
-                    disabled: subBlocked,
+                    disabled: subBlocked || (!!colLimitReason && !grantSet.has(authKey)),
                     onChange: (checked) => { setKeys([authKey], checked); render(); },
                 },
                 {
                     icon: COLUMN_LEVEL_ICONS.eliminar,
                     label: t(COLUMN_ELIMINAR.labelKey),
                     checked: grantSet.has(deleteKey),
-                    disabled: subBlocked,
+                    disabled: subBlocked || (!!colLimitReason && !grantSet.has(deleteKey)),
                     onChange: (checked) => { setKeys([deleteKey], checked); render(); },
                 },
             ];
@@ -1043,7 +1091,6 @@
             // columns: las columnas que muestra este grupo con su llave estructural (cuando un nivel las reclasificó); sin ellas, las suyas.
             const rows = columns || cls.submenu.map((col) => ({ col, base: `${classBase}/${col.id}` }));
             const classLeafKeys = rows.map((r) => keyOf(section.id, item.id, `${r.base}/solo-ver`));
-            const classChecked = classLeafKeys.filter((k) => grantSet.has(k)).length;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
             // Depth 5 — a sibling of the table's own plain columns (also 5,
@@ -1062,12 +1109,14 @@
             }, subBlocked, computeAppToggle(classLeafKeys));
             classRow.row.classList.add('perm-tree-row-classification');
             if (!readOnly) {
-                classRow.input.checked = classChecked === classLeafKeys.length;
-                classRow.input.indeterminate = classChecked > 0 && classChecked < classLeafKeys.length;
+                const classState = containerState(classLeafKeys);
+                classRow.input.checked = classState.checked;
+                classRow.input.indeterminate = classState.indeterminate;
                 classRow.input.addEventListener('change', () => {
                     setKeys(classLeafKeys, classRow.input.checked);
                     render();
                 });
+                if (classState.locked) applyLimitLock(classRow, firstLimitReason(classLeafKeys), false);
             }
             container.appendChild(classRow.row);
             if (!classExpanded) return;
@@ -1155,10 +1204,10 @@
                     const colBase = entry.isClassification
                         ? `${sm.id}/${subSm.id}/${entry.id}/${col.id}`
                         : `${sm.id}/${subSm.id}/${entry.id}`;
+                    const covered = COLUMN_LEVELS.some((level) => grantSet.has(keyOf(section.id, item.id, `${colBase}/${level.id}`)));
+                    if (!covered && isLimitLocked(keyOf(section.id, item.id, `${colBase}/solo-ver`))) return;
                     total += 1;
-                    if (COLUMN_LEVELS.some((level) => grantSet.has(keyOf(section.id, item.id, `${colBase}/${level.id}`)))) {
-                        coveredCount += 1;
-                    }
+                    if (covered) coveredCount += 1;
                 });
             });
             return { total, coveredCount };
@@ -1168,8 +1217,11 @@
             let total = 0;
             let coveredCount = 0;
             (subSm.iconsSubmenu || []).forEach((icon) => {
+                const iconKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
+                const covered = grantSet.has(iconKey);
+                if (!covered && isLimitLocked(iconKey)) return;
                 total += 1;
-                if (grantSet.has(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`))) coveredCount += 1;
+                if (covered) coveredCount += 1;
             });
             return { total, coveredCount };
         }
@@ -1210,6 +1262,9 @@
                     cascadeTableColumns(section, item, sm, subSm, tableRow.input.checked);
                     render();
                 });
+                if (grantLimits && total === 0 && (subSm.submenu || []).length) {
+                    applyLimitLock(tableRow, firstLimitReason((subSm.submenu || []).flatMap((entry) => (entry.isClassification ? entry.submenu.map((col) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}/${col.id}/solo-ver`)) : [keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${entry.id}/solo-ver`)]))), false);
+                }
             }
             container.appendChild(tableRow.row);
             if (!tableExpanded) return;
@@ -1257,6 +1312,9 @@
                     cascadeIcons(section, item, sm, subSm, iconsRow.input.checked);
                     render();
                 });
+                if (grantLimits && total === 0 && (subSm.iconsSubmenu || []).length) {
+                    applyLimitLock(iconsRow, firstLimitReason(subSm.iconsSubmenu.map((icon) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`))), false);
+                }
             }
             container.appendChild(iconsRow.row);
             if (!iconsExpanded) return;
@@ -1269,6 +1327,7 @@
                         setKeys([iconKey], iconRow.input.checked);
                         render();
                     });
+                    applyLimitLock(iconRow, limitReasonKey(iconKey), iconRow.input.checked);
                 }
                 container.appendChild(iconRow.row);
             });
@@ -5253,7 +5312,6 @@
                 // inside it are gated one at a time below instead).
                 const sectionBlocked = readOnly && section.id !== 'main' && !isModuleEnabled(section.id);
                 const sectionLeafKeys = section.items.flatMap((item) => leafKeysUnder(section, item));
-                const sectionChecked = sectionLeafKeys.filter((k) => grantSet.has(k)).length;
                 const sectionExpanded = expandedSections.has(section.id);
                 const sectionRow = buildRow(t(sectionLabelKey(section)), 0, section.items.length ? {
                     expanded: sectionExpanded,
@@ -5263,8 +5321,10 @@
                     },
                 } : null, sectionBlocked, computeAppToggle(sectionLeafKeys));
                 if (!readOnly) {
-                    sectionRow.input.checked = sectionChecked === sectionLeafKeys.length && sectionLeafKeys.length > 0;
-                    sectionRow.input.indeterminate = sectionChecked > 0 && sectionChecked < sectionLeafKeys.length;
+                    const sectionState = containerState(sectionLeafKeys);
+                    sectionRow.input.checked = sectionState.checked;
+                    sectionRow.input.indeterminate = sectionState.indeterminate;
+                    if (sectionState.locked) applyLimitLock(sectionRow, firstLimitReason(sectionLeafKeys), false);
                     sectionRow.input.addEventListener('change', () => {
                         setKeys(sectionLeafKeys, sectionRow.input.checked);
                         section.items.forEach((item) => {
@@ -5288,7 +5348,6 @@
                     const itemBlocked = sectionBlocked
                         || (readOnly && section.id === 'main' && MAIN_MODULE_ITEM_IDS.includes(item.id) && !isModuleEnabled(item.id));
                     const itemLeafKeys = leafKeysUnder(section, item);
-                    const itemChecked = itemLeafKeys.filter((k) => grantSet.has(k)).length;
                     const hasSubmenu = !!(item.submenu && item.submenu.length);
                     const itemKey = `${section.id}::${item.id}`;
                     const itemExpanded = expandedItems.has(itemKey);
@@ -5300,8 +5359,10 @@
                         },
                     } : null, itemBlocked, computeAppToggle(itemLeafKeys));
                     if (!readOnly) {
-                        itemRow.input.checked = itemChecked === itemLeafKeys.length;
-                        itemRow.input.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
+                        const itemState = containerState(itemLeafKeys);
+                        itemRow.input.checked = itemState.checked;
+                        itemRow.input.indeterminate = itemState.indeterminate;
+                        if (itemState.locked) applyLimitLock(itemRow, firstLimitReason(itemLeafKeys), false);
                         itemRow.input.addEventListener('change', () => {
                             setKeys(itemLeafKeys, itemRow.input.checked);
                             detailedSubSmUnder(item).forEach(({ sm, subSm }) => {
@@ -5324,6 +5385,7 @@
                                     setKeys([key], smRow.input.checked);
                                     render();
                                 });
+                                applyLimitLock(smRow, limitReasonKey(key), smRow.input.checked);
                             }
                             treeRoot.appendChild(smRow.row);
                             return;
@@ -5340,7 +5402,6 @@
                         const smLeafKeys = sm.submenu.map((subSm) => (
                             subSm.standalone ? keyOf(section.id, subSm.id, null) : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`)
                         ));
-                        const smChecked = smLeafKeys.filter((k) => grantSet.has(k)).length;
                         const smKey = `${section.id}::${item.id}::${sm.id}`;
                         const smExpandedNow = expandedItems.has(smKey);
                         const smRow = buildRow(t(sm.labelKey, sm.labelParams), 2, {
@@ -5351,8 +5412,10 @@
                             },
                         }, itemBlocked, computeAppToggle(smLeafKeys));
                         if (!readOnly) {
-                            smRow.input.checked = smChecked === smLeafKeys.length;
-                            smRow.input.indeterminate = smChecked > 0 && smChecked < smLeafKeys.length;
+                            const smState = containerState(smLeafKeys);
+                            smRow.input.checked = smState.checked;
+                            smRow.input.indeterminate = smState.indeterminate;
+                            if (smState.locked) applyLimitLock(smRow, firstLimitReason(smLeafKeys), false);
                             smRow.input.addEventListener('change', () => {
                                 setKeys(smLeafKeys, smRow.input.checked);
                                 sm.submenu.forEach((subSm) => {
@@ -5410,7 +5473,7 @@
                                 let subIndeterminate = false;
                                 if (subHasDetail) {
                                     const { total, coveredCount } = subSmDetailCoverage(section, item, sm, subSm);
-                                    if (total > 0 && coveredCount === total) {
+                                    if (total > 0 && coveredCount === total && (!isLimitLocked(key) || grantSet.has(key))) {
                                         // Every column/icon underneath is already
                                         // covered by hand -- heal the pantalla's own
                                         // key too, so it genuinely IS fully granted
@@ -5431,6 +5494,7 @@
                                 }
                                 subRow.input.checked = subChecked;
                                 subRow.input.indeterminate = subIndeterminate;
+                                applyLimitLock(subRow, limitReasonKey(key), subChecked);
                                 subRow.input.addEventListener('change', () => {
                                     setKeys([key], subRow.input.checked);
                                     // Checking/unchecking the pantalla itself
