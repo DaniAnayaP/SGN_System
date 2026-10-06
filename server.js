@@ -324,6 +324,7 @@ const {
     getCascadedColumnGroups,
     getOrderTreeForTarget,
     getEffectiveClassificationOverridesForTarget,
+    getEffectiveClassificationOverridesForViewer,
     setLevelOrders,
     getColorsForTarget,
     SAAS_COLOR_TARGET_LEVELS,
@@ -2644,6 +2645,17 @@ app.get('/api/business/permission-order', requireAuth, (req, res) => {
     }
     const viewer = req.user.clientId ? { userId: req.user.sub, clientId: req.user.clientId } : null;
     res.json(getEffectiveOrdersForViewer(viewer));
+});
+// Las clasificaciones de columna de un nivel de la empresa (?level=perfil|usuario&entityId=, administrador del cliente) o, sin
+// parámetros, las de quien pregunta, para los árboles de permisos (Roles, Usuarios, Mis Accesos).
+app.get('/api/business/permission-classifications', requireAuth, (req, res) => {
+    if (req.query.level) {
+        if (!req.user.clientId || !req.user.isClientAdmin) return res.status(403).json({ message: 'Client admin access required.' });
+        const target = resolveClientColorTarget(req.user.clientId, String(req.query.level), req.query.entityId, req.user.isTestAccount);
+        if (!target) return res.status(404).json({ message: 'Not found.' });
+        return res.json({ overrides: getEffectiveClassificationOverridesForTarget(target.level, target.entityId, req.user.clientId) });
+    }
+    res.json({ overrides: getEffectiveClassificationOverridesForViewer(req.user.clientId ? { userId: req.user.sub, clientId: req.user.clientId } : null) });
 });
 app.get('/api/business/table-classifications', requireAuth, (req, res) => {
     const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';

@@ -569,7 +569,8 @@ async function selectPlanForTree(plan) {
         // instead, when locked.
         treeContainer.innerHTML = '';
         const order = await fetch(`/api/admin/permission-order?level=plan&entityId=${plan.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-        tree = window.PermissionCostTree.create(treeContainer, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN', order });
+        const classOverrides = await fetch(`/api/admin/permission-classifications?level=plan&entityId=${plan.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
+        tree = window.PermissionCostTree.create(treeContainer, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN', order, classOverrides });
         // sectorGrants (from the same response) tags each leaf this plan's
         // own Sector already covers as "(Default)" -- purely informational,
         // see PermissionCostTree.js's sectorDefaultSet.

@@ -860,6 +860,9 @@
     "colColorsPersonalize": "Customize colors",
     "colClassifyPersonalize": "Customize classification",
     "colOrderPersonalize": "Customize order",
+    "classOriginOwn": "Own",
+    "classOriginInherits": "Inherits · {level}",
+    "classOriginMaster": "Master",
     "columnColorsOrderList_dept": "Departments",
     "columnColorsOrderList_area": "Areas of {name}",
     "columnColorsOrderList_apartado": "Sections of {name}",
@@ -2167,6 +2170,10 @@
     "columnColorsOrderReset": {
       "what": "Removes this list's own order and goes back to inheriting the one from above.",
       "example": "you no longer want the order you gave a profile; Reset leaves it the same as its company's."
+    },
+    "classOrigin": {
+      "what": "This column shows up in a different group than usual, and this says why: Own (this level changed it) or Inherits from a level above (Master, Business type, Plan, Client, Administrator, Profile). Only where it is shown changes; its permissions are the same.",
+      "example": "\"Inherits · Plan\" on \"Registration date\" means the plan moved it to the \"Dates\" group."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",

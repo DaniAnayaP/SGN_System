@@ -130,7 +130,8 @@ async function selectJobPositionForPermissions(jp) {
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         const order = await fetch(`/api/business/permission-order?level=perfil&entityId=${jp.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order });
+        const classOverrides = await fetch(`/api/business/permission-classifications?level=perfil&entityId=${jp.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides });
         await tree.init(data.grants || []);
     } catch {
         permissionsSaveStatus.textContent = Dashboard.t('admin.loadError');

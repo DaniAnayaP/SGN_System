@@ -7101,15 +7101,26 @@ function setLevelClassification(level, entityId, nodeKey, classificationId, clas
 }
 // Las clasificaciones de columna que se ven al editar un nivel: las del Maestro y, encima, las de cada nivel de la cadena (gana el
 // más cercano), con la misma forma que las del Maestro ({ nodeKey, classificationId, classificationLabel }).
-function getEffectiveClassificationOverridesForTarget(level, entityId, clientId) {
+// `from` dice de dónde viene cada una: 'master', el nivel de arriba que la cambió, o 'own' si la cambió el propio nivel que se mira.
+function getEffectiveClassificationOverridesForChain(chain, ownLevel) {
     const merged = new Map(getMasterPermissionClassificationOverrides().map((o) => [o.nodeKey, {
-        nodeKey: o.nodeKey, classificationId: o.classificationId, classificationLabel: o.classificationLabel || null,
+        nodeKey: o.nodeKey, classificationId: o.classificationId, classificationLabel: o.classificationLabel || null, from: 'master',
     }]));
-    getLevelClassificationLayers(resolveLevelColorChain(level, entityId, clientId)).forEach((list, nodeKey) => {
+    getLevelClassificationLayers(chain).forEach((list, nodeKey) => {
         const closest = list[0];
-        merged.set(nodeKey, { nodeKey, classificationId: closest.classificationId, classificationLabel: closest.classificationLabel || null });
+        merged.set(nodeKey, {
+            nodeKey, classificationId: closest.classificationId, classificationLabel: closest.classificationLabel || null,
+            from: closest.level === ownLevel ? 'own' : closest.level,
+        });
     });
     return [...merged.values()];
+}
+function getEffectiveClassificationOverridesForTarget(level, entityId, clientId) {
+    return getEffectiveClassificationOverridesForChain(resolveLevelColorChain(level, entityId, clientId), level);
+}
+// Lo que ve una persona de un cliente (viewer = { userId, clientId }): su propia cadena completa.
+function getEffectiveClassificationOverridesForViewer(viewer) {
+    return getEffectiveClassificationOverridesForChain(viewer ? resolveViewerColorChain(viewer) : [], 'usuario');
 }
 // "Restablecer": quita la clasificación propia de esa columna en ese nivel y vuelve a heredar.
 function clearLevelClassification(level, entityId, nodeKey) {
@@ -9515,6 +9526,7 @@ module.exports = {
     setLevelClassification,
     clearLevelClassification,
     getEffectiveClassificationOverridesForTarget,
+    getEffectiveClassificationOverridesForViewer,
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
     setSaasMasterStatuses,

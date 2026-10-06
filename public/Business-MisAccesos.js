@@ -20,8 +20,9 @@ async function loadMyAccess() {
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         const order = await fetch('/api/business/permission-order', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const classOverrides = await fetch('/api/business/permission-classifications', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         const tree = window.PermissionCostTree.create(container, {
-            order, mode: 'clientTricolor', interactive: false,
+            order, classOverrides, mode: 'clientTricolor', interactive: false,
             historyEndpoint: '/api/business/me/grant-change-log',
         });
         await tree.init(data.jobPositionGrants || [], [], data.grants || []);

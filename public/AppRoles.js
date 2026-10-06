@@ -232,7 +232,8 @@ async function openJobPositionTree(jp) {
         const treeContainer = document.createElement('div');
         bodyEl.appendChild(treeContainer);
         const order = await fetch(apiUrl(`/api/business/permission-order?level=perfil&entityId=${jp.id}`), { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order });
+        const classOverrides = await fetch(apiUrl(`/api/business/permission-classifications?level=perfil&entityId=${jp.id}`), { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides });
         await tree.init(data.grants || []);
 
         const equalizeBtn = document.createElement('button');

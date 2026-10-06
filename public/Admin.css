@@ -6247,3 +6247,17 @@ body.dark-mode .col-colors-state-master{ background-color: #2a2c38; color: #a3a8
     opacity: 0.3;
     cursor: default;
 }
+
+/* Árbol por Nivel: de dónde viene la clasificación de una columna que cambió de grupo en el árbol de un nivel. */
+.perm-tree-class-origin{
+    flex: none;
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    background-color: #ececf1;
+    color: #6b7089;
+    font-size: 0.64rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+body.dark-mode .perm-tree-class-origin{ background-color: #2a2c38; color: #a3a8c0; }

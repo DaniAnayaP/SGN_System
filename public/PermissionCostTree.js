@@ -174,8 +174,16 @@
         // El orden de este nivel tal como lo devuelve el servidor (GET .../permission-order): { departmentOrder, areaOrders,
         // apartadoOrders, pantallaOrders, columnOrders }. Sin él, el de menu.json de siempre.
         order = null,
+        // Las clasificaciones de columna de este nivel ({ nodeKey, classificationId, classificationLabel, from }), para agrupar las
+        // columnas como las clasifica (Árbol por Nivel). Sin ellas, la estructura de menu.json de siempre.
+        classOverrides = null,
     } = {}) {
         let sectionsData = [];
+        const classificationOverrides = new Map();
+        (classOverrides || []).forEach((o) => {
+            if (!o || !o.nodeKey || !o.classificationId) return;
+            classificationOverrides.set(o.nodeKey, { classificationId: o.classificationId, classificationLabel: o.classificationLabel || null, from: o.from });
+        });
         let grantSet = new Set(); // costEdit/grantReadonlyCost modes
         let planGrantSet = new Set(); // clientTricolor: coverage granted by the client's PLAN (green)
         let clientGrantSet = new Set(); // clientTricolor: already-saved "+ adicionales" sold to THIS client (yellow)
@@ -978,9 +986,93 @@
         // its color from the same extraSlotArgs/colorFor every other
         // container level already uses; grantReadonlyCost cascades
         // "solo-ver" to every column on click, mirroring PermissionTree.js.
-        function renderClassificationGroup(container, section, item, sm, subSm, cls) {
+        // ── Clasificación heredada (Árbol por Nivel) ─────────────────────────────────────────────────────────────
+        // El árbol de un nivel (Plan, Cliente, Administrador, Perfil, Usuario) agrupa las columnas de una tabla como las clasifica ese
+        // nivel: la del Maestro y, encima, lo que cambió cada nivel de arriba (gana el más cercano). Solo cambia DÓNDE se ve cada
+        // columna: su llave de permiso sigue siendo la estructural (la de menu.json), así que no se mueve ni un permiso. Una columna
+        // que cambió de grupo lleva una etiqueta que dice de dónde viene ("Hereda · Maestro", "Hereda · Plan"... o "Propio").
+        const ORIGIN_UNIVERSAL_CLASSES = [
+            { id: 'class-por-definir', labelKey: 'menu.classPorDefinir' },
+            { id: 'class-acciones', labelKey: 'menu.classAcciones' },
+        ];
+        function resolveOriginTargetClass(classId, subSm, override) {
+            const real = (subSm.submenu || []).find((e) => e.isClassification && e.id === classId);
+            if (real) return real;
+            const universal = ORIGIN_UNIVERSAL_CLASSES.find((u) => u.id === classId);
+            if (universal) return universal;
+            // Una clasificación propia creada en el Maestro: no existe en menu.json, pero su nombre viaja con el cambio.
+            return override.classificationLabel ? { id: classId, labelKey: override.classificationLabel } : null;
+        }
+        // Los grupos que ve este árbol en esa tabla, o null si ninguna columna cambió de grupo (se dibuja la estructura de siempre).
+        function effectiveClassGroupsFor(section, item, sm, subSm) {
+            if (!classificationOverrides.size) return null;
+            const groups = [];
+            const byId = new Map();
+            let loose = null;
+            let moved = false;
+            const groupFor = (cls) => {
+                let g = byId.get(cls.id);
+                if (!g) { g = { cls, columns: [] }; byId.set(cls.id, g); groups.push(g); }
+                return g;
+            };
+            (subSm.submenu || []).forEach((entry) => {
+                if (entry.isClassification) {
+                    loose = null;
+                    const own = groupFor(entry);
+                    (entry.submenu || []).forEach((col) => {
+                        const base = `${sm.id}/${subSm.id}/${entry.id}/${col.id}`;
+                        const override = entry.id === 'class-botones' ? null : classificationOverrides.get(keyOf(section.id, item.id, base));
+                        const target = override && override.classificationId && override.classificationId !== entry.id
+                            ? resolveOriginTargetClass(override.classificationId, subSm, override) : null;
+                        if (target && target.id !== 'class-botones') {
+                            moved = true;
+                            groupFor(target).columns.push({ col, base, from: override.from || 'master' });
+                        } else own.columns.push({ col, base });
+                    });
+                } else {
+                    const base = `${sm.id}/${subSm.id}/${entry.id}`;
+                    const override = classificationOverrides.get(keyOf(section.id, item.id, base));
+                    const target = override && override.classificationId ? resolveOriginTargetClass(override.classificationId, subSm, override) : null;
+                    if (target && target.id !== 'class-botones') {
+                        moved = true;
+                        loose = null;
+                        groupFor(target).columns.push({ col: entry, base, from: override.from || 'master' });
+                    } else {
+                        if (!loose) { loose = { cls: null, columns: [] }; groups.push(loose); }
+                        loose.columns.push({ col: entry, base });
+                    }
+                }
+            });
+            return moved ? groups.filter((g) => g.columns.length) : null;
+        }
+        function buildClassOriginTag(from) {
+            const tag = document.createElement('span');
+            tag.className = 'perm-tree-class-origin';
+            tag.setAttribute('data-help-key', 'classOrigin');
+            if (from === 'own') tag.textContent = t('business.classOriginOwn');
+            else {
+                const level = from === 'master' ? t('business.classOriginMaster') : t(`business.columnColorsLevel_${from}`);
+                tag.textContent = t('business.classOriginInherits', { level });
+            }
+            tag.title = tag.textContent;
+            return tag;
+        }
+        // Dibuja una columna (la fila y lo que despliega) con su llave estructural y, si cambió de grupo, su etiqueta de origen.
+        function renderOriginColumnRow(container, renderRow, entryRow) {
+            const before = container.children.length;
+            renderRow();
+            const rowEl = container.children[before];
+            if (!entryRow.from || !rowEl) return;
+            const labelEl = rowEl.querySelector('label.perm-tree-check, .perm-tree-label-plain, .perm-tree-status-label, .perm-tree-toggle-label');
+            const tag = buildClassOriginTag(entryRow.from);
+            if (labelEl) labelEl.after(tag); else rowEl.appendChild(tag);
+        }
+
+        function renderClassificationGroup(container, section, item, sm, subSm, cls, columns) {
             const classBase = `${sm.id}/${subSm.id}/${cls.id}`;
-            const classLeafKeys = cls.submenu.map((col) => keyOf(section.id, item.id, `${classBase}/${col.id}/solo-ver`));
+            // columns: las columnas que muestra este grupo con su llave estructural (cuando un nivel las reclasificó); sin ellas, las suyas.
+            const rows = columns || cls.submenu.map((col) => ({ col, base: `${classBase}/${col.id}` }));
+            const classLeafKeys = rows.map((r) => keyOf(section.id, item.id, `${r.base}/solo-ver`));
             const classChecked = classLeafKeys.filter((k) => grantSet.has(k)).length;
             const classTreeKey = `cls::${section.id}::${item.id}::${classBase}`;
             const classExpanded = expandedItems.has(classTreeKey);
@@ -1007,7 +1099,7 @@
             const classChildren = document.createElement('div');
             classChildren.className = 'perm-tree-classification-children';
             container.appendChild(classChildren);
-            cls.submenu.forEach((col) => renderColumnRow(classChildren, section, item, `${classBase}/${col.id}`, col, 6));
+            rows.forEach((r) => renderOriginColumnRow(classChildren, () => renderColumnRow(classChildren, section, item, r.base, r.col, 6), r));
         }
 
         // Every column's own "solo-ver" key under this pantalla's Tabla,
@@ -1075,6 +1167,14 @@
             }
             container.appendChild(tableRowEl);
             if (!tableExpanded) return;
+            const regrouped = effectiveClassGroupsFor(section, item, sm, subSm);
+            if (regrouped) {
+                regrouped.forEach((g) => {
+                    if (g.cls) { renderClassificationGroup(container, section, item, sm, subSm, g.cls, g.columns); return; }
+                    g.columns.forEach((r) => renderOriginColumnRow(container, () => renderColumnRow(container, section, item, r.base, r.col, 5), r));
+                });
+                return;
+            }
             subSm.submenu.forEach((entry) => {
                 if (entry.isClassification) {
                     renderClassificationGroup(container, section, item, sm, subSm, entry);

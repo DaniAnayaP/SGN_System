@@ -1085,8 +1085,9 @@ async function openPermisosContratadosModal(client) {
         const { grants, planGrants } = await grantsRes.json();
         const plan = client.plan ? plans.find((p) => p.name === client.plan) : null;
         const order = await fetch(`/api/admin/permission-order?level=cliente&entityId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const classOverrides = await fetch(`/api/admin/permission-classifications?level=cliente&entityId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         const tree = window.PermissionCostTree.create(permisosContratadosContainer, {
-            order, mode: 'clientTricolor', interactive: false, currency: plan?.currency || 'MXN',
+            order, classOverrides, mode: 'clientTricolor', interactive: false, currency: plan?.currency || 'MXN',
             historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },
         });
         await tree.init(planGrants || [], costs, grants || []);
@@ -1161,8 +1162,9 @@ async function openPermisosAdicionalesModal(client) {
         const plan = client.plan ? plans.find((p) => p.name === client.plan) : null;
         adicionalesCurrency = plan?.currency || 'MXN';
         const order = await fetch(`/api/admin/permission-order?level=cliente&entityId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const classOverrides = await fetch(`/api/admin/permission-classifications?level=cliente&entityId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         adicionalesTree = window.PermissionCostTree.create(permisosAdicionalesContainer, {
-            order, mode: 'clientTricolor', interactive: true, currency: adicionalesCurrency,
+            order, classOverrides, mode: 'clientTricolor', interactive: true, currency: adicionalesCurrency,
             historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },
         });
         await adicionalesTree.init(planGrants || [], costs, grants || []);
@@ -1317,8 +1319,10 @@ async function openAdminAccessModal(client) {
         const costCentersData = await costCentersRes.json();
         const enabledModuleKeys = (modulesData.modules || []).filter((m) => m.enabled).map((m) => m.key);
         const order = await fetch(`/api/admin/permission-order?level=admin&clientId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const classOverrides = await fetch(`/api/admin/permission-classifications?level=admin&clientId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         const tree = window.PermissionTree.create(adminAccessTreeContainer, {
             order,
+            classOverrides,
             readOnly: true,
             enabledModuleKeys,
             costCenters: costCentersData.costCenters || [],

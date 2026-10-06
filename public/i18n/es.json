@@ -859,6 +859,9 @@
     "colColorsPersonalize": "Personalizar colores",
     "colClassifyPersonalize": "Personalizar clasificación",
     "colOrderPersonalize": "Personalizar orden",
+    "classOriginOwn": "Propio",
+    "classOriginInherits": "Hereda · {level}",
+    "classOriginMaster": "Maestro",
     "columnColorsOrderList_dept": "Departamentos",
     "columnColorsOrderList_area": "Áreas de {name}",
     "columnColorsOrderList_apartado": "Apartados de {name}",
@@ -2166,6 +2169,10 @@
     "columnColorsOrderReset": {
       "what": "Quita el orden propio de esta lista y vuelve a heredar el de arriba.",
       "example": "ya no quieres el orden que le diste a un perfil; Restablecer lo deja igual que el de su empresa."
+    },
+    "classOrigin": {
+      "what": "Esta columna aparece en un grupo distinto al de siempre, y esto dice por qué: Propio (lo cambió este nivel) o Hereda de un nivel de arriba (Maestro, Giro, Plan, Cliente, Administrador, Perfil). Solo cambia dónde se ve; sus permisos son los mismos.",
+      "example": "«Hereda · Plan» en «Fecha de registro» significa que el plan la movió al grupo «Fechas»."
     },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",
