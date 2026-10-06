@@ -3894,6 +3894,13 @@ app.patch('/api/business/users/:id', requireAuth, requireClientAdmin, (req, res)
 // user can check their OWN active permissions ("Servicio Contratado" ->
 // "Mis Accesos y Permisos"), no admin grant required, since it's their own
 // data. Same Puesto + extra shape "Permisos Activados" already uses.
+// Lo que una empresa tiene contratado: el árbol de su plan más los adicionales que compró. null si no tiene plan (no hay con qué filtrar).
+function getClientContractGrants(clientId) {
+    const client = clientId ? getClientById(clientId) : null;
+    const plan = client && client.plan ? getPlanByName(client.plan) : null;
+    return plan ? [...getPlanGrants(plan.id), ...getClientPermissionGrants(clientId)] : null;
+}
+
 app.get('/api/business/me/grants', requireAuth, (req, res) => {
     // El administrador del cliente no tiene permisos propios guardados: ve todo lo que su empresa contrató. Su árbol se pinta con el
     // contrato (verde = incluido en el plan, amarillo = adicional contratado) y lo que existe en su giro y no contrató queda bloqueado.
@@ -3913,7 +3920,7 @@ app.get('/api/business/me/grants', requireAuth, (req, res) => {
     res.json({
         grants: getUserGrants(req.user.sub),
         jobPositionGrants: getUserJobPositionGrants(req.user.sub),
-        contractGrants: plan ? [...getPlanGrants(plan.id), ...getClientPermissionGrants(req.user.clientId)] : null,
+        contractGrants: getClientContractGrants(req.user.clientId),
     });
 });
 
@@ -3952,6 +3959,8 @@ app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
         visibleStatuses: getUserVisibleStatuses(req.params.id),
         // Los Estatus que esta cuenta (la del administrador) puede dar: un nivel no da más de lo que ve el de arriba.
         assignableStatuses: getUserVisibleStatuses(req.user.sub),
+        // Lo contratado por la empresa: "Permisos Activados" deja en el árbol solo eso (lo no contratado no se muestra).
+        contractGrants: getClientContractGrants(req.user.clientId),
     });
 });
 

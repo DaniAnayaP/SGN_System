@@ -67,6 +67,8 @@ async function openActivePermsModal(user) {
         const classOverrides = await fetch(`/api/business/permission-classifications?level=usuario&entityId=${user.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         const tree = window.PermissionCostTree.create(activePermsContainer, {
             order, classOverrides, mode: 'clientTricolor', interactive: false, columnLevels: true,
+            // Solo lo que la empresa contrató: lo que el perfil o los extras le dan sale normal y el resto de lo contratado, bloqueado.
+            visibleGrants: data.contractGrants,
             historyEndpoint: '/api/business/user-grant-change-log', historyParams: { userId: user.id },
         });
         await tree.init(data.jobPositionGrants || [], [], data.grants || []);
