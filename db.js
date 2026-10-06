@@ -9001,6 +9001,62 @@ function hasSaasGrant(grants, itemId, subItemId = null, isSuperAdmin = false) {
     return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
 }
 
+// ---------------------------------------------------------------------------
+// Auditoría de límites (modo solo registro): ningún nivel da más de lo que le deja el de arriba (Estatus, contrato, permisos). Hoy el
+// servidor casi no lo hace cumplir (ver la auditoría de 2026-10-06), así que antes de activar un guardia que bloquee, esto mide qué
+// bloquearía: revisa los permisos efectivos de cada usuario de cada cliente y cuenta los que incumplirían cada regla. No bloquea ni
+// cambia nada; solo lee.
+//   module   : el departamento del permiso no está contratado por el cliente (client_modules).
+//   status   : el nodo está en un Estatus (inhabilitado, en construcción, en mejoras) que ese usuario no puede ver (cuentas de práctica
+//              no cuentan: ven todos los Estatus a propósito).
+//   contract : el permiso (solo los de pantalla/columna, no los gruesos) queda fuera de lo que el cliente tiene contratado: el árbol
+//              de su plan más sus permisos adicionales. Sin plan asignado no se evalúa.
+// ---------------------------------------------------------------------------
+// Un permiso de columna lleva su nivel al final (solo-ver / ver-y-operar / editar / autorizar / eliminar) y, en la App, #app; el contrato
+// del plan guarda cada columna una sola vez como solo-ver, así que se compara contra eso. Los de centros de costo no son parte del plan.
+const COLUMN_LEVEL_SUFFIX = new RegExp('/(solo-ver|ver-y-operar|editar|autorizar|eliminar)$');
+function contractKeyForGrant(submenuId) {
+    const base = String(submenuId).replace(/#app$/, '');
+    return COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(COLUMN_LEVEL_SUFFIX, '/solo-ver') : base;
+}
+function isCostCenterGrant(g) {
+    return g.itemId === 'cc-list' || String(g.submenuId || '').startsWith('cc-');
+}
+function scanLimitViolations({ sampleSize = 5 } = {}) {
+    const statusOverrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses());
+    const clients = db.prepare('SELECT id, company_name AS name, plan FROM clients ORDER BY company_name COLLATE NOCASE').all();
+    return clients.map((client) => {
+        const modules = new Set(getClientModuleKeys(client.id));
+        const plan = client.plan ? db.prepare('SELECT id FROM plans WHERE name = ?').get(client.plan) : null;
+        const contract = plan ? [...getPlanGrants(plan.id), ...getClientPermissionGrants(client.id)] : null;
+        const users = db.prepare('SELECT id, username, name, is_test_account AS isTest FROM users WHERE client_id = ?').all(client.id);
+        const summary = {
+            clientId: client.id, name: client.name, plan: client.plan || '', hasPlan: !!plan, users: users.length,
+            usersAffected: 0, grantsChecked: 0, affectedGrants: 0, module: 0, status: 0, contract: 0, samples: [],
+        };
+        users.forEach((user) => {
+            const visible = new Set(getUserVisibleStatuses(user.id));
+            let affected = false;
+            getUserEffectiveGrants(user.id).forEach((g) => {
+                summary.grantsChecked += 1;
+                const kinds = [];
+                if (g.sectionId !== 'main' && !modules.has(g.sectionId)) kinds.push('module');
+                if (!user.isTest && !visible.has(resolveMasterNodeStatus(g.sectionId, g.itemId, g.submenuId, statusOverrides))) kinds.push('status');
+                if (contract && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) kinds.push('contract');
+                if (!kinds.length) return;
+                affected = true;
+                summary.affectedGrants += 1;
+                kinds.forEach((k) => { summary[k] += 1; });
+                if (summary.samples.length < sampleSize) {
+                    summary.samples.push({ user: user.name || user.username, node: [g.sectionId, g.itemId, g.submenuId].filter(Boolean).join(' / '), kinds });
+                }
+            });
+            if (affected) summary.usersAffected += 1;
+        });
+        return summary;
+    });
+}
+
 // Estatus RH (hr_workers -> hr_status_catalog) is a separate concept from
 // users.active -- LEFT JOIN twice since not every business user is
 // necessarily tied to an hr_workers row. Estatus Operativo (Accesos y
@@ -9514,6 +9570,7 @@ module.exports = {
     setClassificationTextColor,
     clearClassificationColor,
     getEffectiveColumnClassifications,
+    scanLimitViolations,
     getCascadedColumnGroups,
     getLevelOrderLayers,
     resolveOrderRows,

@@ -322,6 +322,7 @@ const {
     getClientColorsForTarget,
     getEffectiveOrdersForViewer,
     getCascadedColumnGroups,
+    scanLimitViolations,
     getOrderTreeForTarget,
     getEffectiveClassificationOverridesForTarget,
     getEffectiveClassificationOverridesForViewer,
@@ -3241,6 +3242,16 @@ app.get('/api/admin/master-permission-change-log', requireAuth, requireAdmin, (r
     const classificationId = typeof req.query.classificationId === 'string' && req.query.classificationId ? req.query.classificationId : null;
     if (denyMasterPermissionsTreeControl(req, res, 'history')) return;
     res.json({ entries: getMasterPermissionChangeLog(nodeKey, classificationId) });
+});
+
+// Auditoría de Límites (solo lectura): por cliente, cuántos permisos efectivos de sus usuarios incumplirían "ningún nivel da más de lo que
+// le deja el de arriba" (módulo no contratado, Estatus no visible, fuera del contrato del plan). Modo solo registro: no bloquea nada.
+// Solo admin_saas o quien tenga el acceso "Ver la auditoría" (saas-limits-audit, controles::a0).
+app.get('/api/admin/limits-audit', requireAuth, requireAdmin, (req, res) => {
+    if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-limits-audit', 'controles::a0', req.user.isSaasSuperAdmin)) {
+        return res.status(403).json({ message: 'No tienes acceso a la Auditoría de Límites.' });
+    }
+    res.json({ clients: scanLimitViolations() });
 });
 
 // Árbol Maestro SaaS -- same shape as master-permission-status above, but

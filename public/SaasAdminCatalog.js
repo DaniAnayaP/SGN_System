@@ -187,6 +187,13 @@ window.SAAS_ADMIN_CATALOG = [
                     ] },
                 ],
             },
+            {
+                // Auditoría de Límites: solo lectura (server.js /api/admin/limits-audit). Por defecto solo admin_saas.
+                itemId: 'saas-limits-audit', labelKey: 'menu.limitsAudit', href: 'Admin-AuditoriaLimites.html',
+                apartados: [
+                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Ver la auditoría'] },
+                ],
+            },
         ],
     },
 ];

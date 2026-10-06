@@ -6268,3 +6268,33 @@ body.dark-mode .perm-tree-class-origin{ background-color: #2a2c38; color: #a3a8c
     opacity: 0.4;
     cursor: not-allowed;
 }
+
+/* Auditoría de Límites: tabla por cliente con los conteos que incumplirían cada límite. */
+.limits-audit-toolbar{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+.limits-audit-summary{
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+.limits-audit-num{
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.limits-audit-bad{
+    color: #b3261e;
+    font-weight: 700;
+}
+body.dark-mode .limits-audit-bad{ color: #f08a82; }
+.limits-audit-samples{
+    margin: 0;
+    padding-left: 1.2rem;
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+}

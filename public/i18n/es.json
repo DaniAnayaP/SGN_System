@@ -115,6 +115,7 @@
     "users": "Usuarios",
     "columnColors": "Colores de Columnas",
     "columnColorsLevels": "Colores por Nivel",
+    "limitsAudit": "Auditoría de Límites",
     "accessPermissions": "Accesos y Permisos",
     "upcomingUpdates": "Próximas Actualizaciones",
     "trainingSessions": "Sesiones de Capacitación",
@@ -784,6 +785,25 @@
     "colorRequestApproved": "Color autorizado y aplicado",
     "colorRequestRejectedMsg": "Solicitud rechazada",
     "colorRequestError": "No se pudo completar la solicitud",
+    "limitsAuditSubtitle": "Mide, por cliente, cuántos permisos de sus usuarios incumplirían la regla «ningún nivel da más de lo que le deja el de arriba»: módulo no contratado, Estatus que el usuario no ve o permiso fuera del contrato del plan. Solo lectura: no bloquea ni cambia nada.",
+    "limitsAuditRefresh": "Actualizar",
+    "limitsAuditSummary": "{grants} permisos de {users} usuarios en {clients} clientes incumplirían un límite.",
+    "limitsAuditNoPlan": "Sin plan",
+    "limitsAuditColClient": "Cliente",
+    "limitsAuditColPlan": "Plan",
+    "limitsAuditColUsers": "Usuarios",
+    "limitsAuditColChecked": "Permisos revisados",
+    "limitsAuditColAffected": "Usuarios afectados",
+    "limitsAuditColModule": "Módulo no contratado",
+    "limitsAuditColStatus": "Estatus no visible",
+    "limitsAuditColContract": "Fuera del contrato",
+    "limitsAuditColSamples": "Ejemplos",
+    "limitsAuditShowSamples": "Ver ejemplos",
+    "limitsAuditHideSamples": "Ocultar",
+    "limitsAuditEmpty": "No hay clientes para revisar.",
+    "limitsAuditKind_module": "módulo no contratado",
+    "limitsAuditKind_status": "Estatus no visible",
+    "limitsAuditKind_contract": "fuera del contrato",
     "columnColorsLevelsSubtitle": "Elige el color, la clasificación y el orden de las pantallas y columnas de las tablas de los clientes por Giro, por Plan o por Cliente. Lo que cambias solo le llega a lo que está debajo: el giro, a sus planes y clientes; el plan, a sus clientes; el cliente, a toda su empresa.",
     "masterTreeHistoryFieldStatus": "Estatus",
     "masterTreeHistoryFieldClassification": "Clasificación",
@@ -2174,6 +2194,18 @@
     "classOrigin": {
       "what": "Esta columna aparece en un grupo distinto al de siempre, y esto dice por qué: Propio (lo cambió este nivel) o Hereda de un nivel de arriba (Maestro, Giro, Plan, Cliente, Administrador, Perfil). Solo cambia dónde se ve; sus permisos son los mismos.",
       "example": "«Hereda · Plan» en «Fecha de registro» significa que el plan la movió al grupo «Fechas»."
+    },
+    "limitsAuditRefresh": {
+      "what": "Vuelve a revisar los permisos de todos los clientes con los datos de ahora.",
+      "example": "corregiste el contrato de un cliente; actualizas y su cuenta baja."
+    },
+    "limitsAuditTable": {
+      "what": "Una fila por cliente: cuántos permisos de sus usuarios incumplirían cada límite (módulo no contratado, Estatus que el usuario no ve, fuera del contrato del plan). Un número en rojo es lo que un guardia que bloquee dejaría de permitir.",
+      "example": "un cliente con 12 en «Módulo no contratado» tiene usuarios con permisos de un departamento que no contrató."
+    },
+    "limitsAuditSamples": {
+      "what": "Muestra o esconde algunos de los permisos que incumplen un límite en este cliente, con el usuario y el motivo.",
+      "example": "ves que «Ana · finance / ...» está fuera del contrato y decides si corregir el perfil o el contrato."
     },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",

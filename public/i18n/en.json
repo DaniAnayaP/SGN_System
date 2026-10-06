@@ -115,6 +115,7 @@
     "users": "Users",
     "columnColors": "Column Colors",
     "columnColorsLevels": "Colors by Level",
+    "limitsAudit": "Limits Audit",
     "accessPermissions": "Access and Permissions",
     "upcomingUpdates": "Upcoming Updates",
     "trainingSessions": "Training Sessions",
@@ -785,6 +786,25 @@
     "colorRequestApproved": "Color approved and applied",
     "colorRequestRejectedMsg": "Request rejected",
     "colorRequestError": "The request could not be completed",
+    "limitsAuditSubtitle": "Measures, per client, how many of its users' permissions would break the rule \"no level gives more than the level above allows\": module not contracted, Status the user cannot see, or permission outside the plan contract. Read-only: it does not block or change anything.",
+    "limitsAuditRefresh": "Refresh",
+    "limitsAuditSummary": "{grants} permissions of {users} users in {clients} clients would break a limit.",
+    "limitsAuditNoPlan": "No plan",
+    "limitsAuditColClient": "Client",
+    "limitsAuditColPlan": "Plan",
+    "limitsAuditColUsers": "Users",
+    "limitsAuditColChecked": "Permissions checked",
+    "limitsAuditColAffected": "Users affected",
+    "limitsAuditColModule": "Module not contracted",
+    "limitsAuditColStatus": "Status not visible",
+    "limitsAuditColContract": "Outside the contract",
+    "limitsAuditColSamples": "Examples",
+    "limitsAuditShowSamples": "Show examples",
+    "limitsAuditHideSamples": "Hide",
+    "limitsAuditEmpty": "There are no clients to check.",
+    "limitsAuditKind_module": "module not contracted",
+    "limitsAuditKind_status": "Status not visible",
+    "limitsAuditKind_contract": "outside the contract",
     "columnColorsLevelsSubtitle": "Choose the color, classification and order of the clients' screens and table columns by Business type, by Plan or by Client. What you change only reaches whatever sits below: a business type, its plans and clients; a plan, its clients; a client, its whole company.",
     "masterTreeHistoryFieldStatus": "Status",
     "masterTreeHistoryFieldClassification": "Classification",
@@ -2175,6 +2195,18 @@
     "classOrigin": {
       "what": "This column shows up in a different group than usual, and this says why: Own (this level changed it) or Inherits from a level above (Master, Business type, Plan, Client, Administrator, Profile). Only where it is shown changes; its permissions are the same.",
       "example": "\"Inherits · Plan\" on \"Registration date\" means the plan moved it to the \"Dates\" group."
+    },
+    "limitsAuditRefresh": {
+      "what": "Checks the permissions of every client again with today's data.",
+      "example": "you fixed a client's contract; refresh and its count goes down."
+    },
+    "limitsAuditTable": {
+      "what": "One row per client: how many of its users' permissions would break each limit (module not contracted, Status the user cannot see, outside the plan contract). A red number is what a blocking guard would stop allowing.",
+      "example": "a client with 12 under \"Module not contracted\" has users with permissions from a department it did not contract."
+    },
+    "limitsAuditSamples": {
+      "what": "Shows or hides some of the permissions that break a limit in this client, with the user and the reason.",
+      "example": "you see \"Ana · finance / ...\" is outside the contract and decide whether to fix the profile or the contract."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",
