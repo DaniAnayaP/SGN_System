@@ -177,10 +177,10 @@
         // Las clasificaciones de columna de este nivel ({ nodeKey, classificationId, classificationLabel, from }), para agrupar las
         // columnas como las clasifica (Árbol por Nivel). Sin ellas, la estructura de menu.json de siempre.
         classOverrides = null,
-        // clientTricolor only: lo que existe en el giro del cliente ({ sectionId, itemId, submenuId }[]). Con esto el árbol deja solo
-        // lo del giro (más lo que el cliente ya tiene contratado, aunque el giro cambiara después); lo que el cliente no contrató
-        // sigue ahí, en rojo y bloqueado. Sin él, el árbol completo de siempre.
-        giroGrants = null,
+        // clientTricolor only: lo que este árbol puede mostrar ({ sectionId, itemId, submenuId }[]): para el administrador, lo que existe
+        // en el giro; para un usuario, lo que su empresa contrató. El árbol deja solo eso (más lo que ya tiene concedido, aunque el
+        // contrato cambiara después); lo demás de ahí que no esté concedido sigue, en rojo y bloqueado. Sin él, el árbol completo.
+        visibleGrants = null,
     } = {}) {
         let sectionsData = [];
         const classificationOverrides = new Map();
@@ -1509,8 +1509,8 @@
                     return { ...s, items };
                 });
 
-                if (mode === 'clientTricolor' && giroGrants) {
-                    sectionsData = pruneToVisible(sectionsData, [...giroGrants, ...(initialGrants || []), ...(clientGrants || [])]);
+                if (mode === 'clientTricolor' && visibleGrants) {
+                    sectionsData = pruneToVisible(sectionsData, [...visibleGrants, ...(initialGrants || []), ...(clientGrants || [])]);
                 }
 
                 pendingAdditions = new Set();

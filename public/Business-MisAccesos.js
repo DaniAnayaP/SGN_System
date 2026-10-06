@@ -39,13 +39,13 @@ async function loadMyAccess() {
         const order = await fetch('/api/business/permission-order', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch('/api/business/permission-classifications', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         // El administrador del cliente ve todo su contrato (verde = en el plan, amarillo = adicional) y, bloqueado, lo que existe en su
-        // giro y no contrató. Un usuario normal ve lo de su perfil y sus extras, como siempre.
+        // giro y no contrató. Un usuario ve lo contratado por su empresa: lo de su perfil y sus extras normal, lo demás bloqueado.
         const isAdmin = !!data.isClientAdmin;
         if (isAdmin) useAdminTexts();
         const tree = window.PermissionCostTree.create(container, {
             order, classOverrides, mode: 'clientTricolor', interactive: false,
             historyEndpoint: isAdmin ? '/api/business/me/contract-change-log' : '/api/business/me/grant-change-log',
-            giroGrants: isAdmin ? data.giroGrants : null,
+            visibleGrants: isAdmin ? data.giroGrants : data.contractGrants,
         });
         await tree.init(data.jobPositionGrants || [], [], data.grants || []);
     } catch {

@@ -3898,9 +3898,9 @@ app.get('/api/business/me/grants', requireAuth, (req, res) => {
     // El administrador del cliente no tiene permisos propios guardados: ve todo lo que su empresa contrató. Su árbol se pinta con el
     // contrato (verde = incluido en el plan, amarillo = adicional contratado) y lo que existe en su giro y no contrató queda bloqueado.
     // `giroGrants` (null si no hay plan, entonces no se filtra) deja el árbol solo con lo que existe en su giro.
+    const client = req.user.clientId ? getClientById(req.user.clientId) : null;
+    const plan = client && client.plan ? getPlanByName(client.plan) : null;
     if (req.user.isClientAdmin && req.user.clientId) {
-        const client = getClientById(req.user.clientId);
-        const plan = client && client.plan ? getPlanByName(client.plan) : null;
         return res.json({
             isClientAdmin: true,
             jobPositionGrants: plan ? getPlanGrants(plan.id) : [],
@@ -3908,7 +3908,13 @@ app.get('/api/business/me/grants', requireAuth, (req, res) => {
             giroGrants: plan && plan.businessSectorId ? getSectorGrants(plan.businessSectorId) : null,
         });
     }
-    res.json({ grants: getUserGrants(req.user.sub), jobPositionGrants: getUserJobPositionGrants(req.user.sub) });
+    // Un usuario (con su perfil) ve todo lo que su empresa tiene contratado: lo que le habilitaron sale normal y lo demás, bloqueado.
+    // `contractGrants` (plan + adicionales; null si no hay plan, entonces no se filtra) deja el árbol solo con lo contratado.
+    res.json({
+        grants: getUserGrants(req.user.sub),
+        jobPositionGrants: getUserJobPositionGrants(req.user.sub),
+        contractGrants: plan ? [...getPlanGrants(plan.id), ...getClientPermissionGrants(req.user.clientId)] : null,
+    });
 });
 
 // "Cambios" por nodo del árbol contratado del administrador (Mis Accesos): el historial del contrato de SU cliente, nunca el de otro.
