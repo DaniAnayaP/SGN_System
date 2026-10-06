@@ -9085,6 +9085,39 @@ function clampNewGrantsToLimits({ clientId, visibleStatuses, before, after }) {
     return { allowed, dropped };
 }
 
+// Qué límites rompe UN permiso concreto de un usuario de cliente (la misma regla para medirlo, para filtrarlo al usarlo y para el resto):
+//   module   : el departamento no está contratado por el cliente.
+//   status   : el nodo está en un Estatus que ese usuario no ve (skipStatus para las cuentas de práctica: ven todos los Estatus a propósito).
+//   contract : pantalla o columna fuera del plan + adicionales (General, centros de costo y permisos gruesos no cuentan; sin plan no se evalúa).
+// ctx = { modules: Set, overrides: Map, contract: lista | null }.
+function limitKindsForGrant(g, ctx, visibleStatuses, skipStatus) {
+    const kinds = [];
+    if (g.sectionId !== 'main' && !ctx.modules.has(g.sectionId)) kinds.push('module');
+    if (!skipStatus && !visibleStatuses.has(resolveMasterNodeStatus(g.sectionId, g.itemId, g.submenuId, ctx.overrides))) kinds.push('status');
+    if (ctx.contract && g.sectionId !== 'main' && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(ctx.contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) kinds.push('contract');
+    return kinds;
+}
+
+// Lo que cada cliente tiene contratado y el Estatus de cada nodo del Árbol Maestro, guardado unos segundos: getUserEffectiveGrants se llama varias
+// veces por petición y no debe reconstruir esto cada vez. Un cambio de plan, de módulos o de Estatus se nota en esos segundos.
+const LIMITS_CONTEXT_TTL_MS = 3000;
+const limitsContextCache = new Map();
+function getLimitsContext(clientId) {
+    const now = Date.now();
+    const hit = limitsContextCache.get(clientId);
+    if (hit && now - hit.at < LIMITS_CONTEXT_TTL_MS) return hit.ctx;
+    const ctx = {
+        modules: new Set(getClientModuleKeys(clientId)),
+        overrides: buildMasterStatusOverrideMap(getMasterPermissionStatuses()),
+        contract: getClientContractGrants(clientId),
+    };
+    limitsContextCache.set(clientId, { at: now, ctx });
+    return ctx;
+}
+function resetLimitsCache() {
+    limitsContextCache.clear();
+}
+
 function scanLimitViolations({ sampleSize = 5 } = {}) {
     const statusOverrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses());
     const clients = db.prepare('SELECT id, company_name AS name, plan FROM clients ORDER BY company_name COLLATE NOCASE').all();
@@ -9100,12 +9133,10 @@ function scanLimitViolations({ sampleSize = 5 } = {}) {
         users.forEach((user) => {
             const visible = new Set(getUserVisibleStatuses(user.id));
             let affected = false;
-            getUserEffectiveGrants(user.id).forEach((g) => {
+            // Los permisos SIN filtrar: la auditoría mide justo lo que getUserEffectiveGrants ya no deja valer.
+            getUserEffectiveGrantsRaw(user.id).forEach((g) => {
                 summary.grantsChecked += 1;
-                const kinds = [];
-                if (g.sectionId !== 'main' && !modules.has(g.sectionId)) kinds.push('module');
-                if (!user.isTest && !visible.has(resolveMasterNodeStatus(g.sectionId, g.itemId, g.submenuId, statusOverrides))) kinds.push('status');
-                if (contract && g.sectionId !== 'main' && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) kinds.push('contract');
+                const kinds = limitKindsForGrant(g, { modules, overrides: statusOverrides, contract }, visible, !!user.isTest);
                 if (!kinds.length) return;
                 affected = true;
                 summary.affectedGrants += 1;
@@ -9342,7 +9373,8 @@ function getUserJobPositionGrants(userId) {
 // grants (getUserGrants, "Permisos Adicionales") — the full "everything this
 // user can actually see" set every real authorization check in server.js
 // reads, deduplicated by section/item/submenu.
-function getUserEffectiveGrants(userId) {
+// Todo lo que está guardado para este usuario (su Puesto + sus extras), sin filtrar: lo que muestran los editores y mide la Auditoría de Límites.
+function getUserEffectiveGrantsRaw(userId) {
     const seen = new Set();
     const combined = [];
     for (const g of [...getUserJobPositionGrants(userId), ...getUserGrants(userId)]) {
@@ -9352,6 +9384,20 @@ function getUserEffectiveGrants(userId) {
         combined.push(g);
     }
     return combined;
+}
+
+// Lo que este usuario puede USAR de verdad: sus permisos guardados menos los que hoy quedan fuera de los límites (departamento que la empresa ya
+// no tiene contratado, Estatus que el usuario no ve, pantalla o columna fuera del plan y los adicionales). Un permiso viejo fuera de límites
+// sigue guardado (los editores lo muestran y se puede quitar) pero no vale. Es el único punto por el que pasa toda comprobación de acceso y el
+// menú. No se filtra a las cuentas del equipo SaaS (sin cliente) ni al administrador del cliente: su acceso lo da ser administrador, no una
+// lista (con la lista vacía el administrador pasa a "sin restricciones"; filtrarlo ahí le SUBIRÍA el acceso, no se lo bajaría).
+function getUserEffectiveGrants(userId) {
+    const combined = getUserEffectiveGrantsRaw(userId);
+    const account = db.prepare('SELECT client_id AS clientId, is_client_admin AS isClientAdmin, is_test_account AS isTest FROM users WHERE id = ?').get(userId);
+    if (!account || !account.clientId || account.isClientAdmin) return combined;
+    const ctx = getLimitsContext(account.clientId);
+    const visible = new Set(getUserVisibleStatuses(userId));
+    return combined.filter((g) => limitKindsForGrant(g, ctx, visible, !!account.isTest).length === 0);
 }
 
 // Per-node audit trail — see user_grant_change_log's own DDL comment, same
@@ -9662,6 +9708,8 @@ module.exports = {
     scanLimitViolations,
     getClientContractGrants,
     clampNewGrantsToLimits,
+    getUserEffectiveGrantsRaw,
+    resetLimitsCache,
     getCascadedColumnGroups,
     getLevelOrderLayers,
     resolveOrderRows,
