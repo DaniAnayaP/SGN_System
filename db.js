@@ -9187,24 +9187,49 @@ function getUserOperationalStatus(userId) {
     return row ? computeOperationalStatus(row) : 'active';
 }
 
-// ¿Esta cuenta puede seguir usando su sesión? La misma regla del inicio de sesión (ver POST /api/auth/login), pero revisada en CADA petición: la
-// sesión (JWT) dura 8 horas y no sabe si la cuenta se desactivó o se borró después. Devuelve null si puede seguir, o el motivo:
-// 'missing' (la cuenta ya no existe), 'inactive' (desactivada a mano, el cliente se desactivó o su Estatus RH es de baja) o 'suspended'.
-let sessionBlockStmt = null;
-function getSessionBlockReason(userId) {
-    if (!sessionBlockStmt) {
-        sessionBlockStmt = db.prepare(`
-            SELECT users.active, hr_status_catalog.operational_effect AS hrStatusEffect
+// El estado ACTUAL de la cuenta de una sesión, leído de la base en CADA petición: la sesión (JWT) dura 8 horas y no sabe si la cuenta se desactivó,
+// se borró o cambió de privilegios después. Devuelve { reason, fresh }:
+//   reason : null si puede seguir, o el motivo — 'missing' (ya no existe), 'inactive' (desactivada a mano, su cliente se desactivó o su Estatus RH es
+//            de baja) o 'suspended'. Misma regla del inicio de sesión (POST /api/auth/login).
+//   fresh  : los campos de privilegio del token puestos al día (role, clientId, isClientAdmin, isTestAccount, isSaasSuperAdmin): quitarle a una cuenta
+//            el administrador principal, o el de administrador del cliente, vale desde la siguiente petición y no cuando venza su sesión.
+let sessionStateStmt = null;
+function getSessionState(userId) {
+    if (!sessionStateStmt) {
+        sessionStateStmt = db.prepare(`
+            SELECT users.active, users.role, users.client_id AS clientId, users.is_client_admin AS isClientAdmin, users.is_test_account AS isTestAccount,
+                   users.is_saas_super_admin AS isSaasSuperAdmin, hr_status_catalog.operational_effect AS hrStatusEffect
             FROM users
             LEFT JOIN hr_workers ON hr_workers.user_id = users.id
             LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
             WHERE users.id = ?
         `);
     }
-    const row = sessionBlockStmt.get(userId);
-    if (!row) return 'missing';
+    const row = sessionStateStmt.get(userId);
+    if (!row) return { reason: 'missing', fresh: null };
     const status = computeOperationalStatus(row);
-    return status === 'active' ? null : status;
+    return {
+        reason: status === 'active' ? null : status,
+        fresh: {
+            role: row.role, clientId: row.clientId, isClientAdmin: !!row.isClientAdmin, isTestAccount: !!row.isTestAccount, isSaasSuperAdmin: !!row.isSaasSuperAdmin,
+        },
+    };
+}
+function getSessionBlockReason(userId) {
+    return getSessionState(userId).reason;
+}
+
+// ¿Esta cuenta (sin cliente) es administrador principal del equipo SaaS?
+function isSaasSuperAdminUser(userId) {
+    const row = db.prepare('SELECT is_saas_super_admin AS superAdmin FROM users WHERE id = ? AND client_id IS NULL').get(userId);
+    return !!(row && row.superAdmin);
+}
+// Los clientes que tienen un plan (el cliente guarda el NOMBRE del plan) y el cambio de nombre de un plan en ellos.
+function listClientsOnPlan(planName) {
+    return planName ? db.prepare('SELECT id FROM clients WHERE plan = ?').all(planName) : [];
+}
+function renameClientsPlan(oldName, newName) {
+    return db.prepare('UPDATE clients SET plan = ? WHERE plan = ?').run(newName, oldName).changes;
 }
 
 function getUserById(id, clientId) {
@@ -9611,6 +9636,10 @@ module.exports = {
     computeOperationalStatus,
     getUserOperationalStatus,
     getSessionBlockReason,
+    getSessionState,
+    isSaasSuperAdminUser,
+    listClientsOnPlan,
+    renameClientsPlan,
     listIntelligentReports,
     getIntelligentReportById,
     createIntelligentReport,

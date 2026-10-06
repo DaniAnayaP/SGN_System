@@ -327,6 +327,10 @@ const {
     getSessionsValidAfter,
     setSessionsValidAfter,
     getSessionBlockReason,
+    getSessionState,
+    isSaasSuperAdminUser,
+    listClientsOnPlan,
+    renameClientsPlan,
     getClientContractGrants,
     clampNewGrantsToLimits,
     getOrderTreeForTarget,
@@ -734,9 +738,11 @@ function requireAuth(req, res, next) {
         const payload = jwt.verify(token, JWT_SECRET);
         // Después de un Reinicio del Sistema, las sesiones anteriores ya no valen (ver system_state en db.js).
         if (payload.iat && payload.iat < getSessionsValidAfter()) return res.status(401).json({ message: 'Invalid or expired session.' });
-        // Una cuenta desactivada, borrada o dada de baja pierde la sesión en la siguiente petición, no hasta que venza el token (8 h).
-        if (getSessionBlockReason(payload.sub)) return res.status(401).json({ message: 'Invalid or expired session.', code: 'ACCOUNT_BLOCKED' });
-        req.user = payload;
+        // Una cuenta desactivada, borrada o dada de baja pierde la sesión en la siguiente petición, no hasta que venza el token (8 h); y sus privilegios
+        // (administrador principal, administrador del cliente, rol) son los de AHORA, no los que tenía al iniciar sesión.
+        const session = getSessionState(payload.sub);
+        if (session.reason) return res.status(401).json({ message: 'Invalid or expired session.', code: 'ACCOUNT_BLOCKED' });
+        req.user = { ...payload, ...session.fresh };
         next();
     } catch {
         return res.status(401).json({ message: 'Invalid or expired session.' });
@@ -765,6 +771,48 @@ function requireClientAdmin(req, res, next) {
         return res.status(403).json({ message: 'Client admin access required.' });
     }
     next();
+}
+
+// Un permiso fino del equipo SaaS para una ruta de escritura: el administrador principal (admin_saas) o quien tenga alguna de las hojas dadas de la
+// pantalla (itemId) en su árbol de Equipo SaaS. Responde 403 y devuelve true si no. Antes estas rutas solo pedían ser "admin": cualquier cuenta del equipo,
+// aunque no tuviera accesos, podía usarlas.
+function denySaasLeaf(req, res, itemId, subItemIds, message) {
+    const grants = getSaasUserGrants(req.user.sub);
+    const list = Array.isArray(subItemIds) ? subItemIds : [subItemIds];
+    if (list.some((sub) => hasSaasGrant(grants, itemId, sub, req.user.isSaasSuperAdmin))) return false;
+    res.status(403).json({ message: message || 'No tienes permiso para hacer esto.' });
+    return true;
+}
+
+// Una cuenta del equipo que no es el administrador principal no puede darle a otra (ni a sí misma) más de lo que ella tiene: ningún nivel da más de lo que
+// le deja el de arriba. grantsAfter son los accesos que se piden; statuses, los Estatus que se piden (si aplica).
+function denySaasTeamEscalation(req, res, targetId, { grantsBefore = [], grantsAfter = [], statuses = null } = {}) {
+    if (req.user.isSaasSuperAdmin) return false;
+    if (Number(targetId) === Number(req.user.sub)) {
+        res.status(403).json({ message: 'No puedes cambiar tus propios accesos.' });
+        return true;
+    }
+    const keyOf = (g) => `${g.itemId}::${g.subItemId || ''}`;
+    const mine = new Set(getSaasUserGrants(req.user.sub).map(keyOf));
+    const had = new Set(grantsBefore.map(keyOf));
+    if (grantsAfter.some((g) => !had.has(keyOf(g)) && !mine.has(keyOf(g)))) {
+        res.status(403).json({ message: 'No puedes dar un acceso que tú no tienes.' });
+        return true;
+    }
+    if (statuses) {
+        const myStatuses = new Set(getUserVisibleStatuses(req.user.sub));
+        if (statuses.some((s) => !myStatuses.has(s))) {
+            res.status(403).json({ message: 'No puedes dar un Estatus que tú no ves.' });
+            return true;
+        }
+    }
+    return false;
+}
+// Solo el administrador principal cambia la cuenta de otro administrador principal (si no, bastaría restablecerle la contraseña para entrar como él).
+function denySuperAdminTarget(req, res, targetId) {
+    if (req.user.isSaasSuperAdmin || !isSaasSuperAdminUser(targetId)) return false;
+    res.status(403).json({ message: 'Solo el administrador principal puede cambiar esa cuenta.' });
+    return true;
 }
 
 // --- POST /api/auth/login ----------------------------------------------------
@@ -1159,6 +1207,7 @@ async function applyClientLifecycle(client) {
 // records back to empty; the account's login itself is untouched, so nobody
 // needs a new username/password after this.
 app.post('/api/admin/clients/:id/reset-training', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-clients', ['tabla::ta5','tabla::ta2'], 'No tienes permiso para reiniciar la cuenta de capacitación.')) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     if (!client.training_user_id) return res.status(400).json({ message: 'This client has no training account yet.' });
@@ -1444,6 +1493,7 @@ app.get('/api/admin/clients/:id/cost-centers', requireAuth, requireAdmin, (req, 
 });
 
 app.put('/api/admin/clients/:id/modules', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-clients', ['tabla::ta2'], 'No tienes permiso para editar clientes.')) return;
     const existing = getClientById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Client not found.' });
     const { modules, costCentersLimit } = req.body || {};
@@ -1499,6 +1549,7 @@ app.get('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, 
 });
 
 app.put('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-clients', ['tabla::ta0','tabla::ta2'], 'No tienes permiso para cambiar el acceso del administrador.')) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     if (!client.admin_user_id) return res.status(404).json({ message: 'This client has no admin user yet.' });
@@ -1539,6 +1590,7 @@ app.get('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
 // syncClientModulesFromPermissionGrants en db.js, Decisión #6: activar
 // acceso real nunca pasa sin que su costo ya esté sumado).
 app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-clients', ['tabla::ta1','modal-permisos::a1'], 'No tienes permiso para dar permisos adicionales.')) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
     const { grants } = req.body || {};
@@ -1719,6 +1771,7 @@ app.get('/api/admin/module-costs', requireAuth, requireAdmin, (req, res) => {
 });
 
 app.put('/api/admin/module-costs', requireAuth, requireAdmin, (req, res) => {
+    if (!req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'Solo el administrador principal puede cambiar los costos de módulos.' });
     const { costs } = req.body || {};
     if (!Array.isArray(costs)) return res.status(400).json({ message: 'costs must be an array.' });
     const validKeys = new Set(MODULE_CATALOG.map((m) => m.key));
@@ -1868,6 +1921,10 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
             businessSectorId,
         });
         logPlanChange({ planId: plan.id, action: 'update', changedBy: changedByLabel(req) });
+        // Los clientes que tienen este plan lo siguen por NOMBRE: si cambió de nombre, se renombra en ellos; y si cambió su definición (módulos, límite de
+        // centros de costo), se vuelve a estampar en cada cliente lo que tienen contratado.
+        if (plan.name !== existing.name) renameClientsPlan(existing.name, plan.name);
+        if (isDefinitionChange) listClientsOnPlan(plan.name).forEach((c) => applyEffectiveEntitlements(c.id));
         if (currency !== undefined && currency !== existing.currency) {
             logPlanChange({ planId: plan.id, action: 'update', fieldKey: 'admin.planCurrency', oldValue: existing.currency, newValue: currency, changedBy: changedByLabel(req) });
         }
@@ -1911,6 +1968,11 @@ app.delete('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     if (!hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-plans', 'tabla::ta2', req.user.isSaasSuperAdmin)) {
         return res.status(403).json({ message: 'No tienes permiso para editar planes.' });
+    }
+    // Un plan con clientes no se borra: sus clientes se quedarían apuntando a un plan que ya no existe (sin contrato).
+    const clientsOnPlan = listClientsOnPlan(existing.name);
+    if (clientsOnPlan.length) {
+        return res.status(409).json({ message: `Este plan está asignado a ${clientsOnPlan.length} cliente(s) y no se puede eliminar.` });
     }
     deletePlan(req.params.id);
     res.status(204).end();
@@ -2298,6 +2360,7 @@ app.get('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) => 
 });
 
 app.post('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-business-sectors', ['tabla::a0'], 'No tienes permiso para crear giros.')) return;
     const { name, icon, typeId, description } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
     try {
@@ -2319,6 +2382,7 @@ app.post('/api/admin/business-sectors', requireAuth, requireAdmin, (req, res) =>
 // actually changed (mirrors the plan currency/costPerCostCenter pattern),
 // so Registro de Cambios reads as a real diff, not just "something changed".
 app.patch('/api/admin/business-sectors/:id', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-business-sectors', ['tabla::ta3'], 'No tienes permiso para editar giros.')) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
     const { name, icon, typeId, description } = req.body || {};
@@ -2376,6 +2440,7 @@ function isValidIconCategory(value) {
 }
 
 app.post('/api/admin/business-sector-types', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-business-sectors', ['modal-tipo-giro::a0'], 'No tienes permiso para crear o editar tipos de giro.')) return;
     const { name, iconCategory } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
     if (!isValidIconCategory(iconCategory)) return res.status(400).json({ message: 'iconCategory inválido.' });
@@ -2390,6 +2455,7 @@ app.post('/api/admin/business-sector-types', requireAuth, requireAdmin, (req, re
     }
 });
 app.patch('/api/admin/business-sector-types/:id', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-business-sectors', ['modal-tipo-giro::a0'], 'No tienes permiso para crear o editar tipos de giro.')) return;
     const { name, iconCategory } = req.body || {};
     if (name !== undefined && !name.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
     if (!isValidIconCategory(iconCategory)) return res.status(400).json({ message: 'iconCategory inválido.' });
@@ -2411,6 +2477,7 @@ app.patch('/api/admin/business-sector-types/:id', requireAuth, requireAdmin, (re
 // No DELETE route -- Planes and Nuestras APPs already reference a sector by
 // id, same "Activar/Desactivar only" rule as clients/cost centers.
 app.patch('/api/admin/business-sectors/:id/status', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-business-sectors', ['tabla::ta5'], 'No tienes permiso para activar o desactivar giros.')) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
     const { status } = req.body || {};
@@ -2433,6 +2500,7 @@ app.get('/api/admin/business-sectors/:id/grants', requireAuth, requireAdmin, (re
 });
 
 app.put('/api/admin/business-sectors/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-business-sectors', ['tabla::ta0'], 'No tienes permiso para cambiar los accesos globales del giro.')) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
     const { grants } = req.body || {};
@@ -2498,6 +2566,7 @@ app.get('/api/admin/business-sectors/:id/department-order', requireAuth, require
 });
 
 app.put('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-business-sectors', ['tabla::ta1'], 'No tienes permiso para reordenar el giro.')) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
     const { customOrder, customAreaOrders, customApartadoOrders, customPantallaOrders, customColumnOrders } = req.body || {};
@@ -3771,6 +3840,7 @@ app.get('/api/admin/saas-users', requireAuth, requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-team', ['tabla::a0'], 'No tienes permiso para crear cuentas del equipo.')) return;
     const { username, email, password, name } = req.body || {};
     if (!username || !email || !name || !password || password.length < 8) {
         return res.status(400).json({ message: 'username, email, name and a password of at least 8 characters are required.' });
@@ -3793,6 +3863,8 @@ app.post('/api/admin/saas-users', requireAuth, requireAdmin, async (req, res) =>
 // what stops this route from ever reaching a client user's row, no matter
 // what id is sent.
 app.patch('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-team', ['tabla::a0','tabla::ta0'], 'No tienes permiso para cambiar cuentas del equipo.')) return;
+    if (denySuperAdminTarget(req, res, req.params.id)) return;
     const targetId = Number(req.params.id);
     const { active, name, username } = req.body || {};
     if (active === undefined && name === undefined && username === undefined) return res.status(400).json({ message: 'Nothing to update.' });
@@ -3825,6 +3897,8 @@ app.patch('/api/admin/saas-users/:id', requireAuth, requireAdmin, (req, res) => 
 // returns the new password ONCE, the same way provisionTrainingAccount's
 // own generatedPassword does, since it's never stored recoverably.
 app.post('/api/admin/saas-users/:id/reset-password', requireAuth, requireAdmin, async (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-team', ['tabla::a0','tabla::ta0'], 'No tienes permiso para restablecer contraseñas del equipo.')) return;
+    if (denySuperAdminTarget(req, res, req.params.id)) return;
     const target = getSaasUserById(req.params.id);
     if (!target) return res.status(404).json({ message: 'SaaS account not found.' });
     const { password } = await resetSaasUserPassword(req.params.id, changedByLabel(req));
@@ -3861,11 +3935,14 @@ app.get('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res
 });
 
 app.put('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-team', ['tabla::ta0'], 'No tienes permiso para cambiar los accesos de una cuenta.')) return;
     const { grants } = req.body || {};
     const error = validateSaasGrants(grants);
     if (error) return res.status(400).json({ message: error });
+    if (denySuperAdminTarget(req, res, req.params.id)) return;
     const target = getSaasUserById(req.params.id);
     const before = getSaasUserGrants(req.params.id);
+    if (denySaasTeamEscalation(req, res, req.params.id, { grantsBefore: before, grantsAfter: grants })) return;
     const after = setSaasUserGrants(req.params.id, grants);
     // Un registro por cada fila del árbol que se dio o se quitó (con su node_key), para
     // que el icono de Cambios de cada fila diga quién la tocó y cuándo.
@@ -3887,10 +3964,13 @@ app.put('/api/admin/saas-users/:id/grants', requireAuth, requireAdmin, (req, res
 // just habilitado; Pruebas_SGN and any other account an admin widens
 // see the rest too. Same shape as the client-side route below.
 app.put('/api/admin/saas-users/:id/visible-statuses', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-team', ['tabla::ta0'], 'No tienes permiso para cambiar los Estatus de una cuenta.')) return;
     const { statuses } = req.body || {};
     if (!Array.isArray(statuses) || statuses.some((s) => !ALL_ESTATUS_VALUES.includes(s))) {
         return res.status(400).json({ message: `statuses must be an array of: ${ALL_ESTATUS_VALUES.join(', ')}.` });
     }
+    if (denySuperAdminTarget(req, res, req.params.id)) return;
+    if (denySaasTeamEscalation(req, res, req.params.id, { statuses })) return;
     const target = getSaasUserById(req.params.id);
     const before = getUserVisibleStatuses(req.params.id);
     const after = setUserVisibleStatuses(req.params.id, statuses);
