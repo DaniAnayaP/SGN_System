@@ -7382,7 +7382,7 @@ db.exec(`
 ensureColumn('column_color_requests', 'level', 'TEXT');
 ensureColumn('column_color_requests', 'entity_id', 'INTEGER');
 
-const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text'];
+const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text', 'set-class', 'clear-class'];
 const SAAS_COLOR_AUTHORIZE_LEAF = 'controles::a8';
 
 // Jefe directo de una cuenta del equipo SaaS. Hoy todas dependen directo de admin_saas (no hay campo de
@@ -7506,6 +7506,12 @@ function resolveColorAuthorizer(scope, requesterId) {
 // Aplica una solicitud ya autorizada a la tabla de colores que le toca (árbol SaaS o árbol de clientes).
 function applyColorRequest(request, updatedBy) {
     if (request.scope === 'client' || request.scope === 'level') {
+        // Clasificación de una columna: color_id es "class:<nodeKey>"; value es la clasificación ('' = sin clasificar).
+        if (request.action === 'set-class' || request.action === 'clear-class') {
+            const nodeKey = String(request.colorId).replace(/^class:/, '');
+            if (request.action === 'clear-class') return clearLevelClassification(request.level, request.entityId, nodeKey);
+            return setLevelClassification(request.level, request.entityId, nodeKey, request.value || '', null, updatedBy, request.clientId);
+        }
         const kind = request.action.endsWith('text') ? 'text' : 'dot';
         if (request.action.startsWith('clear')) return clearLevelColor(request.level, request.entityId, request.colorId, kind, updatedBy);
         return setLevelColor(request.level, request.entityId, request.colorId, kind, request.value, updatedBy, request.clientId);
@@ -7532,6 +7538,7 @@ function applyColorRequest(request, updatedBy) {
 const COLOR_SCREEN_TABLE_KEY = 'colores-columnas';
 const COLOR_PERSONALIZE_COLUMN = 'colColorsPersonalize';
 const COLOR_AUTHORIZE_COLUMN = 'colColorsAuthorize';
+const COLOR_CLASSIFY_COLUMN = 'colClassifyPersonalize';
 const CLIENT_COLOR_TARGET_LEVELS = ['admin', 'perfil', 'usuario'];
 const COLOR_TREE_SECTION_LABEL_KEYS = {
     main: 'menu.mainSection',
@@ -7663,6 +7670,7 @@ function getColorColumnCatalog() {
                 labelKey: col.labelKey || col.id,
                 nodeKey,
                 classLabelKey: classNode ? classNode.labelKey : null,
+                classId: classNode ? classNode.id : null,
             });
         };
         (pantalla.submenu || []).forEach((entry) => {
@@ -7672,7 +7680,17 @@ function getColorColumnCatalog() {
             } else addColumn(entry, null);
         });
         if (!columns.length) return;
+        // Las clasificaciones que se le pueden dar a una columna de esta pantalla: las suyas (menos "Botones", que son permisos)
+        // y las dos universales.
+        const classOptions = [];
+        (pantalla.submenu || []).forEach((entry) => {
+            if (entry.isClassification && entry.id !== 'class-botones') classOptions.push({ id: entry.id, labelKey: entry.labelKey });
+        });
+        [['class-por-definir', 'menu.classPorDefinir'], ['class-acciones', 'menu.classAcciones']].forEach(([id, labelKey]) => {
+            if (!classOptions.some((o) => o.id === id)) classOptions.push({ id, labelKey });
+        });
         catalog.push({
+            classOptions,
             tableKey,
             path: { sectionId: path.sectionId, itemId: path.itemId, submenuPrefix: path.submenuPrefix },
             crumbs,
@@ -7687,13 +7705,17 @@ function getColorColumnCatalog() {
 // "col-own:<nodeKey>" (Encabezado) / "col-nested:<nodeKey>" (Filas) -> la columna a la que pertenece; null si no es
 // el id de ninguna columna real.
 function findColorColumnByColorId(colorId) {
-    const match = /^col-(own|nested):(.+)$/.exec(colorId || '');
+    const match = /^(?:col-(own|nested)|(class)):(.+)$/.exec(colorId || '');
     if (!match) return null;
     for (const screen of getColorColumnCatalog()) {
-        const column = screen.columns.find((c) => c.nodeKey === match[2]);
-        if (column) return { screen, column, part: match[1] };
+        const column = screen.columns.find((c) => c.nodeKey === match[3]);
+        if (column) return { screen, column, part: match[1] || 'class' };
     }
     return null;
+}
+// El id con el que se guarda y se pide un cambio de una parte de la columna ('own' Encabezado, 'nested' Filas, 'class' clasificación).
+function colorIdForPart(column, part) {
+    return part === 'class' ? `class:${column.nodeKey}` : `col-${part}:${column.nodeKey}`;
 }
 
 // Lo que se pinta en la pantalla para ese objetivo: por cada columna, lo que ve hoy (propio o heredado, y de
@@ -7766,6 +7788,35 @@ function listLevelColorRequests({ userId, isSuperAdmin = false, limit = 100 }) {
 function describeLevelColorRequestTarget(request) {
     const target = request.level ? resolveSaasColorLevelTarget(request.level, request.entityId) : null;
     return { level: request.level || null, name: target ? target.name : '' };
+}
+
+// La clasificación de cada columna para ese objetivo: nodeKey -> { id, from, label?, pending? } solo de las columnas que tienen un
+// cambio propio, uno heredado de un nivel de arriba o del Maestro, o una solicitud pendiente; el resto sigue la clasificación de
+// menu.json (la trae el catálogo). `from`: 'own' | nivel de arriba | 'master'. id '' = sin clasificar a propósito.
+function getClassesForTarget(clientId, target, scope) {
+    const chain = resolveLevelColorChain(target.level, target.entityId, clientId);
+    const layers = getLevelClassificationLayers(chain);
+    const master = new Map(getMasterPermissionClassificationOverrides().map((o) => [o.nodeKey, o]));
+    const result = {};
+    layers.forEach((list, nodeKey) => {
+        const first = list[0];
+        result[nodeKey] = { id: first.classificationId, from: first.level === target.level ? 'own' : first.level, label: first.classificationLabel || undefined };
+    });
+    master.forEach((o, nodeKey) => {
+        if (!result[nodeKey]) result[nodeKey] = { id: o.classificationId, from: 'master', label: o.classificationLabel || undefined };
+    });
+    db.prepare(`
+        SELECT color_id AS colorId, action, value FROM column_color_requests
+        WHERE scope = ? AND IFNULL(client_id, 0) = IFNULL(?, 0) AND level = ? AND entity_id = ? AND status = 'pending' AND action IN ('set-class', 'clear-class')
+    `).all(scope, clientId, target.level, target.entityId).forEach((r) => {
+        const nodeKey = String(r.colorId).replace(/^class:/, '');
+        result[nodeKey] = { ...(result[nodeKey] || { id: null, from: null }), pending: r.action === 'set-class' ? { id: r.value || '' } : { clear: true } };
+    });
+    return result;
+}
+// Colores y clasificaciones juntos, tal como los pide la pantalla.
+function getAppearanceForTarget(clientId, target, scope) {
+    return { colors: getColorsForTarget(clientId, target, scope), classes: getClassesForTarget(clientId, target, scope) };
 }
 
 // Solicitudes de color de una empresa que ve esta persona: las suyas y las pendientes que le tocan decidir
@@ -9381,6 +9432,10 @@ module.exports = {
     resolveViewerColorChain,
     COLOR_PERSONALIZE_COLUMN,
     COLOR_AUTHORIZE_COLUMN,
+    COLOR_CLASSIFY_COLUMN,
+    colorIdForPart,
+    getClassesForTarget,
+    getAppearanceForTarget,
     COLOR_SCREEN_TABLE_KEY,
     CLIENT_COLOR_TARGET_LEVELS,
     userCanAuthorizeClientColors,

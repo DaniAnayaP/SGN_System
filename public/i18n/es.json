@@ -783,7 +783,7 @@
     "colorRequestApproved": "Color autorizado y aplicado",
     "colorRequestRejectedMsg": "Solicitud rechazada",
     "colorRequestError": "No se pudo completar la solicitud",
-    "columnColorsLevelsSubtitle": "Elige el color de fondo y de letra de las columnas de las tablas de los clientes por Giro, por Plan o por Cliente. Lo que cambias solo le llega a lo que está debajo: el giro, a sus planes y clientes; el plan, a sus clientes; el cliente, a toda su empresa.",
+    "columnColorsLevelsSubtitle": "Elige el color de fondo y de letra, y la clasificación, de las columnas de las tablas de los clientes por Giro, por Plan o por Cliente. Lo que cambias solo le llega a lo que está debajo: el giro, a sus planes y clientes; el plan, a sus clientes; el cliente, a toda su empresa.",
     "masterTreeHistoryFieldStatus": "Estatus",
     "masterTreeHistoryFieldClassification": "Clasificación",
     "masterTreeHistoryFieldColor": "Color",
@@ -855,9 +855,13 @@
     "accesosActivePermsTitle": "Permisos Activados",
     "myAccessSubtitle": "Lo que realmente puedes ver hoy, otorgado por tu(s) perfil(es) más cualquier extra.",
     "columnColorsTitle": "Colores de Columnas",
-    "columnColorsSubtitle": "Elige el color de fondo y de letra con que se ven las columnas de las tablas de tu empresa. Lo que cambias solo le llega a lo que está debajo de lo que eliges: si cambias un perfil, solo lo ven sus usuarios; si cambias a una persona, solo ella.",
+    "columnColorsSubtitle": "Elige el color de fondo y de letra, y la clasificación, con que se ven las columnas de las tablas de tu empresa. Lo que cambias solo le llega a lo que está debajo de lo que eliges: si cambias un perfil, solo lo ven sus usuarios; si cambias a una persona, solo ella.",
     "colColorsPersonalize": "Personalizar colores",
-    "colColorsAuthorize": "Autorizar colores",
+    "colClassifyPersonalize": "Personalizar clasificación",
+    "columnColorsClassPart": "Clasificación",
+    "columnColorsRequestClass": "Clasificación: {name}",
+    "columnColorsRequestClassClear": "Quitar clasificación propia",
+    "colColorsAuthorize": "Autorizar colores y clasificación",
     "columnColorsApplyTo": "Aplicar a",
     "columnColorsLevelAdmin": "Administrador",
     "columnColorsLevelProfile": "Perfil",
@@ -2139,6 +2143,10 @@
     "columnColorsEntitySaas": {
       "what": "El giro, el plan o el cliente exacto al que se le aplican los colores que eliges abajo.",
       "example": "eliges al cliente «Transportes del Norte» y los colores que cambies solo cambian para su empresa."
+    },
+    "columnColorsClass": {
+      "what": "Elige en qué grupo (clasificación) aparece esta columna para lo que elegiste arriba. Puedes dejarla sin clasificar; «Restablecer» quita tu cambio y vuelve a la clasificación de arriba.",
+      "example": "mueves «Placas» de «Por Definir» a «Nuestras Unidades» y, para ese perfil, la columna se agrupa ahí en las tablas."
     },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",

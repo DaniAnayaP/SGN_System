@@ -42,7 +42,7 @@ const COLOR_FAMILIES = [
 ];
 
 let screens = [];
-let state = { canPersonalize: false, canAuthorize: false, isAdmin: false, levels: [], target: null, colors: {} };
+let state = { canPersonalize: false, canClassify: false, canAuthorize: false, isAdmin: false, levels: [], target: null, colors: {}, classes: {} };
 const expanded = new Set();
 const recent = { dot: [], text: [] };
 let closePicker = null;
@@ -194,7 +194,7 @@ function renderScreen(screen, depth, parent) {
     const { row, isOpen } = groupRow(key, t(screen.screenLabelKey), depth, 'col-colors-screen');
     parent.appendChild(row);
     if (!isOpen) return;
-    screen.columns.forEach((column) => parent.appendChild(columnRow(column, depth + 1)));
+    screen.columns.forEach((column) => parent.appendChild(columnRow(column, depth + 1, screen)));
 }
 function sampleChip(entry) {
     const chip = document.createElement('span');
@@ -228,7 +228,74 @@ function cell(column, part) {
     btn.addEventListener('click', () => openPicker(btn, colorId, 'dot'));
     return btn;
 }
-function columnRow(column, depth) {
+// Clasificación efectiva de una columna para lo que se está editando: la de este nivel, la heredada, la del Maestro o la de
+// menu.json ('structural'). id '' = sin clasificar a propósito.
+function effectiveClass(column) {
+    const entry = state.classes[column.nodeKey];
+    if (entry && entry.id !== null && entry.id !== undefined) return { id: entry.id, from: entry.from, label: entry.label, pending: entry.pending };
+    return { id: column.classId || '', from: 'structural', pending: entry && entry.pending };
+}
+function classStateInfo(current) {
+    if (current.pending) return { kind: 'pending' };
+    if (current.from === 'own') return { kind: 'own' };
+    if (current.from === 'master' || current.from === 'structural') return { kind: 'master' };
+    return { kind: 'inherited', level: current.from };
+}
+async function changeClass(column, value, reset) {
+    const colorId = `class:${column.nodeKey}`;
+    const common = { level: state.target.level, entityId: state.target.entityId, colorId, kind: 'class' };
+    const { res, body: data } = reset
+        ? await request(`${config.api.state}?${new URLSearchParams({ ...common, entityId: String(common.entityId) })}`, { method: 'DELETE' })
+        : await request(config.api.state, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...common, value }) });
+    if (!res.ok) { toast(data.message || t('admin.saveError'), 'error'); render(); return; }
+    if (data.colors) state.colors = data.colors;
+    if (data.classes) state.classes = data.classes;
+    if (res.status === 202) {
+        toast(t('admin.colorRequestSent', { name: (data.assignedTo && data.assignedTo.name) || '' }), 'info');
+        loadRequests();
+    }
+    render();
+}
+function classControl(column, screen) {
+    const current = effectiveClass(column);
+    const info = classStateInfo(current);
+    const group = document.createElement('div');
+    group.className = 'col-colors-class';
+    const select = document.createElement('select');
+    select.className = 'col-colors-class-select';
+    select.setAttribute('data-help-key', 'columnColorsClass');
+    select.disabled = !state.canClassify;
+    const options = [...(screen.classOptions || []).map((o) => ({ id: o.id, label: t(o.labelKey) })), { id: '', label: t('menu.classNone') }];
+    if (!options.some((o) => o.id === current.id)) options.push({ id: current.id, label: current.label ? t(current.label) : current.id });
+    options.forEach((o) => {
+        const option = document.createElement('option');
+        option.value = o.id;
+        option.textContent = o.label;
+        select.appendChild(option);
+    });
+    const shown = current.pending && current.pending.id !== undefined ? current.pending.id : current.id;
+    select.value = options.some((o) => o.id === shown) ? shown : current.id;
+    select.addEventListener('change', () => changeClass(column, select.value, false));
+    const pill = document.createElement('span');
+    pill.className = `col-colors-state col-colors-state-${info.kind}`;
+    pill.setAttribute('data-help-key', 'columnColorsState');
+    pill.textContent = stateLabel(info);
+    pill.title = pill.textContent;
+    group.append(select, pill);
+    if (state.canClassify && (current.from === 'own' || current.pending)) {
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'col-colors-class-reset';
+        reset.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
+        reset.title = t('admin.masterTreeColorResetHint');
+        reset.setAttribute('aria-label', reset.title);
+        reset.setAttribute('data-help-key', 'masterTreeColorReset');
+        reset.addEventListener('click', () => changeClass(column, '', true));
+        group.appendChild(reset);
+    }
+    return group;
+}
+function columnRow(column, depth, screen) {
     const row = document.createElement('div');
     row.className = 'col-colors-row col-colors-column';
     row.style.paddingLeft = `${0.4 + depth * 1.2}rem`;
@@ -238,12 +305,7 @@ function columnRow(column, depth) {
     label.className = 'col-colors-label';
     label.textContent = t(column.labelKey);
     row.append(spacer, label);
-    if (column.classLabelKey) {
-        const tag = document.createElement('span');
-        tag.className = 'col-colors-class-tag';
-        tag.textContent = t(column.classLabelKey);
-        row.appendChild(tag);
-    }
+    row.appendChild(classControl(column, screen));
     const cells = document.createElement('div');
     cells.className = 'col-colors-cells';
     cells.append(cell(column, 'own'), cell(column, 'nested'));
@@ -409,6 +471,7 @@ function anchorFor(colorId) {
 // ------------------------------------------------------------------ guardar
 function afterChange(colorId, kind, data, status) {
     if (data.colors) state.colors = data.colors;
+    if (data.classes) state.classes = data.classes;
     if (status === 202) {
         toast(t('admin.colorRequestSent', { name: (data.assignedTo && data.assignedTo.name) || '' }), 'info');
         loadRequests();
@@ -455,7 +518,11 @@ async function loadRequests() {
 }
 function requestChange(item) {
     const wrap = document.createElement('span');
-    if (item.action === 'set' || item.action === 'set-text') {
+    if (item.action === 'set-class') {
+        wrap.append(t('business.columnColorsRequestClass', { name: item.valueLabelKey ? t(item.valueLabelKey) : (item.value || t('menu.classNone')) }));
+    } else if (item.action === 'clear-class') {
+        wrap.append(t('business.columnColorsRequestClassClear'));
+    } else if (item.action === 'set' || item.action === 'set-text') {
         const sw = document.createElement('span');
         sw.className = 'color-request-swatch';
         sw.style.backgroundColor = item.value;
@@ -515,7 +582,8 @@ function renderRequests() {
         addCell(status);
         const columnName = item.columnLabelKey ? t(item.columnLabelKey) : item.colorId;
         const screenName = item.screenLabelKey ? `${t(item.screenLabelKey)} › ` : '';
-        const part = item.part ? ` · ${t(item.part === 'own' ? 'admin.colorRequestPartOwn' : 'admin.colorRequestPartNested')}` : '';
+        const partKey = item.part === 'class' ? 'business.columnColorsClassPart' : item.part === 'own' ? 'admin.colorRequestPartOwn' : 'admin.colorRequestPartNested';
+        const part = item.part ? ` · ${t(partKey)}` : '';
         addCell(`${screenName}${columnName}${part}`);
         addCell(item.target && item.target.level
             ? t('business.columnColorsTargetLine', { level: t(`business.columnColorsLevel_${item.target.level}`), name: item.target.name })

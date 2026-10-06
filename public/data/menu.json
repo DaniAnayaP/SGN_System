@@ -184,7 +184,8 @@
                   "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
                   "submenu": [
                     { "id": "colColorsPersonalize", "labelKey": "business.colColorsPersonalize", "permissionOnly": true },
-                    { "id": "colColorsAuthorize", "labelKey": "business.colColorsAuthorize", "permissionOnly": true }
+                    { "id": "colColorsAuthorize", "labelKey": "business.colColorsAuthorize", "permissionOnly": true },
+                    { "id": "colClassifyPersonalize", "labelKey": "business.colClassifyPersonalize", "permissionOnly": true }
                   ]
                 }
               ]

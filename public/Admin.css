@@ -6183,3 +6183,39 @@ body.dark-mode .col-colors-state-own{ background-color: #1c3324; color: #7fd99a;
 body.dark-mode .col-colors-state-pending{ background-color: #3a2f12; color: #f0c24a; }
 body.dark-mode .col-colors-state-inherited,
 body.dark-mode .col-colors-state-master{ background-color: #2a2c38; color: #a3a8c0; }
+
+/* Colores de Columnas: clasificación de cada columna (selector + de dónde viene + Restablecer). */
+.col-colors-class{
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.col-colors-class-select{
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.35rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.72rem;
+    max-width: 11rem;
+}
+.col-colors-class-select:disabled{
+    opacity: 0.85;
+}
+.col-colors-class-reset{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.col-colors-class-reset:hover{
+    color: var(--color-text-primary);
+    border-color: var(--color-accent);
+}

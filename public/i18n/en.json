@@ -784,7 +784,7 @@
     "colorRequestApproved": "Color approved and applied",
     "colorRequestRejectedMsg": "Request rejected",
     "colorRequestError": "The request could not be completed",
-    "columnColorsLevelsSubtitle": "Choose the background and text color of the clients' table columns by Business type, by Plan or by Client. What you change only reaches whatever sits below: a business type, its plans and clients; a plan, its clients; a client, its whole company.",
+    "columnColorsLevelsSubtitle": "Choose the background and text color, and the classification, of the clients' table columns by Business type, by Plan or by Client. What you change only reaches whatever sits below: a business type, its plans and clients; a plan, its clients; a client, its whole company.",
     "masterTreeHistoryFieldStatus": "Status",
     "masterTreeHistoryFieldClassification": "Classification",
     "masterTreeHistoryFieldColor": "Color",
@@ -856,9 +856,13 @@
     "accesosActivePermsTitle": "Active Permissions",
     "myAccessSubtitle": "What you can actually see today, granted by your profile(s) plus anything extra.",
     "columnColorsTitle": "Column Colors",
-    "columnColorsSubtitle": "Choose the background and text color your company's table columns show. What you change only reaches whatever sits below what you pick: change a profile and only its users see it; change a person and only they do.",
+    "columnColorsSubtitle": "Choose the background and text color, and the classification, your company's table columns show. What you change only reaches whatever sits below what you pick: change a profile and only its users see it; change a person and only they do.",
     "colColorsPersonalize": "Customize colors",
-    "colColorsAuthorize": "Authorize colors",
+    "colClassifyPersonalize": "Customize classification",
+    "columnColorsClassPart": "Classification",
+    "columnColorsRequestClass": "Classification: {name}",
+    "columnColorsRequestClassClear": "Remove own classification",
+    "colColorsAuthorize": "Authorize colors and classification",
     "columnColorsApplyTo": "Apply to",
     "columnColorsLevelAdmin": "Administrator",
     "columnColorsLevelProfile": "Profile",
@@ -2140,6 +2144,10 @@
     "columnColorsEntitySaas": {
       "what": "The exact business type, plan or client the colors you choose below are applied to.",
       "example": "you pick the client \"Northern Transport\" and any color you change only changes for its company."
+    },
+    "columnColorsClass": {
+      "what": "Choose which group (classification) this column appears in for whoever you picked above. You can leave it unclassified; \"Reset\" removes your change and goes back to the classification from above.",
+      "example": "you move \"Plates\" from \"To Define\" to \"Our Units\" and, for that profile, the column is grouped there in the tables."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",

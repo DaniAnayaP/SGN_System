@@ -305,6 +305,10 @@ const {
     COLOR_SCREEN_TABLE_KEY,
     COLOR_PERSONALIZE_COLUMN,
     COLOR_AUTHORIZE_COLUMN,
+    COLOR_CLASSIFY_COLUMN,
+    colorIdForPart,
+    getAppearanceForTarget,
+    listLevelClassifications,
     CLIENT_COLOR_TARGET_LEVELS,
     resolveClientColorAuthorizer,
     resolveClientColorTarget,
@@ -2647,12 +2651,42 @@ const spanishLabel = (key) => String(key || '').split('.').reduce((node, part) =
 const COLOR_LEVEL_LABELS_ES = { giro: 'Giro', plan: 'Plan', cliente: 'Cliente', admin: 'Administrador', perfil: 'Perfil', usuario: 'Usuario' };
 const COLOR_HEX = /^#[0-9a-fA-F]{6}$/;
 
+// Qué se está cambiando en una columna: 'dot' (fondo), 'text' (letra) o 'class' (su clasificación). Cada uno con su acción de solicitud.
+function colorChangeAction(kind, clearing) {
+    if (kind === 'class') return clearing ? 'clear-class' : 'set-class';
+    if (kind === 'text') return clearing ? 'clear-text' : 'set-text';
+    return clearing ? 'clear-dot' : 'set';
+}
+// El valor que llega al guardar: un color #rrggbb, o (clasificación) '' = sin clasificar o una de las de esa pantalla.
+function readColorChangeValue(change, rawValue) {
+    if (change.kind === 'class') {
+        if (typeof rawValue !== 'string') return { error: 'value must be a classification id or an empty string.' };
+        if (rawValue !== '' && !change.found.screen.classOptions.some((o) => o.id === rawValue)) return { error: 'That classification is not available for this screen.' };
+        return { value: rawValue };
+    }
+    if (typeof rawValue !== 'string' || !COLOR_HEX.test(rawValue)) return { error: 'value must be a #rrggbb color.' };
+    return { value: rawValue.toLowerCase() };
+}
+function classLabelKeyFor(found, classId) {
+    const option = (found.screen.classOptions || []).find((o) => o.id === classId);
+    return option ? option.labelKey : null;
+}
+function classNameEs(found, classId) {
+    if (!classId) return 'sin clasificar';
+    const key = classLabelKeyFor(found, classId);
+    return key ? spanishLabel(key) : classId;
+}
+function kindOfRequest(request) {
+    return request.action === 'set-class' || request.action === 'clear-class' ? 'class' : request.action.endsWith('text') ? 'text' : 'dot';
+}
+
 function clientColorAccess(req) {
     const isAdmin = !!req.user.isClientAdmin;
     const grants = isAdmin ? [] : getUserEffectiveGrants(req.user.sub);
     return {
         isAdmin,
         canPersonalize: isAdmin || canCreateColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_PERSONALIZE_COLUMN),
+        canClassify: isAdmin || canCreateColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_CLASSIFY_COLUMN),
         canAuthorize: isAdmin || canAuthorizeColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_AUTHORIZE_COLUMN),
     };
 }
@@ -2698,6 +2732,7 @@ app.get('/api/business/column-colors', requireAuth, (req, res) => {
     res.json({
         canPersonalize: access.canPersonalize,
         canAuthorize: access.canAuthorize,
+        canClassify: access.canClassify,
         isAdmin: access.isAdmin,
         targets: allowed,
         levels: [
@@ -2706,26 +2741,34 @@ app.get('/api/business/column-colors', requireAuth, (req, res) => {
             ...(allowed.users.length ? [{ level: 'usuario', entities: allowed.users }] : []),
         ],
         target,
-        colors: target ? getClientColorsForTarget(req.user.clientId, target) : {},
+        ...(target ? getAppearanceForTarget(req.user.clientId, target, 'client') : { colors: {}, classes: {} }),
     });
 });
 
 // Bitácora de la pantalla (data_table_changes, 'colores-columnas'): un renglón por cambio aplicado, con quién lo
 // pidió y quién lo autorizó cuando pasó por una solicitud.
 function logClientColorChange(req, request, found, target, previousHex, appliedBy) {
+    const classChange = request.action === 'set-class' || request.action === 'clear-class';
     const kindLabel = request.action.endsWith('text') ? 'letra' : 'fondo';
-    const partLabel = found.part === 'own' ? 'Encabezado' : 'Filas';
+    const partLabel = found.part === 'own' ? 'Encabezado' : found.part === 'class' ? 'Clasificación' : 'Filas';
     const clearing = request.action.startsWith('clear');
     logTableChange({
         clientId: request.clientId, tableKey: COLOR_SCREEN_TABLE_KEY, recordId: target.entityId,
         recordLabel: `${COLOR_LEVEL_LABELS_ES[target.level]}: ${target.name}`, action: 'update',
         fieldKey: 'business.colorHistoryField',
-        oldValue: previousHex || '',
-        newValue: `${spanishLabel(found.screen.screenLabelKey)} › ${spanishLabel(found.column.labelKey)} (${partLabel}, ${kindLabel}): ${clearing ? 'quitado' : request.value}`,
+        oldValue: classChange ? (previousHex ? classNameEs(found, previousHex) : '') : previousHex || '',
+        newValue: classChange
+            ? `${spanishLabel(found.screen.screenLabelKey)} › ${spanishLabel(found.column.labelKey)} (Clasificación): ${clearing ? 'quitado' : classNameEs(found, request.value)}`
+            : `${spanishLabel(found.screen.screenLabelKey)} › ${spanishLabel(found.column.labelKey)} (${partLabel}, ${kindLabel}): ${clearing ? 'quitado' : request.value}`,
         changedBy: appliedBy.changedBy, requestedBy: appliedBy.requestedBy || null, authorizedBy: appliedBy.authorizedBy || null,
     });
 }
 function currentClientLevelColor(level, entityId, colorId, kind) {
+    if (kind === 'class') {
+        const nodeKey = String(colorId).replace(/^class:/, '');
+        const own = listLevelClassifications(level, entityId).find((r) => r.nodeKey === nodeKey);
+        return own ? own.classificationId : '';
+    }
     const row = listLevelColors(level, entityId).find((r) => r.colorId === colorId);
     return row ? (kind === 'text' ? row.textColor : row.color) : '';
 }
@@ -2734,7 +2777,11 @@ function currentClientLevelColor(level, entityId, colorId, kind) {
 function parseClientColorChange(req, res, source) {
     if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
     const access = clientColorAccess(req);
-    if (!access.canPersonalize) { res.status(403).json({ message: 'No tienes permiso para personalizar colores.' }); return null; }
+    const kind = source.kind === 'text' ? 'text' : source.kind === 'class' ? 'class' : 'dot';
+    if (!(kind === 'class' ? access.canClassify : access.canPersonalize)) {
+        res.status(403).json({ message: kind === 'class' ? 'No tienes permiso para personalizar la clasificación.' : 'No tienes permiso para personalizar colores.' });
+        return null;
+    }
     const found = findColorColumnByColorId(source.colorId);
     if (!found) { res.status(400).json({ message: 'colorId is not a real column.' }); return null; }
     if (!CLIENT_COLOR_TARGET_LEVELS.includes(source.level)) { res.status(400).json({ message: 'Invalid level.' }); return null; }
@@ -2743,19 +2790,19 @@ function parseClientColorChange(req, res, source) {
         res.status(403).json({ message: 'No puedes cambiar el color de esta persona o perfil.' });
         return null;
     }
-    const kind = source.kind === 'text' ? 'text' : 'dot';
+    if ((kind === 'class') !== (found.part === 'class')) { res.status(400).json({ message: 'kind does not match colorId.' }); return null; }
     return { access, found, target, kind };
 }
 // Aplica el cambio al momento (quien puede autorizar) o deja una solicitud que sube por la cadena de jefes.
 function applyOrRequestClientColor(req, res, change, action, value) {
     const { access, found, target, kind } = change;
-    const colorId = found.part === 'own' ? `col-own:${found.column.nodeKey}` : `col-nested:${found.column.nodeKey}`;
+    const colorId = colorIdForPart(found.column, found.part);
     const request = { clientId: req.user.clientId, colorId, action, value, level: target.level, entityId: target.entityId };
     if (access.canAuthorize) {
         const previous = currentClientLevelColor(target.level, target.entityId, colorId, kind);
         applyColorRequest({ ...request, scope: 'client' }, changedByLabel(req));
         logClientColorChange(req, request, found, target, previous, { changedBy: changedByLabel(req) });
-        return res.json({ applied: true, colors: getClientColorsForTarget(req.user.clientId, target) });
+        return res.json({ applied: true, ...getAppearanceForTarget(req.user.clientId, target, 'client') });
     }
     const assignedTo = resolveClientColorAuthorizer(req.user.sub, req.user.clientId);
     const requestId = createColorRequest({
@@ -2764,20 +2811,21 @@ function applyOrRequestClientColor(req, res, change, action, value) {
     });
     return res.status(202).json({
         requested: true, requestId, assignedTo: { id: assignedTo, name: assignedTo ? getUserNameById(assignedTo) : '' },
-        colors: getClientColorsForTarget(req.user.clientId, target),
+        ...getAppearanceForTarget(req.user.clientId, target, 'client'),
     });
 }
 app.put('/api/business/column-colors', requireAuth, (req, res) => {
     const body = req.body || {};
     const change = parseClientColorChange(req, res, body);
     if (!change) return;
-    if (typeof body.value !== 'string' || !COLOR_HEX.test(body.value)) return res.status(400).json({ message: 'value must be a #rrggbb color.' });
-    applyOrRequestClientColor(req, res, change, change.kind === 'text' ? 'set-text' : 'set', body.value.toLowerCase());
+    const read = readColorChangeValue(change, body.value);
+    if (read.error) return res.status(400).json({ message: read.error });
+    applyOrRequestClientColor(req, res, change, colorChangeAction(change.kind, false), read.value);
 });
 app.delete('/api/business/column-colors', requireAuth, (req, res) => {
     const change = parseClientColorChange(req, res, req.query || {});
     if (!change) return;
-    applyOrRequestClientColor(req, res, change, change.kind === 'text' ? 'clear-text' : 'clear-dot', null);
+    applyOrRequestClientColor(req, res, change, colorChangeAction(change.kind, true), null);
 });
 
 // Solicitudes de color de la empresa: cada quien ve las suyas y las pendientes que le tocan decidir (el
@@ -2793,6 +2841,7 @@ app.get('/api/business/column-color-requests', requireAuth, (req, res) => {
             screenLabelKey: found ? found.screen.screenLabelKey : null,
             columnLabelKey: found ? found.column.labelKey : null,
             part: found ? found.part : null,
+            valueLabelKey: found && found.part === 'class' ? classLabelKeyFor(found, r.value) : null,
             canDecide: access.canAuthorize && r.status === 'pending' && (access.isAdmin || r.assignedToId === req.user.sub),
         };
     });
@@ -2811,7 +2860,7 @@ const decideClientColorRequest = (approve) => (req, res) => {
         const found = findColorColumnByColorId(request.colorId);
         const target = resolveClientColorTarget(request.clientId, request.level, request.entityId, null);
         if (!found || !target) return res.status(409).json({ message: 'Lo que pedía esta solicitud ya no existe.' });
-        const kind = request.action.endsWith('text') ? 'text' : 'dot';
+        const kind = kindOfRequest(request);
         const previous = currentClientLevelColor(target.level, target.entityId, request.colorId, kind);
         applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
         logClientColorChange(req, request, found, target, previous, { changedBy: request.requestedByName, requestedBy: request.requestedByName, authorizedBy: label });
@@ -2832,7 +2881,7 @@ const SAAS_COLUMN_COLORS_ITEM = 'saas-column-colors';
 function saasColumnColorsAccess(req) {
     const grants = getSaasUserGrants(req.user.sub);
     const has = (sub) => hasSaasGrant(grants, SAAS_COLUMN_COLORS_ITEM, sub, req.user.isSaasSuperAdmin);
-    return { canOpen: hasSaasGrant(grants, SAAS_COLUMN_COLORS_ITEM, null, req.user.isSaasSuperAdmin), canPersonalize: has('controles::a0'), canAuthorize: has('controles::a1') };
+    return { canOpen: hasSaasGrant(grants, SAAS_COLUMN_COLORS_ITEM, null, req.user.isSaasSuperAdmin), canPersonalize: has('controles::a0'), canAuthorize: has('controles::a1'), canClassify: has('controles::a2') };
 }
 app.get('/api/admin/column-colors/catalog', requireAuth, requireAdmin, (req, res) => {
     if (!saasColumnColorsAccess(req).canOpen) return res.status(403).json({ message: 'No tienes acceso a Colores por Nivel.' });
@@ -2849,45 +2898,54 @@ app.get('/api/admin/column-colors', requireAuth, requireAdmin, (req, res) => {
     res.json({
         canPersonalize: access.canPersonalize,
         canAuthorize: access.canAuthorize,
+        canClassify: access.canClassify,
         isAdmin: !!req.user.isSaasSuperAdmin,
         levels,
         target,
-        colors: target ? getColorsForTarget(null, target, 'level') : {},
+        ...(target ? getAppearanceForTarget(null, target, 'level') : { colors: {}, classes: {} }),
     });
 });
 
 // Bitácora de la pantalla (saas_table_changes, 'colores-niveles'): un renglón por cambio aplicado.
 function logLevelColorChange(req, request, found, target, previousHex, changedBy) {
+    const classChange = request.action === 'set-class' || request.action === 'clear-class';
     const kindLabel = request.action.endsWith('text') ? 'letra' : 'fondo';
-    const partLabel = found.part === 'own' ? 'Encabezado' : 'Filas';
+    const partLabel = found.part === 'own' ? 'Encabezado' : found.part === 'class' ? 'Clasificación' : 'Filas';
     const clearing = request.action.startsWith('clear');
     logSaasTableChange({
         tableKey: 'colores-niveles', recordId: target.entityId,
         recordLabel: `${COLOR_LEVEL_LABELS_ES[target.level]}: ${target.name}`, action: 'update',
-        fieldKey: 'business.colorHistoryField', oldValue: previousHex || '',
-        newValue: `${spanishLabel(found.screen.screenLabelKey)} › ${spanishLabel(found.column.labelKey)} (${partLabel}, ${kindLabel}): ${clearing ? 'quitado' : request.value}`,
+        fieldKey: 'business.colorHistoryField', oldValue: classChange ? (previousHex ? classNameEs(found, previousHex) : '') : previousHex || '',
+        newValue: classChange
+            ? `${spanishLabel(found.screen.screenLabelKey)} › ${spanishLabel(found.column.labelKey)} (Clasificación): ${clearing ? 'quitado' : classNameEs(found, request.value)}`
+            : `${spanishLabel(found.screen.screenLabelKey)} › ${spanishLabel(found.column.labelKey)} (${partLabel}, ${kindLabel}): ${clearing ? 'quitado' : request.value}`,
         changedBy,
     });
 }
 function parseLevelColorChange(req, res, source) {
     const access = saasColumnColorsAccess(req);
-    if (!access.canPersonalize) { res.status(403).json({ message: 'No tienes permiso para personalizar colores por nivel.' }); return null; }
+    const kind = source.kind === 'text' ? 'text' : source.kind === 'class' ? 'class' : 'dot';
+    if (!(kind === 'class' ? access.canClassify : access.canPersonalize)) {
+        res.status(403).json({ message: kind === 'class' ? 'No tienes permiso para personalizar la clasificación por nivel.' : 'No tienes permiso para personalizar colores por nivel.' });
+        return null;
+    }
     const found = findColorColumnByColorId(source.colorId);
     if (!found) { res.status(400).json({ message: 'colorId is not a real column.' }); return null; }
     if (!SAAS_COLOR_TARGET_LEVELS.includes(source.level)) { res.status(400).json({ message: 'Invalid level.' }); return null; }
     const target = resolveSaasColorLevelTarget(source.level, source.entityId);
     if (!target) { res.status(404).json({ message: 'Ese giro, plan o cliente no existe.' }); return null; }
-    return { access, found, target, kind: source.kind === 'text' ? 'text' : 'dot' };
+    if ((kind === 'class') !== (found.part === 'class')) { res.status(400).json({ message: 'kind does not match colorId.' }); return null; }
+    return { access, found, target, kind };
 }
 function applyOrRequestLevelColor(req, res, change, action, value) {
     const { access, found, target, kind } = change;
-    const colorId = found.part === 'own' ? `col-own:${found.column.nodeKey}` : `col-nested:${found.column.nodeKey}`;
+    const colorId = colorIdForPart(found.column, found.part);
     const request = { clientId: null, colorId, action, value, level: target.level, entityId: target.entityId };
     if (access.canAuthorize) {
         const previous = currentClientLevelColor(target.level, target.entityId, colorId, kind);
         applyColorRequest({ ...request, scope: 'level' }, changedByLabel(req));
         logLevelColorChange(req, request, found, target, previous, changedByLabel(req));
-        return res.json({ applied: true, colors: getColorsForTarget(null, target, 'level') });
+        return res.json({ applied: true, ...getAppearanceForTarget(null, target, 'level') });
     }
     const assignedTo = resolveColorAuthorizer('level', req.user.sub);
     const requestId = createColorRequest({
@@ -2896,20 +2954,21 @@ function applyOrRequestLevelColor(req, res, change, action, value) {
     });
     return res.status(202).json({
         requested: true, requestId, assignedTo: { id: assignedTo, name: assignedTo ? getUserNameById(assignedTo) : '' },
-        colors: getColorsForTarget(null, target, 'level'),
+        ...getAppearanceForTarget(null, target, 'level'),
     });
 }
 app.put('/api/admin/column-colors', requireAuth, requireAdmin, (req, res) => {
     const body = req.body || {};
     const change = parseLevelColorChange(req, res, body);
     if (!change) return;
-    if (typeof body.value !== 'string' || !COLOR_HEX.test(body.value)) return res.status(400).json({ message: 'value must be a #rrggbb color.' });
-    applyOrRequestLevelColor(req, res, change, change.kind === 'text' ? 'set-text' : 'set', body.value.toLowerCase());
+    const read = readColorChangeValue(change, body.value);
+    if (read.error) return res.status(400).json({ message: read.error });
+    applyOrRequestLevelColor(req, res, change, colorChangeAction(change.kind, false), read.value);
 });
 app.delete('/api/admin/column-colors', requireAuth, requireAdmin, (req, res) => {
     const change = parseLevelColorChange(req, res, req.query || {});
     if (!change) return;
-    applyOrRequestLevelColor(req, res, change, change.kind === 'text' ? 'clear-text' : 'clear-dot', null);
+    applyOrRequestLevelColor(req, res, change, colorChangeAction(change.kind, true), null);
 });
 
 // Solicitudes de color por nivel: cada quien ve las suyas y las pendientes que le tocan decidir (admin_saas, todas).
@@ -2925,6 +2984,7 @@ app.get('/api/admin/column-color-level-requests', requireAuth, requireAdmin, (re
             screenLabelKey: found ? found.screen.screenLabelKey : null,
             columnLabelKey: found ? found.column.labelKey : null,
             part: found ? found.part : null,
+            valueLabelKey: found && found.part === 'class' ? classLabelKeyFor(found, r.value) : null,
             canDecide: access.canAuthorize && r.status === 'pending' && (isSuper || r.assignedToId === req.user.sub),
         };
     });
@@ -2942,7 +3002,7 @@ const decideLevelColorRequest = (approve) => (req, res) => {
         const found = findColorColumnByColorId(request.colorId);
         const target = resolveSaasColorLevelTarget(request.level, request.entityId);
         if (!found || !target) return res.status(409).json({ message: 'Lo que pedía esta solicitud ya no existe.' });
-        const kind = request.action.endsWith('text') ? 'text' : 'dot';
+        const kind = kindOfRequest(request);
         const previous = currentClientLevelColor(target.level, target.entityId, request.colorId, kind);
         applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
         logLevelColorChange(req, request, found, target, previous, `${label} (solicitado por ${request.requestedByName})`);
