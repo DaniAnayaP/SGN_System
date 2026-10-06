@@ -6876,6 +6876,184 @@ function clearLevelColor(level, entityId, colorId, kind, updatedBy) {
     return info.changes > 0;
 }
 
+// ---------------------------------------------------------------------------
+// Orden y clasificación bajando por niveles -- el mismo modelo que los colores (column_color_level_overrides): la base
+// es el Árbol Maestro y cada nivel de abajo (Giro, Plan, Cliente, Administrador, Perfil, Usuario) puede cambiar el
+// ORDEN de una lista o la CLASIFICACIÓN de una columna. Un cambio solo le llega a lo que está DEBAJO de ese nivel, nunca
+// hacia arriba ni a otro del mismo nivel, y para cada persona gana el nivel más cercano a ella que tenga un cambio propio.
+// "Restablecer" borra el cambio de ese nivel y vuelve a heredar.
+//   - Orden: parent_key y orderedKeys son los mismos del Maestro (master_permission_order). El Giro ya tenía su
+//     "Reorden Personalizado" (sector_permission_order): sigue siendo su capa, no se migra nada. Los demás niveles usan
+//     permission_order_level_overrides. Al guardar solo se queda lo que difiere de lo que ya se hereda: un cambio que
+//     iguala lo de arriba borra el propio, así lo que no se tocó sigue siguiendo al de arriba y no se congela.
+//   - Clasificación: classification_level_overrides, por node_key de la columna. classification_id '' = "sin
+//     clasificación" a propósito (volver al orden suelto aunque el Maestro la haya reclasificado).
+// ---------------------------------------------------------------------------
+db.exec(`
+    CREATE TABLE IF NOT EXISTS permission_order_level_overrides (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        level         TEXT NOT NULL,
+        entity_id     INTEGER NOT NULL,
+        client_id     INTEGER,
+        parent_key    TEXT NOT NULL,
+        ordered_keys  TEXT NOT NULL,
+        updated_by    TEXT,
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(level, entity_id, parent_key)
+    );
+    CREATE TABLE IF NOT EXISTS classification_level_overrides (
+        id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+        level                 TEXT NOT NULL,
+        entity_id             INTEGER NOT NULL,
+        client_id             INTEGER,
+        node_key              TEXT NOT NULL,
+        classification_id     TEXT NOT NULL,
+        classification_label  TEXT,
+        updated_by            TEXT,
+        updated_at            TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(level, entity_id, node_key)
+    );
+`);
+
+// ---- orden
+// parentKey -> [{ level, orderedKeys }] de los niveles de la cadena, el más cercano primero.
+function getLevelOrderLayers(chain) {
+    const byKey = new Map();
+    const stmt = db.prepare('SELECT parent_key, ordered_keys FROM permission_order_level_overrides WHERE level = ? AND entity_id = ?');
+    chain.forEach(({ level, entityId }) => {
+        const rows = level === 'giro' ? getSectorPermissionOrder(entityId) : stmt.all(level, entityId).map(deserializeOrderRow);
+        rows.forEach((r) => {
+            if (!byKey.has(r.parentKey)) byKey.set(r.parentKey, []);
+            byKey.get(r.parentKey).push({ level, orderedKeys: r.orderedKeys });
+        });
+    });
+    return byKey;
+}
+// parentKey -> { orderedKeys, source } con lo que se ve al final de esa cadena: el nivel más cercano que tiene esa lista y,
+// si ninguno, el Maestro. `source` es el nivel del que viene ('master' si nadie más abajo la cambió). Una lista que
+// nadie tocó no aparece (sigue el orden de menu.json, como siempre).
+function resolveOrderRows(chain) {
+    const layers = getLevelOrderLayers(chain);
+    const master = new Map(getMasterPermissionOrder().map((r) => [r.parentKey, r.orderedKeys]));
+    const result = new Map();
+    new Set([...master.keys(), ...layers.keys()]).forEach((parentKey) => {
+        const layer = (layers.get(parentKey) || [])[0];
+        result.set(parentKey, layer ? { orderedKeys: layer.orderedKeys, source: layer.level } : { orderedKeys: master.get(parentKey), source: 'master' });
+    });
+    return result;
+}
+// Las listas resueltas con la misma forma que devuelve GET /api/admin/master-permission-order, para que cualquier
+// consumidor del orden del Maestro pueda usar el de un nivel sin cambiar nada.
+function orderRowsToMaps(rows) {
+    const byPrefix = (prefix) => {
+        const result = {};
+        rows.forEach((orderedKeys, parentKey) => { if (parentKey.startsWith(prefix)) result[parentKey.slice(prefix.length)] = orderedKeys; });
+        return result;
+    };
+    return {
+        departmentOrder: rows.get(PERMISSION_ORDER_ROOT_KEY) || [],
+        areaOrders: byPrefix('area::'),
+        apartadoOrders: byPrefix('apartado::'),
+        pantallaOrders: byPrefix('pantalla::'),
+        columnOrders: byPrefix('columna::'),
+    };
+}
+// Lo que ve una persona (viewer = { userId, clientId }); sin viewer (cuenta SaaS) es el del Maestro.
+function getEffectiveOrdersForViewer(viewer) {
+    const rows = resolveOrderRows(viewer ? resolveViewerColorChain(viewer) : []);
+    return orderRowsToMaps(new Map([...rows].map(([parentKey, { orderedKeys }]) => [parentKey, orderedKeys])));
+}
+// Lo que se ve al editar un nivel concreto: las listas resueltas y de qué nivel viene cada una.
+function getOrderTreeForTarget(level, entityId, clientId) {
+    const rows = resolveOrderRows(resolveLevelColorChain(level, entityId, clientId));
+    const sources = {};
+    rows.forEach(({ source }, parentKey) => { sources[parentKey] = source; });
+    return { ...orderRowsToMaps(new Map([...rows].map(([parentKey, { orderedKeys }]) => [parentKey, orderedKeys]))), sources };
+}
+function listLevelOrders(level, entityId) {
+    if (level === 'giro') return getSectorPermissionOrder(entityId);
+    return db.prepare('SELECT parent_key, ordered_keys FROM permission_order_level_overrides WHERE level = ? AND entity_id = ?').all(level, entityId).map(deserializeOrderRow);
+}
+function writeLevelOrder(level, entityId, parentKey, orderedKeys, updatedBy, clientId) {
+    if (level === 'giro') { setSectorPermissionOrder(entityId, parentKey, orderedKeys, updatedBy); return; }
+    db.prepare(`
+        INSERT INTO permission_order_level_overrides (level, entity_id, client_id, parent_key, ordered_keys, updated_by)
+        VALUES (@level, @entityId, @clientId, @parentKey, @orderedKeys, @updatedBy)
+        ON CONFLICT(level, entity_id, parent_key) DO UPDATE SET ordered_keys = excluded.ordered_keys, updated_by = excluded.updated_by, updated_at = datetime('now')
+    `).run({ level, entityId, clientId, parentKey, orderedKeys: JSON.stringify(orderedKeys), updatedBy: updatedBy || '' });
+}
+// "Restablecer": quita el orden propio de esa lista en ese nivel y vuelve a heredar.
+function clearLevelOrder(level, entityId, parentKey) {
+    const info = level === 'giro'
+        ? db.prepare('DELETE FROM sector_permission_order WHERE business_sector_id = ? AND parent_key = ?').run(entityId, parentKey)
+        : db.prepare('DELETE FROM permission_order_level_overrides WHERE level = ? AND entity_id = ? AND parent_key = ?').run(level, entityId, parentKey);
+    return info.changes > 0;
+}
+// Guarda varias listas de ese nivel a la vez (rows = [{ parentKey, orderedKeys }]). Solo se queda lo que difiere de lo
+// que ese nivel heredaría sin cambio propio; una lista igual a la de arriba borra la propia.
+function setLevelOrders(level, entityId, rows, updatedBy, clientId = null) {
+    if (!COLOR_LEVELS_CLOSEST_FIRST.includes(level)) throw new Error('invalid order level');
+    const inherited = resolveOrderRows(resolveLevelColorChain(level, entityId, clientId).slice(1));
+    const summary = { saved: 0, cleared: 0 };
+    db.transaction(() => {
+        rows.forEach(({ parentKey, orderedKeys }) => {
+            const above = inherited.get(parentKey);
+            const same = above ? JSON.stringify(above.orderedKeys) === JSON.stringify(orderedKeys) : orderedKeys.length === 0;
+            if (same) { if (clearLevelOrder(level, entityId, parentKey)) summary.cleared += 1; return; }
+            writeLevelOrder(level, entityId, parentKey, orderedKeys, updatedBy, clientId);
+            summary.saved += 1;
+        });
+    })();
+    return summary;
+}
+
+// ---- clasificación
+// nodeKey -> [{ level, classificationId, classificationLabel }] de los niveles de la cadena, el más cercano primero.
+function getLevelClassificationLayers(chain) {
+    const byKey = new Map();
+    const stmt = db.prepare('SELECT node_key AS nodeKey, classification_id AS classificationId, classification_label AS classificationLabel FROM classification_level_overrides WHERE level = ? AND entity_id = ?');
+    chain.forEach(({ level, entityId }) => {
+        stmt.all(level, entityId).forEach((row) => {
+            if (!byKey.has(row.nodeKey)) byKey.set(row.nodeKey, []);
+            byKey.get(row.nodeKey).push({ level, classificationId: row.classificationId, classificationLabel: row.classificationLabel });
+        });
+    });
+    return byKey;
+}
+function listLevelClassifications(level, entityId) {
+    return db.prepare('SELECT node_key AS nodeKey, classification_id AS classificationId, classification_label AS classificationLabel FROM classification_level_overrides WHERE level = ? AND entity_id = ?').all(level, entityId);
+}
+function setLevelClassification(level, entityId, nodeKey, classificationId, classificationLabel, updatedBy, clientId = null) {
+    if (!COLOR_LEVELS_CLOSEST_FIRST.includes(level)) throw new Error('invalid classification level');
+    db.prepare(`
+        INSERT INTO classification_level_overrides (level, entity_id, client_id, node_key, classification_id, classification_label, updated_by)
+        VALUES (@level, @entityId, @clientId, @nodeKey, @classificationId, @classificationLabel, @updatedBy)
+        ON CONFLICT(level, entity_id, node_key) DO UPDATE SET classification_id = excluded.classification_id,
+            classification_label = excluded.classification_label, updated_by = excluded.updated_by, updated_at = datetime('now')
+    `).run({ level, entityId, clientId, nodeKey, classificationId: classificationId || '', classificationLabel: classificationLabel || null, updatedBy: updatedBy || '' });
+}
+// "Restablecer": quita la clasificación propia de esa columna en ese nivel y vuelve a heredar.
+function clearLevelClassification(level, entityId, nodeKey) {
+    return db.prepare('DELETE FROM classification_level_overrides WHERE level = ? AND entity_id = ? AND node_key = ?').run(level, entityId, nodeKey).changes > 0;
+}
+
+// Una sola vez: el "Reorden Personalizado" del Giro guardaba una copia COMPLETA del orden del Maestro en cada guardado, y esa copia
+// congelaba al giro (un cambio posterior del Maestro ya no le llegaba). Ahora el orden de cada nivel se hereda y solo se guarda lo que
+// difiere; aquí se borran las copias que son idénticas al Maestro de hoy (no cambian nada de lo que se ve, solo vuelven a seguirlo).
+// Las que difieren se respetan: son un orden propio del giro.
+const FROZEN_SECTOR_ORDER_CLEANUP_KEY = 'cleanup-frozen-sector-order-v1';
+if (!db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(FROZEN_SECTOR_ORDER_CLEANUP_KEY)) {
+    db.transaction(() => {
+        db.prepare(`
+            DELETE FROM sector_permission_order WHERE EXISTS (
+                SELECT 1 FROM master_permission_order m
+                WHERE m.parent_key = sector_permission_order.parent_key AND m.ordered_keys = sector_permission_order.ordered_keys
+            )
+        `).run();
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(FROZEN_SECTOR_ORDER_CLEANUP_KEY);
+    })();
+}
+
 // Every column of one table (tableKey, same key TABLE_GRANT_PATHS already
 // uses for grant checks), with its EFFECTIVE classification -- an
 // override if one was saved for that exact column, else its real
@@ -6905,7 +7083,11 @@ function getEffectiveColumnClassifications(tableKey, viewer = null) {
     // Con `viewer` (la persona que ve la tabla) el color baja por la cadena Giro > Plan > Cliente > Administrador >
     // Perfil > Usuario: gana el nivel más cercano a ella que tenga color, fondo y letra por separado, y sin
     // ninguno queda el del Maestro. Sin viewer (cuenta SaaS) es solo el del Maestro.
-    const levelOverrides = viewer ? getLevelColorOverrides(resolveViewerColorChain(viewer)) : new Map();
+    const viewerChain = viewer ? resolveViewerColorChain(viewer) : [];
+    const levelOverrides = viewer ? getLevelColorOverrides(viewerChain) : new Map();
+    // La clasificación de cada columna sigue la misma cadena: gana el nivel más cercano que la haya cambiado, y sin ninguno
+    // queda la del Maestro (y, sin esa, la de menu.json).
+    const classLayers = viewer ? getLevelClassificationLayers(viewerChain) : new Map();
     const colorPair = (id) => {
         const base = colorRows.get(id);
         const layers = levelOverrides.get(id) || [];
@@ -6919,7 +7101,10 @@ function getEffectiveColumnClassifications(tableKey, viewer = null) {
         const base = columnSubmenuBase(path, colId);
         const nodeKey = `${path.sectionId}::${path.itemId}::${base}`;
         const structuralId = classificationFor(path, colId);
-        const override = overridesByKey.get(nodeKey);
+        const levelClass = (classLayers.get(nodeKey) || [])[0];
+        const override = levelClass
+            ? { classificationId: levelClass.classificationId, classificationLabel: levelClass.classificationLabel }
+            : overridesByKey.get(nodeKey);
         const classificationId = override ? override.classificationId : structuralId;
         const own = colorPair(`col-own:${nodeKey}`);
         const nested = colorPair(`col-nested:${nodeKey}`);
@@ -9153,6 +9338,17 @@ module.exports = {
     setClassificationTextColor,
     clearClassificationColor,
     getEffectiveColumnClassifications,
+    getLevelOrderLayers,
+    resolveOrderRows,
+    getEffectiveOrdersForViewer,
+    getOrderTreeForTarget,
+    listLevelOrders,
+    clearLevelOrder,
+    setLevelOrders,
+    getLevelClassificationLayers,
+    listLevelClassifications,
+    setLevelClassification,
+    clearLevelClassification,
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
     setSaasMasterStatuses,

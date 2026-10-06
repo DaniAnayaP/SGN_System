@@ -1128,8 +1128,38 @@ let selectedArea = getStoredArea();
 function effectiveAreaCategories(data) {
     const base = data.areaCategories || [];
     const overrides = (data.areaOverrides || {})[`${selectedDepartment}/${selectedArea}`];
-    if (!overrides) return base;
-    return base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat));
+    return applyCascadedCategoryOrder(overrides ? base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat)) : base);
+}
+
+// Orden de Departamentos, Áreas, Apartados y Pantallas que le toca a esta cuenta: el del Árbol Maestro y, bajando, el de su
+// Giro, Plan, Cliente, Administrador, Perfil y Usuario (el más cercano a ella gana; lo calcula el servidor). Una cuenta de
+// SaaS no lo usa. Lo que no aparece en una lista conserva su posición de siempre, al final, igual que en el árbol.
+let cascadedOrder = null;
+async function fetchCascadedOrder() {
+    try {
+        const res = await fetch('/api/business/permission-order', { credentials: 'include' });
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+function orderByIds(list, orderIds, idOf) {
+    if (!Array.isArray(orderIds) || !orderIds.length) return list;
+    const byId = new Map(list.map((item) => [idOf(item), item]));
+    const ordered = [];
+    orderIds.forEach((id) => {
+        if (byId.has(id)) { ordered.push(byId.get(id)); byId.delete(id); }
+    });
+    list.forEach((item) => { if (byId.has(idOf(item))) ordered.push(item); });
+    return ordered;
+}
+function applyCascadedCategoryOrder(categories) {
+    if (!cascadedOrder || !selectedDepartment || !selectedArea) return categories;
+    const scope = `${selectedDepartment}::${selectedArea}`;
+    return orderByIds(categories, (cascadedOrder.apartadoOrders || {})[scope], (cat) => cat.id).map((cat) => {
+        const pantallaOrder = (cascadedOrder.pantallaOrders || {})[`${scope}::${cat.id}`];
+        return pantallaOrder && cat.submenu ? { ...cat, submenu: orderByIds(cat.submenu, pantallaOrder, (pantalla) => pantalla.id) } : cat;
+    });
 }
 
 function applyAreaFilter(data) {
@@ -10074,7 +10104,7 @@ function isEstatusVisible(sectionId, itemId, submenuId) {
 // specific user was actually granted (an área is itemId under that
 // department's own sectionId).
 function availableAreasForDepartment(deptKey) {
-    const areas = (deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [];
+    const areas = orderByIds((deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [], cascadedOrder && (cascadedOrder.areaOrders || {})[deptKey], (a) => a.key);
     const visible = areas.filter((a) => isEstatusVisible(deptKey, a.key, null));
     if (isUnrestrictedClientAdmin()) return visible;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
@@ -10969,7 +10999,7 @@ async function initDashboard({ activePage } = {}) {
         // now, in parallel — "Configuración de Botones" needs their granted
         // permissions ready before the first render, not just whenever they
         // happen to open the "Datos de Usuario del Negocio" panel.
-        [contractedModuleKeys] = await Promise.all([fetchContractedModuleKeys(), loadBusinessProfile()]);
+        [contractedModuleKeys, , cascadedOrder] = await Promise.all([fetchContractedModuleKeys(), loadBusinessProfile(), fetchCascadedOrder()]);
         // "Pantalla habilitada" — direct-URL block for the handful of real
         // pages mapped in SCREEN_GRANT_PATHS (sidebar-hiding alone doesn't
         // stop someone who already knows/bookmarked the URL). cachedBusinessProfile
@@ -10991,6 +11021,7 @@ async function initDashboard({ activePage } = {}) {
             const grantedSectionIds = new Set((cachedBusinessProfile?.effectiveGrants || []).map((g) => g.sectionId));
             availableDepartments = availableDepartments.filter((d) => grantedSectionIds.has(d.key));
         }
+        availableDepartments = orderByIds(availableDepartments, cascadedOrder && cascadedOrder.departmentOrder, (d) => d.key);
         if (!availableDepartments.some((d) => d.key === selectedDepartment)) {
             selectedDepartment = availableDepartments.length === 1 ? availableDepartments[0].key : null;
             localStorage.setItem('department', selectedDepartment || '');

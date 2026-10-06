@@ -312,6 +312,8 @@ const {
     getColorColumnCatalog,
     findColorColumnByColorId,
     getClientColorsForTarget,
+    getEffectiveOrdersForViewer,
+    setLevelOrders,
     getColorsForTarget,
     SAAS_COLOR_TARGET_LEVELS,
     listSaasColorLevelTargets,
@@ -2464,7 +2466,7 @@ app.put('/api/admin/business-sectors/:id/department-order', requireAuth, require
         const [sectionId, areaId, apartadoId, pantallaId, classId] = compoundKey.split('::');
         rows.push({ parentKey: columnOrderKey(sectionId, areaId, apartadoId, pantallaId, classId), orderedKeys });
     });
-    setSectorPermissionOrders(req.params.id, rows, changedByLabel(req));
+    setLevelOrders('giro', Number(req.params.id), rows, changedByLabel(req));
     const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
     res.json({
         masterOrder: masterRow ? masterRow.orderedKeys : [],
@@ -2615,6 +2617,13 @@ app.get('/api/admin/saas-table-column-colors', requireAuth, requireAdmin, (req, 
     const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';
     if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
     res.json({ columns: getSaasTableColumnColors(tableKey) });
+});
+// El orden de Departamentos, Áreas, Apartados y Pantallas que le toca a esta persona: el del Árbol Maestro y, bajando, el de
+// su Giro, Plan, Cliente, Administrador, Perfil y Usuario (gana el más cercano a ella). Misma forma que
+// GET /api/admin/master-permission-order; una lista que nadie tocó no aparece (sigue el orden de menu.json).
+app.get('/api/business/permission-order', requireAuth, (req, res) => {
+    const viewer = req.user.clientId ? { userId: req.user.sub, clientId: req.user.clientId } : null;
+    res.json(getEffectiveOrdersForViewer(viewer));
 });
 app.get('/api/business/table-classifications', requireAuth, (req, res) => {
     const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';
