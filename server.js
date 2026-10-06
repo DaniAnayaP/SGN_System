@@ -2600,7 +2600,10 @@ app.get('/api/admin/saas-table-column-colors', requireAuth, requireAdmin, (req, 
 app.get('/api/business/table-classifications', requireAuth, (req, res) => {
     const tableKey = typeof req.query.tableKey === 'string' ? req.query.tableKey : '';
     if (!tableKey) return res.status(400).json({ message: 'tableKey is required.' });
-    res.json({ columns: getEffectiveColumnClassifications(tableKey) });
+    // Una persona de un cliente ve el color de cada columna ya resuelto hacia abajo (giro, plan, cliente,
+    // administrador, perfil, usuario); una cuenta SaaS ve el del Maestro.
+    const viewer = req.user.clientId ? { userId: req.user.sub, clientId: req.user.clientId } : null;
+    res.json({ columns: getEffectiveColumnClassifications(tableKey, viewer) });
 });
 
 // Árbol de Permisos Maestro's own "Cambios" column (see

@@ -5446,8 +5446,10 @@ async function refreshTableClassifications(tableId) {
     const columnColors = {};
     state.columnKeys.forEach((key) => {
         const info = cols[key];
-        if (!info || !info.classificationId) return;
+        if (!info) return;
+        // El color de una columna también vale para las que no tienen clasificación (no llevan banda).
         if (info.own || info.nested) columnColors[key] = { own: info.own || null, nested: info.nested || null };
+        if (!info.classificationId) return;
         const label = info.label || t(info.labelKey, info.labelParams || {});
         classificationMetaById.set(info.classificationId, { label, color: info.color || null });
         if (state.groupKeys.get(key) !== info.classificationId) changed = true;

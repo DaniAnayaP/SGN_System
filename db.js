@@ -3414,7 +3414,11 @@ function categoryPantallasFor(sectionId, areaId, apartadoId) {
 // submenuPrefix segment as an apartado (Catálogos/Operaciones/...) via
 // categoryPantallasFor above, then walks any remaining segments as plain
 // nested submenu ids.
-function findPantallaNode(sectionId, itemId, submenuPrefix) {
+// Busca la pantalla en menu.json tal cual. Las de Administración del Negocio (btn-admin-negocio/ab-*) no cuelgan
+// ahí: el árbol las injerta bajo el botón de Configuración (buildPlanTreeSections), y por eso esta búsqueda las
+// perdía (null) y Roles, Usuarios y demás no tenían clasificación ni llave de columna correctas. Ver
+// findPantallaNode, que cae a ese árbol injertado cuando no la encuentra aquí.
+function findPantallaNodeInMenu(sectionId, itemId, submenuPrefix) {
     const segments = submenuPrefix.split('/');
     let node;
     let rest;
@@ -3433,6 +3437,11 @@ function findPantallaNode(sectionId, itemId, submenuPrefix) {
         node = (node.submenu || []).find((n) => n.id === seg);
     }
     return node || null;
+}
+function findPantallaNode(sectionId, itemId, submenuPrefix) {
+    const node = findPantallaNodeInMenu(sectionId, itemId, submenuPrefix);
+    if (node || sectionId !== 'main') return node;
+    return findMenuPantallaNode(sectionId, itemId, submenuPrefix);
 }
 
 // One lookup per distinct {sectionId, itemId, submenuPrefix} is enough --
@@ -6785,6 +6794,87 @@ function getColumnColorChangeRows(stmt, nodeKey) {
     return rows;
 }
 
+// ---------------------------------------------------------------------------
+// Cascada de colores de columna hacia abajo. La base es el Árbol de Permisos Maestro (master_permission_
+// classification_colors); cada nivel de abajo puede cambiar el color de una columna y ese cambio solo le llega
+// a lo que está DEBAJO de él, nunca hacia arriba ni a otro del mismo nivel:
+//   Maestro -> Giro -> Plan -> Cliente -> Administrador -> Perfil -> Usuario
+// Para cada persona gana el nivel más cercano a ella que tenga color (fondo y letra se resuelven por separado,
+// así quien solo cambia la letra sigue heredando el fondo). Sin ningún cambio, se toma el del Maestro.
+// color_id es el mismo id sintético del Maestro ("col-own:<nodeKey>" = Encabezado, "col-nested:<nodeKey>" =
+// Filas); entity_id es el id de lo que cambia: sectors.id (giro), plans.id, clients.id, el user id del
+// administrador, job_positions.id (perfil) o users.id (usuario).
+// ---------------------------------------------------------------------------
+db.exec(`
+    CREATE TABLE IF NOT EXISTS column_color_level_overrides (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        level       TEXT NOT NULL,
+        entity_id   INTEGER NOT NULL,
+        client_id   INTEGER,
+        color_id    TEXT NOT NULL,
+        color       TEXT,
+        text_color  TEXT,
+        updated_by  TEXT,
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(level, entity_id, color_id)
+    );
+`);
+const COLOR_LEVELS_CLOSEST_FIRST = ['usuario', 'perfil', 'admin', 'cliente', 'plan', 'giro'];
+// Los niveles de abajo, de más cercano a más lejano, que le tocan a esta persona. viewer = { userId, clientId }.
+// Giro: el del propio cliente (su campo es el NOMBRE del giro) y, si no tiene, el del plan; plan: el cliente
+// guarda su NOMBRE; administrador: el registrado en clients.admin_user_id (también lo ven la cuenta de
+// capacitación y demás cuentas de esa empresa); perfil: el Puesto de Trabajo de la persona.
+function resolveViewerColorChain(viewer) {
+    if (!viewer || !viewer.clientId) return [];
+    const client = db.prepare('SELECT plan, sector_negocio AS sector, admin_user_id AS adminId FROM clients WHERE id = ?').get(viewer.clientId);
+    if (!client) return [];
+    const plan = client.plan ? db.prepare('SELECT id, business_sector_id AS sectorId FROM plans WHERE name = ?').get(client.plan) : null;
+    const sector = client.sector ? db.prepare('SELECT id FROM business_sectors WHERE name = ?').get(client.sector) : null;
+    const chain = [];
+    if (viewer.userId) chain.push({ level: 'usuario', entityId: viewer.userId });
+    const jobPositionId = viewer.userId ? getJobPositionIdForUser(viewer.userId) : null;
+    if (jobPositionId) chain.push({ level: 'perfil', entityId: jobPositionId });
+    if (client.adminId) chain.push({ level: 'admin', entityId: client.adminId });
+    chain.push({ level: 'cliente', entityId: viewer.clientId });
+    if (plan) chain.push({ level: 'plan', entityId: plan.id });
+    const sectorId = (sector && sector.id) || (plan && plan.sectorId);
+    if (sectorId) chain.push({ level: 'giro', entityId: sectorId });
+    return chain;
+}
+// colorId -> [{level, color, textColor}] de los niveles de la cadena, el más cercano primero.
+function getLevelColorOverrides(chain) {
+    const stmt = db.prepare('SELECT color_id AS colorId, color, text_color AS textColor FROM column_color_level_overrides WHERE level = ? AND entity_id = ?');
+    const byColorId = new Map();
+    chain.forEach(({ level, entityId }) => {
+        stmt.all(level, entityId).forEach((row) => {
+            if (!byColorId.has(row.colorId)) byColorId.set(row.colorId, []);
+            byColorId.get(row.colorId).push({ level, color: row.color, textColor: row.textColor });
+        });
+    });
+    return byColorId;
+}
+function listLevelColors(level, entityId) {
+    return db.prepare('SELECT color_id AS colorId, color, text_color AS textColor FROM column_color_level_overrides WHERE level = ? AND entity_id = ?').all(level, entityId);
+}
+// Cambia el fondo (kind 'dot') o la letra (kind 'text') de una columna en ese nivel; el otro lado no se toca.
+function setLevelColor(level, entityId, colorId, kind, hex, updatedBy, clientId = null) {
+    if (!COLOR_LEVELS_CLOSEST_FIRST.includes(level)) throw new Error('invalid color level');
+    const column = kind === 'text' ? 'text_color' : 'color';
+    db.prepare(`
+        INSERT INTO column_color_level_overrides (level, entity_id, client_id, color_id, ${column}, updated_by)
+        VALUES (@level, @entityId, @clientId, @colorId, @hex, @updatedBy)
+        ON CONFLICT(level, entity_id, color_id) DO UPDATE SET ${column} = excluded.${column}, updated_by = excluded.updated_by, updated_at = datetime('now')
+    `).run({ level, entityId, clientId, colorId, hex, updatedBy: updatedBy || '' });
+}
+// "Restablecer": quita ese lado del cambio de ese nivel y vuelve a heredar del de arriba; si ya no queda nada, se borra la fila.
+function clearLevelColor(level, entityId, colorId, kind, updatedBy) {
+    const column = kind === 'text' ? 'text_color' : 'color';
+    const info = db.prepare(`UPDATE column_color_level_overrides SET ${column} = NULL, updated_by = ?, updated_at = datetime('now') WHERE level = ? AND entity_id = ? AND color_id = ?`)
+        .run(updatedBy || '', level, entityId, colorId);
+    db.prepare('DELETE FROM column_color_level_overrides WHERE level = ? AND entity_id = ? AND color_id = ? AND color IS NULL AND text_color IS NULL').run(level, entityId, colorId);
+    return info.changes > 0;
+}
+
 // Every column of one table (tableKey, same key TABLE_GRANT_PATHS already
 // uses for grant checks), with its EFFECTIVE classification -- an
 // override if one was saved for that exact column, else its real
@@ -6795,7 +6885,7 @@ function getColumnColorChangeRows(stmt, nodeKey) {
 // instead of staying purely cosmetic to the permission tree itself (see
 // master_permission_classification_overrides' own DDL comment above for
 // the history of why it didn't, until now).
-function getEffectiveColumnClassifications(tableKey) {
+function getEffectiveColumnClassifications(tableKey, viewer = null) {
     const path = TABLE_GRANT_PATHS[tableKey];
     if (!path) return {};
     const pantalla = findPantallaNode(path.sectionId, path.itemId, path.submenuPrefix);
@@ -6811,9 +6901,16 @@ function getEffectiveColumnClassifications(tableKey) {
     const colors = new Map([...colorRows].map(([id, c]) => [id, c.color]));
     // Encabezado ("col-own:<nodeKey>") y Filas ("col-nested:<nodeKey>") de cada columna, ya autorizados:
     // todo lo guardado en la tabla de colores es lo que se pinta en las tablas reales.
+    // Con `viewer` (la persona que ve la tabla) el color baja por la cadena Giro > Plan > Cliente > Administrador >
+    // Perfil > Usuario: gana el nivel más cercano a ella que tenga color, fondo y letra por separado, y sin
+    // ninguno queda el del Maestro. Sin viewer (cuenta SaaS) es solo el del Maestro.
+    const levelOverrides = viewer ? getLevelColorOverrides(resolveViewerColorChain(viewer)) : new Map();
     const colorPair = (id) => {
-        const row = colorRows.get(id);
-        return row && (row.color || row.textColor) ? { bg: row.color || null, text: row.textColor || null } : null;
+        const base = colorRows.get(id);
+        const layers = levelOverrides.get(id) || [];
+        const bg = (layers.find((l) => l.color) || {}).color || (base && base.color) || null;
+        const text = (layers.find((l) => l.textColor) || {}).textColor || (base && base.textColor) || null;
+        return bg || text ? { bg, text } : null;
     };
     const classificationNode = (id) => (pantalla.submenu || []).find((e) => e.isClassification && e.id === id) || null;
     const result = {};
@@ -6823,7 +6920,14 @@ function getEffectiveColumnClassifications(tableKey) {
         const structuralId = classificationFor(path, colId);
         const override = overridesByKey.get(nodeKey);
         const classificationId = override ? override.classificationId : structuralId;
-        if (!classificationId) return;
+        const own = colorPair(`col-own:${nodeKey}`);
+        const nested = colorPair(`col-nested:${nodeKey}`);
+        if (!classificationId) {
+            // Una columna sin clasificación (las de Roles, Centros de Costo, etc.) no tiene banda, pero sí
+            // puede llevar color propio: se devuelve solo con sus colores.
+            if (own || nested) result[colId] = { classificationId: null, labelKey: null, labelParams: null, label: null, color: null, own, nested };
+            return;
+        }
         const node = classificationNode(classificationId);
         const color = colors.get(classificationId);
         result[colId] = {
@@ -6832,8 +6936,8 @@ function getEffectiveColumnClassifications(tableKey) {
             labelParams: (node && node.labelParams) || null,
             label: node ? null : (override && override.classificationLabel) || null,
             color: color || null,
-            own: colorPair(`col-own:${nodeKey}`),
-            nested: colorPair(`col-nested:${nodeKey}`),
+            own,
+            nested,
         };
     });
     return result;
@@ -8796,6 +8900,11 @@ module.exports = {
     diffMasterPermissionStatuses,
     getUserNameById,
     getSaasTableColumnColors,
+    resolveViewerColorChain,
+    getLevelColorOverrides,
+    listLevelColors,
+    setLevelColor,
+    clearLevelColor,
     getEffectiveSaasUserFieldClassifications,
     getSaasMasterChangeLog,
     getMasterPermissionOrder,
