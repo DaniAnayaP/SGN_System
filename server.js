@@ -1237,6 +1237,32 @@ function validateSectorNegocio(sectorNegocio) {
     return null;
 }
 
+// Un plan solo se puede asignar a un cliente si existe, está Activo (no en Revisión ni inactivo) y es del giro del cliente (el giro del plan debe
+// ser el mismo que el Sector de Negocio del cliente, si el cliente ya tiene uno). Lo mismo al reactivar un cliente con plan. Solo valida lo que
+// CAMBIA en este guardado: un cliente viejo con un plan fuera de regla puede seguir guardando otros campos. Devuelve el mensaje o null.
+function validateClientPlanAssignment(body, existing) {
+    const asText = (v) => String(v || '');
+    const planName = body.plan !== undefined ? asText(body.plan) : asText(existing && existing.plan);
+    if (!planName) return null;
+    const planChanged = body.plan !== undefined && asText(body.plan) !== asText(existing && existing.plan);
+    const sectorName = body.sectorNegocio !== undefined ? asText(body.sectorNegocio) : asText(existing && existing.sector_negocio);
+    const sectorChanged = body.sectorNegocio !== undefined && asText(body.sectorNegocio) !== asText(existing && existing.sector_negocio);
+    const reactivated = body.status === 'activo' && (!existing || existing.status !== 'activo');
+    if (!planChanged && !sectorChanged && !reactivated) return null;
+    const plan = getPlanByName(planName);
+    if (!plan) return 'El plan elegido no existe.';
+    if (plan.status !== 'active' && (planChanged || reactivated)) {
+        return 'El plan elegido todavía no está activo. Actívalo primero en Nuestros Planes.';
+    }
+    if (sectorName && plan.businessSectorId) {
+        const planSector = getBusinessSectorById(plan.businessSectorId);
+        if (planSector && planSector.name !== sectorName) {
+            return `El plan «${plan.name}» es del giro «${planSector.name}» y el cliente es del giro «${sectorName}»: no se puede asignar.`;
+        }
+    }
+    return null;
+}
+
 // Historial de cambios de Nuestros Clientes (tabla client_changes): qué campo
 // del registro cambió, de qué a qué y quién. field_key es la clave de i18n del
 // nombre de la columna, así el diálogo lo muestra en el idioma de quien lo abre.
@@ -1280,6 +1306,8 @@ app.post('/api/admin/clients', requireAuth, requireAdmin, async (req, res) => {
     if (error) return res.status(400).json({ message: error });
     const sectorError = validateSectorNegocio(req.body.sectorNegocio);
     if (sectorError) return res.status(400).json({ message: sectorError });
+    const planError = validateClientPlanAssignment(req.body, null);
+    if (planError) return res.status(400).json({ message: planError });
     const rfc = (req.body.rfc || '').trim();
     if (rfc && findClientByRfc(rfc)) {
         return res.status(409).json({ message: 'A client with that RFC already exists.' });
@@ -1312,6 +1340,8 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     if (error) return res.status(400).json({ message: error });
     const sectorError = validateSectorNegocio(req.body.sectorNegocio);
     if (sectorError) return res.status(400).json({ message: sectorError });
+    const planError = validateClientPlanAssignment(req.body, existing);
+    if (planError) return res.status(400).json({ message: planError });
     const rfc = (req.body.rfc || '').trim();
     if (rfc && findClientByRfc(rfc, existing.id)) {
         return res.status(409).json({ message: 'A client with that RFC already exists.' });
@@ -1325,7 +1355,10 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     if (extraCostCenters !== undefined && (!Number.isInteger(extraCostCenters) || extraCostCenters < 0)) {
         return res.status(400).json({ message: 'extraCostCenters must be a non-negative integer.' });
     }
-    const client = updateClient(req.params.id, extractClientFields(req.body));
+    // updateClient no tolera un status ausente (la columna es NOT NULL): un guardado parcial tumbaba el servidor entero. Sin status, se queda el que tiene.
+    const clientFields = extractClientFields(req.body);
+    if (clientFields.status === undefined) clientFields.status = existing.status;
+    const client = updateClient(req.params.id, clientFields);
     logClientFieldChanges(req, existing, client);
     if (extraCostCenters !== undefined) {
         setClientAddenda(req.params.id, { extraCostCenters, extraModules: getClientAddenda(req.params.id).extraModules });
