@@ -749,6 +749,7 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-nuestras-apps': 'saas-apps',
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
+    'admin-column-colors': 'saas-column-colors',
     'admin-equipo-saas': 'saas-team',
     'admin-saas-master-status': 'saas-master-tree',
     'admin-nuestros-respaldos': 'saas-backups',
@@ -837,6 +838,7 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-nuestras-apps': 'saas-apps',
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
+    'admin-column-colors': 'saas-column-colors',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
     'admin-saas-master-status': 'saas-master-tree',
@@ -919,6 +921,7 @@ function buildSidebarData(data, role, activePage) {
             // applySubmenuAbbreviations below).
             abbrKeys: ['menu.businessSectorsAbbr1', 'menu.businessSectorsAbbr2', 'menu.businessSectorsAbbr3', 'menu.businessSectorsAbbr4'],
         },
+        { id: 'admin-column-colors', labelKey: 'menu.columnColorsLevels', href: 'Admin-ColoresColumnas.html', icon: 'bx-color-fill', saasItemId: 'saas-column-colors' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const customerServiceSubmenuOrdered = applySaasSidebarOrder(customerServiceSubmenu, 'customerService', CUSTOMER_SERVICE_SAAS_ORDER_IDS);
     const saasConfigSubmenu = [
@@ -8801,6 +8804,7 @@ const SCREEN_DESCRIPTION_KEYS = {
     'BaseDatos-NuestrosCambios.html': 'admin.changesSubtitle',
     'BaseDatos-Respaldos.html': 'admin.backupsSubtitle',
     'BaseDatos-Solicitudes.html': 'main.databaseRequestsSubtitle',
+    'Admin-ColoresColumnas.html': 'admin.columnColorsLevelsSubtitle',
     'Business-ColoresColumnas.html': 'business.columnColorsSubtitle',
     'Business-Config.html': 'business.configSubtitle',
     'Business-DatosCliente.html': 'business.clientDataSubtitle',

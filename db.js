@@ -7294,6 +7294,7 @@ function decideColorRequest(id, status, { userId, label }) {
 const COLOR_AUTHORIZE_LEAVES = {
     saas: { itemId: 'saas-master-tree', subItemId: SAAS_COLOR_AUTHORIZE_LEAF },
     master: { itemId: 'saas-master-permissions-tree', subItemId: 'controles::a12' },
+    level: { itemId: 'saas-column-colors', subItemId: 'controles::a1' },
 };
 function userCanAuthorizeColors(scope, userId) {
     if (scope === 'saas') return userCanAuthorizeSaasColors(userId);
@@ -7319,7 +7320,7 @@ function resolveColorAuthorizer(scope, requesterId) {
 }
 // Aplica una solicitud ya autorizada a la tabla de colores que le toca (árbol SaaS o árbol de clientes).
 function applyColorRequest(request, updatedBy) {
-    if (request.scope === 'client') {
+    if (request.scope === 'client' || request.scope === 'level') {
         const kind = request.action.endsWith('text') ? 'text' : 'dot';
         if (request.action.startsWith('clear')) return clearLevelColor(request.level, request.entityId, request.colorId, kind, updatedBy);
         return setLevelColor(request.level, request.entityId, request.colorId, kind, request.value, updatedBy, request.clientId);
@@ -7422,6 +7423,16 @@ function listClientColorTargets(clientId, forTestAccount = false) {
 // Cadena de niveles de ese objetivo y de todo lo que tiene arriba, el más cercano primero. El administrador
 // está arriba del perfil, y el perfil arriba de la persona; cliente, plan y giro son los de la empresa.
 function resolveLevelColorChain(level, entityId, clientId) {
+    // Lado SaaS: el giro solo tiene el color base del producto arriba; el plan, el de su giro; el cliente, los de su plan y giro.
+    if (level === 'giro') return [{ level: 'giro', entityId }];
+    if (level === 'plan') {
+        const plan = db.prepare('SELECT business_sector_id AS sectorId FROM plans WHERE id = ?').get(entityId);
+        return [{ level: 'plan', entityId }, ...(plan && plan.sectorId ? [{ level: 'giro', entityId: plan.sectorId }] : [])];
+    }
+    if (level === 'cliente') {
+        const whole = resolveViewerColorChain({ userId: null, clientId: entityId });
+        return whole.slice(Math.max(0, whole.findIndex((l) => l.level === 'cliente')));
+    }
     const above = resolveViewerColorChain({ userId: null, clientId });
     if (level === 'admin') return above;
     if (level === 'perfil') return [{ level: 'perfil', entityId }, ...above];
@@ -7504,14 +7515,17 @@ function findColorColumnByColorId(colorId) {
 // qué nivel viene) y si hay una solicitud pendiente. Solo se devuelven los colores de las columnas que tienen
 // alguno o una solicitud, indexados por su id de color.
 function getClientColorsForTarget(clientId, target) {
+    return getColorsForTarget(clientId, target, 'client');
+}
+function getColorsForTarget(clientId, target, scope) {
     const chain = resolveLevelColorChain(target.level, target.entityId, clientId);
     const layersById = getLevelColorOverrides(chain);
     const masterRows = new Map(getClassificationColors().map((c) => [c.classificationId, c]));
     const pending = new Map();
     db.prepare(`
         SELECT color_id AS colorId, action, value FROM column_color_requests
-        WHERE scope = 'client' AND client_id = ? AND level = ? AND entity_id = ? AND status = 'pending'
-    `).all(clientId, target.level, target.entityId).forEach((r) => {
+        WHERE scope = ? AND IFNULL(client_id, 0) = IFNULL(?, 0) AND level = ? AND entity_id = ? AND status = 'pending'
+    `).all(scope, clientId, target.level, target.entityId).forEach((r) => {
         const entry = pending.get(r.colorId) || {};
         if (r.action.endsWith('text')) entry.pendingText = r.action === 'set-text' ? r.value : '';
         else entry.pendingBg = r.action === 'set' ? r.value : '';
@@ -7535,6 +7549,38 @@ function getClientColorsForTarget(clientId, target) {
         addColor(`col-nested:${col.nodeKey}`);
     }));
     return colors;
+}
+
+// Colores por Nivel (SaaS): el equipo SaaS elige el color de un Giro, un Plan o un Cliente. Lo que cambia solo baja a lo que
+// está debajo (el giro, a sus planes y clientes; el plan, a sus clientes; el cliente, a toda su empresa). Mismo flujo de
+// solicitudes que el resto del lado SaaS (scope 'level'), con las hojas de la pantalla 'saas-column-colors'.
+const SAAS_COLOR_TARGET_LEVELS = ['giro', 'plan', 'cliente'];
+function listSaasColorLevelTargets() {
+    return [
+        { level: 'giro', entities: db.prepare('SELECT id, name FROM business_sectors ORDER BY name COLLATE NOCASE').all().map((r) => ({ entityId: r.id, name: r.name })) },
+        { level: 'plan', entities: db.prepare('SELECT id, name FROM plans ORDER BY name COLLATE NOCASE').all().map((r) => ({ entityId: r.id, name: r.name })) },
+        {
+            level: 'cliente',
+            entities: db.prepare("SELECT id, COALESCE(NULLIF(company_nickname, ''), company_name) AS name FROM clients ORDER BY name COLLATE NOCASE").all().map((r) => ({ entityId: r.id, name: r.name })),
+        },
+    ].filter((l) => l.entities.length);
+}
+function resolveSaasColorLevelTarget(level, entityId) {
+    const id = Number(entityId);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    const row = level === 'giro' ? db.prepare('SELECT id, name FROM business_sectors WHERE id = ?').get(id)
+        : level === 'plan' ? db.prepare('SELECT id, name FROM plans WHERE id = ?').get(id)
+            : level === 'cliente' ? db.prepare("SELECT id, COALESCE(NULLIF(company_nickname, ''), company_name) AS name FROM clients WHERE id = ?").get(id)
+                : null;
+    return row ? { level, entityId: id, name: row.name } : null;
+}
+function listLevelColorRequests({ userId, isSuperAdmin = false, limit = 100 }) {
+    return listColorRequestsForUser('level', { userId, isSuperAdmin, limit });
+}
+// Nombre de lo que cambia una solicitud de nivel ("Plan: Básico").
+function describeLevelColorRequestTarget(request) {
+    const target = request.level ? resolveSaasColorLevelTarget(request.level, request.entityId) : null;
+    return { level: request.level || null, name: target ? target.name : '' };
 }
 
 // Solicitudes de color de una empresa que ve esta persona: las suyas y las pendientes que le tocan decidir
@@ -9148,6 +9194,12 @@ module.exports = {
     getColorColumnCatalog,
     findColorColumnByColorId,
     getClientColorsForTarget,
+    getColorsForTarget,
+    SAAS_COLOR_TARGET_LEVELS,
+    listSaasColorLevelTargets,
+    resolveSaasColorLevelTarget,
+    listLevelColorRequests,
+    describeLevelColorRequestTarget,
     listClientColorRequests,
     describeClientColorRequestTarget,
     getLevelColorOverrides,

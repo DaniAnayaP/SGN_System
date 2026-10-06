@@ -312,6 +312,12 @@ const {
     getColorColumnCatalog,
     findColorColumnByColorId,
     getClientColorsForTarget,
+    getColorsForTarget,
+    SAAS_COLOR_TARGET_LEVELS,
+    listSaasColorLevelTargets,
+    resolveSaasColorLevelTarget,
+    listLevelColorRequests,
+    describeLevelColorRequestTarget,
     listClientColorRequests,
     describeClientColorRequestTarget,
     listLevelColors,
@@ -2062,7 +2068,7 @@ const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
 // Historial de cambios de las tablas de SaaS sin tabla propia (saas_table_changes):
 // Nuestras Apps, Nuestros Respaldos y Material de Apoyo. Con ?recordId=, solo esa fila.
-const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo'];
+const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'colores-niveles'];
 function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue, action = 'update') {
     logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
 }
@@ -2629,7 +2635,7 @@ app.get('/api/business/table-classifications', requireAuth, (req, res) => {
 // ---------------------------------------------------------------------------
 const spanishStrings = require('./public/i18n/es.json');
 const spanishLabel = (key) => String(key || '').split('.').reduce((node, part) => (node && typeof node === 'object' ? node[part] : undefined), spanishStrings) || key;
-const COLOR_LEVEL_LABELS_ES = { admin: 'Administrador', perfil: 'Perfil', usuario: 'Usuario' };
+const COLOR_LEVEL_LABELS_ES = { giro: 'Giro', plan: 'Plan', cliente: 'Cliente', admin: 'Administrador', perfil: 'Perfil', usuario: 'Usuario' };
 const COLOR_HEX = /^#[0-9a-fA-F]{6}$/;
 
 function clientColorAccess(req) {
@@ -2685,6 +2691,11 @@ app.get('/api/business/column-colors', requireAuth, (req, res) => {
         canAuthorize: access.canAuthorize,
         isAdmin: access.isAdmin,
         targets: allowed,
+        levels: [
+            ...(allowed.admin ? [{ level: 'admin', entities: [allowed.admin] }] : []),
+            ...(allowed.profiles.length ? [{ level: 'perfil', entities: allowed.profiles }] : []),
+            ...(allowed.users.length ? [{ level: 'usuario', entities: allowed.users }] : []),
+        ],
         target,
         colors: target ? getClientColorsForTarget(req.user.clientId, target) : {},
     });
@@ -2800,6 +2811,137 @@ const decideClientColorRequest = (approve) => (req, res) => {
 };
 app.post('/api/business/column-color-requests/:id/approve', requireAuth, decideClientColorRequest(true));
 app.post('/api/business/column-color-requests/:id/reject', requireAuth, decideClientColorRequest(false));
+
+// ---------------------------------------------------------------------------
+// Colores por Nivel (SaaS) -- el equipo SaaS elige el color de un Giro, un Plan o un Cliente; el cambio solo baja a lo que
+// está debajo (ver db.js, column_color_level_overrides). Dos accesos en el árbol de la cuenta (pantalla
+// 'saas-column-colors' de SaasAdminCatalog.js): "Personalizar colores" (controles::a0) y "Autorizar colores" (a1). Quien
+// solo personaliza deja una solicitud (scope 'level') que le llega a su jefe directo SaaS y sube hasta quien pueda
+// autorizar; la raíz es admin_saas, que siempre puede.
+// ---------------------------------------------------------------------------
+const SAAS_COLUMN_COLORS_ITEM = 'saas-column-colors';
+function saasColumnColorsAccess(req) {
+    const grants = getSaasUserGrants(req.user.sub);
+    const has = (sub) => hasSaasGrant(grants, SAAS_COLUMN_COLORS_ITEM, sub, req.user.isSaasSuperAdmin);
+    return { canOpen: hasSaasGrant(grants, SAAS_COLUMN_COLORS_ITEM, null, req.user.isSaasSuperAdmin), canPersonalize: has('controles::a0'), canAuthorize: has('controles::a1') };
+}
+app.get('/api/admin/column-colors/catalog', requireAuth, requireAdmin, (req, res) => {
+    if (!saasColumnColorsAccess(req).canOpen) return res.status(403).json({ message: 'No tienes acceso a Colores por Nivel.' });
+    res.json({ screens: getColorColumnCatalog() });
+});
+app.get('/api/admin/column-colors', requireAuth, requireAdmin, (req, res) => {
+    const access = saasColumnColorsAccess(req);
+    if (!access.canOpen) return res.status(403).json({ message: 'No tienes acceso a Colores por Nivel.' });
+    const levels = listSaasColorLevelTargets();
+    const asked = typeof req.query.level === 'string' && req.query.level && SAAS_COLOR_TARGET_LEVELS.includes(req.query.level)
+        ? resolveSaasColorLevelTarget(req.query.level, req.query.entityId) : null;
+    const first = levels[0];
+    const target = asked || (first ? { level: first.level, entityId: first.entities[0].entityId, name: first.entities[0].name } : null);
+    res.json({
+        canPersonalize: access.canPersonalize,
+        canAuthorize: access.canAuthorize,
+        isAdmin: !!req.user.isSaasSuperAdmin,
+        levels,
+        target,
+        colors: target ? getColorsForTarget(null, target, 'level') : {},
+    });
+});
+
+// Bitácora de la pantalla (saas_table_changes, 'colores-niveles'): un renglón por cambio aplicado.
+function logLevelColorChange(req, request, found, target, previousHex, changedBy) {
+    const kindLabel = request.action.endsWith('text') ? 'letra' : 'fondo';
+    const partLabel = found.part === 'own' ? 'Encabezado' : 'Filas';
+    const clearing = request.action.startsWith('clear');
+    logSaasTableChange({
+        tableKey: 'colores-niveles', recordId: target.entityId,
+        recordLabel: `${COLOR_LEVEL_LABELS_ES[target.level]}: ${target.name}`, action: 'update',
+        fieldKey: 'business.colorHistoryField', oldValue: previousHex || '',
+        newValue: `${spanishLabel(found.screen.screenLabelKey)} › ${spanishLabel(found.column.labelKey)} (${partLabel}, ${kindLabel}): ${clearing ? 'quitado' : request.value}`,
+        changedBy,
+    });
+}
+function parseLevelColorChange(req, res, source) {
+    const access = saasColumnColorsAccess(req);
+    if (!access.canPersonalize) { res.status(403).json({ message: 'No tienes permiso para personalizar colores por nivel.' }); return null; }
+    const found = findColorColumnByColorId(source.colorId);
+    if (!found) { res.status(400).json({ message: 'colorId is not a real column.' }); return null; }
+    if (!SAAS_COLOR_TARGET_LEVELS.includes(source.level)) { res.status(400).json({ message: 'Invalid level.' }); return null; }
+    const target = resolveSaasColorLevelTarget(source.level, source.entityId);
+    if (!target) { res.status(404).json({ message: 'Ese giro, plan o cliente no existe.' }); return null; }
+    return { access, found, target, kind: source.kind === 'text' ? 'text' : 'dot' };
+}
+function applyOrRequestLevelColor(req, res, change, action, value) {
+    const { access, found, target, kind } = change;
+    const colorId = found.part === 'own' ? `col-own:${found.column.nodeKey}` : `col-nested:${found.column.nodeKey}`;
+    const request = { clientId: null, colorId, action, value, level: target.level, entityId: target.entityId };
+    if (access.canAuthorize) {
+        const previous = currentClientLevelColor(target.level, target.entityId, colorId, kind);
+        applyColorRequest({ ...request, scope: 'level' }, changedByLabel(req));
+        logLevelColorChange(req, request, found, target, previous, changedByLabel(req));
+        return res.json({ applied: true, colors: getColorsForTarget(null, target, 'level') });
+    }
+    const assignedTo = resolveColorAuthorizer('level', req.user.sub);
+    const requestId = createColorRequest({
+        scope: 'level', clientId: null, colorId, action, value, level: target.level, entityId: target.entityId,
+        requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req), assignedToUserId: assignedTo,
+    });
+    return res.status(202).json({
+        requested: true, requestId, assignedTo: { id: assignedTo, name: assignedTo ? getUserNameById(assignedTo) : '' },
+        colors: getColorsForTarget(null, target, 'level'),
+    });
+}
+app.put('/api/admin/column-colors', requireAuth, requireAdmin, (req, res) => {
+    const body = req.body || {};
+    const change = parseLevelColorChange(req, res, body);
+    if (!change) return;
+    if (typeof body.value !== 'string' || !COLOR_HEX.test(body.value)) return res.status(400).json({ message: 'value must be a #rrggbb color.' });
+    applyOrRequestLevelColor(req, res, change, change.kind === 'text' ? 'set-text' : 'set', body.value.toLowerCase());
+});
+app.delete('/api/admin/column-colors', requireAuth, requireAdmin, (req, res) => {
+    const change = parseLevelColorChange(req, res, req.query || {});
+    if (!change) return;
+    applyOrRequestLevelColor(req, res, change, change.kind === 'text' ? 'clear-text' : 'clear-dot', null);
+});
+
+// Solicitudes de color por nivel: cada quien ve las suyas y las pendientes que le tocan decidir (admin_saas, todas).
+app.get('/api/admin/column-color-level-requests', requireAuth, requireAdmin, (req, res) => {
+    const access = saasColumnColorsAccess(req);
+    if (!access.canOpen) return res.status(403).json({ message: 'No tienes acceso a Colores por Nivel.' });
+    const isSuper = !!req.user.isSaasSuperAdmin;
+    const requests = listLevelColorRequests({ userId: req.user.sub, isSuperAdmin: isSuper }).map((r) => {
+        const found = findColorColumnByColorId(r.colorId);
+        return {
+            ...r,
+            target: describeLevelColorRequestTarget(r),
+            screenLabelKey: found ? found.screen.screenLabelKey : null,
+            columnLabelKey: found ? found.column.labelKey : null,
+            part: found ? found.part : null,
+            canDecide: access.canAuthorize && r.status === 'pending' && (isSuper || r.assignedToId === req.user.sub),
+        };
+    });
+    res.json({ requests, canAuthorize: access.canAuthorize, canPersonalize: access.canPersonalize, toDecide: requests.filter((r) => r.canDecide).length });
+});
+const decideLevelColorRequest = (approve) => (req, res) => {
+    const access = saasColumnColorsAccess(req);
+    if (!access.canAuthorize) return res.status(403).json({ message: 'No tienes permiso para autorizar colores por nivel.' });
+    const request = getColorRequest(Number(req.params.id));
+    if (!request || request.scope !== 'level') return res.status(404).json({ message: 'Solicitud no encontrada.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya se resolvió.' });
+    if (!req.user.isSaasSuperAdmin && request.assignedToId !== req.user.sub) return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
+    const label = changedByLabel(req);
+    if (approve) {
+        const found = findColorColumnByColorId(request.colorId);
+        const target = resolveSaasColorLevelTarget(request.level, request.entityId);
+        if (!found || !target) return res.status(409).json({ message: 'Lo que pedía esta solicitud ya no existe.' });
+        const kind = request.action.endsWith('text') ? 'text' : 'dot';
+        const previous = currentClientLevelColor(target.level, target.entityId, request.colorId, kind);
+        applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+        logLevelColorChange(req, request, found, target, previous, `${label} (solicitado por ${request.requestedByName})`);
+    }
+    res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
+};
+app.post('/api/admin/column-color-level-requests/:id/approve', requireAuth, requireAdmin, decideLevelColorRequest(true));
+app.post('/api/admin/column-color-level-requests/:id/reject', requireAuth, requireAdmin, decideLevelColorRequest(false));
 
 // Árbol de Permisos Maestro's own "Cambios" column (see
 // master_permission_change_log's DDL comment in db.js) -- admin-only, same

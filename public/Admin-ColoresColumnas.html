@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="business.columnColorsTitle">Column Colors</title>
+    <title data-i18n="menu.columnColorsLevels">Colors by Level</title>
     <link rel="icon" href="icons/icon-512.png">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
@@ -86,7 +86,7 @@
                         <!-- Cost center options are rendered at runtime -->
                     </ul>
                 </div>
-                <p class="welcome-text" data-i18n="business.columnColorsTitle">Column Colors</p>
+                <p class="welcome-text" data-i18n="menu.columnColorsLevels">Colors by Level</p>
             </div>
             <div class="top-bar-actions" id="top-bar-actions">
                 <button type="button" class="top-bar-actions-toggle" id="top-bar-actions-toggle"
@@ -365,13 +365,13 @@
         </div>
 
         <section class="admin-panel">
-            <p class="admin-subtitle" data-i18n="business.columnColorsSubtitle">Choose the background and text color your company's table columns show.</p>
+            <p class="admin-subtitle" data-i18n="admin.columnColorsLevelsSubtitle">Choose the background and text color of the clients' table columns by Business type, Plan or Client.</p>
 
             <div class="col-colors-toolbar">
                 <div class="col-colors-target">
                     <label class="col-colors-target-label" for="col-colors-level" data-i18n="business.columnColorsApplyTo">Apply to</label>
-                    <select id="col-colors-level" class="col-colors-select" data-help-key="columnColorsLevel"></select>
-                    <select id="col-colors-entity" class="col-colors-select" data-help-key="columnColorsEntity" hidden></select>
+                    <select id="col-colors-level" class="col-colors-select" data-help-key="columnColorsLevelSaas"></select>
+                    <select id="col-colors-entity" class="col-colors-select" data-help-key="columnColorsEntitySaas" hidden></select>
                 </div>
                 <div class="col-colors-actions">
                     <button type="button" class="btn btn-secondary" id="col-colors-requests-btn" data-help-key="columnColorsRequests" hidden>
@@ -457,6 +457,6 @@
 
     <script src="Dashboard.js"></script>
     <script src="ColumnColorsPage.js"></script>
-    <script src="Business-ColoresColumnas.js"></script>
+    <script src="Admin-ColoresColumnas.js"></script>
 </body>
 </html>

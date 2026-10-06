@@ -114,6 +114,7 @@
     "roles": "Roles",
     "users": "Usuarios",
     "columnColors": "Colores de Columnas",
+    "columnColorsLevels": "Colores por Nivel",
     "accessPermissions": "Accesos y Permisos",
     "upcomingUpdates": "Próximas Actualizaciones",
     "trainingSessions": "Sesiones de Capacitación",
@@ -782,6 +783,7 @@
     "colorRequestApproved": "Color autorizado y aplicado",
     "colorRequestRejectedMsg": "Solicitud rechazada",
     "colorRequestError": "No se pudo completar la solicitud",
+    "columnColorsLevelsSubtitle": "Elige el color de fondo y de letra de las columnas de las tablas de los clientes por Giro, por Plan o por Cliente. Lo que cambias solo le llega a lo que está debajo: el giro, a sus planes y clientes; el plan, a sus clientes; el cliente, a toda su empresa.",
     "masterTreeHistoryFieldStatus": "Estatus",
     "masterTreeHistoryFieldClassification": "Clasificación",
     "masterTreeHistoryFieldColor": "Color",
@@ -2129,6 +2131,14 @@
     "columnColorsMore": {
       "what": "Abre el selector del sistema para elegir cualquier otro color.",
       "example": "necesitas el color exacto de tu marca y lo eliges aquí."
+    },
+    "columnColorsLevelSaas": {
+      "what": "Elige a quién le cambias el color: a un giro de negocio, a un plan o a un cliente. El cambio solo le llega a lo que está debajo de lo que eliges.",
+      "example": "eliges Plan y luego «Básico»: todos los clientes con ese plan ven el color nuevo, salvo los que ya tengan uno propio."
+    },
+    "columnColorsEntitySaas": {
+      "what": "El giro, el plan o el cliente exacto al que se le aplican los colores que eliges abajo.",
+      "example": "eliges al cliente «Transportes del Norte» y los colores que cambies solo cambian para su empresa."
     },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",

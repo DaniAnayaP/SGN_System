@@ -114,6 +114,7 @@
     "roles": "Roles",
     "users": "Users",
     "columnColors": "Column Colors",
+    "columnColorsLevels": "Colors by Level",
     "accessPermissions": "Access and Permissions",
     "upcomingUpdates": "Upcoming Updates",
     "trainingSessions": "Training Sessions",
@@ -783,6 +784,7 @@
     "colorRequestApproved": "Color approved and applied",
     "colorRequestRejectedMsg": "Request rejected",
     "colorRequestError": "The request could not be completed",
+    "columnColorsLevelsSubtitle": "Choose the background and text color of the clients' table columns by Business type, by Plan or by Client. What you change only reaches whatever sits below: a business type, its plans and clients; a plan, its clients; a client, its whole company.",
     "masterTreeHistoryFieldStatus": "Status",
     "masterTreeHistoryFieldClassification": "Classification",
     "masterTreeHistoryFieldColor": "Color",
@@ -2130,6 +2132,14 @@
     "columnColorsMore": {
       "what": "Opens the system picker so you can choose any other color.",
       "example": "you need your brand's exact color and pick it here."
+    },
+    "columnColorsLevelSaas": {
+      "what": "Choose who you change the color for: a business type, a plan or a client. The change only reaches whatever sits below what you pick.",
+      "example": "you pick Plan and then \"Basic\": every client on that plan sees the new color, except those that already have their own."
+    },
+    "columnColorsEntitySaas": {
+      "what": "The exact business type, plan or client the colors you choose below are applied to.",
+      "example": "you pick the client \"Northern Transport\" and any color you change only changes for its company."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",
