@@ -326,6 +326,7 @@ const {
     systemReset,
     getSessionsValidAfter,
     setSessionsValidAfter,
+    getSessionBlockReason,
     getClientContractGrants,
     clampNewGrantsToLimits,
     getOrderTreeForTarget,
@@ -733,6 +734,8 @@ function requireAuth(req, res, next) {
         const payload = jwt.verify(token, JWT_SECRET);
         // Después de un Reinicio del Sistema, las sesiones anteriores ya no valen (ver system_state en db.js).
         if (payload.iat && payload.iat < getSessionsValidAfter()) return res.status(401).json({ message: 'Invalid or expired session.' });
+        // Una cuenta desactivada, borrada o dada de baja pierde la sesión en la siguiente petición, no hasta que venza el token (8 h).
+        if (getSessionBlockReason(payload.sub)) return res.status(401).json({ message: 'Invalid or expired session.', code: 'ACCOUNT_BLOCKED' });
         req.user = payload;
         next();
     } catch {

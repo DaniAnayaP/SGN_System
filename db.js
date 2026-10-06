@@ -9156,6 +9156,26 @@ function getUserOperationalStatus(userId) {
     return row ? computeOperationalStatus(row) : 'active';
 }
 
+// ¿Esta cuenta puede seguir usando su sesión? La misma regla del inicio de sesión (ver POST /api/auth/login), pero revisada en CADA petición: la
+// sesión (JWT) dura 8 horas y no sabe si la cuenta se desactivó o se borró después. Devuelve null si puede seguir, o el motivo:
+// 'missing' (la cuenta ya no existe), 'inactive' (desactivada a mano, el cliente se desactivó o su Estatus RH es de baja) o 'suspended'.
+let sessionBlockStmt = null;
+function getSessionBlockReason(userId) {
+    if (!sessionBlockStmt) {
+        sessionBlockStmt = db.prepare(`
+            SELECT users.active, hr_status_catalog.operational_effect AS hrStatusEffect
+            FROM users
+            LEFT JOIN hr_workers ON hr_workers.user_id = users.id
+            LEFT JOIN hr_status_catalog ON hr_status_catalog.id = hr_workers.hr_status_id
+            WHERE users.id = ?
+        `);
+    }
+    const row = sessionBlockStmt.get(userId);
+    if (!row) return 'missing';
+    const status = computeOperationalStatus(row);
+    return status === 'active' ? null : status;
+}
+
 function getUserById(id, clientId) {
     return db
         .prepare(`
@@ -9544,6 +9564,7 @@ module.exports = {
     HR_STATUS_CATALOG_FIELDS,
     computeOperationalStatus,
     getUserOperationalStatus,
+    getSessionBlockReason,
     listIntelligentReports,
     getIntelligentReportById,
     createIntelligentReport,
