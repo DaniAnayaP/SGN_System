@@ -1476,6 +1476,9 @@ app.get('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
         grants: getClientPermissionGrants(req.params.id),
         planGrants: plan ? getPlanGrants(plan.id) : [],
         planId: plan ? plan.id : null,
+        // Lo que existe en el giro del plan (null si no hay plan o giro): lo usa "Accesos del Administrador" para mostrar, bloqueado,
+        // lo del giro que el cliente no contrató.
+        giroGrants: plan && plan.businessSectorId ? getSectorGrants(plan.businessSectorId) : null,
     });
 });
 

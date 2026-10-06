@@ -1310,24 +1310,19 @@ async function openAdminAccessModal(client) {
     adminAccessSubtitle.textContent = `${client.company_name} — ${client.adminUsername}`;
     adminAccessError.hidden = true;
     try {
-        const [modulesRes, costCentersRes] = await Promise.all([
-            fetch(`/api/admin/clients/${client.id}/modules`, { credentials: 'include' }),
-            fetch(`/api/admin/clients/${client.id}/cost-centers`, { credentials: 'include' }),
-        ]);
-        if (!modulesRes.ok || !costCentersRes.ok) throw new Error('load failed');
-        const modulesData = await modulesRes.json();
-        const costCentersData = await costCentersRes.json();
-        const enabledModuleKeys = (modulesData.modules || []).filter((m) => m.enabled).map((m) => m.key);
+        const grantsRes = await fetch(`/api/admin/clients/${client.id}/permission-grants`, { credentials: 'include' });
+        if (!grantsRes.ok) throw new Error('load failed');
+        const { grants, planGrants, giroGrants } = await grantsRes.json();
+        adminAccessTreeContainer.innerHTML = '';
         const order = await fetch(`/api/admin/permission-order?level=admin&clientId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch(`/api/admin/permission-classifications?level=admin&clientId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
-        const tree = window.PermissionTree.create(adminAccessTreeContainer, {
-            order,
-            classOverrides,
-            readOnly: true,
-            enabledModuleKeys,
-            costCenters: costCentersData.costCenters || [],
+        // Lo mismo que ve el administrador en su Mis Accesos: lo del plan (verde), lo adicional (amarillo) y, bloqueado, lo que existe
+        // en su giro y no ha contratado.
+        const tree = window.PermissionCostTree.create(adminAccessTreeContainer, {
+            order, classOverrides, mode: 'clientTricolor', interactive: false, visibleGrants: giroGrants,
+            historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },
         });
-        await tree.init([]);
+        await tree.init(planGrants || [], [], grants || []);
         adminAccessModal.hidden = false;
     } catch {
         showError(Dashboard.t('admin.loadError'));

@@ -753,9 +753,13 @@
             <p id="admin-access-hint" class="admin-hint" data-i18n="admin.adminAccessHint">Read-only — shows everything this client has contracted (habilitado) vs. not contracted (bloqueado). This administrator always sees everything habilitado automatically; nothing here can be selected or saved.</p>
             <p class="admin-hint perm-tree-legend">
                 <span class="perm-tree-status perm-tree-status-enabled"><i class="bx bx-check" aria-hidden="true"></i></span>
-                <span data-i18n="admin.adminAccessEnabled">Contratado / habilitado</span>
+                <span data-i18n="admin.adminAccessEnabled">Included in the plan</span>
+                <span class="perm-tree-status perm-tree-status-extra"><i class="bx bx-plus-circle" aria-hidden="true"></i></span>
+                <span data-i18n="admin.adminAccessExtra">Contracted extra</span>
                 <span class="perm-tree-status perm-tree-status-blocked"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>
-                <span data-i18n="admin.adminAccessBlocked">No contratado / bloqueado</span>
+                <span data-i18n="admin.adminAccessBlocked">Not contracted</span>
+                <span class="perm-tree-status perm-tree-status-mixed"><i class="bx bx-minus" aria-hidden="true"></i></span>
+                <span data-i18n="business.accesosLegendMixed">Mixed coverage (expand to see the detail)</span>
             </p>
             <div id="admin-access-tree-container"></div>
             <div id="admin-access-error" class="admin-error" role="alert" hidden></div>
