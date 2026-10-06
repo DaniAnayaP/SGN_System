@@ -46,6 +46,7 @@ async function loadMyAccess() {
             order, classOverrides, mode: 'clientTricolor', interactive: false,
             historyEndpoint: isAdmin ? '/api/business/me/contract-change-log' : '/api/business/me/grant-change-log',
             visibleGrants: isAdmin ? data.giroGrants : data.contractGrants,
+            mainIncluded: isAdmin,
         });
         await tree.init(data.jobPositionGrants || [], [], data.grants || []);
     } catch {

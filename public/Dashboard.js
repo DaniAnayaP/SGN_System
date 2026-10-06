@@ -94,6 +94,13 @@ function limitErrorMessage(body) {
     return t('admin.limitModuleNotContracted', { department: body.labelKey ? t(body.labelKey) : body.sectionId });
 }
 
+// El aviso cuando el servidor guardó pero quitó permisos nuevos que no caben (fuera del contrato o en un Estatus que quien da el permiso no ve);
+// null si no se quitó nada.
+function limitDroppedMessage(dropped) {
+    if (!dropped || !dropped.count) return null;
+    return t('admin.limitDroppedNotice', { count: dropped.count });
+}
+
 function showToast(message, type = 'info', { title, duration = TOAST_DEFAULT_DURATION } = {}) {
     const kind = TOAST_ICONS[type] ? type : 'info';
     const container = ensureToastContainer();
@@ -11646,6 +11653,7 @@ window.Dashboard = {
     getVisibleTableSnapshot,
     showToast,
     limitErrorMessage,
+    limitDroppedMessage,
     confirm: confirmDialog,
     openCatalogRequestModal,
 };

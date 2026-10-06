@@ -326,6 +326,8 @@ const {
     systemReset,
     getSessionsValidAfter,
     setSessionsValidAfter,
+    getClientContractGrants,
+    clampNewGrantsToLimits,
     getOrderTreeForTarget,
     getEffectiveClassificationOverridesForTarget,
     getEffectiveClassificationOverridesForViewer,
@@ -1467,8 +1469,10 @@ app.put('/api/admin/clients/:id/admin-access', requireAuth, requireAdmin, (req, 
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
-    if (rejectUncontractedNewGrants(res, client.id, getUserGrants(client.admin_user_id), grants)) return;
-    res.json({ grants: setUserGrants(client.admin_user_id, grants) });
+    const adminGrantsBefore = getUserGrants(client.admin_user_id);
+    if (rejectUncontractedNewGrants(res, client.id, adminGrantsBefore, grants)) return;
+    const limited = clampNewGrantsToLimits({ clientId: client.id, visibleStatuses: getUserVisibleStatuses(client.admin_user_id), before: adminGrantsBefore, after: grants });
+    res.json({ grants: setUserGrants(client.admin_user_id, limited.allowed), dropped: summarizeDroppedGrants(limited.dropped) });
 });
 
 // Permisos Contratados / + Adicionales: árbol completo (hasta Columna) de
@@ -3904,6 +3908,16 @@ function rejectUncontractedNewGrants(res, clientId, grantsBefore, grantsAfter) {
     return true;
 }
 
+// Resumen de lo que las reglas de límites 2 y 3 quitaron de un guardado (ver clampNewGrantsToLimits en db.js); null si no se quitó nada.
+function summarizeDroppedGrants(dropped) {
+    if (!dropped.length) return null;
+    return {
+        count: dropped.length,
+        status: dropped.filter((d) => d.kinds.includes('status')).length,
+        contract: dropped.filter((d) => d.kinds.includes('contract')).length,
+    };
+}
+
 function validateGrants(grants) {
     if (!Array.isArray(grants)) return 'grants must be an array.';
     for (const g of grants) {
@@ -4012,13 +4026,6 @@ app.patch('/api/business/users/:id', requireAuth, requireClientAdmin, (req, res)
 // user can check their OWN active permissions ("Servicio Contratado" ->
 // "Mis Accesos y Permisos"), no admin grant required, since it's their own
 // data. Same Puesto + extra shape "Permisos Activados" already uses.
-// Lo que una empresa tiene contratado: el árbol de su plan más los adicionales que compró. null si no tiene plan (no hay con qué filtrar).
-function getClientContractGrants(clientId) {
-    const client = clientId ? getClientById(clientId) : null;
-    const plan = client && client.plan ? getPlanByName(client.plan) : null;
-    return plan ? [...getPlanGrants(plan.id), ...getClientPermissionGrants(clientId)] : null;
-}
-
 app.get('/api/business/me/grants', requireAuth, (req, res) => {
     // El administrador del cliente no tiene permisos propios guardados: ve todo lo que su empresa contrató. Su árbol se pinta con el
     // contrato (verde = incluido en el plan, amarillo = adicional contratado) y lo que existe en su giro y no contrató queda bloqueado.
@@ -4091,11 +4098,12 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     if (error) return res.status(400).json({ message: error });
     const grantsBefore = getUserGrants(req.params.id);
     if (rejectUncontractedNewGrants(res, req.user.clientId, grantsBefore, grants)) return;
-    const savedGrants = setUserGrants(req.params.id, grants, changedByLabel(req));
+    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: grants });
+    const savedGrants = setUserGrants(req.params.id, limited.allowed, changedByLabel(req));
     if (grantsSignature(grantsBefore) !== grantsSignature(savedGrants)) {
         logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExtraGrants', grantsBefore.length, savedGrants.length);
     }
-    res.json({ grants: savedGrants });
+    res.json({ grants: savedGrants, dropped: summarizeDroppedGrants(limited.dropped) });
 });
 
 // Per-node "Cambios" for the tree above -- same reasoning as the client
@@ -4185,11 +4193,12 @@ app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmi
     if (error) return res.status(400).json({ message: error });
     const roleGrantsBefore = getJobPositionGrants(req.params.id);
     if (rejectUncontractedNewGrants(res, req.user.clientId, roleGrantsBefore, grants)) return;
-    const savedRoleGrants = setJobPositionGrants(req.params.id, grants);
+    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: roleGrantsBefore, after: grants });
+    const savedRoleGrants = setJobPositionGrants(req.params.id, limited.allowed);
     if (grantsSignature(roleGrantsBefore) !== grantsSignature(savedRoleGrants)) {
         logBusinessChange(req, 'business-roles', existing.id, existing.name, 'business.historyRoleGrants', roleGrantsBefore.length, savedRoleGrants.length);
     }
-    res.json({ grants: savedRoleGrants });
+    res.json({ grants: savedRoleGrants, dropped: summarizeDroppedGrants(limited.dropped) });
 });
 
 // Nuestra Estructura Organizacional's own "bosquejo" edge -- which OTHER

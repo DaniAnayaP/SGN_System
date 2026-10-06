@@ -1319,7 +1319,7 @@ async function openAdminAccessModal(client) {
         // Lo mismo que ve el administrador en su Mis Accesos: lo del plan (verde), lo adicional (amarillo) y, bloqueado, lo que existe
         // en su giro y no ha contratado.
         const tree = window.PermissionCostTree.create(adminAccessTreeContainer, {
-            order, classOverrides, mode: 'clientTricolor', interactive: false, visibleGrants: giroGrants,
+            order, classOverrides, mode: 'clientTricolor', interactive: false, visibleGrants: giroGrants, mainIncluded: true,
             historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },
         });
         await tree.init(planGrants || [], [], grants || []);

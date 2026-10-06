@@ -171,8 +171,11 @@ grantAccessSaveBtn.addEventListener('click', async () => {
             err.limitMessage = Dashboard.limitErrorMessage(body);
             throw err;
         }
+        const saved = await grantsRes.json().catch(() => ({}));
         closeGrantAccessModal();
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+        const droppedNotice = Dashboard.limitDroppedMessage(saved.dropped);
+        if (droppedNotice) Dashboard.showToast(droppedNotice, 'warning');
     } catch (err) {
         grantAccessError.textContent = (err && err.limitMessage) || Dashboard.t('admin.saveError');
         grantAccessError.hidden = false;

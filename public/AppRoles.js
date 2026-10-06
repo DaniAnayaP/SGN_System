@@ -290,7 +290,8 @@ async function saveJobPositionGrants(saveBtn) {
             const body = result.body || {};
             showToast(body.code === 'module-not-contracted' ? t('admin.limitModuleNotContracted', { department: body.labelKey ? t(body.labelKey) : body.sectionId }) : t('admin.saveError'));
         } else {
-            showToast(t('main.changeSaved'));
+            const dropped = (result.body && result.body.dropped) || null;
+            showToast(dropped && dropped.count ? `${t('main.changeSaved')} · ${t('admin.limitDroppedNotice', { count: dropped.count })}` : t('main.changeSaved'));
         }
     } catch {
         showToast(t('admin.saveError'));

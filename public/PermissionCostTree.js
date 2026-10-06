@@ -181,6 +181,10 @@
         // en el giro; para un usuario, lo que su empresa contrató. El árbol deja solo eso (más lo que ya tiene concedido, aunque el
         // contrato cambiara después); lo demás de ahí que no esté concedido sigue, en rojo y bloqueado. Sin él, el árbol completo.
         visibleGrants = null,
+        // clientTricolor only: General (la sección 'main') siempre va incluido en el contrato, aunque el plan no lo traiga como permisos. Solo
+        // para las vistas del Administrador (su Mis Accesos y "Accesos del Administrador" del equipo SaaS): él usa todo General. En la vista de
+        // un usuario o perfil NO se pone, porque ahí General sale verde solo si se lo habilitaron.
+        mainIncluded = false,
     } = {}) {
         let sectionsData = [];
         const classificationOverrides = new Map();
@@ -189,7 +193,11 @@
             classificationOverrides.set(o.nodeKey, { classificationId: o.classificationId, classificationLabel: o.classificationLabel || null, from: o.from });
         });
         let grantSet = new Set(); // costEdit/grantReadonlyCost modes
-        let planGrantSet = new Set(); // clientTricolor: coverage granted by the client's PLAN (green)
+        // El conjunto del plan (verde); con mainIncluded, además toda llave de General cuenta como cubierta por el plan.
+        class PlanSet extends Set {
+            has(key) { return super.has(key) || (mainIncluded && String(key).startsWith('main::')); }
+        }
+        let planGrantSet = new PlanSet(); // clientTricolor: coverage granted by the client's PLAN (green)
         let clientGrantSet = new Set(); // clientTricolor: already-saved "+ adicionales" sold to THIS client (yellow)
         let pendingAdditions = new Set(); // clientTricolor + interactive: unsaved additions toggled in this session
         let costMap = new Map(); // tupleKey -> cost, editable in costEdit mode, read-only reference otherwise
@@ -1516,11 +1524,11 @@
                 pendingAdditions = new Set();
                 if (mode === 'clientTricolor') {
                     grantSet = new Set();
-                    planGrantSet = buildExpandedSet(initialGrants);
+                    planGrantSet = new PlanSet(buildExpandedSet(initialGrants));
                     clientGrantSet = buildExpandedSet(clientGrants);
                 } else {
                     grantSet = buildExpandedSet(initialGrants);
-                    planGrantSet = new Set();
+                    planGrantSet = new PlanSet();
                     clientGrantSet = new Set();
                 }
 

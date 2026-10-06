@@ -378,6 +378,7 @@
     "addendaPlanBase": "Plan \"{plan}\": {limit} centros de costo incluidos.",
     "adminAccessTitle": "Accesos del Administrador",
     "adminAccessHint": "Solo lectura — lo que ve el administrador de este cliente: lo que tiene contratado (plan y adicionales) y, bloqueado, lo que existe en su giro y todavía no contrata. Aquí no se puede seleccionar ni guardar nada.",
+    "limitDroppedNotice": "Se guardó, pero {count} permisos no se dieron: están fuera de lo contratado o en un Estatus que no puedes dar.",
     "limitModuleNotContracted": "No se pudo guardar: «{department}» no está contratado por esta empresa.",
     "adminAccessEnabled": "Incluido en el plan",
     "adminAccessExtra": "Adicional contratado",

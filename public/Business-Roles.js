@@ -166,7 +166,10 @@ permissionsSaveBtn.addEventListener('click', async () => {
             err.limitMessage = Dashboard.limitErrorMessage(body);
             throw err;
         }
+        const saved = await res.json().catch(() => ({}));
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+        const droppedNotice = Dashboard.limitDroppedMessage(saved.dropped);
+        if (droppedNotice) Dashboard.showToast(droppedNotice, 'warning');
         closePermissionsModal();
     } catch (err) {
         Dashboard.showToast((err && err.limitMessage) || Dashboard.t('admin.saveError'), 'error');

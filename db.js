@@ -9040,7 +9040,7 @@ function hasSaasGrant(grants, itemId, subItemId = null, isSuperAdmin = false) {
 //   status   : el nodo está en un Estatus (inhabilitado, en construcción, en mejoras) que ese usuario no puede ver (cuentas de práctica
 //              no cuentan: ven todos los Estatus a propósito).
 //   contract : el permiso (solo los de pantalla/columna, no los gruesos) queda fuera de lo que el cliente tiene contratado: el árbol
-//              de su plan más sus permisos adicionales. Sin plan asignado no se evalúa.
+//              de su plan más sus permisos adicionales. Sin plan asignado no se evalúa; General (main) no cuenta, siempre va incluido.
 // ---------------------------------------------------------------------------
 // Un permiso de columna lleva su nivel al final (solo-ver / ver-y-operar / editar / autorizar / eliminar) y, en la App, #app; el contrato
 // del plan guarda cada columna una sola vez como solo-ver, así que se compara contra eso. Los de centros de costo no son parte del plan.
@@ -9052,6 +9052,39 @@ function contractKeyForGrant(submenuId) {
 function isCostCenterGrant(g) {
     return g.itemId === 'cc-list' || String(g.submenuId || '').startsWith('cc-');
 }
+// Lo que una empresa tiene contratado: el árbol de su plan más los adicionales que compró. null si no tiene plan (no hay con qué comparar).
+function getClientContractGrants(clientId) {
+    const client = clientId ? getClientById(clientId) : null;
+    const plan = client && client.plan ? getPlanByName(client.plan) : null;
+    return plan ? [...getPlanGrants(plan.id), ...getClientPermissionGrants(clientId)] : null;
+}
+
+// Reglas de límites 2 y 3 al GUARDAR permisos (la 1, departamento no contratado, la hace server.js y rechaza todo el guardado):
+//   status   : el nodo está en un Estatus que quien da el permiso no ve (visibleStatuses) -- un nivel no da más de lo que ve el de arriba.
+//   contract : un permiso de pantalla o columna fuera del plan del cliente y de sus adicionales (General no cuenta: siempre incluido; sin plan
+//              no se evalúa; los centros de costo tampoco).
+// Solo mira los permisos que se AGREGAN (los que ya estaban guardados se quedan como están). Lo que se agrega y no cabe NO se rechaza: se
+// quita del guardado y se avisa, porque un "marcar todo" de un departamento trae también lo que está fuera del contrato o en otro Estatus, y
+// el resto sí debe guardarse. Devuelve { allowed, dropped } con dropped = [{ sectionId, itemId, submenuId, kinds }].
+function clampNewGrantsToLimits({ clientId, visibleStatuses, before, after }) {
+    const keyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const had = new Set(before.map(keyOf));
+    const visible = new Set(visibleStatuses);
+    const statusOverrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses());
+    const contract = getClientContractGrants(clientId);
+    const allowed = [];
+    const dropped = [];
+    for (const g of after) {
+        if (had.has(keyOf(g))) { allowed.push(g); continue; }
+        const kinds = [];
+        if (!visible.has(resolveMasterNodeStatus(g.sectionId, g.itemId, g.submenuId, statusOverrides))) kinds.push('status');
+        if (contract && g.sectionId !== 'main' && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) kinds.push('contract');
+        if (kinds.length) dropped.push({ sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null, kinds });
+        else allowed.push(g);
+    }
+    return { allowed, dropped };
+}
+
 function scanLimitViolations({ sampleSize = 5 } = {}) {
     const statusOverrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses());
     const clients = db.prepare('SELECT id, company_name AS name, plan FROM clients ORDER BY company_name COLLATE NOCASE').all();
@@ -9072,7 +9105,7 @@ function scanLimitViolations({ sampleSize = 5 } = {}) {
                 const kinds = [];
                 if (g.sectionId !== 'main' && !modules.has(g.sectionId)) kinds.push('module');
                 if (!user.isTest && !visible.has(resolveMasterNodeStatus(g.sectionId, g.itemId, g.submenuId, statusOverrides))) kinds.push('status');
-                if (contract && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) kinds.push('contract');
+                if (contract && g.sectionId !== 'main' && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) kinds.push('contract');
                 if (!kinds.length) return;
                 affected = true;
                 summary.affectedGrants += 1;
@@ -9606,6 +9639,8 @@ module.exports = {
     clearClassificationColor,
     getEffectiveColumnClassifications,
     scanLimitViolations,
+    getClientContractGrants,
+    clampNewGrantsToLimits,
     getCascadedColumnGroups,
     getLevelOrderLayers,
     resolveOrderRows,
