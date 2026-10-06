@@ -110,11 +110,11 @@ window.SAAS_ADMIN_CATALOG = [
             },
             {
                 // Colores por Nivel: el color de las columnas de las tablas de los clientes por Giro, Plan o Cliente. Los 2
-                // accesos reales de la pantalla (a0 colores, a1 autorizar colores y clasificación, a2 clasificación); server.js los revisa en cada
+                // accesos reales de la pantalla (a0 colores, a1 autorizar, a2 clasificación, a3 orden); server.js los revisa en cada
                 // ruta (saasColumnColorsAccess). Lo nuevo va al final: el orden no debe cambiar una vez en producción.
                 itemId: 'saas-column-colors', labelKey: 'menu.columnColorsLevels', href: 'Admin-ColoresColumnas.html',
                 apartados: [
-                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Personalizar colores', 'Autorizar colores y clasificación', 'Personalizar clasificación'] },
+                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Personalizar colores', 'Autorizar colores, clasificación y orden', 'Personalizar clasificación', 'Personalizar orden'] },
                 ],
             },
         ],

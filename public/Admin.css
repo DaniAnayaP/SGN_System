@@ -6219,3 +6219,31 @@ body.dark-mode .col-colors-state-master{ background-color: #2a2c38; color: #a3a8
     color: var(--color-text-primary);
     border-color: var(--color-accent);
 }
+
+/* Colores de Columnas: subir / bajar un elemento en su lista, y de dónde viene el orden. */
+.col-colors-order{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.col-colors-move{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 0.3rem;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+.col-colors-move:hover:not(:disabled){
+    color: var(--color-text-primary);
+    border-color: var(--color-accent);
+}
+.col-colors-move:disabled{
+    opacity: 0.3;
+    cursor: default;
+}

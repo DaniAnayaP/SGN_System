@@ -7,7 +7,7 @@
 window.ColumnColorsPage.start({
     activePage: 'admin-column-colors',
     requiredRole: 'admin',
-    api: { catalog: '/api/admin/column-colors/catalog', state: '/api/admin/column-colors' },
+    api: { catalog: '/api/admin/column-colors/catalog', state: '/api/admin/column-colors', orders: '/api/admin/column-orders' },
     requestsApi: '/api/admin/column-color-level-requests',
     openHistory: () => Dashboard.openChangeHistoryWithRows(Dashboard.t('main.changeHistory'), Dashboard.saasTableChangesLoader('colores-niveles')),
 });

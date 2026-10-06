@@ -306,6 +306,10 @@ const {
     COLOR_PERSONALIZE_COLUMN,
     COLOR_AUTHORIZE_COLUMN,
     COLOR_CLASSIFY_COLUMN,
+    COLOR_ORDER_COLUMN,
+    getOrderListCatalog,
+    listLevelOrders,
+    completeOrder,
     colorIdForPart,
     getAppearanceForTarget,
     listLevelClassifications,
@@ -2676,6 +2680,44 @@ function classNameEs(found, classId) {
     const key = classLabelKeyFor(found, classId);
     return key ? spanishLabel(key) : classId;
 }
+// Lo que se escribe en la bitácora y en las solicitudes sobre el orden de una lista.
+function orderListLabelEs(meta) {
+    const owner = meta.labelKey ? spanishLabel(meta.labelKey) : '';
+    return { dept: 'Departamentos', area: `Áreas de ${owner}`, apartado: `Apartados de ${owner}`, pantalla: `Pantallas de ${owner}` }[meta.kind] || meta.parentKey;
+}
+function orderNamesEs(meta, keys) {
+    return (keys || []).map((id) => {
+        const item = meta.items.find((i) => i.id === id);
+        return item && item.labelKey ? spanishLabel(item.labelKey) : id;
+    }).join(' › ');
+}
+function requestIsOrder(request) {
+    return request.action === 'set-order' || request.action === 'clear-order';
+}
+function orderParentKeyOf(request) {
+    return String(request.colorId).replace(/^order:/, '');
+}
+function orderChangeEntry(request, meta, previousKeys) {
+    const clearing = request.action === 'clear-order';
+    return {
+        fieldKey: 'business.colorHistoryField',
+        oldValue: previousKeys && previousKeys.length ? orderNamesEs(meta, completeOrder(previousKeys, meta.defaults)) : '',
+        newValue: clearing ? `Orden de ${orderListLabelEs(meta)}: orden propio quitado` : `Orden de ${orderListLabelEs(meta)}: ${orderNamesEs(meta, JSON.parse(request.value))}`,
+    };
+}
+function currentLevelOrderKeys(level, entityId, parentKey) {
+    const row = listLevelOrders(level, entityId).find((r) => r.parentKey === parentKey);
+    return row ? row.orderedKeys : [];
+}
+// El orden que llega al guardar: la lista completa de ids de esa lista, en el orden elegido (ni más ni menos que los suyos).
+function readOrderValue(meta, orderedKeys) {
+    if (!Array.isArray(orderedKeys) || !orderedKeys.every((k) => typeof k === 'string')) return { error: 'orderedKeys must be an array of ids.' };
+    if (orderedKeys.length !== meta.defaults.length || new Set(orderedKeys).size !== orderedKeys.length || !orderedKeys.every((k) => meta.defaults.includes(k))) {
+        return { error: 'orderedKeys must contain exactly the ids of that list.' };
+    }
+    return { value: orderedKeys };
+}
+
 function kindOfRequest(request) {
     return request.action === 'set-class' || request.action === 'clear-class' ? 'class' : request.action.endsWith('text') ? 'text' : 'dot';
 }
@@ -2687,6 +2729,7 @@ function clientColorAccess(req) {
         isAdmin,
         canPersonalize: isAdmin || canCreateColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_PERSONALIZE_COLUMN),
         canClassify: isAdmin || canCreateColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_CLASSIFY_COLUMN),
+        canOrder: isAdmin || canCreateColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_ORDER_COLUMN),
         canAuthorize: isAdmin || canAuthorizeColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_AUTHORIZE_COLUMN),
     };
 }
@@ -2733,6 +2776,7 @@ app.get('/api/business/column-colors', requireAuth, (req, res) => {
         canPersonalize: access.canPersonalize,
         canAuthorize: access.canAuthorize,
         canClassify: access.canClassify,
+        canOrder: access.canOrder,
         isAdmin: access.isAdmin,
         targets: allowed,
         levels: [
@@ -2741,7 +2785,7 @@ app.get('/api/business/column-colors', requireAuth, (req, res) => {
             ...(allowed.users.length ? [{ level: 'usuario', entities: allowed.users }] : []),
         ],
         target,
-        ...(target ? getAppearanceForTarget(req.user.clientId, target, 'client') : { colors: {}, classes: {} }),
+        ...(target ? getAppearanceForTarget(req.user.clientId, target, 'client') : { colors: {}, classes: {}, orders: {} }),
     });
 });
 
@@ -2828,6 +2872,59 @@ app.delete('/api/business/column-colors', requireAuth, (req, res) => {
     applyOrRequestClientColor(req, res, change, colorChangeAction(change.kind, true), null);
 });
 
+// Orden de una lista (departamentos, áreas de un departamento, apartados de un área, pantallas de un apartado) para lo que se edita.
+function parseClientOrderChange(req, res, source) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const access = clientColorAccess(req);
+    if (!access.canOrder) { res.status(403).json({ message: 'No tienes permiso para personalizar el orden.' }); return null; }
+    const meta = typeof source.parentKey === 'string' ? getOrderListCatalog().get(source.parentKey) : null;
+    if (!meta) { res.status(400).json({ message: 'parentKey is not an orderable list.' }); return null; }
+    if (!CLIENT_COLOR_TARGET_LEVELS.includes(source.level)) { res.status(400).json({ message: 'Invalid level.' }); return null; }
+    const target = resolveClientColorTarget(req.user.clientId, source.level, source.entityId, req.user.isTestAccount);
+    if (!target || !isAllowedClientColorTarget(allowedClientColorTargets(req, access), target)) {
+        res.status(403).json({ message: 'No puedes cambiar el orden de esta persona o perfil.' });
+        return null;
+    }
+    return { access, target, meta };
+}
+function applyOrRequestClientOrder(req, res, change, orderedKeys) {
+    const { access, target, meta } = change;
+    const colorId = `order:${meta.parentKey}`;
+    const request = { clientId: req.user.clientId, colorId, action: orderedKeys ? 'set-order' : 'clear-order', value: orderedKeys ? JSON.stringify(orderedKeys) : null, level: target.level, entityId: target.entityId };
+    if (access.canAuthorize) {
+        const previous = currentLevelOrderKeys(target.level, target.entityId, meta.parentKey);
+        applyColorRequest({ ...request, scope: 'client' }, changedByLabel(req));
+        const entry = orderChangeEntry(request, meta, previous);
+        logTableChange({
+            clientId: request.clientId, tableKey: COLOR_SCREEN_TABLE_KEY, recordId: target.entityId,
+            recordLabel: `${COLOR_LEVEL_LABELS_ES[target.level]}: ${target.name}`, action: 'update', ...entry, changedBy: changedByLabel(req),
+        });
+        return res.json({ applied: true, ...getAppearanceForTarget(req.user.clientId, target, 'client') });
+    }
+    const assignedTo = resolveClientColorAuthorizer(req.user.sub, req.user.clientId);
+    const requestId = createColorRequest({
+        scope: 'client', clientId: req.user.clientId, colorId, action: request.action, value: request.value, level: target.level, entityId: target.entityId,
+        requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req), assignedToUserId: assignedTo,
+    });
+    return res.status(202).json({
+        requested: true, requestId, assignedTo: { id: assignedTo, name: assignedTo ? getUserNameById(assignedTo) : '' },
+        ...getAppearanceForTarget(req.user.clientId, target, 'client'),
+    });
+}
+app.put('/api/business/column-orders', requireAuth, (req, res) => {
+    const body = req.body || {};
+    const change = parseClientOrderChange(req, res, body);
+    if (!change) return;
+    const read = readOrderValue(change.meta, body.orderedKeys);
+    if (read.error) return res.status(400).json({ message: read.error });
+    applyOrRequestClientOrder(req, res, change, read.value);
+});
+app.delete('/api/business/column-orders', requireAuth, (req, res) => {
+    const change = parseClientOrderChange(req, res, req.query || {});
+    if (!change) return;
+    applyOrRequestClientOrder(req, res, change, null);
+});
+
 // Solicitudes de color de la empresa: cada quien ve las suyas y las pendientes que le tocan decidir (el
 // administrador ve todas las pendientes de su empresa, es la raíz de la cadena).
 app.get('/api/business/column-color-requests', requireAuth, (req, res) => {
@@ -2842,6 +2939,7 @@ app.get('/api/business/column-color-requests', requireAuth, (req, res) => {
             columnLabelKey: found ? found.column.labelKey : null,
             part: found ? found.part : null,
             valueLabelKey: found && found.part === 'class' ? classLabelKeyFor(found, r.value) : null,
+            orderList: requestIsOrder(r) ? (() => { const m = getOrderListCatalog().get(orderParentKeyOf(r)); return m ? { kind: m.kind, labelKey: m.labelKey } : null; })() : null,
             canDecide: access.canAuthorize && r.status === 'pending' && (access.isAdmin || r.assignedToId === req.user.sub),
         };
     });
@@ -2857,13 +2955,23 @@ const decideClientColorRequest = (approve) => (req, res) => {
     if (!access.isAdmin && request.assignedToId !== req.user.sub) return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
     const label = changedByLabel(req);
     if (approve) {
-        const found = findColorColumnByColorId(request.colorId);
+        const isOrder = requestIsOrder(request);
+        const found = isOrder ? null : findColorColumnByColorId(request.colorId);
+        const orderMeta = isOrder ? getOrderListCatalog().get(orderParentKeyOf(request)) : null;
         const target = resolveClientColorTarget(request.clientId, request.level, request.entityId, null);
-        if (!found || !target) return res.status(409).json({ message: 'Lo que pedía esta solicitud ya no existe.' });
-        const kind = kindOfRequest(request);
-        const previous = currentClientLevelColor(target.level, target.entityId, request.colorId, kind);
+        if ((!found && !orderMeta) || !target) return res.status(409).json({ message: 'Lo que pedía esta solicitud ya no existe.' });
+        const kind = isOrder ? 'order' : kindOfRequest(request);
+        const previous = isOrder ? currentLevelOrderKeys(target.level, target.entityId, orderMeta.parentKey) : currentClientLevelColor(target.level, target.entityId, request.colorId, kind);
         applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
-        logClientColorChange(req, request, found, target, previous, { changedBy: request.requestedByName, requestedBy: request.requestedByName, authorizedBy: label });
+        if (isOrder) {
+            logTableChange({
+                clientId: request.clientId, tableKey: COLOR_SCREEN_TABLE_KEY, recordId: target.entityId,
+                recordLabel: `${COLOR_LEVEL_LABELS_ES[target.level]}: ${target.name}`, action: 'update', ...orderChangeEntry(request, orderMeta, previous),
+                changedBy: request.requestedByName, requestedBy: request.requestedByName, authorizedBy: label,
+            });
+        } else {
+            logClientColorChange(req, request, found, target, previous, { changedBy: request.requestedByName, requestedBy: request.requestedByName, authorizedBy: label });
+        }
     }
     res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
 };
@@ -2881,7 +2989,7 @@ const SAAS_COLUMN_COLORS_ITEM = 'saas-column-colors';
 function saasColumnColorsAccess(req) {
     const grants = getSaasUserGrants(req.user.sub);
     const has = (sub) => hasSaasGrant(grants, SAAS_COLUMN_COLORS_ITEM, sub, req.user.isSaasSuperAdmin);
-    return { canOpen: hasSaasGrant(grants, SAAS_COLUMN_COLORS_ITEM, null, req.user.isSaasSuperAdmin), canPersonalize: has('controles::a0'), canAuthorize: has('controles::a1'), canClassify: has('controles::a2') };
+    return { canOpen: hasSaasGrant(grants, SAAS_COLUMN_COLORS_ITEM, null, req.user.isSaasSuperAdmin), canPersonalize: has('controles::a0'), canAuthorize: has('controles::a1'), canClassify: has('controles::a2'), canOrder: has('controles::a3') };
 }
 app.get('/api/admin/column-colors/catalog', requireAuth, requireAdmin, (req, res) => {
     if (!saasColumnColorsAccess(req).canOpen) return res.status(403).json({ message: 'No tienes acceso a Colores por Nivel.' });
@@ -2899,10 +3007,11 @@ app.get('/api/admin/column-colors', requireAuth, requireAdmin, (req, res) => {
         canPersonalize: access.canPersonalize,
         canAuthorize: access.canAuthorize,
         canClassify: access.canClassify,
+        canOrder: access.canOrder,
         isAdmin: !!req.user.isSaasSuperAdmin,
         levels,
         target,
-        ...(target ? getAppearanceForTarget(null, target, 'level') : { colors: {}, classes: {} }),
+        ...(target ? getAppearanceForTarget(null, target, 'level') : { colors: {}, classes: {}, orders: {} }),
     });
 });
 
@@ -2971,6 +3080,54 @@ app.delete('/api/admin/column-colors', requireAuth, requireAdmin, (req, res) => 
     applyOrRequestLevelColor(req, res, change, colorChangeAction(change.kind, true), null);
 });
 
+function parseLevelOrderChange(req, res, source) {
+    const access = saasColumnColorsAccess(req);
+    if (!access.canOrder) { res.status(403).json({ message: 'No tienes permiso para personalizar el orden por nivel.' }); return null; }
+    const meta = typeof source.parentKey === 'string' ? getOrderListCatalog().get(source.parentKey) : null;
+    if (!meta) { res.status(400).json({ message: 'parentKey is not an orderable list.' }); return null; }
+    if (!SAAS_COLOR_TARGET_LEVELS.includes(source.level)) { res.status(400).json({ message: 'Invalid level.' }); return null; }
+    const target = resolveSaasColorLevelTarget(source.level, source.entityId);
+    if (!target) { res.status(404).json({ message: 'Ese giro, plan o cliente no existe.' }); return null; }
+    return { access, target, meta };
+}
+function applyOrRequestLevelOrder(req, res, change, orderedKeys) {
+    const { access, target, meta } = change;
+    const colorId = `order:${meta.parentKey}`;
+    const request = { clientId: null, colorId, action: orderedKeys ? 'set-order' : 'clear-order', value: orderedKeys ? JSON.stringify(orderedKeys) : null, level: target.level, entityId: target.entityId };
+    if (access.canAuthorize) {
+        const previous = currentLevelOrderKeys(target.level, target.entityId, meta.parentKey);
+        applyColorRequest({ ...request, scope: 'level' }, changedByLabel(req));
+        const entry = orderChangeEntry(request, meta, previous);
+        logSaasTableChange({
+            tableKey: 'colores-niveles', recordId: target.entityId, recordLabel: `${COLOR_LEVEL_LABELS_ES[target.level]}: ${target.name}`, action: 'update',
+            ...entry, changedBy: changedByLabel(req),
+        });
+        return res.json({ applied: true, ...getAppearanceForTarget(null, target, 'level') });
+    }
+    const assignedTo = resolveColorAuthorizer('level', req.user.sub);
+    const requestId = createColorRequest({
+        scope: 'level', clientId: null, colorId, action: request.action, value: request.value, level: target.level, entityId: target.entityId,
+        requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req), assignedToUserId: assignedTo,
+    });
+    return res.status(202).json({
+        requested: true, requestId, assignedTo: { id: assignedTo, name: assignedTo ? getUserNameById(assignedTo) : '' },
+        ...getAppearanceForTarget(null, target, 'level'),
+    });
+}
+app.put('/api/admin/column-orders', requireAuth, requireAdmin, (req, res) => {
+    const body = req.body || {};
+    const change = parseLevelOrderChange(req, res, body);
+    if (!change) return;
+    const read = readOrderValue(change.meta, body.orderedKeys);
+    if (read.error) return res.status(400).json({ message: read.error });
+    applyOrRequestLevelOrder(req, res, change, read.value);
+});
+app.delete('/api/admin/column-orders', requireAuth, requireAdmin, (req, res) => {
+    const change = parseLevelOrderChange(req, res, req.query || {});
+    if (!change) return;
+    applyOrRequestLevelOrder(req, res, change, null);
+});
+
 // Solicitudes de color por nivel: cada quien ve las suyas y las pendientes que le tocan decidir (admin_saas, todas).
 app.get('/api/admin/column-color-level-requests', requireAuth, requireAdmin, (req, res) => {
     const access = saasColumnColorsAccess(req);
@@ -2985,6 +3142,7 @@ app.get('/api/admin/column-color-level-requests', requireAuth, requireAdmin, (re
             columnLabelKey: found ? found.column.labelKey : null,
             part: found ? found.part : null,
             valueLabelKey: found && found.part === 'class' ? classLabelKeyFor(found, r.value) : null,
+            orderList: requestIsOrder(r) ? (() => { const m = getOrderListCatalog().get(orderParentKeyOf(r)); return m ? { kind: m.kind, labelKey: m.labelKey } : null; })() : null,
             canDecide: access.canAuthorize && r.status === 'pending' && (isSuper || r.assignedToId === req.user.sub),
         };
     });
@@ -2999,13 +3157,23 @@ const decideLevelColorRequest = (approve) => (req, res) => {
     if (!req.user.isSaasSuperAdmin && request.assignedToId !== req.user.sub) return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
     const label = changedByLabel(req);
     if (approve) {
-        const found = findColorColumnByColorId(request.colorId);
+        const isOrder = requestIsOrder(request);
+        const found = isOrder ? null : findColorColumnByColorId(request.colorId);
+        const orderMeta = isOrder ? getOrderListCatalog().get(orderParentKeyOf(request)) : null;
         const target = resolveSaasColorLevelTarget(request.level, request.entityId);
-        if (!found || !target) return res.status(409).json({ message: 'Lo que pedía esta solicitud ya no existe.' });
-        const kind = kindOfRequest(request);
-        const previous = currentClientLevelColor(target.level, target.entityId, request.colorId, kind);
+        if ((!found && !orderMeta) || !target) return res.status(409).json({ message: 'Lo que pedía esta solicitud ya no existe.' });
+        const kind = isOrder ? 'order' : kindOfRequest(request);
+        const previous = isOrder ? currentLevelOrderKeys(target.level, target.entityId, orderMeta.parentKey) : currentClientLevelColor(target.level, target.entityId, request.colorId, kind);
         applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
-        logLevelColorChange(req, request, found, target, previous, `${label} (solicitado por ${request.requestedByName})`);
+        const by = `${label} (solicitado por ${request.requestedByName})`;
+        if (isOrder) {
+            logSaasTableChange({
+                tableKey: 'colores-niveles', recordId: target.entityId, recordLabel: `${COLOR_LEVEL_LABELS_ES[target.level]}: ${target.name}`, action: 'update',
+                ...orderChangeEntry(request, orderMeta, previous), changedBy: by,
+            });
+        } else {
+            logLevelColorChange(req, request, found, target, previous, by);
+        }
     }
     res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
 };

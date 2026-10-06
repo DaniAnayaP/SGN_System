@@ -6991,20 +6991,87 @@ function clearLevelOrder(level, entityId, parentKey) {
 }
 // Guarda varias listas de ese nivel a la vez (rows = [{ parentKey, orderedKeys }]). Solo se queda lo que difiere de lo
 // que ese nivel heredaría sin cambio propio; una lista igual a la de arriba borra la propia.
-function setLevelOrders(level, entityId, rows, updatedBy, clientId = null) {
+// `defaults` (Map parentKey -> ids en el orden de menu.json), si se pasa, hace que "igual a lo heredado" también cuente cuando nadie
+// arriba tiene una lista guardada (iguala el orden de menu.json), y que las listas incompletas se comparen ya completadas.
+function setLevelOrders(level, entityId, rows, updatedBy, clientId = null, defaults = null) {
     if (!COLOR_LEVELS_CLOSEST_FIRST.includes(level)) throw new Error('invalid order level');
     const inherited = resolveOrderRows(resolveLevelColorChain(level, entityId, clientId).slice(1));
     const summary = { saved: 0, cleared: 0 };
     db.transaction(() => {
         rows.forEach(({ parentKey, orderedKeys }) => {
             const above = inherited.get(parentKey);
-            const same = above ? JSON.stringify(above.orderedKeys) === JSON.stringify(orderedKeys) : orderedKeys.length === 0;
+            const def = defaults && defaults.get(parentKey);
+            const same = def
+                ? JSON.stringify(completeOrder(orderedKeys, def)) === JSON.stringify(completeOrder(above ? above.orderedKeys : [], def))
+                : (above ? JSON.stringify(above.orderedKeys) === JSON.stringify(orderedKeys) : orderedKeys.length === 0);
             if (same) { if (clearLevelOrder(level, entityId, parentKey)) summary.cleared += 1; return; }
             writeLevelOrder(level, entityId, parentKey, orderedKeys, updatedBy, clientId);
             summary.saved += 1;
         });
     })();
     return summary;
+}
+
+// ---- listas ordenables desde Colores de Columnas / Colores por Nivel
+// Las listas (Departamentos, Áreas de un departamento, Apartados de un área, Pantallas de un apartado) por las que pasa alguna
+// de las tablas del catálogo de colores, cada una con su orden de menu.json. Solo las de departamentos (no General): son las que
+// el Dashboard del cliente ordena (ver GET /api/business/permission-order).
+// Orden en que el Dashboard del cliente lista los departamentos cuando nadie guardó uno (DEPARTMENTS en public/Dashboard.js; mantener igual).
+const CLIENT_DEPARTMENT_DEFAULT_ORDER = ['finance', 'accounting', 'human-resources', 'marketing', 'commercial', 'purchasing', 'supply-chain', 'management-control', 'general-management', 'steering-committee', 'certifications'];
+let cachedOrderListCatalog = null;
+function getOrderListCatalog() {
+    if (cachedOrderListCatalog) return cachedOrderListCatalog;
+    const lists = new Map();
+    // items: [{ id, labelKey }] en el orden de menu.json; defaults son solo sus ids.
+    const add = (parentKey, kind, labelKey, items) => {
+        if (!lists.has(parentKey)) lists.set(parentKey, { parentKey, kind, labelKey, items, defaults: items.map((i) => i.id) });
+    };
+    const sectionIds = CLIENT_DEPARTMENT_DEFAULT_ORDER.filter((id) => menuData.sections.some((s) => s.id === id));
+    const apartadoItems = (menuData.areaCategories || []).map((c) => ({ id: c.id, labelKey: c.labelKey }));
+    getColorColumnCatalog().forEach((screen) => {
+        const { sectionId, itemId, submenuPrefix } = screen.path;
+        if (sectionId === 'main') return;
+        const apartadoId = submenuPrefix.split('/')[0];
+        const areaItems = menuData.areas && menuData.areas[sectionId]
+            ? menuData.areas[sectionId].map((a) => ({ id: a.id, labelKey: a.labelKey }))
+            : GENERIC_AREA_IDS.map((id) => ({ id, labelKey: null }));
+        add(PERMISSION_ORDER_ROOT_KEY, 'dept', null, sectionIds.map((id) => ({ id, labelKey: COLOR_TREE_SECTION_LABEL_KEYS[id] || null })));
+        add(areaOrderKey(sectionId), 'area', screen.crumbs[0].labelKey, areaItems);
+        add(apartadoOrderKey(sectionId, itemId), 'apartado', screen.crumbs[1].labelKey, apartadoItems);
+        add(pantallaOrderKey(sectionId, itemId, apartadoId), 'pantalla', screen.crumbs[2].labelKey, categoryPantallasFor(sectionId, itemId, apartadoId).map((p) => ({ id: p.id, labelKey: p.labelKey || null })));
+    });
+    cachedOrderListCatalog = lists;
+    return lists;
+}
+// Igual que PermissionTree.js applyOrder: lo que nombra la lista primero y en ese orden; lo demás, en su posición de siempre al final.
+function completeOrder(orderedKeys, defaults) {
+    const known = new Set(defaults);
+    const out = [];
+    (orderedKeys || []).forEach((id) => { if (known.has(id) && !out.includes(id)) out.push(id); });
+    defaults.forEach((id) => { if (!out.includes(id)) out.push(id); });
+    return out;
+}
+// El orden de cada lista para ese objetivo: parentKey -> { kind, labelKey, keys, source, pending? }. `source`: 'own' (lo de ese nivel),
+// el nivel de arriba del que viene, 'master' o 'default' (menu.json). `pending`: hay una solicitud de orden sin autorizar.
+function getOrderListsForTarget(clientId, target, scope) {
+    const rows = resolveOrderRows(resolveLevelColorChain(target.level, target.entityId, clientId));
+    const pending = new Map();
+    db.prepare(`
+        SELECT color_id AS colorId, action FROM column_color_requests
+        WHERE scope = ? AND IFNULL(client_id, 0) = IFNULL(?, 0) AND level = ? AND entity_id = ? AND status = 'pending' AND action IN ('set-order', 'clear-order')
+    `).all(scope, clientId, target.level, target.entityId).forEach((r) => pending.set(String(r.colorId).replace(/^order:/, ''), r.action === 'clear-order' ? 'clear' : 'set'));
+    const result = {};
+    getOrderListCatalog().forEach((meta, parentKey) => {
+        const row = rows.get(parentKey);
+        result[parentKey] = {
+            kind: meta.kind,
+            labelKey: meta.labelKey,
+            keys: completeOrder(row && row.orderedKeys, meta.defaults),
+            source: row ? (row.source === target.level ? 'own' : row.source) : 'default',
+            ...(pending.has(parentKey) ? { pending: pending.get(parentKey) } : {}),
+        };
+    });
+    return result;
 }
 
 // ---- clasificación
@@ -7382,7 +7449,7 @@ db.exec(`
 ensureColumn('column_color_requests', 'level', 'TEXT');
 ensureColumn('column_color_requests', 'entity_id', 'INTEGER');
 
-const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text', 'set-class', 'clear-class'];
+const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text', 'set-class', 'clear-class', 'set-order', 'clear-order'];
 const SAAS_COLOR_AUTHORIZE_LEAF = 'controles::a8';
 
 // Jefe directo de una cuenta del equipo SaaS. Hoy todas dependen directo de admin_saas (no hay campo de
@@ -7506,6 +7573,14 @@ function resolveColorAuthorizer(scope, requesterId) {
 // Aplica una solicitud ya autorizada a la tabla de colores que le toca (árbol SaaS o árbol de clientes).
 function applyColorRequest(request, updatedBy) {
     if (request.scope === 'client' || request.scope === 'level') {
+        // Orden de una lista: color_id es "order:<parentKey>"; value es la lista de ids en JSON.
+        if (request.action === 'set-order' || request.action === 'clear-order') {
+            const parentKey = String(request.colorId).replace(/^order:/, '');
+            if (request.action === 'clear-order') return clearLevelOrder(request.level, request.entityId, parentKey);
+            const meta = getOrderListCatalog().get(parentKey);
+            return setLevelOrders(request.level, request.entityId, [{ parentKey, orderedKeys: JSON.parse(request.value) }], updatedBy, request.clientId,
+                meta ? new Map([[parentKey, meta.defaults]]) : null);
+        }
         // Clasificación de una columna: color_id es "class:<nodeKey>"; value es la clasificación ('' = sin clasificar).
         if (request.action === 'set-class' || request.action === 'clear-class') {
             const nodeKey = String(request.colorId).replace(/^class:/, '');
@@ -7539,6 +7614,7 @@ const COLOR_SCREEN_TABLE_KEY = 'colores-columnas';
 const COLOR_PERSONALIZE_COLUMN = 'colColorsPersonalize';
 const COLOR_AUTHORIZE_COLUMN = 'colColorsAuthorize';
 const COLOR_CLASSIFY_COLUMN = 'colClassifyPersonalize';
+const COLOR_ORDER_COLUMN = 'colOrderPersonalize';
 const CLIENT_COLOR_TARGET_LEVELS = ['admin', 'perfil', 'usuario'];
 const COLOR_TREE_SECTION_LABEL_KEYS = {
     main: 'menu.mainSection',
@@ -7816,7 +7892,7 @@ function getClassesForTarget(clientId, target, scope) {
 }
 // Colores y clasificaciones juntos, tal como los pide la pantalla.
 function getAppearanceForTarget(clientId, target, scope) {
-    return { colors: getColorsForTarget(clientId, target, scope), classes: getClassesForTarget(clientId, target, scope) };
+    return { colors: getColorsForTarget(clientId, target, scope), classes: getClassesForTarget(clientId, target, scope), orders: getOrderListsForTarget(clientId, target, scope) };
 }
 
 // Solicitudes de color de una empresa que ve esta persona: las suyas y las pendientes que le tocan decidir
@@ -9433,6 +9509,10 @@ module.exports = {
     COLOR_PERSONALIZE_COLUMN,
     COLOR_AUTHORIZE_COLUMN,
     COLOR_CLASSIFY_COLUMN,
+    COLOR_ORDER_COLUMN,
+    getOrderListCatalog,
+    getOrderListsForTarget,
+    completeOrder,
     colorIdForPart,
     getClassesForTarget,
     getAppearanceForTarget,

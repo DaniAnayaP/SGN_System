@@ -42,7 +42,7 @@ const COLOR_FAMILIES = [
 ];
 
 let screens = [];
-let state = { canPersonalize: false, canClassify: false, canAuthorize: false, isAdmin: false, levels: [], target: null, colors: {}, classes: {} };
+let state = { canPersonalize: false, canClassify: false, canOrder: false, canAuthorize: false, isAdmin: false, levels: [], target: null, colors: {}, classes: {}, orders: {} };
 const expanded = new Set();
 const recent = { dot: [], text: [] };
 let closePicker = null;
@@ -141,19 +141,114 @@ function stateLabel(info) {
 }
 
 // ------------------------------------------------------------------ árbol
+// La lista ordenable a la que pertenece cada fila (mismas llaves que el orden del Árbol Maestro). General no se ordena aquí.
+function orderListKeyFor(crumbs, index) {
+    if (crumbs[0].id === 'main' || crumbs.length !== 3) return null;
+    if (index === 0) return '__root__';
+    if (index === 1) return `area::${crumbs[0].id}`;
+    if (index === 2) return `apartado::${crumbs[0].id}::${crumbs[1].id}`;
+    return null;
+}
+function screenListKey(screen) {
+    const c = screen.crumbs;
+    return c[0].id === 'main' || c.length !== 3 ? null : `pantalla::${c[0].id}::${c[1].id}::${c[2].id}`;
+}
+// Los elementos en el orden que le toca a lo que se edita (el de su lista; sin lista, el de siempre).
+function sortByOrder(items, idOf, listKey) {
+    const keys = listKey && state.orders[listKey] ? state.orders[listKey].keys : null;
+    if (!keys) return items;
+    const rank = (item) => { const i = keys.indexOf(idOf(item)); return i === -1 ? keys.length : i; };
+    return [...items].sort((a, b) => rank(a) - rank(b));
+}
 function buildTrie() {
     const root = { children: new Map(), screens: [] };
     screens.forEach((screen) => {
         let node = root;
         let key = '';
-        screen.crumbs.forEach((crumb) => {
+        screen.crumbs.forEach((crumb, index) => {
             key = `${key}/${crumb.id}`;
-            if (!node.children.has(crumb.id)) node.children.set(crumb.id, { key, id: crumb.id, labelKey: crumb.labelKey, children: new Map(), screens: [] });
+            if (!node.children.has(crumb.id)) {
+                node.children.set(crumb.id, { key, id: crumb.id, labelKey: crumb.labelKey, listKey: orderListKeyFor(screen.crumbs, index), children: new Map(), screens: [] });
+            }
             node = node.children.get(crumb.id);
         });
         node.screens.push(screen);
     });
     return root;
+}
+
+// Subir / bajar un elemento en su lista, de qué nivel viene el orden y Restablecer.
+function orderStateInfo(list) {
+    if (list.pending) return { kind: 'pending' };
+    if (list.source === 'own') return { kind: 'own' };
+    if (list.source === 'default' || list.source === 'master') return null;
+    return { kind: 'inherited', level: list.source };
+}
+async function changeOrder(listKey, orderedKeys) {
+    const common = { level: state.target.level, entityId: state.target.entityId, parentKey: listKey };
+    const { res, body: data } = orderedKeys
+        ? await request(config.api.orders, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...common, orderedKeys }) })
+        : await request(`${config.api.orders}?${new URLSearchParams({ ...common, entityId: String(common.entityId) })}`, { method: 'DELETE' });
+    if (!res.ok) { toast(data.message || t('admin.saveError'), 'error'); render(); return; }
+    if (data.colors) state.colors = data.colors;
+    if (data.classes) state.classes = data.classes;
+    if (data.orders) state.orders = data.orders;
+    if (res.status === 202) {
+        toast(t('admin.colorRequestSent', { name: (data.assignedTo && data.assignedTo.name) || '' }), 'info');
+        loadRequests();
+    }
+    render();
+}
+function moveInList(listKey, id, direction, siblingIds) {
+    const list = state.orders[listKey];
+    const position = siblingIds.indexOf(id);
+    const neighbor = siblingIds[position + direction];
+    if (!list || !neighbor) return;
+    const keys = list.keys.filter((k) => k !== id);
+    const at = keys.indexOf(neighbor) + (direction > 0 ? 1 : 0);
+    keys.splice(at, 0, id);
+    changeOrder(listKey, keys);
+}
+function orderControls(order) {
+    if (!order || !order.listKey || !state.orders[order.listKey]) return null;
+    const list = state.orders[order.listKey];
+    const group = document.createElement('span');
+    group.className = 'col-colors-order';
+    const info = orderStateInfo(list);
+    if (info) {
+        const pill = document.createElement('span');
+        pill.className = `col-colors-state col-colors-state-${info.kind}`;
+        pill.setAttribute('data-help-key', 'columnColorsState');
+        pill.textContent = `${t('business.columnColorsOrderPart')} · ${stateLabel(info)}`;
+        pill.title = pill.textContent;
+        group.appendChild(pill);
+    }
+    if (!state.canOrder) return group.childNodes.length ? group : null;
+    const position = order.siblingIds.indexOf(order.id);
+    [[-1, 'bx-chevron-up', 'business.columnColorsMoveUp'], [1, 'bx-chevron-down', 'business.columnColorsMoveDown']].forEach(([direction, icon, labelKey]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'col-colors-move';
+        btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+        btn.title = t(labelKey);
+        btn.setAttribute('aria-label', btn.title);
+        btn.setAttribute('data-help-key', 'columnColorsOrderMove');
+        btn.disabled = !order.siblingIds[position + direction];
+        btn.addEventListener('click', (event) => { event.stopPropagation(); moveInList(order.listKey, order.id, direction, order.siblingIds); });
+        group.appendChild(btn);
+    });
+    if (list.source === 'own' || list.pending) {
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'col-colors-class-reset';
+        reset.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
+        reset.title = t('business.columnColorsOrderReset');
+        reset.setAttribute('aria-label', reset.title);
+        reset.setAttribute('data-help-key', 'columnColorsOrderReset');
+        reset.addEventListener('click', (event) => { event.stopPropagation(); changeOrder(order.listKey, null); });
+        group.appendChild(reset);
+    }
+    return group;
 }
 function toggleButton(key, isOpen) {
     const btn = document.createElement('button');
@@ -164,7 +259,7 @@ function toggleButton(key, isOpen) {
     btn.innerHTML = '<i class="bx bx-chevron-down" aria-hidden="true"></i>';
     return btn;
 }
-function groupRow(key, label, depth, extraClass) {
+function groupRow(key, label, depth, extraClass, order) {
     const row = document.createElement('div');
     row.className = `col-colors-row ${extraClass}`;
     row.style.paddingLeft = `${0.4 + depth * 1.2}rem`;
@@ -174,6 +269,8 @@ function groupRow(key, label, depth, extraClass) {
     text.className = 'col-colors-label';
     text.textContent = label;
     row.appendChild(text);
+    const controls = orderControls(order);
+    if (controls) row.appendChild(controls);
     // Toda la fila abre y cierra el grupo, no solo la flecha.
     row.classList.add('col-colors-clickable');
     row.addEventListener('click', () => {
@@ -182,16 +279,22 @@ function groupRow(key, label, depth, extraClass) {
     });
     return { row, isOpen };
 }
-function renderNode(node, depth, parent) {
-    const { row, isOpen } = groupRow(node.key, t(node.labelKey), depth, depth === 0 ? 'col-colors-dept' : 'col-colors-group');
+function renderNode(node, depth, parent, siblingIds) {
+    const { row, isOpen } = groupRow(node.key, t(node.labelKey), depth, depth === 0 ? 'col-colors-dept' : 'col-colors-group',
+        node.listKey ? { listKey: node.listKey, id: node.id, siblingIds } : null);
     parent.appendChild(row);
     if (!isOpen) return;
-    [...node.children.values()].forEach((child) => renderNode(child, depth + 1, parent));
-    node.screens.forEach((screen) => renderScreen(screen, depth + 1, parent));
+    const kids = sortByOrder([...node.children.values()], (child) => child.id, [...node.children.values()][0] && [...node.children.values()][0].listKey);
+    const kidIds = kids.map((child) => child.id);
+    kids.forEach((child) => renderNode(child, depth + 1, parent, kidIds));
+    const shownScreens = sortByOrder(node.screens, (s) => s.screenId, node.screens[0] && screenListKey(node.screens[0]));
+    const screenIds = shownScreens.map((s) => s.screenId);
+    shownScreens.forEach((screen) => renderScreen(screen, depth + 1, parent, screenIds));
 }
-function renderScreen(screen, depth, parent) {
+function renderScreen(screen, depth, parent, siblingIds) {
     const key = `screen:${screen.tableKey}`;
-    const { row, isOpen } = groupRow(key, t(screen.screenLabelKey), depth, 'col-colors-screen');
+    const listKey = screenListKey(screen);
+    const { row, isOpen } = groupRow(key, t(screen.screenLabelKey), depth, 'col-colors-screen', listKey ? { listKey, id: screen.screenId, siblingIds } : null);
     parent.appendChild(row);
     if (!isOpen) return;
     screen.columns.forEach((column) => parent.appendChild(columnRow(column, depth + 1, screen)));
@@ -250,6 +353,7 @@ async function changeClass(column, value, reset) {
     if (!res.ok) { toast(data.message || t('admin.saveError'), 'error'); render(); return; }
     if (data.colors) state.colors = data.colors;
     if (data.classes) state.classes = data.classes;
+    if (data.orders) state.orders = data.orders;
     if (res.status === 202) {
         toast(t('admin.colorRequestSent', { name: (data.assignedTo && data.assignedTo.name) || '' }), 'info');
         loadRequests();
@@ -317,9 +421,13 @@ function render() {
     emptyEl.hidden = !!(state.target && screens.length);
     if (!state.target || !screens.length) return;
     const root = buildTrie();
-    [...root.children.values()]
-        .sort((a, b) => SECTION_ORDER.indexOf(a.id) - SECTION_ORDER.indexOf(b.id))
-        .forEach((node) => renderNode(node, 0, treeEl));
+    // General primero; los departamentos en el orden de su lista (sin lista, el de siempre).
+    const tops = [...root.children.values()].sort((a, b) => SECTION_ORDER.indexOf(a.id) - SECTION_ORDER.indexOf(b.id));
+    const general = tops.filter((n) => n.id === 'main');
+    const departments = sortByOrder(tops.filter((n) => n.id !== 'main'), (n) => n.id, '__root__');
+    const departmentIds = departments.map((n) => n.id);
+    general.forEach((node) => renderNode(node, 0, treeEl, []));
+    departments.forEach((node) => renderNode(node, 0, treeEl, departmentIds));
 }
 
 // ------------------------------------------------------------------ selector de color
@@ -472,6 +580,7 @@ function anchorFor(colorId) {
 function afterChange(colorId, kind, data, status) {
     if (data.colors) state.colors = data.colors;
     if (data.classes) state.classes = data.classes;
+    if (data.orders) state.orders = data.orders;
     if (status === 202) {
         toast(t('admin.colorRequestSent', { name: (data.assignedTo && data.assignedTo.name) || '' }), 'info');
         loadRequests();
@@ -518,7 +627,11 @@ async function loadRequests() {
 }
 function requestChange(item) {
     const wrap = document.createElement('span');
-    if (item.action === 'set-class') {
+    if (item.action === 'set-order') {
+        wrap.append(t('business.columnColorsRequestOrder'));
+    } else if (item.action === 'clear-order') {
+        wrap.append(t('business.columnColorsRequestOrderClear'));
+    } else if (item.action === 'set-class') {
         wrap.append(t('business.columnColorsRequestClass', { name: item.valueLabelKey ? t(item.valueLabelKey) : (item.value || t('menu.classNone')) }));
     } else if (item.action === 'clear-class') {
         wrap.append(t('business.columnColorsRequestClassClear'));
@@ -580,10 +693,13 @@ function renderRequests() {
         status.className = `color-request-status color-request-status-${item.status}`;
         status.textContent = t(`admin.colorRequestStatus_${item.status}`);
         addCell(status);
-        const columnName = item.columnLabelKey ? t(item.columnLabelKey) : item.colorId;
+        const orderList = item.orderList
+            ? t(`business.columnColorsOrderList_${item.orderList.kind}`, { name: item.orderList.labelKey ? t(item.orderList.labelKey) : '' })
+            : null;
+        const columnName = orderList || (item.columnLabelKey ? t(item.columnLabelKey) : item.colorId);
         const screenName = item.screenLabelKey ? `${t(item.screenLabelKey)} › ` : '';
-        const partKey = item.part === 'class' ? 'business.columnColorsClassPart' : item.part === 'own' ? 'admin.colorRequestPartOwn' : 'admin.colorRequestPartNested';
-        const part = item.part ? ` · ${t(partKey)}` : '';
+        const partKey = item.orderList ? 'business.columnColorsOrderPart' : item.part === 'class' ? 'business.columnColorsClassPart' : item.part === 'own' ? 'admin.colorRequestPartOwn' : 'admin.colorRequestPartNested';
+        const part = item.part || item.orderList ? ` · ${t(partKey)}` : '';
         addCell(`${screenName}${columnName}${part}`);
         addCell(item.target && item.target.level
             ? t('business.columnColorsTargetLine', { level: t(`business.columnColorsLevel_${item.target.level}`), name: item.target.name })

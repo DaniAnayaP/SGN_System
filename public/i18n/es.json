@@ -783,7 +783,7 @@
     "colorRequestApproved": "Color autorizado y aplicado",
     "colorRequestRejectedMsg": "Solicitud rechazada",
     "colorRequestError": "No se pudo completar la solicitud",
-    "columnColorsLevelsSubtitle": "Elige el color de fondo y de letra, y la clasificación, de las columnas de las tablas de los clientes por Giro, por Plan o por Cliente. Lo que cambias solo le llega a lo que está debajo: el giro, a sus planes y clientes; el plan, a sus clientes; el cliente, a toda su empresa.",
+    "columnColorsLevelsSubtitle": "Elige el color, la clasificación y el orden de las pantallas y columnas de las tablas de los clientes por Giro, por Plan o por Cliente. Lo que cambias solo le llega a lo que está debajo: el giro, a sus planes y clientes; el plan, a sus clientes; el cliente, a toda su empresa.",
     "masterTreeHistoryFieldStatus": "Estatus",
     "masterTreeHistoryFieldClassification": "Clasificación",
     "masterTreeHistoryFieldColor": "Color",
@@ -855,13 +855,24 @@
     "accesosActivePermsTitle": "Permisos Activados",
     "myAccessSubtitle": "Lo que realmente puedes ver hoy, otorgado por tu(s) perfil(es) más cualquier extra.",
     "columnColorsTitle": "Colores de Columnas",
-    "columnColorsSubtitle": "Elige el color de fondo y de letra, y la clasificación, con que se ven las columnas de las tablas de tu empresa. Lo que cambias solo le llega a lo que está debajo de lo que eliges: si cambias un perfil, solo lo ven sus usuarios; si cambias a una persona, solo ella.",
+    "columnColorsSubtitle": "Elige el color, la clasificación y el orden con que se ven las pantallas y columnas de las tablas de tu empresa. Lo que cambias solo le llega a lo que está debajo de lo que eliges: si cambias un perfil, solo lo ven sus usuarios; si cambias a una persona, solo ella.",
     "colColorsPersonalize": "Personalizar colores",
     "colClassifyPersonalize": "Personalizar clasificación",
+    "colOrderPersonalize": "Personalizar orden",
+    "columnColorsOrderList_dept": "Departamentos",
+    "columnColorsOrderList_area": "Áreas de {name}",
+    "columnColorsOrderList_apartado": "Apartados de {name}",
+    "columnColorsOrderList_pantalla": "Pantallas de {name}",
+    "columnColorsOrderPart": "Orden",
+    "columnColorsRequestOrder": "Nuevo orden de la lista",
+    "columnColorsRequestOrderClear": "Quitar orden propio",
+    "columnColorsMoveUp": "Subir",
+    "columnColorsMoveDown": "Bajar",
+    "columnColorsOrderReset": "Quitar el orden propio de esta lista y volver a heredar",
     "columnColorsClassPart": "Clasificación",
     "columnColorsRequestClass": "Clasificación: {name}",
     "columnColorsRequestClassClear": "Quitar clasificación propia",
-    "colColorsAuthorize": "Autorizar colores y clasificación",
+    "colColorsAuthorize": "Autorizar colores, clasificación y orden",
     "columnColorsApplyTo": "Aplicar a",
     "columnColorsLevelAdmin": "Administrador",
     "columnColorsLevelProfile": "Perfil",
@@ -2147,6 +2158,14 @@
     "columnColorsClass": {
       "what": "Elige en qué grupo (clasificación) aparece esta columna para lo que elegiste arriba. Puedes dejarla sin clasificar; «Restablecer» quita tu cambio y vuelve a la clasificación de arriba.",
       "example": "mueves «Placas» de «Por Definir» a «Nuestras Unidades» y, para ese perfil, la columna se agrupa ahí en las tablas."
+    },
+    "columnColorsOrderMove": {
+      "what": "Sube o baja este elemento en su lista, para lo que elegiste arriba. El orden nuevo solo le llega a lo que está debajo de lo que eliges.",
+      "example": "subes «Operaciones» antes de «Catálogos» y, para ese perfil, el menú muestra Operaciones primero."
+    },
+    "columnColorsOrderReset": {
+      "what": "Quita el orden propio de esta lista y vuelve a heredar el de arriba.",
+      "example": "ya no quieres el orden que le diste a un perfil; Restablecer lo deja igual que el de su empresa."
     },
     "changeHistory": {
       "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",

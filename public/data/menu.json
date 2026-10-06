@@ -185,7 +185,8 @@
                   "submenu": [
                     { "id": "colColorsPersonalize", "labelKey": "business.colColorsPersonalize", "permissionOnly": true },
                     { "id": "colColorsAuthorize", "labelKey": "business.colColorsAuthorize", "permissionOnly": true },
-                    { "id": "colClassifyPersonalize", "labelKey": "business.colClassifyPersonalize", "permissionOnly": true }
+                    { "id": "colClassifyPersonalize", "labelKey": "business.colClassifyPersonalize", "permissionOnly": true },
+                    { "id": "colOrderPersonalize", "labelKey": "business.colOrderPersonalize", "permissionOnly": true }
                   ]
                 }
               ]

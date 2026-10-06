@@ -784,7 +784,7 @@
     "colorRequestApproved": "Color approved and applied",
     "colorRequestRejectedMsg": "Request rejected",
     "colorRequestError": "The request could not be completed",
-    "columnColorsLevelsSubtitle": "Choose the background and text color, and the classification, of the clients' table columns by Business type, by Plan or by Client. What you change only reaches whatever sits below: a business type, its plans and clients; a plan, its clients; a client, its whole company.",
+    "columnColorsLevelsSubtitle": "Choose the color, classification and order of the clients' screens and table columns by Business type, by Plan or by Client. What you change only reaches whatever sits below: a business type, its plans and clients; a plan, its clients; a client, its whole company.",
     "masterTreeHistoryFieldStatus": "Status",
     "masterTreeHistoryFieldClassification": "Classification",
     "masterTreeHistoryFieldColor": "Color",
@@ -856,13 +856,24 @@
     "accesosActivePermsTitle": "Active Permissions",
     "myAccessSubtitle": "What you can actually see today, granted by your profile(s) plus anything extra.",
     "columnColorsTitle": "Column Colors",
-    "columnColorsSubtitle": "Choose the background and text color, and the classification, your company's table columns show. What you change only reaches whatever sits below what you pick: change a profile and only its users see it; change a person and only they do.",
+    "columnColorsSubtitle": "Choose the color, classification and order your company's screens and table columns show. What you change only reaches whatever sits below what you pick: change a profile and only its users see it; change a person and only they do.",
     "colColorsPersonalize": "Customize colors",
     "colClassifyPersonalize": "Customize classification",
+    "colOrderPersonalize": "Customize order",
+    "columnColorsOrderList_dept": "Departments",
+    "columnColorsOrderList_area": "Areas of {name}",
+    "columnColorsOrderList_apartado": "Sections of {name}",
+    "columnColorsOrderList_pantalla": "Screens of {name}",
+    "columnColorsOrderPart": "Order",
+    "columnColorsRequestOrder": "New order of the list",
+    "columnColorsRequestOrderClear": "Remove own order",
+    "columnColorsMoveUp": "Move up",
+    "columnColorsMoveDown": "Move down",
+    "columnColorsOrderReset": "Remove this list's own order and go back to inheriting",
     "columnColorsClassPart": "Classification",
     "columnColorsRequestClass": "Classification: {name}",
     "columnColorsRequestClassClear": "Remove own classification",
-    "colColorsAuthorize": "Authorize colors and classification",
+    "colColorsAuthorize": "Authorize colors, classification and order",
     "columnColorsApplyTo": "Apply to",
     "columnColorsLevelAdmin": "Administrator",
     "columnColorsLevelProfile": "Profile",
@@ -2148,6 +2159,14 @@
     "columnColorsClass": {
       "what": "Choose which group (classification) this column appears in for whoever you picked above. You can leave it unclassified; \"Reset\" removes your change and goes back to the classification from above.",
       "example": "you move \"Plates\" from \"To Define\" to \"Our Units\" and, for that profile, the column is grouped there in the tables."
+    },
+    "columnColorsOrderMove": {
+      "what": "Moves this item up or down in its list, for whoever you picked above. The new order only reaches whatever sits below what you pick.",
+      "example": "you move \"Operations\" before \"Catalogs\" and, for that profile, the menu shows Operations first."
+    },
+    "columnColorsOrderReset": {
+      "what": "Removes this list's own order and goes back to inheriting the one from above.",
+      "example": "you no longer want the order you gave a profile; Reset leaves it the same as its company's."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",

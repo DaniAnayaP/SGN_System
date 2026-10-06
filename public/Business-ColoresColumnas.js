@@ -5,7 +5,7 @@
 // ---------------------------------------------------------------------------
 window.ColumnColorsPage.start({
     activePage: 'ab-column-colors',
-    api: { catalog: '/api/business/column-colors/catalog', state: '/api/business/column-colors' },
+    api: { catalog: '/api/business/column-colors/catalog', state: '/api/business/column-colors', orders: '/api/business/column-orders' },
     requestsApi: '/api/business/column-color-requests',
     // Solo las pantallas a las que esta cuenta tiene acceso (mismo criterio del menú lateral).
     filterScreen: (screen) => Dashboard.hasScreenGrant(screen.path.sectionId, screen.path.itemId, screen.path.submenuPrefix),
