@@ -106,6 +106,19 @@
         { id: 'area-3', labelKey: 'menu.area.generic', labelParams: { n: 3 } },
     ];
 
+    // Reordena `list` según `orderIds`: lo que nombra primero y en ese orden; lo demás, en su posición de siempre al final (igual que
+    // applyOrder de PermissionTree.js).
+    function applyOrder(list, orderIds) {
+        if (!orderIds || !orderIds.length) return list;
+        const byId = new Map(list.map((item) => [item.id, item]));
+        const ordered = [];
+        orderIds.forEach((id) => {
+            if (byId.has(id)) { ordered.push(byId.get(id)); byId.delete(id); }
+        });
+        list.forEach((item) => { if (byId.has(item.id)) ordered.push(item); });
+        return ordered;
+    }
+
     function categoriesForArea(sectionId, areaId, categories, areaOverrides) {
         const overrides = areaOverrides && areaOverrides[`${sectionId}/${areaId}`];
         if (!overrides) return categories;
@@ -158,6 +171,9 @@
         // grantReadonlyCost never pass it -- the former isn't in scope for this
         // feature, the latter already has its own screen-level Cambios button).
         historyEndpoint = null, historyParams = {},
+        // El orden de este nivel tal como lo devuelve el servidor (GET .../permission-order): { departmentOrder, areaOrders,
+        // apartadoOrders, pantallaOrders, columnOrders }. Sin él, el de menu.json de siempre.
+        order = null,
     } = {}) {
         let sectionsData = [];
         let grantSet = new Set(); // costEdit/grantReadonlyCost modes
@@ -1297,14 +1313,36 @@
                 const scopedSections = allowedSectionIds
                     ? allSections.filter((s) => s.id === 'main' || allowedSectionIds.includes(s.id))
                     : allSections;
-                sectionsData = scopedSections.map((s) => {
+                const ord = order || {};
+                // General primero; los departamentos en el orden de este nivel (sin lista, el de menu.json).
+                const orderedSections = [
+                    ...scopedSections.filter((s) => s.id === 'main'),
+                    ...applyOrder(scopedSections.filter((s) => s.id !== 'main'), ord.departmentOrder),
+                ];
+                sectionsData = orderedSections.map((s) => {
                     if (s.id !== 'main') {
-                        const deptAreas = (areas && areas[s.id]) || GENERIC_AREAS;
+                        const deptAreas = applyOrder((areas && areas[s.id]) || GENERIC_AREAS, ord.areaOrders && ord.areaOrders[s.id]);
                         const areaItems = deptAreas.map((area) => ({
                             id: area.id,
                             labelKey: area.labelKey,
                             labelParams: area.labelParams,
-                            submenu: categoriesForArea(s.id, area.id, areaCategories || [], areaOverrides),
+                            // Apartados, pantallas y columnas en su orden; cada uno se clona para no reordenar la plantilla compartida.
+                            submenu: applyOrder(categoriesForArea(s.id, area.id, areaCategories || [], areaOverrides), ord.apartadoOrders && ord.apartadoOrders[`${s.id}::${area.id}`]).map((cat) => ({
+                                ...cat,
+                                submenu: cat.submenu
+                                    ? [...applyOrder(cat.submenu, ord.pantallaOrders && ord.pantallaOrders[`${s.id}::${area.id}::${cat.id}`])].map((subSm) => {
+                                        if (subSm.standalone || !subSm.submenu) return subSm;
+                                        return {
+                                            ...subSm,
+                                            submenu: subSm.submenu.map((entry) => {
+                                                if (!entry.isClassification || !entry.submenu) return entry;
+                                                const colKey = `${s.id}::${area.id}::${cat.id}::${subSm.id}::${entry.id}`;
+                                                return { ...entry, submenu: [...applyOrder(entry.submenu, ord.columnOrders && ord.columnOrders[colKey])] };
+                                            }),
+                                        };
+                                    })
+                                    : cat.submenu,
+                            })),
                         }));
                         // clientTricolor mode deliberately drops generalItems
                         // (home/panel/dashboard) here, unlike costEdit/

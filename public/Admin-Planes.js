@@ -568,7 +568,8 @@ async function selectPlanForTree(plan) {
         // stays fully interactive and a CSS class disables interaction
         // instead, when locked.
         treeContainer.innerHTML = '';
-        tree = window.PermissionCostTree.create(treeContainer, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN' });
+        const order = await fetch(`/api/admin/permission-order?level=plan&entityId=${plan.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        tree = window.PermissionCostTree.create(treeContainer, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN', order });
         // sectorGrants (from the same response) tags each leaf this plan's
         // own Sector already covers as "(Default)" -- purely informational,
         // see PermissionCostTree.js's sectorDefaultSet.

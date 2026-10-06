@@ -278,12 +278,21 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
         // which currency the values are in (master_cost_settings in db.js).
         const costCurrencySymbol = { MXN: '$', USD: '$', EUR: '€' }[costCurrency] || '$';
+        // `order`: el orden de un nivel tal como lo devuelve el servidor (GET .../permission-order), con la forma del Árbol Maestro:
+        // { departmentOrder, areaOrders, apartadoOrders, pantallaOrders, columnOrders }. Atajo para no pasar las cinco por separado.
+        if (order) {
+            departmentOrder = order.departmentOrder || departmentOrder;
+            areaOrder = order.areaOrders || areaOrder;
+            apartadoOrder = order.apartadoOrders || apartadoOrder;
+            pantallaOrder = order.pantallaOrders || pantallaOrder;
+            columnOrder = order.columnOrders || columnOrder;
+        }
         // statusMode (Árbol de Permisos Maestro) is a completely separate,
         // much simpler mode: no grants, no rollup/indeterminate math, no
         // App-visibility column, no cost-center/module filtering -- GEIPSA

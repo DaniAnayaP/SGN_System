@@ -19,8 +19,9 @@ async function loadMyAccess() {
         const res = await fetch('/api/business/me/grants', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
+        const order = await fetch('/api/business/permission-order', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const tree = window.PermissionCostTree.create(container, {
-            mode: 'clientTricolor', interactive: false,
+            order, mode: 'clientTricolor', interactive: false,
             historyEndpoint: '/api/business/me/grant-change-log',
         });
         await tree.init(data.jobPositionGrants || [], [], data.grants || []);

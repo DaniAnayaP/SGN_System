@@ -321,6 +321,7 @@ const {
     findColorColumnByColorId,
     getClientColorsForTarget,
     getEffectiveOrdersForViewer,
+    getOrderTreeForTarget,
     setLevelOrders,
     getColorsForTarget,
     SAAS_COLOR_TARGET_LEVELS,
@@ -2630,6 +2631,15 @@ app.get('/api/admin/saas-table-column-colors', requireAuth, requireAdmin, (req, 
 // su Giro, Plan, Cliente, Administrador, Perfil y Usuario (gana el más cercano a ella). Misma forma que
 // GET /api/admin/master-permission-order; una lista que nadie tocó no aparece (sigue el orden de menu.json).
 app.get('/api/business/permission-order', requireAuth, (req, res) => {
+    // Con ?level=&entityId= (perfil o persona de su empresa): el orden de ese nivel, para los árboles de permisos que edita el
+    // administrador del cliente (Roles, Usuarios). Sin ellos, el de quien pregunta.
+    if (req.query.level) {
+        if (!req.user.clientId || !req.user.isClientAdmin) return res.status(403).json({ message: 'Client admin access required.' });
+        const target = resolveClientColorTarget(req.user.clientId, String(req.query.level), req.query.entityId, req.user.isTestAccount);
+        if (!target) return res.status(404).json({ message: 'Not found.' });
+        const { sources, ...orders } = getOrderTreeForTarget(target.level, target.entityId, req.user.clientId);
+        return res.json(orders);
+    }
     const viewer = req.user.clientId ? { userId: req.user.sub, clientId: req.user.clientId } : null;
     res.json(getEffectiveOrdersForViewer(viewer));
 });
@@ -2787,6 +2797,21 @@ app.get('/api/business/column-colors', requireAuth, (req, res) => {
         target,
         ...(target ? getAppearanceForTarget(req.user.clientId, target, 'client') : { colors: {}, classes: {}, orders: {} }),
     });
+});
+
+// Lo mismo del lado SaaS, para los árboles de permisos de Giro, Plan, Cliente y del Administrador de un cliente (?clientId=).
+app.get('/api/admin/permission-order', requireAuth, requireAdmin, (req, res) => {
+    const level = String(req.query.level || '');
+    let target = null;
+    let clientId = null;
+    if (SAAS_COLOR_TARGET_LEVELS.includes(level)) target = resolveSaasColorLevelTarget(level, req.query.entityId);
+    else if (level === 'admin') {
+        clientId = Number(req.query.clientId);
+        target = Number.isInteger(clientId) && clientId > 0 ? resolveClientColorTarget(clientId, 'admin', null) : null;
+    }
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { sources, ...orders } = getOrderTreeForTarget(target.level, target.entityId, clientId);
+    res.json(orders);
 });
 
 // Bitácora de la pantalla (data_table_changes, 'colores-columnas'): un renglón por cambio aplicado, con quién lo

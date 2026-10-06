@@ -480,7 +480,9 @@ async function openSectorTreeModal(sector) {
         const grantsData = await grantsRes.json();
         const statusData = await statusRes.json();
         const costsData = await costsRes.json();
+        const order = await fetch(`/api/admin/permission-order?level=giro&entityId=${sector.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         sectorTree = window.PermissionTree.create(sectorTreeContainer, {
+            order,
             grantMode: 'giro',
             masterGate: statusData.statuses || [],
             masterCosts: costsData.costs || [],
