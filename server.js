@@ -297,6 +297,10 @@ const {
     applySaasColorRequest,
     resolveSaasColorAuthorizer,
     userCanAuthorizeSaasColors,
+    userCanAuthorizeColors,
+    resolveColorAuthorizer,
+    applyColorRequest,
+    diffMasterPermissionStatuses,
     getUserNameById,
     getSaasTableColumnColors,
     getEffectiveSaasUserFieldClassifications,
@@ -2002,6 +2006,7 @@ app.get('/api/admin/master-permission-costs', requireAuth, requireAdmin, (req, r
 });
 
 app.put('/api/admin/master-permission-costs', requireAuth, requireAdmin, (req, res) => {
+    if (denyMasterPermissionsTreeControl(req, res, 'save', 'costs')) return;
     const { costs } = req.body || {};
     const error = validateMasterPermissionCosts(costs);
     if (error) return res.status(400).json({ message: error });
@@ -2018,6 +2023,7 @@ app.put('/api/admin/master-permission-costs', requireAuth, requireAdmin, (req, r
 // a USD->EUR switch would need routing through MXN first, not implemented
 // here yet.
 app.put('/api/admin/master-permission-costs/currency', requireAuth, requireAdmin, (req, res) => {
+    if (denyMasterPermissionsTreeControl(req, res, 'currency')) return;
     const { currency, exchangeRate } = req.body || {};
     if (!MASTER_COST_CURRENCIES.includes(currency)) {
         return res.status(400).json({ message: `currency must be one of ${MASTER_COST_CURRENCIES.join(', ')}.` });
@@ -2475,6 +2481,11 @@ app.put('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, 
             return res.status(400).json({ message: `status must be one of ${MASTER_PERMISSION_STATUS_VALUES.join(', ')}.` });
         }
     }
+    const diff = diffMasterPermissionStatuses(statuses);
+    const needed = ['save'];
+    if (diff.status) needed.push('status');
+    if (diff.platform) needed.push('platform');
+    if (denyMasterPermissionsTreeControl(req, res, ...needed)) return;
     res.json({ statuses: setMasterPermissionStatuses(statuses, changedByLabel(req)) });
 });
 
@@ -2492,6 +2503,7 @@ app.put('/api/admin/master-permission-classifications', requireAuth, requireAdmi
     if (typeof nodeKey !== 'string' || !nodeKey) {
         return res.status(400).json({ message: 'nodeKey is required.' });
     }
+    if (denyMasterPermissionsTreeControl(req, res, 'classify')) return;
     // An empty/null classificationId means "put this column back under its
     // own real structural classification" -- just remove the exception row.
     if (!classificationId) {
@@ -2529,6 +2541,17 @@ app.put('/api/admin/master-permission-classification-colors', requireAuth, requi
     if (typeof classificationId !== 'string' || !classificationId) {
         return res.status(400).json({ message: 'classificationId is required.' });
     }
+    if (denyMasterPermissionsTreeControl(req, res, 'colors')) return;
+    // El color de una COLUMNA solo se aplica si quien lo pide puede autorizarlo; si no, queda como solicitud
+    // (202) para quien le toque (ver requestColorChange). El de una clasificación completa se aplica directo.
+    if (isColumnColorId(classificationId) && !canApplyColorsDirectly('master', req)) {
+        const isText = textColor !== undefined;
+        const value = isText ? textColor : color;
+        if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) {
+            return res.status(400).json({ message: `${isText ? 'textColor' : 'color'} must be a hex color like #7f77dd.` });
+        }
+        return requestColorChange('master', req, res, classificationId, isText ? 'set-text' : 'set', value);
+    }
     // textColor recolors only the classification badge's TEXT (see the "A"
     // picker button in PermissionTree.js), independent of the dot/
     // background `color` below -- mutually exclusive per request, same one-
@@ -2555,6 +2578,10 @@ app.delete('/api/admin/master-permission-classification-colors', requireAuth, re
     const kind = req.query.kind;
     if (!classificationId) return res.status(400).json({ message: 'classificationId is required.' });
     if (kind !== 'dot' && kind !== 'text') return res.status(400).json({ message: "kind must be 'dot' or 'text'." });
+    if (denyMasterPermissionsTreeControl(req, res, 'colors')) return;
+    if (isColumnColorId(classificationId) && !canApplyColorsDirectly('master', req)) {
+        return requestColorChange('master', req, res, classificationId, kind === 'text' ? 'clear-text' : 'clear-dot', null);
+    }
     res.json({ cleared: clearClassificationColor(classificationId, kind, changedByLabel(req)) });
 });
 
@@ -2586,6 +2613,7 @@ app.get('/api/admin/master-permission-change-log', requireAuth, requireAdmin, (r
     const nodeKey = typeof req.query.nodeKey === 'string' ? req.query.nodeKey : '';
     if (!nodeKey) return res.status(400).json({ message: 'nodeKey is required.' });
     const classificationId = typeof req.query.classificationId === 'string' && req.query.classificationId ? req.query.classificationId : null;
+    if (denyMasterPermissionsTreeControl(req, res, 'history')) return;
     res.json({ entries: getMasterPermissionChangeLog(nodeKey, classificationId) });
 });
 
@@ -2622,6 +2650,78 @@ function denySaasMasterTreeControl(req, res, ...controls) {
     }
     return false;
 }
+// Árbol de Permisos Maestro (el de clientes): lo mismo, controles::a0..a12 de 'saas-master-permissions-tree' en
+// public/SaasAdminCatalog.js (las pestañas, Navegar y Autorizar solo viven en pantalla / en la solicitud).
+const MASTER_PERMISSIONS_TREE_CONTROLS = {
+    save: { sub: 'controles::a2', message: 'No tienes permiso para guardar el Árbol de Permisos Maestro.' },
+    currency: { sub: 'controles::a3', message: 'No tienes permiso para cambiar la moneda del Árbol de Permisos Maestro.' },
+    status: { sub: 'controles::a4', message: 'No tienes permiso para cambiar estatus en el Árbol de Permisos Maestro.' },
+    platform: { sub: 'controles::a5', message: 'No tienes permiso para cambiar Web y App en el Árbol de Permisos Maestro.' },
+    costs: { sub: 'controles::a6', message: 'No tienes permiso para cambiar costos en el Árbol de Permisos Maestro.' },
+    classify: { sub: 'controles::a7', message: 'No tienes permiso para cambiar clasificaciones en el Árbol de Permisos Maestro.' },
+    colors: { sub: 'controles::a8', message: 'No tienes permiso para personalizar colores en el Árbol de Permisos Maestro.' },
+    reorder: { sub: 'controles::a9', message: 'No tienes permiso para reordenar el Árbol de Permisos Maestro.' },
+    history: { sub: 'controles::a11', message: 'No tienes permiso para ver los cambios del Árbol de Permisos Maestro.' },
+    authorize: { sub: 'controles::a12', message: 'No tienes permiso para autorizar colores en el Árbol de Permisos Maestro.' },
+};
+function denyMasterPermissionsTreeControl(req, res, ...controls) {
+    const grants = getSaasUserGrants(req.user.sub);
+    for (const control of controls) {
+        const { sub, message } = MASTER_PERMISSIONS_TREE_CONTROLS[control];
+        if (!hasSaasGrant(grants, 'saas-master-permissions-tree', sub, req.user.isSaasSuperAdmin)) {
+            res.status(403).json({ message });
+            return true;
+        }
+    }
+    return false;
+}
+// Para cualquier árbol ('saas' o 'master'): ¿esta cuenta aplica los colores de columna directo (super admin o
+// con "Autorizar colores") o deja una solicitud?
+function canApplyColorsDirectly(scope, req) {
+    if (req.user.isSaasSuperAdmin) return true;
+    const isMaster = scope === 'master';
+    return hasSaasGrant(
+        getSaasUserGrants(req.user.sub),
+        isMaster ? 'saas-master-permissions-tree' : 'saas-master-tree',
+        (isMaster ? MASTER_PERMISSIONS_TREE_CONTROLS : SAAS_MASTER_TREE_CONTROLS).authorize.sub,
+        false,
+    );
+}
+function requestColorChange(scope, req, res, colorId, action, value) {
+    const assignedTo = resolveColorAuthorizer(scope, req.user.sub);
+    const requestId = createColorRequest({
+        scope, colorId, action, value,
+        requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req), assignedToUserId: assignedTo,
+    });
+    res.status(202).json({ requested: true, requestId, assignedTo: { id: assignedTo, name: getUserNameById(assignedTo) } });
+}
+// Rutas de solicitudes de color de un árbol: cada quien ve las suyas y las pendientes que le tocan decidir
+// (un super admin ve todas las pendientes); decide quien tenga "Autorizar colores" y a quien le llegó.
+function registerColorRequestRoutes(scope, basePath, denyFn) {
+    app.get(basePath, requireAuth, requireAdmin, (req, res) => {
+        const userId = req.user.sub;
+        const canAuthorize = !!req.user.isSaasSuperAdmin || userCanAuthorizeColors(scope, userId);
+        const requests = listColorRequestsForUser(scope, { userId, isSuperAdmin: !!req.user.isSaasSuperAdmin })
+            .map((r) => ({ ...r, canDecide: canAuthorize && r.status === 'pending' && (!!req.user.isSaasSuperAdmin || r.assignedToId === userId) }));
+        res.json({ requests, canAuthorize, toDecide: requests.filter((r) => r.canDecide).length });
+    });
+    const decide = (approve) => (req, res) => {
+        if (denyFn(req, res, 'authorize')) return;
+        const request = getColorRequest(Number(req.params.id));
+        if (!request || request.scope !== scope) return res.status(404).json({ message: 'Solicitud no encontrada.' });
+        if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya se resolvió.' });
+        if (!req.user.isSaasSuperAdmin && request.assignedToId !== req.user.sub) {
+            return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
+        }
+        const label = changedByLabel(req);
+        if (approve) applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+        res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
+    };
+    app.post(`${basePath}/:id/approve`, requireAuth, requireAdmin, decide(true));
+    app.post(`${basePath}/:id/reject`, requireAuth, requireAdmin, decide(false));
+}
+registerColorRequestRoutes('master', '/api/admin/master-color-requests', denyMasterPermissionsTreeControl);
+
 // Qué cambió entre lo guardado y lo que llega (mismos valores por defecto que setSaasMasterStatuses).
 function diffSaasMasterStatuses(before, after) {
     const norm = (r) => ({
@@ -2838,6 +2938,7 @@ app.get('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, r
 });
 
 app.put('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, res) => {
+    if (denyMasterPermissionsTreeControl(req, res, 'save', 'reorder')) return;
     const { departmentOrder, areaOrders, apartadoOrders, pantallaOrders, columnOrders } = req.body || {};
     if (!isValidOrderArray(departmentOrder)) {
         return res.status(400).json({ message: 'departmentOrder must be an array of section ids.' });

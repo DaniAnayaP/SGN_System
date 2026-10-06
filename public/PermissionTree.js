@@ -278,7 +278,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN' } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -1855,6 +1855,12 @@
             });
         }
 
+        // Árbol de Permisos Maestro (statusMode): qué controles de cada fila puede usar quien lo abre. Es un mapa
+        // { status, platform, costs, classify, colors, reorder, navigate, history } de booleanos que pasa la pantalla
+        // (Admin-ArbolMaestro.js, según el árbol de accesos de la cuenta). Sin el mapa (cualquier otro uso) todo
+        // queda permitido, igual que siempre.
+        const canControl = (name) => !controlGrants || controlGrants[name] !== false;
+
         function statusRow(labelText, depth, key, toggle, rollup, leafKeys, ancestorLocked, dragCtx, previewInfo, classificationCtx, tint) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
@@ -1889,7 +1895,7 @@
             // being a valid target). readOnly mode never gets
             // draggable="true" -- same guard every other editable control
             // in this file already respects.
-            if (dragCtx && !readOnly) {
+            if (dragCtx && !readOnly && canControl('reorder')) {
                 row.classList.add('perm-tree-row-draggable');
                 row.draggable = true;
                 const grip = document.createElement('span');
@@ -2063,7 +2069,7 @@
                     // real COLUMNS (Control Interno, Acciones, Por Definir,
                     // custom) and for columns themselves, not for the Botones
                     // action-button grouping.
-                    if (classificationCtx.classificationId && !grantMode && !FIXED_CLASSIFICATION_IDS.has(classificationCtx.classificationId)) {
+                    if (classificationCtx.classificationId && !grantMode && canControl('colors') && !FIXED_CLASSIFICATION_IDS.has(classificationCtx.classificationId)) {
                         badge.classList.add('perm-tree-mstatus-class-badge-with-actions');
                         const labelSpan = document.createElement('span');
                         labelSpan.className = 'perm-tree-mstatus-class-badge-label';
@@ -2108,7 +2114,7 @@
                     // already uses -- Accesos Globales isn't where a
                     // column's classification gets edited, only where it's
                     // useful to see at a glance which one it's already in.
-                    select.disabled = !!grantMode;
+                    select.disabled = !!grantMode || !canControl('classify');
                     classificationCtx.options.forEach((opt) => {
                         const optionEl = document.createElement('option');
                         optionEl.value = opt.id;
@@ -2188,7 +2194,7 @@
                         // Trigger first in DOM order so tab order matches
                         // the visual one (icon at the pill's start, then
                         // the <select>).
-                        selectWrap.appendChild(buildLeafColorGroup(key, labelText));
+                        if (canControl('colors')) selectWrap.appendChild(buildLeafColorGroup(key, labelText));
                         selectWrap.appendChild(select);
                         classificationCell.appendChild(selectWrap);
                     } else {
@@ -2226,7 +2232,7 @@
                     // debe de haber espacios vacíos entre filas"), same
                     // "visible but disabled" call already made for the
                     // classification select just above.
-                    statusNestBtn.disabled = !hasStatusChildren(key) || !!grantMode;
+                    statusNestBtn.disabled = !hasStatusChildren(key) || !!grantMode || !canControl('status');
                     statusNestBtn.addEventListener('click', () => applyNestedStatus(key));
                     statusNestCell.appendChild(statusNestBtn);
                 }
@@ -2287,7 +2293,7 @@
                     // grantMode 'giro' -- Árbol Maestro's own base cost,
                     // read-only reference here, never edited from Accesos
                     // Globales.
-                    input.disabled = !!grantMode;
+                    input.disabled = !!grantMode || !canControl('costs');
                     input.addEventListener('change', () => {
                         const current = getNodeCost(key);
                         const parsed = Math.max(0, parseFloat(input.value) || 0);
@@ -2335,7 +2341,7 @@
                     if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'info');
                     else if (typeof window.showToast === 'function') window.showToast(message);
                 });
-                navigateCell.appendChild(navigateBtn);
+                if (canControl('navigate')) navigateCell.appendChild(navigateBtn);
                 controls.appendChild(navigateCell);
                 // "Cambios" -- every row's own audit trail (Estatus/Web/
                 // App from this same key, plus a classification's own
@@ -2354,7 +2360,7 @@
                 historyBtn.addEventListener('click', () => {
                     openHistoryDialog(key, classificationCtx?.classificationId || null, labelText);
                 });
-                historyCell.appendChild(historyBtn);
+                if (canControl('history')) historyCell.appendChild(historyBtn);
                 controls.appendChild(historyCell);
                 row.appendChild(controls);
             }
@@ -2479,7 +2485,7 @@
             // grantMode 'giro' never edits Árbol Maestro's own Estatus --
             // this badge is read-only reference here, regardless of the
             // (separately false) readOnly option.
-            select.disabled = readOnly || !!grantMode;
+            select.disabled = readOnly || !!grantMode || !canControl('status');
             STATUS_OPTIONS.forEach((opt) => {
                 const optionEl = document.createElement('option');
                 optionEl.value = opt.value;
@@ -2802,7 +2808,7 @@
             const input = document.createElement('input');
             input.type = 'checkbox';
             input.checked = checked;
-            input.disabled = readOnly || locked;
+            input.disabled = readOnly || locked || !canControl('platform');
             input.addEventListener('change', () => {
                 const next = { ...getNodeState(key) };
                 if (platform === 'web') {
@@ -2865,7 +2871,7 @@
                 btn.setAttribute('aria-label', btn.title);
                 btn.setAttribute('data-help-key', 'masterTreeApplyNestedPlatform');
                 btn.innerHTML = '<i class="bx bx-copy" aria-hidden="true"></i>';
-                btn.disabled = !leafKeys || !leafKeys.length;
+                btn.disabled = !leafKeys || !leafKeys.length || !canControl('platform');
                 btn.addEventListener('click', () => applyNestedPlatform(leafKeys, key, platform));
                 group.appendChild(btn);
             }
@@ -3083,6 +3089,7 @@
                     body: JSON.stringify(body),
                 });
                 if (!res.ok) throw new SaveFailedError(res.status);
+                if (res.status === 202) { if (onColorRequested) await onColorRequested(res); closeColorPanel(); return; }
                 const targetMap = isText ? classificationTextColors : classificationColors;
                 const recentList = isText ? recentTextColors : recentColors;
                 targetMap.set(classificationId, hex);
@@ -3106,6 +3113,7 @@
                 const params = new URLSearchParams({ classificationId, kind: isText ? 'text' : 'dot' });
                 const res = await fetch(`/api/admin/master-permission-classification-colors?${params}`, { method: 'DELETE', credentials: 'include' });
                 if (!res.ok) throw new SaveFailedError(res.status);
+                if (res.status === 202) { if (onColorRequested) await onColorRequested(res); closeColorPanel(); return; }
                 (isText ? classificationTextColors : classificationColors).delete(classificationId);
                 renderStatusTree();
             } catch (err) {

@@ -7179,6 +7179,64 @@ function decideColorRequest(id, status, { userId, label }) {
     `).run(status, userId, label || '', id);
     return getColorRequest(id);
 }
+// Hoja "Autorizar colores" de cada árbol (scope de column_color_requests): 'saas' es el Árbol Maestro SaaS
+// (controles::a8) y 'master' el Árbol de Permisos Maestro de clientes (controles::a12).
+const COLOR_AUTHORIZE_LEAVES = {
+    saas: { itemId: 'saas-master-tree', subItemId: SAAS_COLOR_AUTHORIZE_LEAF },
+    master: { itemId: 'saas-master-permissions-tree', subItemId: 'controles::a12' },
+};
+function userCanAuthorizeColors(scope, userId) {
+    if (scope === 'saas') return userCanAuthorizeSaasColors(userId);
+    const leaf = COLOR_AUTHORIZE_LEAVES[scope];
+    if (!leaf) return false;
+    const row = db.prepare('SELECT is_saas_super_admin AS superAdmin, active FROM users WHERE id = ? AND client_id IS NULL').get(userId);
+    if (!row || row.active === 0) return false;
+    if (row.superAdmin) return true;
+    return hasSaasGrant(getSaasUserGrants(userId), leaf.itemId, leaf.subItemId, false);
+}
+// Igual que resolveSaasColorAuthorizer, para cualquier árbol: sube por la cadena de jefes hasta el primero
+// que pueda autorizar ese árbol; sin nadie en la cadena (hoy, siempre), la raíz.
+function resolveColorAuthorizer(scope, requesterId) {
+    if (scope === 'saas') return resolveSaasColorAuthorizer(requesterId);
+    const seen = new Set([requesterId]);
+    let cursor = saasDirectBossOf(requesterId);
+    while (cursor && !seen.has(cursor)) {
+        seen.add(cursor);
+        if (userCanAuthorizeColors(scope, cursor)) return cursor;
+        cursor = saasDirectBossOf(cursor);
+    }
+    return saasColorRootUserId();
+}
+// Aplica una solicitud ya autorizada a la tabla de colores que le toca (árbol SaaS o árbol de clientes).
+function applyColorRequest(request, updatedBy) {
+    if (request.scope !== 'master') return applySaasColorRequest(request, updatedBy);
+    switch (request.action) {
+        case 'set': return setClassificationColor(request.colorId, request.value, updatedBy);
+        case 'set-text': return setClassificationTextColor(request.colorId, request.value, updatedBy);
+        case 'clear-dot': return clearClassificationColor(request.colorId, 'dot', updatedBy);
+        case 'clear-text': return clearClassificationColor(request.colorId, 'text', updatedBy);
+        default: throw new Error('invalid color request action');
+    }
+}
+// Qué cambió entre lo guardado del Árbol de Permisos Maestro y lo que llega (mismos valores por defecto
+// que setMasterPermissionStatuses): estatus y/o Web-App.
+function diffMasterPermissionStatuses(rows) {
+    const norm = (r) => ({
+        status: (r && r.status) || 'habilitado',
+        web: r ? r.webEnabled !== false : true,
+        app: r ? r.appEnabled === true : false,
+    });
+    const before = new Map(getMasterPermissionStatuses().map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r]));
+    const after = new Map((rows || []).filter((r) => r && r.sectionId).map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r]));
+    const diff = { status: false, platform: false };
+    for (const key of new Set([...before.keys(), ...after.keys()])) {
+        const x = norm(before.get(key));
+        const y = norm(after.get(key));
+        if (x.status !== y.status) diff.status = true;
+        if (x.web !== y.web || x.app !== y.app) diff.platform = true;
+    }
+    return diff;
+}
 // Aplica una solicitud autorizada a las tablas de colores del árbol SaaS.
 function applySaasColorRequest(request, updatedBy) {
     switch (request.action) {
@@ -8732,6 +8790,10 @@ module.exports = {
     applySaasColorRequest,
     resolveSaasColorAuthorizer,
     userCanAuthorizeSaasColors,
+    userCanAuthorizeColors,
+    resolveColorAuthorizer,
+    applyColorRequest,
+    diffMasterPermissionStatuses,
     getUserNameById,
     getSaasTableColumnColors,
     getEffectiveSaasUserFieldClassifications,

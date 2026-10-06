@@ -87,7 +87,15 @@ window.SAAS_ADMIN_CATALOG = [
             {
                 itemId: 'saas-master-permissions-tree', labelKey: 'menu.masterPermissionsTree', href: 'Admin-ArbolMaestro.html',
                 apartados: [
-                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Pestaña Árbol', 'Pestaña Resumen', 'Guardar', 'Cambiar moneda'] },
+                    // Los controles reales del Árbol de Permisos Maestro (el de clientes), uno por acceso. Las 4 primeras ya
+                    // existían (a0..a3) y no se mueven; lo nuevo va al final (el orden no debe cambiar una vez en
+                    // producción). Admin-ArbolMaestro.js y PermissionTree.js los revisan en pantalla y server.js en
+                    // cada ruta (denyMasterPermissionsTreeControl).
+                    { id: 'controles', label: 'Controles del árbol', acciones: [
+                        'Pestaña Árbol', 'Pestaña Resumen', 'Guardar', 'Cambiar moneda',
+                        'Cambiar estatus', 'Cambiar Web y App', 'Cambiar costos', 'Cambiar clasificación',
+                        'Personalizar colores', 'Reordenar', 'Navegar', 'Ver cambios', 'Autorizar colores',
+                    ] },
                 ],
             },
             {

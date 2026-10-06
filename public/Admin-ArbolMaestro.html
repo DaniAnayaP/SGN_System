@@ -377,6 +377,11 @@
                     </button>
                 </div>
                 <button type="button" class="btn" id="master-tree-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="master-color-requests-btn" data-help-key="masterTreeColorRequests" hidden>
+                    <i class="bx bx-palette" aria-hidden="true"></i>
+                    <span data-i18n="admin.colorRequestsBtn">Color requests</span>
+                    <span class="saas-color-requests-badge" id="master-color-requests-badge" hidden></span>
+                </button>
             </div>
             <div class="currency-bar">
                 <span class="currency-label"><i class="bx bx-coin-stack" aria-hidden="true"></i><span data-i18n="admin.masterCostCurrencyLabel">Currency</span></span>
@@ -398,6 +403,16 @@
             </div>
         </section>
     </main>
+
+    <div class="modal-overlay" id="master-color-requests-modal" hidden>
+        <div class="modal-panel" style="max-width: 64rem;" role="dialog" aria-modal="true" aria-labelledby="master-color-requests-title">
+            <h3 id="master-color-requests-title" data-i18n="admin.colorRequestsTitle">Column color requests</h3>
+            <div id="master-color-requests-list" class="saas-color-requests-list"></div>
+            <div class="admin-form-actions">
+                <button type="button" class="btn btn-secondary" id="master-color-requests-close" data-i18n="main.close">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Currency change confirmation -- opened when master-currency-select
          changes to something other than the currency the tree is already
