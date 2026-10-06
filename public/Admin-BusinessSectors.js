@@ -481,6 +481,8 @@ async function openSectorTreeModal(sector) {
         const statusData = await statusRes.json();
         const costsData = await costsRes.json();
         const order = await fetch(`/api/admin/permission-order?level=giro&entityId=${sector.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const classificationOverrides = await fetch(`/api/admin/permission-classifications?level=giro&entityId=${sector.id}`, { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : null)).then((data) => (data && data.overrides) || []).catch(() => []);
         sectorTree = window.PermissionTree.create(sectorTreeContainer, {
             order,
             grantMode: 'giro',
@@ -488,7 +490,7 @@ async function openSectorTreeModal(sector) {
             masterCosts: costsData.costs || [],
             costCurrency: costsData.currency || 'MXN',
         });
-        await sectorTree.init(grantsData.grants || []);
+        await sectorTree.init(grantsData.grants || [], [], classificationOverrides);
     } catch {
         sectorTreeError.textContent = Dashboard.t('admin.loadError');
         sectorTreeError.hidden = false;

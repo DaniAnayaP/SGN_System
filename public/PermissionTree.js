@@ -5660,6 +5660,13 @@
                 // expand() needed, that only exists to broaden a coarser
                 // legacy grant into every leaf it implies).
                 if (grantMode) {
+                    // Las clasificaciones de columna de este nivel (el 3er argumento de init, igual que en el Árbol Maestro): sin ellas
+                    // la réplica agrupa las columnas solo como las trae menu.json. Aquí el selector de clasificación es de solo lectura.
+                    classificationOverrides = new Map();
+                    (initialClassificationOverrides || []).forEach((o) => {
+                        if (!o || !o.nodeKey || !o.classificationId) return;
+                        classificationOverrides.set(o.nodeKey, { classificationId: o.classificationId, classificationLabel: o.classificationLabel || null });
+                    });
                     grantSet = new Set((initialGrants || []).map((g) => keyOf(g.sectionId, g.itemId, g.submenuId)));
                     masterGateMap = new Map();
                     (masterGate || []).forEach((s) => {

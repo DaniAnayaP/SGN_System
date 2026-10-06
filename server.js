@@ -322,6 +322,7 @@ const {
     getClientColorsForTarget,
     getEffectiveOrdersForViewer,
     getOrderTreeForTarget,
+    getEffectiveClassificationOverridesForTarget,
     setLevelOrders,
     getColorsForTarget,
     SAAS_COLOR_TARGET_LEVELS,
@@ -2800,18 +2801,26 @@ app.get('/api/business/column-colors', requireAuth, (req, res) => {
 });
 
 // Lo mismo del lado SaaS, para los árboles de permisos de Giro, Plan, Cliente y del Administrador de un cliente (?clientId=).
-app.get('/api/admin/permission-order', requireAuth, requireAdmin, (req, res) => {
+function resolveSaasTreeTarget(req) {
     const level = String(req.query.level || '');
-    let target = null;
-    let clientId = null;
-    if (SAAS_COLOR_TARGET_LEVELS.includes(level)) target = resolveSaasColorLevelTarget(level, req.query.entityId);
-    else if (level === 'admin') {
-        clientId = Number(req.query.clientId);
-        target = Number.isInteger(clientId) && clientId > 0 ? resolveClientColorTarget(clientId, 'admin', null) : null;
+    if (SAAS_COLOR_TARGET_LEVELS.includes(level)) return { target: resolveSaasColorLevelTarget(level, req.query.entityId), clientId: null };
+    if (level === 'admin') {
+        const clientId = Number(req.query.clientId);
+        return { target: Number.isInteger(clientId) && clientId > 0 ? resolveClientColorTarget(clientId, 'admin', null) : null, clientId };
     }
+    return { target: null, clientId: null };
+}
+app.get('/api/admin/permission-order', requireAuth, requireAdmin, (req, res) => {
+    const { target, clientId } = resolveSaasTreeTarget(req);
     if (!target) return res.status(404).json({ message: 'Not found.' });
     const { sources, ...orders } = getOrderTreeForTarget(target.level, target.entityId, clientId);
     res.json(orders);
+});
+// Las clasificaciones de columna de ese nivel (Maestro y lo de cada nivel de arriba), para los árboles que las muestran.
+app.get('/api/admin/permission-classifications', requireAuth, requireAdmin, (req, res) => {
+    const { target, clientId } = resolveSaasTreeTarget(req);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    res.json({ overrides: getEffectiveClassificationOverridesForTarget(target.level, target.entityId, clientId) });
 });
 
 // Bitácora de la pantalla (data_table_changes, 'colores-columnas'): un renglón por cambio aplicado, con quién lo

@@ -7099,6 +7099,18 @@ function setLevelClassification(level, entityId, nodeKey, classificationId, clas
             classification_label = excluded.classification_label, updated_by = excluded.updated_by, updated_at = datetime('now')
     `).run({ level, entityId, clientId, nodeKey, classificationId: classificationId || '', classificationLabel: classificationLabel || null, updatedBy: updatedBy || '' });
 }
+// Las clasificaciones de columna que se ven al editar un nivel: las del Maestro y, encima, las de cada nivel de la cadena (gana el
+// más cercano), con la misma forma que las del Maestro ({ nodeKey, classificationId, classificationLabel }).
+function getEffectiveClassificationOverridesForTarget(level, entityId, clientId) {
+    const merged = new Map(getMasterPermissionClassificationOverrides().map((o) => [o.nodeKey, {
+        nodeKey: o.nodeKey, classificationId: o.classificationId, classificationLabel: o.classificationLabel || null,
+    }]));
+    getLevelClassificationLayers(resolveLevelColorChain(level, entityId, clientId)).forEach((list, nodeKey) => {
+        const closest = list[0];
+        merged.set(nodeKey, { nodeKey, classificationId: closest.classificationId, classificationLabel: closest.classificationLabel || null });
+    });
+    return [...merged.values()];
+}
 // "Restablecer": quita la clasificación propia de esa columna en ese nivel y vuelve a heredar.
 function clearLevelClassification(level, entityId, nodeKey) {
     return db.prepare('DELETE FROM classification_level_overrides WHERE level = ? AND entity_id = ? AND node_key = ?').run(level, entityId, nodeKey).changes > 0;
@@ -9476,6 +9488,7 @@ module.exports = {
     listLevelClassifications,
     setLevelClassification,
     clearLevelClassification,
+    getEffectiveClassificationOverridesForTarget,
     getMasterPermissionChangeLog,
     getSaasMasterStatuses,
     setSaasMasterStatuses,
