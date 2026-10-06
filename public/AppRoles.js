@@ -175,6 +175,63 @@ async function loadCostCentersForTree() {
     }
 }
 
+// --- Límites al dar permisos ---------------------------------------------------
+// Lo que no se puede dar (fuera del plan y los adicionales de la empresa, o en un Estatus que quien edita no ve) sale con candado en el árbol, igual que en
+// Roles de escritorio. Es la MISMA regla que Dashboard.buildGrantLimits y que clampNewGrantsToLimits (db.js) aplica al guardar: si cambia una, cambian las
+// tres. Esta página no carga Dashboard.js, así que el Estatus se resuelve aquí con el perfil del negocio. Sin conexión (o si algo falla) no hay candados en
+// pantalla; el servidor igual quita lo que no cabe y avisa.
+const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar)$/;
+function buildAppGrantLimits(contractGrants, visibleStatuses, statusOverrides) {
+    const keyOf = (s, i, sub) => `${s}::${i || ''}::${sub || ''}`;
+    const contract = Array.isArray(contractGrants) ? contractGrants : null;
+    const rawSet = contract ? new Set(contract.map((g) => keyOf(g.sectionId, g.itemId, g.submenuId))) : null;
+    const covered = (s, i, sub) => rawSet.has(keyOf(s, i, sub)) || (!!i && rawSet.has(keyOf(s, i, null))) || rawSet.has(keyOf(s, null, null));
+    const visible = new Set(visibleStatuses && visibleStatuses.length ? visibleStatuses : ['habilitado']);
+    const overrides = new Map((statusOverrides || []).map((r) => [keyOf(r.sectionId, r.itemId, r.submenuId), r.status]));
+    function nodeStatus(sectionId, itemId, submenuId) {
+        if (!overrides.size) return 'habilitado';
+        const dept = overrides.get(keyOf(sectionId, null, null));
+        if (dept) return dept;
+        if (itemId) {
+            const item = overrides.get(keyOf(sectionId, itemId, null));
+            if (item) return item;
+        }
+        if (submenuId) {
+            const parts = String(submenuId).split('/');
+            for (let i = 1; i <= parts.length; i += 1) {
+                const partial = overrides.get(keyOf(sectionId, itemId, parts.slice(0, i).join('/')));
+                if (partial) return partial;
+            }
+        }
+        return 'habilitado';
+    }
+    return {
+        reason(sectionId, itemId, submenuId) {
+            if (!visible.has(nodeStatus(sectionId, itemId, submenuId))) return 'status';
+            if (!rawSet || sectionId === 'main' || !submenuId) return null;
+            if (itemId === 'cc-list' || String(submenuId).startsWith('cc-')) return null;
+            const base = String(submenuId).replace(/#app$/, '');
+            const contractKey = GRANT_COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(GRANT_COLUMN_LEVEL_SUFFIX, '/solo-ver') : base;
+            return covered(sectionId, itemId, contractKey) ? null : 'contract';
+        },
+    };
+}
+let grantLimits = null;
+async function loadGrantLimits() {
+    try {
+        const [profileRes, contractRes] = await Promise.all([
+            fetch(apiUrl('/api/me/business-profile'), { credentials: 'include' }),
+            fetch(apiUrl('/api/business/contract-grants'), { credentials: 'include' }),
+        ]);
+        if (!profileRes.ok) throw new Error('no profile');
+        const { profile } = await profileRes.json();
+        const contract = contractRes.ok ? (await contractRes.json()).contractGrants : null;
+        grantLimits = buildAppGrantLimits(contract, profile.visibleStatuses, profile.masterStatusOverrides);
+    } catch {
+        grantLimits = null;
+    }
+}
+
 // --- Rendering -------------------------------------------------------------
 const titleEl = document.getElementById('carga-title');
 const bodyEl = document.getElementById('carga-body');
@@ -233,7 +290,7 @@ async function openJobPositionTree(jp) {
         bodyEl.appendChild(treeContainer);
         const order = await fetch(apiUrl(`/api/business/permission-order?level=perfil&entityId=${jp.id}`), { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch(apiUrl(`/api/business/permission-classifications?level=perfil&entityId=${jp.id}`), { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides });
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides, grantLimits });
         await tree.init(data.grants || []);
 
         const equalizeBtn = document.createElement('button');
@@ -317,7 +374,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
     try {
         const meRes = await fetch(apiUrl('/api/me'), { credentials: 'include' });
         if (!meRes.ok) { window.location.replace('Login.html'); return; }
-        await Promise.all([loadJobPositions(), loadAllowedSectionIds(), loadCostCentersForTree(), loadBrandingForTheme()]);
+        await Promise.all([loadJobPositions(), loadAllowedSectionIds(), loadCostCentersForTree(), loadBrandingForTheme(), loadGrantLimits()]);
         applyStyle(getStoredStyle());
         render();
     } catch (err) {
