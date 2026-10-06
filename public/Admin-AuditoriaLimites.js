@@ -25,6 +25,45 @@
         td.textContent = value || '—';
         return td;
     }
+    // Nombres que se leen: el departamento por su etiqueta y el nodo del Árbol Maestro como «Departamento › área › pantalla».
+    const SECTION_LABELS = {
+        main: 'menu.mainSection', finance: 'menu.finance', accounting: 'menu.accounting', 'human-resources': 'menu.humanResources', marketing: 'menu.marketing',
+        commercial: 'menu.commercial', purchasing: 'menu.purchasing', 'supply-chain': 'menu.supplyChain', 'management-control': 'menu.managementControl',
+        'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications',
+    };
+    const STATUS_LABELS = {
+        habilitado: 'admin.masterTreeStatusHabilitadoMed', inhabilitado: 'admin.masterTreeStatusInhabilitado',
+        construccion: 'admin.masterTreeStatusConstruccion', mejoras: 'admin.masterTreeStatusMejoras',
+    };
+    const sectionLabel = (id) => (SECTION_LABELS[id] ? t(SECTION_LABELS[id]) : id);
+    const statusLabel = (id) => (STATUS_LABELS[id] ? t(STATUS_LABELS[id]) : id);
+    const nodeLabel = (section, item, submenu) => [sectionLabel(section), item, submenu].filter(Boolean).join(' › ');
+
+    function line(text, cls) {
+        const li = document.createElement('li');
+        li.textContent = text;
+        if (cls) li.className = cls;
+        return li;
+    }
+    // Las razones de UN usuario, con cuántos permisos rompe cada una y la causa más probable.
+    function userReasons(u) {
+        const items = [];
+        u.status.groups.forEach((g) => {
+            items.push(line(t('admin.limitsAuditReasonStatus', { count: g.count, node: g.nodeKey ? nodeLabel(g.section, g.item, g.submenu) : t('admin.limitsAuditAnyNode'), status: statusLabel(g.nodeStatus) })));
+        });
+        if (u.status.groupsOmitted) items.push(line(t('admin.limitsAuditMore', { n: u.status.groupsOmitted })));
+        if (u.status.total) {
+            const lacksHabilitado = !u.visibleStatuses.includes('habilitado');
+            const top = u.status.groups[0];
+            if (lacksHabilitado) items.push(line(t('admin.limitsAuditCauseUserStatus'), 'limits-audit-cause'));
+            else if (top && top.nodeKey) items.push(line(t('admin.limitsAuditCauseTree', { node: nodeLabel(top.section, top.item, top.submenu), status: statusLabel(top.nodeStatus) }), 'limits-audit-cause'));
+        }
+        u.module.groups.forEach((g) => items.push(line(t('admin.limitsAuditReasonModule', { count: g.count, department: sectionLabel(g.section) }))));
+        if (u.module.groupsOmitted) items.push(line(t('admin.limitsAuditMore', { n: u.module.groupsOmitted })));
+        u.contract.groups.forEach((g) => items.push(line(t('admin.limitsAuditReasonContract', { count: g.count, node: nodeLabel(g.section, g.item) }))));
+        if (u.contract.groupsOmitted) items.push(line(t('admin.limitsAuditMore', { n: u.contract.groupsOmitted })));
+        return items;
+    }
     function samplesRow(client) {
         const tr = document.createElement('tr');
         tr.className = 'limits-audit-samples-row';
@@ -32,12 +71,23 @@
         td.colSpan = 9;
         const list = document.createElement('ul');
         list.className = 'limits-audit-samples';
-        client.samples.forEach((s) => {
+        (client.userDetails || []).forEach((u) => {
             const li = document.createElement('li');
-            const reasons = s.kinds.map((k) => t(`admin.limitsAuditKind_${k}`)).join(', ');
-            li.textContent = `${s.user} · ${s.node} · ${reasons}`;
+            li.className = 'limits-audit-user';
+            const head = document.createElement('p');
+            head.className = 'limits-audit-user-head';
+            const strong = document.createElement('strong');
+            strong.textContent = u.user;
+            const meta = document.createElement('span');
+            meta.textContent = ` (${u.username}) · ${t('admin.limitsAuditUserSees', { statuses: u.visibleStatuses.map(statusLabel).join(', ') })} · ${t('admin.limitsAuditUserCount', { affected: u.affectedGrants, checked: u.grantsChecked })}`;
+            head.append(strong, meta);
+            const reasons = document.createElement('ul');
+            reasons.className = 'limits-audit-reasons';
+            userReasons(u).forEach((item) => reasons.appendChild(item));
+            li.append(head, reasons);
             list.appendChild(li);
         });
+        if (client.userDetailsOmitted) list.appendChild(line(t('admin.limitsAuditMore', { n: client.userDetailsOmitted })));
         td.appendChild(list);
         tr.appendChild(td);
         return tr;

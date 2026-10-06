@@ -851,7 +851,16 @@
     "limitsAuditColStatus": "Estatus no visible",
     "limitsAuditColContract": "Fuera del contrato",
     "limitsAuditColSamples": "Ejemplos",
-    "limitsAuditShowSamples": "Ver ejemplos",
+    "limitsAuditShowSamples": "Ver detalle por usuario",
+    "limitsAuditUserSees": "ve: {statuses}",
+    "limitsAuditUserCount": "{affected} de {checked} permisos con problema",
+    "limitsAuditReasonStatus": "{count} permisos: «{node}» está en «{status}», un Estatus que este usuario no ve",
+    "limitsAuditAnyNode": "sus permisos",
+    "limitsAuditReasonModule": "{count} permisos del departamento «{department}», que la empresa no tiene contratado",
+    "limitsAuditReasonContract": "{count} permisos de «{node}» que no están en el plan ni en los adicionales",
+    "limitsAuditMore": "y {n} más",
+    "limitsAuditCauseUserStatus": "Causa probable: a este usuario le falta «Habilitado» en «¿Qué Estatus puede ver?» (Usuarios → Otorgar accesos).",
+    "limitsAuditCauseTree": "Causa probable: en el Árbol Maestro, «{node}» está en «{status}». Cambia su Estatus ahí, o dale a este usuario ese Estatus.",
     "limitsAuditHideSamples": "Ocultar",
     "limitsAuditEmpty": "No hay clientes para revisar.",
     "limitsAuditKind_module": "módulo no contratado",
@@ -2263,8 +2272,8 @@
       "example": "un cliente con 12 en «Módulo no contratado» tiene usuarios con permisos de un departamento que no contrató."
     },
     "limitsAuditSamples": {
-      "what": "Muestra o esconde algunos de los permisos que incumplen un límite en este cliente, con el usuario y el motivo.",
-      "example": "ves que «Ana · finance / ...» está fuera del contrato y decides si corregir el perfil o el contrato."
+      "what": "Muestra o esconde el detalle por usuario de este cliente: qué Estatus ve, cuántos de sus permisos rompen un límite y el motivo exacto agrupado (qué nodo del Árbol Maestro está en qué Estatus, qué departamento no está contratado, qué pantallas están fuera del plan), con la causa más probable.",
+      "example": "ves que «Juan · 126 permisos: General está en En mejoras» y sabes que hay que cambiar el Estatus de General o darle ese Estatus a Juan."
     },
     "systemResetBackup": {
       "what": "Crea una copia completa de la base de datos y la revisa (integridad y que traiga todas las tablas). Se guarda en el servidor y se puede descargar a tu computadora. Sin un respaldo de la última hora no se puede borrar.",

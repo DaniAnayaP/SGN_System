@@ -6606,6 +6606,26 @@ function resolveMasterNodeStatus(sectionId, itemId, submenuId, overridesByKey) {
     }
     return 'habilitado';
 }
+// Lo mismo que resolveMasterNodeStatus pero diciendo QUIÉN lo decidió: { status, key } con la llave (section::item::submenu) del nodo del Árbol Maestro cuyo
+// Estatus aplica; key '' cuando nada en la cadena se ha tocado (queda Habilitado). Lo usa la Auditoría de Límites para decir por qué un nodo no se ve.
+function resolveMasterNodeStatusSource(sectionId, itemId, submenuId, overridesByKey) {
+    if (!overridesByKey.size) return { status: 'habilitado', key: '' };
+    const check = (key) => (overridesByKey.get(key) ? { status: overridesByKey.get(key), key } : null);
+    const dept = check(masterTreeNodeKey(sectionId, null, null));
+    if (dept) return dept;
+    if (itemId) {
+        const item = check(masterTreeNodeKey(sectionId, itemId, null));
+        if (item) return item;
+    }
+    if (submenuId) {
+        const parts = String(submenuId).split('/');
+        for (let i = 1; i <= parts.length; i += 1) {
+            const partial = check(masterTreeNodeKey(sectionId, itemId, parts.slice(0, i).join('/')));
+            if (partial) return partial;
+        }
+    }
+    return { status: 'habilitado', key: '' };
+}
 function buildMasterStatusOverrideMap(overrides) {
     return new Map(overrides.map((r) => [masterTreeNodeKey(r.sectionId, r.itemId, r.submenuId), r.status]));
 }
@@ -9130,23 +9150,56 @@ function scanLimitViolations({ sampleSize = 5 } = {}) {
             clientId: client.id, name: client.name, plan: client.plan || '', hasPlan: !!plan, users: users.length,
             usersAffected: 0, grantsChecked: 0, affectedGrants: 0, module: 0, status: 0, contract: 0, samples: [],
         };
+        summary.userDetails = [];
         users.forEach((user) => {
             const visible = new Set(getUserVisibleStatuses(user.id));
             let affected = false;
+            // El detalle de ESTE usuario: de cada límite, cuántos permisos rompe y por qué (agrupado), para poder decir la causa exacta.
+            const detail = {
+                userId: user.id, user: user.name || user.username, username: user.username, isTest: !!user.isTest, visibleStatuses: [...visible],
+                grantsChecked: 0, affectedGrants: 0, samples: [],
+                status: { total: 0, groups: new Map() }, module: { total: 0, groups: new Map() }, contract: { total: 0, groups: new Map() },
+            };
+            const bump = (bucket, key, make) => {
+                bucket.total += 1;
+                const hit = bucket.groups.get(key);
+                if (hit) hit.count += 1; else bucket.groups.set(key, { ...make(), count: 1 });
+            };
             // Los permisos SIN filtrar: la auditoría mide justo lo que getUserEffectiveGrants ya no deja valer.
             getUserEffectiveGrantsRaw(user.id).forEach((g) => {
                 summary.grantsChecked += 1;
+                detail.grantsChecked += 1;
                 const kinds = limitKindsForGrant(g, { modules, overrides: statusOverrides, contract }, visible, !!user.isTest);
                 if (!kinds.length) return;
                 affected = true;
                 summary.affectedGrants += 1;
+                detail.affectedGrants += 1;
                 kinds.forEach((k) => { summary[k] += 1; });
-                if (summary.samples.length < sampleSize) {
-                    summary.samples.push({ user: user.name || user.username, node: [g.sectionId, g.itemId, g.submenuId].filter(Boolean).join(' / '), kinds });
+                if (kinds.includes('status')) {
+                    const src = resolveMasterNodeStatusSource(g.sectionId, g.itemId, g.submenuId, statusOverrides);
+                    bump(detail.status, `${src.status}|${src.key}`, () => {
+                        const [section, item, submenu] = src.key.split('::');
+                        return { nodeStatus: src.status, nodeKey: src.key, section: section || '', item: item || '', submenu: submenu || '' };
+                    });
                 }
+                if (kinds.includes('module')) bump(detail.module, g.sectionId, () => ({ section: g.sectionId }));
+                if (kinds.includes('contract')) bump(detail.contract, `${g.sectionId}::${g.itemId || ''}`, () => ({ section: g.sectionId, item: g.itemId || '' }));
+                const node = [g.sectionId, g.itemId, g.submenuId].filter(Boolean).join(' / ');
+                if (summary.samples.length < sampleSize) summary.samples.push({ user: user.name || user.username, node, kinds });
+                if (detail.samples.length < 3) detail.samples.push({ node, kinds });
             });
-            if (affected) summary.usersAffected += 1;
+            if (affected) {
+                summary.usersAffected += 1;
+                const flat = (bucket) => {
+                    const groups = [...bucket.groups.values()].sort((a, b) => b.count - a.count);
+                    return { total: bucket.total, groups: groups.slice(0, 8), groupsOmitted: Math.max(0, groups.length - 8) };
+                };
+                summary.userDetails.push({ ...detail, status: flat(detail.status), module: flat(detail.module), contract: flat(detail.contract) });
+            }
         });
+        summary.userDetails.sort((a, b) => b.affectedGrants - a.affectedGrants);
+        summary.userDetailsOmitted = Math.max(0, summary.userDetails.length - 25);
+        summary.userDetails = summary.userDetails.slice(0, 25);
         return summary;
     });
 }

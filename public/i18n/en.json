@@ -852,7 +852,16 @@
     "limitsAuditColStatus": "Status not visible",
     "limitsAuditColContract": "Outside the contract",
     "limitsAuditColSamples": "Examples",
-    "limitsAuditShowSamples": "Show examples",
+    "limitsAuditShowSamples": "Show detail by user",
+    "limitsAuditUserSees": "sees: {statuses}",
+    "limitsAuditUserCount": "{affected} of {checked} permissions with a problem",
+    "limitsAuditReasonStatus": "{count} permissions: “{node}” is in “{status}”, a Status this user does not see",
+    "limitsAuditAnyNode": "their permissions",
+    "limitsAuditReasonModule": "{count} permissions of the “{department}” department, which the company has not contracted",
+    "limitsAuditReasonContract": "{count} permissions of “{node}” that are not in the plan or the extras",
+    "limitsAuditMore": "and {n} more",
+    "limitsAuditCauseUserStatus": "Likely cause: this user is missing “Habilitado” in “Which Status can they see?” (Users → Grant Access).",
+    "limitsAuditCauseTree": "Likely cause: in the Master Tree, “{node}” is in “{status}”. Change its Status there, or give this user that Status.",
     "limitsAuditHideSamples": "Hide",
     "limitsAuditEmpty": "There are no clients to check.",
     "limitsAuditKind_module": "module not contracted",
@@ -2264,8 +2273,8 @@
       "example": "a client with 12 under \"Module not contracted\" has users with permissions from a department it did not contract."
     },
     "limitsAuditSamples": {
-      "what": "Shows or hides some of the permissions that break a limit in this client, with the user and the reason.",
-      "example": "you see \"Ana · finance / ...\" is outside the contract and decide whether to fix the profile or the contract."
+      "what": "Shows or hides the per-user detail for this client: which Status they see, how many of their permissions break a limit and the exact reason, grouped (which Master Tree node is in which Status, which department is not contracted, which screens are outside the plan), with the most likely cause.",
+      "example": "you see “Juan · 126 permissions: General is in Under improvement” and know you must change General’s Status or give Juan that Status."
     },
     "systemResetBackup": {
       "what": "Creates a full copy of the database and checks it (integrity and that it has every table). It is stored on the server and can be downloaded to your computer. Nothing can be deleted without a backup from the last hour.",

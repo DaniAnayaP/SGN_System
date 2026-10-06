@@ -6443,3 +6443,21 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     color: var(--color-text-secondary);
     cursor: help;
 }
+
+/* Auditoría de Límites: el detalle por usuario (qué Estatus ve y el motivo exacto de cada límite roto). */
+.limits-audit-user{
+    margin-bottom: 0.7rem;
+    list-style: none;
+}
+.limits-audit-user-head{
+    margin: 0 0 0.2rem;
+    color: var(--color-text-primary);
+}
+.limits-audit-reasons{
+    margin: 0;
+    padding-left: 1.2rem;
+}
+.limits-audit-cause{
+    color: var(--color-text-primary);
+    font-weight: 600;
+}
