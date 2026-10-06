@@ -3361,6 +3361,7 @@ const TABLE_GRANT_PATHS = {
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
     'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
     'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
+    'colores-columnas': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-column-colors' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
     'nuestros-articulos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-articulos' },
@@ -7192,6 +7193,9 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_column_color_requests_scope_status ON column_color_requests(scope, status);
 `);
+// Solicitudes de un cliente (scope 'client'): a quién se le cambia el color -- el nivel (admin/perfil/usuario) y su id.
+ensureColumn('column_color_requests', 'level', 'TEXT');
+ensureColumn('column_color_requests', 'entity_id', 'INTEGER');
 
 const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text'];
 const SAAS_COLOR_AUTHORIZE_LEAF = 'controles::a8';
@@ -7233,7 +7237,7 @@ function getUserNameById(userId) {
     return row ? (row.name || row.username) : '';
 }
 
-function createColorRequest({ scope, clientId = null, colorId, action, value = null, requestedByUserId, requestedByLabel, assignedToUserId }) {
+function createColorRequest({ scope, clientId = null, colorId, action, value = null, level = null, entityId = null, requestedByUserId, requestedByLabel, assignedToUserId }) {
     if (!COLOR_REQUEST_ACTIONS.includes(action)) throw new Error('invalid color request action');
     const isText = action.endsWith('text') ? 1 : 0;
     return db.transaction(() => {
@@ -7242,17 +7246,19 @@ function createColorRequest({ scope, clientId = null, colorId, action, value = n
         db.prepare(`
             UPDATE column_color_requests SET status = 'superseded', decided_at = datetime('now')
             WHERE scope = ? AND IFNULL(client_id, 0) = IFNULL(?, 0) AND color_id = ? AND requested_by_user_id = ?
+              AND IFNULL(level, '') = IFNULL(?, '') AND IFNULL(entity_id, 0) = IFNULL(?, 0)
               AND status = 'pending' AND (action LIKE '%text') = ?
-        `).run(scope, clientId, colorId, requestedByUserId, isText);
+        `).run(scope, clientId, colorId, requestedByUserId, level, entityId, isText);
         const info = db.prepare(`
-            INSERT INTO column_color_requests (scope, client_id, color_id, action, value, requested_by_user_id, requested_by_label, assigned_to_user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(scope, clientId, colorId, action, value, requestedByUserId, requestedByLabel || '', assignedToUserId || null);
+            INSERT INTO column_color_requests (scope, client_id, color_id, action, value, level, entity_id, requested_by_user_id, requested_by_label, assigned_to_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(scope, clientId, colorId, action, value, level, entityId, requestedByUserId, requestedByLabel || '', assignedToUserId || null);
         return Number(info.lastInsertRowid);
     })();
 }
 const COLOR_REQUEST_SELECT = `
     SELECT r.id, r.scope, r.client_id AS clientId, r.color_id AS colorId, r.action, r.value,
+           r.level, r.entity_id AS entityId,
            r.requested_by_user_id AS requestedById, COALESCE(NULLIF(r.requested_by_label, ''), u1.name, u1.username) AS requestedByName,
            r.assigned_to_user_id AS assignedToId, COALESCE(u2.name, u2.username) AS assignedToName,
            r.status, r.decided_by_user_id AS decidedById, r.decided_by_label AS decidedByName, r.decided_at AS decidedAt,
@@ -7313,6 +7319,11 @@ function resolveColorAuthorizer(scope, requesterId) {
 }
 // Aplica una solicitud ya autorizada a la tabla de colores que le toca (árbol SaaS o árbol de clientes).
 function applyColorRequest(request, updatedBy) {
+    if (request.scope === 'client') {
+        const kind = request.action.endsWith('text') ? 'text' : 'dot';
+        if (request.action.startsWith('clear')) return clearLevelColor(request.level, request.entityId, request.colorId, kind, updatedBy);
+        return setLevelColor(request.level, request.entityId, request.colorId, kind, request.value, updatedBy, request.clientId);
+    }
     if (request.scope !== 'master') return applySaasColorRequest(request, updatedBy);
     switch (request.action) {
         case 'set': return setClassificationColor(request.colorId, request.value, updatedBy);
@@ -7322,6 +7333,231 @@ function applyColorRequest(request, updatedBy) {
         default: throw new Error('invalid color request action');
     }
 }
+// ---------------------------------------------------------------------------
+// Colores de Columnas (cliente): pantalla de Administración del Negocio donde el administrador, un perfil o
+// una persona eligen el color de las columnas de las tablas de SU empresa. Los cambios bajan por la cadena
+// Maestro > Giro > Plan > Cliente > Administrador > Perfil > Usuario (ver column_color_level_overrides): un
+// cambio solo le llega a lo que está debajo de él. Permisos propios en el árbol de la pantalla: "Personalizar
+// colores" (hoja colColorsPersonalize, nivel Ver y Operar/Editar) y "Autorizar colores" (colColorsAuthorize,
+// Autorizar). Quien personaliza pero no autoriza deja una solicitud (scope 'client') que le llega a su jefe
+// directo del organigrama y sube por la cadena hasta el primero que pueda autorizar; la raíz es el
+// administrador del cliente, que siempre puede.
+// ---------------------------------------------------------------------------
+const COLOR_SCREEN_TABLE_KEY = 'colores-columnas';
+const COLOR_PERSONALIZE_COLUMN = 'colColorsPersonalize';
+const COLOR_AUTHORIZE_COLUMN = 'colColorsAuthorize';
+const CLIENT_COLOR_TARGET_LEVELS = ['admin', 'perfil', 'usuario'];
+const COLOR_TREE_SECTION_LABEL_KEYS = {
+    main: 'menu.mainSection',
+    finance: 'menu.finance',
+    accounting: 'menu.accounting',
+    'human-resources': 'menu.humanResources',
+    marketing: 'menu.marketing',
+    commercial: 'menu.commercial',
+    purchasing: 'menu.purchasing',
+    'supply-chain': 'menu.supplyChain',
+    'management-control': 'menu.managementControl',
+    'general-management': 'menu.generalManagement',
+    'steering-committee': 'menu.steeringCommittee',
+    certifications: 'menu.certifications',
+};
+
+function userCanAuthorizeClientColors(userId, clientId) {
+    const row = db.prepare('SELECT is_client_admin AS isAdmin, active, client_id AS clientId FROM users WHERE id = ?').get(userId);
+    if (!row || row.active === 0 || row.clientId !== clientId) return false;
+    if (row.isAdmin) return true;
+    return canAuthorizeColumn(getUserEffectiveGrants(userId), COLOR_SCREEN_TABLE_KEY, COLOR_AUTHORIZE_COLUMN);
+}
+// A quién le llega la solicitud de `requesterId`: su jefe directo del organigrama y, si este no tiene "Autorizar
+// colores", el jefe del jefe, hasta el primero que sí. Sin nadie en la cadena (o un puesto vacante o sin usuario,
+// que resolveDirectSupervisorUserId ya salta), el administrador del cliente.
+function resolveClientColorAuthorizer(requesterId, clientId) {
+    const seen = new Set([requesterId]);
+    let cursor = resolveDirectSupervisorUserId(requesterId);
+    while (cursor && !seen.has(cursor)) {
+        seen.add(cursor);
+        if (userCanAuthorizeClientColors(cursor, clientId)) return cursor;
+        cursor = resolveDirectSupervisorUserId(cursor);
+    }
+    const client = db.prepare('SELECT admin_user_id AS adminId FROM clients WHERE id = ?').get(clientId);
+    if (client && client.adminId) return client.adminId;
+    const anyAdmin = db.prepare('SELECT id FROM users WHERE client_id = ? AND is_client_admin = 1 AND active != 0 ORDER BY id LIMIT 1').get(clientId);
+    return anyAdmin ? anyAdmin.id : null;
+}
+
+// A quién se le puede cambiar el color: el administrador de la empresa, un perfil (Puesto de Trabajo) o una
+// persona. Devuelve el objetivo ya validado contra el cliente, o null.
+function resolveClientColorTarget(clientId, level, entityId, forTestAccount = false) {
+    if (level === 'admin') {
+        const client = db.prepare('SELECT admin_user_id AS adminId FROM clients WHERE id = ?').get(clientId);
+        if (!client || !client.adminId) return null;
+        return { level, entityId: client.adminId, name: getUserNameById(client.adminId) };
+    }
+    const id = Number(entityId);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    if (level === 'perfil') {
+        // forTestAccount null = sin importar si es del universo de práctica (al decidir una solicitud ya hecha).
+        const position = forTestAccount === null
+            ? db.prepare('SELECT id, name FROM job_positions WHERE id = ? AND client_id = ?').get(id, clientId)
+            : getJobPositionById(id, clientId, forTestAccount);
+        return position ? { level, entityId: id, name: position.name } : null;
+    }
+    if (level === 'usuario') {
+        const user = db.prepare('SELECT id, name, username FROM users WHERE id = ? AND client_id = ? AND is_client_admin = 0').get(id, clientId);
+        return user ? { level, entityId: id, name: user.name || user.username } : null;
+    }
+    return null;
+}
+function listClientColorTargets(clientId, forTestAccount = false) {
+    const admin = resolveClientColorTarget(clientId, 'admin', null);
+    const profiles = listJobPositions(clientId, forTestAccount).map((p) => ({ entityId: p.id, name: p.name }));
+    const users = db.prepare(`
+        SELECT id, COALESCE(NULLIF(name, ''), username) AS name FROM users
+        WHERE client_id = ? AND is_client_admin = 0 AND active != 0 AND is_test_account = ?
+        ORDER BY name COLLATE NOCASE
+    `).all(clientId, forTestAccount ? 1 : 0).map((u) => ({ entityId: u.id, name: u.name }));
+    return { admin: admin ? { entityId: admin.entityId, name: admin.name } : null, profiles, users };
+}
+
+// Cadena de niveles de ese objetivo y de todo lo que tiene arriba, el más cercano primero. El administrador
+// está arriba del perfil, y el perfil arriba de la persona; cliente, plan y giro son los de la empresa.
+function resolveLevelColorChain(level, entityId, clientId) {
+    const above = resolveViewerColorChain({ userId: null, clientId });
+    if (level === 'admin') return above;
+    if (level === 'perfil') return [{ level: 'perfil', entityId }, ...above];
+    const jobPositionId = getJobPositionIdForUser(entityId);
+    return [{ level: 'usuario', entityId }, ...(jobPositionId ? [{ level: 'perfil', entityId: jobPositionId }] : []), ...above];
+}
+
+// Todas las columnas de las tablas reales (las de TABLE_GRANT_PATHS, salvo esta misma pantalla), con el camino
+// Departamento > Área > ... > Pantalla que les corresponde en menu.json. Las hojas de la clasificación
+// "Botones" son permisos de la pantalla, no columnas de datos.
+let cachedColorColumnCatalog = null;
+function getColorColumnCatalog() {
+    if (cachedColorColumnCatalog) return cachedColorColumnCatalog;
+    const labelKeyById = new Map();
+    const collect = (nodes) => (nodes || []).forEach((n) => {
+        if (n && n.id && n.labelKey && !labelKeyById.has(n.id)) labelKeyById.set(n.id, n.labelKey);
+        if (n && n.submenu) collect(n.submenu);
+    });
+    menuData.sections.forEach((s) => collect(s.items));
+    collect(menuData.areaCategories);
+    Object.values(menuData.areaOverrides || {}).forEach((byApartado) => Object.values(byApartado).forEach(collect));
+    Object.values(menuData.areas || {}).forEach(collect);
+
+    const catalog = [];
+    Object.entries(TABLE_GRANT_PATHS).forEach(([tableKey, path]) => {
+        if (tableKey === COLOR_SCREEN_TABLE_KEY) return;
+        const pantalla = findPantallaNode(path.sectionId, path.itemId, path.submenuPrefix);
+        if (!pantalla) return;
+        const segments = path.submenuPrefix.split('/');
+        const crumbs = [
+            { id: path.sectionId, labelKey: COLOR_TREE_SECTION_LABEL_KEYS[path.sectionId] || path.sectionId },
+            { id: path.itemId, labelKey: labelKeyById.get(path.itemId) || path.itemId },
+            ...segments.slice(0, -1).map((id) => ({ id, labelKey: labelKeyById.get(id) || id })),
+        ];
+        const columns = [];
+        const addColumn = (col, structuralClassId) => {
+            if (!col || !col.id) return;
+            const base = columnSubmenuBase(path, col.id);
+            const nodeKey = `${path.sectionId}::${path.itemId}::${base}`;
+            const classNode = structuralClassId ? (pantalla.submenu || []).find((e) => e.isClassification && e.id === structuralClassId) : null;
+            columns.push({
+                id: col.id,
+                labelKey: col.labelKey || col.id,
+                nodeKey,
+                classLabelKey: classNode ? classNode.labelKey : null,
+            });
+        };
+        (pantalla.submenu || []).forEach((entry) => {
+            if (entry.isClassification) {
+                if (entry.id === 'class-botones') return;
+                (entry.submenu || []).forEach((col) => addColumn(col, entry.id));
+            } else addColumn(entry, null);
+        });
+        if (!columns.length) return;
+        catalog.push({
+            tableKey,
+            path: { sectionId: path.sectionId, itemId: path.itemId, submenuPrefix: path.submenuPrefix },
+            crumbs,
+            screenId: segments[segments.length - 1],
+            screenLabelKey: pantalla.labelKey || segments[segments.length - 1],
+            columns,
+        });
+    });
+    cachedColorColumnCatalog = catalog;
+    return catalog;
+}
+// "col-own:<nodeKey>" (Encabezado) / "col-nested:<nodeKey>" (Filas) -> la columna a la que pertenece; null si no es
+// el id de ninguna columna real.
+function findColorColumnByColorId(colorId) {
+    const match = /^col-(own|nested):(.+)$/.exec(colorId || '');
+    if (!match) return null;
+    for (const screen of getColorColumnCatalog()) {
+        const column = screen.columns.find((c) => c.nodeKey === match[2]);
+        if (column) return { screen, column, part: match[1] };
+    }
+    return null;
+}
+
+// Lo que se pinta en la pantalla para ese objetivo: por cada columna, lo que ve hoy (propio o heredado, y de
+// qué nivel viene) y si hay una solicitud pendiente. Solo se devuelven los colores de las columnas que tienen
+// alguno o una solicitud, indexados por su id de color.
+function getClientColorsForTarget(clientId, target) {
+    const chain = resolveLevelColorChain(target.level, target.entityId, clientId);
+    const layersById = getLevelColorOverrides(chain);
+    const masterRows = new Map(getClassificationColors().map((c) => [c.classificationId, c]));
+    const pending = new Map();
+    db.prepare(`
+        SELECT color_id AS colorId, action, value FROM column_color_requests
+        WHERE scope = 'client' AND client_id = ? AND level = ? AND entity_id = ? AND status = 'pending'
+    `).all(clientId, target.level, target.entityId).forEach((r) => {
+        const entry = pending.get(r.colorId) || {};
+        if (r.action.endsWith('text')) entry.pendingText = r.action === 'set-text' ? r.value : '';
+        else entry.pendingBg = r.action === 'set' ? r.value : '';
+        pending.set(r.colorId, entry);
+    });
+    const colors = {};
+    const addColor = (colorId) => {
+        const base = masterRows.get(colorId);
+        const layers = layersById.get(colorId) || [];
+        const bgLayer = layers.find((l) => l.color);
+        const textLayer = layers.find((l) => l.textColor);
+        const entry = { ...(pending.get(colorId) || {}) };
+        if (bgLayer) { entry.bg = bgLayer.color; entry.bgFrom = bgLayer.level === target.level ? 'own' : bgLayer.level; }
+        else if (base && base.color) { entry.bg = base.color; entry.bgFrom = 'master'; }
+        if (textLayer) { entry.text = textLayer.textColor; entry.textFrom = textLayer.level === target.level ? 'own' : textLayer.level; }
+        else if (base && base.textColor) { entry.text = base.textColor; entry.textFrom = 'master'; }
+        if (Object.keys(entry).length) colors[colorId] = entry;
+    };
+    getColorColumnCatalog().forEach((screen) => screen.columns.forEach((col) => {
+        addColor(`col-own:${col.nodeKey}`);
+        addColor(`col-nested:${col.nodeKey}`);
+    }));
+    return colors;
+}
+
+// Solicitudes de color de una empresa que ve esta persona: las suyas y las pendientes que le tocan decidir
+// (el administrador del cliente ve todas las pendientes de su empresa, porque es la raíz de la cadena).
+function listClientColorRequests(clientId, { userId, isClientAdmin = false, limit = 100 }) {
+    return db.prepare(`
+        ${COLOR_REQUEST_SELECT}
+        WHERE r.scope = 'client' AND r.client_id = ?
+          AND (r.requested_by_user_id = ? OR (r.status = 'pending' AND (r.assigned_to_user_id = ? OR ? = 1)))
+        ORDER BY (r.status = 'pending') DESC, r.id DESC
+        LIMIT ?
+    `).all(clientId, userId, userId, isClientAdmin ? 1 : 0, limit);
+}
+// Nombre del objetivo de una solicitud ("Perfil: Coordinador"): se muestra en la lista de solicitudes.
+function describeClientColorRequestTarget(request) {
+    if (!request.level) return { level: null, name: '' };
+    if (request.level === 'perfil') {
+        const row = db.prepare('SELECT name FROM job_positions WHERE id = ?').get(request.entityId);
+        return { level: 'perfil', name: row ? row.name : '' };
+    }
+    return { level: request.level, name: getUserNameById(request.entityId) };
+}
+
 // Qué cambió entre lo guardado del Árbol de Permisos Maestro y lo que llega (mismos valores por defecto
 // que setMasterPermissionStatuses): estatus y/o Web-App.
 function diffMasterPermissionStatuses(rows) {
@@ -8901,6 +9137,19 @@ module.exports = {
     getUserNameById,
     getSaasTableColumnColors,
     resolveViewerColorChain,
+    COLOR_PERSONALIZE_COLUMN,
+    COLOR_AUTHORIZE_COLUMN,
+    COLOR_SCREEN_TABLE_KEY,
+    CLIENT_COLOR_TARGET_LEVELS,
+    userCanAuthorizeClientColors,
+    resolveClientColorAuthorizer,
+    resolveClientColorTarget,
+    listClientColorTargets,
+    getColorColumnCatalog,
+    findColorColumnByColorId,
+    getClientColorsForTarget,
+    listClientColorRequests,
+    describeClientColorRequestTarget,
     getLevelColorOverrides,
     listLevelColors,
     setLevelColor,

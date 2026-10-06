@@ -113,6 +113,7 @@
     "clientData": "Client Data",
     "roles": "Roles",
     "users": "Users",
+    "columnColors": "Column Colors",
     "accessPermissions": "Access and Permissions",
     "upcomingUpdates": "Upcoming Updates",
     "trainingSessions": "Training Sessions",
@@ -852,6 +853,30 @@
     "accesosActivePermsBtn": "View active permissions",
     "accesosActivePermsTitle": "Active Permissions",
     "myAccessSubtitle": "What you can actually see today, granted by your profile(s) plus anything extra.",
+    "columnColorsTitle": "Column Colors",
+    "columnColorsSubtitle": "Choose the background and text color your company's table columns show. What you change only reaches whatever sits below what you pick: change a profile and only its users see it; change a person and only they do.",
+    "colColorsPersonalize": "Customize colors",
+    "colColorsAuthorize": "Authorize colors",
+    "columnColorsApplyTo": "Apply to",
+    "columnColorsLevelAdmin": "Administrator",
+    "columnColorsLevelProfile": "Profile",
+    "columnColorsLevelUser": "Person",
+    "columnColorsSample": "Aa",
+    "columnColorsStateOwn": "Own",
+    "columnColorsStatePending": "Pending",
+    "columnColorsStateMaster": "From the product",
+    "columnColorsStateInherited": "Inherits · {level}",
+    "columnColorsLevel_giro": "Business type",
+    "columnColorsLevel_plan": "Plan",
+    "columnColorsLevel_cliente": "Client",
+    "columnColorsLevel_admin": "Administrator",
+    "columnColorsLevel_perfil": "Profile",
+    "columnColorsLevel_usuario": "Person",
+    "columnColorsNoColor": "No color",
+    "columnColorsEmpty": "There are no screens available to customize.",
+    "columnColorsReqColTarget": "For",
+    "columnColorsTargetLine": "{level}: {name}",
+    "colorHistoryField": "Column color",
     "accesosLegendProfile": "Granted by profile",
     "accesosLegendExtra": "Granted extra",
     "accesosLegendNone": "No access",
@@ -2069,6 +2094,42 @@
     "masterTreeColorReject": {
       "what": "Rejects this color change: it is not applied and the column stays as it is.",
       "example": "the requested color does not match; you tap Reject and everything stays the same."
+    },
+    "columnColorsLevel": {
+      "what": "Choose who you change the color for: the company administrator, a profile or a person. The change only reaches whatever sits below what you pick.",
+      "example": "you pick Profile and then \"Coordinator\": the new color is only seen by people with that profile."
+    },
+    "columnColorsEntity": {
+      "what": "The exact profile or person the colors you choose below are applied to.",
+      "example": "you pick \"Ana Pérez\" and any color you change only changes for her."
+    },
+    "columnColorsCell": {
+      "what": "Opens the color picker for this part of the column (Header or Rows), for whoever you picked above. There you change the background and the text separately.",
+      "example": "you tap Rows of \"Plates\" and pick green: plates show in green for the chosen profile."
+    },
+    "columnColorsState": {
+      "what": "Says where the color you see comes from: Own (you chose it here), Pending (waiting for someone to authorize it) or Inherits (it comes from a level above: Administrator, Client, Plan, Business type or the product base color).",
+      "example": "\"Inherits · Plan\" means nobody lower down changed it and the plan's color is used."
+    },
+    "columnColorsRequests": {
+      "what": "Shows the color requests: the ones you made and the ones you have to authorize. Each one goes up through your bosses to whoever can authorize colors.",
+      "example": "you asked for a color for \"Folio\"; here you see it is pending and who it went to."
+    },
+    "columnColorsToggle": {
+      "what": "Opens or closes this group to show what it contains.",
+      "example": "you open \"Our Units\" to see all its columns."
+    },
+    "columnColorsKind": {
+      "what": "Switches between the background color and the text color you are editing.",
+      "example": "you tap the \"A\" to choose only the text color."
+    },
+    "columnColorsSwatch": {
+      "what": "Applies this color to the part of the column you are editing. If you cannot authorize colors, a request is sent.",
+      "example": "you tap light blue and the header turns that color."
+    },
+    "columnColorsMore": {
+      "what": "Opens the system picker so you can choose any other color.",
+      "example": "you need your brand's exact color and pick it here."
     },
     "changeHistory": {
       "what": "Shows who changed something in this table, what they changed, and when.",

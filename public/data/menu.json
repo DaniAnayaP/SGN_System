@@ -177,6 +177,18 @@
               ]
             },
             { "id": "ab-users", "labelKey": "menu.users", "href": "Business-Usuarios.html", "icon": "bx-group" },
+            {
+              "id": "ab-column-colors", "labelKey": "menu.columnColors", "href": "Business-ColoresColumnas.html", "icon": "bx-color-fill",
+              "submenu": [
+                {
+                  "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+                  "submenu": [
+                    { "id": "colColorsPersonalize", "labelKey": "business.colColorsPersonalize", "permissionOnly": true },
+                    { "id": "colColorsAuthorize", "labelKey": "business.colColorsAuthorize", "permissionOnly": true }
+                  ]
+                }
+              ]
+            },
             { "id": "ab-upcoming-updates", "labelKey": "menu.upcomingUpdates", "href": "#", "icon": "bx-calendar" },
             { "id": "ab-training-sessions", "labelKey": "menu.trainingSessions", "href": "#", "icon": "bx-chalkboard" }
           ]

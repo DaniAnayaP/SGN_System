@@ -302,6 +302,19 @@ const {
     applyColorRequest,
     diffMasterPermissionStatuses,
     getUserNameById,
+    COLOR_SCREEN_TABLE_KEY,
+    COLOR_PERSONALIZE_COLUMN,
+    COLOR_AUTHORIZE_COLUMN,
+    CLIENT_COLOR_TARGET_LEVELS,
+    resolveClientColorAuthorizer,
+    resolveClientColorTarget,
+    listClientColorTargets,
+    getColorColumnCatalog,
+    findColorColumnByColorId,
+    getClientColorsForTarget,
+    listClientColorRequests,
+    describeClientColorRequestTarget,
+    listLevelColors,
     getSaasTableColumnColors,
     getEffectiveSaasUserFieldClassifications,
     getSaasMasterChangeLog,
@@ -2605,6 +2618,188 @@ app.get('/api/business/table-classifications', requireAuth, (req, res) => {
     const viewer = req.user.clientId ? { userId: req.user.sub, clientId: req.user.clientId } : null;
     res.json({ columns: getEffectiveColumnClassifications(tableKey, viewer) });
 });
+
+// ---------------------------------------------------------------------------
+// Colores de Columnas (cliente) -- Administración del Negocio. Cada administrador, perfil o persona elige el
+// color (Encabezado / Filas, fondo y letra) de las columnas de las tablas de SU empresa; el cambio solo baja
+// por la cadena Maestro > Giro > Plan > Cliente > Administrador > Perfil > Usuario (ver db.js,
+// column_color_level_overrides). Dos permisos en el árbol de la pantalla: "Personalizar colores" y "Autorizar
+// colores"; quien solo personaliza deja una solicitud que le llega a su jefe directo del organigrama y sube por
+// la cadena hasta el primero que pueda autorizar (la raíz es el administrador del cliente, que siempre puede).
+// ---------------------------------------------------------------------------
+const spanishStrings = require('./public/i18n/es.json');
+const spanishLabel = (key) => String(key || '').split('.').reduce((node, part) => (node && typeof node === 'object' ? node[part] : undefined), spanishStrings) || key;
+const COLOR_LEVEL_LABELS_ES = { admin: 'Administrador', perfil: 'Perfil', usuario: 'Usuario' };
+const COLOR_HEX = /^#[0-9a-fA-F]{6}$/;
+
+function clientColorAccess(req) {
+    const isAdmin = !!req.user.isClientAdmin;
+    const grants = isAdmin ? [] : getUserEffectiveGrants(req.user.sub);
+    return {
+        isAdmin,
+        canPersonalize: isAdmin || canCreateColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_PERSONALIZE_COLUMN),
+        canAuthorize: isAdmin || canAuthorizeColumn(grants, COLOR_SCREEN_TABLE_KEY, COLOR_AUTHORIZE_COLUMN),
+    };
+}
+// A quién puede cambiarle el color esta persona: el administrador, a cualquiera; los demás, solo a sí mismos y a
+// su propio perfil. Una cuenta de práctica (datos de prueba) nunca toca el nivel Administrador, que es el real.
+function allowedClientColorTargets(req, access) {
+    const all = listClientColorTargets(req.user.clientId, req.user.isTestAccount);
+    if (req.user.isTestAccount) all.admin = null;
+    if (access.isAdmin) return all;
+    const ownProfileId = getJobPositionIdForUser(req.user.sub);
+    return {
+        admin: null,
+        profiles: all.profiles.filter((p) => p.entityId === ownProfileId),
+        users: all.users.filter((u) => u.entityId === req.user.sub),
+    };
+}
+function isAllowedClientColorTarget(allowed, target) {
+    if (target.level === 'admin') return !!allowed.admin && allowed.admin.entityId === target.entityId;
+    const list = target.level === 'perfil' ? allowed.profiles : allowed.users;
+    return list.some((e) => e.entityId === target.entityId);
+}
+// Qué se le muestra por defecto: el administrador, su propio nivel; los demás, su persona.
+function defaultClientColorTarget(req, allowed) {
+    if (allowed.admin) return { level: 'admin', entityId: allowed.admin.entityId, name: allowed.admin.name };
+    const self = allowed.users.find((u) => u.entityId === req.user.sub);
+    if (self) return { level: 'usuario', entityId: self.entityId, name: self.name };
+    const profile = allowed.profiles[0];
+    return profile ? { level: 'perfil', entityId: profile.entityId, name: profile.name } : null;
+}
+
+app.get('/api/business/column-colors/catalog', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ screens: getColorColumnCatalog() });
+});
+app.get('/api/business/column-colors', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const access = clientColorAccess(req);
+    const allowed = allowedClientColorTargets(req, access);
+    const asked = typeof req.query.level === 'string' && req.query.level
+        ? resolveClientColorTarget(req.user.clientId, req.query.level, req.query.entityId, req.user.isTestAccount)
+        : null;
+    const target = asked && isAllowedClientColorTarget(allowed, asked) ? asked : defaultClientColorTarget(req, allowed);
+    res.json({
+        canPersonalize: access.canPersonalize,
+        canAuthorize: access.canAuthorize,
+        isAdmin: access.isAdmin,
+        targets: allowed,
+        target,
+        colors: target ? getClientColorsForTarget(req.user.clientId, target) : {},
+    });
+});
+
+// Bitácora de la pantalla (data_table_changes, 'colores-columnas'): un renglón por cambio aplicado, con quién lo
+// pidió y quién lo autorizó cuando pasó por una solicitud.
+function logClientColorChange(req, request, found, target, previousHex, appliedBy) {
+    const kindLabel = request.action.endsWith('text') ? 'letra' : 'fondo';
+    const partLabel = found.part === 'own' ? 'Encabezado' : 'Filas';
+    const clearing = request.action.startsWith('clear');
+    logTableChange({
+        clientId: request.clientId, tableKey: COLOR_SCREEN_TABLE_KEY, recordId: target.entityId,
+        recordLabel: `${COLOR_LEVEL_LABELS_ES[target.level]}: ${target.name}`, action: 'update',
+        fieldKey: 'business.colorHistoryField',
+        oldValue: previousHex || '',
+        newValue: `${spanishLabel(found.screen.screenLabelKey)} › ${spanishLabel(found.column.labelKey)} (${partLabel}, ${kindLabel}): ${clearing ? 'quitado' : request.value}`,
+        changedBy: appliedBy.changedBy, requestedBy: appliedBy.requestedBy || null, authorizedBy: appliedBy.authorizedBy || null,
+    });
+}
+function currentClientLevelColor(level, entityId, colorId, kind) {
+    const row = listLevelColors(level, entityId).find((r) => r.colorId === colorId);
+    return row ? (kind === 'text' ? row.textColor : row.color) : '';
+}
+// Valida lo común de PUT/DELETE: columna real, nivel y persona de su empresa, y que esta persona pueda
+// proponer el cambio. Devuelve null si ya respondió el error.
+function parseClientColorChange(req, res, source) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const access = clientColorAccess(req);
+    if (!access.canPersonalize) { res.status(403).json({ message: 'No tienes permiso para personalizar colores.' }); return null; }
+    const found = findColorColumnByColorId(source.colorId);
+    if (!found) { res.status(400).json({ message: 'colorId is not a real column.' }); return null; }
+    if (!CLIENT_COLOR_TARGET_LEVELS.includes(source.level)) { res.status(400).json({ message: 'Invalid level.' }); return null; }
+    const target = resolveClientColorTarget(req.user.clientId, source.level, source.entityId, req.user.isTestAccount);
+    if (!target || !isAllowedClientColorTarget(allowedClientColorTargets(req, access), target)) {
+        res.status(403).json({ message: 'No puedes cambiar el color de esta persona o perfil.' });
+        return null;
+    }
+    const kind = source.kind === 'text' ? 'text' : 'dot';
+    return { access, found, target, kind };
+}
+// Aplica el cambio al momento (quien puede autorizar) o deja una solicitud que sube por la cadena de jefes.
+function applyOrRequestClientColor(req, res, change, action, value) {
+    const { access, found, target, kind } = change;
+    const colorId = found.part === 'own' ? `col-own:${found.column.nodeKey}` : `col-nested:${found.column.nodeKey}`;
+    const request = { clientId: req.user.clientId, colorId, action, value, level: target.level, entityId: target.entityId };
+    if (access.canAuthorize) {
+        const previous = currentClientLevelColor(target.level, target.entityId, colorId, kind);
+        applyColorRequest({ ...request, scope: 'client' }, changedByLabel(req));
+        logClientColorChange(req, request, found, target, previous, { changedBy: changedByLabel(req) });
+        return res.json({ applied: true, colors: getClientColorsForTarget(req.user.clientId, target) });
+    }
+    const assignedTo = resolveClientColorAuthorizer(req.user.sub, req.user.clientId);
+    const requestId = createColorRequest({
+        scope: 'client', clientId: req.user.clientId, colorId, action, value, level: target.level, entityId: target.entityId,
+        requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req), assignedToUserId: assignedTo,
+    });
+    return res.status(202).json({
+        requested: true, requestId, assignedTo: { id: assignedTo, name: assignedTo ? getUserNameById(assignedTo) : '' },
+        colors: getClientColorsForTarget(req.user.clientId, target),
+    });
+}
+app.put('/api/business/column-colors', requireAuth, (req, res) => {
+    const body = req.body || {};
+    const change = parseClientColorChange(req, res, body);
+    if (!change) return;
+    if (typeof body.value !== 'string' || !COLOR_HEX.test(body.value)) return res.status(400).json({ message: 'value must be a #rrggbb color.' });
+    applyOrRequestClientColor(req, res, change, change.kind === 'text' ? 'set-text' : 'set', body.value.toLowerCase());
+});
+app.delete('/api/business/column-colors', requireAuth, (req, res) => {
+    const change = parseClientColorChange(req, res, req.query || {});
+    if (!change) return;
+    applyOrRequestClientColor(req, res, change, change.kind === 'text' ? 'clear-text' : 'clear-dot', null);
+});
+
+// Solicitudes de color de la empresa: cada quien ve las suyas y las pendientes que le tocan decidir (el
+// administrador ve todas las pendientes de su empresa, es la raíz de la cadena).
+app.get('/api/business/column-color-requests', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const access = clientColorAccess(req);
+    const requests = listClientColorRequests(req.user.clientId, { userId: req.user.sub, isClientAdmin: access.isAdmin }).map((r) => {
+        const found = findColorColumnByColorId(r.colorId);
+        return {
+            ...r,
+            target: describeClientColorRequestTarget(r),
+            screenLabelKey: found ? found.screen.screenLabelKey : null,
+            columnLabelKey: found ? found.column.labelKey : null,
+            part: found ? found.part : null,
+            canDecide: access.canAuthorize && r.status === 'pending' && (access.isAdmin || r.assignedToId === req.user.sub),
+        };
+    });
+    res.json({ requests, canAuthorize: access.canAuthorize, canPersonalize: access.canPersonalize, toDecide: requests.filter((r) => r.canDecide).length });
+});
+const decideClientColorRequest = (approve) => (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const access = clientColorAccess(req);
+    if (!access.canAuthorize) return res.status(403).json({ message: 'No tienes permiso para autorizar colores.' });
+    const request = getColorRequest(Number(req.params.id));
+    if (!request || request.scope !== 'client' || request.clientId !== req.user.clientId) return res.status(404).json({ message: 'Solicitud no encontrada.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya se resolvió.' });
+    if (!access.isAdmin && request.assignedToId !== req.user.sub) return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
+    const label = changedByLabel(req);
+    if (approve) {
+        const found = findColorColumnByColorId(request.colorId);
+        const target = resolveClientColorTarget(request.clientId, request.level, request.entityId, null);
+        if (!found || !target) return res.status(409).json({ message: 'Lo que pedía esta solicitud ya no existe.' });
+        const kind = request.action.endsWith('text') ? 'text' : 'dot';
+        const previous = currentClientLevelColor(target.level, target.entityId, request.colorId, kind);
+        applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+        logClientColorChange(req, request, found, target, previous, { changedBy: request.requestedByName, requestedBy: request.requestedByName, authorizedBy: label });
+    }
+    res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
+};
+app.post('/api/business/column-color-requests/:id/approve', requireAuth, decideClientColorRequest(true));
+app.post('/api/business/column-color-requests/:id/reject', requireAuth, decideClientColorRequest(false));
 
 // Árbol de Permisos Maestro's own "Cambios" column (see
 // master_permission_change_log's DDL comment in db.js) -- admin-only, same
