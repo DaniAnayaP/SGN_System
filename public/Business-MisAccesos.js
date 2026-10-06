@@ -12,6 +12,23 @@
 const container = document.getElementById('my-access-container');
 const errorBanner = document.getElementById('my-access-error');
 
+// Para el administrador, el subtítulo y la leyenda hablan del contrato (no de un perfil). Se cambia la clave de traducción, así el
+// texto también sigue al cambiar de idioma.
+const ADMIN_TEXT_KEYS = {
+    'business.myAccessSubtitle': 'business.myAccessAdminSubtitle',
+    'business.accesosLegendProfile': 'business.accesosLegendPlan',
+    'business.accesosLegendExtra': 'business.accesosLegendAdditional',
+    'business.accesosLegendNone': 'business.accesosLegendNotContracted',
+};
+function useAdminTexts() {
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const adminKey = ADMIN_TEXT_KEYS[el.dataset.i18n];
+        if (!adminKey) return;
+        el.dataset.i18n = adminKey;
+        el.textContent = Dashboard.t(adminKey);
+    });
+}
+
 async function loadMyAccess() {
     errorBanner.hidden = true;
     container.innerHTML = '';
@@ -21,9 +38,14 @@ async function loadMyAccess() {
         const data = await res.json();
         const order = await fetch('/api/business/permission-order', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch('/api/business/permission-classifications', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
+        // El administrador del cliente ve todo su contrato (verde = en el plan, amarillo = adicional) y, bloqueado, lo que existe en su
+        // giro y no contrató. Un usuario normal ve lo de su perfil y sus extras, como siempre.
+        const isAdmin = !!data.isClientAdmin;
+        if (isAdmin) useAdminTexts();
         const tree = window.PermissionCostTree.create(container, {
             order, classOverrides, mode: 'clientTricolor', interactive: false,
-            historyEndpoint: '/api/business/me/grant-change-log',
+            historyEndpoint: isAdmin ? '/api/business/me/contract-change-log' : '/api/business/me/grant-change-log',
+            giroGrants: isAdmin ? data.giroGrants : null,
         });
         await tree.init(data.jobPositionGrants || [], [], data.grants || []);
     } catch {

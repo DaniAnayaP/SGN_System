@@ -177,6 +177,10 @@
         // Las clasificaciones de columna de este nivel ({ nodeKey, classificationId, classificationLabel, from }), para agrupar las
         // columnas como las clasifica (Árbol por Nivel). Sin ellas, la estructura de menu.json de siempre.
         classOverrides = null,
+        // clientTricolor only: lo que existe en el giro del cliente ({ sectionId, itemId, submenuId }[]). Con esto el árbol deja solo
+        // lo del giro (más lo que el cliente ya tiene contratado, aunque el giro cambiara después); lo que el cliente no contrató
+        // sigue ahí, en rojo y bloqueado. Sin él, el árbol completo de siempre.
+        giroGrants = null,
     } = {}) {
         let sectionsData = [];
         const classificationOverrides = new Map();
@@ -236,6 +240,34 @@
             });
             (rawGrants || []).forEach((g) => expanded.add(keyOf(g.sectionId, g.itemId, g.submenuId)));
             return expanded;
+        }
+
+        // Deja del árbol solo lo que cubre `visibleRaw` (los permisos del giro y del contrato): un nodo se queda si él, un nivel de
+        // arriba, o algo debajo de él está en la lista. Llega hasta la pantalla; sus columnas se quedan todas. 'main' no se toca.
+        function pruneToVisible(sections, visibleRaw) {
+            const raw = new Set((visibleRaw || []).map((g) => keyOf(g.sectionId, g.itemId, String(g.submenuId || '').replace(/#app$/, ''))));
+            const keys = [...raw];
+            const covers = (sectionId, itemId, submenuId) => {
+                if (isGranted(raw, sectionId, itemId, submenuId)) return true;
+                if (submenuId) return keys.some((k) => k.startsWith(`${sectionId}::${itemId}::${submenuId}/`));
+                if (itemId) return keys.some((k) => k.startsWith(`${sectionId}::${itemId}::`));
+                return keys.some((k) => k.startsWith(`${sectionId}::`));
+            };
+            return sections.map((section) => {
+                if (section.id === 'main') return section;
+                const items = section.items.map((item) => {
+                    if (!item.submenu || !item.submenu.length) return covers(section.id, item.id, null) ? item : null;
+                    const apartados = item.submenu.map((sm) => {
+                        if (!sm.submenu || !sm.submenu.length) return covers(section.id, item.id, sm.id) ? sm : null;
+                        const pantallas = sm.submenu.filter((subSm) => (
+                            subSm.standalone ? covers(section.id, subSm.id, null) : covers(section.id, item.id, `${sm.id}/${subSm.id}`)
+                        ));
+                        return pantallas.length ? { ...sm, submenu: pantallas } : null;
+                    }).filter(Boolean);
+                    return apartados.length ? { ...item, submenu: apartados } : null;
+                }).filter(Boolean);
+                return items.length ? { ...section, items } : null;
+            }).filter(Boolean);
         }
 
         // Container-level color: green if EVERY leaf is plan-covered, else
@@ -1476,6 +1508,10 @@
                         });
                     return { ...s, items };
                 });
+
+                if (mode === 'clientTricolor' && giroGrants) {
+                    sectionsData = pruneToVisible(sectionsData, [...giroGrants, ...(initialGrants || []), ...(clientGrants || [])]);
+                }
 
                 pendingAdditions = new Set();
                 if (mode === 'clientTricolor') {

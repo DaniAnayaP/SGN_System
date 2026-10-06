@@ -3895,7 +3895,27 @@ app.patch('/api/business/users/:id', requireAuth, requireClientAdmin, (req, res)
 // "Mis Accesos y Permisos"), no admin grant required, since it's their own
 // data. Same Puesto + extra shape "Permisos Activados" already uses.
 app.get('/api/business/me/grants', requireAuth, (req, res) => {
+    // El administrador del cliente no tiene permisos propios guardados: ve todo lo que su empresa contrató. Su árbol se pinta con el
+    // contrato (verde = incluido en el plan, amarillo = adicional contratado) y lo que existe en su giro y no contrató queda bloqueado.
+    // `giroGrants` (null si no hay plan, entonces no se filtra) deja el árbol solo con lo que existe en su giro.
+    if (req.user.isClientAdmin && req.user.clientId) {
+        const client = getClientById(req.user.clientId);
+        const plan = client && client.plan ? getPlanByName(client.plan) : null;
+        return res.json({
+            isClientAdmin: true,
+            jobPositionGrants: plan ? getPlanGrants(plan.id) : [],
+            grants: getClientPermissionGrants(req.user.clientId),
+            giroGrants: plan && plan.businessSectorId ? getSectorGrants(plan.businessSectorId) : null,
+        });
+    }
     res.json({ grants: getUserGrants(req.user.sub), jobPositionGrants: getUserJobPositionGrants(req.user.sub) });
+});
+
+// "Cambios" por nodo del árbol contratado del administrador (Mis Accesos): el historial del contrato de SU cliente, nunca el de otro.
+app.get('/api/business/me/contract-change-log', requireAuth, requireClientAdmin, (req, res) => {
+    const { nodeKey } = req.query || {};
+    if (!nodeKey) return res.status(400).json({ message: 'nodeKey is required.' });
+    res.json({ entries: getClientPermissionChangeLog(req.user.clientId, nodeKey) });
 });
 
 // Per-node "Cambios" for Business-MisAccesos.js's own read-only tricolor
