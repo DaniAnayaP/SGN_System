@@ -2394,13 +2394,14 @@ db.prepare("UPDATE users SET is_saas_super_admin = 1 WHERE username IN ('admin',
 // abbreviation (confirmed live, 2026-09-28 -- an earlier message that day
 // had asked for the literal string "USUARIO_PRUEBAS" instead; this
 // supersedes that, see the rename block right below for the account
-// already created under that name). is_saas_super_admin = 1, same as
-// admin_saas itself -- corrected 2026-09-28: an ordinary account (zero
-// saas_user_grants rows) no longer means "sees everything" by default (see
-// hasSaasGrant's own comment), so this training account needs the SAME
-// explicit unrestricted flag admin_saas has, mirroring how the client
-// side's own training account is also isClientAdmin=1, not unrestricted
-// merely by having no grants.
+// already created under that name). CHANGED 2026-10-06: it is NO LONGER a
+// super admin (is_saas_super_admin = 0). On 2026-09-28 it was seeded with
+// that flag so it would see everything like admin_saas, but Daniel's rule
+// of 2026-09-30 is that ONLY admin_saas has access to everything -- this
+// account depends on its own tree grants (Config. SaaS > Equipo SaaS)
+// like any other, and keeps only the Estatus exemption below
+// (is_test_account = 1 + all four visible statuses), which is what makes
+// it useful for testing screens "en construcción"/"en mejoras".
 // Idempotent by username, same as the admin/admin seed above, so this only
 // ever inserts once per database.
 const SAAS_TEST_USERNAME = 'Pruebas_SGN';
@@ -2481,7 +2482,7 @@ const SAAS_GRANT_LEGACY_TO_REAL_TREE = [
 if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(SAAS_TEST_USERNAME)) {
     db.prepare(`
         INSERT INTO users (username, email, password_hash, name, role, is_test_account, visible_statuses, is_saas_super_admin)
-        VALUES (@username, @email, @passwordHash, @name, @role, 1, @visibleStatuses, 1)
+        VALUES (@username, @email, @passwordHash, @name, @role, 1, @visibleStatuses, 0)
     `).run({
         username: SAAS_TEST_USERNAME,
         email: 'pruebas_sgn@sgn.invalid',
@@ -2492,9 +2493,16 @@ if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(SAAS_TEST_USERNAME
     });
     console.log(`[db] Seeded SaaS-side ${SAAS_TEST_USERNAME} test account (first run only) — set its password from Config. SaaS > Usuarios before relying on it.`);
 }
-// Backfill for a Pruebas_SGN row that already existed before
-// is_saas_super_admin was added.
-db.prepare('UPDATE users SET is_saas_super_admin = 1 WHERE username = ? AND is_saas_super_admin = 0').run(SAAS_TEST_USERNAME);
+// One-time, 2026-10-06: Pruebas_SGN used to be a super admin and this file re-forced that flag on EVERY start (so clearing it from the
+// database never stuck). It is cleared exactly once here (tracked in schema_migrations_data) and never re-applied, so giving it back
+// full access, if ever wanted, is a deliberate edit and survives restarts.
+const SAAS_TEST_NOT_SUPER_KEY = 'saas-test-account-not-super-admin-2026-10-06';
+if (!db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SAAS_TEST_NOT_SUPER_KEY)) {
+    db.transaction(() => {
+        db.prepare('UPDATE users SET is_saas_super_admin = 0 WHERE username = ?').run(SAAS_TEST_USERNAME);
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SAAS_TEST_NOT_SUPER_KEY);
+    })();
+}
 
 // --- One-time backfill: a "Cuenta creada" entry for every SaaS/GEIPSA
 // account that already existed before saas_user_changes did (admin/admin

@@ -9,8 +9,8 @@
 // Nuestros Planes. CORRECTED 2026-09-28: an account with NO grants at all
 // used to mean unrestricted (sees/does everything); confirmed live that's
 // wrong for anyone except the one designated super-admin (users.
-// is_saas_super_admin, only admin_saas and the Pruebas_SGN training
-// account have it) -- a brand-new "+ Nuevo Admin SaaS" account starts with
+// is_saas_super_admin, only admin_saas has it; Pruebas_SGN stopped
+// being one on 2026-10-06 and depends on this tree like everyone else) -- a brand-new "+ Nuevo Admin SaaS" account starts with
 // zero grants same as always, but now that correctly means it sees/does
 // NOTHING until this screen's own tree below grants it something, same
 // "empty = no access" the client side's own profiles already had. Shell
