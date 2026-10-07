@@ -31,6 +31,61 @@ async function loadLanguage() {
     document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => { el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder)); });
     const titleEl = document.querySelector('title[data-i18n]');
     if (titleEl) document.title = t(titleEl.dataset.i18n);
+    renderMenuUserCard();
+}
+
+// --- Quién tiene la sesión abierta ---------------------------------------------------------------------------------------
+// Tarjeta dentro del menú, encima de «Cerrar sesión»: la misma idea que la de la barra lateral de la web (renderSidebarUserCard en Dashboard.js).
+// Círculo con las iniciales, nombre, tipo de cuenta y, si es una cuenta de práctica, la etiqueta «Pruebas». No depende de ningún permiso.
+let sessionUser = null;
+
+function userCardInitials(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    const first = words[0][0];
+    const second = words.length > 1 ? words[words.length - 1][0] : (words[0][1] || '');
+    return (first + second).toUpperCase();
+}
+
+function renderMenuUserCard() {
+    const card = document.getElementById('home-menu-user-card');
+    if (!card || !sessionUser) return;
+    const name = sessionUser.name || sessionUser.username || '';
+    let kind = 'user';
+    let roleKey = 'main.userCardRoleUser';
+    if (sessionUser.isSaasSuperAdmin) { kind = 'saas'; roleKey = 'main.userCardRoleSaasMain'; }
+    else if (!sessionUser.clientId) { kind = 'saas'; roleKey = 'main.userCardRoleSaasTeam'; }
+    else if (sessionUser.isClientAdmin) { kind = 'client'; roleKey = 'main.userCardRoleClientAdmin'; }
+    card.dataset.kind = kind;
+    card.setAttribute('aria-label', t('main.userCardLabel', { name }));
+    card.title = sessionUser.username && sessionUser.username !== name ? `${name} (${sessionUser.username})` : name;
+
+    const avatar = document.createElement('span');
+    avatar.className = 'user-card-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = userCardInitials(name);
+
+    const nameEl = document.createElement('b');
+    nameEl.className = 'user-card-name';
+    nameEl.textContent = name;
+    const roleText = document.createElement('span');
+    roleText.className = 'user-card-role-text';
+    roleText.textContent = t(roleKey);
+    const roleEl = document.createElement('span');
+    roleEl.className = 'user-card-role';
+    roleEl.appendChild(roleText);
+    if (sessionUser.isTestAccount) {
+        const badge = document.createElement('span');
+        badge.className = 'user-card-badge';
+        badge.textContent = t('main.userCardTestBadge');
+        roleEl.appendChild(badge);
+    }
+    const text = document.createElement('div');
+    text.className = 'user-card-text';
+    text.append(nameEl, roleEl);
+
+    card.replaceChildren(avatar, text);
+    card.hidden = false;
 }
 
 // Same structure/behavior as login.js's showToast (icon, message, close X,
@@ -2283,6 +2338,8 @@ async function loadClientBranding() {
             return;
         }
         const { user } = await meRes.json();
+        sessionUser = user;
+        renderMenuUserCard();
         isClientAdmin = !!user?.isClientAdmin;
         // The auto-provisioned client-admin account's `name` is frozen as
         // "Admin <razón social completa>" (see activateClient in db.js) --
@@ -2322,6 +2379,8 @@ async function loadClientBranding() {
         // isn't a special case, just a normal load with cached inputs.
         const cached = loadAppDataCache();
         if (cached.user) {
+            sessionUser = cached.user;
+            renderMenuUserCard();
             isClientAdmin = !!cached.user?.isClientAdmin;
             document.getElementById('home-user-name').textContent = isClientAdmin
                 ? (cached.user?.name || '')

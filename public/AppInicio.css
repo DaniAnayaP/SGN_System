@@ -486,6 +486,74 @@ body{
 #home-menu-database[aria-expanded="true"] .bx-chevron-down,
 #home-menu-business-intelligence[aria-expanded="true"] .bx-chevron-down{ transform: rotate(180deg); }
 .home-hamburger-menu hr{ border: none; border-top: 1px solid var(--home-border); margin: 0.3rem 0; }
+/* Tarjeta de quien tiene la sesión abierta, dentro del menú y encima de «Cerrar sesión» (misma idea que la de la barra lateral de la web): sin caja,
+   todo con los colores del tema. El círculo dice el tipo de cuenta (lleno = equipo SaaS, suave = administrador del cliente, contorno = usuario) y
+   «Pruebas» es una etiqueta aparte en la línea del rol. */
+.home-menu-user-card{ display: flex; align-items: center; gap: 0.55rem; min-width: 0; padding: 0.5rem 0.6rem 0.35rem; }
+.home-menu-user-card[hidden]{ display: none; }
+.home-menu-user-card .user-card-avatar{
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: var(--home-accent-strong-2);
+    color: var(--home-on-accent);
+}
+.home-menu-user-card[data-kind="client"] .user-card-avatar{
+    background: var(--home-surface-2);
+    background: color-mix(in srgb, var(--home-accent-strong-2) 22%, var(--home-surface));
+    box-shadow: inset 0 0 0 1px var(--home-border);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--home-accent-strong-2) 50%, var(--home-surface));
+    color: var(--home-text-secondary);
+}
+.home-menu-user-card[data-kind="user"] .user-card-avatar{
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--home-border);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--home-text-secondary) 55%, var(--home-surface));
+    color: var(--home-text-secondary);
+}
+.home-menu-user-card .user-card-text{ display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.home-menu-user-card .user-card-name{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--home-text-primary);
+}
+.home-menu-user-card .user-card-role{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem 0.35rem;
+    min-width: 0;
+    font-size: 0.66rem;
+    color: var(--home-text-secondary);
+}
+.home-menu-user-card .user-card-role-text{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-menu-user-card .user-card-badge{
+    flex: none;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    font-size: 0.54rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: rgba(240, 194, 74, 0.2);
+    color: #8a5d00;
+    box-shadow: inset 0 0 0 1px rgba(200, 150, 30, 0.35);
+}
+body.dark-mode .home-menu-user-card .user-card-badge,
+body.institutional-mode .home-menu-user-card .user-card-badge,
+body.futuristic-mode .home-menu-user-card .user-card-badge{
+    color: #f0c24a;
+    box-shadow: inset 0 0 0 1px rgba(240, 194, 74, 0.4);
+}
 .home-hamburger-menu .home-menu-logout{ color: var(--home-danger); }
 .home-hamburger-menu .home-menu-logout i{ color: var(--home-danger); }
 .home-search-bar{

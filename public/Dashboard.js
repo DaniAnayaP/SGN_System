@@ -11019,9 +11019,9 @@ function userCardInitials(name) {
     return (first + second).toUpperCase();
 }
 
-// El color del círculo dice el tipo de cuenta: de práctica (ámbar), del equipo SaaS (oscuro), administrador de cliente (azul) o usuario (gris).
+// El círculo dice el tipo de cuenta con el acento del tema: lleno = equipo SaaS, suave = administrador del cliente, solo contorno = usuario. Que sea
+// una cuenta de práctica se dice aparte, con la etiqueta «Pruebas» en la línea del rol (data-test).
 function userCardKind(user) {
-    if (user.isTestAccount) return 'test';
     if (user.isSaasSuperAdmin || !user.clientId) return 'saas';
     return user.isClientAdmin ? 'client' : 'user';
 }
@@ -11046,6 +11046,8 @@ function renderSidebarUserCard() {
     }
     const name = currentUser.name || currentUser.username || '';
     card.dataset.kind = userCardKind(currentUser);
+    if (currentUser.isTestAccount) card.dataset.test = 'true';
+    else delete card.dataset.test;
     card.setAttribute('aria-label', t('main.userCardLabel', { name }));
     card.title = currentUser.username && currentUser.username !== name ? `${name} (${currentUser.username})` : name;
 
@@ -11057,15 +11059,18 @@ function renderSidebarUserCard() {
     const nameEl = document.createElement('b');
     nameEl.className = 'user-card-name';
     nameEl.textContent = name;
+    const roleText = document.createElement('span');
+    roleText.className = 'user-card-role-text';
+    roleText.textContent = t(userCardRoleKey(currentUser));
+    const roleEl = document.createElement('span');
+    roleEl.className = 'user-card-role';
+    roleEl.appendChild(roleText);
     if (currentUser.isTestAccount) {
         const badge = document.createElement('span');
         badge.className = 'user-card-badge';
         badge.textContent = t('main.userCardTestBadge');
-        nameEl.appendChild(badge);
+        roleEl.appendChild(badge);
     }
-    const roleEl = document.createElement('span');
-    roleEl.className = 'user-card-role';
-    roleEl.textContent = t(userCardRoleKey(currentUser));
     const text = document.createElement('div');
     text.className = 'user-card-text';
     text.append(nameEl, roleEl);

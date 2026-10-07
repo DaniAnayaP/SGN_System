@@ -704,21 +704,20 @@
         overflow: hidden;
         margin-top: 1rem;
     }
-    /* Tarjeta de quien tiene la sesión abierta, encima de «Cerrar sesión» (renderSidebarUserCard en Dashboard.js). El color del círculo dice el tipo
-       de cuenta. Con la barra cerrada solo queda el círculo. */
+    /* Tarjeta de quien tiene la sesión abierta, encima de «Cerrar sesión» (renderSidebarUserCard en Dashboard.js). Sin caja: sin relleno ni borde, así
+       no choca con ningún tema (tampoco con la paleta de un cliente institucional); todo sale de los colores del tema. El círculo dice el tipo de
+       cuenta (lleno = equipo SaaS, suave = administrador del cliente, contorno = usuario) y «Pruebas» es una etiqueta aparte en la línea del rol. */
     .sidebar-user-card{
         display: flex;
         align-items: center;
         gap: 0.6rem;
         margin-top: 0.8rem;
-        padding: 0.5rem;
-        border: 1px solid var(--color-border);
-        border-radius: 0.6rem;
-        background-color: var(--color-bg);
+        padding: 0.45rem 0.5rem;
         overflow: hidden;
         white-space: nowrap;
     }
     .sidebar-user-card .user-card-avatar{
+        position: relative;
         flex: none;
         display: grid;
         place-items: center;
@@ -731,18 +730,18 @@
         background-color: var(--color-accent);
         color: var(--color-accent-text);
     }
-    .sidebar-user-card[data-kind="test"] .user-card-avatar{
-        background-color: var(--color-report-calc-bg);
-        color: var(--color-report-calc-text);
-        box-shadow: 0 0 0 1.5px var(--color-report-calc-band-bg);
-    }
     .sidebar-user-card[data-kind="client"] .user-card-avatar{
-        background-color: var(--color-table-band-fuel-bg);
-        color: var(--color-table-band-fuel-text);
+        background-color: var(--color-column-system-bg);
+        background-color: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface));
+        box-shadow: inset 0 0 0 1px var(--color-border);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, var(--color-surface));
+        color: var(--color-text-secondary);
     }
     .sidebar-user-card[data-kind="user"] .user-card-avatar{
-        background-color: var(--color-column-system-bg);
-        color: var(--color-column-system-text);
+        background-color: transparent;
+        box-shadow: inset 0 0 0 1.5px var(--color-border);
+        box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-text-secondary) 55%, var(--color-surface));
+        color: var(--color-text-secondary);
     }
     .sidebar-user-card .user-card-text{
         display: flex;
@@ -758,31 +757,48 @@
         color: var(--color-text-primary);
     }
     .sidebar-user-card .user-card-role{
-        overflow: hidden;
-        text-overflow: ellipsis;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-width: 0;
         font-size: 0.66rem;
         color: var(--color-text-secondary);
     }
+    .sidebar-user-card .user-card-role-text{
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .sidebar-user-card .user-card-badge{
-        margin-left: 0.35rem;
+        flex: none;
         padding: 0 0.4rem;
         border-radius: 999px;
-        font-size: 0.56rem;
+        font-size: 0.54rem;
         font-weight: 700;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
         background-color: var(--color-report-calc-bg);
         color: var(--color-report-calc-text);
-        vertical-align: middle;
+        box-shadow: inset 0 0 0 1px var(--color-report-calc-band-bg);
     }
     .Sidebar.minimize .sidebar-user-card{
         justify-content: center;
         padding-inline: 0;
-        border-color: transparent;
-        background-color: transparent;
     }
     .Sidebar.minimize .sidebar-user-card .user-card-text{
         display: none;
+    }
+    /* Con la barra cerrada ya no se ve la etiqueta: en las cuentas de pruebas queda un punto ámbar en el círculo. */
+    .Sidebar.minimize .sidebar-user-card[data-test="true"] .user-card-avatar::after{
+        content: '';
+        position: absolute;
+        top: -0.1rem;
+        right: -0.1rem;
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background-color: var(--color-report-calc-text);
+        box-shadow: 0 0 0 2px var(--color-surface);
     }
     /* Logout link, styled to match a regular sidebar menu item (icon +
        label left-aligned, e.g. Inicio) instead of the old icon-only button
