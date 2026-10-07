@@ -2568,6 +2568,10 @@
       "what": "Te lleva a esa pantalla del sistema.",
       "example": "tocas el nombre de una pantalla en el menú para abrirla."
     },
+    "sidebarFlyoutSection": {
+      "what": "Es el nombre de la sección sobre la que pasaste el mouse. Al llegar aquí se despliegan sus opciones; con clic se abre la barra con la sección desplegada.",
+      "example": "con la barra cerrada pasas el mouse por el icono de Servicio a Cliente, llegas a su nombre y eliges Nuestros Clientes sin abrir la barra."
+    },
     "genericActions": {
       "what": "Aquí están los botones para editar, eliminar o hacer otra acción con este registro.",
       "example": "tocas el ícono de lápiz en esta columna para editar esa fila."

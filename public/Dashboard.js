@@ -1902,9 +1902,10 @@ function hideSidebarTooltip() {
 }
 
 // --- Barra cerrada: lista de opciones al pasar el mouse ----------------------------------------------------------------------------
-// Con la barra cerrada, pasar el mouse por un icono con opciones dentro abre una lista a su lado (y otra más por cada nivel) para elegir sin abrir la
-// barra: una PANTALLA abre la pantalla; un MENÚ (algo que a su vez tiene opciones) abre la barra con ese menú desplegado; el clic en el icono también
-// abre la barra con su sección. La lista se arma del propio menú ya dibujado (.sub-menu), así respeta permisos, búsqueda, idioma y abreviaturas.
+// Con la barra cerrada, pasar el mouse por un icono con opciones dentro muestra a su lado SOLO la franja con el nombre de la sección; las opciones se
+// despliegan hacia abajo cuando el mouse llega a esa franja (y otra lista por cada nivel de adentro) para elegir sin abrir la barra: una PANTALLA abre la
+// pantalla; un MENÚ (algo que a su vez tiene opciones) abre la barra con ese menú desplegado; el clic en el icono también abre la barra con su sección.
+// La lista se arma del propio menú ya dibujado (.sub-menu), así respeta permisos, búsqueda, idioma y abreviaturas.
 let sidebarFlyoutRoot = null;
 let sidebarFlyoutCloseTimer = null;
 let sidebarFlyoutOwner = null;
@@ -1955,23 +1956,78 @@ function openSidebarMenuPath(sourceLi) {
     });
 }
 
-function placeSidebarFlyoutPanel(panel, anchorRect, gap) {
-    panel.style.maxHeight = `${window.innerHeight - 16}px`;
-    panel.style.left = `${Math.round(anchorRect.right + gap)}px`;
-    panel.style.top = `${Math.max(8, Math.round(anchorRect.top - 8))}px`;
-    const height = panel.getBoundingClientRect().height;
-    if (anchorRect.top - 8 + height > window.innerHeight - 8) panel.style.top = `${Math.max(8, Math.round(window.innerHeight - height - 8))}px`;
+// La franja de la sección queda alineada con su icono (la flecha apunta al centro del icono aunque la lista deba subirse para caber).
+function syncSidebarFlyoutNotch(panel) {
+    const anchorY = Number(panel.dataset.anchorY);
+    if (!Number.isFinite(anchorY)) return;
+    panel.style.setProperty('--flyout-notch-top', `${Math.round(anchorY - panel.getBoundingClientRect().top - 6)}px`);
 }
 
-function buildSidebarFlyoutPanel(title, subMenuEl, depth, anchorRect, gap) {
+function placeSidebarFlyoutPanel(panel, anchorRect, gap) {
+    // Las listas de segundo nivel arrancan un poco arriba de su fila; la franja de la sección, justo a la altura de su icono (1 px por el borde).
+    const isSection = panel.classList.contains('sidebar-flyout-section');
+    const offset = isSection ? 1 : 8;
+    if (!isSection) panel.style.maxHeight = `${window.innerHeight - 16}px`;
+    panel.style.left = `${Math.round(anchorRect.right + gap)}px`;
+    panel.style.top = `${Math.max(8, Math.round(anchorRect.top - offset))}px`;
+    const height = panel.getBoundingClientRect().height;
+    if (anchorRect.top - offset + height > window.innerHeight - 8) panel.style.top = `${Math.max(8, Math.round(window.innerHeight - height - 8))}px`;
+    if (isSection) {
+        panel.dataset.anchorY = String(anchorRect.top + (anchorRect.height || 0) / 2);
+        syncSidebarFlyoutNotch(panel);
+    }
+}
+
+// Despliega las opciones de la sección (solo pasa al llegar a su franja). Si ya no caben hacia abajo, la lista sube lo justo.
+function openSidebarFlyoutSection(panel) {
+    if (!panel || panel.classList.contains('open')) return;
+    panel.classList.add('open');
+    const head = panel.querySelector('.sidebar-flyout-head');
+    const list = panel.querySelector('.sidebar-flyout-list');
+    if (head) head.setAttribute('aria-expanded', 'true');
+    if (!head || !list) return;
+    const finalHeight = head.offsetHeight + Math.min(list.scrollHeight, parseFloat(list.style.maxHeight) || list.scrollHeight) + 2;
+    const top = parseFloat(panel.style.top) || 0;
+    if (top + finalHeight > window.innerHeight - 8) panel.style.top = `${Math.max(8, Math.round(window.innerHeight - finalHeight - 8))}px`;
+    syncSidebarFlyoutNotch(panel);
+}
+
+// `section` (solo el primer nivel): { iconClass } -> la lista nace cerrada y arriba lleva la franja con el icono y el nombre de la sección.
+function buildSidebarFlyoutPanel(title, subMenuEl, depth, anchorRect, gap, section) {
     const rootEl = getSidebarFlyoutRoot();
     // Al abrir una lista de este nivel se cierran las de los niveles de abajo.
     [...rootEl.querySelectorAll('.sidebar-flyout-panel')].filter((p) => Number(p.dataset.depth) >= depth).forEach((p) => p.remove());
     const panel = document.createElement('div');
-    panel.className = 'sidebar-flyout-panel';
+    panel.className = section ? 'sidebar-flyout-panel sidebar-flyout-section' : 'sidebar-flyout-panel';
     panel.dataset.depth = String(depth);
     panel.setAttribute('role', 'menu');
-    if (title) {
+    let head = null;
+    if (section) {
+        head = document.createElement('div');
+        head.className = 'sidebar-flyout-head';
+        head.tabIndex = 0;
+        head.setAttribute('role', 'button');
+        head.setAttribute('aria-expanded', 'false');
+        head.setAttribute('aria-label', title);
+        head.setAttribute('data-help-key', 'sidebarFlyoutSection');
+        if (anchorRect.height) head.style.minHeight = `${Math.round(anchorRect.height)}px`;
+        const chip = document.createElement('span');
+        chip.className = 'sidebar-flyout-chip';
+        if (section.iconClass) {
+            const icon = document.createElement('i');
+            icon.className = section.iconClass;
+            icon.setAttribute('aria-hidden', 'true');
+            chip.appendChild(icon);
+        }
+        const name = document.createElement('span');
+        name.className = 'sidebar-flyout-name';
+        name.textContent = title;
+        const chevron = document.createElement('i');
+        chevron.className = 'bx bx-chevron-down sidebar-flyout-chevron';
+        chevron.setAttribute('aria-hidden', 'true');
+        head.append(chip, name, chevron);
+        panel.appendChild(head);
+    } else if (title) {
         const heading = document.createElement('div');
         heading.className = 'sidebar-flyout-title';
         heading.textContent = title;
@@ -2034,7 +2090,29 @@ function buildSidebarFlyoutPanel(title, subMenuEl, depth, anchorRect, gap) {
         li.appendChild(a);
         ul.appendChild(li);
     });
-    panel.appendChild(ul);
+    if (section) {
+        // La lista va dentro de una parte que se despliega (cerrada hasta que el mouse llega a la franja); si es muy larga se desplaza sola.
+        ul.style.maxHeight = `${Math.max(120, window.innerHeight - 80)}px`;
+        const drop = document.createElement('div');
+        drop.className = 'sidebar-flyout-drop';
+        const inner = document.createElement('div');
+        inner.className = 'sidebar-flyout-drop-inner';
+        inner.appendChild(ul);
+        drop.appendChild(inner);
+        panel.appendChild(drop);
+        const expand = () => { cancelSidebarFlyoutClose(); openSidebarFlyoutSection(panel); };
+        head.addEventListener('mouseenter', expand);
+        head.addEventListener('focus', expand);
+        head.addEventListener('click', expand);
+        head.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            expand();
+            ul.querySelector('.sidebar-flyout-link')?.focus();
+        });
+    } else {
+        panel.appendChild(ul);
+    }
     rootEl.appendChild(panel);
     placeSidebarFlyoutPanel(panel, anchorRect, gap);
     return panel;
@@ -2046,18 +2124,36 @@ function wireSidebarFlyouts(Sidebar) {
         if (!subMenu || !subMenu.children.length) return;
         const open = () => {
             if (!Sidebar.classList.contains('minimize') || helpModeActive) return;
+            // La barra todavía se está cerrando (su ancho cambia durante medio segundo): se espera a que termine para colocar la franja junto a su borde final.
+            const closing = Sidebar.getAnimations ? Sidebar.getAnimations().filter((animation) => animation.playState === 'running' || animation.playState === 'pending') : [];
+            if (closing.length) {
+                Promise.allSettled(closing.map((animation) => animation.finished)).then(() => { if (menuItem.matches(':hover')) open(); });
+                return;
+            }
             cancelSidebarFlyoutClose();
             hideSidebarTooltip();
             if (sidebarFlyoutOwner === menuItem) return;
             sidebarFlyoutOwner = menuItem;
             const link = menuItem.querySelector(':scope > .menu-link');
-            // Alineada con el borde de la barra (no con el del icono, que queda 16 px adentro) y a la altura del icono.
-            const itemRect = menuItem.getBoundingClientRect();
-            buildSidebarFlyoutPanel(link ? sidebarEntryLabel(link) : '', subMenu, 1, { top: itemRect.top, right: Sidebar.getBoundingClientRect().right }, 6);
+            // Solo sale la franja con el nombre, a la altura del icono y pegada al borde de la barra (no al del icono, que queda 16 px adentro); las opciones se
+            // despliegan cuando el mouse llega a la franja.
+            const linkRect = (link || menuItem).getBoundingClientRect();
+            const sectionIcon = link ? link.querySelector(':scope > i') : null;
+            buildSidebarFlyoutPanel(link ? sidebarEntryLabel(link) : '', subMenu, 1,
+                { top: linkRect.top, height: linkRect.height, right: Sidebar.getBoundingClientRect().right }, 6,
+                { iconClass: sectionIcon ? sectionIcon.className : '' });
         };
         menuItem.addEventListener('mouseenter', open);
         menuItem.addEventListener('focusin', open);
         menuItem.addEventListener('mouseleave', scheduleSidebarFlyoutClose);
+        // Con teclado: la flecha derecha pasa de la sección a su franja.
+        menuItem.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowRight' || sidebarFlyoutOwner !== menuItem) return;
+            const head = sidebarFlyoutRoot && sidebarFlyoutRoot.querySelector('.sidebar-flyout-head');
+            if (!head) return;
+            event.preventDefault();
+            head.focus();
+        });
     });
     // Los demás iconos (Inicio, Tablero... sin nada dentro) cierran la lista abierta: solo muestran su nombre.
     document.querySelectorAll('#Sidebar .menu-item-static, #Sidebar .search').forEach((el) => el.addEventListener('mouseenter', hideSidebarFlyout));

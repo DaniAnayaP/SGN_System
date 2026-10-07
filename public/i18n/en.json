@@ -2569,6 +2569,10 @@
       "what": "Takes you to that screen in the system.",
       "example": "you tap a screen's name in the menu to open it."
     },
+    "sidebarFlyoutSection": {
+      "what": "This is the name of the section you hovered over. Its options unfold once you reach it; a click opens the sidebar with the section expanded.",
+      "example": "with the sidebar closed you hover the Customer Service icon, reach its name and pick Our Customers without opening the sidebar."
+    },
     "genericActions": {
       "what": "This is where the buttons to edit, delete, or do something else with this record live.",
       "example": "you tap the pencil icon in this column to edit that row."
