@@ -2420,8 +2420,12 @@
                     platformsCell.appendChild(buildGateIcon('web', key, computeGateNodeState(key, 'web')));
                     platformsCell.appendChild(buildGateIcon('app', key, computeGateNodeState(key, 'app')));
                 } else {
-                    platformsCell.appendChild(buildPlatformGroup(key, 'web', leafKeys, ancestorLocked));
-                    platformsCell.appendChild(buildPlatformGroup(key, 'app', leafKeys, ancestorLocked));
+                    // Una fila que no recibió su lista de hojas (la pantalla con detalle, la Tabla, la Columna) pero sí tiene cosas debajo usa lo que de verdad
+                    // cuelga de ella, igual que su botón de Estatus (hasStatusChildren): antes sus botones de aplicar WEB/APP a lo anidado quedaban apagados
+                    // aunque el de Estatus de la misma fila sí funcionaba (Daniel, 2026-10-07: «porque no aparece poder anidados, hacia abajo»).
+                    const nestLeafKeys = leafKeys && leafKeys.length ? leafKeys : (hasStatusChildren(key) ? collectLeafStatusKeys(key) : []);
+                    platformsCell.appendChild(buildPlatformGroup(key, 'web', nestLeafKeys, ancestorLocked));
+                    platformsCell.appendChild(buildPlatformGroup(key, 'app', nestLeafKeys, ancestorLocked));
                 }
                 controls.appendChild(platformsCell);
                 // $ Web / $ App -- Árbol Maestro's own suggested/base cost
