@@ -757,6 +757,11 @@ function hasSaasScreenGrant(itemId, subItemId = null) {
     const grants = cachedSaasGrants || [];
     return grants.some((g) => g.itemId === itemId && (subItemId ? g.subItemId === subItemId : true));
 }
+// ¿El Estatus de este nodo es de los que la cuenta ve? (sin pedir un permiso con su id: para los grupos del menú, que no llevan permisos propios)
+function isSaasNodeStatusVisible(itemId) {
+    if (currentUser?.isSaasSuperAdmin) return true;
+    return (cachedSaasVisibleStatuses || ['habilitado']).includes(resolveSaasNodeStatus(itemId));
+}
 // Equipo SaaS and Árbol Maestro SaaS itself used to be a deliberate
 // exception here -- restricting who can see them would need to be granted
 // BY someone who can already see them, a bootstrapping problem. Removed
@@ -1038,7 +1043,10 @@ function buildSidebarData(data, role, activePage) {
     // exactly; the submenu.length guard is a second, independent reason to
     // hide the same empty-dropdown case even if that ever diverges from the
     // group's own node.
-    orderedGroupItems = orderedGroupItems.filter((item) => item.submenu.length > 0 && hasSaasScreenGrant(item.saasGroupId));
+    // El grupo NO lleva permisos propios: el árbol de accesos de la cuenta solo da permisos de pantallas (itemId de cada pantalla), nunca uno con el id del grupo.
+    // Pedir hasSaasScreenGrant(grupo) lo escondía SIEMPRE para una cuenta que no es la principal, aunque tuviera pantallas asignadas (Daniel, 2026-10-07: «porque
+    // si ya le asigné, no me aparece en el perfil»). Ahora el grupo se muestra si tiene al menos una pantalla visible y su Estatus es de los que la cuenta ve.
+    orderedGroupItems = orderedGroupItems.filter((item) => item.submenu.length > 0 && isSaasNodeStatusVisible(item.saasGroupId));
     return { ...data, sections: [{ id: 'main', items: [home, dashboard, ...orderedGroupItems].filter(Boolean) }] };
 }
 
@@ -1689,6 +1697,7 @@ function wireMenuInteractions() {
             menuBtn.setAttribute('aria-expanded', String(!isMinimized));
             syncSidebarToggleLabel();
             hideSidebarTooltip();
+            hideSidebarFlyout();
             applySubmenuAbbreviations();
             // The sidebar's own collapse/expand transition (.Sidebar's own
             // "transition: width 0.5s ease" in Inicio-en.css) changes how
@@ -1721,6 +1730,13 @@ function wireMenuInteractions() {
             // sure each handler only ever touches ITS OWN direct submenu,
             // never a nested one belonging to a child dropdown.
             event.stopPropagation();
+            // Con la barra cerrada, el clic en el icono (o en un menú de la lista que sale al pasar el mouse) abre la barra con esa sección desplegada; si
+            // ya estaba abierta, solo se abre la barra.
+            if (Sidebar.classList.contains('minimize') && menuBtn) {
+                hideSidebarFlyout();
+                menuBtn.click();
+                if (menuItem.classList.contains('sub-menu-toggle')) return;
+            }
             const subMenu = menuItem.querySelector(':scope > .sub-menu');
             const isActive = menuItem.classList.toggle('sub-menu-toggle');
             if (subMenu) {
@@ -1793,6 +1809,7 @@ function wireMenuInteractions() {
         menuItem.addEventListener('mouseenter', () => showSidebarTooltip(menuItem, Sidebar));
         menuItem.addEventListener('mouseleave', hideSidebarTooltip);
     });
+    wireSidebarFlyouts(Sidebar);
 
     // Expanded-sidebar top-level tooltip -- same "always show the real
     // full name" rule the sub-menu already had (showSubmenuTooltip is
@@ -1842,6 +1859,7 @@ function showSidebarTooltip(menuItem, Sidebar) {
     // aside while that mode is on instead of fighting for the same space.
     if (helpModeActive) return;
     if (!Sidebar.classList.contains('minimize')) return;
+    if (menuItem.matches('.menu-item-dropdown') && menuItem.querySelector(':scope > .sub-menu > li')) return;
     const label = menuItem.querySelector('.menu-link > span')?.textContent;
     if (!label) return;
     const tooltip = getSidebarTooltip();
@@ -1883,7 +1901,192 @@ function hideSidebarTooltip() {
     document.getElementById('sidebar-tooltip')?.classList.remove('visible');
 }
 
+// --- Barra cerrada: lista de opciones al pasar el mouse ----------------------------------------------------------------------------
+// Con la barra cerrada, pasar el mouse por un icono con opciones dentro abre una lista a su lado (y otra más por cada nivel) para elegir sin abrir la
+// barra: una PANTALLA abre la pantalla; un MENÚ (algo que a su vez tiene opciones) abre la barra con ese menú desplegado; el clic en el icono también
+// abre la barra con su sección. La lista se arma del propio menú ya dibujado (.sub-menu), así respeta permisos, búsqueda, idioma y abreviaturas.
+let sidebarFlyoutRoot = null;
+let sidebarFlyoutCloseTimer = null;
+let sidebarFlyoutOwner = null;
+const SIDEBAR_FLYOUT_CLOSE_DELAY_MS = 180;
+const SIDEBAR_KEEP_COLLAPSED_KEY = 'sgn.sidebarKeepCollapsed';
+
+function getSidebarFlyoutRoot() {
+    if (sidebarFlyoutRoot && document.body.contains(sidebarFlyoutRoot)) return sidebarFlyoutRoot;
+    const rootEl = document.createElement('div');
+    rootEl.id = 'sidebar-flyout-root';
+    rootEl.className = 'sidebar-flyout-root';
+    rootEl.addEventListener('mouseenter', cancelSidebarFlyoutClose);
+    rootEl.addEventListener('mouseleave', scheduleSidebarFlyoutClose);
+    document.body.appendChild(rootEl);
+    sidebarFlyoutRoot = rootEl;
+    return rootEl;
+}
+function cancelSidebarFlyoutClose() {
+    clearTimeout(sidebarFlyoutCloseTimer);
+    sidebarFlyoutCloseTimer = null;
+}
+function scheduleSidebarFlyoutClose() {
+    cancelSidebarFlyoutClose();
+    sidebarFlyoutCloseTimer = setTimeout(hideSidebarFlyout, SIDEBAR_FLYOUT_CLOSE_DELAY_MS);
+}
+function hideSidebarFlyout() {
+    cancelSidebarFlyoutClose();
+    sidebarFlyoutOwner = null;
+    if (sidebarFlyoutRoot) sidebarFlyoutRoot.replaceChildren();
+}
+
+// El nombre completo de una entrada (la abreviatura que ve la barra abierta no): igual que el tooltip.
+function sidebarEntryLabel(link) {
+    const span = link.querySelector('span');
+    const ladder = span && span.dataset.abbrLadder ? JSON.parse(span.dataset.abbrLadder) : null;
+    return ladder ? ladder[0] : (span ? span.textContent : (link.getAttribute('aria-label') || ''));
+}
+
+// Abre la barra con la cadena de menús desplegada hasta el elegido (el de más arriba primero), reutilizando el clic de cada uno.
+function openSidebarMenuPath(sourceLi) {
+    hideSidebarFlyout();
+    const Sidebar = document.getElementById('Sidebar');
+    if (Sidebar && Sidebar.classList.contains('minimize')) document.getElementById('menu-btn')?.click();
+    const chain = [];
+    for (let el = sourceLi; el; el = el.parentElement ? el.parentElement.closest('.menu-item-dropdown') : null) chain.unshift(el);
+    chain.forEach((li) => {
+        if (!li.classList.contains('sub-menu-toggle')) li.querySelector(':scope > a')?.click();
+    });
+}
+
+function placeSidebarFlyoutPanel(panel, anchorRect, gap) {
+    panel.style.maxHeight = `${window.innerHeight - 16}px`;
+    panel.style.left = `${Math.round(anchorRect.right + gap)}px`;
+    panel.style.top = `${Math.max(8, Math.round(anchorRect.top - 8))}px`;
+    const height = panel.getBoundingClientRect().height;
+    if (anchorRect.top - 8 + height > window.innerHeight - 8) panel.style.top = `${Math.max(8, Math.round(window.innerHeight - height - 8))}px`;
+}
+
+function buildSidebarFlyoutPanel(title, subMenuEl, depth, anchorRect, gap) {
+    const rootEl = getSidebarFlyoutRoot();
+    // Al abrir una lista de este nivel se cierran las de los niveles de abajo.
+    [...rootEl.querySelectorAll('.sidebar-flyout-panel')].filter((p) => Number(p.dataset.depth) >= depth).forEach((p) => p.remove());
+    const panel = document.createElement('div');
+    panel.className = 'sidebar-flyout-panel';
+    panel.dataset.depth = String(depth);
+    panel.setAttribute('role', 'menu');
+    if (title) {
+        const heading = document.createElement('div');
+        heading.className = 'sidebar-flyout-title';
+        heading.textContent = title;
+        panel.appendChild(heading);
+    }
+    const currentPage = window.location.pathname.split('/').pop();
+    const ul = document.createElement('ul');
+    ul.className = 'sidebar-flyout-list';
+    [...subMenuEl.children].forEach((sourceLi) => {
+        const sourceLink = sourceLi.querySelector(':scope > a');
+        if (!sourceLink) return;
+        const childMenu = sourceLi.querySelector(':scope > .sub-menu');
+        const hasChildren = !!(childMenu && childMenu.children.length);
+        const label = sidebarEntryLabel(sourceLink);
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.className = 'sidebar-flyout-link';
+        a.setAttribute('role', 'menuitem');
+        a.setAttribute('aria-label', label);
+        a.setAttribute('data-help-key', 'sidebarNavigation');
+        const text = document.createElement('span');
+        text.textContent = label;
+        a.appendChild(text);
+        const href = sourceLink.getAttribute('href') || '#';
+        if (hasChildren) {
+            // Un menú: al elegirlo se abre la barra con él desplegado.
+            a.href = '#';
+            a.classList.add('sidebar-flyout-menu');
+            a.setAttribute('aria-haspopup', 'true');
+            const chevron = document.createElement('i');
+            chevron.className = 'bx bx-chevron-right';
+            chevron.setAttribute('aria-hidden', 'true');
+            a.appendChild(chevron);
+            a.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openSidebarMenuPath(sourceLi);
+            });
+        } else {
+            // Una pantalla: navega a ella con la barra cerrada. Sin dirección todavía ('#'), no hace nada.
+            a.href = href;
+            if (href === '#') a.addEventListener('click', (event) => event.preventDefault());
+            else {
+                if (href.split('#')[0].split('?')[0].split('/').pop() === currentPage) li.classList.add('sidebar-flyout-current');
+                // La pantalla nueva carga con la barra abierta por defecto; esta marca hace que arranque cerrada, como la dejó quien eligió desde la lista.
+                a.addEventListener('click', (event) => {
+                    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                    try { sessionStorage.setItem(SIDEBAR_KEEP_COLLAPSED_KEY, '1'); } catch { /* sin almacenamiento: la pantalla abre con la barra abierta */ }
+                });
+            }
+        }
+        li.addEventListener('mouseenter', () => {
+            cancelSidebarFlyoutClose();
+            [...rootEl.querySelectorAll('.sidebar-flyout-panel')].filter((p) => Number(p.dataset.depth) > depth).forEach((p) => p.remove());
+            if (hasChildren) {
+                // Pegada al borde de ESTA lista (no al de la fila, que queda unos px adentro) y a la altura de la fila.
+                buildSidebarFlyoutPanel(label, childMenu, depth + 1, { top: li.getBoundingClientRect().top, right: panel.getBoundingClientRect().right }, 2);
+            }
+        });
+        li.appendChild(a);
+        ul.appendChild(li);
+    });
+    panel.appendChild(ul);
+    rootEl.appendChild(panel);
+    placeSidebarFlyoutPanel(panel, anchorRect, gap);
+    return panel;
+}
+
+function wireSidebarFlyouts(Sidebar) {
+    document.querySelectorAll('#Sidebar .menu-item-dropdown').forEach((menuItem) => {
+        const subMenu = menuItem.querySelector(':scope > .sub-menu');
+        if (!subMenu || !subMenu.children.length) return;
+        const open = () => {
+            if (!Sidebar.classList.contains('minimize') || helpModeActive) return;
+            cancelSidebarFlyoutClose();
+            hideSidebarTooltip();
+            if (sidebarFlyoutOwner === menuItem) return;
+            sidebarFlyoutOwner = menuItem;
+            const link = menuItem.querySelector(':scope > .menu-link');
+            // Alineada con el borde de la barra (no con el del icono, que queda 16 px adentro) y a la altura del icono.
+            const itemRect = menuItem.getBoundingClientRect();
+            buildSidebarFlyoutPanel(link ? sidebarEntryLabel(link) : '', subMenu, 1, { top: itemRect.top, right: Sidebar.getBoundingClientRect().right }, 6);
+        };
+        menuItem.addEventListener('mouseenter', open);
+        menuItem.addEventListener('focusin', open);
+        menuItem.addEventListener('mouseleave', scheduleSidebarFlyoutClose);
+    });
+    // Los demás iconos (Inicio, Tablero... sin nada dentro) cierran la lista abierta: solo muestran su nombre.
+    document.querySelectorAll('#Sidebar .menu-item-static, #Sidebar .search').forEach((el) => el.addEventListener('mouseenter', hideSidebarFlyout));
+    if (!document.body.dataset.sidebarFlyoutWired) {
+        document.body.dataset.sidebarFlyoutWired = '1';
+        // Venimos de elegir una pantalla desde la lista de la barra cerrada: la barra sigue cerrada (se usa una sola vez).
+        let keepCollapsed = false;
+        try { keepCollapsed = sessionStorage.getItem(SIDEBAR_KEEP_COLLAPSED_KEY) === '1'; sessionStorage.removeItem(SIDEBAR_KEEP_COLLAPSED_KEY); } catch { /* sin almacenamiento */ }
+        if (keepCollapsed && window.matchMedia('(min-width: 781px) and (min-height: 551px)').matches) {
+            Sidebar.classList.add('minimize');
+            document.getElementById('menu-btn')?.setAttribute('aria-expanded', 'false');
+            syncSidebarToggleLabel();
+        }
+        window.addEventListener('resize', hideSidebarFlyout);
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape') hideSidebarFlyout(); });
+        // Al desplazar la página la lista se cierra; desplazar la propia lista (si es larga) no.
+        document.addEventListener('scroll', (event) => {
+            if (sidebarFlyoutRoot && event.target instanceof Node && sidebarFlyoutRoot.contains(event.target)) return;
+            hideSidebarFlyout();
+        }, true);
+    }
+}
+
+// Un "resize" con el mismo tamaño de ventana (el visor lo dispara al cargar la pantalla) no es un cambio real: no debe volver a abrir una barra que quedó cerrada a propósito.
+let lastViewportSize = `${window.innerWidth}x${window.innerHeight}`;
 function checkWindowSize() {
+    const size = `${window.innerWidth}x${window.innerHeight}`;
+    if (size === lastViewportSize) return;
+    lastViewportSize = size;
     document.getElementById('Sidebar')?.classList.remove('minimize');
 }
 window.addEventListener('resize', checkWindowSize);
