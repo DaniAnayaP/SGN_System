@@ -266,7 +266,7 @@ function renderUsersTable() {
         tdEmail.textContent = user.email;
         const tdCreated = document.createElement('td');
         tdCreated.dataset.col = 'accCreated';
-        tdCreated.textContent = (user.created_at || '').slice(0, 10);
+        Dashboard.renderLocalDate(tdCreated, user.created_at);
 
         // Estatus RH — read-only here, sourced from Recursos Humanos /
         // Administración de Personal / Mi Recurso Humano (Business-EstatusRH

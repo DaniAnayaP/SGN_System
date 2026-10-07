@@ -282,7 +282,7 @@ function renderPlans() {
         tdBusinessSector.textContent = businessSectorName(plan.businessSectorId) || '—';
         const tdCreatedAt = document.createElement('td');
         tdCreatedAt.dataset.col = 'createdAt';
-        tdCreatedAt.textContent = formatDate(plan.created_at);
+        Dashboard.renderLocalDate(tdCreatedAt, plan.created_at);
         const tdCreatedBy = document.createElement('td');
         tdCreatedBy.dataset.col = 'createdBy';
         tdCreatedBy.textContent = plan.createdBy || '—';
@@ -413,7 +413,7 @@ function openEditModal(plan) {
     nameField.value = plan.name;
     descriptionField.value = plan.description || '';
     businessSectorField.value = plan.businessSectorId || '';
-    createdAtField.value = plan.created_at ? plan.created_at.slice(0, 10) : '';
+    createdAtField.value = Dashboard.formatLocalDate(plan.created_at);
     createdByField.value = plan.createdBy || '';
     endDateField.value = plan.endDate || '';
     costCentersLimitField.value = plan.costCentersLimit || 0;

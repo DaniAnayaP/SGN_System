@@ -7,9 +7,10 @@
 // pagination.
 // ---------------------------------------------------------------------------
 
-function textCell(value) {
+function textCell(value, title) {
     const td = document.createElement('td');
     td.textContent = value || '—';
+    if (title) td.title = title;
     return td;
 }
 
@@ -41,7 +42,7 @@ function statusBadge(status) {
 function buildRequestRow(request) {
     const tr = document.createElement('tr');
     tr.append(
-        textCell(formatDate(request.createdAt)),
+        textCell(Dashboard.formatLocalDate(request.createdAt, 'dmy-short') || '—', Dashboard.timeStampTitle(request.createdAt)),
         textCell(Dashboard.t('main.reqTypeRequest')),
         textCell(request.categoryLabel),
         textCell(request.requestedName),
@@ -56,7 +57,7 @@ function buildRequestRow(request) {
 function buildAlertRow(alert) {
     const tr = document.createElement('tr');
     tr.append(
-        textCell(formatDate(alert.created_at)),
+        textCell(Dashboard.formatLocalDate(alert.created_at, 'dmy-short') || '—', Dashboard.timeStampTitle(alert.created_at)),
         textCell(Dashboard.t('main.reqTypeAlert')),
         textCell('—'),
         textCell('—'),
@@ -66,13 +67,6 @@ function buildAlertRow(alert) {
         badgeCell(Dashboard.t('main.reqStatusAlert'), 'admin-badge-inactivo'),
     );
     return tr;
-}
-
-// dd-mm-aa, same format Dashboard.js's own change-history modal already
-// uses for a raw SQLite "YYYY-MM-DD HH:MM:SS" value.
-function formatDate(sqliteDatetime) {
-    const [y, m, d] = (sqliteDatetime || '').slice(0, 10).split('-');
-    return y && m && d ? `${d}-${m}-${y.slice(2)}` : '—';
 }
 
 // A request's own sourceTableKey is a raw table key (e.g.

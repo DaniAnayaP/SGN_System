@@ -156,16 +156,18 @@ function renderScheduledReports() {
             ['scheduledName', scheduled.name],
             ['scheduledCreatedBy', scheduled.created_by || '—'],
             ['scheduledAuthorizedBy', scheduled.authorized_by || '—'],
-            ['scheduledCreatedAt', formatDate(scheduled.created_at)],
+            ['scheduledCreatedAt', Dashboard.formatLocalDate(scheduled.created_at, 'dmy') || '—', false, Dashboard.timeStampTitle(scheduled.created_at)],
+            // La fecha final la escribe una persona (un día, sin hora): no es un sello UTC y no se mueve de día.
             ['scheduledEndDate', formatDate(scheduled.end_date)],
             ['scheduledDeliveryMethod', deliveryMethodLabel(scheduled.delivery_method)],
             ['scheduledRecipients', scheduled.recipients],
         ];
-        cells.forEach(([col, text, isSystem]) => {
+        cells.forEach(([col, text, isSystem, title]) => {
             const td = document.createElement('td');
             td.dataset.col = col;
             if (isSystem) td.className = 'col-system';
             td.textContent = text;
+            if (title) td.title = title;
             tr.appendChild(td);
         });
 

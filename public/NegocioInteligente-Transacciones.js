@@ -369,14 +369,6 @@ document.getElementById('report-save-btn').addEventListener('click', async () =>
     }
 });
 
-function formatDate(isoLike) {
-    if (!isoLike) return '—';
-    const [datePart] = isoLike.split(' ');
-    const [year, month, day] = (datePart || '').split('-');
-    if (!year || !month || !day) return isoLike;
-    return `${day}/${month}/${year}`;
-}
-
 // The 13 "Control Interno" columns — see OpTransVolCombustible.js for the
 // original pattern this mirrors.
 const SYSTEM_COLUMN_KEYS = [
@@ -395,15 +387,16 @@ function renderReports() {
         const cells = [
             ...SYSTEM_COLUMN_KEYS.map((key) => [key, report[key] || '—', true]),
             ['reportName', report.name],
-            ['reportCreatedAt', formatDate(report.created_at)],
+            ['reportCreatedAt', Dashboard.formatLocalDate(report.created_at, 'dmy') || '—', false, Dashboard.timeStampTitle(report.created_at)],
             ['reportCreatedBy', report.created_by || '—'],
             ['reportAuthorizedBy', report.authorized_by || '—'],
         ];
-        cells.forEach(([col, text, isSystem]) => {
+        cells.forEach(([col, text, isSystem, title]) => {
             const td = document.createElement('td');
             td.dataset.col = col;
             if (isSystem) td.className = 'col-system';
             td.textContent = text;
+            if (title) td.title = title;
             tr.appendChild(td);
         });
 

@@ -89,7 +89,7 @@ function renderSaasUsers() {
         tdEmail.textContent = user.email;
         const tdCreatedAt = document.createElement('td');
         tdCreatedAt.dataset.col = 'createdAt';
-        tdCreatedAt.textContent = (user.created_at || '').slice(0, 10) || '—';
+        Dashboard.renderLocalDate(tdCreatedAt, user.created_at);
 
         // Estatus -- confirmed live, 2026-09-28: "ningún usuario se puede
         // eliminar, solo se pueden colocar en estatus diferente", same rule

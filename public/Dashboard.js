@@ -9162,6 +9162,8 @@ const TIME_STAMP_HAS_ZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/;
 function parseUtcStamp(value) {
     const s = String(value ?? '').trim();
     if (!s) return null;
+    // Una fecha sola ("2026-10-05", sin hora) no es un sello UTC: es el día que alguien escribió, y no se mueve de día por la zona.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
     const iso = s.replace(' ', 'T');
     const date = new Date(TIME_STAMP_HAS_ZONE_RE.test(iso) ? iso : `${iso}Z`);
     return Number.isNaN(date.getTime()) ? null : date;
@@ -9245,16 +9247,45 @@ function formatNotificationDate(sqliteDatetime) {
     const p = zoneParts(date, getViewerTimeZone());
     return `${pad2(p.day)}-${pad2(p.month)}-${String(p.year).slice(2)}`;
 }
-function notificationDateTitle(sqliteDatetime) {
-    const date = parseUtcStamp(sqliteDatetime);
+// "06/oct/2026 23:33:12 · 2026-10-07 05:33:12 UTC": la hora local y la hora base juntas, para el tooltip de una columna que solo muestra el día.
+function timeStampTitle(value) {
+    const date = parseUtcStamp(value);
     return date ? `${formatLocalStamp(date)} · ${formatUtcStamp(date)}` : '';
+}
+
+// Solo el DÍA de un sello UTC en la zona de quien mira, con el formato que cada pantalla ya traía: 'iso' 2026-10-05, 'dmy' 05/10/2026,
+// 'dmy-short' 05-10-26. Un valor que ya es solo fecha (sin hora) se queda en su día. '' si no es una fecha.
+function formatLocalDate(value, style = 'iso') {
+    const text = String(value ?? '').trim();
+    let year;
+    let month;
+    let day;
+    const date = parseUtcStamp(text);
+    if (date) {
+        ({ year, month, day } = zoneParts(date, getViewerTimeZone()));
+    } else {
+        const m = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return '';
+        [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    }
+    if (style === 'dmy') return `${pad2(day)}/${pad2(month)}/${year}`;
+    if (style === 'dmy-short') return `${pad2(day)}-${pad2(month)}-${String(year).slice(2)}`;
+    return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+// Pinta en una celda el día local de un sello UTC y deja la hora local + la hora base en el tooltip ('—' si no hay fecha).
+function renderLocalDate(container, value, style = 'iso') {
+    container.textContent = formatLocalDate(value, style) || '—';
+    const title = timeStampTitle(value);
+    if (title) container.title = title;
+    return container;
 }
 
 function renderAlertRow(alert) {
     const row = document.createElement('div');
     row.className = `notifications-item notifications-item-alert${alert.seen_at ? '' : ' notifications-item-unseen'}`;
     row.innerHTML = `
-        <div class="notifications-item-meta" title="${notificationDateTitle(alert.created_at)}">#${alert.seq} · ${formatNotificationDate(alert.created_at)}</div>
+        <div class="notifications-item-meta" title="${timeStampTitle(alert.created_at)}">#${alert.seq} · ${formatNotificationDate(alert.created_at)}</div>
         <div class="notifications-item-desc">
             <b data-role="actor"></b>, ${t('main.notificationAttemptedChangePrefix')}
             <b>${t(alert.field_key)} / ${t(alert.screen_key)}</b>, ${t('main.notificationAttemptedChangeSuffix')}
@@ -9276,7 +9307,7 @@ function renderRequestRow(change, { showOutcome = false } = {}) {
     row.className = `notifications-item${showOutcome && !change.seen_at ? ' notifications-item-unseen' : ''}`;
     const tableLabel = t(PENDING_CHANGE_TABLE_LABELS[change.table_key] || change.table_key);
     const outcome = showOutcome
-        ? `<div class="notifications-item-meta" title="${notificationDateTitle(change.resolved_at)}">${t(change.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected')} — <span data-role="resolved-by"></span> · ${formatNotificationDate(change.resolved_at)}</div>`
+        ? `<div class="notifications-item-meta" title="${timeStampTitle(change.resolved_at)}">${t(change.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected')} — <span data-role="resolved-by"></span> · ${formatNotificationDate(change.resolved_at)}</div>`
         : '';
     row.innerHTML = `
         <div class="notifications-item-meta">${tableLabel} · <span data-role="record-label"></span></div>
@@ -9349,7 +9380,7 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
     meta.textContent = `${item.categoryLabel} · ${formatNotificationDate(item.createdAt)}`;
-    meta.title = notificationDateTitle(item.createdAt);
+    meta.title = timeStampTitle(item.createdAt);
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
     desc.textContent = t('main.notificationCatalogRequestDesc', { name: item.requestedName, catalog: item.categoryLabel });
@@ -11729,6 +11760,9 @@ window.Dashboard = {
     formatUtcStamp,
     getViewerTimeZone,
     renderTimeStamp,
+    timeStampTitle,
+    formatLocalDate,
+    renderLocalDate,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },
