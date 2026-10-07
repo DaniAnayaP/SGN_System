@@ -336,6 +336,20 @@
     "status": "Estado",
     "statusActivo": "Activo",
     "statusInactivo": "Inactivo",
+    "timeZone": "Zona horaria",
+    "timeZoneMexicoCentro": "México (Centro)",
+    "timeZoneMexicoNoroeste": "México (Noroeste, Tijuana)",
+    "timeZoneMexicoPacifico": "México (Pacífico)",
+    "timeZoneMexicoSureste": "México (Sureste, Cancún)",
+    "timeZoneColombia": "Colombia",
+    "timeZonePeru": "Perú",
+    "timeZoneChile": "Chile",
+    "timeZoneArgentina": "Argentina",
+    "timeZoneEspana": "España",
+    "timeZoneUsEste": "EE. UU. (Este)",
+    "timeZoneUsCentro": "EE. UU. (Centro)",
+    "timeZoneUsPacifico": "EE. UU. (Pacífico)",
+    "timeZoneUtc": "UTC (hora universal)",
     "statusProspecto": "Prospecto",
     "addClient": "Agregar cliente",
     "editClient": "Editar cliente",
@@ -1794,6 +1808,8 @@
     "changeHistoryTitle": "Historial de cambios",
     "changeHistoryTitleRecord": "Historial de cambios de este registro",
     "changeHistoryEmpty": "Aún no hay cambios registrados.",
+    "timeLocalTitle": "Tu hora local ({zone}, {offset})",
+    "timeUtcTitle": "Hora base (UTC): la que se guarda en el sistema",
     "changeHistoryUpdated": "Registro actualizado",
     "historyFillRule": "Regla de orden de llenado",
     "historyRuleAuthorized": "Regla autorizada",
@@ -2080,7 +2096,7 @@
       "example": "un gasto de la sucursal Norte muestra aquí \"Sucursal Norte\"."
     },
     "colSysFecha": {
-      "what": "Es la fecha exacta en que se guardó este registro.",
+      "what": "Es la fecha exacta en que se guardó este registro, en la zona horaria de la empresa.",
       "example": "si lo capturaste hoy, aquí se ve la fecha de hoy, como \"30/sep/2026\"."
     },
     "colSysDiaNum": {
@@ -2108,7 +2124,7 @@
       "example": "si fue en la semana 40 del año, aquí dice \"Sem40_2026\"."
     },
     "colSysHora": {
-      "what": "Es la hora exacta, con segundos, en que se guardó el registro.",
+      "what": "Es la hora exacta, con segundos, en que se guardó el registro, en la zona horaria de la empresa.",
       "example": "si lo guardaste a las 3 de la tarde, aquí dice algo como \"15:04:22\"."
     },
     "filterColumn": {
@@ -2288,7 +2304,7 @@
       "example": "antes de lanzar el sistema, borras las pruebas para que el primer cliente real sea el cliente número 1."
     },
     "changeHistory": {
-      "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo.",
+      "what": "Muestra quién cambió algo en esta tabla, qué cambió, y cuándo: la fecha va en tu hora local y, debajo, la hora base (UTC) con la que se guarda.",
       "example": "si un dato cambió y no sabes por qué, aquí ves quién lo modificó y qué valor tenía antes."
     },
     "columnLegend": {

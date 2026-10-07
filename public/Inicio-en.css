@@ -2309,6 +2309,16 @@
     .data-table.change-history-table td[data-col="date"]{
         overflow-wrap: normal;
     }
+    /* Hora local de quien mira y, debajo, la hora base (UTC): la regla de horas del sistema (ver renderTimeStamp en Dashboard.js). */
+    .time-local{
+        display: block;
+    }
+    .time-utc{
+        display: block;
+        margin-top: 0.1rem;
+        font-size: 0.72rem;
+        color: var(--color-text-secondary);
+    }
     .change-history-table .change-history-empty-row td.data-table-empty-cell{
         padding: 1.4rem 0.7rem;
         text-align: center;

@@ -923,6 +923,12 @@ if (!clientColumns.some((c) => c.name === 'sector_negocio')) {
 if (!clientColumns.some((c) => c.name === 'app_enabled')) {
     db.exec('ALTER TABLE clients ADD COLUMN app_enabled INTEGER NOT NULL DEFAULT 0');
 }
+// Zona horaria del cliente (nombre IANA, p. ej. America/Mexico_City). Todo se guarda en UTC; esta zona solo decide cómo se leen las columnas de
+// Control Interno (Fecha, Hora, Día, Semana...) de los registros de ese cliente. Los clientes que ya existían se quedan en la de México (centro),
+// la que se usaba para todos antes de que existiera este dato.
+if (!clientColumns.some((c) => c.name === 'time_zone')) {
+    db.exec("ALTER TABLE clients ADD COLUMN time_zone TEXT NOT NULL DEFAULT 'America/Mexico_City'");
+}
 
 const costCenterColumns = db.prepare('PRAGMA table_info(cost_centers)').all();
 // Same "no hard-delete, only Activar/Desactivar" rule as clients, for the
@@ -2830,7 +2836,7 @@ function createClient({
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
     contractWordDataUrl, contractWordFileName,
-    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations,
+    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations, timeZone,
 }) {
     const create = db.transaction(() => {
         const accountNumber = db.prepare('SELECT COALESCE(MAX(account_number), 0) + 1 AS n FROM clients').get().n;
@@ -2842,7 +2848,7 @@ function createClient({
                     rfc, company_nickname, company_abbreviation, owner_name, billing_email, razon_social, big_date_number, account_number,
                     contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
                     contract_word_data_url, contract_word_file_name,
-                    contracted_cost, monthly_payment, initial_payment, sector_negocio, is_test, equipment_recommendations
+                    contracted_cost, monthly_payment, initial_payment, sector_negocio, is_test, equipment_recommendations, time_zone
                 )
                 VALUES (
                     @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
@@ -2850,7 +2856,7 @@ function createClient({
                     @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @razonSocial, @bigDateNumber, @accountNumber,
                     @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
                     @contractWordDataUrl, @contractWordFileName,
-                    @contractedCost, @monthlyPayment, @initialPayment, @sectorNegocio, @isTest, @equipmentRecommendations
+                    @contractedCost, @monthlyPayment, @initialPayment, @sectorNegocio, @isTest, @equipmentRecommendations, @timeZone
                 )
             `)
             .run({
@@ -2866,9 +2872,12 @@ function createClient({
                 contractWordDataUrl: contractWordDataUrl || null, contractWordFileName: contractWordFileName || null,
                 contractedCost: contractedCost || 0, monthlyPayment: monthlyPayment || 0, initialPayment: initialPayment || 0,
                 sectorNegocio: sectorNegocio || '', isTest: isTest ? 1 : 0, equipmentRecommendations: equipmentRecommendations || '',
+                timeZone: timeZone && isValidTimeZone(timeZone) ? timeZone : DEFAULT_CLIENT_TIME_ZONE,
             }).lastInsertRowid;
     });
-    return getClientById(create());
+    const created = getClientById(create());
+    resetClientTimeZoneCache();
+    return created;
 }
 
 // contractedCost is intentionally handled with COALESCE, not a plain
@@ -2883,7 +2892,7 @@ function updateClient(id, {
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
     contractWordDataUrl, contractWordFileName,
-    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations,
+    contractedCost, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations, timeZone,
 }) {
     const existing = getClientById(id);
     db.prepare(`
@@ -2900,7 +2909,7 @@ function updateClient(id, {
             contract_word_data_url = @contractWordDataUrl, contract_word_file_name = @contractWordFileName,
             contracted_cost = COALESCE(@contractedCost, contracted_cost),
             monthly_payment = @monthlyPayment, initial_payment = @initialPayment, sector_negocio = @sectorNegocio,
-            is_test = @isTest, equipment_recommendations = @equipmentRecommendations
+            is_test = @isTest, equipment_recommendations = @equipmentRecommendations, time_zone = @timeZone
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
@@ -2916,7 +2925,10 @@ function updateClient(id, {
         sectorNegocio: sectorNegocio ?? (existing ? existing.sector_negocio : '') ?? '',
         isTest: isTest != null ? (isTest ? 1 : 0) : (existing ? existing.is_test : 0),
         equipmentRecommendations: equipmentRecommendations ?? (existing ? existing.equipment_recommendations : '') ?? '',
+        // Un guardado que no trae la zona (una acción de la fila, un cliente viejo) deja la que ya tenía.
+        timeZone: timeZone && isValidTimeZone(timeZone) ? timeZone : ((existing && existing.time_zone) || DEFAULT_CLIENT_TIME_ZONE),
     });
+    resetClientTimeZoneCache();
     return getClientById(id);
 }
 
@@ -5248,18 +5260,62 @@ const SYSTEM_COLUMN_DAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb
 // come from one consistent, server-side source, and so a future Reportes
 // query can rely on them without re-deriving anything per screen. Centro
 // Costos is the one real per-row value, passed in from the stored column.
-// Mexico Central Time, fixed (no DST since 2022 in most of the country) —
-// hardcoded rather than read from the Node process' own local timezone,
-// because that varies by deployment (this dev machine runs -0600, but a
-// plain Railway deployment defaults to UTC) and would silently shift "Hora"
-// depending on where the server happens to run. created_at is stored in UTC
-// (SQLite's datetime('now')); shifting it here, then reading every field
-// with the UTC getters, makes the result deterministic regardless of host.
-const SYSTEM_COLUMN_UTC_OFFSET_HOURS = -6;
+// REGLA DE HORAS DEL SISTEMA: todo se guarda en UTC (la hora base: created_at es el datetime('now') de SQLite) y NUNCA depende del reloj del
+// servidor (esta máquina corre en -0600, pero un Railway normal corre en UTC). Lo que se lee en pantalla se convierte a la zona de quien lo ve; estas
+// columnas de Control Interno se leen en la zona del CLIENTE dueño del registro (clients.time_zone, México centro por defecto, que es la que se usaba
+// para todos antes). Las tablas propias de GEIPSA (companyName 'GEIPSA') usan la zona de GEIPSA. Se convierte aquí, fuera de la hora de este
+// proceso, y después se leen todos los campos con los getters UTC, así el resultado es el mismo en cualquier servidor.
+const DEFAULT_CLIENT_TIME_ZONE = 'America/Mexico_City';
+const SAAS_TIME_ZONE = 'America/Mexico_City';
 
-function getSystemColumnsForRecord({ companyName, area, modulo, pantalla, centroCostos, createdAt }) {
+function isValidTimeZone(timeZone) {
+    if (typeof timeZone !== 'string' || !timeZone || timeZone.length > 64) return false;
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+const timeZoneFormatters = new Map();
+function getTimeZoneFormatter(timeZone) {
+    let formatter = timeZoneFormatters.get(timeZone);
+    if (!formatter) {
+        formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+        });
+        timeZoneFormatters.set(timeZone, formatter);
+    }
+    return formatter;
+}
+
+// Un Date cuyos getters UTC dan la hora de reloj de esa zona (incluye el horario de verano de la zona, si lo tiene).
+function wallClockInZone(utcDate, timeZone) {
+    const p = {};
+    getTimeZoneFormatter(timeZone).formatToParts(utcDate).forEach((part) => { if (part.type !== 'literal') p[part.type] = Number(part.value); });
+    return new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second));
+}
+
+// Zona por nombre de empresa (los llamadores de getSystemColumnsForRecord ya traen el nombre): un solo mapa que se rearma cada 5 s o al
+// cambiar un cliente, para no consultar la base por cada fila de una tabla grande.
+let clientTimeZoneCache = { at: 0, byName: new Map() };
+function resetClientTimeZoneCache() { clientTimeZoneCache = { at: 0, byName: new Map() }; }
+function getClientTimeZoneByCompanyName(companyName) {
+    const now = Date.now();
+    if (now - clientTimeZoneCache.at > 5000) {
+        const byName = new Map();
+        db.prepare('SELECT company_name, time_zone FROM clients').all().forEach((r) => { if (!byName.has(r.company_name)) byName.set(r.company_name, r.time_zone); });
+        clientTimeZoneCache = { at: now, byName };
+    }
+    const zone = clientTimeZoneCache.byName.get(companyName);
+    return zone && isValidTimeZone(zone) ? zone : DEFAULT_CLIENT_TIME_ZONE;
+}
+
+function getSystemColumnsForRecord({ companyName, area, modulo, pantalla, centroCostos, createdAt, timeZone }) {
     const utc = createdAt ? new Date(`${createdAt.replace(' ', 'T')}Z`) : new Date();
-    const d = new Date(utc.getTime() + SYSTEM_COLUMN_UTC_OFFSET_HOURS * 60 * 60 * 1000);
+    const zone = timeZone && isValidTimeZone(timeZone) ? timeZone : (companyName === 'GEIPSA' ? SAAS_TIME_ZONE : getClientTimeZoneByCompanyName(companyName));
+    const d = Number.isNaN(utc.getTime()) ? utc : wallClockInZone(utc, zone);
     const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     const week = Math.ceil((Math.floor((d - start) / 86400000) + start.getUTCDay() + 1) / 7);
     const pad = (n) => String(n).padStart(2, '0');
@@ -9732,6 +9788,9 @@ module.exports = {
     deleteFleetUnit,
     suggestFuelTypeForEcoUnit,
     getSystemColumnsForRecord,
+    isValidTimeZone,
+    DEFAULT_CLIENT_TIME_ZONE,
+    SAAS_TIME_ZONE,
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,

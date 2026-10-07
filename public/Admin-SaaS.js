@@ -25,6 +25,7 @@ const emailField = document.getElementById('client-email');
 const phoneField = document.getElementById('client-phone');
 const planField = document.getElementById('client-plan');
 const sectorField = document.getElementById('client-sector');
+const timeZoneField = document.getElementById('client-time-zone');
 const statusField = document.getElementById('client-status');
 const isTestField = document.getElementById('client-is-test');
 const missionField = document.getElementById('client-mission');
@@ -556,7 +557,7 @@ function clientToPayload(client) {
         equipmentRecommendations: client.equipment_recommendations,
         rfc: client.rfc, companyNickname: client.company_nickname, companyAbbreviation: client.company_abbreviation,
         ownerName: client.owner_name, billingEmail: client.billing_email, razonSocial: client.razon_social,
-        sectorNegocio: client.sector_negocio,
+        sectorNegocio: client.sector_negocio, timeZone: client.time_zone,
         contractStartDate: client.contract_start_date, contractRegisteredDate: client.contract_registered_date,
         contractEndDate: client.contract_end_date, contractFileDataUrl: client.contract_file_data_url, contractFileName: client.contract_file_name,
         contractWordDataUrl: client.contract_word_data_url, contractWordFileName: client.contract_word_file_name,
@@ -648,6 +649,14 @@ function startEdit(client) {
         sectorField.appendChild(option);
     }
     sectorField.value = client.sector_negocio || '';
+    // Una zona guardada por otra vía que no está en la lista se conserva tal cual (no se pierde al guardar).
+    if (client.time_zone && !timeZoneField.querySelector(`option[value="${CSS.escape(client.time_zone)}"]`)) {
+        const option = document.createElement('option');
+        option.value = client.time_zone;
+        option.textContent = client.time_zone;
+        timeZoneField.appendChild(option);
+    }
+    timeZoneField.value = client.time_zone || 'America/Mexico_City';
     statusField.value = client.status;
     isTestField.checked = !!client.is_test;
     missionField.value = client.mission || '';
@@ -818,6 +827,7 @@ form.addEventListener('submit', async (event) => {
         phone: phoneField.value.trim(),
         plan: planField.value.trim(),
         sectorNegocio: sectorField.value.trim(),
+        timeZone: timeZoneField.value,
         status: statusField.value,
         isTest: isTestField.checked,
         logoDataUrl: logoDataField.value || null,
@@ -1028,7 +1038,9 @@ async function openAnexoChangesModal(client) {
                 ].forEach(([key, value]) => {
                     const td = document.createElement('td');
                     td.dataset.col = key;
-                    td.textContent = value;
+                    // Las dos fechas se guardan en UTC: hora local de quien mira y, debajo, la hora base.
+                    if (key === 'colRequestedAt' || key === 'colChangedAt') Dashboard.renderTimeStamp(td, value);
+                    else td.textContent = value;
                     tr.appendChild(td);
                 });
                 anexoChangesTableBody.appendChild(tr);

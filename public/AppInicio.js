@@ -1054,9 +1054,15 @@ const PENDING_CHANGE_TABLE_LABELS = {
 const notificationsBadgeEl = document.getElementById('home-menu-notifications-badge');
 let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [], pendientes: [] };
 
+// dd-mm-aa del día LOCAL del dispositivo: SQLite guarda la fecha en UTC ("YYYY-MM-DD HH:MM:SS"), y el aviso de las 11:33 p. m. de México es del
+// día 06 aunque en UTC ya sea 07. Misma regla de horas que Dashboard.js (todo se guarda en UTC, se muestra en la zona de quien lo ve).
 function formatNotificationDate(sqliteDatetime) {
-    const [y, m, d] = (sqliteDatetime || '').slice(0, 10).split('-');
-    return y && m && d ? `${d}-${m}-${y.slice(2)}` : '';
+    const s = String(sqliteDatetime || '').trim().replace(' ', 'T');
+    const date = new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(s) ? s : `${s}Z`);
+    if (!s || Number.isNaN(date.getTime())) return '';
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    return `${dd}-${mm}-${String(date.getFullYear()).slice(2)}`;
 }
 
 function renderNotifAlertItem(alert) {

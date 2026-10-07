@@ -3445,10 +3445,12 @@ const RULE_RANGE_TYPE_BY_KEY = {
 function cellDateToIso(value) {
     const v = String(value ?? '').trim();
     if (ISO_DATE_RE.test(v)) return v;
-    // Fecha con hora (historial de cambios): vale la fecha.
+    // Fecha con hora: vale la fecha.
     const withTime = v.match(/^(\d{4}-\d{2}-\d{2})[ T]\d{1,2}:\d{2}(:\d{2})?$/);
     if (withTime && ISO_DATE_RE.test(withTime[1])) return withTime[1];
-    const m = v.match(/^(\d{1,2})\/([A-Za-zÀ-ÿ]{3,4})\.?\/(\d{4})$/);
+    // Historial de cambios: la celda trae la hora LOCAL de quien mira y, después, la hora base: "06/oct/2026 23:33:12 2026-10-07 05:33:12 UTC".
+    // El filtro por fecha usa el día local (el que la persona ve primero); las demás celdas de fecha siguen siendo "dd/mmm/aaaa" sin más.
+    const m = v.match(/^(\d{1,2})\/([A-Za-zÀ-ÿ]{3,4})\.?\/(\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s+\d{4}-\d{2}-\d{2}\s.*)?)?$/);
     if (!m) return null;
     const abbr = m[2].toLowerCase().slice(0, 3);
     let month = RULE_MONTHS.indexOf(abbr);
@@ -5701,7 +5703,9 @@ function renderChangeHistoryRow(cells, stripeColor) {
     cells.forEach((text, i) => {
         const td = document.createElement('td');
         td.dataset.col = CHANGE_HISTORY_COLUMNS[i];
-        td.textContent = text;
+        // La primera columna es la fecha: hora local de quien mira y, debajo, la hora base (UTC).
+        if (i === 0) renderTimeStamp(td, text);
+        else td.textContent = text;
         tr.appendChild(td);
     });
     return tr;
@@ -9146,20 +9150,111 @@ function setNotificationsBadge(count) {
     });
 }
 
-// dd-mm-aa, matching the format the user asked for — SQLite's
-// datetime('now') gives "YYYY-MM-DD HH:MM:SS" (UTC); just re-sliced, no
-// timezone conversion (same "good enough, not a legal timestamp" precedent
-// as every other date shown straight from a DB column in this app).
+// --- Hora base (UTC) y hora local -------------------------------------------------------------------------------------
+// REGLA DEL SISTEMA (Daniel, 2026-10-06): todo se guarda en UTC (SQLite datetime('now') = "YYYY-MM-DD HH:MM:SS" en UTC) y nada depende del
+// reloj de un lugar. Lo que se muestra se convierte a la zona de QUIEN lo ve y la hora base queda a la vista debajo. Todo sello de fecha/hora
+// que se muestre en pantalla pasa por renderTimeStamp (celdas) o formatLocalStamp / formatUtcStamp (texto suelto); nunca se corta el texto
+// de la base ni se pinta tal cual. Las columnas de Control Interno son otra cosa: las calcula el servidor en la zona del cliente.
+const TIME_STAMP_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const TIME_STAMP_HAS_ZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/;
+
+// "2026-10-07 05:33:12" (UTC, sin zona) o un ISO con zona -> Date; null si no es una fecha.
+function parseUtcStamp(value) {
+    const s = String(value ?? '').trim();
+    if (!s) return null;
+    const iso = s.replace(' ', 'T');
+    const date = new Date(TIME_STAMP_HAS_ZONE_RE.test(iso) ? iso : `${iso}Z`);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// La zona de quien mira (la del navegador); UTC solo si el navegador no la sabe decir.
+function getViewerTimeZone() {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch {
+        return 'UTC';
+    }
+}
+
+const timeStampFormatters = new Map();
+function zoneParts(date, timeZone) {
+    let formatter = timeStampFormatters.get(timeZone);
+    if (!formatter) {
+        formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+        });
+        timeStampFormatters.set(timeZone, formatter);
+    }
+    const parts = {};
+    formatter.formatToParts(date).forEach((p) => { if (p.type !== 'literal') parts[p.type] = Number(p.value); });
+    parts.hour %= 24;
+    return parts;
+}
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+// "06/oct/2026 23:33:12" en la zona de quien mira (mismo formato que la columna Fecha/Hora de Control Interno).
+function formatLocalStamp(date, { withTime = true } = {}) {
+    const p = zoneParts(date, getViewerTimeZone());
+    const day = `${pad2(p.day)}/${TIME_STAMP_MONTHS[p.month - 1]}/${p.year}`;
+    return withTime ? `${day} ${pad2(p.hour)}:${pad2(p.minute)}:${pad2(p.second)}` : day;
+}
+
+// "2026-10-07 05:33:12 UTC": la hora base, la que se guarda.
+function formatUtcStamp(date) {
+    const iso = date.toISOString();
+    return `${iso.slice(0, 10)} ${iso.slice(11, 19)} UTC`;
+}
+
+// "UTC−6" de la zona de quien mira en ese momento (con horario de verano si lo tiene); '' si el navegador no lo sabe decir.
+function formatViewerZoneOffset(date) {
+    try {
+        const name = new Intl.DateTimeFormat('en-US', { timeZone: getViewerTimeZone(), timeZoneName: 'shortOffset' })
+            .formatToParts(date).find((p) => p.type === 'timeZoneName')?.value || '';
+        return name === 'GMT' ? 'UTC' : name.replace('GMT', 'UTC').replace('-', '−');
+    } catch {
+        return '';
+    }
+}
+
+// Pinta un sello en una celda/elemento: la hora local de quien mira y, debajo, la hora base (UTC). Lo que no sea una fecha se muestra tal cual.
+function renderTimeStamp(container, value) {
+    container.textContent = '';
+    const date = parseUtcStamp(value);
+    if (!date) {
+        container.textContent = value == null || value === '' ? '—' : String(value);
+        return container;
+    }
+    const local = document.createElement('span');
+    local.className = 'time-local';
+    local.textContent = formatLocalStamp(date);
+    local.title = t('main.timeLocalTitle', { zone: getViewerTimeZone(), offset: formatViewerZoneOffset(date) });
+    const base = document.createElement('small');
+    base.className = 'time-utc';
+    base.textContent = formatUtcStamp(date);
+    base.title = t('main.timeUtcTitle');
+    // El espacio entre las dos líneas deja el texto de la celda como "<local> <base>": así el filtro y la búsqueda leen las dos.
+    container.append(local, document.createTextNode(' '), base);
+    return container;
+}
+
+// dd-mm-aa del día LOCAL de quien mira (el aviso de las 11:33 p. m. de México es del 06, aunque en UTC ya sea 07); la hora completa va en el title.
 function formatNotificationDate(sqliteDatetime) {
-    const [y, m, d] = (sqliteDatetime || '').slice(0, 10).split('-');
-    return y && m && d ? `${d}-${m}-${y.slice(2)}` : '';
+    const date = parseUtcStamp(sqliteDatetime);
+    if (!date) return '';
+    const p = zoneParts(date, getViewerTimeZone());
+    return `${pad2(p.day)}-${pad2(p.month)}-${String(p.year).slice(2)}`;
+}
+function notificationDateTitle(sqliteDatetime) {
+    const date = parseUtcStamp(sqliteDatetime);
+    return date ? `${formatLocalStamp(date)} · ${formatUtcStamp(date)}` : '';
 }
 
 function renderAlertRow(alert) {
     const row = document.createElement('div');
     row.className = `notifications-item notifications-item-alert${alert.seen_at ? '' : ' notifications-item-unseen'}`;
     row.innerHTML = `
-        <div class="notifications-item-meta">#${alert.seq} · ${formatNotificationDate(alert.created_at)}</div>
+        <div class="notifications-item-meta" title="${notificationDateTitle(alert.created_at)}">#${alert.seq} · ${formatNotificationDate(alert.created_at)}</div>
         <div class="notifications-item-desc">
             <b data-role="actor"></b>, ${t('main.notificationAttemptedChangePrefix')}
             <b>${t(alert.field_key)} / ${t(alert.screen_key)}</b>, ${t('main.notificationAttemptedChangeSuffix')}
@@ -9181,7 +9276,7 @@ function renderRequestRow(change, { showOutcome = false } = {}) {
     row.className = `notifications-item${showOutcome && !change.seen_at ? ' notifications-item-unseen' : ''}`;
     const tableLabel = t(PENDING_CHANGE_TABLE_LABELS[change.table_key] || change.table_key);
     const outcome = showOutcome
-        ? `<div class="notifications-item-meta">${t(change.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected')} — <span data-role="resolved-by"></span> · ${formatNotificationDate(change.resolved_at)}</div>`
+        ? `<div class="notifications-item-meta" title="${notificationDateTitle(change.resolved_at)}">${t(change.status === 'approved' ? 'main.notificationApproved' : 'main.notificationRejected')} — <span data-role="resolved-by"></span> · ${formatNotificationDate(change.resolved_at)}</div>`
         : '';
     row.innerHTML = `
         <div class="notifications-item-meta">${tableLabel} · <span data-role="record-label"></span></div>
@@ -9254,6 +9349,7 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
     meta.textContent = `${item.categoryLabel} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = notificationDateTitle(item.createdAt);
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
     desc.textContent = t('main.notificationCatalogRequestDesc', { name: item.requestedName, catalog: item.categoryLabel });
@@ -11627,6 +11723,12 @@ window.Dashboard = {
     registerSaasTableHistory,
     saasHistoryRow,
     saasTableChangesLoader,
+    // Hora base (UTC) y hora local: ver la regla en formatNotificationDate.
+    parseUtcStamp,
+    formatLocalStamp,
+    formatUtcStamp,
+    getViewerTimeZone,
+    renderTimeStamp,
     get lang() { return currentLang; },
     get role() { return currentRole; },
     get isClientAdmin() { return !!currentUser?.isClientAdmin; },

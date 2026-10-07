@@ -177,6 +177,8 @@ const {
     updateTransfer,
     deleteTransfer,
     getSystemColumnsForRecord,
+    isValidTimeZone,
+    SAAS_TIME_ZONE,
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,
@@ -1110,10 +1112,13 @@ function validateClientBody(body) {
     const {
         companyName, contactName, email, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
         billingEmail, contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractWordDataUrl,
-        rfc, companyAbbreviation, monthlyPayment, initialPayment,
+        rfc, companyAbbreviation, monthlyPayment, initialPayment, timeZone,
     } = body || {};
     if (!companyName || !contactName || !email) {
         return 'companyName, contactName and email are required.';
+    }
+    if (timeZone !== undefined && timeZone !== null && timeZone !== '' && !isValidTimeZone(timeZone)) {
+        return 'timeZone must be a valid time zone name like America/Mexico_City.';
     }
     if (status && !CLIENT_STATUSES.includes(status)) {
         return `status must be one of: ${CLIENT_STATUSES.join(', ')}.`;
@@ -1172,7 +1177,7 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
             additionalsPaymentTotal: additionalCostCentersPayment + additionalPermissionsPayment,
             ...getSystemColumnsForRecord({
                 companyName: client.company_name, area: '', modulo: 'Administración del Negocio', pantalla: 'Nuestros Clientes',
-                centroCostos: '', createdAt: client.created_at,
+                centroCostos: '', createdAt: client.created_at, timeZone: SAAS_TIME_ZONE,
             }),
         };
     });
@@ -1271,7 +1276,7 @@ function extractClientFields(body) {
         rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
         contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
         contractWordDataUrl, contractWordFileName,
-        monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations,
+        monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations, timeZone,
     } = body;
     return {
         companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
@@ -1283,7 +1288,7 @@ function extractClientFields(body) {
         // updateClient hace COALESCE(@contractedCost, contracted_cost), así
         // que mandar null aquí congela el valor histórico en vez de
         // ponerlo en 0 en cada guardado futuro.
-        contractedCost: null, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations,
+        contractedCost: null, monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations, timeZone,
     };
 }
 
@@ -1338,7 +1343,7 @@ const CLIENT_TRACKED_FIELDS = {
     contract_file_name: 'admin.contractFile', contract_word_file_name: 'admin.contractWordFile',
     plan: 'admin.plan', sector_negocio: 'menu.appSector', equipment_recommendations: 'admin.equipmentRecommendations',
     initial_payment: 'admin.initialPayment', monthly_payment: 'admin.monthlyPayment', status: 'admin.status',
-    app_enabled: 'admin.clientAppEnabled',
+    app_enabled: 'admin.clientAppEnabled', time_zone: 'admin.timeZone',
 };
 function logClientFieldChanges(req, before, after) {
     const label = after.company_name || before.company_name || '';
