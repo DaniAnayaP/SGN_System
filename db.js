@@ -7603,6 +7603,10 @@ db.exec(`
 // Solicitudes de un cliente (scope 'client'): a quién se le cambia el color -- el nivel (admin/perfil/usuario) y su id.
 ensureColumn('column_color_requests', 'level', 'TEXT');
 ensureColumn('column_color_requests', 'entity_id', 'INTEGER');
+// Cómo se llama la columna que se quiere pintar ("Nuestros Clientes › Tabla principal › RFC"): lo manda la pantalla del árbol al pedir el cambio, para que la
+// campana de Notificaciones lo muestre sin tener que conocer el árbol. Y cuándo abrió el aviso (aprobada/rechazada) quien la pidió.
+ensureColumn('column_color_requests', 'label', 'TEXT');
+ensureColumn('column_color_requests', 'requester_seen_at', 'TEXT');
 
 const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text', 'set-class', 'clear-class', 'set-order', 'clear-order'];
 const SAAS_COLOR_AUTHORIZE_LEAF = 'controles::a8';
@@ -7644,7 +7648,7 @@ function getUserNameById(userId) {
     return row ? (row.name || row.username) : '';
 }
 
-function createColorRequest({ scope, clientId = null, colorId, action, value = null, level = null, entityId = null, requestedByUserId, requestedByLabel, assignedToUserId }) {
+function createColorRequest({ scope, clientId = null, colorId, action, value = null, level = null, entityId = null, requestedByUserId, requestedByLabel, assignedToUserId, label = '' }) {
     if (!COLOR_REQUEST_ACTIONS.includes(action)) throw new Error('invalid color request action');
     const isText = action.endsWith('text') ? 1 : 0;
     return db.transaction(() => {
@@ -7657,9 +7661,9 @@ function createColorRequest({ scope, clientId = null, colorId, action, value = n
               AND status = 'pending' AND (action LIKE '%text') = ?
         `).run(scope, clientId, colorId, requestedByUserId, level, entityId, isText);
         const info = db.prepare(`
-            INSERT INTO column_color_requests (scope, client_id, color_id, action, value, level, entity_id, requested_by_user_id, requested_by_label, assigned_to_user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(scope, clientId, colorId, action, value, level, entityId, requestedByUserId, requestedByLabel || '', assignedToUserId || null);
+            INSERT INTO column_color_requests (scope, client_id, color_id, action, value, level, entity_id, requested_by_user_id, requested_by_label, assigned_to_user_id, label)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(scope, clientId, colorId, action, value, level, entityId, requestedByUserId, requestedByLabel || '', assignedToUserId || null, String(label || '').slice(0, 200));
         return Number(info.lastInsertRowid);
     })();
 }
@@ -7669,7 +7673,7 @@ const COLOR_REQUEST_SELECT = `
            r.requested_by_user_id AS requestedById, COALESCE(NULLIF(r.requested_by_label, ''), u1.name, u1.username) AS requestedByName,
            r.assigned_to_user_id AS assignedToId, COALESCE(u2.name, u2.username) AS assignedToName,
            r.status, r.decided_by_user_id AS decidedById, r.decided_by_label AS decidedByName, r.decided_at AS decidedAt,
-           r.created_at AS createdAt
+           r.created_at AS createdAt, r.label AS label, r.requester_seen_at AS seenAt
     FROM column_color_requests r
     LEFT JOIN users u1 ON u1.id = r.requested_by_user_id
     LEFT JOIN users u2 ON u2.id = r.assigned_to_user_id
@@ -7687,6 +7691,35 @@ function listColorRequestsForUser(scope, { userId, isSuperAdmin = false, limit =
         ORDER BY (r.status = 'pending') DESC, r.id DESC
         LIMIT ?
     `).all(scope, userId, userId, isSuperAdmin ? 1 : 0, limit);
+}
+// La campana de Notificaciones de una cuenta SaaS (solo los dos árboles SaaS: 'saas' = Árbol Maestro SaaS, 'master' = Árbol de Permisos Maestro de clientes):
+// lo que le toca autorizar, lo que pidió y sigue pendiente, y lo que pidió y ya se resolvió (últimos 30 días; los que aún no abre cuentan en el globo).
+function listColorNotificationsForUser({ userId, isSuperAdmin = false }) {
+    const rows = db.prepare(`
+        ${COLOR_REQUEST_SELECT}
+        WHERE r.scope IN ('saas', 'master')
+          AND ((r.status = 'pending' AND (r.assigned_to_user_id = ? OR ? = 1)) OR r.requested_by_user_id = ?)
+        ORDER BY r.id DESC
+        LIMIT 200
+    `).all(userId, isSuperAdmin ? 1 : 0, userId);
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+    const out = { autorizar: [], solicitudes: [], avisos: [] };
+    rows.forEach((r) => {
+        const mine = r.requestedById === userId;
+        const canDecide = r.status === 'pending' && !mine
+            && (isSuperAdmin || (r.assignedToId === userId && userCanAuthorizeColors(r.scope, userId)));
+        const item = { ...r, canDecide };
+        if (canDecide) out.autorizar.push(item);
+        else if (mine && r.status === 'pending') out.solicitudes.push(item);
+        else if (mine && (r.status === 'approved' || r.status === 'rejected') && (r.decidedAt || '') >= cutoff) out.avisos.push(item);
+    });
+    return out;
+}
+function markColorRequestsSeen(userId) {
+    db.prepare(`
+        UPDATE column_color_requests SET requester_seen_at = datetime('now')
+        WHERE requested_by_user_id = ? AND scope IN ('saas', 'master') AND status IN ('approved', 'rejected') AND requester_seen_at IS NULL
+    `).run(userId);
 }
 function decideColorRequest(id, status, { userId, label }) {
     db.prepare(`
@@ -9884,6 +9917,8 @@ module.exports = {
     createColorRequest,
     getColorRequest,
     listColorRequestsForUser,
+    listColorNotificationsForUser,
+    markColorRequestsSeen,
     decideColorRequest,
     applySaasColorRequest,
     resolveSaasColorAuthorizer,

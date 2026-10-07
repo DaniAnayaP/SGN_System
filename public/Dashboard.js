@@ -9700,6 +9700,84 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
     return row;
 }
 
+// --- Solicitudes de color (campana de las cuentas SaaS) -----------------------------------------------------------------
+// Quien puede personalizar colores pero no autorizarlos pide el cambio en el árbol (Árbol Maestro SaaS o Árbol de Permisos Maestro); la solicitud le llega
+// a quien debe decidirla (su jefe directo y, si ese no puede autorizar, el siguiente) aquí, en Notificaciones (kind: 'color-request', ver
+// /api/business/notifications). Autorizar la aplica a las tablas; Rechazar la cierra.
+const COLOR_REQUEST_TREE_LABEL_KEYS = { saas: 'menu.saasMasterTree', master: 'menu.masterPermissionsTree' };
+
+// "Encabezado · Nuestros Clientes › Tabla principal › RFC": el nombre que mandó la pantalla del árbol; sin él (solicitudes viejas), lo que se pueda leer del id.
+function colorRequestColumnText(item) {
+    const m = /^col-(own|nested):(.*)$/.exec(item.colorId || '');
+    const part = m ? t(m[1] === 'own' ? 'admin.colorRequestPartOwn' : 'admin.colorRequestPartNested') : '';
+    let column = item.label || '';
+    if (!column && m) {
+        const colId = m[2].split('/').pop();
+        const translated = t(`main.${colId}`);
+        column = translated && translated !== `main.${colId}` ? translated : colId;
+    }
+    if (!column) column = item.colorId || '';
+    return part ? `${part} · ${column}` : column;
+}
+
+function renderColorRequestRow(item, bucket) {
+    const row = document.createElement('div');
+    row.className = 'notifications-item';
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${t(COLOR_REQUEST_TREE_LABEL_KEYS[item.scope] || 'main.notificationsTab_solicitudes')} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.append(`${colorRequestColumnText(item)}: `);
+    if (item.action === 'set' || item.action === 'set-text') {
+        const swatch = document.createElement('span');
+        swatch.className = 'color-request-swatch';
+        swatch.style.backgroundColor = item.value;
+        desc.appendChild(swatch);
+        desc.append(t(item.action === 'set' ? 'admin.colorRequestChangeFill' : 'admin.colorRequestChangeText', { hex: item.value }));
+    } else {
+        desc.append(t(item.action === 'clear-dot' ? 'admin.colorRequestChangeClearFill' : 'admin.colorRequestChangeClearText'));
+    }
+    row.append(meta, desc);
+    const note = document.createElement('div');
+    note.className = 'notifications-item-meta';
+    if (bucket === 'autorizar') note.textContent = t('main.notificationColorRequestBy', { name: item.requestedByName || '—' });
+    else if (bucket === 'solicitudes') note.textContent = t('main.notificationColorRequestTo', { name: item.assignedToName || '—' });
+    else note.textContent = t('main.notificationColorRequestDecidedBy', { status: t(`admin.colorRequestStatus_${item.status}`), name: item.decidedByName || '—' });
+    row.appendChild(note);
+    if (bucket === 'autorizar' && item.canDecide) {
+        const actions = document.createElement('div');
+        actions.className = 'notifications-item-actions';
+        [[false, 'main.notificationReject', 'btn btn-secondary'], [true, 'main.notificationApprove', 'btn']].forEach(([approve, labelKey, cls]) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = cls;
+            btn.textContent = t(labelKey);
+            btn.addEventListener('click', () => decideColorRequestNotification(item, approve, row));
+            actions.appendChild(btn);
+        });
+        row.appendChild(actions);
+    }
+    return row;
+}
+
+async function decideColorRequestNotification(item, approve, row) {
+    try {
+        const res = await fetch(`/api/admin/${item.scope}-color-requests/${item.id}/${approve ? 'approve' : 'reject'}`, { method: 'POST', credentials: 'include' });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            showToast(body.message || t('admin.colorRequestError'), 'error');
+            return;
+        }
+        row.remove();
+        showToast(t(approve ? 'admin.colorRequestApproved' : 'admin.colorRequestRejectedMsg'), 'success');
+        loadNotifications();
+    } catch {
+        showToast(t('admin.colorRequestError'), 'error');
+    }
+}
+
 async function resolveCatalogRequestAction(id, action, row, payload) {
     try {
         const res = await fetch(`/api/business/catalog-requests/${id}/${action}`, {
@@ -10016,7 +10094,8 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
+            if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
+            else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (activeNotificationTab === 'alertas') row = renderAlertRow(item);
             else if (activeNotificationTab === 'avisos') row = renderRequestRow(item, { showOutcome: true });
             else if (activeNotificationTab === 'solicitudes') row = renderRequestRow(item);

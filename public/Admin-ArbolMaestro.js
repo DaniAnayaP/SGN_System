@@ -556,6 +556,7 @@ async function loadMasterTree() {
                 colors: canUse('colors'), reorder: canUse('reorder'), navigate: canUse('navigate'), history: canUse('history'),
             },
             onColorRequested: notifyColorRequested,
+            describeColorId,
             departmentOrder: orderData.departmentOrder || [],
             areaOrder: orderData.areaOrders || {},
             apartadoOrder: orderData.apartadoOrders || {},
@@ -723,144 +724,21 @@ currencyConfirmBtn.addEventListener('click', async () => {
 });
 
 // --- Solicitudes de color de columna ---------------------------------------------------
-// Quien puede personalizar colores pero no autorizarlos deja una solicitud (el servidor responde 202): el
-// color no se pinta en las tablas reales hasta que lo autorice quien le toca (su jefe directo y, si ese no
-// tiene el acceso, el siguiente, hasta quien lo tenga; ver resolveColorAuthorizer en db.js).
-const colorRequestsBtn = document.getElementById('master-color-requests-btn');
-const colorRequestsBadge = document.getElementById('master-color-requests-badge');
-const colorRequestsModal = document.getElementById('master-color-requests-modal');
-const colorRequestsListEl = document.getElementById('master-color-requests-list');
-let colorRequests = [];
-let colorRequestsCanAuthorize = false;
-
-async function loadColorRequests() {
-    try {
-        const res = await fetch('/api/admin/master-color-requests', { credentials: 'include' });
-        if (!res.ok) throw new Error('load failed');
-        const data = await res.json();
-        colorRequests = data.requests || [];
-        colorRequestsCanAuthorize = !!data.canAuthorize;
-        const waiting = colorRequestsCanAuthorize ? (data.toDecide || 0) : colorRequests.filter((r) => r.status === 'pending').length;
-        colorRequestsBadge.textContent = String(waiting);
-        colorRequestsBadge.hidden = waiting === 0;
-        colorRequestsBtn.hidden = !(canUse('colors') || colorRequestsCanAuthorize || colorRequests.length);
-        if (!colorRequestsModal.hidden) renderColorRequests();
-    } catch {
-        colorRequestsBtn.hidden = true;
-    }
-}
+// Quien puede personalizar colores pero no autorizarlos deja una solicitud (el servidor responde 202): el color no se pinta en las tablas reales hasta que lo
+// autorice quien le toca (su jefe directo y, si ese no tiene el acceso, el siguiente, hasta quien lo tenga; ver resolveColorAuthorizer en db.js). A esa
+// persona le llega en Notificaciones (la campana), ya no en un botón de esta pantalla.
 async function notifyColorRequested(res) {
     const data = await res.json().catch(() => ({}));
     Dashboard.showToast(Dashboard.t('admin.colorRequestSent', { name: data.assignedTo?.name || '' }), 'info');
-    await loadColorRequests();
 }
-// "col-own:<sectionId>::<itemId>::<ruta>/<columna>" -> la columna (su texto, o su id si no tiene traducción)
+// "col-own:<sectionId>::<itemId>::<ruta>/<columna>" -> la columna (su texto, o su id si no tiene traducción); viaja con la solicitud para la campana.
 function describeColorId(colorId) {
     const m = /^col-(own|nested):(.*)$/.exec(colorId || '');
-    if (!m) return { part: '', path: colorId || '' };
+    if (!m) return colorId || '';
     const colId = m[2].split('/').pop();
     const translated = Dashboard.t(`main.${colId}`);
-    return {
-        part: Dashboard.t(m[1] === 'own' ? 'admin.colorRequestPartOwn' : 'admin.colorRequestPartNested'),
-        path: translated && translated !== `main.${colId}` ? translated : colId,
-    };
+    return translated && translated !== `main.${colId}` ? translated : colId;
 }
-function colorRequestChange(request) {
-    const wrap = document.createElement('span');
-    if (request.action === 'set' || request.action === 'set-text') {
-        const sw = document.createElement('span');
-        sw.className = 'color-request-swatch';
-        sw.style.backgroundColor = request.value;
-        wrap.appendChild(sw);
-        wrap.append(Dashboard.t(request.action === 'set' ? 'admin.colorRequestChangeFill' : 'admin.colorRequestChangeText', { hex: request.value }));
-    } else {
-        wrap.append(Dashboard.t(request.action === 'clear-dot' ? 'admin.colorRequestChangeClearFill' : 'admin.colorRequestChangeClearText'));
-    }
-    return wrap;
-}
-async function decideColorRequest(request, approve) {
-    try {
-        const res = await fetch(`/api/admin/master-color-requests/${request.id}/${approve ? 'approve' : 'reject'}`, { method: 'POST', credentials: 'include' });
-        if (!res.ok) throw new Error('decide failed');
-        Dashboard.showToast(Dashboard.t(approve ? 'admin.colorRequestApproved' : 'admin.colorRequestRejectedMsg'), 'success');
-        // Un color autorizado ya quedó guardado: se vuelve a dibujar el árbol (sin perder lo editado pendiente
-        // no sería posible aquí, así que solo se recarga cuando no hay cambios sin guardar).
-        if (approve && masterTree && !describeChanges().length && ![...collectOrderChanges(), ...collectCostChanges()].length) await loadMasterTree();
-    } catch {
-        Dashboard.showToast(Dashboard.t('admin.colorRequestError'), 'error');
-    }
-    await loadColorRequests();
-}
-function renderColorRequests() {
-    colorRequestsListEl.innerHTML = '';
-    if (!colorRequests.length) {
-        const empty = document.createElement('p');
-        empty.className = 'admin-hint';
-        empty.textContent = Dashboard.t('admin.colorRequestsEmpty');
-        colorRequestsListEl.appendChild(empty);
-        return;
-    }
-    const wrap = document.createElement('div');
-    wrap.className = 'admin-table-wrap';
-    const table = document.createElement('table');
-    table.className = 'admin-table';
-    const thead = document.createElement('thead');
-    const head = document.createElement('tr');
-    ['Status', 'Column', 'Change', 'By', 'To', 'Date', 'Actions'].forEach((col) => {
-        const th = document.createElement('th');
-        th.textContent = Dashboard.t(`admin.colorRequestCol${col}`);
-        head.appendChild(th);
-    });
-    thead.appendChild(head);
-    table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    colorRequests.forEach((request) => {
-        const tr = document.createElement('tr');
-        const cell = (content) => {
-            const td = document.createElement('td');
-            if (content instanceof Node) td.appendChild(content); else td.textContent = content;
-            tr.appendChild(td);
-        };
-        const status = document.createElement('span');
-        status.className = `color-request-status color-request-status-${request.status}`;
-        status.textContent = Dashboard.t(`admin.colorRequestStatus_${request.status}`);
-        cell(status);
-        const { part, path } = describeColorId(request.colorId);
-        cell(part ? `${path} · ${part}` : path);
-        cell(colorRequestChange(request));
-        cell(request.requestedByName || '');
-        cell(request.assignedToName || '');
-        cell(request.createdAt ? new Date(request.createdAt.replace(' ', 'T') + 'Z').toLocaleString() : '');
-        const actions = document.createElement('div');
-        actions.className = 'color-request-actions';
-        if (request.canDecide) {
-            [[true, 'admin.colorRequestApprove', 'masterTreeColorApprove'], [false, 'admin.colorRequestReject', 'masterTreeColorReject']].forEach(([approve, labelKey, helpKey]) => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = approve ? 'btn' : 'btn btn-secondary';
-                btn.textContent = Dashboard.t(labelKey);
-                btn.setAttribute('data-help-key', helpKey);
-                btn.addEventListener('click', () => decideColorRequest(request, approve));
-                actions.appendChild(btn);
-            });
-        }
-        cell(actions);
-        tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    colorRequestsListEl.appendChild(wrap);
-}
-function closeColorRequests() { colorRequestsModal.hidden = true; }
-colorRequestsBtn.addEventListener('click', async () => {
-    await loadColorRequests();
-    renderColorRequests();
-    colorRequestsModal.hidden = false;
-});
-document.getElementById('master-color-requests-close').addEventListener('click', closeColorRequests);
-colorRequestsModal.addEventListener('click', (event) => { if (event.target === colorRequestsModal) closeColorRequests(); });
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !colorRequestsModal.hidden) closeColorRequests(); });
-document.addEventListener('dashboard:language-changed', () => { if (!colorRequestsModal.hidden) renderColorRequests(); });
 
 (async function init() {
     try {
@@ -874,7 +752,6 @@ document.addEventListener('dashboard:language-changed', () => { if (!colorReques
         await loadMasterTree();
         // Sin la pestaña del árbol pero con la del resumen: se abre el resumen (ya con los datos cargados).
         if (viewTreeBtn.hidden && !viewResumenBtn.hidden) showResumenView();
-        loadColorRequests();
     } catch (err) {
         console.error('Admin (Árbol de Permisos Maestro) failed to initialize:', err);
     }

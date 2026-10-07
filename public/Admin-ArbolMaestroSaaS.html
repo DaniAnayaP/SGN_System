@@ -367,11 +367,6 @@
         <section class="admin-panel saas-master-tree-panel">
             <div class="admin-form-actions">
                 <button type="button" class="btn" id="saas-master-status-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="saas-color-requests-btn" data-help-key="masterTreeColorRequests" hidden>
-                    <i class="bx bx-palette" aria-hidden="true"></i>
-                    <span data-i18n="admin.colorRequestsBtn">Color requests</span>
-                    <span class="saas-color-requests-badge" id="saas-color-requests-badge" hidden></span>
-                </button>
             </div>
             <p id="saas-master-status-save-status" class="admin-save-status"></p>
             <div id="saas-master-status-list" class="saas-master-status-list">
@@ -381,16 +376,6 @@
             <p class="admin-subtitle" data-i18n="admin.saasMasterTreeSubtitle">Set the GEIPSA-wide readiness (Enabled/Disabled/In progress/Improving, Web/App) for the SaaS team's own internal screens -- separate from Árbol de Permisos Maestro, which is only about what clients get.</p>
         </section>
     </main>
-
-    <div class="modal-overlay" id="saas-color-requests-modal" hidden>
-        <div class="modal-panel" style="max-width: 64rem;" role="dialog" aria-modal="true" aria-labelledby="saas-color-requests-title">
-            <h3 id="saas-color-requests-title" data-i18n="admin.colorRequestsTitle">Column color requests</h3>
-            <div id="saas-color-requests-list" class="saas-color-requests-list"></div>
-            <div class="admin-form-actions">
-                <button type="button" class="btn btn-secondary" id="saas-color-requests-close" data-i18n="main.close">Close</button>
-            </div>
-        </div>
-    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">

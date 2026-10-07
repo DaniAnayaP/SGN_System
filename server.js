@@ -295,6 +295,8 @@ const {
     createColorRequest,
     getColorRequest,
     listColorRequestsForUser,
+    listColorNotificationsForUser,
+    markColorRequestsSeen,
     decideColorRequest,
     applySaasColorRequest,
     resolveSaasColorAuthorizer,
@@ -3602,10 +3604,15 @@ function canApplyColorsDirectly(scope, req) {
         false,
     );
 }
+// El nombre de la columna que la pantalla del árbol manda al pedir un cambio ("Nuestros Clientes › Tabla principal › RFC"), para la campana de Notificaciones.
+function colorRequestLabel(req) {
+    const raw = (req.body && req.body.label) ?? req.query?.label;
+    return typeof raw === 'string' ? raw.trim().slice(0, 200) : '';
+}
 function requestColorChange(scope, req, res, colorId, action, value) {
     const assignedTo = resolveColorAuthorizer(scope, req.user.sub);
     const requestId = createColorRequest({
-        scope, colorId, action, value,
+        scope, colorId, action, value, label: colorRequestLabel(req),
         requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req), assignedToUserId: assignedTo,
     });
     res.status(202).json({ requested: true, requestId, assignedTo: { id: assignedTo, name: getUserNameById(assignedTo) } });
@@ -3734,7 +3741,7 @@ function canApplySaasColorsDirectly(req) {
 function requestSaasColorChange(req, res, colorId, action, value) {
     const assignedTo = resolveSaasColorAuthorizer(req.user.sub);
     const requestId = createColorRequest({
-        scope: 'saas', colorId, action, value,
+        scope: 'saas', colorId, action, value, label: colorRequestLabel(req),
         requestedByUserId: req.user.sub, requestedByLabel: changedByLabel(req), assignedToUserId: assignedTo,
     });
     res.status(202).json({ requested: true, requestId, assignedTo: { id: assignedTo, name: getUserNameById(assignedTo) } });
@@ -7440,7 +7447,19 @@ app.post('/api/business/pending-changes/:id/reject', requireAuth, (req, res) => 
 // Opening a tab (the 2 mark-seen routes below) is what clears its
 // contribution to the bell's badge count, not fetching this list.
 app.get('/api/business/notifications', requireAuth, (req, res) => {
-    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.clientId) {
+        // Cuenta del equipo SaaS: su campana trae las solicitudes de color de los dos árboles SaaS (Árbol Maestro SaaS y Árbol de Permisos Maestro) --
+        // por autorizar (las que le tocan), las que ella pidió y las ya resueltas. Lo demás de la campana es de los clientes.
+        if (req.user.role !== 'admin') return res.status(404).json({ message: 'No client for this account.' });
+        const colors = listColorNotificationsForUser({ userId: req.user.sub, isSuperAdmin: !!req.user.isSaasSuperAdmin });
+        const asNotification = (r) => ({ ...r, kind: 'color-request', seen_at: r.seenAt });
+        return res.json({
+            alertas: [],
+            avisos: colors.avisos.map(asNotification),
+            solicitudes: colors.solicitudes.map(asNotification),
+            autorizar: colors.autorizar.map(asNotification),
+        });
+    }
     const allPending = listPendingChangesForClient(req.user.clientId);
     let autorizar = allPending;
     if (!req.user.isClientAdmin) {
@@ -7475,13 +7494,21 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
 });
 
 app.post('/api/business/notifications/alertas/mark-seen', requireAuth, (req, res) => {
-    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.clientId) {
+        // La campana SaaS no tiene alertas de acceso negado: nada que marcar.
+        if (req.user.role === 'admin') return res.json({ ok: true });
+        return res.status(404).json({ message: 'No client for this account.' });
+    }
     markAccessDeniedAlertsSeen(req.user.clientId, req.user.sub);
     res.json({ ok: true });
 });
 
 app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res) => {
-    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.clientId) {
+        if (req.user.role !== 'admin') return res.status(404).json({ message: 'No client for this account.' });
+        markColorRequestsSeen(req.user.sub);
+        return res.json({ ok: true });
+    }
     markPendingChangesSeenForRequester(req.user.clientId, req.user.sub);
     res.json({ ok: true });
 });

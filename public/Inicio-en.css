@@ -1955,16 +1955,50 @@
         color: var(--color-text-primary);
         word-break: break-word;
     }
+    /* El cuadrito del color pedido en una solicitud de color (Admin.css trae el mismo para las pantallas de administración; la campana sale en todas). */
+    .notifications-item-desc .color-request-swatch{
+        display: inline-block;
+        width: 0.9rem;
+        height: 0.9rem;
+        margin-right: 0.35rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.25rem;
+        vertical-align: -0.15rem;
+    }
     .notifications-item-actions{
         display: flex;
         justify-content: flex-end;
         gap: 0.4rem;
     }
+    /* ".top-bar-actions button" (los iconos redondos de la barra de arriba) también alcanza a estos botones, que viven dentro de ella: sin esto quedaban de 2.2rem,
+       redondos y encimados ("Rechazar" sobre "Aprobar"). Aquí se les devuelve su ancho y su forma de botón (Admin.css no se carga en todas las pantallas). */
     .notifications-item-actions .btn,
     .notifications-item-actions .btn-secondary{
+        width: auto;
         height: auto;
-        padding: 0.3rem 0.6rem;
+        padding: 0.3rem 0.8rem;
+        border: 1px solid var(--color-accent);
+        border-radius: 1.4rem;
+        background: var(--color-accent);
+        color: var(--color-accent-text);
         font-size: 0.72rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .notifications-item-actions .btn:hover{
+        background: var(--color-accent);
+        color: var(--color-accent-text);
+        filter: brightness(1.08);
+    }
+    .notifications-item-actions .btn-secondary{
+        border-color: var(--color-border);
+        background: transparent;
+        color: var(--color-text-primary);
+    }
+    .notifications-item-actions .btn-secondary:hover{
+        background: var(--color-bg);
+        color: var(--color-text-primary);
+        filter: none;
     }
     /* Datos de Usuario del Negocio — Departamentos/Áreas/Centro Costos/
        Permisos are condensed into one summary button ("3 Dep. - 6 Áreas -

@@ -278,7 +278,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, grantLimits = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, describeColorId = null, grantLimits = null } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -3246,6 +3246,8 @@
             const isText = kind === 'text';
             try {
                 const body = isText ? { classificationId, textColor: hex } : { classificationId, color: hex };
+                // El nombre de la columna viaja con el pedido (solo se guarda si el color queda como solicitud) para mostrarlo en Notificaciones.
+                if (describeColorId && /^col-(own|nested):/.test(classificationId)) body.label = describeColorId(classificationId);
                 const res = await fetch('/api/admin/master-permission-classification-colors', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -3275,6 +3277,7 @@
             const isText = kind === 'text';
             try {
                 const params = new URLSearchParams({ classificationId, kind: isText ? 'text' : 'dot' });
+                if (describeColorId && /^col-(own|nested):/.test(classificationId)) params.set('label', describeColorId(classificationId));
                 const res = await fetch(`/api/admin/master-permission-classification-colors?${params}`, { method: 'DELETE', credentials: 'include' });
                 if (!res.ok) throw new SaveFailedError(res.status);
                 if (res.status === 202) { if (onColorRequested) await onColorRequested(res); closeColorPanel(); return; }
