@@ -2724,7 +2724,13 @@ function renderList() {
             screenRow.appendChild(rollupEl(computeRollup(screenLeafKeys, 'web'), computeRollup(screenLeafKeys, 'app')));
             screenRow.appendChild(labelEl(Dashboard.t(screen.labelKey)));
             screenRow.appendChild(countBadge(screensItemCount([screen])));
-            screenRow.appendChild(buildControls(screen.itemId, screenLeafKeys, screen.href, buildLevelBadgeCtx('pantalla'), Dashboard.t(screen.labelKey)));
+            // Una pantalla hecha solo de botones (Árbol de Permisos Maestro, Colores por Nivel...) no tiene columnas, así que no tenía "hojas" y los tres botones
+            // de aplicar a lo anidado de su fila quedaban apagados aunque de ella cuelgan la fila Botones y cada uno de sus botones (Daniel, 2026-10-07: «porque no
+            // aparece poder anidados, hacia abajo»). Para decidir si hay algo que aplicar se usan sus botones; lo que se aplica ya recorría todo lo que cuelga.
+            const screenButtonKeys = orderedApartados(screen).flatMap((apartado) => (
+                apartado.acciones && apartado.acciones.length ? buildActionLeaves(apartado).map((leaf) => leafKey(screen, apartado, leaf)) : []
+            ));
+            screenRow.appendChild(buildControls(screen.itemId, screenLeafKeys.length ? screenLeafKeys : screenButtonKeys, screen.href, buildLevelBadgeCtx('pantalla'), Dashboard.t(screen.labelKey)));
             screenRow.dataset.nodeKey = screen.itemId;
             listEl.appendChild(screenRow);
             if (!isExpanded(`s:${screen.itemId}`)) return;
