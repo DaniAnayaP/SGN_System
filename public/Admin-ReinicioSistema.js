@@ -9,6 +9,7 @@
     const $ = (id) => document.getElementById(id);
     const el = {
         disabled: $('system-reset-disabled'),
+        missing: $('system-reset-missing'),
         unclassified: $('system-reset-unclassified'),
         backupBtn: $('system-reset-backup-btn'),
         downloadBtn: $('system-reset-download-btn'),
@@ -102,10 +103,23 @@
         });
     }
 
+    // Lo que todavía impide borrar, en palabras: el botón gris dice qué le falta.
+    function missingItems() {
+        if (!status) return [];
+        const items = [];
+        if (!status.enabled) items.push(t('admin.systemResetMissingVariable'));
+        if (!status.backupFresh) items.push(t('admin.systemResetMissingBackup'));
+        if (!status.preview.ok) items.push(t('admin.systemResetMissingClassify'));
+        if (el.phrase.value !== status.phrase) items.push(t('admin.systemResetMissingPhrase'));
+        return items;
+    }
+
     function updateRunButton() {
-        const phraseOk = !!status && el.phrase.value === status.phrase;
-        const ready = !!status && status.enabled && status.backupFresh && status.preview.ok && phraseOk && !running;
-        el.runBtn.disabled = !ready;
+        const missing = missingItems();
+        el.runBtn.disabled = !(!!status && missing.length === 0 && !running);
+        const showHint = !!status && missing.length > 0 && !el.runBtn.hidden;
+        el.missing.hidden = !showHint;
+        el.missing.textContent = showHint ? t('admin.systemResetMissing', { items: missing.join(' · ') }) : '';
     }
 
     function render() {
