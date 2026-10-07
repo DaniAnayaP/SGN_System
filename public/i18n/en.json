@@ -559,6 +559,8 @@
     "saasAccessNoneBtn": "None",
     "saasAccessAllTitle": "Grant everything below",
     "saasAccessNoneTitle": "Remove everything below",
+    "saasAccessAllTitleLeaf": "Grant this access",
+    "saasAccessNoneTitleLeaf": "Remove this access",
     "saasAccessLevelColumn": "Column",
     "saasAccessLevelAction": "Action",
     "saasAccessChange": "Access to «{node}»: {from} → {to}",
@@ -2172,7 +2174,7 @@
       "example": "“Partial” on a screen means the account has some of its columns and buttons, but not all of them."
     },
     "saasAccessAllNone": {
-      "what": "“All” checks everything under this row at once (only what is Enabled) and “None” removes it all.",
+      "what": "“All” checks everything under this row at once (only what is Enabled) and “None” removes it all. On a row with nothing under it, “All” grants that access and “None” removes it.",
       "example": "on “Customer Service”, “None” takes all of those screens away from the account at once."
     },
     "saasAccessCount": {

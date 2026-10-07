@@ -559,6 +559,8 @@
     "saasAccessNoneBtn": "Nada",
     "saasAccessAllTitle": "Dar todo lo de abajo",
     "saasAccessNoneTitle": "Quitar todo lo de abajo",
+    "saasAccessAllTitleLeaf": "Dar este acceso",
+    "saasAccessNoneTitleLeaf": "Quitar este acceso",
     "saasAccessLevelColumn": "Columna",
     "saasAccessLevelAction": "Acción",
     "saasAccessChange": "Acceso a «{node}»: {from} → {to}",
@@ -2171,7 +2173,7 @@
       "example": "«Parcial» en una pantalla quiere decir que la cuenta tiene algunas de sus columnas y botones, pero no todos."
     },
     "saasAccessAllNone": {
-      "what": "«Todo» marca de golpe todo lo que hay debajo de esta fila (solo lo que está Habilitado) y «Nada» lo quita todo.",
+      "what": "«Todo» marca de golpe todo lo que hay debajo de esta fila (solo lo que está Habilitado) y «Nada» lo quita todo. En una fila que no tiene nada debajo, «Todo» da ese acceso y «Nada» lo quita.",
       "example": "en «Servicio a Cliente», «Nada» le quita a la cuenta todas esas pantallas a la vez."
     },
     "saasAccessCount": {

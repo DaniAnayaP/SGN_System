@@ -672,10 +672,12 @@ function buildAccessRow({ depth, label, level, pairs, toggle, nodeKey, isLeaf, h
 
     const nestCell = document.createElement('div');
     nestCell.className = 'perm-tree-mstatus-status-nest-cell';
-    if (!isLeaf && total > 0) {
+    // Todas las filas llevan «Todo / Nada», así la columna no deja huecos: en una fila sin nada debajo (una pantalla o un icono), «Todo» da ese
+    // acceso y «Nada» lo quita, lo mismo que su casilla.
+    if (total > 0) {
         const nest = document.createElement('div');
         nest.className = 'saas-access-nest';
-        [['admin.saasAccessAllBtn', 'admin.saasAccessAllTitle', true], ['admin.saasAccessNoneBtn', 'admin.saasAccessNoneTitle', false]].forEach(([textKey, titleKey, value]) => {
+        [['admin.saasAccessAllBtn', isLeaf ? 'admin.saasAccessAllTitleLeaf' : 'admin.saasAccessAllTitle', true], ['admin.saasAccessNoneBtn', isLeaf ? 'admin.saasAccessNoneTitleLeaf' : 'admin.saasAccessNoneTitle', false]].forEach(([textKey, titleKey, value]) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'saas-access-nest-btn';
