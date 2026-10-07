@@ -3403,7 +3403,6 @@ const TABLE_GRANT_PATHS = {
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
     'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
     'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
-    'colores-columnas': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-column-colors' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
     'nuestros-articulos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-articulos' },
@@ -7734,7 +7733,6 @@ function decideColorRequest(id, status, { userId, label }) {
 const COLOR_AUTHORIZE_LEAVES = {
     saas: { itemId: 'saas-master-tree', subItemId: SAAS_COLOR_AUTHORIZE_LEAF },
     master: { itemId: 'saas-master-permissions-tree', subItemId: 'controles::a12' },
-    level: { itemId: 'saas-column-colors', subItemId: 'controles::a1' },
 };
 function userCanAuthorizeColors(scope, userId) {
     if (scope === 'saas') return userCanAuthorizeSaasColors(userId);

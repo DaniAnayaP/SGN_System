@@ -113,8 +113,6 @@
     "clientData": "Datos de Cliente",
     "roles": "Roles",
     "users": "Usuarios",
-    "columnColors": "Colores de Columnas",
-    "columnColorsLevels": "Colores por Nivel",
     "limitsAudit": "Auditoría de Límites",
     "systemReset": "Reinicio del Sistema",
     "accessPermissions": "Accesos y Permisos",
@@ -891,7 +889,6 @@
     "limitsAuditKind_module": "módulo no contratado",
     "limitsAuditKind_status": "Estatus no visible",
     "limitsAuditKind_contract": "fuera del contrato",
-    "columnColorsLevelsSubtitle": "Elige el color, la clasificación y el orden de las pantallas y columnas de las tablas de los clientes por Giro, por Plan o por Cliente. Lo que cambias solo le llega a lo que está debajo: el giro, a sus planes y clientes; el plan, a sus clientes; el cliente, a toda su empresa.",
     "masterTreeHistoryFieldStatus": "Estatus",
     "masterTreeHistoryFieldClassification": "Clasificación",
     "masterTreeHistoryFieldColor": "Color",
@@ -962,47 +959,15 @@
     "accesosActivePermsBtn": "Ver permisos activados",
     "accesosActivePermsTitle": "Permisos Activados",
     "myAccessSubtitle": "Lo que realmente puedes ver hoy, otorgado por tu(s) perfil(es) más cualquier extra.",
-    "columnColorsTitle": "Colores de Columnas",
-    "columnColorsSubtitle": "Elige el color, la clasificación y el orden con que se ven las pantallas y columnas de las tablas de tu empresa. Lo que cambias solo le llega a lo que está debajo de lo que eliges: si cambias un perfil, solo lo ven sus usuarios; si cambias a una persona, solo ella.",
-    "colColorsPersonalize": "Personalizar colores",
-    "colClassifyPersonalize": "Personalizar clasificación",
-    "colOrderPersonalize": "Personalizar orden",
     "classOriginOwn": "Propio",
     "classOriginInherits": "Hereda · {level}",
     "classOriginMaster": "Maestro",
-    "columnColorsOrderList_dept": "Departamentos",
-    "columnColorsOrderList_area": "Áreas de {name}",
-    "columnColorsOrderList_apartado": "Apartados de {name}",
-    "columnColorsOrderList_pantalla": "Pantallas de {name}",
-    "columnColorsOrderPart": "Orden",
-    "columnColorsRequestOrder": "Nuevo orden de la lista",
-    "columnColorsRequestOrderClear": "Quitar orden propio",
-    "columnColorsMoveUp": "Subir",
-    "columnColorsMoveDown": "Bajar",
-    "columnColorsOrderReset": "Quitar el orden propio de esta lista y volver a heredar",
-    "columnColorsClassPart": "Clasificación",
-    "columnColorsRequestClass": "Clasificación: {name}",
-    "columnColorsRequestClassClear": "Quitar clasificación propia",
-    "colColorsAuthorize": "Autorizar colores, clasificación y orden",
-    "columnColorsApplyTo": "Aplicar a",
-    "columnColorsLevelAdmin": "Administrador",
-    "columnColorsLevelProfile": "Perfil",
-    "columnColorsLevelUser": "Persona",
-    "columnColorsSample": "Aa",
-    "columnColorsStateOwn": "Propio",
-    "columnColorsStatePending": "Pendiente",
-    "columnColorsStateMaster": "Del producto",
-    "columnColorsStateInherited": "Hereda · {level}",
     "columnColorsLevel_giro": "Giro",
     "columnColorsLevel_plan": "Plan",
     "columnColorsLevel_cliente": "Cliente",
     "columnColorsLevel_admin": "Administrador",
     "columnColorsLevel_perfil": "Perfil",
     "columnColorsLevel_usuario": "Persona",
-    "columnColorsNoColor": "Sin color",
-    "columnColorsEmpty": "No hay pantallas disponibles para personalizar.",
-    "columnColorsReqColTarget": "Para",
-    "columnColorsTargetLine": "{level}: {name}",
     "colorHistoryField": "Color de columna",
     "accesosLegendProfile": "Otorgado por perfil",
     "accesosLegendExtra": "Otorgado adicional",
@@ -2238,62 +2203,6 @@
     "masterTreeColorReject": {
       "what": "Rechaza este cambio de color: no se aplica y la columna se queda como está.",
       "example": "el color pedido no combina; tocas Rechazar y todo queda igual."
-    },
-    "columnColorsLevel": {
-      "what": "Elige a quién le cambias el color: al administrador de la empresa, a un perfil o a una persona. El cambio solo le llega a lo que está debajo de lo que eliges.",
-      "example": "eliges Perfil y luego «Coordinador»: el color nuevo solo lo ven quienes tienen ese perfil."
-    },
-    "columnColorsEntity": {
-      "what": "El perfil o la persona exacta a la que se le aplican los colores que eliges abajo.",
-      "example": "eliges a «Ana Pérez» y los colores que cambies solo cambian para ella."
-    },
-    "columnColorsCell": {
-      "what": "Abre el selector de color de esta parte de la columna (Encabezado o Filas), para lo que elegiste arriba. Ahí cambias el fondo y la letra por separado.",
-      "example": "tocas Filas de «Placas» y eliges verde: las placas se ven en verde para el perfil elegido."
-    },
-    "columnColorsState": {
-      "what": "Dice de dónde viene el color que se ve: Propio (lo elegiste aquí), Pendiente (espera que alguien lo autorice) o Hereda (viene de un nivel de arriba: Administrador, Cliente, Plan, Giro o el color base del producto).",
-      "example": "«Hereda · Plan» significa que nadie más abajo lo cambió y se usa el que puso el plan."
-    },
-    "columnColorsRequests": {
-      "what": "Muestra las solicitudes de color: las que hiciste y las que te toca autorizar. Cada una sube por tus jefes hasta quien tiene permiso de autorizar colores.",
-      "example": "pediste un color para «Folio»; aquí ves que está pendiente y a quién le llegó."
-    },
-    "columnColorsToggle": {
-      "what": "Abre o cierra este grupo para ver lo que contiene.",
-      "example": "abres «Nuestras Unidades» para ver todas sus columnas."
-    },
-    "columnColorsKind": {
-      "what": "Cambia entre el color de fondo y el color de letra que estás editando.",
-      "example": "tocas la «A» para elegir solo el color de la letra."
-    },
-    "columnColorsSwatch": {
-      "what": "Aplica este color a la parte de la columna que estás editando. Si no puedes autorizar colores, se envía una solicitud.",
-      "example": "tocas el azul claro y el encabezado se pinta de ese color."
-    },
-    "columnColorsMore": {
-      "what": "Abre el selector del sistema para elegir cualquier otro color.",
-      "example": "necesitas el color exacto de tu marca y lo eliges aquí."
-    },
-    "columnColorsLevelSaas": {
-      "what": "Elige a quién le cambias el color: a un giro de negocio, a un plan o a un cliente. El cambio solo le llega a lo que está debajo de lo que eliges.",
-      "example": "eliges Plan y luego «Básico»: todos los clientes con ese plan ven el color nuevo, salvo los que ya tengan uno propio."
-    },
-    "columnColorsEntitySaas": {
-      "what": "El giro, el plan o el cliente exacto al que se le aplican los colores que eliges abajo.",
-      "example": "eliges al cliente «Transportes del Norte» y los colores que cambies solo cambian para su empresa."
-    },
-    "columnColorsClass": {
-      "what": "Elige en qué grupo (clasificación) aparece esta columna para lo que elegiste arriba. Puedes dejarla sin clasificar; «Restablecer» quita tu cambio y vuelve a la clasificación de arriba.",
-      "example": "mueves «Placas» de «Por Definir» a «Nuestras Unidades» y, para ese perfil, la columna se agrupa ahí en las tablas."
-    },
-    "columnColorsOrderMove": {
-      "what": "Sube o baja este elemento en su lista, para lo que elegiste arriba. El orden nuevo solo le llega a lo que está debajo de lo que eliges.",
-      "example": "subes «Operaciones» antes de «Catálogos» y, para ese perfil, el menú muestra Operaciones primero."
-    },
-    "columnColorsOrderReset": {
-      "what": "Quita el orden propio de esta lista y vuelve a heredar el de arriba.",
-      "example": "ya no quieres el orden que le diste a un perfil; Restablecer lo deja igual que el de su empresa."
     },
     "classOrigin": {
       "what": "Esta columna aparece en un grupo distinto al de siempre, y esto dice por qué: Propio (lo cambió este nivel) o Hereda de un nivel de arriba (Maestro, Giro, Plan, Cliente, Administrador, Perfil). Solo cambia dónde se ve; sus permisos son los mismos.",

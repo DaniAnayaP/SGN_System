@@ -792,7 +792,6 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-nuestras-apps': 'saas-apps',
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
-    'admin-column-colors': 'saas-column-colors',
     'admin-limits-audit': 'saas-limits-audit',
     'admin-system-reset': 'saas-system-reset',
     'admin-equipo-saas': 'saas-team',
@@ -883,7 +882,6 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-nuestras-apps': 'saas-apps',
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
-    'admin-column-colors': 'saas-column-colors',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
     'admin-saas-master-status': 'saas-master-tree',
@@ -968,7 +966,6 @@ function buildSidebarData(data, role, activePage) {
             // applySubmenuAbbreviations below).
             abbrKeys: ['menu.businessSectorsAbbr1', 'menu.businessSectorsAbbr2', 'menu.businessSectorsAbbr3', 'menu.businessSectorsAbbr4'],
         },
-        { id: 'admin-column-colors', labelKey: 'menu.columnColorsLevels', href: 'Admin-ColoresColumnas.html', icon: 'bx-color-fill', saasItemId: 'saas-column-colors' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const customerServiceSubmenuOrdered = applySaasSidebarOrder(customerServiceSubmenu, 'customerService', CUSTOMER_SERVICE_SAAS_ORDER_IDS);
     const saasConfigSubmenu = [
@@ -9181,8 +9178,6 @@ const SCREEN_DESCRIPTION_KEYS = {
     'BaseDatos-Solicitudes.html': 'main.databaseRequestsSubtitle',
     'Admin-AuditoriaLimites.html': 'admin.limitsAuditSubtitle',
     'Admin-ReinicioSistema.html': 'admin.systemResetSubtitle',
-    'Admin-ColoresColumnas.html': 'admin.columnColorsLevelsSubtitle',
-    'Business-ColoresColumnas.html': 'business.columnColorsSubtitle',
     'Business-Config.html': 'business.configSubtitle',
     'Business-DatosCliente.html': 'business.clientDataSubtitle',
     'Business-EstatusRH.html': 'business.hrStatusCatalogSubtitle',

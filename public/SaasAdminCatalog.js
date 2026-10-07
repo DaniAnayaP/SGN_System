@@ -108,15 +108,6 @@ window.SAAS_ADMIN_CATALOG = [
                     { id: 'modal-permisos-asignados', label: 'Modal: Permisos Asignados (solo lectura)', acciones: ['Ver resumen'], nestUnder: { host: 'tabla', column: 'Permisos asignados' } },
                 ],
             },
-            {
-                // Colores por Nivel: el color de las columnas de las tablas de los clientes por Giro, Plan o Cliente. Los 2
-                // accesos reales de la pantalla (a0 colores, a1 autorizar, a2 clasificación, a3 orden); server.js los revisa en cada
-                // ruta (saasColumnColorsAccess). Lo nuevo va al final: el orden no debe cambiar una vez en producción.
-                itemId: 'saas-column-colors', labelKey: 'menu.columnColorsLevels', href: 'Admin-ColoresColumnas.html',
-                apartados: [
-                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Personalizar colores', 'Autorizar colores, clasificación y orden', 'Personalizar clasificación', 'Personalizar orden'] },
-                ],
-            },
         ],
     },
     {
