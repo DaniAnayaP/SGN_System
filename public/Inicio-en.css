@@ -217,6 +217,18 @@
     .header{
         width: 100%;
     }
+    /* La línea fina entre el logo y Buscar: la misma del pie (encima de la tarjeta de sesión, ver .footer), centrada, con el mismo aire arriba y abajo
+       (antes el logo y Buscar se separaban con 1.8rem de margen; ahora son 0.9rem a cada lado de la línea). */
+    .Sidebar .header .brand{
+        margin-bottom: 0.9rem;
+    }
+    .Sidebar .header::after{
+        content: '';
+        display: block;
+        height: 1px;
+        margin-bottom: 0.9rem;
+        box-shadow: 0 -0.02rem 0 0 var(--color-border);
+    }
 
     /* Menu Button */
     .menu-btn{
