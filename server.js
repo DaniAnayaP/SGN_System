@@ -3455,10 +3455,23 @@ async function countClientFiles() {
     }
 }
 
+// Qué ve el servidor de la variable ALLOW_SYSTEM_RESET, para que la pantalla diga qué corregir en Railway cuando no la reconoce: 'ok', 'absent' (no
+// existe con ese nombre), 'format' (el valor es true pero con mayúsculas, comillas o espacios) o 'wrong-value'. Solo devuelve NOMBRES de variables
+// parecidas (p. ej. una con "=true" pegado en el nombre), nunca valores.
+function systemResetVariableState() {
+    const raw = process.env.ALLOW_SYSTEM_RESET;
+    const similar = Object.keys(process.env).filter((name) => name !== 'ALLOW_SYSTEM_RESET' && /ALLOW|RESET/i.test(name)).slice(0, 5);
+    if (raw === 'true') return { state: 'ok', similar };
+    if (raw === undefined) return { state: 'absent', similar };
+    const loose = String(raw).trim().replace(/^["']|["']$/g, '').toLowerCase() === 'true';
+    return { state: loose ? 'format' : 'wrong-value', similar };
+}
+
 app.get('/api/admin/system-reset/status', requireAuth, requireAdmin, requireSystemResetAccess, async (req, res) => {
     const lastBackup = systemReset.lastBackup();
     res.json({
         enabled: process.env.ALLOW_SYSTEM_RESET === 'true',
+        variable: systemResetVariableState(),
         phrase: SYSTEM_RESET_PHRASE,
         preview: systemReset.preview(),
         groups: { delete: GROUPS_TO_DELETE, keep: GROUPS_TO_KEEP },

@@ -103,11 +103,20 @@
         });
     }
 
+    // Lo que ve el servidor de la variable de Railway (ver systemResetVariableState en server.js): ausente, con mal formato o con otro valor.
+    function variableProblem() {
+        const v = status.variable || { state: 'absent', similar: [] };
+        if (v.state === 'format') return t('admin.systemResetVarFormat');
+        if (v.state === 'wrong-value') return t('admin.systemResetVarWrongValue');
+        const base = t('admin.systemResetVarAbsent');
+        return v.similar && v.similar.length ? `${base} ${t('admin.systemResetVarSimilar', { names: v.similar.map((n) => `«${n}»`).join(', ') })}` : base;
+    }
+
     // Lo que todavía impide borrar, en palabras: el botón gris dice qué le falta.
     function missingItems() {
         if (!status) return [];
         const items = [];
-        if (!status.enabled) items.push(t('admin.systemResetMissingVariable'));
+        if (!status.enabled) items.push(variableProblem());
         if (!status.backupFresh) items.push(t('admin.systemResetMissingBackup'));
         if (!status.preview.ok) items.push(t('admin.systemResetMissingClassify'));
         if (el.phrase.value !== status.phrase) items.push(t('admin.systemResetMissingPhrase'));
