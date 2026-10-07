@@ -1811,6 +1811,12 @@
     "changeHistoryEmpty": "No changes recorded yet.",
     "timeLocalTitle": "Your local time ({zone}, {offset})",
     "timeUtcTitle": "Base time (UTC): the one stored in the system",
+    "userCardLabel": "Signed in: {name}",
+    "userCardTestBadge": "Test",
+    "userCardRoleSaasMain": "Main administrator",
+    "userCardRoleSaasTeam": "SaaS team",
+    "userCardRoleClientAdmin": "Client administrator",
+    "userCardRoleUser": "User",
     "changeHistoryUpdated": "Record updated",
     "historyFillRule": "Fill order rule",
     "historyRuleAuthorized": "Rule authorized",
@@ -2315,6 +2321,10 @@
     "fieldRules": {
       "what": "This is where you set the order this table's fields must be filled in, and which ones are required.",
       "example": "you require \"Name\" to be filled in before \"Email\" can be typed."
+    },
+    "sidebarUserCard": {
+      "what": "Shows who is signed in: your name, your account type and, for a test account, the \"Test\" tag.",
+      "example": "if you switch from one account to another, this confirms which one you are working with before you save anything."
     },
     "sidebarSearch": {
       "what": "Searches for any screen in the menu by its name, without having to open every group to find it.",

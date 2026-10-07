@@ -8790,6 +8790,7 @@ const HELP_CONTENT_KEYS = {
     'user-info-btn': 'userInfo',
     'business-profile-btn': 'businessProfile',
     'sidebar-search': 'sidebarSearch',
+    'sidebar-user-card': 'sidebarUserCard',
     // La ruta de acceso (migas de pan) y el botón del mapa que la contrae; los crea
     // ensureBreadcrumbBar en cada pantalla.
     'breadcrumb-list': 'breadcrumbRoute',
@@ -11005,6 +11006,74 @@ document.addEventListener('dashboard:language-changed', () => {
     renderBreadcrumbBar();
     setTopBarCollapsed(isTopBarCollapsed());
 });
+
+// --- Quién tiene la sesión abierta -------------------------------------------------------------------------------------------
+// Tarjeta en la barra lateral, encima de «Cerrar sesión» (la opción B que eligió Daniel, 2026-10-07): iniciales, nombre, tipo de cuenta y, si es
+// una cuenta de práctica, la etiqueta «Pruebas». NO depende del árbol de permisos: es la identidad de la sesión, no un permiso, así que sale
+// aunque la cuenta no tenga nada asignado. Con la barra cerrada solo queda el círculo (ver .Sidebar.minimize en Inicio-en.css).
+function userCardInitials(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    const first = words[0][0];
+    const second = words.length > 1 ? words[words.length - 1][0] : (words[0][1] || '');
+    return (first + second).toUpperCase();
+}
+
+// El color del círculo dice el tipo de cuenta: de práctica (ámbar), del equipo SaaS (oscuro), administrador de cliente (azul) o usuario (gris).
+function userCardKind(user) {
+    if (user.isTestAccount) return 'test';
+    if (user.isSaasSuperAdmin || !user.clientId) return 'saas';
+    return user.isClientAdmin ? 'client' : 'user';
+}
+
+function userCardRoleKey(user) {
+    if (user.isSaasSuperAdmin) return 'main.userCardRoleSaasMain';
+    if (!user.clientId) return 'main.userCardRoleSaasTeam';
+    return user.isClientAdmin ? 'main.userCardRoleClientAdmin' : 'main.userCardRoleUser';
+}
+
+function renderSidebarUserCard() {
+    if (!currentUser) return;
+    const footer = document.querySelector('.Sidebar .footer');
+    if (!footer) return;
+    let card = document.getElementById('sidebar-user-card');
+    if (!card) {
+        card = document.createElement('div');
+        card.id = 'sidebar-user-card';
+        card.className = 'sidebar-user-card';
+        card.setAttribute('role', 'group');
+        footer.insertBefore(card, footer.querySelector('.user'));
+    }
+    const name = currentUser.name || currentUser.username || '';
+    card.dataset.kind = userCardKind(currentUser);
+    card.setAttribute('aria-label', t('main.userCardLabel', { name }));
+    card.title = currentUser.username && currentUser.username !== name ? `${name} (${currentUser.username})` : name;
+
+    const avatar = document.createElement('span');
+    avatar.className = 'user-card-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = userCardInitials(name);
+
+    const nameEl = document.createElement('b');
+    nameEl.className = 'user-card-name';
+    nameEl.textContent = name;
+    if (currentUser.isTestAccount) {
+        const badge = document.createElement('span');
+        badge.className = 'user-card-badge';
+        badge.textContent = t('main.userCardTestBadge');
+        nameEl.appendChild(badge);
+    }
+    const roleEl = document.createElement('span');
+    roleEl.className = 'user-card-role';
+    roleEl.textContent = t(userCardRoleKey(currentUser));
+    const text = document.createElement('div');
+    text.className = 'user-card-text';
+    text.append(nameEl, roleEl);
+
+    card.replaceChildren(avatar, text);
+}
+// dashboard:language-changed sale una vez al cargar (ya con el usuario y los textos listos) y cada vez que se cambia el idioma.
+document.addEventListener('dashboard:language-changed', renderSidebarUserCard);
 
 function isBreadcrumbCollapsed() {
     return localStorage.getItem(BREADCRUMB_COLLAPSED_KEY) === 'true';

@@ -1810,6 +1810,12 @@
     "changeHistoryEmpty": "Aún no hay cambios registrados.",
     "timeLocalTitle": "Tu hora local ({zone}, {offset})",
     "timeUtcTitle": "Hora base (UTC): la que se guarda en el sistema",
+    "userCardLabel": "Sesión abierta: {name}",
+    "userCardTestBadge": "Pruebas",
+    "userCardRoleSaasMain": "Administrador principal",
+    "userCardRoleSaasTeam": "Equipo SaaS",
+    "userCardRoleClientAdmin": "Administrador del cliente",
+    "userCardRoleUser": "Usuario",
     "changeHistoryUpdated": "Registro actualizado",
     "historyFillRule": "Regla de orden de llenado",
     "historyRuleAuthorized": "Regla autorizada",
@@ -2314,6 +2320,10 @@
     "fieldRules": {
       "what": "Aquí defines en qué orden se deben llenar los campos de esta tabla, y cuáles son obligatorios.",
       "example": "obligas a llenar primero \"Nombre\" antes de poder escribir en \"Correo\"."
+    },
+    "sidebarUserCard": {
+      "what": "Dice quién tiene la sesión abierta: tu nombre, tu tipo de cuenta y, si es una cuenta de pruebas, la etiqueta «Pruebas».",
+      "example": "si cambias de una cuenta a otra, aquí confirmas con cuál estás trabajando antes de guardar algo."
     },
     "sidebarSearch": {
       "what": "Busca cualquier pantalla del menú por su nombre, sin tener que abrir cada grupo para encontrarla.",
