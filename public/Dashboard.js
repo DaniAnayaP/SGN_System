@@ -1811,32 +1811,9 @@ function wireMenuInteractions() {
     });
     wireSidebarFlyouts(Sidebar);
 
-    // Expanded-sidebar top-level tooltip -- same "always show the real
-    // full name" rule the sub-menu already had (showSubmenuTooltip is
-    // generic, not actually sub-menu-specific: it just reads a link's own
-    // span + optional abbrLadder), now also wired for .menu-link so a long
-    // top-level item like "Administración de Cliente" behaves identically
-    // instead of just hard-overflowing with nothing on hover. Skipped
-    // while minimized -- the icon-only tooltip above already owns that
-    // case, and the label span isn't meaningfully measurable then anyway.
-    document.querySelectorAll('.menu-link').forEach((link) => {
-        link.addEventListener('mouseenter', () => {
-            if (Sidebar.classList.contains('minimize')) return;
-            showSubmenuTooltip(link);
-        });
-        link.addEventListener('mouseleave', hideSidebarTooltip);
-    });
-
-    // Expanded-sidebar sub-menu tooltip: a long label (e.g. one of the 7
-    // "Nuestras Categorías..." catalogs) now ellipsizes instead of
-    // hard-clipping (see .sub-menu .sub-menu-link span in Inicio-en.css) --
-    // this shows the FULL label on hover, same tooltip element/positioning
-    // as showSidebarTooltip's minimized-sidebar case above, just gated on
-    // the label actually being truncated rather than on sidebar state.
-    document.querySelectorAll('.sub-menu-link').forEach((link) => {
-        link.addEventListener('mouseenter', () => showSubmenuTooltip(link));
-        link.addEventListener('mouseleave', hideSidebarTooltip);
-    });
+    // Con la barra abierta ya no sale la etiqueta negra con el nombre completo al pasar el mouse por un nombre abreviado o cortado (Daniel, 2026-10-07):
+    // el nombre completo se ve con la barra cerrada, en la ruta de arriba y en Modo ayuda. showSubmenuTooltip se conserva porque la usan las filas del
+    // Árbol Maestro (PermissionTree.js).
 }
 
 function getSidebarTooltip() {
