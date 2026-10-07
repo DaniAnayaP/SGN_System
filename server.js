@@ -297,6 +297,10 @@ const {
     listColorRequestsForUser,
     listColorNotificationsForUser,
     markColorRequestsSeen,
+    publishColorUpdate,
+    publishOrderUpdate,
+    listTreeNoticesForUser,
+    markTreeNoticesSeen,
     decideColorRequest,
     applySaasColorRequest,
     resolveSaasColorAuthorizer,
@@ -2746,14 +2750,20 @@ app.put('/api/admin/master-permission-classification-colors', requireAuth, requi
         if (typeof textColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(textColor)) {
             return res.status(400).json({ message: 'textColor must be a hex color like #7f77dd.' });
         }
-        return res.json({ textColor: setClassificationTextColor(classificationId, textColor, changedByLabel(req)) });
+        const changed = colorWouldChange(getClassificationColors(), classificationId, true, textColor);
+        const saved = setClassificationTextColor(classificationId, textColor, changedByLabel(req));
+        if (changed) noticeColorChange('master', req, classificationId, 'set-text', textColor);
+        return res.json({ textColor: saved });
     }
     // Free-form now (see Más Colores in PermissionTree.js) -- any real hex
     // color is valid, not just the 8 quick-swatch presets.
     if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) {
         return res.status(400).json({ message: 'color must be a hex color like #7f77dd.' });
     }
-    res.json({ color: setClassificationColor(classificationId, color, changedByLabel(req)) });
+    const changed = colorWouldChange(getClassificationColors(), classificationId, false, color);
+    const saved = setClassificationColor(classificationId, color, changedByLabel(req));
+    if (changed) noticeColorChange('master', req, classificationId, 'set', color);
+    res.json({ color: saved });
 });
 // "Restablecer" -- clears ONE of a classification's (or a column's own
 // "col-own:"/"col-nested:") two colors back to "nothing chosen"; kind is
@@ -2768,7 +2778,9 @@ app.delete('/api/admin/master-permission-classification-colors', requireAuth, re
     if (isColumnColorId(classificationId) && !canApplyColorsDirectly('master', req)) {
         return requestColorChange('master', req, res, classificationId, kind === 'text' ? 'clear-text' : 'clear-dot', null);
     }
-    res.json({ cleared: clearClassificationColor(classificationId, kind, changedByLabel(req)) });
+    const cleared = clearClassificationColor(classificationId, kind, changedByLabel(req));
+    if (cleared) noticeColorChange('master', req, classificationId, kind === 'text' ? 'clear-text' : 'clear-dot', null);
+    res.json({ cleared });
 });
 
 // Read-only, any logged-in user (not admin-only like the routes above) --
@@ -3047,6 +3059,39 @@ function colorRequestLabel(req) {
     const raw = (req.body && req.body.label) ?? req.query?.label;
     return typeof raw === 'string' ? raw.trim().slice(0, 200) : '';
 }
+// Avisa a los que tienen acceso a ese árbol que un color se actualizó (y le confirma a quien lo hizo a quién le llegó); nunca debe romper el guardado.
+function noticeColorChange(scope, req, colorId, action, value) {
+    try {
+        publishColorUpdate({ scope, colorId, action, value, label: colorRequestLabel(req), actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    } catch (err) {
+        console.error('No se pudo avisar del color actualizado:', err);
+    }
+}
+// Un reorden guardado en un árbol: aviso para todos los que tienen acceso a él y confirmación para quien lo hizo. La pantalla manda los nombres de las listas que movió.
+function noticeOrderChange(scope, req) {
+    try {
+        publishOrderUpdate({ scope, lists: req.body && req.body.changes, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    } catch (err) {
+        console.error('No se pudo avisar del reorden:', err);
+    }
+}
+// Una solicitud autorizada: el aviso va a todos los del árbol menos a quien la pidió (ya recibe su "Autorizada"); la confirmación es de quien la autorizó.
+function noticeApprovedColor(request, req, authorizedByLabel) {
+    try {
+        publishColorUpdate({
+            scope: request.scope, colorId: request.colorId, action: request.action, value: request.value, label: request.label,
+            actorUserId: req.user.sub, actorLabel: authorizedByLabel, requestedByUserId: request.requestedById, requestedByLabel: request.requestedByName, authorizedByLabel,
+        });
+    } catch (err) {
+        console.error('No se pudo avisar del color autorizado:', err);
+    }
+}
+// ¿Cambia de verdad el color guardado? (guardar el mismo color otra vez no avisa a nadie)
+function colorWouldChange(rows, classificationId, isText, next) {
+    const row = (rows || []).find((c) => c.classificationId === classificationId);
+    const prev = row ? (isText ? row.textColor : row.color) : null;
+    return !prev || String(prev).toLowerCase() !== String(next).toLowerCase();
+}
 function requestColorChange(scope, req, res, colorId, action, value) {
     const assignedTo = resolveColorAuthorizer(scope, req.user.sub);
     const requestId = createColorRequest({
@@ -3074,7 +3119,10 @@ function registerColorRequestRoutes(scope, basePath, denyFn) {
             return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
         }
         const label = changedByLabel(req);
-        if (approve) applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+        if (approve) {
+            applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+            noticeApprovedColor(request, req, label);
+        }
         res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
     };
     app.post(`${basePath}/:id/approve`, requireAuth, requireAdmin, decide(true));
@@ -3133,7 +3181,11 @@ app.put('/api/admin/saas-master-order', requireAuth, requireAdmin, (req, res) =>
         return res.status(400).json({ message: 'order must be an object.' });
     }
     if (denySaasMasterTreeControl(req, res, 'save', 'reorder')) return;
-    res.json({ order: setSaasMasterOrder(order, changedByLabel(req)) });
+    const before = JSON.stringify(getSaasMasterOrder());
+    const saved = setSaasMasterOrder(order, changedByLabel(req));
+    // La pantalla manda qué listas movió (req.body.changes); solo si de verdad cambió el orden se avisa a los del árbol.
+    if (JSON.stringify(saved) !== before) noticeOrderChange('saas', req);
+    res.json({ order: saved });
 });
 
 // Árbol Maestro SaaS's own Clasificación + color + Cambios routes -- same
@@ -3198,8 +3250,15 @@ app.put('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (req
     if (isColumnColorId(classificationId) && !canApplySaasColorsDirectly(req)) {
         return requestSaasColorChange(req, res, classificationId, isText ? 'set-text' : 'set', value);
     }
-    if (isText) return res.json({ textColor: setSaasClassificationTextColor(classificationId, value, changedByLabel(req)) });
-    res.json({ color: setSaasClassificationColor(classificationId, value, changedByLabel(req)) });
+    const changed = colorWouldChange(getSaasClassificationColors(), classificationId, isText, value);
+    if (isText) {
+        const saved = setSaasClassificationTextColor(classificationId, value, changedByLabel(req));
+        if (changed) noticeColorChange('saas', req, classificationId, 'set-text', value);
+        return res.json({ textColor: saved });
+    }
+    const saved = setSaasClassificationColor(classificationId, value, changedByLabel(req));
+    if (changed) noticeColorChange('saas', req, classificationId, 'set', value);
+    res.json({ color: saved });
 });
 // "Restablecer" -- same as master-permission-classification-colors' DELETE
 // above, against this screen's own table/log.
@@ -3212,7 +3271,9 @@ app.delete('/api/admin/saas-classification-colors', requireAuth, requireAdmin, (
     if (isColumnColorId(classificationId) && !canApplySaasColorsDirectly(req)) {
         return requestSaasColorChange(req, res, classificationId, kind === 'text' ? 'clear-text' : 'clear-dot', null);
     }
-    res.json({ cleared: clearSaasClassificationColor(classificationId, kind, changedByLabel(req)) });
+    const cleared = clearSaasClassificationColor(classificationId, kind, changedByLabel(req));
+    if (cleared) noticeColorChange('saas', req, classificationId, kind === 'text' ? 'clear-text' : 'clear-dot', null);
+    res.json({ cleared });
 });
 
 // Solicitudes de color de columna del Árbol Maestro SaaS: cada quien ve las suyas y las pendientes que le
@@ -3234,7 +3295,10 @@ function decideSaasColorRequest(req, res, approve) {
         return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
     }
     const label = changedByLabel(req);
-    if (approve) applySaasColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+    if (approve) {
+        applySaasColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+        noticeApprovedColor(request, req, label);
+    }
     res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
 }
 app.post('/api/admin/saas-color-requests/:id/approve', requireAuth, requireAdmin, (req, res) => decideSaasColorRequest(req, res, true));
@@ -3334,7 +3398,10 @@ app.put('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, r
         const [sectionId, areaId, apartadoId, pantallaId, classId] = compoundKey.split('::');
         rows.push({ parentKey: columnOrderKey(sectionId, areaId, apartadoId, pantallaId, classId), orderedKeys });
     });
+    const orderSnapshot = () => JSON.stringify(getMasterPermissionOrder().map((r) => [r.parentKey, r.orderedKeys]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+    const orderBefore = orderSnapshot();
     setMasterPermissionOrders(rows, changedByLabel(req));
+    if (orderSnapshot() !== orderBefore) noticeOrderChange('master', req);
     const row = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
     res.json({
         departmentOrder: row ? row.orderedKeys : [],
@@ -6891,9 +6958,12 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
         if (req.user.role !== 'admin') return res.status(404).json({ message: 'No client for this account.' });
         const colors = listColorNotificationsForUser({ userId: req.user.sub, isSuperAdmin: !!req.user.isSaasSuperAdmin });
         const asNotification = (r) => ({ ...r, kind: 'color-request', seen_at: r.seenAt });
+        // Avisos de cambios en los árboles ("Color actualizado", "Orden actualizado", "Aviso enviado"): mezclados con los de las solicitudes, el más nuevo primero.
+        const notices = listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }));
+        const avisos = [...colors.avisos.map(asNotification), ...notices].sort((a, b) => String(b.createdAt || b.decidedAt || '').localeCompare(String(a.createdAt || a.decidedAt || '')));
         return res.json({
             alertas: [],
-            avisos: colors.avisos.map(asNotification),
+            avisos,
             solicitudes: colors.solicitudes.map(asNotification),
             autorizar: colors.autorizar.map(asNotification),
         });
@@ -6945,6 +7015,7 @@ app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res)
     if (!req.user.clientId) {
         if (req.user.role !== 'admin') return res.status(404).json({ message: 'No client for this account.' });
         markColorRequestsSeen(req.user.sub);
+        markTreeNoticesSeen(req.user.sub);
         return res.json({ ok: true });
     }
     markPendingChangesSeenForRequester(req.user.clientId, req.user.sub);

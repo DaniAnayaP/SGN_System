@@ -602,6 +602,8 @@ async function saveMasterTree() {
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({
+                        // Los nombres de las listas que se movieron (los mismos de la confirmación): el servidor los usa para avisar a los del árbol.
+                        changes: collectOrderChanges().map((item) => item.label),
                         departmentOrder: masterTree.getDepartmentOrder(),
                         areaOrders: masterTree.getAreaOrders(),
                         apartadoOrders: masterTree.getApartadoOrders(),

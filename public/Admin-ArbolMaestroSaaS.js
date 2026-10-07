@@ -661,6 +661,35 @@ function orderedLeaves(screen, apartado) {
     return [...saved, ...rest].map((s) => bySuffix.get(s));
 }
 
+// El orden de cada lista tal como se dibuja (clave -> {label, ids}), para saber al guardar QUÉ listas se reordenaron y avisarlo en Notificaciones.
+function currentOrderLists() {
+    const lists = new Map();
+    lists.set('groups', { label: Dashboard.t('admin.saasOrderGroups'), ids: orderedGroups().map((g) => g.groupId) });
+    orderedGroups().forEach((group) => {
+        lists.set(`screens:${group.groupId}`, { label: Dashboard.t('admin.saasOrderScreens', { name: Dashboard.t(group.labelKey) }), ids: orderedScreens(group).map((s) => s.itemId) });
+        orderedScreens(group).forEach((screen) => {
+            const screenName = Dashboard.t(screen.labelKey);
+            lists.set(`apartados:${screen.itemId}`, { label: Dashboard.t('admin.saasOrderApartados', { name: screenName }), ids: orderedApartados(screen).map((a) => a.id) });
+            orderedApartados(screen).forEach((apartado) => {
+                lists.set(`leaves:${apartadoKey(screen, apartado)}`, {
+                    label: Dashboard.t('admin.saasOrderLeaves', { name: `${screenName} › ${apartado.label}` }),
+                    ids: orderedLeaves(screen, apartado).map((l) => l.suffix),
+                });
+            });
+        });
+    });
+    return lists;
+}
+let savedOrderSnapshot = null; // clave -> ids (JSON) tal como quedó guardado
+function snapshotOrderLists() {
+    savedOrderSnapshot = new Map([...currentOrderLists()].map(([key, { ids }]) => [key, JSON.stringify(ids)]));
+}
+// Los nombres de las listas cuyo orden cambió desde lo último guardado.
+function changedOrderListLabels() {
+    if (!savedOrderSnapshot) return [];
+    return [...currentOrderLists()].filter(([key, { ids }]) => savedOrderSnapshot.has(key) && savedOrderSnapshot.get(key) !== JSON.stringify(ids)).map(([, { label }]) => label);
+}
+
 function makeDraggable(el, { list, id, onReorder }) {
     if (!canUse('reorder')) return;
     el.classList.add('perm-tree-row-draggable');
@@ -2706,6 +2735,7 @@ async function load() {
             if (c && c.classificationId && c.color) classificationColors.set(c.classificationId, c.color);
             if (c && c.classificationId && c.textColor) classificationTextColors.set(c.classificationId, c.textColor);
         });
+        snapshotOrderLists();
         renderList();
     } catch {
         errorEl.textContent = Dashboard.t('admin.loadError');
@@ -2731,11 +2761,12 @@ saveBtn.addEventListener('click', async () => {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ order }),
+                    body: JSON.stringify({ order, changes: changedOrderListLabels() }),
                 })
                 : Promise.resolve({ ok: true }),
         ]);
         if (!statusRes.ok || !orderRes.ok) throw new Error('save failed');
+        snapshotOrderLists();
         const statusData = await statusRes.json();
         statuses = statusData.statuses || [];
         renderList();

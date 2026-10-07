@@ -7720,6 +7720,83 @@ function markColorRequestsSeen(userId) {
         WHERE requested_by_user_id = ? AND scope IN ('saas', 'master') AND status IN ('approved', 'rejected') AND requester_seen_at IS NULL
     `).run(userId);
 }
+// ---------------------------------------------------------------------------
+// Avisos de cambios en los dos árboles SaaS (campana de las cuentas SaaS, pestaña Avisos): "Color actualizado" y "Orden actualizado". Cuando un color se
+// actualiza (lo cambia alguien con el cambio de color, se autoriza una solicitud o se restablece) o se guarda un reorden del árbol, el aviso le llega a TODOS los que
+// tienen habilitado el acceso a ESE árbol (aunque no tengan Personalizar, Autorizar ni Reordenar) y a los administradores principales, menos quien lo hizo y quien
+// lo había pedido (que ya recibe su "Autorizada"). Quien lo hizo recibe la confirmación "Aviso enviado" con a quién le llegó. Cada renglón es de UNA persona
+// (user_id) y cuenta en el globo de la campana hasta que abre la pestaña Avisos.
+// ---------------------------------------------------------------------------
+db.exec(`
+    CREATE TABLE IF NOT EXISTS saas_tree_notices (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id        INTEGER NOT NULL,
+        kind           TEXT NOT NULL,
+        scope          TEXT NOT NULL,
+        payload        TEXT NOT NULL DEFAULT '{}',
+        actor_user_id  INTEGER,
+        actor_label    TEXT NOT NULL DEFAULT '',
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        seen_at        TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_saas_tree_notices_user ON saas_tree_notices(user_id, created_at);
+`);
+// La pantalla de cada árbol: Árbol Maestro SaaS ('saas') y Árbol de Permisos Maestro de clientes ('master').
+const TREE_NOTICE_SCREENS = { saas: 'saas-master-tree', master: 'saas-master-permissions-tree' };
+// Cuentas SaaS (activas, role admin) que pueden abrir ese árbol: los administradores principales y quien tenga cualquier acceso a su pantalla.
+function listTreeAccessRecipients(scope) {
+    const itemId = TREE_NOTICE_SCREENS[scope];
+    if (!itemId) return [];
+    const rows = db.prepare("SELECT id, name, username, is_saas_super_admin AS superAdmin FROM users WHERE client_id IS NULL AND role = 'admin' AND active != 0").all();
+    return rows
+        .filter((u) => u.superAdmin || hasSaasGrant(getSaasUserGrants(u.id), itemId, null, false))
+        .map((u) => ({ id: u.id, name: u.name || u.username }));
+}
+// "saas-class-control-interno" -> "Control Interno": el nombre de una clasificación cuando la pantalla no mandó uno.
+function humanizeClassificationId(id) {
+    const base = String(id || '').replace(/^(saas-)?class-(custom-)?/, '').replace(/[-_]+/g, ' ').trim();
+    return base ? base.replace(/\b\w/g, (c) => c.toUpperCase()) : String(id || '');
+}
+// Guarda un aviso para cada persona con acceso al árbol y la confirmación para quien lo hizo. Devuelve a quién se le avisó ([{id, name}]).
+function publishTreeNotice({ kind, scope, payload, actorUserId, actorLabel = '', skipUserIds = [] }) {
+    const skip = new Set([actorUserId, ...skipUserIds].filter((id) => id != null));
+    const recipients = listTreeAccessRecipients(scope).filter((u) => !skip.has(u.id));
+    const insert = db.prepare('INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, ?, ?, ?, ?, ?)');
+    db.transaction(() => {
+        recipients.forEach((r) => insert.run(r.id, kind, scope, JSON.stringify(payload), actorUserId, actorLabel));
+        if (actorUserId != null) insert.run(actorUserId, 'notice-sent', scope, JSON.stringify({ ...payload, what: kind === 'order-updated' ? 'order' : 'color', recipients: recipients.map((r) => r.name) }), actorUserId, actorLabel);
+    })();
+    return recipients;
+}
+// Un color actualizado. actor = quien lo aplicó; requester = quien lo había pedido (si pasó por una solicitud).
+function publishColorUpdate({ scope, colorId, action, value = null, label = '', actorUserId, actorLabel = '', requestedByUserId = null, requestedByLabel = '', authorizedByLabel = '' }) {
+    const columnLabel = String(label || '').trim() || (/^col-(own|nested):/.test(String(colorId)) ? String(colorId) : humanizeClassificationId(colorId));
+    return publishTreeNotice({
+        kind: 'color-updated', scope, actorUserId, actorLabel, skipUserIds: [requestedByUserId],
+        payload: { colorId, action, value, label: columnLabel, requestedBy: requestedByLabel || '', authorizedBy: authorizedByLabel || '' },
+    });
+}
+// Un reorden guardado. lists = los nombres de las listas que cambiaron de orden ("Áreas de Cadena de Suministro"...).
+function publishOrderUpdate({ scope, lists, actorUserId, actorLabel = '' }) {
+    const clean = (Array.isArray(lists) ? lists : []).map((s) => String(s || '').trim().slice(0, 160)).filter(Boolean).slice(0, 12);
+    // Sin nombres de listas no hay nada que contar (la pantalla solo los manda cuando de verdad movió algo): no se avisa.
+    if (!clean.length) return [];
+    return publishTreeNotice({ kind: 'order-updated', scope, actorUserId, actorLabel, payload: { lists: clean } });
+}
+function listTreeNoticesForUser(userId) {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+    return db.prepare(`
+        SELECT id, kind, scope, payload, actor_label AS actorLabel, created_at AS createdAt, seen_at AS seenAt
+        FROM saas_tree_notices WHERE user_id = ? AND created_at >= ? ORDER BY id DESC LIMIT 100
+    `).all(userId, cutoff).map((r) => {
+        let payload = {};
+        try { payload = JSON.parse(r.payload) || {}; } catch { /* aviso viejo sin datos legibles */ }
+        return { ...r, ...payload, payload: undefined };
+    });
+}
+function markTreeNoticesSeen(userId) {
+    db.prepare("UPDATE saas_tree_notices SET seen_at = datetime('now') WHERE user_id = ? AND seen_at IS NULL").run(userId);
+}
 function decideColorRequest(id, status, { userId, label }) {
     db.prepare(`
         UPDATE column_color_requests
@@ -9917,6 +9994,10 @@ module.exports = {
     listColorRequestsForUser,
     listColorNotificationsForUser,
     markColorRequestsSeen,
+    publishColorUpdate,
+    publishOrderUpdate,
+    listTreeNoticesForUser,
+    markTreeNoticesSeen,
     decideColorRequest,
     applySaasColorRequest,
     resolveSaasColorAuthorizer,

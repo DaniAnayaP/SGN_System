@@ -9715,6 +9715,63 @@ function colorRequestColumnText(item) {
     return part ? `${part} · ${column}` : column;
 }
 
+// "■ Fondo #85B7EB" / "Quitar letra": lo que cambió el color de una solicitud o de un aviso.
+function appendColorChange(desc, item) {
+    if (item.action === 'set' || item.action === 'set-text') {
+        const swatch = document.createElement('span');
+        swatch.className = 'color-request-swatch';
+        swatch.style.backgroundColor = item.value;
+        desc.appendChild(swatch);
+        desc.append(t(item.action === 'set' ? 'admin.colorRequestChangeFill' : 'admin.colorRequestChangeText', { hex: item.value }));
+    } else {
+        desc.append(t(item.action === 'clear-dot' ? 'admin.colorRequestChangeClearFill' : 'admin.colorRequestChangeClearText'));
+    }
+}
+
+// Avisos de cambios en los dos árboles SaaS (pestaña Avisos): "Color actualizado" y "Orden actualizado" le llegan a todos los que tienen acceso a ese árbol;
+// "Aviso enviado" es la confirmación para quien hizo el cambio, con a quién le llegó (kind: 'color-updated' | 'order-updated' | 'notice-sent', ver db.js publishTreeNotice).
+function renderTreeNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(item.kind === 'color-updated' ? 'main.noticeColorUpdated' : item.kind === 'order-updated' ? 'main.noticeOrderUpdated' : 'main.noticeSent');
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${t(COLOR_REQUEST_TREE_LABEL_KEYS[item.scope] || 'main.notificationsTab_avisos')} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    const lists = (item.lists || []).join(' · ');
+    const recipients = item.recipients || [];
+    if (item.kind === 'color-updated') {
+        desc.append(`${colorRequestColumnText(item)}: `);
+        appendColorChange(desc, item);
+    } else if (item.kind === 'order-updated') {
+        desc.textContent = t('main.noticeOrderLists', { lists });
+    } else if (item.what === 'order') {
+        desc.textContent = recipients.length
+            ? t('main.noticeSentOrder', { lists, count: recipients.length, names: recipients.join(', ') })
+            : t('main.noticeSentOrderNobody', { lists });
+    } else {
+        desc.textContent = recipients.length
+            ? t('main.noticeSentColor', { label: item.label, count: recipients.length, names: recipients.join(', ') })
+            : t('main.noticeSentColorNobody', { label: item.label });
+    }
+    row.append(tag, meta, desc);
+    if (item.kind !== 'notice-sent') {
+        const by = document.createElement('div');
+        by.className = 'notifications-item-meta';
+        const who = item.requestedBy || item.actorLabel || '—';
+        by.textContent = item.authorizedBy
+            ? t('main.noticeChangedByAuthorized', { name: who, authorized: item.authorizedBy })
+            : t('main.noticeChangedBy', { name: who });
+        row.appendChild(by);
+    }
+    return row;
+}
+
 function renderColorRequestRow(item, bucket) {
     const row = document.createElement('div');
     row.className = 'notifications-item';
@@ -9725,15 +9782,7 @@ function renderColorRequestRow(item, bucket) {
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
     desc.append(`${colorRequestColumnText(item)}: `);
-    if (item.action === 'set' || item.action === 'set-text') {
-        const swatch = document.createElement('span');
-        swatch.className = 'color-request-swatch';
-        swatch.style.backgroundColor = item.value;
-        desc.appendChild(swatch);
-        desc.append(t(item.action === 'set' ? 'admin.colorRequestChangeFill' : 'admin.colorRequestChangeText', { hex: item.value }));
-    } else {
-        desc.append(t(item.action === 'clear-dot' ? 'admin.colorRequestChangeClearFill' : 'admin.colorRequestChangeClearText'));
-    }
+    appendColorChange(desc, item);
     row.append(meta, desc);
     const note = document.createElement('div');
     note.className = 'notifications-item-meta';
@@ -10089,7 +10138,8 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent') row = renderTreeNoticeRow(item);
+            else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (activeNotificationTab === 'alertas') row = renderAlertRow(item);
             else if (activeNotificationTab === 'avisos') row = renderRequestRow(item, { showOutcome: true });
