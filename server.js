@@ -3068,9 +3068,9 @@ function noticeColorChange(scope, req, colorId, action, value) {
     }
 }
 // Un reorden guardado en un árbol: aviso para todos los que tienen acceso a él y confirmación para quien lo hizo. La pantalla manda los nombres de las listas que movió.
-function noticeOrderChange(scope, req) {
+function noticeOrderChange(scope, req, changedKeys = null) {
     try {
-        publishOrderUpdate({ scope, lists: req.body && req.body.changes, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+        publishOrderUpdate({ scope, lists: req.body && req.body.changes, changedKeys, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
     } catch (err) {
         console.error('No se pudo avisar del reorden:', err);
     }
@@ -3398,10 +3398,12 @@ app.put('/api/admin/master-permission-order', requireAuth, requireAdmin, (req, r
         const [sectionId, areaId, apartadoId, pantallaId, classId] = compoundKey.split('::');
         rows.push({ parentKey: columnOrderKey(sectionId, areaId, apartadoId, pantallaId, classId), orderedKeys });
     });
-    const orderSnapshot = () => JSON.stringify(getMasterPermissionOrder().map((r) => [r.parentKey, r.orderedKeys]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
-    const orderBefore = orderSnapshot();
+    const orderRows = () => new Map(getMasterPermissionOrder().map((r) => [r.parentKey, JSON.stringify(r.orderedKeys)]));
+    const orderBefore = orderRows();
     setMasterPermissionOrders(rows, changedByLabel(req));
-    if (orderSnapshot() !== orderBefore) noticeOrderChange('master', req);
+    // Las listas cuyo orden cambió de verdad: de ellas depende a qué personas de los clientes les toca el aviso (las de esas áreas y pantallas).
+    const changedKeys = [...orderRows()].filter(([key, value]) => orderBefore.get(key) !== value).map(([key]) => key);
+    if (changedKeys.length) noticeOrderChange('master', req, changedKeys);
     const row = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
     res.json({
         departmentOrder: row ? row.orderedKeys : [],
@@ -6995,7 +6997,8 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
         .map((r) => ({ ...mapCatalogValueRequestRecord(r), kind: 'catalog-request' }));
     res.json({
         alertas: listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub),
-        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved],
+        // Los avisos de "Color actualizado" / "Orden actualizado" del Árbol de Permisos Maestro (a quien se le modificó) van aquí también.
+        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved, ...listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }))],
         solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending],
         autorizar: [...autorizar, ...catalogToAct],
     });
@@ -7019,6 +7022,7 @@ app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res)
         return res.json({ ok: true });
     }
     markPendingChangesSeenForRequester(req.user.clientId, req.user.sub);
+    markTreeNoticesSeen(req.user.sub);
     res.json({ ok: true });
 });
 

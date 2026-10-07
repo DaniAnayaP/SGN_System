@@ -9739,21 +9739,35 @@ function renderTreeNoticeRow(item) {
     tag.textContent = t(item.kind === 'color-updated' ? 'main.noticeColorUpdated' : item.kind === 'order-updated' ? 'main.noticeOrderUpdated' : 'main.noticeSent');
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
-    meta.textContent = `${t(COLOR_REQUEST_TREE_LABEL_KEYS[item.scope] || 'main.notificationsTab_avisos')} · ${formatNotificationDate(item.createdAt)}`;
+    // A las personas de los clientes no se les muestra el nombre del árbol (es interno): solo que es una actualización del sistema.
+    const treeName = currentUser && currentUser.clientId ? t('main.noticeFromSystem') : t(COLOR_REQUEST_TREE_LABEL_KEYS[item.scope] || 'main.notificationsTab_avisos');
+    meta.textContent = `${treeName} · ${formatNotificationDate(item.createdAt)}`;
     meta.title = timeStampTitle(item.createdAt);
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
     const lists = (item.lists || []).join(' · ');
     const recipients = item.recipients || [];
+    // En el árbol de clientes la confirmación dice cuántas personas y de cuántos clientes (no una lista de nombres).
+    const clientsSummary = item.recipientsCount !== undefined ? { count: item.recipientsCount, clients: item.clientsCount } : null;
     if (item.kind === 'color-updated') {
         desc.append(`${colorRequestColumnText(item)}: `);
         appendColorChange(desc, item);
     } else if (item.kind === 'order-updated') {
         desc.textContent = t('main.noticeOrderLists', { lists });
     } else if (item.what === 'order') {
-        desc.textContent = recipients.length
-            ? t('main.noticeSentOrder', { lists, count: recipients.length, names: recipients.join(', ') })
-            : t('main.noticeSentOrderNobody', { lists });
+        if (clientsSummary) {
+            desc.textContent = clientsSummary.count
+                ? t('main.noticeSentOrderClients', { lists, count: clientsSummary.count, clients: clientsSummary.clients })
+                : t('main.noticeSentOrderNobody', { lists });
+        } else {
+            desc.textContent = recipients.length
+                ? t('main.noticeSentOrder', { lists, count: recipients.length, names: recipients.join(', ') })
+                : t('main.noticeSentOrderNobody', { lists });
+        }
+    } else if (clientsSummary) {
+        desc.textContent = clientsSummary.count
+            ? t('main.noticeSentColorClients', { label: item.label, count: clientsSummary.count, clients: clientsSummary.clients })
+            : t('main.noticeSentColorNobody', { label: item.label });
     } else {
         desc.textContent = recipients.length
             ? t('main.noticeSentColor', { label: item.label, count: recipients.length, names: recipients.join(', ') })

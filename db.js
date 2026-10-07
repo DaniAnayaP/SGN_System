@@ -7721,11 +7721,14 @@ function markColorRequestsSeen(userId) {
     `).run(userId);
 }
 // ---------------------------------------------------------------------------
-// Avisos de cambios en los dos árboles SaaS (campana de las cuentas SaaS, pestaña Avisos): "Color actualizado" y "Orden actualizado". Cuando un color se
-// actualiza (lo cambia alguien con el cambio de color, se autoriza una solicitud o se restablece) o se guarda un reorden del árbol, el aviso le llega a TODOS los que
-// tienen habilitado el acceso a ESE árbol (aunque no tengan Personalizar, Autorizar ni Reordenar) y a los administradores principales, menos quien lo hizo y quien
-// lo había pedido (que ya recibe su "Autorizada"). Quien lo hizo recibe la confirmación "Aviso enviado" con a quién le llegó. Cada renglón es de UNA persona
-// (user_id) y cuenta en el globo de la campana hasta que abre la pestaña Avisos.
+// Avisos de cambios en los dos árboles (pestaña Avisos de la campana): "Color actualizado" y "Orden actualizado". Cuando un color se actualiza (lo cambia alguien con el
+// cambio de color, se autoriza una solicitud o se restablece) o se guarda un reorden del árbol, el aviso le llega a QUIEN SE LE MODIFICÓ: solo hacia ABAJO de la
+// jerarquía; hacia arriba y en el mismo nivel no llega nada.
+//   - Árbol de Permisos Maestro ('master'): las personas de los clientes que tienen acceso a la pantalla que cambió (el equipo SaaS no es a quien se le modificó).
+//   - Árbol Maestro SaaS ('saas'): las cuentas SaaS que dependen de quien cambió (hoy todas dependen directo de admin_saas, así que solo lo que cambia admin_saas
+//     llega a alguien) y tienen acceso a la pantalla. Una solicitud autorizada no se le repite a quien la pidió (ya recibe su "Autorizada").
+// Quien lo hizo recibe la confirmación "Aviso enviado" con a quién le llegó. Cada renglón es de UNA persona (user_id) y cuenta en el globo de la campana hasta que
+// abre la pestaña Avisos.
 // ---------------------------------------------------------------------------
 db.exec(`
     CREATE TABLE IF NOT EXISTS saas_tree_notices (
@@ -7741,47 +7744,122 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_saas_tree_notices_user ON saas_tree_notices(user_id, created_at);
 `);
-// La pantalla de cada árbol: Árbol Maestro SaaS ('saas') y Árbol de Permisos Maestro de clientes ('master').
-const TREE_NOTICE_SCREENS = { saas: 'saas-master-tree', master: 'saas-master-permissions-tree' };
-// Cuentas SaaS (activas, role admin) que pueden abrir ese árbol: los administradores principales y quien tenga cualquier acceso a su pantalla.
-function listTreeAccessRecipients(scope) {
-    const itemId = TREE_NOTICE_SCREENS[scope];
-    if (!itemId) return [];
-    const rows = db.prepare("SELECT id, name, username, is_saas_super_admin AS superAdmin FROM users WHERE client_id IS NULL AND role = 'admin' AND active != 0").all();
-    return rows
-        .filter((u) => u.superAdmin || hasSaasGrant(getSaasUserGrants(u.id), itemId, null, false))
-        .map((u) => ({ id: u.id, name: u.name || u.username }));
+// Las cuentas SaaS que dependen (directa o indirectamente) de actorId. Hoy ninguna cuenta tiene jefe propio: todas dependen directo de admin_saas (la raíz), así que solo admin_saas
+// tiene gente debajo; cuando exista la pantalla de Perfiles, saasDirectBossOf devuelve el jefe y esto sube/baja solo.
+function saasSubordinatesOf(actorId) {
+    const root = saasColorRootUserId();
+    const bossOf = (id) => saasDirectBossOf(id) || (id === root ? null : root);
+    const accounts = db.prepare("SELECT id, name, username, is_saas_super_admin AS superAdmin FROM users WHERE client_id IS NULL AND role = 'admin' AND active != 0").all();
+    return accounts.filter((u) => {
+        if (u.id === actorId) return false;
+        const seen = new Set([u.id]);
+        let cursor = bossOf(u.id);
+        while (cursor && !seen.has(cursor)) {
+            if (cursor === actorId) return true;
+            seen.add(cursor);
+            cursor = bossOf(cursor);
+        }
+        return false;
+    });
+}
+// Qué pantalla SaaS pintó un color de columna ("col-own:saas-clients::tabla::c3" -> "saas-clients"); null si es el color de una clasificación (toca a todas).
+function saasScreenOfColorId(colorId) {
+    const m = /^col-(own|nested):([^:]+)::/.exec(String(colorId || ''));
+    return m ? m[2] : null;
+}
+// ¿Esta persona de un cliente tiene acceso a lo que cambió? target = { any } | { sectionId, itemId, prefix }: el administrador entra si la empresa tiene ese
+// departamento contratado (General siempre); los demás, si alguno de sus permisos cae en esa pantalla/área.
+function clientPersonHasAccessTo(user, grantsOf, targets) {
+    return targets.some((t) => {
+        if (t.any) return true;
+        if (user.isAdmin) return t.sectionId === 'main' || getClientModuleKeys(user.clientId).includes(t.sectionId);
+        return grantsOf(user.id).some((g) => {
+            if (g.sectionId !== t.sectionId) return false;
+            if (t.itemId && g.itemId !== t.itemId) return false;
+            if (!t.prefix) return true;
+            const sub = g.submenuId || '';
+            return sub === t.prefix || sub.startsWith(t.prefix + '/');
+        });
+    });
+}
+// El árbol de clientes: de un color ("col-own:<sectionId>::<itemId>::<ruta>/<columna>") a la pantalla que pinta.
+function masterTargetsForColorId(colorId) {
+    const m = /^col-(own|nested):([^:]+)::([^:]+)::(.+)$/.exec(String(colorId || ''));
+    if (!m) return [{ any: true }];
+    const [, , sectionId, itemId, rest] = m;
+    const path = Object.values(TABLE_GRANT_PATHS).find((pth) => pth.sectionId === sectionId && pth.itemId === itemId && rest.startsWith(pth.submenuPrefix + '/'));
+    return [{ sectionId, itemId, prefix: path ? path.submenuPrefix : null }];
+}
+// ...y de la lista de un reorden ("area::<s>", "apartado::<s>::<a>", "pantalla::<s>::<a>::<ap>", "columna::<s>::<a>::<ap>::<p>::<c>") al área/pantalla que toca.
+function masterTargetsForOrderKeys(parentKeys) {
+    const targets = [];
+    (parentKeys || []).forEach((key) => {
+        const [kind, s, a, ap, p] = String(key).split('::');
+        if (kind === 'area') targets.push({ sectionId: s });
+        else if (kind === 'apartado') targets.push({ sectionId: s, itemId: a });
+        else if (kind === 'pantalla') targets.push({ sectionId: s, itemId: a, prefix: ap });
+        else if (kind === 'columna') targets.push({ sectionId: s, itemId: a, prefix: p ? `${ap}/${p}` : ap });
+        else targets.push({ any: true });
+    });
+    return targets.length ? targets : [{ any: true }];
+}
+// A quién se le modificó: [{id, name, clientId}] (clientId solo en el árbol de clientes).
+function listTreeNoticeRecipients(scope, { actorUserId, skipUserIds = [], screenId = null, targets = [{ any: true }] }) {
+    const skip = new Set([actorUserId, ...skipUserIds].filter((id) => id != null));
+    if (scope === 'saas') {
+        return saasSubordinatesOf(actorUserId)
+            .filter((u) => !skip.has(u.id) && (!screenId || u.superAdmin || hasSaasGrant(getSaasUserGrants(u.id), screenId, null, false)))
+            .map((u) => ({ id: u.id, name: u.name || u.username, clientId: null }));
+    }
+    if (scope === 'master') {
+        const grantCache = new Map();
+        const grantsOf = (id) => { if (!grantCache.has(id)) grantCache.set(id, getUserEffectiveGrantsRaw(id)); return grantCache.get(id); };
+        const users = db.prepare('SELECT id, name, username, client_id AS clientId, is_client_admin AS isAdmin FROM users WHERE client_id IS NOT NULL AND active != 0').all();
+        return users
+            .filter((u) => !skip.has(u.id) && clientPersonHasAccessTo(u, grantsOf, targets))
+            .map((u) => ({ id: u.id, name: u.name || u.username, clientId: u.clientId }));
+    }
+    return [];
 }
 // "saas-class-control-interno" -> "Control Interno": el nombre de una clasificación cuando la pantalla no mandó uno.
 function humanizeClassificationId(id) {
     const base = String(id || '').replace(/^(saas-)?class-(custom-)?/, '').replace(/[-_]+/g, ' ').trim();
     return base ? base.replace(/\b\w/g, (c) => c.toUpperCase()) : String(id || '');
 }
-// Guarda un aviso para cada persona con acceso al árbol y la confirmación para quien lo hizo. Devuelve a quién se le avisó ([{id, name}]).
-function publishTreeNotice({ kind, scope, payload, actorUserId, actorLabel = '', skipUserIds = [] }) {
-    const skip = new Set([actorUserId, ...skipUserIds].filter((id) => id != null));
-    const recipients = listTreeAccessRecipients(scope).filter((u) => !skip.has(u.id));
+// Guarda un aviso para cada persona a la que se le modificó y la confirmación para quien lo hizo. Devuelve a quién se le avisó.
+// A las personas de los clientes se les avisa de parte del "Equipo SaaS" (no se muestra quién del equipo fue ni quién lo pidió/autorizó).
+function publishTreeNotice({ kind, scope, payload, actorUserId, actorLabel = '', recipients }) {
     const insert = db.prepare('INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, ?, ?, ?, ?, ?)');
+    const forClients = scope === 'master';
+    const clientPayload = forClients ? { ...payload, requestedBy: '', authorizedBy: '' } : payload;
+    const clientCount = new Set(recipients.map((r) => r.clientId).filter((id) => id != null)).size;
     db.transaction(() => {
-        recipients.forEach((r) => insert.run(r.id, kind, scope, JSON.stringify(payload), actorUserId, actorLabel));
-        if (actorUserId != null) insert.run(actorUserId, 'notice-sent', scope, JSON.stringify({ ...payload, what: kind === 'order-updated' ? 'order' : 'color', recipients: recipients.map((r) => r.name) }), actorUserId, actorLabel);
+        recipients.forEach((r) => insert.run(r.id, kind, scope, JSON.stringify(clientPayload), actorUserId, forClients ? 'Equipo SaaS' : actorLabel));
+        if (actorUserId != null) {
+            const summary = forClients ? { recipientsCount: recipients.length, clientsCount: clientCount } : { recipients: recipients.map((r) => r.name) };
+            insert.run(actorUserId, 'notice-sent', scope, JSON.stringify({ ...payload, what: kind === 'order-updated' ? 'order' : 'color', ...summary }), actorUserId, actorLabel);
+        }
     })();
     return recipients;
 }
 // Un color actualizado. actor = quien lo aplicó; requester = quien lo había pedido (si pasó por una solicitud).
 function publishColorUpdate({ scope, colorId, action, value = null, label = '', actorUserId, actorLabel = '', requestedByUserId = null, requestedByLabel = '', authorizedByLabel = '' }) {
     const columnLabel = String(label || '').trim() || (/^col-(own|nested):/.test(String(colorId)) ? String(colorId) : humanizeClassificationId(colorId));
+    const recipients = listTreeNoticeRecipients(scope, {
+        actorUserId, skipUserIds: [requestedByUserId], screenId: scope === 'saas' ? saasScreenOfColorId(colorId) : null, targets: scope === 'master' ? masterTargetsForColorId(colorId) : [{ any: true }],
+    });
     return publishTreeNotice({
-        kind: 'color-updated', scope, actorUserId, actorLabel, skipUserIds: [requestedByUserId],
+        kind: 'color-updated', scope, actorUserId, actorLabel, recipients,
         payload: { colorId, action, value, label: columnLabel, requestedBy: requestedByLabel || '', authorizedBy: authorizedByLabel || '' },
     });
 }
-// Un reorden guardado. lists = los nombres de las listas que cambiaron de orden ("Áreas de Cadena de Suministro"...).
-function publishOrderUpdate({ scope, lists, actorUserId, actorLabel = '' }) {
+// Un reorden guardado. lists = los nombres de las listas que cambiaron de orden ("Áreas de Cadena de Suministro"...); changedKeys = sus claves (árbol de clientes).
+function publishOrderUpdate({ scope, lists, changedKeys = null, actorUserId, actorLabel = '' }) {
     const clean = (Array.isArray(lists) ? lists : []).map((s) => String(s || '').trim().slice(0, 160)).filter(Boolean).slice(0, 12);
     // Sin nombres de listas no hay nada que contar (la pantalla solo los manda cuando de verdad movió algo): no se avisa.
     if (!clean.length) return [];
-    return publishTreeNotice({ kind: 'order-updated', scope, actorUserId, actorLabel, payload: { lists: clean } });
+    const recipients = listTreeNoticeRecipients(scope, { actorUserId, targets: scope === 'master' ? masterTargetsForOrderKeys(changedKeys) : [{ any: true }] });
+    return publishTreeNotice({ kind: 'order-updated', scope, actorUserId, actorLabel, recipients, payload: { lists: clean } });
 }
 function listTreeNoticesForUser(userId) {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
