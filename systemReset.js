@@ -68,6 +68,7 @@ const TABLES = {
     pending_changes: { action: WIPE, group: 'requests' },
     column_color_requests: { action: WIPE, group: 'requests' },
     access_denied_alerts: { action: WIPE, group: 'requests' },
+    saas_tree_notices: { action: WIPE, group: 'requests' },
     // Historiales de cambios (de clientes y también de la configuración, a petición de Daniel)
     data_table_changes: { action: WIPE, group: 'history' },
     business_sector_changes: { action: WIPE, group: 'history' },
