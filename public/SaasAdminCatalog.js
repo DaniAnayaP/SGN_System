@@ -71,7 +71,9 @@ window.SAAS_ADMIN_CATALOG = [
                     ], [
                         '+ Nuevo Plan',
                     ], [
-                        'Árbol de acceso', 'Registro de Cambios', 'Editar', 'Activar', 'Eliminar',
+                        // Las 2 últimas son de "Orden y clasificación" del plan (Personalizar propone; quien no tiene Autorizar deja una solicitud). Lo nuevo va al
+                        // final: las hojas guardadas dependen de la posición.
+                        'Árbol de acceso', 'Registro de Cambios', 'Editar', 'Activar', 'Eliminar', 'Personalizar orden y clasificación', 'Autorizar orden y clasificación',
                     ]),
                     { id: 'modal-arbol-plan', label: 'Modal: Árbol de Plan (accesos + costo)', acciones: ['Ver árbol', 'Editar árbol', 'Igualar visibilidad APP', 'Agregar visibilidad APP faltante'], nestUnder: { host: 'tabla', column: 'Árbol de acceso' } },
                 ],

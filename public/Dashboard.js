@@ -9700,6 +9700,12 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
 // a quien debe decidirla (su jefe directo y, si ese no puede autorizar, el siguiente) aquí, en Notificaciones (kind: 'color-request', ver
 // /api/business/notifications). Autorizar la aplica a las tablas; Rechazar la cierra.
 const COLOR_REQUEST_TREE_LABEL_KEYS = { saas: 'menu.saasMasterTree', master: 'menu.masterPermissionsTree', level: 'menu.businessSectors' };
+// Las solicitudes de "Orden y clasificación" (scope 'level') dicen de qué pantalla vienen según su nivel.
+const LEVEL_REQUEST_SOURCE_LABEL_KEYS = { giro: 'menu.businessSectors', plan: 'menu.plansRegistered' };
+function colorRequestTreeLabelKey(item) {
+    if (item.scope === 'level') return LEVEL_REQUEST_SOURCE_LABEL_KEYS[item.level] || COLOR_REQUEST_TREE_LABEL_KEYS.level;
+    return COLOR_REQUEST_TREE_LABEL_KEYS[item.scope];
+}
 
 // "Encabezado · Nuestros Clientes › Tabla principal › RFC": el nombre que mandó la pantalla del árbol; sin él (solicitudes viejas), lo que se pueda leer del id.
 // Las solicitudes de "Orden y clasificación" de un nivel (scope 'level') traen su resumen completo en label ("Giro «Transporte»: ...").
@@ -9744,7 +9750,7 @@ function renderTreeNoticeRow(item) {
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
     // A las personas de los clientes no se les muestra el nombre del árbol (es interno): solo que es una actualización del sistema.
-    const treeName = currentUser && currentUser.clientId ? t('main.noticeFromSystem') : t(COLOR_REQUEST_TREE_LABEL_KEYS[item.scope] || 'main.notificationsTab_avisos');
+    const treeName = currentUser && currentUser.clientId ? t('main.noticeFromSystem') : t(colorRequestTreeLabelKey(item) || 'main.notificationsTab_avisos');
     meta.textContent = `${treeName} · ${formatNotificationDate(item.createdAt)}`;
     meta.title = timeStampTitle(item.createdAt);
     const desc = document.createElement('div');
@@ -9795,7 +9801,7 @@ function renderColorRequestRow(item, bucket) {
     row.className = 'notifications-item';
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
-    meta.textContent = `${t(COLOR_REQUEST_TREE_LABEL_KEYS[item.scope] || 'main.notificationsTab_solicitudes')} · ${formatNotificationDate(item.createdAt)}`;
+    meta.textContent = `${t(colorRequestTreeLabelKey(item) || 'main.notificationsTab_solicitudes')} · ${formatNotificationDate(item.createdAt)}`;
     meta.title = timeStampTitle(item.createdAt);
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';

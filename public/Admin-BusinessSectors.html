@@ -502,39 +502,7 @@
         </div>
     </div>
 
-    <!-- "Reorden Personalizado" -- literal réplica of Accesos Globales's
-         own tree, filtered to only what this Giro already has granted,
-         with drag-reorder turned back on (grantOrderMode in
-         PermissionTree.js) at every depth Árbol Maestro itself reorders
-         at. Confirmed with the user: replaces the old Departamento+Área-
-         only 2-column screen entirely -- the semáforo here is read-only
-         reference, this screen only ever reorders. -->
-    <div class="modal-overlay" id="sector-order-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-order-modal-title" style="max-width: 48rem;">
-            <h3 id="sector-order-modal-title" data-i18n="admin.giroReordenPersonalizadoTitle">Order and classification</h3>
-            <p class="admin-hint" data-i18n="admin.layoutDownHint">What you change here only reaches the levels below.</p>
-            <p class="admin-hint" id="sector-order-pending" role="status" hidden></p>
-            <div id="sector-order-container" class="perm-tree perm-tree-scroll-x"></div>
-            <div id="sector-order-error" class="admin-error" role="alert" hidden></div>
-            <div class="admin-form-actions" style="margin-top: 1.25rem;">
-                <button type="button" class="btn" id="sector-order-save" data-i18n="admin.save">Save</button>
-                <button type="button" class="btn btn-secondary" id="sector-order-close" data-i18n="admin.cancel">Close</button>
-                <button type="button" class="btn btn-secondary" id="sector-order-reset" data-help-key="layoutResetAll" data-i18n="admin.layoutResetAll">Reset to original order</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Confirmación de "Restablecer orden original" del giro: dice qué se quita antes de hacerlo. -->
-    <div class="modal-overlay" id="sector-order-reset-modal" hidden>
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sector-order-reset-title" style="max-width: 30rem;">
-            <h3 id="sector-order-reset-title" data-i18n="admin.layoutResetTitle">Go back to the original order?</h3>
-            <p class="admin-hint" id="sector-order-reset-body"></p>
-            <div class="admin-form-actions" style="margin-top: 1rem;">
-                <button type="button" class="btn" id="sector-order-reset-confirm" data-i18n="admin.layoutResetConfirm">Yes, reset</button>
-                <button type="button" class="btn btn-secondary" id="sector-order-reset-cancel" data-i18n="admin.cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
+    <!-- "Orden y clasificación" del Giro: su modal (y la confirmación de "Restablecer orden original") lo arma LevelLayoutModal.js. -->
 
     <!-- Cost cascade: this Giro's own default discount/increase on top of
          Árbol Maestro's base cost, plus per-node exceptions -- see
@@ -618,6 +586,7 @@
     <script src="Dashboard.js"></script>
     <script src="AppConfig.js"></script>
     <script src="PermissionTree.js"></script>
+    <script src="LevelLayoutModal.js"></script>
     <script src="PermissionCostAdjustTree.js"></script>
     <script src="BusinessSectorIcons.js"></script>
     <script src="Admin-BusinessSectors.js"></script>

@@ -256,11 +256,25 @@ async function activatePlan(plan) {
     }
 }
 
+// --- Orden y clasificación del plan ------------------------------------------
+// Mismo modal que el del Giro (LevelLayoutModal.js): réplica del árbol de este plan filtrada a lo que ya tiene asignado, con arrastre para reordenar y selector
+// de clasificación por columna. Lo que se cambia solo les llega a los clientes de este plan (y a los de abajo de ellos); restablecer vuelve a lo del giro del plan.
+// Se puede cambiar aunque el plan ya esté activo: no toca lo que el plan incluye, solo cómo se ve.
+const planLayoutModal = window.LevelLayoutModal.create({
+    idPrefix: 'plan-layout',
+    stateUrl: (plan) => `/api/admin/plans/${plan.id}/layout-order`,
+    grantsUrl: (plan) => `/api/admin/plans/${plan.id}/grants`,
+    hintKey: 'admin.layoutDownHintPlan',
+    resetBodyKey: 'admin.layoutResetBodyPlan',
+    resetBodyRequestKey: 'admin.layoutResetBodyRequestPlan',
+});
+
 function renderPlans() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = plans.length > 0;
     const canActivate = Dashboard.hasSaasScreenGrant('saas-plans', 'activate');
     const canEditPlans = Dashboard.hasSaasScreenGrant('saas-plans', 'editar');
+    const canPersonalizeLayout = Dashboard.hasSaasScreenGrant('saas-plans', 'tabla::ta5');
     plans.forEach((plan) => {
         const tr = document.createElement('tr');
         tr.dataset.planStatus = !plan.locked ? 'revision' : (plan.status || 'active');
@@ -314,6 +328,15 @@ function renderPlans() {
         costBtn.setAttribute('data-help-key', 'sectorCostAdjust');
         costBtn.innerHTML = '<i class="bx bx-dollar-circle" aria-hidden="true"></i>';
         costBtn.addEventListener('click', () => openPlanCostModal(plan));
+        // "Orden y clasificación" del plan: solo para quien tiene la hoja Personalizar (ta5) en el Árbol de Permisos SaaS; el servidor lo vuelve a exigir.
+        const orderBtn = document.createElement('button');
+        orderBtn.type = 'button';
+        orderBtn.className = 'admin-icon-btn';
+        orderBtn.setAttribute('aria-label', Dashboard.t('admin.layoutTitle'));
+        orderBtn.title = Dashboard.t('admin.layoutTitle');
+        orderBtn.setAttribute('data-help-key', 'planReordenPersonalizado');
+        orderBtn.innerHTML = '<i class="bx bx-sort-alt-2" aria-hidden="true"></i>';
+        orderBtn.addEventListener('click', () => planLayoutModal.open(plan));
         const historyBtn = document.createElement('button');
         historyBtn.type = 'button';
         historyBtn.className = 'admin-icon-btn';
@@ -327,7 +350,7 @@ function renderPlans() {
         historyBtn.setAttribute('data-help-key', 'changeHistory');
         historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
         historyBtn.addEventListener('click', () => Dashboard.openPlanChangeHistory(plan));
-        tdActions.append(treeBtn, costBtn, historyBtn);
+        tdActions.append(treeBtn, costBtn, ...(canPersonalizeLayout ? [orderBtn] : []), historyBtn);
         if (!isHardLocked(plan)) {
             const editBtn = document.createElement('button');
             editBtn.type = 'button';

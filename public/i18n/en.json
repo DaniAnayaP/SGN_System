@@ -473,7 +473,15 @@
     "giroAccesosGlobalesTitle": "Global Access",
     "giroReordenPersonalizadoTitle": "Order and classification",
     "layoutDownHint": "What you change here only reaches the levels below: this business sector's plans, clients, administrators, profiles and users. \"Inherits\" comes from the Master.",
-    "layoutPendingBanner": "{n} request(s) of yours for this business sector are waiting to be authorized. They don't show below until they are.",
+    "layoutTitle": "Order and classification",
+    "layoutAboveMaster": "the Master",
+    "layoutAboveGiro": "the business sector \"{name}\"",
+    "layoutAboveMasterFrom": "the Master",
+    "layoutAboveGiroFrom": "the business sector \"{name}\"",
+    "layoutDownHintPlan": "What you change here only reaches the levels below: this plan's clients, administrators, profiles and users. \"Inherits\" comes from {aboveFrom}.",
+    "layoutResetBodyPlan": "Everything this plan changed (order and classification) is removed and it goes back to looking the way {above} sets it. The people below are notified.",
+    "layoutResetBodyRequestPlan": "A request will be sent to remove everything this plan changed (order and classification). It is not applied until someone with Authorize approves it.",
+    "layoutPendingBanner": "{n} request(s) of yours are waiting to be authorized. They don't show below until they are.",
     "layoutRequestSend": "Send request",
     "layoutResetAll": "↺ Reset to original order",
     "layoutResetTitle": "Go back to the original order?",
@@ -2340,12 +2348,16 @@
       "what": "Changes the order and classification of screens and columns, only for clients in this business sector. If you can't authorize, it is sent as a request.",
       "example": "you move \"Recipes\" to the top of the menu because that's the first thing restaurants use."
     },
+    "planReordenPersonalizado": {
+      "what": "Changes the order and classification of screens and columns, only for clients on this plan. If you can't authorize, it is sent as a request.",
+      "example": "on the \"Basic\" plan you put \"Invoices\" first in the menu because that's what those clients use the most."
+    },
     "layoutResetOne": {
-      "what": "Removes this column's own classification and goes back to inheriting the one from above.",
-      "example": "you changed \"Plates\" to another classification and regret it: you tap it and it goes back to what the Master sets."
+      "what": "Removes this column's own classification and goes back to inheriting the one from the level above.",
+      "example": "you changed \"Plates\" to another classification and regret it: you tap it and it goes back to what the level above sets."
     },
     "layoutResetAll": {
-      "what": "Removes everything this business sector changed in order and classification and goes back to inheriting the Master's. Asks for confirmation.",
+      "what": "Removes everything this level changed in order and classification and goes back to inheriting the level above's (a plan goes back to its business sector's). Asks for confirmation.",
       "example": "you moved several lists and don't like how it turned out: you press it and everything goes back to the original order."
     },
     "businessSectorPreview": {

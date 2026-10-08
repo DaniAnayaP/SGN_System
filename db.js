@@ -7919,18 +7919,31 @@ function clientIdsOfSector(sectorId) {
     `).all(sector.name, sectorId);
     return new Set(rows.map((r) => r.id));
 }
+// Los clientes que tienen contratado ese plan (clients.plan guarda su NOMBRE, igual que resolveViewerColorChain).
+function clientIdsOfPlan(planId) {
+    const plan = db.prepare('SELECT name FROM plans WHERE id = ?').get(planId);
+    if (!plan) return new Set();
+    return new Set(db.prepare('SELECT id FROM clients WHERE plan = ?').all(plan.name).map((r) => r.id));
+}
+// Los clientes de abajo de un nivel (hoy Giro y Plan); un nivel que todavía no tiene su pantalla de orden y clasificación no avisa a nadie.
+function clientIdsOfLevel(level, entityId) {
+    if (level === 'giro') return clientIdsOfSector(entityId);
+    if (level === 'plan') return clientIdsOfPlan(entityId);
+    return null;
+}
 // El aviso hacia abajo de un orden/clasificación guardado en un nivel: a las personas de los clientes de abajo con acceso a lo que cambió.
 // changedKeys = claves de las listas que cambiaron de orden; classNodeKeys = columnas cuya clasificación cambió ("<sección>::<área>::<ruta>").
 function publishLevelLayoutUpdate({ level, entityId, lists, changedKeys = [], classNodeKeys = [], actorUserId, actorLabel = '' }) {
     const clean = (Array.isArray(lists) ? lists : []).map((s) => String(s || '').trim().slice(0, 160)).filter(Boolean).slice(0, 12);
     if (!clean.length) return [];
-    if (level !== 'giro') return [];
+    const clientIds = clientIdsOfLevel(level, entityId);
+    if (!clientIds) return [];
     const targets = changedKeys && changedKeys.length ? masterTargetsForOrderKeys(changedKeys) : [];
     (classNodeKeys || []).forEach((nodeKey) => {
         const [sectionId, itemId] = String(nodeKey).split('::');
         if (sectionId && itemId) targets.push({ sectionId, itemId });
     });
-    const recipients = listTreeNoticeRecipients('level', { actorUserId, targets: targets.length ? targets : [{ any: true }], clientIds: clientIdsOfSector(entityId) });
+    const recipients = listTreeNoticeRecipients('level', { actorUserId, targets: targets.length ? targets : [{ any: true }], clientIds });
     return publishTreeNotice({ kind: 'order-updated', scope: 'level', actorUserId, actorLabel, recipients, payload: { lists: clean } });
 }
 // Un reorden guardado. lists = los nombres de las listas que cambiaron de orden ("Áreas de Cadena de Suministro"...); changedKeys = sus claves (árbol de clientes).
@@ -7978,10 +7991,11 @@ function userCanAuthorizeColors(scope, userId) {
     if (row.superAdmin) return true;
     return hasSaasGrant(getSaasUserGrants(userId), leaf.itemId, leaf.subItemId, false);
 }
-// Hoja "Autorizar orden y clasificación" de cada nivel SaaS (scope 'level' de column_color_requests). Giro: Giros de negocio, tabla::ta6. Los demás niveles
-// (Plan, Cliente, Administrador, Perfil, Usuario) se agregan uno por uno con su propia hoja.
+// Hoja "Autorizar orden y clasificación" de cada nivel SaaS (scope 'level' de column_color_requests). Giro: Giros de negocio, tabla::ta6; Plan: Nuestros Planes,
+// tabla::ta6. Los demás niveles (Cliente, Administrador, Perfil, Usuario) se agregan uno por uno con su propia hoja.
 const LEVEL_AUTHORIZE_LEAVES = {
     giro: { itemId: 'saas-business-sectors', subItemId: 'tabla::ta6' },
+    plan: { itemId: 'saas-plans', subItemId: 'tabla::ta6' },
 };
 function userCanAuthorizeLevel(level, userId) {
     const leaf = LEVEL_AUTHORIZE_LEAVES[level];
