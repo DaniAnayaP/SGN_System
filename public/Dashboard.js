@@ -9699,10 +9699,12 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
 // Quien puede personalizar colores pero no autorizarlos pide el cambio en el árbol (Árbol Maestro SaaS o Árbol de Permisos Maestro); la solicitud le llega
 // a quien debe decidirla (su jefe directo y, si ese no puede autorizar, el siguiente) aquí, en Notificaciones (kind: 'color-request', ver
 // /api/business/notifications). Autorizar la aplica a las tablas; Rechazar la cierra.
-const COLOR_REQUEST_TREE_LABEL_KEYS = { saas: 'menu.saasMasterTree', master: 'menu.masterPermissionsTree' };
+const COLOR_REQUEST_TREE_LABEL_KEYS = { saas: 'menu.saasMasterTree', master: 'menu.masterPermissionsTree', level: 'menu.businessSectors' };
 
 // "Encabezado · Nuestros Clientes › Tabla principal › RFC": el nombre que mandó la pantalla del árbol; sin él (solicitudes viejas), lo que se pueda leer del id.
+// Las solicitudes de "Orden y clasificación" de un nivel (scope 'level') traen su resumen completo en label ("Giro «Transporte»: ...").
 function colorRequestColumnText(item) {
+    if (item.scope === 'level') return item.label || t('admin.layoutRequestDefault');
     const m = /^col-(own|nested):(.*)$/.exec(item.colorId || '');
     const part = m ? t(m[1] === 'own' ? 'admin.colorRequestPartOwn' : 'admin.colorRequestPartNested') : '';
     let column = item.label || '';
@@ -9717,6 +9719,8 @@ function colorRequestColumnText(item) {
 
 // "■ Fondo #85B7EB" / "Quitar letra": lo que cambió el color de una solicitud o de un aviso.
 function appendColorChange(desc, item) {
+    // Orden y clasificación de un nivel: no hay un color que mostrar, el resumen ya va en el texto de la solicitud.
+    if (item.action === 'set-layout' || item.action === 'clear-all') return;
     if (item.action === 'set' || item.action === 'set-text') {
         const swatch = document.createElement('span');
         swatch.className = 'color-request-swatch';
@@ -9795,7 +9799,7 @@ function renderColorRequestRow(item, bucket) {
     meta.title = timeStampTitle(item.createdAt);
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
-    desc.append(`${colorRequestColumnText(item)}: `);
+    desc.append(item.scope === 'level' ? colorRequestColumnText(item) : `${colorRequestColumnText(item)}: `);
     appendColorChange(desc, item);
     row.append(meta, desc);
     const note = document.createElement('div');
@@ -9829,7 +9833,8 @@ async function decideColorRequestNotification(item, approve, row) {
             return;
         }
         row.remove();
-        showToast(t(approve ? 'admin.colorRequestApproved' : 'admin.colorRequestRejectedMsg'), 'success');
+        const approvedKey = item.scope === 'level' ? 'admin.layoutRequestApproved' : 'admin.colorRequestApproved';
+        showToast(t(approve ? approvedKey : 'admin.colorRequestRejectedMsg'), 'success');
         loadNotifications();
     } catch {
         showToast(t('admin.colorRequestError'), 'error');

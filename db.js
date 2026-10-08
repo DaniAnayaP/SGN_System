@@ -7043,7 +7043,8 @@ function resolveOrderRows(chain) {
     const master = new Map(getMasterPermissionOrder().map((r) => [r.parentKey, r.orderedKeys]));
     const result = new Map();
     new Set([...master.keys(), ...layers.keys()]).forEach((parentKey) => {
-        const layer = (layers.get(parentKey) || [])[0];
+        // Una lista vacía no es un orden: no tapa el de arriba (un Giro con una fila [] escondía el orden de departamentos del Maestro).
+        const layer = (layers.get(parentKey) || []).find((l) => l.orderedKeys && l.orderedKeys.length);
         result.set(parentKey, layer ? { orderedKeys: layer.orderedKeys, source: layer.level } : { orderedKeys: master.get(parentKey), source: 'master' });
     });
     return result;
@@ -7223,6 +7224,10 @@ function getEffectiveClassificationOverridesForChain(chain, ownLevel) {
 }
 function getEffectiveClassificationOverridesForTarget(level, entityId, clientId) {
     return getEffectiveClassificationOverridesForChain(resolveLevelColorChain(level, entityId, clientId), level);
+}
+// Lo que ese nivel heredaría SIN cambios propios (la clasificación de arriba): a esto vuelve el ↺ y el "Restablecer orden original".
+function getInheritedClassificationOverridesForTarget(level, entityId, clientId) {
+    return getEffectiveClassificationOverridesForChain(resolveLevelColorChain(level, entityId, clientId).slice(1), level);
 }
 // Lo que ve una persona de un cliente (viewer = { userId, clientId }): su propia cadena completa.
 function getEffectiveClassificationOverridesForViewer(viewer) {
@@ -7607,7 +7612,9 @@ ensureColumn('column_color_requests', 'entity_id', 'INTEGER');
 ensureColumn('column_color_requests', 'label', 'TEXT');
 ensureColumn('column_color_requests', 'requester_seen_at', 'TEXT');
 
-const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text', 'set-class', 'clear-class', 'set-order', 'clear-order'];
+// 'set-layout' (todo lo que se cambió de orden y clasificación en un nivel, de una vez, en value como JSON) y 'clear-all' (volver a heredar todo) son las
+// solicitudes de "Orden y clasificación" de un nivel (scope 'level').
+const COLOR_REQUEST_ACTIONS = ['set', 'set-text', 'clear-dot', 'clear-text', 'set-class', 'clear-class', 'set-order', 'clear-order', 'set-layout', 'clear-all'];
 const SAAS_COLOR_AUTHORIZE_LEAF = 'controles::a8';
 
 // Jefe directo de una cuenta del equipo SaaS. Hoy todas dependen directo de admin_saas (no hay campo de
@@ -7696,7 +7703,7 @@ function listColorRequestsForUser(scope, { userId, isSuperAdmin = false, limit =
 function listColorNotificationsForUser({ userId, isSuperAdmin = false }) {
     const rows = db.prepare(`
         ${COLOR_REQUEST_SELECT}
-        WHERE r.scope IN ('saas', 'master')
+        WHERE r.scope IN ('saas', 'master', 'level')
           AND ((r.status = 'pending' AND (r.assigned_to_user_id = ? OR ? = 1)) OR r.requested_by_user_id = ?)
         ORDER BY r.id DESC
         LIMIT 200
@@ -7706,7 +7713,7 @@ function listColorNotificationsForUser({ userId, isSuperAdmin = false }) {
     rows.forEach((r) => {
         const mine = r.requestedById === userId;
         const canDecide = r.status === 'pending' && !mine
-            && (isSuperAdmin || (r.assignedToId === userId && userCanAuthorizeColors(r.scope, userId)));
+            && (isSuperAdmin || (r.assignedToId === userId && (r.scope === 'level' ? userCanAuthorizeLevel(r.level, userId) : userCanAuthorizeColors(r.scope, userId))));
         const item = { ...r, canDecide };
         if (canDecide) out.autorizar.push(item);
         else if (mine && r.status === 'pending') out.solicitudes.push(item);
@@ -7717,7 +7724,7 @@ function listColorNotificationsForUser({ userId, isSuperAdmin = false }) {
 function markColorRequestsSeen(userId) {
     db.prepare(`
         UPDATE column_color_requests SET requester_seen_at = datetime('now')
-        WHERE requested_by_user_id = ? AND scope IN ('saas', 'master') AND status IN ('approved', 'rejected') AND requester_seen_at IS NULL
+        WHERE requested_by_user_id = ? AND scope IN ('saas', 'master', 'level') AND status IN ('approved', 'rejected') AND requester_seen_at IS NULL
     `).run(userId);
 }
 // ---------------------------------------------------------------------------
@@ -7804,19 +7811,19 @@ function masterTargetsForOrderKeys(parentKeys) {
     return targets.length ? targets : [{ any: true }];
 }
 // A quién se le modificó: [{id, name, clientId}] (clientId solo en el árbol de clientes).
-function listTreeNoticeRecipients(scope, { actorUserId, skipUserIds = [], screenId = null, targets = [{ any: true }] }) {
+function listTreeNoticeRecipients(scope, { actorUserId, skipUserIds = [], screenId = null, targets = [{ any: true }], clientIds = null }) {
     const skip = new Set([actorUserId, ...skipUserIds].filter((id) => id != null));
     if (scope === 'saas') {
         return saasSubordinatesOf(actorUserId)
             .filter((u) => !skip.has(u.id) && (!screenId || u.superAdmin || hasSaasGrant(getSaasUserGrants(u.id), screenId, null, false)))
             .map((u) => ({ id: u.id, name: u.name || u.username, clientId: null }));
     }
-    if (scope === 'master') {
+    if (scope === 'master' || scope === 'level') {
         const grantCache = new Map();
         const grantsOf = (id) => { if (!grantCache.has(id)) grantCache.set(id, getUserEffectiveGrantsRaw(id)); return grantCache.get(id); };
         const users = db.prepare('SELECT id, name, username, client_id AS clientId, is_client_admin AS isAdmin FROM users WHERE client_id IS NOT NULL AND active != 0').all();
         return users
-            .filter((u) => !skip.has(u.id) && clientPersonHasAccessTo(u, grantsOf, targets))
+            .filter((u) => !skip.has(u.id) && (!clientIds || clientIds.has(u.clientId)) && clientPersonHasAccessTo(u, grantsOf, targets))
             .map((u) => ({ id: u.id, name: u.name || u.username, clientId: u.clientId }));
     }
     return [];
@@ -7830,7 +7837,7 @@ function humanizeClassificationId(id) {
 // A las personas de los clientes se les avisa de parte del "Equipo SaaS" (no se muestra quién del equipo fue ni quién lo pidió/autorizó).
 function publishTreeNotice({ kind, scope, payload, actorUserId, actorLabel = '', recipients }) {
     const insert = db.prepare('INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, ?, ?, ?, ?, ?)');
-    const forClients = scope === 'master';
+    const forClients = scope !== 'saas';
     const clientPayload = forClients ? { ...payload, requestedBy: '', authorizedBy: '' } : payload;
     const clientCount = new Set(recipients.map((r) => r.clientId).filter((id) => id != null)).size;
     db.transaction(() => {
@@ -7852,6 +7859,79 @@ function publishColorUpdate({ scope, colorId, action, value = null, label = '', 
         kind: 'color-updated', scope, actorUserId, actorLabel, recipients,
         payload: { colorId, action, value, label: columnLabel, requestedBy: requestedByLabel || '', authorizedBy: authorizedByLabel || '' },
     });
+}
+// ---------------------------------------------------------------------------
+// "Orden y clasificación" de un nivel (hoy el Giro). Lo que se cambia solo baja a los niveles de abajo; "restablecer" siempre vuelve a heredar del nivel de arriba.
+// payload = { lists: [{ parentKey, orderedKeys }], clearLists: [parentKey], classes: [{ nodeKey, classificationId, classificationLabel }], clearClasses: [nodeKey] }.
+// ---------------------------------------------------------------------------
+function applyLevelLayout(level, entityId, payload, updatedBy, clientId = null) {
+    const p = payload || {};
+    return db.transaction(() => {
+        const out = { listsSaved: 0, listsCleared: 0, classesSaved: 0, classesCleared: 0 };
+        const lists = (Array.isArray(p.lists) ? p.lists : []).filter((l) => l && typeof l.parentKey === 'string' && Array.isArray(l.orderedKeys));
+        if (lists.length) {
+            const summary = setLevelOrders(level, entityId, lists, updatedBy, clientId);
+            out.listsSaved += summary.saved;
+            out.listsCleared += summary.cleared;
+        }
+        (Array.isArray(p.clearLists) ? p.clearLists : []).forEach((parentKey) => { if (clearLevelOrder(level, entityId, String(parentKey))) out.listsCleared += 1; });
+        const inherited = new Map(getEffectiveClassificationOverridesForChain(resolveLevelColorChain(level, entityId, clientId).slice(1), level).map((o) => [o.nodeKey, o.classificationId]));
+        (Array.isArray(p.classes) ? p.classes : []).forEach((c) => {
+            if (!c || typeof c.nodeKey !== 'string') return;
+            const classificationId = String(c.classificationId || '');
+            // Elegir lo mismo que ya viene de arriba no es un cambio propio: se queda heredando.
+            if (inherited.has(c.nodeKey) && inherited.get(c.nodeKey) === classificationId) {
+                if (clearLevelClassification(level, entityId, c.nodeKey)) out.classesCleared += 1;
+                return;
+            }
+            setLevelClassification(level, entityId, c.nodeKey, classificationId, c.classificationLabel || null, updatedBy, clientId);
+            out.classesSaved += 1;
+        });
+        (Array.isArray(p.clearClasses) ? p.clearClasses : []).forEach((nodeKey) => { if (clearLevelClassification(level, entityId, String(nodeKey))) out.classesCleared += 1; });
+        return out;
+    })();
+}
+// "Restablecer orden original" de un nivel: quita TODO lo propio (orden y clasificación) y vuelve a heredar lo del nivel de arriba.
+function clearLevelLayout(level, entityId) {
+    return db.transaction(() => {
+        const orders = level === 'giro'
+            ? db.prepare('DELETE FROM sector_permission_order WHERE business_sector_id = ?').run(entityId).changes
+            : db.prepare('DELETE FROM permission_order_level_overrides WHERE level = ? AND entity_id = ?').run(level, entityId).changes;
+        const classes = db.prepare('DELETE FROM classification_level_overrides WHERE level = ? AND entity_id = ?').run(level, entityId).changes;
+        return { listsCleared: orders, classesCleared: classes };
+    })();
+}
+// Las solicitudes de orden y clasificación que siguen pendientes de ese nivel (para avisar en su pantalla).
+function listPendingLevelRequests(level, entityId) {
+    return db.prepare(`
+        ${COLOR_REQUEST_SELECT}
+        WHERE r.scope = 'level' AND r.level = ? AND r.entity_id = ? AND r.status = 'pending'
+        ORDER BY r.id DESC
+    `).all(level, entityId);
+}
+// Los clientes que cuelgan de un giro: los que lo tienen como su giro y los que no tienen y su plan es de ese giro (igual que resolveViewerColorChain).
+function clientIdsOfSector(sectorId) {
+    const sector = db.prepare('SELECT name FROM business_sectors WHERE id = ?').get(sectorId);
+    if (!sector) return new Set();
+    const rows = db.prepare(`
+        SELECT c.id FROM clients c LEFT JOIN plans pl ON pl.name = c.plan
+        WHERE c.sector_negocio = ? OR ((c.sector_negocio IS NULL OR c.sector_negocio = '') AND pl.business_sector_id = ?)
+    `).all(sector.name, sectorId);
+    return new Set(rows.map((r) => r.id));
+}
+// El aviso hacia abajo de un orden/clasificación guardado en un nivel: a las personas de los clientes de abajo con acceso a lo que cambió.
+// changedKeys = claves de las listas que cambiaron de orden; classNodeKeys = columnas cuya clasificación cambió ("<sección>::<área>::<ruta>").
+function publishLevelLayoutUpdate({ level, entityId, lists, changedKeys = [], classNodeKeys = [], actorUserId, actorLabel = '' }) {
+    const clean = (Array.isArray(lists) ? lists : []).map((s) => String(s || '').trim().slice(0, 160)).filter(Boolean).slice(0, 12);
+    if (!clean.length) return [];
+    if (level !== 'giro') return [];
+    const targets = changedKeys && changedKeys.length ? masterTargetsForOrderKeys(changedKeys) : [];
+    (classNodeKeys || []).forEach((nodeKey) => {
+        const [sectionId, itemId] = String(nodeKey).split('::');
+        if (sectionId && itemId) targets.push({ sectionId, itemId });
+    });
+    const recipients = listTreeNoticeRecipients('level', { actorUserId, targets: targets.length ? targets : [{ any: true }], clientIds: clientIdsOfSector(entityId) });
+    return publishTreeNotice({ kind: 'order-updated', scope: 'level', actorUserId, actorLabel, recipients, payload: { lists: clean } });
 }
 // Un reorden guardado. lists = los nombres de las listas que cambiaron de orden ("Áreas de Cadena de Suministro"...); changedKeys = sus claves (árbol de clientes).
 function publishOrderUpdate({ scope, lists, changedKeys = null, actorUserId, actorLabel = '' }) {
@@ -7898,6 +7978,30 @@ function userCanAuthorizeColors(scope, userId) {
     if (row.superAdmin) return true;
     return hasSaasGrant(getSaasUserGrants(userId), leaf.itemId, leaf.subItemId, false);
 }
+// Hoja "Autorizar orden y clasificación" de cada nivel SaaS (scope 'level' de column_color_requests). Giro: Giros de negocio, tabla::ta6. Los demás niveles
+// (Plan, Cliente, Administrador, Perfil, Usuario) se agregan uno por uno con su propia hoja.
+const LEVEL_AUTHORIZE_LEAVES = {
+    giro: { itemId: 'saas-business-sectors', subItemId: 'tabla::ta6' },
+};
+function userCanAuthorizeLevel(level, userId) {
+    const leaf = LEVEL_AUTHORIZE_LEAVES[level];
+    if (!leaf) return false;
+    const row = db.prepare('SELECT is_saas_super_admin AS superAdmin, active FROM users WHERE id = ? AND client_id IS NULL').get(userId);
+    if (!row || row.active === 0) return false;
+    if (row.superAdmin) return true;
+    return hasSaasGrant(getSaasUserGrants(userId), leaf.itemId, leaf.subItemId, false);
+}
+// A quién le llega la solicitud de orden y clasificación de un nivel: sube por la cadena de jefes hasta el primero con "Autorizar" de ese nivel; la raíz es admin_saas.
+function resolveLevelAuthorizer(level, requesterId) {
+    const seen = new Set([requesterId]);
+    let cursor = saasDirectBossOf(requesterId);
+    while (cursor && !seen.has(cursor)) {
+        seen.add(cursor);
+        if (userCanAuthorizeLevel(level, cursor)) return cursor;
+        cursor = saasDirectBossOf(cursor);
+    }
+    return saasColorRootUserId();
+}
 // Igual que resolveSaasColorAuthorizer, para cualquier árbol: sube por la cadena de jefes hasta el primero
 // que pueda autorizar ese árbol; sin nadie en la cadena (hoy, siempre), la raíz.
 function resolveColorAuthorizer(scope, requesterId) {
@@ -7913,6 +8017,8 @@ function resolveColorAuthorizer(scope, requesterId) {
 }
 // Aplica una solicitud ya autorizada a la tabla de colores que le toca (árbol SaaS o árbol de clientes).
 function applyColorRequest(request, updatedBy) {
+    if (request.scope === 'level' && request.action === 'set-layout') return applyLevelLayout(request.level, request.entityId, JSON.parse(request.value || '{}'), updatedBy, request.clientId);
+    if (request.scope === 'level' && request.action === 'clear-all') return clearLevelLayout(request.level, request.entityId);
     if (request.scope === 'client' || request.scope === 'level') {
         // Orden de una lista: color_id es "order:<parentKey>"; value es la lista de ids en JSON.
         if (request.action === 'set-order' || request.action === 'clear-order') {
@@ -10074,6 +10180,13 @@ module.exports = {
     markColorRequestsSeen,
     publishColorUpdate,
     publishOrderUpdate,
+    applyLevelLayout,
+    getInheritedClassificationOverridesForTarget,
+    clearLevelLayout,
+    listPendingLevelRequests,
+    publishLevelLayoutUpdate,
+    userCanAuthorizeLevel,
+    resolveLevelAuthorizer,
     listTreeNoticesForUser,
     markTreeNoticesSeen,
     decideColorRequest,

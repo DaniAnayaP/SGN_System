@@ -103,7 +103,9 @@ window.SAAS_ADMIN_CATALOG = [
                 apartados: [
                     tablaApartado('tabla', ['Icono', 'Nombre del giro', 'Tipo de giro', 'Descripción', 'Permisos asignados', 'Status', 'Creado por', 'Fecha de creación'],
                         ['+ Crear Giro'],
-                        ['Accesos Globales', 'Reorden Personalizado', 'Vista Previa', 'Editar', 'Registro de Cambios', 'Activar/Desactivar']),
+                        // 'Reorden Personalizado' (ta1) es ahora "Personalizar orden y clasificación" del giro; quien no tiene "Autorizar orden y clasificación" (ta6,
+                        // lo nuevo va al final) deja una solicitud que autoriza quien sí. No cambiar el orden de esta lista: las hojas guardadas dependen de la posición.
+                        ['Accesos Globales', 'Personalizar orden y clasificación', 'Vista Previa', 'Editar', 'Registro de Cambios', 'Activar/Desactivar', 'Autorizar orden y clasificación']),
                     { id: 'modal-tipo-giro', label: 'Modal: Tipo de Giro', acciones: ['Crear/editar tipo'], nestUnder: { host: 'tabla', classification: 'saas-class-acciones' } },
                     { id: 'modal-permisos-asignados', label: 'Modal: Permisos Asignados (solo lectura)', acciones: ['Ver resumen'], nestUnder: { host: 'tabla', column: 'Permisos asignados' } },
                 ],

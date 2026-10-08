@@ -471,7 +471,24 @@
     "sectorOrderColCustom": "Custom Order",
     "sectorOrderCustomTag": "Custom",
     "giroAccesosGlobalesTitle": "Global Access",
-    "giroReordenPersonalizadoTitle": "Custom Order",
+    "giroReordenPersonalizadoTitle": "Order and classification",
+    "layoutDownHint": "What you change here only reaches the levels below: this business sector's plans, clients, administrators, profiles and users. \"Inherits\" comes from the Master.",
+    "layoutPendingBanner": "{n} request(s) of yours for this business sector are waiting to be authorized. They don't show below until they are.",
+    "layoutRequestSend": "Send request",
+    "layoutResetAll": "↺ Reset to original order",
+    "layoutResetTitle": "Go back to the original order?",
+    "layoutResetBody": "Everything this business sector changed (order and classification) is removed and it goes back to looking the way the Master sets it. The people below are notified.",
+    "layoutResetBodyRequest": "A request will be sent to remove everything this business sector changed (order and classification). It is not applied until someone with Authorize approves it.",
+    "layoutResetConfirm": "Yes, reset",
+    "layoutOwnTag": "Own",
+    "layoutInheritsTag": "Inherits",
+    "layoutResetOne": "Go back to inheriting the classification from above",
+    "layoutRequestSent": "Request sent to {name}. It will apply once it is authorized.",
+    "layoutSaved": "Order and classification saved. The people it concerns were notified.",
+    "layoutNoChanges": "There are no changes to save.",
+    "layoutRequestDefault": "Order and classification",
+    "layoutOrderListNames": "Order of {name}",
+    "layoutClassNames": "Classification of \"{name}\"",
     "giroGateBlockedByStatus": "This permission is in the \"{status}\" Status — it can't be granted until Árbol Maestro enables it.",
     "giroGateBlockedByPlatform": "Árbol Maestro hasn't enabled the {platform} platform for this permission.",
     "giroGateNeedsWebFirst": "Grant Web access for this permission first — App can't be enabled without Web.",
@@ -803,6 +820,7 @@
     "colorRequestSent": "Request sent to {name}: the color will apply once it is approved.",
     "colorRequestApproved": "Color approved and applied",
     "colorRequestRejectedMsg": "Request rejected",
+    "layoutRequestApproved": "Order and classification approved and applied; the people it affects were notified",
     "saasOrderGroups": "SaaS menu groups",
     "saasOrderScreens": "Screens of {name}",
     "saasOrderApartados": "Sections of {name}",
@@ -2319,8 +2337,16 @@
       "example": "a screen's base cost is $100; if the Giro has a -10% default, that screen costs $90 for any plan under that giro, unless it has its own exception."
     },
     "giroReordenPersonalizado": {
-      "what": "Changes the order screens appear in the menu, only for clients in this business sector.",
+      "what": "Changes the order and classification of screens and columns, only for clients in this business sector. If you can't authorize, it is sent as a request.",
       "example": "you move \"Recipes\" to the top of the menu because that's the first thing restaurants use."
+    },
+    "layoutResetOne": {
+      "what": "Removes this column's own classification and goes back to inheriting the one from above.",
+      "example": "you changed \"Plates\" to another classification and regret it: you tap it and it goes back to what the Master sets."
+    },
+    "layoutResetAll": {
+      "what": "Removes everything this business sector changed in order and classification and goes back to inheriting the Master's. Asks for confirmation.",
+      "example": "you moved several lists and don't like how it turned out: you press it and everything goes back to the original order."
     },
     "businessSectorPreview": {
       "what": "Lets you see the system the way a client in this business sector would, without having to log in as one of them.",

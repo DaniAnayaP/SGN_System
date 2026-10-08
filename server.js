@@ -325,6 +325,13 @@ const {
     getClientContractGrants,
     clampNewGrantsToLimits,
     getOrderTreeForTarget,
+    getInheritedClassificationOverridesForTarget,
+    applyLevelLayout,
+    clearLevelLayout,
+    listPendingLevelRequests,
+    publishLevelLayoutUpdate,
+    userCanAuthorizeLevel,
+    resolveLevelAuthorizer,
     getEffectiveClassificationOverridesForTarget,
     getEffectiveClassificationOverridesForViewer,
     setLevelOrders,
@@ -2577,31 +2584,57 @@ function buildMasterOrdersByPrefix(prefix) {
 // "Reorden Personalizado" -- confirmed with the user: a réplica of Accesos
 // Globales, filtered to what's granted, with reorder enabled at every
 // depth Árbol Maestro itself reorders at, not just Departamento/Área.
+// "Orden y clasificación" del Giro. Quien tiene "Personalizar orden y clasificación" (tabla::ta1) propone cambios; si además tiene "Autorizar orden y clasificación"
+// (tabla::ta6) o es administrador principal, se aplican al momento y se avisa hacia abajo; si no, quedan como SOLICITUD (scope 'level') que le llega a quien
+// tenga Autorizar (a su campana, subiendo por los jefes). Lo que se cambia solo baja (planes, clientes, administradores, perfiles y usuarios de ese giro) y
+// restablecer siempre vuelve a heredar lo del nivel de arriba (el Maestro).
+function giroLayoutAccess(req) {
+    const grants = getSaasUserGrants(req.user.sub);
+    const has = (sub) => hasSaasGrant(grants, 'saas-business-sectors', sub, req.user.isSaasSuperAdmin);
+    return { canPersonalize: has('tabla::ta1'), canAuthorize: has('tabla::ta6') };
+}
+// Lo que lee la pantalla: el orden del Maestro y del giro (como siempre), de dónde viene cada lista, las clasificaciones del giro (y lo que heredaría sin
+// cambios propios), las solicitudes pendientes y lo que esta persona puede hacer.
+function buildGiroLayoutState(sectorId, req) {
+    const id = String(sectorId);
+    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
+    const tree = getOrderTreeForTarget('giro', Number(id), null);
+    return {
+        masterOrder: masterRow ? masterRow.orderedKeys : [],
+        customOrder: getEffectiveSectorDepartmentOrder(id),
+        masterAreaOrders: buildMasterOrdersByPrefix('area::'),
+        customAreaOrders: getEffectiveSectorOrdersByPrefix(id, 'area::'),
+        masterApartadoOrders: buildMasterOrdersByPrefix('apartado::'),
+        customApartadoOrders: getEffectiveSectorOrdersByPrefix(id, 'apartado::'),
+        masterPantallaOrders: buildMasterOrdersByPrefix('pantalla::'),
+        customPantallaOrders: getEffectiveSectorOrdersByPrefix(id, 'pantalla::'),
+        masterColumnOrders: buildMasterOrdersByPrefix('columna::'),
+        customColumnOrders: getEffectiveSectorOrdersByPrefix(id, 'columna::'),
+        sources: tree.sources,
+        classifications: getEffectiveClassificationOverridesForTarget('giro', Number(id), null),
+        inheritedClassifications: getInheritedClassificationOverridesForTarget('giro', Number(id), null),
+        pending: listPendingLevelRequests('giro', Number(id)).map((r) => ({
+            id: r.id, action: r.action, label: r.label || '', requestedByName: r.requestedByName, assignedToName: r.assignedToName, createdAt: r.createdAt,
+        })),
+        ...giroLayoutAccess(req),
+    };
+}
 app.get('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
     if (denySaasScreen(req, res, ['saas-business-sectors'])) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
-    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
-    res.json({
-        masterOrder: masterRow ? masterRow.orderedKeys : [],
-        customOrder: getEffectiveSectorDepartmentOrder(req.params.id),
-        masterAreaOrders: buildMasterOrdersByPrefix('area::'),
-        customAreaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'area::'),
-        masterApartadoOrders: buildMasterOrdersByPrefix('apartado::'),
-        customApartadoOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'apartado::'),
-        masterPantallaOrders: buildMasterOrdersByPrefix('pantalla::'),
-        customPantallaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'pantalla::'),
-        masterColumnOrders: buildMasterOrdersByPrefix('columna::'),
-        customColumnOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'columna::'),
-    });
+    res.json(buildGiroLayoutState(req.params.id, req));
 });
 
+const cleanNames = (list) => (Array.isArray(list) ? list : []).filter((s) => typeof s === 'string').map((s) => s.trim().slice(0, 160)).filter(Boolean).slice(0, 12);
 app.put('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
-    if (denySaasLeaf(req, res, 'saas-business-sectors', ['tabla::ta1'], 'No tienes permiso para reordenar el giro.')) return;
+    if (denySaasLeaf(req, res, 'saas-business-sectors', ['tabla::ta1'], 'No tienes permiso para personalizar el orden y la clasificación del giro.')) return;
     const existing = getBusinessSectorById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Sector not found.' });
-    const { customOrder, customAreaOrders, customApartadoOrders, customPantallaOrders, customColumnOrders } = req.body || {};
-    if (!isValidOrderArray(customOrder)) {
+    const sectorId = Number(req.params.id);
+    const { customOrder, customAreaOrders, customApartadoOrders, customPantallaOrders, customColumnOrders, classChanges, clearClasses, clearLists, resetAll, changes } = req.body || {};
+    // Solo las listas que de verdad se movieron (la pantalla ya no manda todas): customOrder puede faltar.
+    if (customOrder !== undefined && !isValidOrderArray(customOrder)) {
         return res.status(400).json({ message: 'customOrder must be an array of section ids.' });
     }
     if (customAreaOrders !== undefined && !isValidOrderMap(customAreaOrders)) {
@@ -2616,7 +2649,8 @@ app.put('/api/admin/business-sectors/:id/department-order', requireAuth, require
     if (customColumnOrders !== undefined && !isValidOrderMap(customColumnOrders)) {
         return res.status(400).json({ message: 'customColumnOrders must be a map of "sectionId::areaId::apartadoId::pantallaId::classId" to an array of column ids.' });
     }
-    const rows = [{ parentKey: PERMISSION_ORDER_ROOT_KEY, orderedKeys: customOrder }];
+    const rows = [];
+    if (customOrder !== undefined) rows.push({ parentKey: PERMISSION_ORDER_ROOT_KEY, orderedKeys: customOrder });
     Object.entries(customAreaOrders || {}).forEach(([sectionId, orderedKeys]) => {
         rows.push({ parentKey: areaOrderKey(sectionId), orderedKeys });
     });
@@ -2632,21 +2666,81 @@ app.put('/api/admin/business-sectors/:id/department-order', requireAuth, require
         const [sectionId, areaId, apartadoId, pantallaId, classId] = compoundKey.split('::');
         rows.push({ parentKey: columnOrderKey(sectionId, areaId, apartadoId, pantallaId, classId), orderedKeys });
     });
-    setLevelOrders('giro', Number(req.params.id), rows, changedByLabel(req));
-    const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
-    res.json({
-        masterOrder: masterRow ? masterRow.orderedKeys : [],
-        customOrder: getEffectiveSectorDepartmentOrder(req.params.id),
-        masterAreaOrders: buildMasterOrdersByPrefix('area::'),
-        customAreaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'area::'),
-        masterApartadoOrders: buildMasterOrdersByPrefix('apartado::'),
-        customApartadoOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'apartado::'),
-        masterPantallaOrders: buildMasterOrdersByPrefix('pantalla::'),
-        customPantallaOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'pantalla::'),
-        masterColumnOrders: buildMasterOrdersByPrefix('columna::'),
-        customColumnOrders: getEffectiveSectorOrdersByPrefix(req.params.id, 'columna::'),
+    const classes = (Array.isArray(classChanges) ? classChanges : [])
+        .filter((c) => c && typeof c.nodeKey === 'string' && c.nodeKey && typeof c.classificationId === 'string')
+        .map((c) => ({ nodeKey: c.nodeKey, classificationId: c.classificationId, classificationLabel: typeof c.classificationLabel === 'string' ? c.classificationLabel.slice(0, 120) : null }));
+    const payload = {
+        lists: rows,
+        clearLists: (Array.isArray(clearLists) ? clearLists : []).filter((k) => typeof k === 'string'),
+        classes,
+        clearClasses: (Array.isArray(clearClasses) ? clearClasses : []).filter((k) => typeof k === 'string'),
+    };
+    const names = cleanNames(changes);
+    const everything = resetAll === true;
+    const nothing = !rows.length && !payload.clearLists.length && !payload.classes.length && !payload.clearClasses.length;
+    if (!everything && nothing) return res.json({ ...buildGiroLayoutState(sectorId, req), unchanged: true });
+    const changedKeys = [...rows.map((r) => r.parentKey), ...payload.clearLists];
+    const classNodeKeys = [...payload.classes.map((c) => c.nodeKey), ...payload.clearClasses];
+    const access = giroLayoutAccess(req);
+    const label = changedByLabel(req);
+    if (access.canAuthorize) {
+        const result = everything ? clearLevelLayout('giro', sectorId) : applyLevelLayout('giro', sectorId, payload, label, null);
+        const touched = (result.listsSaved || 0) + (result.listsCleared || 0) + (result.classesSaved || 0) + (result.classesCleared || 0);
+        if (touched > 0) {
+            try {
+                const lists = names.length ? names : [everything ? `Orden y clasificación del Giro «${existing.name}»: restablecido` : `Orden y clasificación del Giro «${existing.name}»`];
+                publishLevelLayoutUpdate({ level: 'giro', entityId: sectorId, lists, changedKeys, classNodeKeys, actorUserId: req.user.sub, actorLabel: label });
+            } catch (err) {
+                console.error('No se pudo avisar del orden y clasificación del giro:', err);
+            }
+        }
+        return res.json({ ...buildGiroLayoutState(sectorId, req), applied: true });
+    }
+    // Sin Autorizar: queda como solicitud para quien pueda autorizarla.
+    const assignedTo = resolveLevelAuthorizer('giro', req.user.sub);
+    const summary = everything
+        ? `Giro «${existing.name}»: restablecer todo el orden y la clasificación`
+        : `Giro «${existing.name}»: ${names.join(' · ') || 'orden y clasificación'}`;
+    const requestId = createColorRequest({
+        scope: 'level', colorId: everything ? `all:giro:${sectorId}` : `layout:giro:${sectorId}`, action: everything ? 'clear-all' : 'set-layout',
+        value: everything ? null : JSON.stringify({ ...payload, names, changedKeys, classNodeKeys }), level: 'giro', entityId: sectorId,
+        requestedByUserId: req.user.sub, requestedByLabel: label, assignedToUserId: assignedTo, label: summary,
     });
+    res.status(202).json({ ...buildGiroLayoutState(sectorId, req), requested: true, requestId, assignedTo: { id: assignedTo, name: getUserNameById(assignedTo) } });
 });
+
+// Autorizar o rechazar una solicitud de orden y clasificación de un nivel (llega a la campana de quien tiene "Autorizar" de ese nivel).
+function decideLevelRequest(req, res, approve) {
+    const request = getColorRequest(Number(req.params.id));
+    if (!request || request.scope !== 'level') return res.status(404).json({ message: 'Solicitud no encontrada.' });
+    if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya se resolvió.' });
+    if (!req.user.isSaasSuperAdmin && !userCanAuthorizeLevel(request.level, req.user.sub)) {
+        return res.status(403).json({ message: 'No tienes permiso para autorizar el orden y la clasificación de este nivel.' });
+    }
+    if (!req.user.isSaasSuperAdmin && request.assignedToId !== req.user.sub) {
+        return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
+    }
+    const label = changedByLabel(req);
+    if (approve) {
+        applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
+        try {
+            let extra = {};
+            try { extra = request.value ? JSON.parse(request.value) : {}; } catch { extra = {}; }
+            const lists = cleanNames(extra.names);
+            publishLevelLayoutUpdate({
+                level: request.level, entityId: request.entityId,
+                lists: lists.length ? lists : [request.label || 'Orden y clasificación'],
+                changedKeys: Array.isArray(extra.changedKeys) ? extra.changedKeys : [], classNodeKeys: Array.isArray(extra.classNodeKeys) ? extra.classNodeKeys : [],
+                actorUserId: req.user.sub, actorLabel: label,
+            });
+        } catch (err) {
+            console.error('No se pudo avisar del orden y clasificación autorizado:', err);
+        }
+    }
+    res.json({ request: decideColorRequest(request.id, approve ? 'approved' : 'rejected', { userId: req.user.sub, label }) });
+}
+app.post('/api/admin/level-color-requests/:id/approve', requireAuth, requireAdmin, (req, res) => decideLevelRequest(req, res, true));
+app.post('/api/admin/level-color-requests/:id/reject', requireAuth, requireAdmin, (req, res) => decideLevelRequest(req, res, false));
 
 // --- Árbol de Permisos Maestro (GEIPSA-wide node readiness -- does a ---------
 // feature exist / is it ready to sell -- independent of any one Sector,

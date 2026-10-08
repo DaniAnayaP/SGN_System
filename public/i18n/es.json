@@ -471,7 +471,24 @@
     "sectorOrderColCustom": "Reorden Personalizado",
     "sectorOrderCustomTag": "Personalizado",
     "giroAccesosGlobalesTitle": "Accesos Globales",
-    "giroReordenPersonalizadoTitle": "Reorden Personalizado",
+    "giroReordenPersonalizadoTitle": "Orden y clasificación",
+    "layoutDownHint": "Lo que cambies aquí solo les llega a los de abajo: planes, clientes, administradores, perfiles y usuarios de este giro. «Hereda» viene del Maestro.",
+    "layoutPendingBanner": "Hay {n} solicitud(es) tuya(s) pendiente(s) de autorizar para este giro. No se ven abajo hasta que se autoricen.",
+    "layoutRequestSend": "Enviar solicitud",
+    "layoutResetAll": "↺ Restablecer orden original",
+    "layoutResetTitle": "¿Volver al orden original?",
+    "layoutResetBody": "Se quita todo lo que cambió este giro (el orden y la clasificación) y vuelve a verse como lo manda el Maestro. A las personas de abajo les llega el aviso.",
+    "layoutResetBodyRequest": "Se enviará una solicitud para quitar todo lo que cambió este giro (el orden y la clasificación). No se aplica hasta que alguien con Autorizar la apruebe.",
+    "layoutResetConfirm": "Sí, restablecer",
+    "layoutOwnTag": "Propio",
+    "layoutInheritsTag": "Hereda",
+    "layoutResetOne": "Volver a heredar la clasificación de arriba",
+    "layoutRequestSent": "Solicitud enviada a {name}. Se aplicará cuando la autorice.",
+    "layoutSaved": "Orden y clasificación guardados. Se avisó a quienes les toca.",
+    "layoutNoChanges": "No hay cambios que guardar.",
+    "layoutRequestDefault": "Orden y clasificación",
+    "layoutOrderListNames": "Orden de {name}",
+    "layoutClassNames": "Clasificación de «{name}»",
     "giroGateBlockedByStatus": "Este permiso está en el Estatus \"{status}\" — no se puede otorgar hasta que Árbol Maestro lo habilite.",
     "giroGateBlockedByPlatform": "Árbol Maestro no tiene la plataforma {platform} habilitada para este permiso.",
     "giroGateNeedsWebFirst": "Primero otorga el acceso Web de este permiso — App no puede activarse sin Web.",
@@ -802,6 +819,7 @@
     "colorRequestSent": "Solicitud enviada a {name}: el color se aplicará cuando la autorice.",
     "colorRequestApproved": "Color autorizado y aplicado",
     "colorRequestRejectedMsg": "Solicitud rechazada",
+    "layoutRequestApproved": "Orden y clasificación autorizados y aplicados; se avisó a quienes les toca",
     "saasOrderGroups": "Grupos del menú SaaS",
     "saasOrderScreens": "Pantallas de {name}",
     "saasOrderApartados": "Apartados de {name}",
@@ -2318,8 +2336,16 @@
       "example": "el costo base de una pantalla es $100; si el Giro tiene -10% de default, esa pantalla cuesta $90 para cualquier plan de ese giro, salvo que tenga su propia excepción."
     },
     "giroReordenPersonalizado": {
-      "what": "Cambia el orden en que aparecen las pantallas en el menú, solo para los clientes de este giro de negocio.",
+      "what": "Cambia el orden y la clasificación de las pantallas y columnas, solo para los clientes de este giro de negocio. Si no puedes autorizar, se envía como solicitud.",
       "example": "subes \"Recetas\" hasta arriba del menú porque es lo primero que usan los restaurantes."
+    },
+    "layoutResetOne": {
+      "what": "Quita la clasificación propia de esta columna y vuelve a heredar la que viene de arriba.",
+      "example": "cambiaste «Placas» a otra clasificación y te arrepientes: lo tocas y vuelve a como lo manda el Maestro."
+    },
+    "layoutResetAll": {
+      "what": "Quita todo lo que este giro cambió de orden y clasificación y vuelve a heredar lo del Maestro. Pide confirmación.",
+      "example": "moviste varias listas y ya no te gusta cómo quedó: lo presionas y todo vuelve al orden original."
     },
     "businessSectorPreview": {
       "what": "Te deja ver el sistema tal como lo vería un cliente de este giro de negocio, sin tener que iniciar sesión como uno de ellos.",

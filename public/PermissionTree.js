@@ -278,7 +278,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, describeColorId = null, grantLimits = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, describeColorId = null, classificationEditor = null, grantLimits = null } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -2274,7 +2274,9 @@
                     // already uses -- Accesos Globales isn't where a
                     // column's classification gets edited, only where it's
                     // useful to see at a glance which one it's already in.
-                    select.disabled = !!grantMode || !canControl('classify');
+                    // "Orden y clasificación" de un nivel (Giro...): ahí la clasificación SÍ se puede cambiar (classificationEditor); lo que se cambia queda
+                    // pendiente en la pantalla y se manda junto con el orden al guardar.
+                    select.disabled = classificationEditorActive() ? !classificationEditor.canEdit : (!!grantMode || !canControl('classify'));
                     classificationCtx.options.forEach((opt) => {
                         const optionEl = document.createElement('option');
                         optionEl.value = opt.id;
@@ -2359,6 +2361,8 @@
                         classificationCell.appendChild(selectWrap);
                     } else {
                         classificationCell.appendChild(select);
+                        const originTag = buildClassificationOriginTag(key);
+                        if (originTag) classificationCell.appendChild(originTag);
                     }
                 }
                 controls.appendChild(classificationCell);
@@ -4156,7 +4160,49 @@
         // clears) one override and repaints -- renderStatusTree() is the
         // same "just call it again" pattern every other change here
         // already uses (toggle, reorder, aplicar-a-anidados, ...).
+        // "Orden y clasificación" de un nivel (el modal del Giro, grantMode + grantOrderMode): la clasificación de una columna se puede cambiar, pero NO se guarda
+        // al momento; queda pendiente en la pantalla (classificationEditor.onChange) y viaja junto con el orden al guardar o al enviar la solicitud.
+        function classificationEditorActive() {
+            return !!(grantMode && grantOrderMode && classificationEditor);
+        }
+        // "Propio" (lo cambió este nivel, con su ↺ para volver a heredar) o "Hereda" (viene de arriba) junto al selector de clasificación de una columna.
+        function buildClassificationOriginTag(nodeKey) {
+            if (!classificationEditorActive()) return null;
+            const override = classificationOverrides.get(nodeKey);
+            if (!override) return null;
+            const wrap = document.createElement('span');
+            wrap.className = 'perm-tree-layout-origin';
+            const chip = document.createElement('span');
+            chip.className = override.from === 'own' ? 'perm-tree-layout-origin-chip own' : 'perm-tree-layout-origin-chip';
+            chip.textContent = override.from === 'own' ? t('admin.layoutOwnTag') : t('admin.layoutInheritsTag');
+            wrap.appendChild(chip);
+            if (override.from === 'own' && classificationEditor.canEdit) {
+                const reset = document.createElement('button');
+                reset.type = 'button';
+                reset.className = 'perm-tree-layout-origin-reset';
+                reset.textContent = '↺';
+                reset.title = t('admin.layoutResetOne');
+                reset.setAttribute('aria-label', reset.title);
+                reset.setAttribute('data-help-key', 'layoutResetOne');
+                reset.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const inherited = classificationEditor.onReset(nodeKey);
+                    if (inherited && inherited.classificationId) classificationOverrides.set(nodeKey, { classificationId: inherited.classificationId, classificationLabel: inherited.classificationLabel || null, from: inherited.from || 'master' });
+                    else classificationOverrides.delete(nodeKey);
+                    renderStatusTree();
+                });
+                wrap.appendChild(reset);
+            }
+            return wrap;
+        }
         async function saveClassificationOverride(nodeKey, classificationId, classificationLabel) {
+            if (classificationEditorActive()) {
+                if (!classificationEditor.canEdit) return;
+                classificationOverrides.set(nodeKey, { classificationId: classificationId || '', classificationLabel: classificationLabel || null, from: 'own' });
+                classificationEditor.onChange(nodeKey, classificationId || '', classificationLabel || null);
+                renderStatusTree();
+                return;
+            }
             try {
                 const res = await fetch('/api/admin/master-permission-classifications', {
                     method: 'PUT',
@@ -4202,7 +4248,8 @@
                     // column(s) still reference it later.
                     const picked = options.find((o) => o.id === newId);
                     const label = picked && picked.isCustom ? t(picked.labelKey) : null;
-                    saveClassificationOverride(nodeKey, newId === normalizedStructuralId ? null : newId, label);
+                    // En "Orden y clasificación" de un nivel se manda siempre lo que se eligió (aunque sea la de fábrica): "volver a heredar" es el ↺, no elegir la misma.
+                    saveClassificationOverride(nodeKey, (newId === normalizedStructuralId && !classificationEditorActive()) ? null : newId, label);
                 },
                 // "+ Crear nueva clasificación..." (see the select below) --
                 // a fresh id scoped to this Pantalla, saved as this

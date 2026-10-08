@@ -1770,6 +1770,46 @@ body.dark-mode .perm-tree-depth-2{
    on this wrapper and the select is transparent inside it, its left
    padding reserving the icon's spot. Used by both Admin-ArbolMaestroSaaS.js
    and PermissionTree.js (buildLeafColorGroup). */
+/* "Orden y clasificación" de un nivel: el rótulo "Propio"/"Hereda" y el ↺ para volver a heredar, junto al selector de clasificación de una columna. */
+.perm-tree-layout-origin{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: 0.35rem;
+    flex: none;
+}
+.perm-tree-layout-origin-chip{
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+.perm-tree-layout-origin-chip.own{
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+}
+.perm-tree-layout-origin-reset{
+    width: 1.2rem;
+    height: 1.2rem;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.perm-tree-layout-origin-reset:hover{
+    background: var(--color-bg);
+    color: var(--color-text-primary);
+}
 .perm-tree-mstatus-class-select-wrap{
     position: relative;
     display: flex;

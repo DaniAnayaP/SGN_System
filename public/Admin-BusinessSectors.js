@@ -320,7 +320,9 @@ function renderSectors() {
         toggleBtn.setAttribute('data-help-key', sector.status === 'inactive' ? 'activate' : 'deactivate');
         toggleBtn.addEventListener('click', () => toggleSectorStatus(sector));
 
-        tdActions.append(treeBtn, costBtn, orderBtn, previewBtn, editBtn, historyBtn, toggleBtn);
+        // "Orden y clasificación" solo para quien tiene la hoja Personalizar (ta1) en el Árbol de Permisos SaaS; el servidor lo vuelve a exigir.
+        const canPersonalizeLayout = Dashboard.hasSaasScreenGrant('saas-business-sectors', 'tabla::ta1');
+        tdActions.append(treeBtn, costBtn, ...(canPersonalizeLayout ? [orderBtn] : []), previewBtn, editBtn, historyBtn, toggleBtn);
         tr.append(tdIcon, tdName, tdType, tdDescription, tdPerms, tdStatus, tdCreatedBy, tdCreatedAt, ...systemCols, tdActions);
         tableBody.appendChild(tr);
     });
@@ -696,15 +698,101 @@ const sectorOrderContainer = document.getElementById('sector-order-container');
 const sectorOrderError = document.getElementById('sector-order-error');
 const sectorOrderSaveBtn = document.getElementById('sector-order-save');
 const sectorOrderCloseBtn = document.getElementById('sector-order-close');
+const sectorOrderPendingEl = document.getElementById('sector-order-pending');
+const sectorOrderResetBtn = document.getElementById('sector-order-reset');
+const sectorOrderResetModal = document.getElementById('sector-order-reset-modal');
+const sectorOrderResetBody = document.getElementById('sector-order-reset-body');
+const sectorOrderResetConfirm = document.getElementById('sector-order-reset-confirm');
+const sectorOrderResetCancel = document.getElementById('sector-order-reset-cancel');
 
 let sectorOrderTree = null;
+let sectorOrderSector = null;
 let sectorOrderSectorId = null;
+let sectorOrderState = null;
+// El orden tal como estaba al abrir: lo que se manda es SOLO lo que se movió contra esto (no copias de listas que nadie tocó).
+let sectorOrderBaseline = null;
+// Clasificaciones cambiadas / vueltas a heredar en esta sesión (se mandan al guardar, no al momento).
+const sectorClassChanges = new Map();
+const sectorClassClears = new Set();
+
+function snapshotSectorOrder(tree) {
+    return {
+        customOrder: tree.getDepartmentOrder(),
+        customAreaOrders: tree.getAreaOrders(),
+        customApartadoOrders: tree.getApartadoOrders(),
+        customPantallaOrders: tree.getPantallaOrders(),
+        customColumnOrders: tree.getColumnOrders(),
+    };
+}
+const sectorOrderDiffers = (a, b) => JSON.stringify(a || []) !== JSON.stringify(b || []);
+
+// Lo que cambió desde que se abrió el modal: solo las listas que se movieron (con su nombre, igual que la confirmación del Árbol de Permisos Maestro) y las
+// clasificaciones cambiadas o vueltas a heredar.
+function collectSectorLayoutChanges() {
+    const tree = sectorOrderTree;
+    const base = sectorOrderBaseline;
+    const now = snapshotSectorOrder(tree);
+    const t = Dashboard.t;
+    const body = {};
+    const names = [];
+    if (sectorOrderDiffers(now.customOrder, base.customOrder)) {
+        body.customOrder = now.customOrder;
+        names.push(t('admin.masterTreeOrderLabel'));
+    }
+    const mapDiff = (field, labelOf) => {
+        Object.keys(now[field] || {}).forEach((key) => {
+            if (!sectorOrderDiffers(now[field][key], (base[field] || {})[key])) {
+                (body[field] = body[field] || {})[key] = now[field][key];
+                names.push(labelOf(key));
+            }
+        });
+    };
+    mapDiff('customAreaOrders', (sectionId) => t('admin.masterTreeAreaOrderLabel', { department: tree.getStatusLabel(sectionId, null, null) || sectionId }));
+    mapDiff('customApartadoOrders', (compoundKey) => {
+        const [sectionId, areaId] = compoundKey.split('::');
+        return t('admin.masterTreeApartadoOrderLabel', { area: tree.getStatusLabel(sectionId, areaId, null) || areaId });
+    });
+    mapDiff('customPantallaOrders', (compoundKey) => {
+        const [sectionId, areaId, apartadoId] = compoundKey.split('::');
+        return t('admin.masterTreePantallaOrderLabel', { apartado: tree.getStatusLabel(sectionId, areaId, apartadoId) || apartadoId });
+    });
+    mapDiff('customColumnOrders', (compoundKey) => {
+        const [sectionId, areaId, apartadoId, pantallaId, classId] = compoundKey.split('::');
+        return t('admin.masterTreeColumnOrderLabel', { classification: tree.getStatusLabel(sectionId, areaId, `${apartadoId}/${pantallaId}/${classId}`) || classId });
+    });
+    const classLabel = (nodeKey) => {
+        const [sectionId, itemId, ...rest] = nodeKey.split('::');
+        return t('admin.layoutClassNames', { name: tree.getStatusLabel(sectionId, itemId, rest.join('::')) || rest.join('::') });
+    };
+    const classChanges = [...sectorClassChanges.values()];
+    const clearClasses = [...sectorClassClears];
+    classChanges.forEach((c) => names.push(classLabel(c.nodeKey)));
+    clearClasses.forEach((nodeKey) => names.push(classLabel(nodeKey)));
+    if (classChanges.length) body.classChanges = classChanges;
+    if (clearClasses.length) body.clearClasses = clearClasses;
+    body.changes = names;
+    return { body, count: names.length };
+}
+
+// Lo que esta persona puede hacer: sin Personalizar no cambia nada; sin Autorizar, guardar es "Enviar solicitud".
+function renderSectorOrderAccess() {
+    const state = sectorOrderState || {};
+    sectorOrderSaveBtn.disabled = !state.canPersonalize;
+    sectorOrderResetBtn.disabled = !state.canPersonalize;
+    sectorOrderSaveBtn.textContent = state.canAuthorize ? Dashboard.t('admin.save') : Dashboard.t('admin.layoutRequestSend');
+    const pending = (state.pending || []).length;
+    sectorOrderPendingEl.hidden = !pending;
+    sectorOrderPendingEl.textContent = pending ? Dashboard.t('admin.layoutPendingBanner', { n: pending }) : '';
+}
 
 async function openSectorOrderModal(sector) {
+    sectorOrderSector = sector;
     sectorOrderSectorId = sector.id;
     sectorOrderError.hidden = true;
     sectorOrderContainer.innerHTML = '';
     sectorOrderModal.hidden = false;
+    sectorClassChanges.clear();
+    sectorClassClears.clear();
     try {
         const [grantsRes, statusRes, costsRes, orderRes] = await Promise.all([
             fetch(`/api/admin/business-sectors/${sector.id}/grants`, { credentials: 'include' }),
@@ -717,6 +805,8 @@ async function openSectorOrderModal(sector) {
         const statusData = await statusRes.json();
         const costsData = await costsRes.json();
         const orderData = await orderRes.json();
+        sectorOrderState = orderData;
+        const inherited = new Map((orderData.inheritedClassifications || []).map((o) => [o.nodeKey, o]));
         sectorOrderTree = window.PermissionTree.create(sectorOrderContainer, {
             grantMode: 'giro',
             grantOrderMode: true,
@@ -728,8 +818,25 @@ async function openSectorOrderModal(sector) {
             apartadoOrder: orderData.customApartadoOrders || {},
             pantallaOrder: orderData.customPantallaOrders || {},
             columnOrder: orderData.customColumnOrders || {},
+            // La clasificación de una columna se puede cambiar aquí; queda pendiente y viaja junto con el orden al guardar.
+            classificationEditor: {
+                canEdit: !!orderData.canPersonalize,
+                onChange(nodeKey, classificationId, classificationLabel) {
+                    sectorClassChanges.set(nodeKey, { nodeKey, classificationId, classificationLabel });
+                    sectorClassClears.delete(nodeKey);
+                },
+                // El ↺: quita lo propio y vuelve a lo que viene de arriba (devuelve eso para que el árbol lo pinte).
+                onReset(nodeKey) {
+                    sectorClassChanges.delete(nodeKey);
+                    const above = inherited.get(nodeKey) || null;
+                    if (sectorOrderState && (sectorOrderState.classifications || []).some((o) => o.nodeKey === nodeKey && o.from === 'own')) sectorClassClears.add(nodeKey);
+                    return above;
+                },
+            },
         });
-        await sectorOrderTree.init(grantsData.grants || []);
+        await sectorOrderTree.init(grantsData.grants || [], [], orderData.classifications || []);
+        sectorOrderBaseline = snapshotSectorOrder(sectorOrderTree);
+        renderSectorOrderAccess();
     } catch {
         sectorOrderError.textContent = Dashboard.t('admin.loadError');
         sectorOrderError.hidden = false;
@@ -738,35 +845,69 @@ async function openSectorOrderModal(sector) {
 
 function closeSectorOrderModal() {
     sectorOrderModal.hidden = true;
+    sectorOrderResetModal.hidden = true;
     sectorOrderTree = null;
+    sectorOrderSector = null;
     sectorOrderSectorId = null;
+    sectorOrderState = null;
+    sectorOrderBaseline = null;
 }
 sectorOrderCloseBtn.addEventListener('click', closeSectorOrderModal);
 sectorOrderModal.addEventListener('click', (event) => { if (event.target === sectorOrderModal) closeSectorOrderModal(); });
 
+// Manda el cambio (o el restablecer todo). 200 = ya se aplicó; 202 = quedó como solicitud para quien autoriza.
+async function submitSectorLayout(body) {
+    const res = await fetch(`/api/admin/business-sectors/${sectorOrderSectorId}/department-order`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+    });
+    if (!res.ok && res.status !== 202) throw new Error('save failed');
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 202) Dashboard.showToast(Dashboard.t('admin.layoutRequestSent', { name: (data.assignedTo && data.assignedTo.name) || '' }), 'info');
+    else if (data.unchanged) Dashboard.showToast(Dashboard.t('admin.layoutNoChanges'), 'info');
+    else Dashboard.showToast(Dashboard.t('admin.layoutSaved'), 'success');
+    return data;
+}
+
 sectorOrderSaveBtn.addEventListener('click', async () => {
     if (!sectorOrderSectorId || !sectorOrderTree) return;
+    const { body, count } = collectSectorLayoutChanges();
+    if (!count) {
+        Dashboard.showToast(Dashboard.t('admin.layoutNoChanges'), 'info');
+        return;
+    }
     sectorOrderSaveBtn.disabled = true;
     try {
-        const res = await fetch(`/api/admin/business-sectors/${sectorOrderSectorId}/department-order`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-                customOrder: sectorOrderTree.getDepartmentOrder(),
-                customAreaOrders: sectorOrderTree.getAreaOrders(),
-                customApartadoOrders: sectorOrderTree.getApartadoOrders(),
-                customPantallaOrders: sectorOrderTree.getPantallaOrders(),
-                customColumnOrders: sectorOrderTree.getColumnOrders(),
-            }),
-        });
-        if (!res.ok) throw new Error('save failed');
-        Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+        await submitSectorLayout(body);
         closeSectorOrderModal();
     } catch {
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     } finally {
         sectorOrderSaveBtn.disabled = false;
+    }
+});
+
+// "Restablecer orden original": vuelve a heredar TODO lo de arriba (el Maestro). Pide confirmación y, si no puede autorizar, se manda como solicitud.
+sectorOrderResetBtn.addEventListener('click', () => {
+    if (!sectorOrderSectorId || !sectorOrderState) return;
+    sectorOrderResetBody.textContent = Dashboard.t(sectorOrderState.canAuthorize ? 'admin.layoutResetBody' : 'admin.layoutResetBodyRequest');
+    sectorOrderResetModal.hidden = false;
+});
+sectorOrderResetCancel.addEventListener('click', () => { sectorOrderResetModal.hidden = true; });
+sectorOrderResetModal.addEventListener('click', (event) => { if (event.target === sectorOrderResetModal) sectorOrderResetModal.hidden = true; });
+sectorOrderResetConfirm.addEventListener('click', async () => {
+    if (!sectorOrderSectorId) return;
+    sectorOrderResetConfirm.disabled = true;
+    try {
+        await submitSectorLayout({ resetAll: true, changes: [Dashboard.t('admin.layoutResetAll').replace(/^↺\s*/, '')] });
+        sectorOrderResetModal.hidden = true;
+        closeSectorOrderModal();
+    } catch {
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    } finally {
+        sectorOrderResetConfirm.disabled = false;
     }
 });
 
