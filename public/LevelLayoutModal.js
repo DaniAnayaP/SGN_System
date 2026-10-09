@@ -25,6 +25,8 @@
     //   idPrefix: 'plan-layout'   -- prefijo de los ids del modal (único por pantalla)
     //   stateUrl(entity)          -- GET (estado) y PUT (guardar) del nivel
     //   grantsUrl(entity)         -- GET de lo que ese nivel tiene asignado ({ grants })
+    //   grantsOf(json)            -- opcional: saca la lista de permisos de esa respuesta (por defecto json.grants); el Cliente junta lo de su plan y sus adicionales
+    //   subtitle(entity)          -- opcional: el nombre de lo que se está editando, se muestra junto al título
     //   hintKey, resetBodyKey, resetBodyRequestKey -- textos propios del nivel (reciben { above } = nombre del nivel de arriba)
     //   titleKey                  -- opcional (por defecto "Orden y clasificación")
     // }
@@ -77,7 +79,8 @@
 
         // Los textos se ponen al abrir (no al crear) para que sigan el idioma que esté activo.
         function renderTexts() {
-            dom.title.textContent = t(config.titleKey || 'admin.layoutTitle');
+            const name = entity && config.subtitle ? config.subtitle(entity) : '';
+            dom.title.textContent = t(config.titleKey || 'admin.layoutTitle') + (name ? ` — ${name}` : '');
             dom.hint.textContent = t(config.hintKey, { above: aboveName(), aboveFrom: aboveName(true) });
             dom.save.textContent = t('admin.save');
             dom.close.textContent = t('admin.cancel');
@@ -92,6 +95,7 @@
         function aboveName(fromForm) {
             const above = (state && state.above) || { kind: 'master', name: '' };
             const suffix = fromForm ? 'From' : '';
+            if (above.kind === 'plan' && above.name) return t(`admin.layoutAbovePlan${suffix}`, { name: above.name });
             return above.kind === 'giro' && above.name ? t(`admin.layoutAboveGiro${suffix}`, { name: above.name }) : t(`admin.layoutAboveMaster${suffix}`);
         }
 
@@ -217,7 +221,7 @@
                         },
                     },
                 });
-                await tree.init(grantsData.grants || [], [], orderData.classifications || []);
+                await tree.init((config.grantsOf ? config.grantsOf(grantsData) : grantsData.grants) || [], [], orderData.classifications || []);
                 baseline = snapshot(tree);
                 renderAccess();
             } catch {

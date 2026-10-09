@@ -264,6 +264,7 @@ const planLayoutModal = window.LevelLayoutModal.create({
     idPrefix: 'plan-layout',
     stateUrl: (plan) => `/api/admin/plans/${plan.id}/layout-order`,
     grantsUrl: (plan) => `/api/admin/plans/${plan.id}/grants`,
+    subtitle: (plan) => plan.name || '',
     hintKey: 'admin.layoutDownHintPlan',
     resetBodyKey: 'admin.layoutResetBodyPlan',
     resetBodyRequestKey: 'admin.layoutResetBodyRequestPlan',

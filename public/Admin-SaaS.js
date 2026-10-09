@@ -334,6 +334,30 @@ function iconButton(iconClass, label, onClick, { disabled = false, title = '', d
     return btn;
 }
 
+// --- Orden y clasificación del cliente ---------------------------------------
+// Mismo modal que el del Giro y el Plan (LevelLayoutModal.js): réplica del árbol de este cliente filtrada a lo que ya tiene (lo de su plan y lo que se le vendió
+// como adicional), con arrastre para reordenar y selector de clasificación por columna. Lo que se cambia solo les llega a la gente de este cliente;
+// restablecer vuelve a lo de su plan (si no tiene plan, a lo de su giro o al Maestro).
+const clientLayoutModal = window.LevelLayoutModal.create({
+    idPrefix: 'client-layout',
+    stateUrl: (client) => `/api/admin/clients/${client.id}/layout-order`,
+    grantsUrl: (client) => `/api/admin/clients/${client.id}/permission-grants`,
+    // Lo que el cliente tiene = lo de su plan + sus adicionales (sin repetir).
+    grantsOf: (data) => {
+        const seen = new Set();
+        return [...(data.planGrants || []), ...(data.grants || [])].filter((g) => {
+            const key = `${g.sectionId}|${g.itemId || ''}|${g.submenuId || ''}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    },
+    subtitle: (client) => client.company_name || client.razon_social || '',
+    hintKey: 'admin.layoutDownHintCliente',
+    resetBodyKey: 'admin.layoutResetBodyCliente',
+    resetBodyRequestKey: 'admin.layoutResetBodyRequestCliente',
+});
+
 function renderClients() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = clients.length > 0;
@@ -344,6 +368,8 @@ function renderClients() {
     const canEditClients = Dashboard.hasSaasScreenGrant('saas-clients', 'editar');
     const canActivateClients = Dashboard.hasSaasScreenGrant('saas-clients', 'activar');
     const canResetClients = Dashboard.hasSaasScreenGrant('saas-clients', 'reset');
+    // "Orden y clasificación" del cliente: solo con la hoja Personalizar (ta6) de Nuestros Clientes; el servidor lo vuelve a exigir.
+    const canPersonalizeLayout = Dashboard.hasSaasScreenGrant('saas-clients', 'tabla::ta6');
     clients.forEach((client) => {
         const tr = document.createElement('tr');
         tr.dataset.status = client.status;
@@ -438,6 +464,7 @@ function renderClients() {
             iconButton('bx-plus', Dashboard.t('admin.permisosAdicionalesTitle'), () => openPermisosAdicionalesModal(client), {
                 helpKey: 'permisosAdicionales',
             }),
+            ...(canPersonalizeLayout ? [iconButton('bx-sort-alt-2', Dashboard.t('admin.layoutTitle'), () => clientLayoutModal.open(client), { helpKey: 'clienteReordenPersonalizado' })] : []),
             iconButton('bx-edit', Dashboard.t('admin.edit'), () => startEdit(client), {
                 disabled: !canEditClients,
                 title: canEditClients ? '' : Dashboard.t('admin.clientEditNoPermission'),

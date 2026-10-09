@@ -2177,7 +2177,7 @@ function validateMasterPermissionCosts(costs) {
 }
 
 app.get('/api/admin/master-permission-costs', requireAuth, requireAdmin, (req, res) => {
-    if (denySaasScreen(req, res, ['saas-master-permissions-tree','saas-business-sectors','saas-plans'])) return;
+    if (denySaasScreen(req, res, ['saas-master-permissions-tree','saas-business-sectors','saas-plans','saas-clients'])) return;
     res.json({ costs: getMasterPermissionCosts(), ...getMasterCostSettings() });
 });
 
@@ -2606,6 +2606,21 @@ const LAYOUT_LEVELS = {
             return sector ? { kind: 'giro', name: sector.name } : { kind: 'master', name: '' };
         },
     },
+    cliente: {
+        screenId: 'saas-clients', personalizeLeaf: 'tabla::ta6', authorizeLeaf: 'tabla::ta7',
+        get: (id) => getClientById(id), notFound: 'Client not found.',
+        label: (e) => `Cliente «${e.company_name}»`,
+        noPermission: 'No tienes permiso para personalizar el orden y la clasificación del cliente.',
+        // Lo de este nivel se guarda con el id del propio cliente (así se borra junto con sus datos al reiniciar).
+        rowClientId: (e) => e.id,
+        // El nivel de arriba del cliente: su plan; sin plan, su giro; sin giro, el Maestro.
+        above: (e) => {
+            const plan = e.plan ? getPlanByName(e.plan) : null;
+            if (plan) return { kind: 'plan', name: plan.name };
+            const sector = e.sector_negocio ? listBusinessSectors().find((s) => s.name === e.sector_negocio) : null;
+            return sector ? { kind: 'giro', name: sector.name } : { kind: 'master', name: '' };
+        },
+    },
 };
 function layoutLevelAccess(level, req) {
     const cfg = LAYOUT_LEVELS[level];
@@ -2664,6 +2679,12 @@ app.get('/api/admin/plans/:id/layout-order', requireAuth, requireAdmin, (req, re
     const existing = getPlanById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     res.json(buildLevelLayoutState('plan', existing, req));
+});
+app.get('/api/admin/clients/:id/layout-order', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    res.json(buildLevelLayoutState('cliente', existing, req));
 });
 
 const cleanNames = (list) => (Array.isArray(list) ? list : []).filter((s) => typeof s === 'string').map((s) => s.trim().slice(0, 160)).filter(Boolean).slice(0, 12);
@@ -2725,8 +2746,9 @@ function putLevelLayout(level, req, res) {
     const access = layoutLevelAccess(level, req);
     const label = changedByLabel(req);
     const levelName = cfg.label(existing);
+    const rowClientId = cfg.rowClientId ? cfg.rowClientId(existing) : null;
     if (access.canAuthorize) {
-        const result = everything ? clearLevelLayout(level, entityId) : applyLevelLayout(level, entityId, payload, label, null);
+        const result = everything ? clearLevelLayout(level, entityId) : applyLevelLayout(level, entityId, payload, label, rowClientId);
         const touched = (result.listsSaved || 0) + (result.listsCleared || 0) + (result.classesSaved || 0) + (result.classesCleared || 0);
         if (touched > 0) {
             try {
@@ -2745,13 +2767,14 @@ function putLevelLayout(level, req, res) {
         : `${levelName}: ${names.join(' · ') || 'orden y clasificación'}`;
     const requestId = createColorRequest({
         scope: 'level', colorId: everything ? `all:${level}:${entityId}` : `layout:${level}:${entityId}`, action: everything ? 'clear-all' : 'set-layout',
-        value: everything ? null : JSON.stringify({ ...payload, names, changedKeys, classNodeKeys }), level, entityId,
+        value: everything ? null : JSON.stringify({ ...payload, names, changedKeys, classNodeKeys }), level, entityId, clientId: rowClientId,
         requestedByUserId: req.user.sub, requestedByLabel: label, assignedToUserId: assignedTo, label: summary,
     });
     res.status(202).json({ ...buildLevelLayoutState(level, existing, req), requested: true, requestId, assignedTo: { id: assignedTo, name: getUserNameById(assignedTo) } });
 }
 app.put('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => putLevelLayout('giro', req, res));
 app.put('/api/admin/plans/:id/layout-order', requireAuth, requireAdmin, (req, res) => putLevelLayout('plan', req, res));
+app.put('/api/admin/clients/:id/layout-order', requireAuth, requireAdmin, (req, res) => putLevelLayout('cliente', req, res));
 
 // Autorizar o rechazar una solicitud de orden y clasificación de un nivel (llega a la campana de quien tiene "Autorizar" de ese nivel).
 function decideLevelRequest(req, res, approve) {
@@ -2792,7 +2815,7 @@ app.post('/api/admin/level-color-requests/:id/reject', requireAuth, requireAdmin
 // unlike the Sector routes above there's no :id -- exactly one tree.
 const MASTER_PERMISSION_STATUS_VALUES = ['habilitado', 'inhabilitado', 'construccion', 'mejoras'];
 app.get('/api/admin/master-permission-status', requireAuth, requireAdmin, (req, res) => {
-    if (denySaasScreen(req, res, ['saas-master-permissions-tree','saas-business-sectors','saas-plans'])) return;
+    if (denySaasScreen(req, res, ['saas-master-permissions-tree','saas-business-sectors','saas-plans','saas-clients'])) return;
     res.json({ statuses: getMasterPermissionStatuses() });
 });
 

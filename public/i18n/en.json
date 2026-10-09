@@ -478,6 +478,16 @@
     "layoutAboveGiro": "the business sector \"{name}\"",
     "layoutAboveMasterFrom": "the Master",
     "layoutAboveGiroFrom": "the business sector \"{name}\"",
+    "layoutAbovePlan": "the plan \"{name}\"",
+    "layoutAbovePlanFrom": "the plan \"{name}\"",
+    "layoutInheritsFrom": "Inherits · {from}",
+    "layoutFromMaster": "Master",
+    "layoutFromGiro": "Business sector",
+    "layoutFromPlan": "Plan",
+    "layoutFromCliente": "Client",
+    "layoutDownHintCliente": "What you change here only reaches the levels below: this client's administrator, profiles and users. \"Inherits\" comes from {aboveFrom}.",
+    "layoutResetBodyCliente": "Everything this client changed (order and classification) is removed and it goes back to looking the way {above} sets it. The people below are notified.",
+    "layoutResetBodyRequestCliente": "A request will be sent to remove everything this client changed (order and classification). It is not applied until someone with Authorize approves it.",
     "layoutDownHintPlan": "What you change here only reaches the levels below: this plan's clients, administrators, profiles and users. \"Inherits\" comes from {aboveFrom}.",
     "layoutResetBodyPlan": "Everything this plan changed (order and classification) is removed and it goes back to looking the way {above} sets it. The people below are notified.",
     "layoutResetBodyRequestPlan": "A request will be sent to remove everything this plan changed (order and classification). It is not applied until someone with Authorize approves it.",
@@ -2348,6 +2358,10 @@
       "what": "Changes the order and classification of screens and columns, only for clients in this business sector. If you can't authorize, it is sent as a request.",
       "example": "you move \"Recipes\" to the top of the menu because that's the first thing restaurants use."
     },
+    "clienteReordenPersonalizado": {
+      "what": "Changes the order and classification of screens and columns, only for the people of this client (its administrator, profiles and users). If you can't authorize, it is sent as a request.",
+      "example": "for \"Transportes del Norte\" you move \"Fuel\" to the top because it is the only thing they use every day; the other clients on its plan don't see that change."
+    },
     "planReordenPersonalizado": {
       "what": "Changes the order and classification of screens and columns, only for clients on this plan. If you can't authorize, it is sent as a request.",
       "example": "on the \"Basic\" plan you put \"Invoices\" first in the menu because that's what those clients use the most."
@@ -2357,7 +2371,7 @@
       "example": "you changed \"Plates\" to another classification and regret it: you tap it and it goes back to what the level above sets."
     },
     "layoutResetAll": {
-      "what": "Removes everything this level changed in order and classification and goes back to inheriting the level above's (a plan goes back to its business sector's). Asks for confirmation.",
+      "what": "Removes everything this level changed in order and classification and goes back to inheriting the level above's (a plan goes back to its business sector's; a client, to its plan's). Asks for confirmation.",
       "example": "you moved several lists and don't like how it turned out: you press it and everything goes back to the original order."
     },
     "businessSectorPreview": {

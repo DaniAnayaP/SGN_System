@@ -1,4 +1,69 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700&display=swap');
+/* Tipografía Poppins instalada en el propio sistema (carpeta fonts/poppins, licencia en OFL.txt): antes se pedía a Google en cada carga y la pantalla esperaba esa respuesta
+   antes de pintar. Solo los pesos que se usan (400, 500, 600, 700) y los alfabetos latino y latino extendido (español incluido). */
+    @font-face{
+        font-family: 'Poppins';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('fonts/poppins/Poppins-400-latin-ext.woff2') format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    @font-face{
+        font-family: 'Poppins';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('fonts/poppins/Poppins-400-latin.woff2') format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face{
+        font-family: 'Poppins';
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        src: url('fonts/poppins/Poppins-500-latin-ext.woff2') format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    @font-face{
+        font-family: 'Poppins';
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        src: url('fonts/poppins/Poppins-500-latin.woff2') format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face{
+        font-family: 'Poppins';
+        font-style: normal;
+        font-weight: 600;
+        font-display: swap;
+        src: url('fonts/poppins/Poppins-600-latin-ext.woff2') format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    @font-face{
+        font-family: 'Poppins';
+        font-style: normal;
+        font-weight: 600;
+        font-display: swap;
+        src: url('fonts/poppins/Poppins-600-latin.woff2') format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face{
+        font-family: 'Poppins';
+        font-style: normal;
+        font-weight: 700;
+        font-display: swap;
+        src: url('fonts/poppins/Poppins-700-latin-ext.woff2') format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    @font-face{
+        font-family: 'Poppins';
+        font-style: normal;
+        font-weight: 700;
+        font-display: swap;
+        src: url('fonts/poppins/Poppins-700-latin.woff2') format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
 
     *{
         box-sizing: border-box;
@@ -3508,3 +3573,109 @@
     }
 
     /*border: 2px solid red; -- Borde colorido*/
+
+    /* Arranque sin parpadeo: hasta que initDashboard (Dashboard.js) sabe qué tiene habilitado la cuenta (permisos, estatus, menú), el menú lateral y la pantalla
+       no se pintan (visibility, así no se mueve nada de lugar) y al saberlo aparecen una sola vez, ya definitivos: nunca se ve algo que luego se quita.
+       Dashboard.js pone la clase sgn-ready en <body>. Si algo falla o no hay acceso, Dashboard.js muestra una alerta que lo explica (clase sgn-alert) y la pantalla sigue sin
+       mostrarse: nunca se enseña lo que la cuenta no tiene ni algo viejo. Si el script ni corre (un archivo viejo en la memoria del navegador justo después de una
+       actualización), a los 12 segundos aparece solo el aviso de recargar de más abajo. */
+    body:has(> nav.Sidebar):not(.sgn-ready) > nav.Sidebar,
+    body:has(> nav.Sidebar):not(.sgn-ready) > main{
+        visibility: hidden;
+    }
+    body:has(> nav.Sidebar):not(.sgn-ready):not(.sgn-alert)::after{
+        content: "Esta pantalla se actualizó. Recarga la página para continuar.\A This screen was updated. Reload the page to continue.";
+        white-space: pre-line;
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        background-color: var(--color-bg);
+        opacity: 0;
+        animation: sgn-stale-note 1ms linear 12s forwards;
+    }
+    @keyframes sgn-stale-note{
+        to{ opacity: 1; }
+    }
+    /* Alerta del arranque (Dashboard.js showShellAlert): no se pudo verificar el acceso, no hay acceso a la pantalla, o está verificando. */
+    .sgn-shell-alert{
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        background-color: var(--color-bg);
+    }
+    .sgn-shell-alert-card{
+        width: min(22rem, 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 1.4rem 1.3rem;
+        text-align: center;
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 14px;
+        box-shadow: 0 10px 28px var(--shadow-border);
+    }
+    .sgn-shell-alert-card h2{
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--color-text-primary);
+    }
+    .sgn-shell-alert-card p{
+        font-size: 0.82rem;
+        color: var(--color-text-secondary);
+    }
+    .sgn-shell-alert-actions{
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 0.3rem;
+    }
+    .sgn-shell-alert-actions button{
+        font: inherit;
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 0.45rem 1.1rem;
+        border-radius: 999px;
+        cursor: pointer;
+        border: 1px solid var(--color-border);
+        background: transparent;
+        color: var(--color-text-primary);
+    }
+    .sgn-shell-alert-actions button.primary{
+        background-color: var(--color-text-primary);
+        border-color: var(--color-text-primary);
+        color: var(--color-surface);
+    }
+    .sgn-shell-alert-actions button:focus-visible{
+        outline: 2px solid var(--color-text-primary);
+        outline-offset: 2px;
+    }
+    .sgn-shell-alert-waiting .sgn-shell-alert-card{
+        box-shadow: none;
+        border-color: transparent;
+        background: transparent;
+    }
+    @keyframes sgn-shell-reveal{
+        from{ opacity: 0; }
+        to{ opacity: 1; }
+    }
+    body.sgn-ready > nav.Sidebar,
+    body.sgn-ready > main{
+        animation: sgn-shell-reveal 0.14s ease-out;
+    }
+    @media (prefers-reduced-motion: reduce){
+        body.sgn-ready > nav.Sidebar,
+        body.sgn-ready > main{ animation: none; }
+    }

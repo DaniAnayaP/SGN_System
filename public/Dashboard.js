@@ -557,8 +557,15 @@ const EMBEDDED_TRANSLATIONS = {
 // Returns the user's role ('admin' | 'user') on success, or null (after
 // redirecting to Login.html) if the session is missing/expired.
 async function authGuard() {
+    let res;
     try {
-        const res = await fetch(`${API_BASE}/me`, { credentials: 'include' });
+        res = await fetch(`${API_BASE}/me`, { credentials: 'include' });
+    } catch {
+        // Sin red: no se sabe si la sesión sigue o no; initDashboard muestra la alerta de "no pudimos verificar tus accesos".
+        throw new Error('network');
+    }
+    if (res.status >= 500) throw new Error('server');
+    try {
         if (!res.ok) throw new Error('not authenticated');
         const data = await res.json();
         currentUser = data.user || null;
@@ -581,14 +588,25 @@ function t(key, params = {}) {
     return value.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? `{${name}}`);
 }
 
-async function loadLanguage(lang) {
-    let loaded = null;
-    try {
-        const res = await fetch(`i18n/${lang}.json`);
-        if (res.ok) loaded = await res.json();
-    } catch {
-        // fetch blocked (e.g. file:// protocol) — fall through to embedded copy
+// El JSON de cada idioma se pide una sola vez (initDashboard lo pide al arrancar, a la vez que el resto, y loadLanguage lo aplica cuando llega).
+const languageJsonPromises = {};
+function fetchLanguageJson(lang) {
+    if (!languageJsonPromises[lang]) {
+        languageJsonPromises[lang] = (async () => {
+            try {
+                const res = await fetch(`i18n/${lang}.json`);
+                if (res.ok) return await res.json();
+            } catch {
+                // fetch blocked (e.g. file:// protocol) — fall through to embedded copy
+            }
+            return null;
+        })();
     }
+    return languageJsonPromises[lang];
+}
+
+async function loadLanguage(lang) {
+    const loaded = await fetchLanguageJson(lang);
     dict = loaded || EMBEDDED_TRANSLATIONS[lang] || EMBEDDED_TRANSLATIONS[DEFAULT_LANG];
     currentLang = lang;
     document.documentElement.lang = lang;
@@ -660,6 +678,11 @@ const EMBEDDED_MENU_FALLBACK = {
     footer: []
 };
 
+let menuLoadPromise = null;
+function loadMenuOnce() {
+    if (!menuLoadPromise) menuLoadPromise = loadMenu();
+    return menuLoadPromise;
+}
 async function loadMenu() {
     try {
         const res = await fetch('data/menu.json');
@@ -696,6 +719,9 @@ async function loadMenu() {
 // starts with no rows here) isn't accidentally locked out of its own
 // screens the moment this ships.
 let cachedSaasGrants = null;
+// El arranque no puede saber qué tiene habilitado la cuenta si alguna de las lecturas de permisos falló (red caída o error del servidor, no un "no tiene"):
+// initDashboard lo detecta y muestra la alerta de "no pudimos verificar tus accesos" en lugar de la pantalla.
+let shellLoadFailed = false;
 // Estatus visibility gate, SaaS side -- same idea as
 // resolveMasterNodeStatus/isEstatusVisible above, mirrored against
 // saas_master_status's own flat "::"-nested item_id keys instead of the
@@ -707,12 +733,17 @@ let cachedSaasStatusOverrides = null;
 async function loadSaasGrants() {
     try {
         const res = await fetch(`${API_BASE}/me/saas-grants`, { credentials: 'include' });
-        if (!res.ok) { cachedSaasGrants = []; cachedSaasVisibleStatuses = ['habilitado']; cachedSaasStatusOverrides = []; return; }
+        if (!res.ok) {
+            if (res.status >= 500) shellLoadFailed = true;
+            cachedSaasGrants = []; cachedSaasVisibleStatuses = ['habilitado']; cachedSaasStatusOverrides = [];
+            return;
+        }
         const data = await res.json();
         cachedSaasGrants = data.grants || [];
         cachedSaasVisibleStatuses = data.visibleStatuses || ['habilitado'];
         cachedSaasStatusOverrides = data.saasStatusOverrides || [];
     } catch {
+        shellLoadFailed = true;
         cachedSaasGrants = [];
         cachedSaasVisibleStatuses = ['habilitado'];
         cachedSaasStatusOverrides = [];
@@ -1079,10 +1110,14 @@ let contractedModuleKeys = [];
 async function fetchContractedModuleKeys() {
     try {
         const res = await fetch(`${API_BASE}/business/contracted-modules`);
-        if (!res.ok) return [];
+        if (!res.ok) {
+            if (res.status >= 500) shellLoadFailed = true;
+            return [];
+        }
         const data = await res.json();
         return data.moduleKeys || [];
     } catch {
+        shellLoadFailed = true;
         return [];
     }
 }
@@ -2639,11 +2674,15 @@ async function loadBusinessProfile() {
     }
     try {
         const res = await fetch('/api/me/business-profile');
-        if (!res.ok) return;
+        if (!res.ok) {
+            if (res.status >= 500) shellLoadFailed = true;
+            return;
+        }
         const { profile } = await res.json();
         cachedBusinessProfile = profile;
         renderBusinessProfile();
     } catch (err) {
+        shellLoadFailed = true;
         console.error('Failed to load business profile:', err);
     }
 }
@@ -9701,7 +9740,7 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
 // /api/business/notifications). Autorizar la aplica a las tablas; Rechazar la cierra.
 const COLOR_REQUEST_TREE_LABEL_KEYS = { saas: 'menu.saasMasterTree', master: 'menu.masterPermissionsTree', level: 'menu.businessSectors' };
 // Las solicitudes de "Orden y clasificación" (scope 'level') dicen de qué pantalla vienen según su nivel.
-const LEVEL_REQUEST_SOURCE_LABEL_KEYS = { giro: 'menu.businessSectors', plan: 'menu.plansRegistered' };
+const LEVEL_REQUEST_SOURCE_LABEL_KEYS = { giro: 'menu.businessSectors', plan: 'menu.plansRegistered', cliente: 'menu.clientesRegistrados' };
 function colorRequestTreeLabelKey(item) {
     if (item.scope === 'level') return LEVEL_REQUEST_SOURCE_LABEL_KEYS[item.level] || COLOR_REQUEST_TREE_LABEL_KEYS.level;
     return COLOR_REQUEST_TREE_LABEL_KEYS[item.scope];
@@ -10606,8 +10645,8 @@ function hasCostCenterPermission(ccId) {
     return grants.some((g) => g.sectionId === 'main' && g.itemId === 'cc-list' && g.submenuId === `cc-${ccId}`);
 }
 
-async function initCostCenterPicker() {
-    const allCostCenters = await fetchCostCenters();
+async function initCostCenterPicker(prefetchedCostCenters) {
+    const allCostCenters = await (prefetchedCostCenters || fetchCostCenters());
     sidebarCostCenters = allCostCenters.filter((cc) => hasCostCenterPermission(cc.id));
     if (sidebarCostCenters.length === 1) {
         // Nothing to actually choose between — same idea as the department
@@ -11324,11 +11363,22 @@ function updateDatabaseMenuLabel(branding) {
 // it rides in via item.label (see buildMenuItem/crumbFromItem) rather than
 // labelKey. Runs on every page (not just Transacciones Inteligentes), same
 // as clientBranding/sidebarCostCenters just above.
-async function loadPersonalizedReports() {
+// Solo la petición (initDashboard la lanza a la vez que las demás); null = no se pudo leer.
+async function fetchIntelligentReports() {
     try {
         const res = await fetch('/api/business/intelligent-reports', { credentials: 'include' });
-        if (!res.ok) return;
+        if (!res.ok) return null;
         const { reports } = await res.json();
+        return reports || [];
+    } catch (err) {
+        console.error('Reportes personalizados: no se pudieron cargar', err);
+        return null;
+    }
+}
+async function loadPersonalizedReports(prefetchedReports) {
+    try {
+        const reports = await (prefetchedReports || fetchIntelligentReports());
+        if (reports === null) return;
         const cat = (menuData?.areaCategories || []).find((c) => c.id === 'cat-reportes');
         const personalizados = cat?.submenu?.find((sm) => sm.id === 'reportes-personalizados');
         if (!personalizados) return;
@@ -11667,11 +11717,141 @@ async function applyLoginDefaultsIfNeeded() {
     }
 }
 
-async function initDashboard({ activePage } = {}) {
-    const role = await authGuard();
+// Arranque sin parpadeo. El menú lateral y la pantalla no se pintan (Inicio-en.css, clase sgn-ready en <body>) hasta que se sabe qué tiene habilitado la
+// cuenta; initDashboard los muestra una sola vez al terminar. Si algo falla, no hay acceso o tarda demasiado, NO se muestra la pantalla: aparece una alerta que lo explica
+// (showShellAlert) y nunca se enseña lo que la cuenta no tiene ni algo viejo.
+const SHELL_WAITING_MS = 3000;
+const SHELL_VERIFY_TIMEOUT_MS = 8000;
+// Textos propios de estas alertas (no dependen del diccionario de idiomas, que puede ser justo lo que no llegó).
+const SHELL_ALERT_TEXTS = {
+    es: {
+        waiting: 'Verificando tus accesos…',
+        verifyTitle: 'No pudimos verificar tus accesos', verifyBody: 'Revisa tu conexión e inténtalo de nuevo.', retry: 'Reintentar', logout: 'Cerrar sesión',
+        noAccessTitle: 'No tienes acceso a esta pantalla', noAccessBody: 'Tu cuenta no tiene habilitada esta pantalla.', home: 'Ir a Inicio',
+    },
+    en: {
+        waiting: 'Checking your access…',
+        verifyTitle: "We couldn't verify your access", verifyBody: 'Check your connection and try again.', retry: 'Try again', logout: 'Log out',
+        noAccessTitle: "You don't have access to this screen", noAccessBody: "Your account doesn't have this screen enabled.", home: 'Go to Home',
+    },
+};
+function clearShellAlert() {
+    document.getElementById('sgn-shell-alert')?.remove();
+    document.body.classList.remove('sgn-alert');
+}
+// kind: 'waiting' (tarda más de lo normal) | 'verify' (no se pudo leer qué tiene la cuenta) | 'noAccess' (la cuenta no tiene esta pantalla).
+function showShellAlert(kind) {
+    clearShellAlert();
+    const lang = typeof getStoredLang === 'function' ? getStoredLang() : 'es';
+    const text = SHELL_ALERT_TEXTS[lang] || SHELL_ALERT_TEXTS.es;
+    const overlay = document.createElement('div');
+    overlay.id = 'sgn-shell-alert';
+    overlay.className = 'sgn-shell-alert' + (kind === 'waiting' ? ' sgn-shell-alert-waiting' : '');
+    overlay.setAttribute('role', kind === 'waiting' ? 'status' : 'alert');
+    const card = document.createElement('div');
+    card.className = 'sgn-shell-alert-card';
+    const addText = (tag, value) => {
+        const el = document.createElement(tag);
+        el.textContent = value;
+        card.appendChild(el);
+    };
+    const actions = document.createElement('div');
+    actions.className = 'sgn-shell-alert-actions';
+    const addButton = (label, onClick, primary) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = label;
+        if (primary) btn.className = 'primary';
+        btn.addEventListener('click', onClick);
+        actions.appendChild(btn);
+        return btn;
+    };
+    let focusTarget = null;
+    if (kind === 'waiting') {
+        addText('p', text.waiting);
+    } else if (kind === 'noAccess') {
+        addText('h2', text.noAccessTitle);
+        addText('p', text.noAccessBody);
+        focusTarget = addButton(text.home, () => window.location.replace('Inicio-en.html'), true);
+    } else {
+        addText('h2', text.verifyTitle);
+        addText('p', text.verifyBody);
+        focusTarget = addButton(text.retry, () => window.location.reload(), true);
+        addButton(text.logout, () => {
+            const link = document.getElementById('logout-link');
+            if (link) link.click();
+            else window.location.replace('Login.html');
+        }, false);
+    }
+    if (actions.children.length) card.appendChild(actions);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    document.body.classList.add('sgn-alert');
+    if (focusTarget) focusTarget.focus();
+}
+function revealShell() {
+    document.body.classList.add('sgn-ready');
+    // Marca de tiempo (visible en las herramientas del navegador, pestaña Rendimiento): cuánto tardó la pantalla en estar lista.
+    try { performance.mark('sgn-shell-ready'); } catch { /* sin Performance API */ }
+}
+
+// Todo lo que depende solo de si la cuenta es de GEIPSA o de un cliente se pide a la vez (antes era una petición tras otra). Se guarda el tipo de cuenta de la
+// última vez para empezar a pedir lo suyo sin esperar a /me; si resulta ser otro tipo, se pide lo que corresponde.
+const ROLE_HINT_KEY = 'sgn.roleHint';
+function startRoleLoads(role) {
+    if (role === 'admin') {
+        return { role: 'admin', grants: Promise.all([loadSaasGrants(), loadSaasMasterOrder()]) };
+    }
+    return {
+        role: 'user',
+        defaults: applyLoginDefaultsIfNeeded(),
+        base: Promise.all([fetchContractedModuleKeys(), loadBusinessProfile(), fetchCascadedOrder()]),
+        branding: fetchClientBranding(),
+        costCenters: fetchCostCenters(),
+        reports: fetchIntelligentReports(),
+    };
+}
+
+async function initDashboard(options = {}) {
+    // Si tarda más de lo normal, "Verificando tus accesos…"; si pasa del límite, la alerta de que no se pudo verificar (nunca se muestra la pantalla sin saberlo).
+    const waitingTimer = setTimeout(() => showShellAlert('waiting'), SHELL_WAITING_MS);
+    const verifyTimer = setTimeout(() => showShellAlert('verify'), SHELL_VERIFY_TIMEOUT_MS);
+    try {
+        const role = await initDashboardInner(options);
+        clearTimeout(waitingTimer);
+        clearTimeout(verifyTimer);
+        // null = no se muestra esta pantalla (sin sesión, sin acceso o se está yendo a otra): lo que corresponda ya se mostró o se está cargando.
+        if (role) {
+            clearShellAlert();
+            revealShell();
+        } else if (document.getElementById('sgn-shell-alert')?.getAttribute('role') === 'status') {
+            clearShellAlert();
+        }
+        return role;
+    } catch (err) {
+        clearTimeout(waitingTimer);
+        clearTimeout(verifyTimer);
+        console.error('No se pudo verificar el acceso a la pantalla:', err);
+        showShellAlert('verify');
+        return null;
+    }
+}
+
+async function initDashboardInner({ activePage } = {}) {
+    let roleHint = null;
+    try { roleHint = localStorage.getItem(ROLE_HINT_KEY); } catch { /* sin localStorage: se pide después de /me */ }
+    const authPromise = authGuard();
+    const languagePromise = fetchLanguageJson(getStoredLang());
+    const menuPromise = loadMenuOnce();
+    const uiScalePromise = fetchUiScaleLevel();
+    let loads = roleHint === 'admin' || roleHint === 'user' ? startRoleLoads(roleHint) : null;
+    const role = await authPromise;
     if (!role) return null;
+    try { localStorage.setItem(ROLE_HINT_KEY, role === 'admin' ? 'admin' : 'user'); } catch { /* ignorar */ }
+    if (!loads || loads.role !== (role === 'admin' ? 'admin' : 'user')) loads = startRoleLoads(role);
     currentRole = role;
-    const [, uiScaleLevel] = await Promise.all([loadLanguage(getStoredLang()), fetchUiScaleLevel()]);
+    await languagePromise;
+    const [, uiScaleLevel] = await Promise.all([loadLanguage(getStoredLang()), uiScalePromise]);
     applyUiScaleLevel(uiScaleLevel);
     if (role !== 'admin') {
         // Right after a fresh login (flag set by login.js), the account's
@@ -11680,7 +11860,9 @@ async function initDashboard({ activePage } = {}) {
         // before any of the validation below so an invalid/uncontracted
         // default still gets corrected the same way a stale localStorage
         // pick would.
-        await applyLoginDefaultsIfNeeded();
+        await loads.defaults;
+        await loads.base;
+        if (shellLoadFailed) throw new Error('No se pudieron leer los accesos de la cuenta.');
         // Narrow the department picker to what this client actually
         // contracted — resolve before the first render so there's no
         // flash of an uncontracted department. If the previously-selected
@@ -11691,13 +11873,14 @@ async function initDashboard({ activePage } = {}) {
         // now, in parallel — "Configuración de Botones" needs their granted
         // permissions ready before the first render, not just whenever they
         // happen to open the "Datos de Usuario del Negocio" panel.
-        [contractedModuleKeys, , cascadedOrder] = await Promise.all([fetchContractedModuleKeys(), loadBusinessProfile(), fetchCascadedOrder()]);
+        [contractedModuleKeys, , cascadedOrder] = await loads.base;
         // "Pantalla habilitada" — direct-URL block for the handful of real
         // pages mapped in SCREEN_GRANT_PATHS (sidebar-hiding alone doesn't
         // stop someone who already knows/bookmarked the URL). cachedBusinessProfile
         // is populated by loadBusinessProfile() above, so this check is safe here.
-        if (activePage && !hasScreenAccess(activePage)) {
-            window.location.replace('Inicio-en.html');
+        if (activePage && (!hasScreenAccess(activePage) || /^admin-/.test(activePage))) {
+            // Las pantallas de GEIPSA (activePage "admin-...") no son para cuentas de un cliente.
+            showShellAlert('noAccess');
             return null;
         }
         availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key) && isEstatusVisible(d.key, null, null));
@@ -11726,13 +11909,14 @@ async function initDashboard({ activePage } = {}) {
         // grants (Equipo SaaS) before the sidebar renders, same reasoning
         // as loadBusinessProfile() above for client users, then block
         // direct URL access to a SaaS screen this admin isn't granted.
-        await Promise.all([loadSaasGrants(), loadSaasMasterOrder()]);
+        await loads.grants;
+        if (shellLoadFailed) throw new Error('No se pudieron leer los accesos de la cuenta.');
         if (activePage && !hasSaasScreenAccess(activePage)) {
-            window.location.replace('Inicio-en.html');
+            showShellAlert('noAccess');
             return null;
         }
     }
-    menuData = await loadMenu();
+    menuData = await menuPromise;
     menuData = buildSidebarData(menuData, role, activePage);
     // loadBusinessProfile() above already rendered the "Datos de Usuario del
     // Negocio" summary once, but at that point menuData was still null —
@@ -11759,11 +11943,11 @@ async function initDashboard({ activePage } = {}) {
         updateAreaPickerVisibility();
     }
     if (role !== 'admin') {
-        clientBranding = await fetchClientBranding();
+        clientBranding = await loads.branding;
         applyClientBranding(clientBranding);
         updateDatabaseMenuLabel(clientBranding);
-        await initCostCenterPicker();
-        await loadPersonalizedReports();
+        await initCostCenterPicker(loads.costCenters);
+        await loadPersonalizedReports(loads.reports);
     } else {
         document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');
     }

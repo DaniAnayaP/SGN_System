@@ -1,0 +1,7 @@
+Poppins
+Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
+
+Esta fuente se distribuye bajo la SIL Open Font License, Version 1.1.
+Texto completo de la licencia: https://openfontlicense.org
+
+Archivos de esta carpeta: Poppins-{400,500,600,700}-{latin,latin-ext}.woff2, tomados de Google Fonts (fonts.gstatic.com, versión v24).

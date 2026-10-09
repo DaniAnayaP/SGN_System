@@ -31,7 +31,7 @@ const CATEGORY_TYPE_TABLE_KEYS = {
 
 const CATEGORY_TYPE = document.body.dataset.categoryType;
 const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
-const API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
+const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 
 (async function init() {
@@ -78,7 +78,7 @@ function isPending(record, key) {
 async function ensureCreatedThenPatch(record, patch) {
     if (record.id) return patchCategory(record.id, patch);
     try {
-        const res = await fetch(API_BASE, { method: 'POST', credentials: 'include' });
+        const res = await fetch(CATEGORY_API_BASE, { method: 'POST', credentials: 'include' });
         if (!res.ok) {
             const body = await res.json().catch(() => null);
             throw new Error(body?.message || 'create failed');
@@ -96,7 +96,7 @@ async function ensureCreatedThenPatch(record, patch) {
 
 async function patchCategory(id, patch) {
     try {
-        const res = await fetch(`${API_BASE}/${id}`, {
+        const res = await fetch(`${CATEGORY_API_BASE}/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -174,7 +174,7 @@ function buildActionsCell(record, tr) {
 async function deleteCategory(id, tr) {
     if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;
     try {
-        const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE', credentials: 'include' });
+        const res = await fetch(`${CATEGORY_API_BASE}/${id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) {
             if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
             throw new Error('delete failed');
@@ -248,7 +248,7 @@ async function refreshTable() {
     const tbody = getTbody();
     if (tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
     try {
-        const res = await fetch(API_BASE, { credentials: 'include' });
+        const res = await fetch(CATEGORY_API_BASE, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { categories } = await res.json();
         tbody.innerHTML = '';

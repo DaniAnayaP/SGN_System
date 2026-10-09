@@ -478,6 +478,16 @@
     "layoutAboveGiro": "el giro «{name}»",
     "layoutAboveMasterFrom": "del Maestro",
     "layoutAboveGiroFrom": "del giro «{name}»",
+    "layoutAbovePlan": "el plan «{name}»",
+    "layoutAbovePlanFrom": "del plan «{name}»",
+    "layoutInheritsFrom": "Hereda · {from}",
+    "layoutFromMaster": "Maestro",
+    "layoutFromGiro": "Giro",
+    "layoutFromPlan": "Plan",
+    "layoutFromCliente": "Cliente",
+    "layoutDownHintCliente": "Lo que cambies aquí solo les llega a los de abajo: el administrador, los perfiles y los usuarios de este cliente. «Hereda» viene {aboveFrom}.",
+    "layoutResetBodyCliente": "Se quita todo lo que cambió este cliente (el orden y la clasificación) y vuelve a verse como lo manda {above}. A las personas de abajo les llega el aviso.",
+    "layoutResetBodyRequestCliente": "Se enviará una solicitud para quitar todo lo que cambió este cliente (el orden y la clasificación). No se aplica hasta que alguien con Autorizar la apruebe.",
     "layoutDownHintPlan": "Lo que cambies aquí solo les llega a los de abajo: clientes, administradores, perfiles y usuarios de este plan. «Hereda» viene {aboveFrom}.",
     "layoutResetBodyPlan": "Se quita todo lo que cambió este plan (el orden y la clasificación) y vuelve a verse como lo manda {above}. A las personas de abajo les llega el aviso.",
     "layoutResetBodyRequestPlan": "Se enviará una solicitud para quitar todo lo que cambió este plan (el orden y la clasificación). No se aplica hasta que alguien con Autorizar la apruebe.",
@@ -2347,6 +2357,10 @@
       "what": "Cambia el orden y la clasificación de las pantallas y columnas, solo para los clientes de este giro de negocio. Si no puedes autorizar, se envía como solicitud.",
       "example": "subes \"Recetas\" hasta arriba del menú porque es lo primero que usan los restaurantes."
     },
+    "clienteReordenPersonalizado": {
+      "what": "Cambia el orden y la clasificación de las pantallas y columnas, solo para la gente de este cliente (su administrador, perfiles y usuarios). Si no puedes autorizar, se envía como solicitud.",
+      "example": "a \"Transportes del Norte\" le subes \"Combustible\" hasta arriba porque es lo único que usan a diario; los demás clientes de su plan no ven ese cambio."
+    },
     "planReordenPersonalizado": {
       "what": "Cambia el orden y la clasificación de las pantallas y columnas, solo para los clientes de este plan. Si no puedes autorizar, se envía como solicitud.",
       "example": "en el plan \"Básico\" pones \"Facturas\" como lo primero del menú porque es lo que más usan esos clientes."
@@ -2356,7 +2370,7 @@
       "example": "cambiaste «Placas» a otra clasificación y te arrepientes: lo tocas y vuelve a como lo manda el nivel de arriba."
     },
     "layoutResetAll": {
-      "what": "Quita todo lo que este nivel cambió de orden y clasificación y vuelve a heredar lo del nivel de arriba (un plan vuelve a lo de su giro). Pide confirmación.",
+      "what": "Quita todo lo que este nivel cambió de orden y clasificación y vuelve a heredar lo del nivel de arriba (un plan vuelve a lo de su giro; un cliente, a lo de su plan). Pide confirmación.",
       "example": "moviste varias listas y ya no te gusta cómo quedó: lo presionas y todo vuelve al orden original."
     },
     "businessSectorPreview": {

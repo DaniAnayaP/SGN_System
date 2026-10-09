@@ -691,6 +691,7 @@ const sectorLayoutModal = window.LevelLayoutModal.create({
     stateUrl: (sector) => `/api/admin/business-sectors/${sector.id}/department-order`,
     grantsUrl: (sector) => `/api/admin/business-sectors/${sector.id}/grants`,
     titleKey: 'admin.giroReordenPersonalizadoTitle',
+    subtitle: (sector) => sector.name || '',
     hintKey: 'admin.layoutDownHint',
     resetBodyKey: 'admin.layoutResetBody',
     resetBodyRequestKey: 'admin.layoutResetBodyRequest',
