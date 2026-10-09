@@ -9743,7 +9743,7 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
 // /api/business/notifications). Autorizar la aplica a las tablas; Rechazar la cierra.
 const COLOR_REQUEST_TREE_LABEL_KEYS = { saas: 'menu.saasMasterTree', master: 'menu.masterPermissionsTree', level: 'menu.businessSectors' };
 // Las solicitudes de "Orden y clasificación" (scope 'level') dicen de qué pantalla vienen según su nivel.
-const LEVEL_REQUEST_SOURCE_LABEL_KEYS = { giro: 'menu.businessSectors', plan: 'menu.plansRegistered', cliente: 'menu.clientesRegistrados', admin: 'menu.clientesRegistrados' };
+const LEVEL_REQUEST_SOURCE_LABEL_KEYS = { giro: 'menu.businessSectors', plan: 'menu.plansRegistered', cliente: 'menu.clientesRegistrados', admin: 'menu.clientesRegistrados', perfil: 'menu.roles', usuario: 'menu.users' };
 function colorRequestTreeLabelKey(item) {
     if (item.scope === 'level') return LEVEL_REQUEST_SOURCE_LABEL_KEYS[item.level] || COLOR_REQUEST_TREE_LABEL_KEYS.level;
     return COLOR_REQUEST_TREE_LABEL_KEYS[item.scope];
@@ -9812,7 +9812,7 @@ function renderTreeNoticeRow(item) {
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
     // A las personas de los clientes no se les muestra el nombre del árbol (es interno): solo que es una actualización del sistema.
-    const treeName = currentUser && currentUser.clientId ? t('main.noticeFromSystem') : t(colorRequestTreeLabelKey(item) || 'main.notificationsTab_avisos');
+    const treeName = item.fromCompany ? t('main.noticeFromCompany') : (currentUser && currentUser.clientId ? t('main.noticeFromSystem') : t(colorRequestTreeLabelKey(item) || 'main.notificationsTab_avisos'));
     meta.textContent = `${treeName} · ${formatNotificationDate(item.createdAt)}`;
     meta.title = timeStampTitle(item.createdAt);
     const desc = document.createElement('div');
@@ -9894,7 +9894,9 @@ function renderColorRequestRow(item, bucket) {
 
 async function decideColorRequestNotification(item, approve, row) {
     try {
-        const res = await fetch(`/api/admin/${item.scope}-color-requests/${item.id}/${approve ? 'approve' : 'reject'}`, { method: 'POST', credentials: 'include' });
+        // Perfil y Usuario se deciden dentro de la empresa; los demás niveles y los árboles, por las rutas de GEIPSA.
+        const base = item.scope === 'level' && (item.level === 'perfil' || item.level === 'usuario') ? '/api/business' : '/api/admin';
+        const res = await fetch(`${base}/${item.scope}-color-requests/${item.id}/${approve ? 'approve' : 'reject'}`, { method: 'POST', credentials: 'include' });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
             showToast(body.message || t('admin.colorRequestError'), 'error');

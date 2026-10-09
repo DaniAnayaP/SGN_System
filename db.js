@@ -3403,6 +3403,7 @@ const TABLE_GRANT_PATHS = {
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
     'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
     'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
+    'usuarios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-users' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
     'nuestros-articulos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-articulos' },
@@ -7844,7 +7845,7 @@ function masterTargetsForOrderKeys(parentKeys) {
     return targets.length ? targets : [{ any: true }];
 }
 // A quién se le modificó: [{id, name, clientId}] (clientId solo en el árbol de clientes).
-function listTreeNoticeRecipients(scope, { actorUserId, skipUserIds = [], screenId = null, targets = [{ any: true }], clientIds = null }) {
+function listTreeNoticeRecipients(scope, { actorUserId, skipUserIds = [], screenId = null, targets = [{ any: true }], clientIds = null, userIds = null }) {
     const skip = new Set([actorUserId, ...skipUserIds].filter((id) => id != null));
     if (scope === 'saas') {
         return saasSubordinatesOf(actorUserId)
@@ -7856,7 +7857,7 @@ function listTreeNoticeRecipients(scope, { actorUserId, skipUserIds = [], screen
         const grantsOf = (id) => { if (!grantCache.has(id)) grantCache.set(id, getUserEffectiveGrantsRaw(id)); return grantCache.get(id); };
         const users = db.prepare('SELECT id, name, username, client_id AS clientId, is_client_admin AS isAdmin FROM users WHERE client_id IS NOT NULL AND active != 0').all();
         return users
-            .filter((u) => !skip.has(u.id) && (!clientIds || clientIds.has(u.clientId)) && clientPersonHasAccessTo(u, grantsOf, targets))
+            .filter((u) => !skip.has(u.id) && (!clientIds || clientIds.has(u.clientId)) && (!userIds || userIds.has(u.id)) && clientPersonHasAccessTo(u, grantsOf, targets))
             .map((u) => ({ id: u.id, name: u.name || u.username, clientId: u.clientId }));
     }
     return [];
@@ -7868,9 +7869,10 @@ function humanizeClassificationId(id) {
 }
 // Guarda un aviso para cada persona a la que se le modificó y la confirmación para quien lo hizo. Devuelve a quién se le avisó.
 // A las personas de los clientes se les avisa de parte del "Equipo SaaS" (no se muestra quién del equipo fue ni quién lo pidió/autorizó).
-function publishTreeNotice({ kind, scope, payload, actorUserId, actorLabel = '', recipients }) {
+// companyLevel: un cambio hecho dentro de la empresa (Perfil, Usuario): el aviso dice QUIÉN lo cambió (las personas se conocen) y la confirmación lista a quién le llegó.
+function publishTreeNotice({ kind, scope, payload, actorUserId, actorLabel = '', recipients, companyLevel = false }) {
     const insert = db.prepare('INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, ?, ?, ?, ?, ?)');
-    const forClients = scope !== 'saas';
+    const forClients = scope !== 'saas' && !companyLevel;
     const clientPayload = forClients ? { ...payload, requestedBy: '', authorizedBy: '' } : payload;
     const clientCount = new Set(recipients.map((r) => r.clientId).filter((id) => id != null)).size;
     db.transaction(() => {
@@ -7966,11 +7968,20 @@ function clientIdsOfLevel(level, entityId) {
     if (level === 'cliente') return new Set([Number(entityId)]);
     // Administrador: entityId es el usuario administrador; el cliente es aquel cuyo administrador registrado es él.
     if (level === 'admin') return new Set(db.prepare('SELECT id FROM clients WHERE admin_user_id = ?').all(entityId).map((r) => r.id));
+    // Perfil: el cliente del puesto; Usuario: el cliente de la persona (a quién dentro de él, lo dice recipientUserIdsOfLevel).
+    if (level === 'perfil') return new Set(db.prepare('SELECT client_id AS id FROM job_positions WHERE id = ?').all(entityId).map((r) => r.id));
+    if (level === 'usuario') return new Set(db.prepare('SELECT client_id AS id FROM users WHERE id = ? AND client_id IS NOT NULL').all(entityId).map((r) => r.id));
+    return null;
+}
+// Para los niveles de la empresa, además del cliente, quiénes exactamente: las personas con ese puesto (Perfil) o esa persona (Usuario). null = todas las del cliente.
+function recipientUserIdsOfLevel(level, entityId) {
+    if (level === 'perfil') return userIdsOfJobPosition(entityId);
+    if (level === 'usuario') return new Set([Number(entityId)]);
     return null;
 }
 // El aviso hacia abajo de un orden/clasificación guardado en un nivel: a las personas de los clientes de abajo con acceso a lo que cambió.
 // changedKeys = claves de las listas que cambiaron de orden; classNodeKeys = columnas cuya clasificación cambió ("<sección>::<área>::<ruta>").
-function publishLevelLayoutUpdate({ level, entityId, lists, changedKeys = [], classNodeKeys = [], actorUserId, actorLabel = '' }) {
+function publishLevelLayoutUpdate({ level, entityId, lists, changedKeys = [], classNodeKeys = [], actorUserId, actorLabel = '', requestedByLabel = '', authorizedByLabel = '' }) {
     const clean = (Array.isArray(lists) ? lists : []).map((s) => String(s || '').trim().slice(0, 160)).filter(Boolean).slice(0, 12);
     if (!clean.length) return [];
     const clientIds = clientIdsOfLevel(level, entityId);
@@ -7980,8 +7991,10 @@ function publishLevelLayoutUpdate({ level, entityId, lists, changedKeys = [], cl
         const [sectionId, itemId] = String(nodeKey).split('::');
         if (sectionId && itemId) targets.push({ sectionId, itemId });
     });
-    const recipients = listTreeNoticeRecipients('level', { actorUserId, targets: targets.length ? targets : [{ any: true }], clientIds });
-    return publishTreeNotice({ kind: 'order-updated', scope: 'level', actorUserId, actorLabel, recipients, payload: { lists: clean } });
+    const companyLevel = isClientLayoutLevel(level);
+    const recipients = listTreeNoticeRecipients('level', { actorUserId, targets: targets.length ? targets : [{ any: true }], clientIds, userIds: recipientUserIdsOfLevel(level, entityId) });
+    const payload = companyLevel ? { lists: clean, fromCompany: true, requestedBy: requestedByLabel || '', authorizedBy: authorizedByLabel || '' } : { lists: clean };
+    return publishTreeNotice({ kind: 'order-updated', scope: 'level', actorUserId, actorLabel, recipients, payload, companyLevel });
 }
 // Un reorden guardado. lists = los nombres de las listas que cambiaron de orden ("Áreas de Cadena de Suministro"...); changedKeys = sus claves (árbol de clientes).
 function publishOrderUpdate({ scope, lists, changedKeys = null, actorUserId, actorLabel = '' }) {
@@ -8036,7 +8049,86 @@ const LEVEL_AUTHORIZE_LEAVES = {
     cliente: { itemId: 'saas-clients', subItemId: 'tabla::ta7' },
     admin: { itemId: 'saas-clients', subItemId: 'tabla::ta9' },
 };
+// --- Perfil y Usuario: niveles del lado de la empresa --------------------------------------------------------------------------------
+// Quien puede cambiar y quien puede autorizar el orden y la clasificación de un perfil (Puesto de Trabajo, pantalla Roles) o de una persona (pantalla Usuarios) lo dice el
+// árbol de permisos de la empresa: una columna de solo permiso por pantalla (roleLayout / userLayout) -- Personalizar = Ver y Operar, Autorizar = Autorizar. El
+// administrador del cliente tiene los dos siempre. Quien no es administrador solo puede cambiar a los que están DEBAJO de él en el organigrama (reports_to).
+const CLIENT_LAYOUT_LEVELS = {
+    perfil: { tableKey: 'roles', colKey: 'roleLayout' },
+    usuario: { tableKey: 'usuarios', colKey: 'userLayout' },
+};
+function isClientLayoutLevel(level) { return !!CLIENT_LAYOUT_LEVELS[level]; }
+// Lo que el permiso de la cuenta deja hacer en ese nivel (sin mirar todavía a quién).
+function clientLayoutRights(level, userId) {
+    const cfg = CLIENT_LAYOUT_LEVELS[level];
+    const row = db.prepare('SELECT client_id AS clientId, is_client_admin AS isAdmin, active FROM users WHERE id = ?').get(userId);
+    if (!cfg || !row || !row.clientId || row.active === 0) return { canPersonalize: false, canAuthorize: false };
+    if (row.isAdmin) return { canPersonalize: true, canAuthorize: true };
+    const grants = getUserEffectiveGrants(userId);
+    const level3 = getColumnGrantLevel(grants, cfg.tableKey, cfg.colKey);
+    return { canPersonalize: level3 === 'ver-y-operar' || level3 === 'editar', canAuthorize: canAuthorizeColumn(grants, cfg.tableKey, cfg.colKey) };
+}
+// Los puestos que están arriba de uno en el organigrama (su jefe, el jefe de su jefe...).
+function jobPositionAncestorIds(jobPositionId) {
+    const out = [];
+    let current = jobPositionId;
+    for (let hop = 0; current && hop < 50; hop += 1) {
+        const row = db.prepare('SELECT reports_to_job_position_id AS parentId FROM job_positions WHERE id = ?').get(current);
+        if (!row || !row.parentId || out.includes(row.parentId)) break;
+        out.push(row.parentId);
+        current = row.parentId;
+    }
+    return out;
+}
+// ¿Ese perfil o esa persona está DEBAJO de quien pregunta en el organigrama? (el mismo puesto no cuenta)
+function isClientLayoutTargetBelow(level, entityId, actorUserId) {
+    const actorPosition = getJobPositionIdForUser(actorUserId);
+    if (!actorPosition) return false;
+    const targetPosition = level === 'perfil' ? Number(entityId) : getJobPositionIdForUser(entityId);
+    if (!targetPosition || targetPosition === actorPosition) return false;
+    return jobPositionAncestorIds(targetPosition).includes(actorPosition);
+}
+// Lo que esta cuenta puede hacer con ESE perfil o persona: el administrador del cliente, todo; los demás, solo con los de abajo.
+function clientLayoutAccess(level, entityId, actor) {
+    const rights = clientLayoutRights(level, actor.id);
+    if (actor.isClientAdmin) return rights;
+    if (!rights.canPersonalize && !rights.canAuthorize) return { canPersonalize: false, canAuthorize: false };
+    const below = isClientLayoutTargetBelow(level, entityId, actor.id);
+    return { canPersonalize: rights.canPersonalize && below, canAuthorize: rights.canAuthorize && below };
+}
+// A quién le llega la solicitud: sube por el organigrama desde quien la pide (su jefe directo, el jefe de su jefe...) hasta el primero con "Autorizar" de ese nivel; un puesto
+// que nadie ocupa se salta; si nadie lo tiene, el administrador del cliente.
+function resolveClientLayoutAuthorizer(level, requesterId, clientId) {
+    const requesterPosition = getJobPositionIdForUser(requesterId);
+    const chain = requesterPosition ? jobPositionAncestorIds(requesterPosition) : [];
+    for (const positionId of chain) {
+        const people = db.prepare(`
+            SELECT hw.user_id AS id FROM hr_workers hw JOIN users u ON u.id = hw.user_id
+            WHERE hw.job_position_id = ? AND hw.user_id IS NOT NULL AND u.active != 0 ORDER BY hw.id
+        `).all(positionId);
+        for (const person of people) {
+            if (person.id !== requesterId && clientLayoutRights(level, person.id).canAuthorize) return person.id;
+        }
+    }
+    const client = db.prepare('SELECT admin_user_id AS adminId FROM clients WHERE id = ?').get(clientId);
+    if (client && client.adminId) return client.adminId;
+    const anyAdmin = db.prepare('SELECT id FROM users WHERE client_id = ? AND is_client_admin = 1 AND active != 0 ORDER BY id LIMIT 1').get(clientId);
+    return anyAdmin ? anyAdmin.id : null;
+}
+// Las personas que tienen ese puesto (con acceso al sistema): a ellas les llega un cambio hecho al perfil.
+// El puesto sin importar de qué empresa (para nombrar el nivel de arriba de una persona).
+function getJobPositionByIdAnyClient(jobPositionId) {
+    return db.prepare('SELECT id, name, client_id AS clientId FROM job_positions WHERE id = ?').get(jobPositionId);
+}
+function userIdsOfJobPosition(jobPositionId) {
+    return new Set(db.prepare(`
+        SELECT DISTINCT hw.user_id AS id FROM hr_workers hw JOIN users u ON u.id = hw.user_id
+        WHERE hw.job_position_id = ? AND hw.user_id IS NOT NULL AND u.active != 0
+    `).all(jobPositionId).map((r) => r.id));
+}
+
 function userCanAuthorizeLevel(level, userId) {
+    if (isClientLayoutLevel(level)) return clientLayoutRights(level, userId).canAuthorize;
     const leaf = LEVEL_AUTHORIZE_LEAVES[level];
     if (!leaf) return false;
     const row = db.prepare('SELECT is_saas_super_admin AS superAdmin, active FROM users WHERE id = ? AND client_id IS NULL').get(userId);
@@ -10031,6 +10123,11 @@ module.exports = {
     getLastChangedBy,
     listPendingChangesRequestedBy,
     markPendingChangesSeenForRequester,
+    getJobPositionByIdAnyClient,
+    isClientLayoutLevel,
+    clientLayoutRights,
+    clientLayoutAccess,
+    resolveClientLayoutAuthorizer,
     createAccessDeniedAlert,
     hasRecentScreenAccessDeniedAlert,
     publishSaasAccessDeniedNotice,

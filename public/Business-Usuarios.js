@@ -248,11 +248,56 @@ function operationalLabelKey(status) {
     return 'business.hrStatusEffectSuspended';
 }
 
+// --- Orden y clasificación de la persona -------------------------------------
+// Mismo modal que el de los demás niveles (LevelLayoutModal.js). Lo que se cambia le llega solo a esa persona; restablecer vuelve a lo de su perfil (su puesto). Lo ve el
+// administrador del cliente y quien tenga Personalizar para las personas que están debajo de él en el organigrama; sin Autorizar, el cambio se pide a su jefe.
+const usuarioLayoutModal = window.LevelLayoutModal.create({
+    idPrefix: 'usuario-layout',
+    titleKey: 'admin.layoutTitleUsuario',
+    stateUrl: (user) => `/api/business/level-layout/usuario/${user.id}`,
+    statusUrl: '/api/business/master-permission-status',
+    costsUrl: null,
+    subtitle: (user) => user.name || '',
+    hintKey: 'admin.layoutDownHintUsuario',
+    resetBodyKey: 'admin.layoutResetBodyUsuario',
+    resetBodyRequestKey: 'admin.layoutResetBodyRequestUsuario',
+});
+function buildUserLayoutButton(user) {
+    const layoutBtn = document.createElement('button');
+    layoutBtn.type = 'button';
+    layoutBtn.className = 'admin-icon-btn';
+    layoutBtn.setAttribute('aria-label', Dashboard.t('admin.layoutTitleUsuario'));
+    layoutBtn.title = Dashboard.t('admin.layoutTitleUsuario');
+    layoutBtn.setAttribute('data-help-key', 'usuarioReordenPersonalizado');
+    layoutBtn.innerHTML = '<i class="bx bx-sort-alt-2" aria-hidden="true"></i>';
+    layoutBtn.addEventListener('click', () => usuarioLayoutModal.open(user));
+    return layoutBtn;
+}
+
 function renderUsersTable() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = users.length > 0;
     users.forEach((user) => {
         const tr = document.createElement('tr');
+        if (user.layoutOnly) {
+            // Quien no es administrador del cliente: solo el nombre, el puesto y su botón; las demás columnas son del administrador (cada celda lleva su columna para que la tabla las acomode).
+            const cell = (col, text) => {
+                const td = document.createElement('td');
+                td.dataset.col = col;
+                td.textContent = text || '—';
+                return td;
+            };
+            const tdLayoutActions = document.createElement('td');
+            tdLayoutActions.dataset.col = 'actions';
+            tdLayoutActions.className = 'admin-table-actions';
+            tdLayoutActions.appendChild(buildUserLayoutButton(user));
+            tr.append(
+                cell('accUsername', ''), cell('accName', user.name), cell('accEmail', ''), cell('accJobPosition', user.positionName), cell('accCreated', ''),
+                cell('accHrStatus', ''), cell('accOperationalStatus', ''), cell('accActivePerms', ''), tdLayoutActions,
+            );
+            tableBody.appendChild(tr);
+            return;
+        }
         tr.dataset.operationalStatus = user.operationalStatus || 'active';
 
         const tdUsername = document.createElement('td');
@@ -355,6 +400,7 @@ function renderUsersTable() {
         resetRoleBtn.innerHTML = '<i class="bx bx-reset" aria-hidden="true"></i>';
         resetRoleBtn.addEventListener('click', () => resetUserRole(user));
         tdActions.appendChild(resetRoleBtn);
+        tdActions.appendChild(buildUserLayoutButton(user));
 
         tr.append(tdUsername, tdName, tdEmail, tdCreated, tdHrStatus, tdOperationalStatus, tdActivePerms, tdActions);
         tableBody.appendChild(tr);
@@ -385,6 +431,14 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear
 async function loadUsers() {
     try {
         const res = await fetch('/api/business/users', { credentials: 'include' });
+        if (res.status === 403) {
+            // No es administrador del cliente: solo las personas a las que puede cambiarles el orden y la clasificación (las de abajo en el organigrama).
+            const mine = await fetch('/api/business/layout-targets/usuario', { credentials: 'include' });
+            if (!mine.ok) throw new Error('load failed');
+            users = ((await mine.json()).users || []).map((u) => ({ ...u, layoutOnly: true }));
+            renderUsersTable();
+            return;
+        }
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         users = data.users || [];

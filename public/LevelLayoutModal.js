@@ -25,6 +25,8 @@
     //   idPrefix: 'plan-layout'   -- prefijo de los ids del modal (único por pantalla)
     //   stateUrl(entity)          -- GET (estado) y PUT (guardar) del nivel
     //   grantsUrl(entity)         -- GET de lo que ese nivel tiene asignado ({ grants })
+    //   statusUrl / costsUrl      -- opcional: de dónde salen los Estatus y costos del Maestro (por defecto las rutas de GEIPSA); costsUrl: null = sin costos
+    //                                grantsUrl puede faltar: entonces los permisos vienen dentro del estado (state.grants), como en Perfil y Usuario
     //   grantsOf(json)            -- opcional: saca la lista de permisos de esa respuesta (por defecto json.grants); el Cliente junta lo de su plan y sus adicionales
     //   subtitle(entity)          -- opcional: el nombre de lo que se está editando, se muestra junto al título
     //   hintKey, resetBodyKey, resetBodyRequestKey -- textos propios del nivel (reciben { above } = nombre del nivel de arriba)
@@ -97,6 +99,8 @@
             const suffix = fromForm ? 'From' : '';
             if (above.kind === 'plan' && above.name) return t(`admin.layoutAbovePlan${suffix}`, { name: above.name });
             if (above.kind === 'cliente' && above.name) return t(`admin.layoutAboveCliente${suffix}`, { name: above.name });
+            if (above.kind === 'perfil' && above.name) return t(`admin.layoutAbovePerfil${suffix}`, { name: above.name });
+            if (above.kind === 'admin') return t(`admin.layoutAboveAdmin${suffix}`);
             return above.kind === 'giro' && above.name ? t(`admin.layoutAboveGiro${suffix}`, { name: above.name }) : t(`admin.layoutAboveMaster${suffix}`);
         }
 
@@ -181,16 +185,17 @@
             classChanges.clear();
             classClears.clear();
             try {
+                const costsUrl = config.costsUrl === null ? null : (config.costsUrl || '/api/admin/master-permission-costs');
                 const [grantsRes, statusRes, costsRes, orderRes] = await Promise.all([
-                    fetch(config.grantsUrl(target), { credentials: 'include' }),
-                    fetch('/api/admin/master-permission-status', { credentials: 'include' }),
-                    fetch('/api/admin/master-permission-costs', { credentials: 'include' }),
+                    config.grantsUrl ? fetch(config.grantsUrl(target), { credentials: 'include' }) : Promise.resolve(null),
+                    fetch(config.statusUrl || '/api/admin/master-permission-status', { credentials: 'include' }),
+                    costsUrl ? fetch(costsUrl, { credentials: 'include' }) : Promise.resolve(null),
                     fetch(config.stateUrl(target), { credentials: 'include' }),
                 ]);
-                if (!grantsRes.ok || !statusRes.ok || !costsRes.ok || !orderRes.ok) throw new Error('load failed');
-                const grantsData = await grantsRes.json();
+                if ((grantsRes && !grantsRes.ok) || !statusRes.ok || (costsRes && !costsRes.ok) || !orderRes.ok) throw new Error('load failed');
+                const grantsData = grantsRes ? await grantsRes.json() : null;
                 const statusData = await statusRes.json();
-                const costsData = await costsRes.json();
+                const costsData = costsRes ? await costsRes.json() : { costs: [] };
                 const orderData = await orderRes.json();
                 state = orderData;
                 renderTexts();
@@ -222,7 +227,8 @@
                         },
                     },
                 });
-                await tree.init((config.grantsOf ? config.grantsOf(grantsData) : grantsData.grants) || [], [], orderData.classifications || []);
+                const treeGrants = grantsData ? (config.grantsOf ? config.grantsOf(grantsData) : grantsData.grants) : orderData.grants;
+                await tree.init(treeGrants || [], [], orderData.classifications || []);
                 baseline = snapshot(tree);
                 renderAccess();
             } catch {

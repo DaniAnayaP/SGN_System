@@ -485,6 +485,19 @@
     "layoutDownHintAdmin": "Lo que cambies aquí le llega al administrador de este cliente y a los de abajo: perfiles y usuarios. «Hereda» viene {aboveFrom}.",
     "layoutResetBodyAdmin": "Se quita todo lo que cambió el administrador de este cliente (el orden y la clasificación) y vuelve a verse como lo manda {above}. A las personas de abajo les llega el aviso.",
     "layoutResetBodyRequestAdmin": "Se enviará una solicitud para quitar todo lo que cambió el administrador de este cliente (el orden y la clasificación). No se aplica hasta que alguien con Autorizar la apruebe.",
+    "layoutAboveAdmin": "el administrador",
+    "layoutAboveAdminFrom": "del administrador",
+    "layoutAbovePerfil": "el perfil «{name}»",
+    "layoutAbovePerfilFrom": "del perfil «{name}»",
+    "layoutFromPerfil": "Perfil",
+    "layoutTitlePerfil": "Orden y clasificación del perfil",
+    "layoutTitleUsuario": "Orden y clasificación de la persona",
+    "layoutDownHintPerfil": "Lo que cambies aquí le llega a las personas con este puesto. «Hereda» viene {aboveFrom}.",
+    "layoutDownHintUsuario": "Lo que cambies aquí le llega solo a esta persona. «Hereda» viene {aboveFrom}.",
+    "layoutResetBodyPerfil": "Se quita todo lo que cambió este perfil (el orden y la clasificación) y vuelve a verse como lo manda {above}. A las personas con este puesto les llega el aviso.",
+    "layoutResetBodyRequestPerfil": "Se enviará una solicitud para quitar todo lo que cambió este perfil (el orden y la clasificación). No se aplica hasta que lo autorice quien corresponde.",
+    "layoutResetBodyUsuario": "Se quita todo lo que cambió esta persona (el orden y la clasificación) y vuelve a verse como lo manda {above}. A la persona le llega el aviso.",
+    "layoutResetBodyRequestUsuario": "Se enviará una solicitud para quitar todo lo que cambió esta persona (el orden y la clasificación). No se aplica hasta que lo autorice quien corresponde.",
     "layoutAbovePlan": "el plan «{name}»",
     "layoutAbovePlanFrom": "del plan «{name}»",
     "layoutInheritsFrom": "Hereda · {from}",
@@ -1095,6 +1108,8 @@
     "jobPositionCostCentersRequired": "Selecciona al menos un centro de costos o Todos.",
     "jobPositionAltSupervisors": "Jefes Alternos",
     "jobPositionAltSupervisorsHint": "Puestos adicionales con autoridad directa sobre este, sin cambiar a quién reporta.",
+    "roleLayoutColumn": "Orden y clasificación de perfiles",
+    "userLayoutColumn": "Orden y clasificación de personas",
     "jobPositionStatus": "Estatus",
     "addJobPosition": "Agregar puesto",
     "jobPositionsNoneYet": "Aún no hay puestos. Agrega el primero arriba.",
@@ -1379,6 +1394,7 @@
     "notificationColorRequestBy": "Pedido por: {name}",
     "notificationColorRequestTo": "Le toca decidir a: {name}",
     "notificationColorRequestDecidedBy": "{status} por {name}",
+    "noticeFromCompany": "Tu empresa",
     "noticeColorUpdated": "Color actualizado",
     "noticeOrderUpdated": "Orden actualizado",
     "noticeSent": "Aviso enviado",
@@ -2369,6 +2385,14 @@
     "clienteReordenPersonalizado": {
       "what": "Cambia el orden y la clasificación de las pantallas y columnas, solo para la gente de este cliente (su administrador, perfiles y usuarios). Si no puedes autorizar, se envía como solicitud.",
       "example": "a \"Transportes del Norte\" le subes \"Combustible\" hasta arriba porque es lo único que usan a diario; los demás clientes de su plan no ven ese cambio."
+    },
+    "perfilReordenPersonalizado": {
+      "what": "Cambia el orden y la clasificación de las pantallas y columnas para las personas que tienen este puesto. Si no puedes autorizar, se envía como solicitud a tu jefe.",
+      "example": "al puesto \"Contador\" le subes \"Facturas\" al inicio del menú; lo que dejó el administrador para todos no cambia."
+    },
+    "usuarioReordenPersonalizado": {
+      "what": "Cambia el orden y la clasificación de las pantallas y columnas solo para esta persona. Si no puedes autorizar, se envía como solicitud a tu jefe.",
+      "example": "a Ana le subes \"Facturas\" al inicio del menú porque es lo que más usa; el resto de su puesto no lo ve."
     },
     "adminReordenPersonalizado": {
       "what": "Cambia el orden y la clasificación de las pantallas y columnas para el administrador de este cliente y para los de abajo (perfiles y usuarios). Si no puedes autorizar, se envía como solicitud.",

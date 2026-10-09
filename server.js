@@ -222,6 +222,12 @@ const {
     listPendingChangesRequestedBy,
     markPendingChangesSeenForRequester,
     createAccessDeniedAlert,
+    isClientLayoutLevel,
+    clientLayoutAccess,
+    resolveClientLayoutAuthorizer,
+    getUserEffectiveGrantsRaw,
+    listClientColorTargets,
+    getJobPositionByIdAnyClient,
     hasRecentScreenAccessDeniedAlert,
     publishSaasAccessDeniedNotice,
     listAccessDeniedAlertsForUser,
@@ -2635,9 +2641,50 @@ const LAYOUT_LEVELS = {
         // Lo de arriba del administrador es su cliente.
         above: (e) => ({ kind: 'cliente', name: e.company_name }),
     },
+    // Perfil (Puesto de Trabajo) y Usuario (persona): niveles de la EMPRESA. Quien cambia y quien autoriza lo dice el árbol de permisos de la empresa y el organigrama
+    // (ver clientLayoutAccess en db.js); el objetivo viaja como { id, entityId, name, clientId }.
+    perfil: {
+        clientSide: true,
+        getTarget: (req) => {
+            const t = resolveClientColorTarget(req.user.clientId, 'perfil', req.params.id, req.user.isTestAccount);
+            return t ? { id: t.entityId, entityId: t.entityId, name: t.name, clientId: req.user.clientId } : null;
+        },
+        notFound: 'Job position not found.',
+        label: (e) => `Perfil «${e.name}»`,
+        noPermission: 'No tienes permiso para personalizar el orden y la clasificación de este perfil.',
+        entityId: (e) => e.entityId,
+        rowClientId: (e) => e.clientId,
+        // Lo de arriba del perfil es el administrador del cliente.
+        above: () => ({ kind: 'admin', name: '' }),
+        grants: (e) => getJobPositionGrants(e.entityId),
+    },
+    usuario: {
+        clientSide: true,
+        getTarget: (req) => {
+            const t = resolveClientColorTarget(req.user.clientId, 'usuario', req.params.id, req.user.isTestAccount);
+            return t ? { id: t.entityId, entityId: t.entityId, name: t.name, clientId: req.user.clientId } : null;
+        },
+        notFound: 'User not found.',
+        label: (e) => `Persona «${e.name}»`,
+        noPermission: 'No tienes permiso para personalizar el orden y la clasificación de esta persona.',
+        entityId: (e) => e.entityId,
+        rowClientId: (e) => e.clientId,
+        // Lo de arriba de la persona es su perfil (su puesto); sin puesto, el administrador del cliente.
+        above: (e) => {
+            const positionId = getJobPositionIdForUser(e.entityId);
+            const position = positionId ? db_getJobPositionName(positionId) : null;
+            return position ? { kind: 'perfil', name: position } : { kind: 'admin', name: '' };
+        },
+        grants: (e) => getUserEffectiveGrantsRaw(e.entityId),
+    },
 };
-function layoutLevelAccess(level, req) {
+function db_getJobPositionName(positionId) {
+    const row = getJobPositionByIdAnyClient(positionId);
+    return row ? row.name : null;
+}
+function layoutLevelAccess(level, req, entity) {
     const cfg = LAYOUT_LEVELS[level];
+    if (cfg.clientSide) return clientLayoutAccess(level, entity.entityId, { id: req.user.sub, isClientAdmin: !!req.user.isClientAdmin });
     const grants = getSaasUserGrants(req.user.sub);
     const has = (sub) => hasSaasGrant(grants, cfg.screenId, sub, req.user.isSaasSuperAdmin);
     return { canPersonalize: has(cfg.personalizeLeaf), canAuthorize: has(cfg.authorizeLeaf) };
@@ -2682,7 +2729,8 @@ function buildLevelLayoutState(level, entity, req) {
             id: r.id, action: r.action, label: r.label || '', requestedByName: r.requestedByName, assignedToName: r.assignedToName, createdAt: r.createdAt,
         })),
         above: cfg.above(entity),
-        ...layoutLevelAccess(level, req),
+        ...(cfg.grants ? { grants: cfg.grants(entity) } : {}),
+        ...layoutLevelAccess(level, req, entity),
     };
 }
 app.get('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => {
@@ -2715,11 +2763,20 @@ app.get('/api/admin/clients/:id/layout-order', requireAuth, requireAdmin, (req, 
 const cleanNames = (list) => (Array.isArray(list) ? list : []).filter((s) => typeof s === 'string').map((s) => s.trim().slice(0, 160)).filter(Boolean).slice(0, 12);
 function putLevelLayout(level, req, res) {
     const cfg = LAYOUT_LEVELS[level];
-    if (denySaasLeaf(req, res, cfg.screenId, [cfg.personalizeLeaf], cfg.noPermission)) return;
-    const existing = cfg.get(req.params.id);
-    if (!existing) return res.status(404).json({ message: cfg.notFound });
-    const unavailable = cfg.unavailable ? cfg.unavailable(existing) : null;
-    if (unavailable) return res.status(409).json({ message: unavailable });
+    let existing;
+    if (cfg.clientSide) {
+        // Niveles de la empresa: el administrador del cliente, o quien tenga Personalizar y el objetivo esté debajo de él en el organigrama.
+        if (!req.user.clientId) return res.status(403).json({ message: cfg.noPermission });
+        existing = cfg.getTarget(req);
+        if (!existing) return res.status(404).json({ message: cfg.notFound });
+        if (!layoutLevelAccess(level, req, existing).canPersonalize) return res.status(403).json({ message: cfg.noPermission });
+    } else {
+        if (denySaasLeaf(req, res, cfg.screenId, [cfg.personalizeLeaf], cfg.noPermission)) return;
+        existing = cfg.get(req.params.id);
+        if (!existing) return res.status(404).json({ message: cfg.notFound });
+        const unavailable = cfg.unavailable ? cfg.unavailable(existing) : null;
+        if (unavailable) return res.status(409).json({ message: unavailable });
+    }
     const entityId = Number(cfg.entityId ? cfg.entityId(existing) : req.params.id);
     const { customOrder, customAreaOrders, customApartadoOrders, customPantallaOrders, customColumnOrders, classChanges, clearClasses, clearLists, resetAll, changes } = req.body || {};
     // Solo las listas que de verdad se movieron (la pantalla ya no manda todas): customOrder puede faltar.
@@ -2770,8 +2827,10 @@ function putLevelLayout(level, req, res) {
     if (!everything && nothing) return res.json({ ...buildLevelLayoutState(level, existing, req), unchanged: true });
     const changedKeys = [...rows.map((r) => r.parentKey), ...payload.clearLists];
     const classNodeKeys = [...payload.classes.map((c) => c.nodeKey), ...payload.clearClasses];
-    const access = layoutLevelAccess(level, req);
+    const access = layoutLevelAccess(level, req, existing);
     const label = changedByLabel(req);
+    // En la empresa los avisos dicen el NOMBRE de quien lo cambió (las personas se conocen); en los niveles de GEIPSA, "Equipo SaaS".
+    const personName = req.user.name || req.user.username;
     const levelName = cfg.label(existing);
     const rowClientId = cfg.rowClientId ? cfg.rowClientId(existing) : null;
     if (access.canAuthorize) {
@@ -2780,7 +2839,10 @@ function putLevelLayout(level, req, res) {
         if (touched > 0) {
             try {
                 const lists = names.length ? names : [everything ? `Orden y clasificación de ${levelName}: restablecido` : `Orden y clasificación de ${levelName}`];
-                publishLevelLayoutUpdate({ level, entityId, lists, changedKeys, classNodeKeys, actorUserId: req.user.sub, actorLabel: label });
+                publishLevelLayoutUpdate({
+                    level, entityId, lists, changedKeys, classNodeKeys, actorUserId: req.user.sub,
+                    actorLabel: cfg.clientSide ? personName : label, requestedByLabel: cfg.clientSide ? personName : '',
+                });
             } catch (err) {
                 console.error(`No se pudo avisar del orden y clasificación (${level}):`, err);
             }
@@ -2788,14 +2850,14 @@ function putLevelLayout(level, req, res) {
         return res.json({ ...buildLevelLayoutState(level, existing, req), applied: true });
     }
     // Sin Autorizar: queda como solicitud para quien pueda autorizarla.
-    const assignedTo = resolveLevelAuthorizer(level, req.user.sub);
+    const assignedTo = cfg.clientSide ? resolveClientLayoutAuthorizer(level, req.user.sub, req.user.clientId) : resolveLevelAuthorizer(level, req.user.sub);
     const summary = everything
         ? `${levelName}: restablecer todo el orden y la clasificación`
         : `${levelName}: ${names.join(' · ') || 'orden y clasificación'}`;
     const requestId = createColorRequest({
         scope: 'level', colorId: everything ? `all:${level}:${entityId}` : `layout:${level}:${entityId}`, action: everything ? 'clear-all' : 'set-layout',
         value: everything ? null : JSON.stringify({ ...payload, names, changedKeys, classNodeKeys }), level, entityId, clientId: rowClientId,
-        requestedByUserId: req.user.sub, requestedByLabel: label, assignedToUserId: assignedTo, label: summary,
+        requestedByUserId: req.user.sub, requestedByLabel: cfg.clientSide ? personName : label, assignedToUserId: assignedTo, label: summary,
     });
     res.status(202).json({ ...buildLevelLayoutState(level, existing, req), requested: true, requestId, assignedTo: { id: assignedTo, name: getUserNameById(assignedTo) } });
 }
@@ -2809,13 +2871,24 @@ function decideLevelRequest(req, res, approve) {
     const request = getColorRequest(Number(req.params.id));
     if (!request || request.scope !== 'level') return res.status(404).json({ message: 'Solicitud no encontrada.' });
     if (request.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya se resolvió.' });
-    if (!req.user.isSaasSuperAdmin && !userCanAuthorizeLevel(request.level, req.user.sub)) {
-        return res.status(403).json({ message: 'No tienes permiso para autorizar el orden y la clasificación de este nivel.' });
-    }
-    if (!req.user.isSaasSuperAdmin && request.assignedToId !== req.user.sub) {
-        return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
+    const companyLevel = isClientLayoutLevel(request.level);
+    if (companyLevel) {
+        // Niveles de la empresa: solo de la misma empresa; la decide a quien se le asignó (o el administrador del cliente).
+        if (!req.user.clientId || request.clientId !== req.user.clientId) return res.status(404).json({ message: 'Solicitud no encontrada.' });
+        if (!req.user.isClientAdmin && !(userCanAuthorizeLevel(request.level, req.user.sub) && request.assignedToId === req.user.sub)) {
+            return res.status(403).json({ message: 'No tienes permiso para autorizar esta solicitud.' });
+        }
+    } else {
+        if (req.user.clientId) return res.status(404).json({ message: 'Solicitud no encontrada.' });
+        if (!req.user.isSaasSuperAdmin && !userCanAuthorizeLevel(request.level, req.user.sub)) {
+            return res.status(403).json({ message: 'No tienes permiso para autorizar el orden y la clasificación de este nivel.' });
+        }
+        if (!req.user.isSaasSuperAdmin && request.assignedToId !== req.user.sub) {
+            return res.status(403).json({ message: 'Esta solicitud le toca decidirla a otra persona.' });
+        }
     }
     const label = changedByLabel(req);
+    const personName = req.user.name || req.user.username;
     if (approve) {
         applyColorRequest(request, `${label} (solicitado por ${request.requestedByName})`);
         try {
@@ -2826,7 +2899,8 @@ function decideLevelRequest(req, res, approve) {
                 level: request.level, entityId: request.entityId,
                 lists: lists.length ? lists : [request.label || 'Orden y clasificación'],
                 changedKeys: Array.isArray(extra.changedKeys) ? extra.changedKeys : [], classNodeKeys: Array.isArray(extra.classNodeKeys) ? extra.classNodeKeys : [],
-                actorUserId: req.user.sub, actorLabel: label,
+                actorUserId: req.user.sub, actorLabel: companyLevel ? request.requestedByName || personName : label,
+                requestedByLabel: companyLevel ? request.requestedByName : '', authorizedByLabel: companyLevel ? personName : '',
             });
         } catch (err) {
             console.error('No se pudo avisar del orden y clasificación autorizado:', err);
@@ -2836,6 +2910,52 @@ function decideLevelRequest(req, res, approve) {
 }
 app.post('/api/admin/level-color-requests/:id/approve', requireAuth, requireAdmin, (req, res) => decideLevelRequest(req, res, true));
 app.post('/api/admin/level-color-requests/:id/reject', requireAuth, requireAdmin, (req, res) => decideLevelRequest(req, res, false));
+
+// --- Perfil y Usuario: lado de la empresa (la pantalla Roles y la pantalla Usuarios) --------------------------------------------------------------
+// Estado, guardar y solicitar: el administrador del cliente, o quien tenga Personalizar y el perfil/persona esté debajo de él en el organigrama.
+function companyLayoutLevel(req, res) {
+    const level = String(req.params.level || '');
+    if (!isClientLayoutLevel(level) || !req.user.clientId) {
+        res.status(404).json({ message: 'Not found.' });
+        return null;
+    }
+    return level;
+}
+app.get('/api/business/level-layout/:level/:id', requireAuth, (req, res) => {
+    const level = companyLayoutLevel(req, res);
+    if (!level) return;
+    const cfg = LAYOUT_LEVELS[level];
+    const target = cfg.getTarget(req);
+    if (!target) return res.status(404).json({ message: cfg.notFound });
+    const state = buildLevelLayoutState(level, target, req);
+    if (!state.canPersonalize) return res.status(403).json({ message: cfg.noPermission });
+    res.json(state);
+});
+app.put('/api/business/level-layout/:level/:id', requireAuth, (req, res) => {
+    const level = companyLayoutLevel(req, res);
+    if (!level) return;
+    putLevelLayout(level, req, res);
+});
+app.post('/api/business/level-color-requests/:id/approve', requireAuth, (req, res) => decideLevelRequest(req, res, true));
+app.post('/api/business/level-color-requests/:id/reject', requireAuth, (req, res) => decideLevelRequest(req, res, false));
+// Los Estatus del Árbol Maestro (solo lectura, cualquier persona de una empresa): es lo que la réplica del árbol necesita para marcar qué está bloqueado arriba.
+app.get('/api/business/master-permission-status', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json({ statuses: getMasterPermissionStatuses() });
+});
+// Las personas a las que esta cuenta puede cambiarles el orden y la clasificación: el administrador del cliente, todas; los demás, solo las que están debajo de ellos
+// en el organigrama. Lo usa la pantalla Usuarios cuando quien la abre no es administrador (su lista completa es solo del administrador).
+app.get('/api/business/layout-targets/usuario', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const actor = { id: req.user.sub, isClientAdmin: !!req.user.isClientAdmin };
+    const rows = listClientColorTargets(req.user.clientId, req.user.isTestAccount).users
+        .filter((u) => clientLayoutAccess('usuario', u.entityId, actor).canPersonalize)
+        .map((u) => {
+            const positionId = getJobPositionIdForUser(u.entityId);
+            return { id: u.entityId, name: u.name, positionName: positionId ? db_getJobPositionName(positionId) : '' };
+        });
+    res.json({ users: rows });
+});
 
 // --- Árbol de Permisos Maestro (GEIPSA-wide node readiness -- does a ---------
 // feature exist / is it ready to sell -- independent of any one Sector,
@@ -4691,8 +4811,10 @@ function mapJobPosition(row, companyName) {
 app.get('/api/business/job-positions', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const client = getClientById(req.user.clientId);
+    const actor = { id: req.user.sub, isClientAdmin: !!req.user.isClientAdmin };
     const jobPositions = listJobPositions(req.user.clientId, req.user.isTestAccount)
-        .map((jp) => mapJobPosition(jp, client?.company_name));
+        // layoutCanPersonalize: ¿esta cuenta puede cambiar el orden y la clasificación de este perfil? (el administrador, todos; los demás, los de abajo en el organigrama)
+        .map((jp) => ({ ...mapJobPosition(jp, client?.company_name), layoutCanPersonalize: clientLayoutAccess('perfil', jp.id, actor).canPersonalize }));
     res.json({ jobPositions });
 });
 
@@ -7184,12 +7306,15 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
         .map((r) => ({ ...mapCatalogValueRequestRecord(r), kind: 'catalog-request' }));
     const catalogMinePending = listCatalogValueRequestsBySubmitter(req.user.clientId, req.user.sub, ['pending'])
         .map((r) => ({ ...mapCatalogValueRequestRecord(r), kind: 'catalog-request' }));
+    // Solicitudes de orden y clasificación de Perfil y Usuario (las que me tocan decidir, las que yo pedí y las ya resueltas), en las mismas 3 pestañas.
+    const layoutRequests = listColorNotificationsForUser({ userId: req.user.sub, isSuperAdmin: false });
+    const asLayoutNotification = (r) => ({ ...r, kind: 'color-request', seen_at: r.seenAt });
     res.json({
         alertas: listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub),
         // Los avisos de "Color actualizado" / "Orden actualizado" del Árbol de Permisos Maestro (a quien se le modificó) van aquí también.
-        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved, ...listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }))],
-        solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending],
-        autorizar: [...autorizar, ...catalogToAct],
+        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved, ...layoutRequests.avisos.map(asLayoutNotification), ...listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }))],
+        solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending, ...layoutRequests.solicitudes.map(asLayoutNotification)],
+        autorizar: [...autorizar, ...catalogToAct, ...layoutRequests.autorizar.map(asLayoutNotification)],
     });
 });
 
@@ -7230,6 +7355,7 @@ app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res)
         return res.json({ ok: true });
     }
     markPendingChangesSeenForRequester(req.user.clientId, req.user.sub);
+    markColorRequestsSeen(req.user.sub);
     markTreeNoticesSeen(req.user.sub);
     res.json({ ok: true });
 });

@@ -54,6 +54,21 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
 
+// --- Orden y clasificación del perfil ----------------------------------------
+// Mismo modal que el de los demás niveles (LevelLayoutModal.js). Lo que se cambia le llega a las personas con este puesto; restablecer vuelve a lo del administrador. Lo ve el
+// administrador del cliente y quien tenga Personalizar para los perfiles que están debajo de él en el organigrama; sin Autorizar, el cambio se pide a su jefe.
+const perfilLayoutModal = window.LevelLayoutModal.create({
+    idPrefix: 'perfil-layout',
+    titleKey: 'admin.layoutTitlePerfil',
+    stateUrl: (jp) => `/api/business/level-layout/perfil/${jp.id}`,
+    statusUrl: '/api/business/master-permission-status',
+    costsUrl: null,
+    subtitle: (jp) => jp.name || '',
+    hintKey: 'admin.layoutDownHintPerfil',
+    resetBodyKey: 'admin.layoutResetBodyPerfil',
+    resetBodyRequestKey: 'admin.layoutResetBodyRequestPerfil',
+});
+
 function renderJobPositions() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = jobPositions.length > 0;
@@ -101,6 +116,17 @@ function renderJobPositions() {
         configureBtn.innerHTML = '<i class="bx bx-shield" aria-hidden="true"></i>';
         configureBtn.addEventListener('click', () => selectJobPositionForPermissions(jp));
         tdActions.appendChild(configureBtn);
+        if (jp.layoutCanPersonalize) {
+            const layoutBtn = document.createElement('button');
+            layoutBtn.type = 'button';
+            layoutBtn.className = 'admin-icon-btn';
+            layoutBtn.setAttribute('aria-label', Dashboard.t('admin.layoutTitlePerfil'));
+            layoutBtn.title = Dashboard.t('admin.layoutTitlePerfil');
+            layoutBtn.setAttribute('data-help-key', 'perfilReordenPersonalizado');
+            layoutBtn.innerHTML = '<i class="bx bx-sort-alt-2" aria-hidden="true"></i>';
+            layoutBtn.addEventListener('click', () => perfilLayoutModal.open(jp));
+            tdActions.appendChild(layoutBtn);
+        }
 
         tr.append(tdName, tdAbbreviation, tdStatus, ...systemCols, tdActions);
         tableBody.appendChild(tr);

@@ -4175,7 +4175,7 @@
             const chip = document.createElement('span');
             chip.className = override.from === 'own' ? 'perm-tree-layout-origin-chip own' : 'perm-tree-layout-origin-chip';
             // Lo heredado dice de qué nivel viene ("Hereda · Plan"): un cliente puede recibir cosas de su plan, de su giro o del Maestro.
-            const fromKeys = { master: 'admin.layoutFromMaster', giro: 'admin.layoutFromGiro', plan: 'admin.layoutFromPlan', cliente: 'admin.layoutFromCliente', admin: 'admin.layoutFromAdmin' };
+            const fromKeys = { master: 'admin.layoutFromMaster', giro: 'admin.layoutFromGiro', plan: 'admin.layoutFromPlan', cliente: 'admin.layoutFromCliente', admin: 'admin.layoutFromAdmin', perfil: 'admin.layoutFromPerfil' };
             chip.textContent = override.from === 'own'
                 ? t('admin.layoutOwnTag')
                 : (fromKeys[override.from] ? t('admin.layoutInheritsFrom', { from: t(fromKeys[override.from]) }) : t('admin.layoutInheritsTag'));

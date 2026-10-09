@@ -485,6 +485,19 @@
     "layoutDownHintAdmin": "What you change here reaches this client's administrator and the levels below: profiles and users. \"Inherits\" comes from {aboveFrom}.",
     "layoutResetBodyAdmin": "Everything this client's administrator changed (order and classification) is removed and it goes back to looking the way {above} sets it. The people below are notified.",
     "layoutResetBodyRequestAdmin": "A request will be sent to remove everything this client's administrator changed (order and classification). It is not applied until someone with Authorize approves it.",
+    "layoutAboveAdmin": "the administrator",
+    "layoutAboveAdminFrom": "the administrator",
+    "layoutAbovePerfil": "the profile \"{name}\"",
+    "layoutAbovePerfilFrom": "the profile \"{name}\"",
+    "layoutFromPerfil": "Profile",
+    "layoutTitlePerfil": "Profile order and classification",
+    "layoutTitleUsuario": "Person order and classification",
+    "layoutDownHintPerfil": "What you change here reaches the people who hold this position. \"Inherits\" comes from {aboveFrom}.",
+    "layoutDownHintUsuario": "What you change here reaches only this person. \"Inherits\" comes from {aboveFrom}.",
+    "layoutResetBodyPerfil": "Everything this profile changed (order and classification) is removed and it goes back to looking the way {above} sets it. The people with this position are notified.",
+    "layoutResetBodyRequestPerfil": "A request will be sent to remove everything this profile changed (order and classification). It is not applied until the right person approves it.",
+    "layoutResetBodyUsuario": "Everything this person changed (order and classification) is removed and it goes back to looking the way {above} sets it. The person is notified.",
+    "layoutResetBodyRequestUsuario": "A request will be sent to remove everything this person changed (order and classification). It is not applied until the right person approves it.",
     "layoutAbovePlan": "the plan \"{name}\"",
     "layoutAbovePlanFrom": "the plan \"{name}\"",
     "layoutInheritsFrom": "Inherits · {from}",
@@ -1096,6 +1109,8 @@
     "jobPositionCostCentersRequired": "Select at least one cost center, or All.",
     "jobPositionAltSupervisors": "Alternate Supervisors",
     "jobPositionAltSupervisorsHint": "Extra Job Positions with direct authority over this one, without changing who it reports to.",
+    "roleLayoutColumn": "Profile order and classification",
+    "userLayoutColumn": "Person order and classification",
     "jobPositionStatus": "Status",
     "addJobPosition": "Add job position",
     "jobPositionsNoneYet": "No job positions yet. Add the first one above.",
@@ -1380,6 +1395,7 @@
     "notificationColorRequestBy": "Requested by: {name}",
     "notificationColorRequestTo": "Up to: {name}",
     "notificationColorRequestDecidedBy": "{status} by {name}",
+    "noticeFromCompany": "Your company",
     "noticeColorUpdated": "Color updated",
     "noticeOrderUpdated": "Order updated",
     "noticeSent": "Notice sent",
@@ -2370,6 +2386,14 @@
     "clienteReordenPersonalizado": {
       "what": "Changes the order and classification of screens and columns, only for the people of this client (its administrator, profiles and users). If you can't authorize, it is sent as a request.",
       "example": "for \"Transportes del Norte\" you move \"Fuel\" to the top because it is the only thing they use every day; the other clients on its plan don't see that change."
+    },
+    "perfilReordenPersonalizado": {
+      "what": "Changes the order and classification of screens and columns for the people who hold this position. If you can't authorize, it is sent as a request to your boss.",
+      "example": "for the \"Accountant\" position you move \"Invoices\" to the top of the menu; what the administrator set for everyone does not change."
+    },
+    "usuarioReordenPersonalizado": {
+      "what": "Changes the order and classification of screens and columns only for this person. If you can't authorize, it is sent as a request to your boss.",
+      "example": "for Ana you move \"Invoices\" to the top of the menu because she uses it the most; the rest of her position does not see it."
     },
     "adminReordenPersonalizado": {
       "what": "Changes the order and classification of screens and columns for this client's administrator and the levels below (profiles and users). If you can't authorize, it is sent as a request.",
