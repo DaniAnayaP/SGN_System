@@ -9595,13 +9595,16 @@ function renderLocalDate(container, value, style = 'iso') {
 function renderAlertRow(alert) {
     const row = document.createElement('div');
     row.className = `notifications-item notifications-item-alert${alert.seen_at ? '' : ' notifications-item-unseen'}`;
+    // field_key '__screen__': alguien intentó abrir una pantalla sin acceso (no cambiar un campo).
+    const openedScreen = alert.field_key === '__screen__';
     row.innerHTML = `
         <div class="notifications-item-meta" title="${timeStampTitle(alert.created_at)}">#${alert.seq} · ${formatNotificationDate(alert.created_at)}</div>
         <div class="notifications-item-desc">
-            <b data-role="actor"></b>, ${t('main.notificationAttemptedChangePrefix')}
-            <b>${t(alert.field_key)} / ${t(alert.screen_key)}</b>, ${t('main.notificationAttemptedChangeSuffix')}
+            <b data-role="actor"></b>, ${t(openedScreen ? 'main.notificationAttemptedOpenScreen' : 'main.notificationAttemptedChangePrefix')}
+            <b data-role="target"></b>, ${t('main.notificationAttemptedChangeSuffix')}
         </div>
     `;
+    row.querySelector('[data-role="target"]').textContent = openedScreen ? t(alert.screen_key) : `${t(alert.field_key)} / ${t(alert.screen_key)}`;
     // alert.acting_user_label is free text (a user's own display name) --
     // set via textContent, never interpolated into innerHTML (same
     // convention as openForwardPicker's requestedName/categoryLabel above).
@@ -9779,7 +9782,27 @@ function appendColorChange(desc, item) {
 
 // Avisos de cambios en los dos árboles SaaS (pestaña Avisos): "Color actualizado" y "Orden actualizado" le llegan a todos los que tienen acceso a ese árbol;
 // "Aviso enviado" es la confirmación para quien hizo el cambio, con a quién le llegó (kind: 'color-updated' | 'order-updated' | 'notice-sent', ver db.js publishTreeNotice).
+// "Intento de acceso sin permiso" de una cuenta del equipo SaaS (le llega a su jefe directo).
+function renderAccessDeniedNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = t('main.noticeAccessDenied');
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = formatNotificationDate(item.createdAt);
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = `${item.actorLabel || '—'}, ${t('main.notificationAttemptedOpenScreen')} ${t(item.screenKey || '')}, ${t('main.notificationAttemptedChangeSuffix')}`;
+    row.append(tag, meta, desc);
+    return row;
+}
+
 function renderTreeNoticeRow(item) {
+    if (item.kind === 'access-denied') return renderAccessDeniedNoticeRow(item);
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const tag = document.createElement('div');
@@ -11789,6 +11812,18 @@ function showShellAlert(kind) {
     document.body.classList.add('sgn-alert');
     if (focusTarget) focusTarget.focus();
 }
+// Avisa a quien le toca (su jefe directo y, si ese puesto no tiene a nadie, al siguiente hacia arriba) que alguien intentó abrir una pantalla sin acceso. El servidor decide a
+// quién y no repite el mismo aviso de la misma persona y pantalla en 10 minutos; si no se puede avisar, la alerta en pantalla igual se muestra.
+function reportScreenAccessDenied() {
+    const screenKey = document.querySelector('title[data-i18n]')?.dataset.i18n;
+    if (!screenKey) return;
+    fetch('/api/me/screen-access-denied', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ screenKey }),
+    }).catch(() => {});
+}
 function revealShell() {
     document.body.classList.add('sgn-ready');
     // Marca de tiempo (visible en las herramientas del navegador, pestaña Rendimiento): cuánto tardó la pantalla en estar lista.
@@ -11880,6 +11915,7 @@ async function initDashboardInner({ activePage } = {}) {
         // is populated by loadBusinessProfile() above, so this check is safe here.
         if (activePage && (!hasScreenAccess(activePage) || /^admin-/.test(activePage))) {
             // Las pantallas de GEIPSA (activePage "admin-...") no son para cuentas de un cliente.
+            reportScreenAccessDenied();
             showShellAlert('noAccess');
             return null;
         }
@@ -11912,6 +11948,7 @@ async function initDashboardInner({ activePage } = {}) {
         await loads.grants;
         if (shellLoadFailed) throw new Error('No se pudieron leer los accesos de la cuenta.');
         if (activePage && !hasSaasScreenAccess(activePage)) {
+            reportScreenAccessDenied();
             showShellAlert('noAccess');
             return null;
         }

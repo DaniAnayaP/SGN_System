@@ -3661,6 +3661,14 @@ function createAccessDeniedAlert({ clientId, actingUserLabel, fieldKey, screenKe
     return db.prepare('SELECT * FROM access_denied_alerts WHERE id = ?').get(result.lastInsertRowid);
 }
 
+// Un intento de abrir una pantalla sin acceso (field_key '__screen__', screen_key = la clave de nombre de la pantalla): la misma persona y pantalla no se repite en 10 minutos.
+function hasRecentScreenAccessDeniedAlert(clientId, actingUserLabel, screenKey) {
+    return !!db.prepare(`
+        SELECT 1 FROM access_denied_alerts
+        WHERE client_id = ? AND acting_user_label = ? AND field_key = '__screen__' AND screen_key = ? AND created_at >= datetime('now', '-10 minutes')
+    `).get(clientId, actingUserLabel, screenKey);
+}
+
 function listAccessDeniedAlertsForUser(clientId, userId) {
     return db.prepare(`
         SELECT * FROM access_denied_alerts WHERE client_id = ? AND recipient_user_id = ?
@@ -7769,6 +7777,31 @@ function saasSubordinatesOf(actorId) {
         return false;
     });
 }
+// Alguien del equipo SaaS intentó abrir una pantalla a la que su cuenta no tiene acceso: se le avisa a su jefe directo (si ese no está activo, al siguiente hacia arriba).
+// Hoy todas las cuentas dependen directo de admin_saas, que es quien lo recibe; cuando exista el jefe propio, saasDirectBossOf lo devuelve y esto sube solo. La misma
+// persona y pantalla no se repite en 10 minutos. Devuelve a quién se le avisó (o null).
+function publishSaasAccessDeniedNotice({ actorUserId, actorLabel, screenKey }) {
+    const root = saasColorRootUserId();
+    const bossOf = (id) => saasDirectBossOf(id) || (id === root ? null : root);
+    const seen = new Set([actorUserId]);
+    let boss = bossOf(actorUserId);
+    for (let hop = 0; boss && !seen.has(boss) && hop < 20; hop += 1) {
+        const row = db.prepare('SELECT active FROM users WHERE id = ? AND client_id IS NULL').get(boss);
+        if (row && row.active !== 0) break;
+        seen.add(boss);
+        boss = bossOf(boss);
+    }
+    if (!boss || seen.has(boss)) return null;
+    const payload = JSON.stringify({ screenKey });
+    const recent = db.prepare(`
+        SELECT 1 FROM saas_tree_notices
+        WHERE kind = 'access-denied' AND actor_user_id = ? AND payload = ? AND created_at >= datetime('now', '-10 minutes')
+    `).get(actorUserId, payload);
+    if (recent) return null;
+    db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'access-denied', 'saas', ?, ?, ?)")
+        .run(boss, payload, actorUserId, actorLabel || '');
+    return boss;
+}
 // Qué pantalla SaaS pintó un color de columna ("col-own:saas-clients::tabla::c3" -> "saas-clients"); null si es el color de una clasificación (toca a todas).
 function saasScreenOfColorId(colorId) {
     const m = /^col-(own|nested):([^:]+)::/.exec(String(colorId || ''));
@@ -9996,6 +10029,8 @@ module.exports = {
     listPendingChangesRequestedBy,
     markPendingChangesSeenForRequester,
     createAccessDeniedAlert,
+    hasRecentScreenAccessDeniedAlert,
+    publishSaasAccessDeniedNotice,
     listAccessDeniedAlertsForUser,
     listAllAccessDeniedAlerts,
     markAccessDeniedAlertsSeen,

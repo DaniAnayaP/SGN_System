@@ -1891,6 +1891,8 @@
     "notificationsTab_solicitudes": "Requests",
     "notificationsTab_autorizar": "Authorize",
     "notificationsTab_pendientes": "Pending Upload",
+    "notificationAttemptedOpenScreen": "attempted to open the screen",
+    "noticeAccessDenied": "Access attempt without permission",
     "notificationAttemptedChangePrefix": "attempted a change on",
     "notificationAttemptedChangeSuffix": "but doesn't have access."
   },

@@ -63,7 +63,7 @@ function buildAlertRow(alert) {
         textCell('—'),
         textCell(alert.acting_user_label),
         textCell(Dashboard.t(alert.screen_key)),
-        textCell(`${Dashboard.t(alert.field_key)} → ${Dashboard.t('main.reportsTo')}`),
+        textCell(`${alert.field_key === '__screen__' ? Dashboard.t('main.notificationAttemptedOpenScreen') : Dashboard.t(alert.field_key)} → ${Dashboard.t('main.reportsTo')}`),
         badgeCell(Dashboard.t('main.reqStatusAlert'), 'admin-badge-inactivo'),
     );
     return tr;

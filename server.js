@@ -222,6 +222,8 @@ const {
     listPendingChangesRequestedBy,
     markPendingChangesSeenForRequester,
     createAccessDeniedAlert,
+    hasRecentScreenAccessDeniedAlert,
+    publishSaasAccessDeniedNotice,
     listAccessDeniedAlertsForUser,
     listAllAccessDeniedAlerts,
     markAccessDeniedAlertsSeen,
@@ -7163,6 +7165,25 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
         solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending],
         autorizar: [...autorizar, ...catalogToAct],
     });
+});
+
+// Alguien abrió una pantalla a la que su cuenta no tiene acceso (la pantalla le mostró "No tienes acceso a esta pantalla"): se le avisa a su jefe directo y, si ese puesto
+// no tiene a nadie, al siguiente hacia arriba (cuentas de un cliente: pestaña Alertas; cuentas del equipo SaaS: pestaña Avisos). Solo informa, nunca pide autorización.
+app.post('/api/me/screen-access-denied', requireAuth, (req, res) => {
+    const raw = req.body && req.body.screenKey;
+    if (typeof raw !== 'string' || !/^[A-Za-z0-9_.-]{1,80}$/.test(raw)) return res.status(400).json({ message: 'screenKey is required.' });
+    if (req.user.clientId) {
+        const actingUser = getUserById(req.user.sub, req.user.clientId);
+        const actingUserLabel = `${req.user.username} - ${actingUser?.nickname || req.user.name}`;
+        if (!hasRecentScreenAccessDeniedAlert(req.user.clientId, actingUserLabel, raw)) {
+            createAccessDeniedAlert({
+                clientId: req.user.clientId, actingUserLabel, fieldKey: '__screen__', screenKey: raw, recipientUserId: resolveDirectSupervisorUserId(req.user.sub),
+            });
+        }
+    } else if (req.user.role === 'admin') {
+        publishSaasAccessDeniedNotice({ actorUserId: req.user.sub, actorLabel: changedByLabel(req), screenKey: raw });
+    }
+    res.json({ ok: true });
 });
 
 app.post('/api/business/notifications/alertas/mark-seen', requireAuth, (req, res) => {

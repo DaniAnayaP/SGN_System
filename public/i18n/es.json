@@ -1890,6 +1890,8 @@
     "notificationsTab_solicitudes": "Solicitudes",
     "notificationsTab_autorizar": "Autorizar",
     "notificationsTab_pendientes": "Pendiente x Subir",
+    "notificationAttemptedOpenScreen": "intentó abrir la pantalla",
+    "noticeAccessDenied": "Intento de acceso sin permiso",
     "notificationAttemptedChangePrefix": "intentó hacer un cambio en",
     "notificationAttemptedChangeSuffix": "pero no tiene acceso."
   },
