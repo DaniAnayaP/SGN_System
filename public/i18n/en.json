@@ -478,6 +478,13 @@
     "layoutAboveGiro": "the business sector \"{name}\"",
     "layoutAboveMasterFrom": "the Master",
     "layoutAboveGiroFrom": "the business sector \"{name}\"",
+    "layoutAboveCliente": "the client \"{name}\"",
+    "layoutAboveClienteFrom": "the client \"{name}\"",
+    "layoutFromAdmin": "Administrator",
+    "layoutTitleAdmin": "Administrator order and classification",
+    "layoutDownHintAdmin": "What you change here reaches this client's administrator and the levels below: profiles and users. \"Inherits\" comes from {aboveFrom}.",
+    "layoutResetBodyAdmin": "Everything this client's administrator changed (order and classification) is removed and it goes back to looking the way {above} sets it. The people below are notified.",
+    "layoutResetBodyRequestAdmin": "A request will be sent to remove everything this client's administrator changed (order and classification). It is not applied until someone with Authorize approves it.",
     "layoutAbovePlan": "the plan \"{name}\"",
     "layoutAbovePlanFrom": "the plan \"{name}\"",
     "layoutInheritsFrom": "Inherits · {from}",
@@ -2363,6 +2370,10 @@
     "clienteReordenPersonalizado": {
       "what": "Changes the order and classification of screens and columns, only for the people of this client (its administrator, profiles and users). If you can't authorize, it is sent as a request.",
       "example": "for \"Transportes del Norte\" you move \"Fuel\" to the top because it is the only thing they use every day; the other clients on its plan don't see that change."
+    },
+    "adminReordenPersonalizado": {
+      "what": "Changes the order and classification of screens and columns for this client's administrator and the levels below (profiles and users). If you can't authorize, it is sent as a request.",
+      "example": "for the administrator of \"Transportes del Norte\" you move \"Fuel\" to the top; what the client set for everyone does not change."
     },
     "planReordenPersonalizado": {
       "what": "Changes the order and classification of screens and columns, only for clients on this plan. If you can't authorize, it is sent as a request.",

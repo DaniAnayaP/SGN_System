@@ -96,6 +96,7 @@
             const above = (state && state.above) || { kind: 'master', name: '' };
             const suffix = fromForm ? 'From' : '';
             if (above.kind === 'plan' && above.name) return t(`admin.layoutAbovePlan${suffix}`, { name: above.name });
+            if (above.kind === 'cliente' && above.name) return t(`admin.layoutAboveCliente${suffix}`, { name: above.name });
             return above.kind === 'giro' && above.name ? t(`admin.layoutAboveGiro${suffix}`, { name: above.name }) : t(`admin.layoutAboveMaster${suffix}`);
         }
 

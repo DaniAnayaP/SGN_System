@@ -9743,7 +9743,7 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
 // /api/business/notifications). Autorizar la aplica a las tablas; Rechazar la cierra.
 const COLOR_REQUEST_TREE_LABEL_KEYS = { saas: 'menu.saasMasterTree', master: 'menu.masterPermissionsTree', level: 'menu.businessSectors' };
 // Las solicitudes de "Orden y clasificación" (scope 'level') dicen de qué pantalla vienen según su nivel.
-const LEVEL_REQUEST_SOURCE_LABEL_KEYS = { giro: 'menu.businessSectors', plan: 'menu.plansRegistered', cliente: 'menu.clientesRegistrados' };
+const LEVEL_REQUEST_SOURCE_LABEL_KEYS = { giro: 'menu.businessSectors', plan: 'menu.plansRegistered', cliente: 'menu.clientesRegistrados', admin: 'menu.clientesRegistrados' };
 function colorRequestTreeLabelKey(item) {
     if (item.scope === 'level') return LEVEL_REQUEST_SOURCE_LABEL_KEYS[item.level] || COLOR_REQUEST_TREE_LABEL_KEYS.level;
     return COLOR_REQUEST_TREE_LABEL_KEYS[item.scope];

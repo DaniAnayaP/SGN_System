@@ -358,6 +358,30 @@ const clientLayoutModal = window.LevelLayoutModal.create({
     resetBodyRequestKey: 'admin.layoutResetBodyRequestCliente',
 });
 
+// --- Orden y clasificación del administrador del cliente -----------------------
+// Mismo modal que el del Giro, el Plan y el Cliente (LevelLayoutModal.js). Lo que se cambia le llega al administrador de este cliente y a los de abajo (perfiles y
+// usuarios); restablecer vuelve a lo del cliente. Lo ve quien tiene la hoja Personalizar del administrador (ta8).
+const adminLayoutModal = window.LevelLayoutModal.create({
+    idPrefix: 'admin-layout',
+    titleKey: 'admin.layoutTitleAdmin',
+    stateUrl: (client) => `/api/admin/clients/${client.id}/admin-layout-order`,
+    grantsUrl: (client) => `/api/admin/clients/${client.id}/permission-grants`,
+    // El administrador ve todo lo contratado: lo del plan + lo adicional (sin repetir).
+    grantsOf: (data) => {
+        const seen = new Set();
+        return [...(data.planGrants || []), ...(data.grants || [])].filter((g) => {
+            const key = `${g.sectionId}|${g.itemId || ''}|${g.submenuId || ''}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    },
+    subtitle: (client) => `${client.company_name || client.razon_social || ''} — ${client.adminUsername || ''}`,
+    hintKey: 'admin.layoutDownHintAdmin',
+    resetBodyKey: 'admin.layoutResetBodyAdmin',
+    resetBodyRequestKey: 'admin.layoutResetBodyRequestAdmin',
+});
+
 function renderClients() {
     tableBody.innerHTML = '';
     emptyMsg.hidden = clients.length > 0;
@@ -370,6 +394,7 @@ function renderClients() {
     const canResetClients = Dashboard.hasSaasScreenGrant('saas-clients', 'reset');
     // "Orden y clasificación" del cliente: solo con la hoja Personalizar (ta6) de Nuestros Clientes; el servidor lo vuelve a exigir.
     const canPersonalizeLayout = Dashboard.hasSaasScreenGrant('saas-clients', 'tabla::ta6');
+    const canPersonalizeAdminLayout = Dashboard.hasSaasScreenGrant('saas-clients', 'tabla::ta8');
     clients.forEach((client) => {
         const tr = document.createElement('tr');
         tr.dataset.status = client.status;
@@ -461,6 +486,11 @@ function renderClients() {
                 title: client.adminUsername ? '' : Dashboard.t('admin.adminAccessNoAdminYet'),
                 helpKey: 'adminAccess',
             }),
+            ...(canPersonalizeAdminLayout ? [iconButton('bx-sort-down', Dashboard.t('admin.layoutTitleAdmin'), () => adminLayoutModal.open(client), {
+                disabled: !client.adminUsername,
+                title: client.adminUsername ? Dashboard.t('admin.layoutTitleAdmin') : Dashboard.t('admin.adminAccessNoAdminYet'),
+                helpKey: 'adminReordenPersonalizado',
+            })] : []),
             iconButton('bx-plus', Dashboard.t('admin.permisosAdicionalesTitle'), () => openPermisosAdicionalesModal(client), {
                 helpKey: 'permisosAdicionales',
             }),

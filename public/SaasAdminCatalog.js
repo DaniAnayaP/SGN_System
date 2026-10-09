@@ -54,10 +54,11 @@ window.SAAS_ADMIN_CATALOG = [
                         '+ Nuevo Cliente',
                     ], [
                         // Las 2 últimas son de "Orden y clasificación" del cliente (ta6 Personalizar, ta7 Autorizar). Lo nuevo va al final: las hojas
-                        // guardadas dependen de la posición.
+                        // guardadas dependen de la posición. ta8 y ta9 son lo mismo para el administrador del cliente.
                         'Acceso Administrador', '+ Permisos Adicionales', 'Editar',
                         'Activar/Desactivar', 'Toggle APP', 'Reiniciar cliente de prueba',
-                        'Personalizar orden y clasificación', 'Autorizar orden y clasificación',
+                        'Personalizar orden y clasificación (cliente)', 'Autorizar orden y clasificación (cliente)',
+                        'Personalizar orden y clasificación (administrador)', 'Autorizar orden y clasificación (administrador)',
                     ]),
                     { id: 'modal-permisos', label: 'Modal: Permisos Contratados / Adicionales', acciones: ['Ver árbol', 'Editar árbol'], nestUnder: { host: 'tabla', column: 'Permisos contratados' } },
                     { id: 'modal-anexos', label: 'Modal: Cambios de Anexos', columnas: ['Módulo', 'Acción', 'Solicitado por', 'Fecha solicitud', 'Fecha cambio', 'Duración contratada'], nestUnder: { host: 'tabla', column: 'Cambios de anexos' } },

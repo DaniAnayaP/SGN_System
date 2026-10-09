@@ -2623,6 +2623,18 @@ const LAYOUT_LEVELS = {
             return sector ? { kind: 'giro', name: sector.name } : { kind: 'master', name: '' };
         },
     },
+    // Administrador del cliente: la ruta lleva el id del CLIENTE; el nivel guarda lo suyo con el id del usuario administrador y el id del cliente.
+    admin: {
+        screenId: 'saas-clients', personalizeLeaf: 'tabla::ta8', authorizeLeaf: 'tabla::ta9',
+        get: (id) => getClientById(id), notFound: 'Client not found.',
+        label: (e) => `Administrador de «${e.company_name}»`,
+        noPermission: 'No tienes permiso para personalizar el orden y la clasificación del administrador.',
+        entityId: (e) => e.admin_user_id,
+        rowClientId: (e) => e.id,
+        unavailable: (e) => (e.admin_user_id ? null : 'Este cliente aún no tiene un usuario administrador.'),
+        // Lo de arriba del administrador es su cliente.
+        above: (e) => ({ kind: 'cliente', name: e.company_name }),
+    },
 };
 function layoutLevelAccess(level, req) {
     const cfg = LAYOUT_LEVELS[level];
@@ -2635,8 +2647,11 @@ function layoutLevelAccess(level, req) {
 function buildLevelLayoutState(level, entity, req) {
     const cfg = LAYOUT_LEVELS[level];
     const id = String(entity.id);
+    // El id con el que se guarda este nivel (el administrador usa el del usuario) y el cliente al que pertenece (para armar su cadena hacia arriba).
+    const levelId = Number(cfg.entityId ? cfg.entityId(entity) : entity.id);
+    const chainClientId = cfg.rowClientId ? cfg.rowClientId(entity) : null;
     const masterRow = getMasterPermissionOrder().find((r) => r.parentKey === PERMISSION_ORDER_ROOT_KEY);
-    const tree = getOrderTreeForTarget(level, Number(id), null);
+    const tree = getOrderTreeForTarget(level, levelId, chainClientId);
     // El Giro conserva sus lectores de siempre (su orden ya completa lo que falta); los demás niveles leen lo resuelto por la cadena de herencia.
     const own = level === 'giro'
         ? {
@@ -2661,9 +2676,9 @@ function buildLevelLayoutState(level, entity, req) {
         masterColumnOrders: buildMasterOrdersByPrefix('columna::'),
         ...own,
         sources: tree.sources,
-        classifications: getEffectiveClassificationOverridesForTarget(level, Number(id), null),
-        inheritedClassifications: getInheritedClassificationOverridesForTarget(level, Number(id), null),
-        pending: listPendingLevelRequests(level, Number(id)).map((r) => ({
+        classifications: getEffectiveClassificationOverridesForTarget(level, levelId, chainClientId),
+        inheritedClassifications: getInheritedClassificationOverridesForTarget(level, levelId, chainClientId),
+        pending: listPendingLevelRequests(level, levelId).map((r) => ({
             id: r.id, action: r.action, label: r.label || '', requestedByName: r.requestedByName, assignedToName: r.assignedToName, createdAt: r.createdAt,
         })),
         above: cfg.above(entity),
@@ -2682,6 +2697,14 @@ app.get('/api/admin/plans/:id/layout-order', requireAuth, requireAdmin, (req, re
     if (!existing) return res.status(404).json({ message: 'Plan not found.' });
     res.json(buildLevelLayoutState('plan', existing, req));
 });
+app.get('/api/admin/clients/:id/admin-layout-order', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-clients'])) return;
+    const existing = getClientById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Client not found.' });
+    const unavailable = LAYOUT_LEVELS.admin.unavailable(existing);
+    if (unavailable) return res.status(409).json({ message: unavailable });
+    res.json(buildLevelLayoutState('admin', existing, req));
+});
 app.get('/api/admin/clients/:id/layout-order', requireAuth, requireAdmin, (req, res) => {
     if (denySaasScreen(req, res, ['saas-clients'])) return;
     const existing = getClientById(req.params.id);
@@ -2695,7 +2718,9 @@ function putLevelLayout(level, req, res) {
     if (denySaasLeaf(req, res, cfg.screenId, [cfg.personalizeLeaf], cfg.noPermission)) return;
     const existing = cfg.get(req.params.id);
     if (!existing) return res.status(404).json({ message: cfg.notFound });
-    const entityId = Number(req.params.id);
+    const unavailable = cfg.unavailable ? cfg.unavailable(existing) : null;
+    if (unavailable) return res.status(409).json({ message: unavailable });
+    const entityId = Number(cfg.entityId ? cfg.entityId(existing) : req.params.id);
     const { customOrder, customAreaOrders, customApartadoOrders, customPantallaOrders, customColumnOrders, classChanges, clearClasses, clearLists, resetAll, changes } = req.body || {};
     // Solo las listas que de verdad se movieron (la pantalla ya no manda todas): customOrder puede faltar.
     if (customOrder !== undefined && !isValidOrderArray(customOrder)) {
@@ -2777,6 +2802,7 @@ function putLevelLayout(level, req, res) {
 app.put('/api/admin/business-sectors/:id/department-order', requireAuth, requireAdmin, (req, res) => putLevelLayout('giro', req, res));
 app.put('/api/admin/plans/:id/layout-order', requireAuth, requireAdmin, (req, res) => putLevelLayout('plan', req, res));
 app.put('/api/admin/clients/:id/layout-order', requireAuth, requireAdmin, (req, res) => putLevelLayout('cliente', req, res));
+app.put('/api/admin/clients/:id/admin-layout-order', requireAuth, requireAdmin, (req, res) => putLevelLayout('admin', req, res));
 
 // Autorizar o rechazar una solicitud de orden y clasificación de un nivel (llega a la campana de quien tiene "Autorizar" de ese nivel).
 function decideLevelRequest(req, res, approve) {

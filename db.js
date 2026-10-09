@@ -7964,6 +7964,8 @@ function clientIdsOfLevel(level, entityId) {
     if (level === 'giro') return clientIdsOfSector(entityId);
     if (level === 'plan') return clientIdsOfPlan(entityId);
     if (level === 'cliente') return new Set([Number(entityId)]);
+    // Administrador: entityId es el usuario administrador; el cliente es aquel cuyo administrador registrado es él.
+    if (level === 'admin') return new Set(db.prepare('SELECT id FROM clients WHERE admin_user_id = ?').all(entityId).map((r) => r.id));
     return null;
 }
 // El aviso hacia abajo de un orden/clasificación guardado en un nivel: a las personas de los clientes de abajo con acceso a lo que cambió.
@@ -8032,6 +8034,7 @@ const LEVEL_AUTHORIZE_LEAVES = {
     giro: { itemId: 'saas-business-sectors', subItemId: 'tabla::ta6' },
     plan: { itemId: 'saas-plans', subItemId: 'tabla::ta6' },
     cliente: { itemId: 'saas-clients', subItemId: 'tabla::ta7' },
+    admin: { itemId: 'saas-clients', subItemId: 'tabla::ta9' },
 };
 function userCanAuthorizeLevel(level, userId) {
     const leaf = LEVEL_AUTHORIZE_LEAVES[level];

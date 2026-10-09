@@ -478,6 +478,13 @@
     "layoutAboveGiro": "el giro «{name}»",
     "layoutAboveMasterFrom": "del Maestro",
     "layoutAboveGiroFrom": "del giro «{name}»",
+    "layoutAboveCliente": "el cliente «{name}»",
+    "layoutAboveClienteFrom": "del cliente «{name}»",
+    "layoutFromAdmin": "Administrador",
+    "layoutTitleAdmin": "Orden y clasificación del administrador",
+    "layoutDownHintAdmin": "Lo que cambies aquí le llega al administrador de este cliente y a los de abajo: perfiles y usuarios. «Hereda» viene {aboveFrom}.",
+    "layoutResetBodyAdmin": "Se quita todo lo que cambió el administrador de este cliente (el orden y la clasificación) y vuelve a verse como lo manda {above}. A las personas de abajo les llega el aviso.",
+    "layoutResetBodyRequestAdmin": "Se enviará una solicitud para quitar todo lo que cambió el administrador de este cliente (el orden y la clasificación). No se aplica hasta que alguien con Autorizar la apruebe.",
     "layoutAbovePlan": "el plan «{name}»",
     "layoutAbovePlanFrom": "del plan «{name}»",
     "layoutInheritsFrom": "Hereda · {from}",
@@ -2362,6 +2369,10 @@
     "clienteReordenPersonalizado": {
       "what": "Cambia el orden y la clasificación de las pantallas y columnas, solo para la gente de este cliente (su administrador, perfiles y usuarios). Si no puedes autorizar, se envía como solicitud.",
       "example": "a \"Transportes del Norte\" le subes \"Combustible\" hasta arriba porque es lo único que usan a diario; los demás clientes de su plan no ven ese cambio."
+    },
+    "adminReordenPersonalizado": {
+      "what": "Cambia el orden y la clasificación de las pantallas y columnas para el administrador de este cliente y para los de abajo (perfiles y usuarios). Si no puedes autorizar, se envía como solicitud.",
+      "example": "al administrador de \"Transportes del Norte\" le subes \"Combustible\" al inicio; lo que dejó el cliente para todos no cambia."
     },
     "planReordenPersonalizado": {
       "what": "Cambia el orden y la clasificación de las pantallas y columnas, solo para los clientes de este plan. Si no puedes autorizar, se envía como solicitud.",
