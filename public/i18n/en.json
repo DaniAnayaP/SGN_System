@@ -71,7 +71,8 @@
       "managementControl": "MC",
       "generalManagement": "GM",
       "steeringCommittee": "STC",
-      "certifications": "CERT"
+      "certifications": "CERT",
+      "informationTechnology": "IT"
     },
     "area": "Area",
     "generalAccess": "General Access",
@@ -136,6 +137,7 @@
     "accounting": "Accounting",
     "finance": "Finance",
     "certifications": "Certifications",
+    "informationTechnology": "Information Technology",
     "deptArea": "Dept. Area {n}",
     "option": "Option {n}",
     "area": {
@@ -1888,11 +1890,11 @@
     "changeHistoryNotGranted": "Not granted",
     "fieldLocked": "You are not authorized to make changes to this option, check with your Direct Supervisor",
     "tablePrefix": "Table",
-    "permSoloVer": "View Only",
+    "permSoloVer": "View",
     "permVerYOperar": "Operate",
-    "permEditar": "Edit",
+    "permEditar": "Modify record",
     "permAutorizar": "Authorize",
-    "permEliminar": "Delete",
+    "permEliminar": "Delete record",
     "limitLockedContract": "Not part of what the company contracted: it cannot be given",
     "limitLockedStatus": "It is in a Status you cannot give: it cannot be given",
     "appVisionColumn": "APP visibility",

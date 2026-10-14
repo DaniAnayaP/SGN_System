@@ -1525,6 +1525,7 @@ const DEPARTMENTS = [
     { key: 'general-management', labelKey: 'menu.generalManagement', abbrKey: 'sidebar.deptAbbr.generalManagement', icon: 'bx-crown' },
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee', abbrKey: 'sidebar.deptAbbr.steeringCommittee', icon: 'bx-group' },
     { key: 'certifications', labelKey: 'menu.certifications', abbrKey: 'sidebar.deptAbbr.certifications', icon: 'bx-certification' },
+    { key: 'information-technology', labelKey: 'menu.informationTechnology', abbrKey: 'sidebar.deptAbbr.informationTechnology', icon: 'bx-chip' },
 ];
 const GENERIC_AREAS = [
     { key: 'area-1', labelKey: 'menu.area.generic', labelParams: { n: 1 }, icon: 'bx-folder' },
@@ -1564,6 +1565,7 @@ const AREAS_BY_DEPARTMENT = {
     certifications: [
         { key: 'cert-area-iso-9001', labelKey: 'menu.area.iso9001', abbrKey: 'menu.area.iso9001Abbr', icon: 'bx-badge-check' },
     ],
+    'information-technology': GENERIC_AREAS,
 };
 // home-tab-* button ids -> the areaCategories entry (data/menu.json) each
 // one represents — Inicio/Panel/Tablero aren't in this map on purpose,

@@ -71,7 +71,8 @@
       "managementControl": "CG",
       "generalManagement": "DG",
       "steeringCommittee": "CD",
-      "certifications": "CERT"
+      "certifications": "CERT",
+      "informationTechnology": "TI"
     },
     "area": "Área",
     "generalAccess": "Accesos Generales",
@@ -136,6 +137,7 @@
     "accounting": "Contabilidad",
     "finance": "Finanzas",
     "certifications": "Certificaciones",
+    "informationTechnology": "Tecnologías de la Información",
     "deptArea": "Área Dep. {n}",
     "option": "Opción {n}",
     "area": {
@@ -1887,11 +1889,11 @@
     "changeHistoryNotGranted": "No otorgado",
     "fieldLocked": "Usted no está habilitado para hacer modificaciones en esta opción, consulte con su Jefe Directo",
     "tablePrefix": "Tabla",
-    "permSoloVer": "Solo Ver",
+    "permSoloVer": "Ver",
     "permVerYOperar": "Operar",
-    "permEditar": "Editar",
+    "permEditar": "Modificar registro",
     "permAutorizar": "Autorizar",
-    "permEliminar": "Eliminar",
+    "permEliminar": "Eliminar registro",
     "limitLockedContract": "No está en lo que contrató la empresa: no se puede dar",
     "limitLockedStatus": "Está en un Estatus que no puedes dar: no se puede dar",
     "appVisionColumn": "Visión APP",

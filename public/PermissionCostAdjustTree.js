@@ -46,6 +46,7 @@
         'general-management': 'menu.generalManagement',
         'steering-committee': 'menu.steeringCommittee',
         certifications: 'menu.certifications',
+        'information-technology': 'menu.informationTechnology',
     };
     function sectionLabelKey(section) {
         if (section.id === 'main') return 'menu.mainSection';

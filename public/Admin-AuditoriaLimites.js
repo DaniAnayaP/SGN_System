@@ -29,7 +29,7 @@
     const SECTION_LABELS = {
         main: 'menu.mainSection', finance: 'menu.finance', accounting: 'menu.accounting', 'human-resources': 'menu.humanResources', marketing: 'menu.marketing',
         commercial: 'menu.commercial', purchasing: 'menu.purchasing', 'supply-chain': 'menu.supplyChain', 'management-control': 'menu.managementControl',
-        'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications',
+        'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology',
     };
     const STATUS_LABELS = {
         habilitado: 'admin.masterTreeStatusHabilitadoMed', inhabilitado: 'admin.masterTreeStatusInhabilitado',

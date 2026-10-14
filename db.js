@@ -1683,6 +1683,7 @@ const MODULE_CATALOG = [
     { key: 'accounting', labelKey: 'menu.accounting' },
     { key: 'finance', labelKey: 'menu.finance' },
     { key: 'certifications', labelKey: 'menu.certifications' },
+    { key: 'information-technology', labelKey: 'menu.informationTechnology' },
     // Top-bar buttons — contracted at the client level same as departments;
     // a button only actually shows for a given user when it's BOTH
     // contracted here AND granted to them in Accesos y Permisos (see
@@ -7133,7 +7134,7 @@ function setLevelOrders(level, entityId, rows, updatedBy, clientId = null, defau
 // de las tablas del catálogo de colores, cada una con su orden de menu.json. Solo las de departamentos (no General): son las que
 // el Dashboard del cliente ordena (ver GET /api/business/permission-order).
 // Orden en que el Dashboard del cliente lista los departamentos cuando nadie guardó uno (DEPARTMENTS en public/Dashboard.js; mantener igual).
-const CLIENT_DEPARTMENT_DEFAULT_ORDER = ['finance', 'accounting', 'human-resources', 'marketing', 'commercial', 'purchasing', 'supply-chain', 'management-control', 'general-management', 'steering-committee', 'certifications'];
+const CLIENT_DEPARTMENT_DEFAULT_ORDER = ['finance', 'accounting', 'human-resources', 'marketing', 'commercial', 'purchasing', 'supply-chain', 'management-control', 'general-management', 'steering-committee', 'certifications', 'information-technology'];
 let cachedOrderListCatalog = null;
 function getOrderListCatalog() {
     if (cachedOrderListCatalog) return cachedOrderListCatalog;
@@ -8221,6 +8222,7 @@ const COLOR_TREE_SECTION_LABEL_KEYS = {
     'general-management': 'menu.generalManagement',
     'steering-committee': 'menu.steeringCommittee',
     certifications: 'menu.certifications',
+    'information-technology': 'menu.informationTechnology',
 };
 
 function userCanAuthorizeClientColors(userId, clientId) {

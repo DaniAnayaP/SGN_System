@@ -199,7 +199,8 @@
     { "id": "human-resources", "items": [] },
     { "id": "accounting", "items": [] },
     { "id": "finance", "items": [] },
-    { "id": "certifications", "items": [] }
+    { "id": "certifications", "items": [] },
+    { "id": "information-technology", "items": [] }
   ],
   "areaCategories": [
     {

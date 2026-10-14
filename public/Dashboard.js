@@ -261,7 +261,7 @@ let currentUser = null;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", logoutConfirm: "Are you sure you want to log out?", logoutConfirmGreeting: "{name}, are you sure you want to log out?", department: "Department", deptAbbr: { finance: "FIN", accounting: "ACC", humanResources: "HR", marketing: "MKT", commercial: "COM", purchasing: "PUR", supplyChain: "SCM", managementControl: "MC", generalManagement: "GM", steeringCommittee: "STC", certifications: "CERT" }, area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", logoutConfirm: "Are you sure you want to log out?", logoutConfirmGreeting: "{name}, are you sure you want to log out?", department: "Department", deptAbbr: { finance: "FIN", accounting: "ACC", humanResources: "HR", marketing: "MKT", commercial: "COM", purchasing: "PUR", supplyChain: "SCM", managementControl: "MC", generalManagement: "GM", steeringCommittee: "STC", certifications: "CERT", informationTechnology: "IT" }, area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
         menu: {
             home: "Home", panel: "Panel", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Style",
@@ -275,6 +275,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Purchasing", commercial: "Commercial", marketing: "Marketing",
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             certifications: "Certifications",
+            informationTechnology: "Information Technology",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transportVolume: "Volume Transport", transportLastMile: "Last-Mile Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015", recruitment: "Recruitment and Selection", personnelAdmin: "Personnel Administration", trainingDevelopment: "Training and Development", compensationBenefits: "Compensation and Benefits", organizationalDevelopment: "Organizational Development", occupationalHealthSafety: "Occupational Health and Safety", hris: "HR Information System (HRIS)", hrAnalytics: "HR Analytics" },
             clientesRegistrados: "Our Clients", addClientNew: "Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Our Plans", addPlanNew: "Add New Plan", moduleCosts: "Access & Permissions Cost", saasTeam: "SaaS Team", mainSection: "General",
@@ -401,13 +402,13 @@ const EMBEDDED_TRANSLATIONS = {
             colFuelType: "Fuel Type", colFuelLiters: "Liters", colFuelCostPerLiter: "Cost per Liter", fuelTypeSelect: "Select...", fuelTypeDiesel: "Diesel", fuelTypeMagna: "Regular", fuelTypePremium: "Premium",
             changeHistory: "Change history", changeHistoryTitle: "Change history", changeHistoryTitleRecord: "Change history for this record", changeHistoryEmpty: "No changes recorded yet.", changeHistoryCreated: "Record created", changeHistoryDeleted: "Record deleted", changeHistoryDate: "Date", changeHistoryUser: "User", changeHistoryRecord: "Record", changeHistoryChange: "Change",
             fieldLocked: "Already saved — you need permission to edit it",
-            tablePrefix: "Table", permSoloVer: "View Only", permVerYOperar: "Operate", permEditar: "Edit", permAutorizar: "Authorize",
+            tablePrefix: "Table", permSoloVer: "View", permVerYOperar: "Operate", permEditar: "Modify record", permAutorizar: "Authorize",
             changePending: "Pending authorization", changeHistoryRequestedBy: "Requested by", changeHistoryAuthorizedBy: "Authorized by",
             notificationsTitle: "Notifications", notificationsEmpty: "No changes pending authorization.", notificationApprove: "Approve", notificationReject: "Reject", notificationApproved: "Change applied.", notificationRejected: "Change rejected." }
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", logoutConfirm: "¿Seguro que deseas salir?", logoutConfirmGreeting: "{name}, ¿seguro que deseas salir?", department: "Departamento", deptAbbr: { finance: "FIN", accounting: "CONT", humanResources: "RRHH", marketing: "MKT", commercial: "COM", purchasing: "COMP", supplyChain: "CDS", managementControl: "CG", generalManagement: "DG", steeringCommittee: "CD", certifications: "CERT" }, area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", logoutConfirm: "¿Seguro que deseas salir?", logoutConfirmGreeting: "{name}, ¿seguro que deseas salir?", department: "Departamento", deptAbbr: { finance: "FIN", accounting: "CONT", humanResources: "RRHH", marketing: "MKT", commercial: "COM", purchasing: "COMP", supplyChain: "CDS", managementControl: "CG", generalManagement: "DG", steeringCommittee: "CD", certifications: "CERT", informationTechnology: "TI" }, area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
         menu: {
             home: "Inicio", panel: "Panel", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Estilo del Negocio",
@@ -421,6 +422,7 @@ const EMBEDDED_TRANSLATIONS = {
             purchasing: "Compras", commercial: "Comercial", marketing: "Mercadotecnia",
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             certifications: "Certificaciones",
+            informationTechnology: "Tecnologías de la Información",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
             area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transportVolume: "Transporte Volumen", transportLastMile: "Transporte Última Milla", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015", recruitment: "Reclutamiento y Selección", personnelAdmin: "Administración de Personal", trainingDevelopment: "Formación y Desarrollo", compensationBenefits: "Compensaciones y Beneficios", organizationalDevelopment: "Desarrollo Organizacional", occupationalHealthSafety: "Seguridad y Salud Laboral", hris: "Sistema de Información de RRHH (SIRH)", hrAnalytics: "Analítica Recursos Humanos (RH Analytics)" },
             clientesRegistrados: "Nuestros Clientes", addClientNew: "Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Nuestros Planes", addPlanNew: "Agregar Plan Nuevo", moduleCosts: "Costo Accesos-Permisos", saasTeam: "Equipo SaaS", mainSection: "General",
@@ -547,7 +549,7 @@ const EMBEDDED_TRANSLATIONS = {
             colFuelType: "Tipo Combustible", colFuelLiters: "Cant Litros", colFuelCostPerLiter: "Costo x Litro", fuelTypeSelect: "Seleccionar...", fuelTypeDiesel: "Diésel", fuelTypeMagna: "Magna", fuelTypePremium: "Premium",
             changeHistory: "Historial de cambios", changeHistoryTitle: "Historial de cambios", changeHistoryTitleRecord: "Historial de cambios de este registro", changeHistoryEmpty: "Aún no hay cambios registrados.", changeHistoryCreated: "Registro creado", changeHistoryDeleted: "Registro eliminado", changeHistoryDate: "Fecha", changeHistoryUser: "Usuario", changeHistoryRecord: "Registro", changeHistoryChange: "Cambio",
             fieldLocked: "Ya se guardó — necesitas permiso para modificarlo",
-            tablePrefix: "Tabla", permSoloVer: "Solo Ver", permVerYOperar: "Operar", permEditar: "Editar", permAutorizar: "Autorizar",
+            tablePrefix: "Tabla", permSoloVer: "Ver", permVerYOperar: "Operar", permEditar: "Modificar registro", permAutorizar: "Autorizar",
             changePending: "Pendiente de autorización", changeHistoryRequestedBy: "Solicitó", changeHistoryAuthorizedBy: "Autorizó",
             notificationsTitle: "Notificaciones", notificationsEmpty: "No hay cambios pendientes de autorización.", notificationApprove: "Aprobar", notificationReject: "Rechazar", notificationApproved: "Cambio aplicado.", notificationRejected: "Cambio rechazado." }
     }
@@ -1093,7 +1095,8 @@ const DEPARTMENTS = [
     { key: 'management-control', labelKey: 'menu.managementControl', abbrKey: 'sidebar.deptAbbr.managementControl', icon: 'bx-line-chart' },
     { key: 'general-management', labelKey: 'menu.generalManagement', abbrKey: 'sidebar.deptAbbr.generalManagement', icon: 'bx-crown' },
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee', abbrKey: 'sidebar.deptAbbr.steeringCommittee', icon: 'bx-group' },
-    { key: 'certifications', labelKey: 'menu.certifications', abbrKey: 'sidebar.deptAbbr.certifications', icon: 'bx-certification' }
+    { key: 'certifications', labelKey: 'menu.certifications', abbrKey: 'sidebar.deptAbbr.certifications', icon: 'bx-certification' },
+    { key: 'information-technology', labelKey: 'menu.informationTechnology', abbrKey: 'sidebar.deptAbbr.informationTechnology', icon: 'bx-chip' }
 ];
 const ALWAYS_VISIBLE_SECTIONS = ['main'];
 
@@ -1185,7 +1188,8 @@ const AREAS_BY_DEPARTMENT = {
     'steering-committee': GENERIC_AREAS,
     certifications: [
         { key: 'cert-area-iso-9001', labelKey: 'menu.area.iso9001', abbrKey: 'menu.area.iso9001Abbr', icon: 'bx-badge-check' }
-    ]
+    ],
+    'information-technology': GENERIC_AREAS
 };
 
 function getStoredArea() {
@@ -2497,6 +2501,7 @@ const SECTION_LABEL_KEYS = {
     'general-management': 'menu.generalManagement',
     'steering-committee': 'menu.steeringCommittee',
     certifications: 'menu.certifications',
+    'information-technology': 'menu.informationTechnology',
 };
 function sectionGrantLabel(sectionId) {
     if (sectionId === 'main') return t('menu.mainSection');
