@@ -101,7 +101,17 @@ window.SAAS_ADMIN_CATALOG = [
                         'Pestaña Árbol', 'Pestaña Resumen', 'Guardar', 'Cambiar moneda',
                         'Cambiar estatus', 'Cambiar Web y App', 'Cambiar costos', 'Cambiar clasificación',
                         'Personalizar colores', 'Reordenar', 'Navegar', 'Ver cambios', 'Autorizar colores',
-                    ] },
+                    ],
+                    // Solo cambia CÓMO SE DIBUJA esta pantalla en el árbol de accesos de una cuenta (Admin-EquipoSaaS.js, renderPresentedApartado): un nivel por cada clic,
+                    // Botones y Tabla principal > columna > permiso, en vez de los 13 controles sueltos bajo "Controles del árbol". Los ids a0..a12 NO cambian, así que los
+                    // accesos ya guardados siguen valiendo. `botones` y `columnas[].accion` son posiciones de `acciones`; lo que no se nombre aquí cae en Botones.
+                    // Cambiar estatus / Web y App / costos / clasificación son las columnas de la tabla del árbol, y "cambiar" es el permiso Modificar registro de cada una.
+                    presentacion: {
+                        botones: [0, 1, 2, 3, 8, 9, 10, 11, 12],
+                        columnas: [
+                            { label: 'Estatus', accion: 4 }, { label: 'Web y App', accion: 5 }, { label: 'Costos', accion: 6 }, { label: 'Clasificación', accion: 7 },
+                        ],
+                    } },
                 ],
             },
             {

@@ -550,6 +550,7 @@ const ACCESS_LEVELS = {
     modal: { labelKey: 'admin.masterTreeLevelApartado', color: '#9A6B00' },
     column: { labelKey: 'admin.saasAccessLevelColumn', color: '#5C6079' },
     action: { labelKey: 'admin.saasAccessLevelAction', color: '#0E7C86' },
+    buttons: { labelKey: 'menu.classBotones', color: '#0E7C86' },
 };
 
 function accessSpacer() {
@@ -855,10 +856,58 @@ function toggleAccessNode(nodeKey) {
     renderTreeList();
 }
 
+// Un apartado con `presentacion` (ver SaasAdminCatalog.js) no dibuja su propia fila: sus acciones salen como las ve quien usa la pantalla, un nivel por cada clic.
+// Botones > cada botón, y Tabla principal > cada columna > su permiso. Los ids de lo guardado (apartado::aN) son los de siempre; solo cambia dónde se dibujan.
+function renderPresentedApartado(screen, apartado, depth, rows) {
+    const pres = apartado.presentacion;
+    const leaves = buildRealLeaves(apartado);
+    const actions = new Map(leaves.filter((l) => l.suffix.startsWith('a')).map((l) => [l.suffix, l]));
+    const pairOf = (leaf) => ({ itemId: screen.itemId, subItemId: realLeafSubItemId(apartado, leaf) });
+    const keysOf = (pairs) => pairs.map((p) => `${p.itemId}::${p.subItemId}`).join(',');
+    const columns = (pres.columnas || []).map((c) => ({ label: c.label, leaf: actions.get(`a${c.accion}`) })).filter((c) => c.leaf);
+    const buttonLeaves = (pres.botones || []).map((i) => actions.get(`a${i}`)).filter(Boolean);
+    // Lo que el catálogo no nombra (un botón nuevo, agregado al final) cae en Botones: nunca se pierde.
+    const named = new Set([...buttonLeaves, ...columns.map((c) => c.leaf)]);
+    leaves.filter((l) => l.suffix.startsWith('a') && !named.has(l)).forEach((l) => buttonLeaves.push(l));
+    const toggleFor = (key) => ({ expanded: expandedRealNodes.has(key), onToggle: () => toggleAccessNode(key) });
+    if (buttonLeaves.length) {
+        const pairs = buttonLeaves.map(pairOf);
+        const nodeKey = `${screen.itemId}::${apartado.id}::botones`;
+        rows.push(buildAccessRow({ depth, label: Dashboard.t('menu.classBotones'), level: 'buttons', pairs, nodeKey, historyKeys: keysOf(pairs), toggle: toggleFor(nodeKey) }));
+        if (expandedRealNodes.has(nodeKey)) {
+            buttonLeaves.forEach((leaf) => rows.push(buildAccessRow({
+                depth: depth + 1, label: leaf.label, level: 'action', pairs: [pairOf(leaf)], nodeKey: `${screen.itemId}::${realLeafSubItemId(apartado, leaf)}`, isLeaf: true,
+            })));
+        }
+    }
+    if (columns.length) {
+        const pairs = columns.map((c) => pairOf(c.leaf));
+        const nodeKey = `${screen.itemId}::${apartado.id}::tabla-principal`;
+        rows.push(buildAccessRow({ depth, label: pres.tablaLabel || 'Tabla principal', level: 'tabla', pairs, nodeKey, historyKeys: keysOf(pairs), toggle: toggleFor(nodeKey) }));
+        if (expandedRealNodes.has(nodeKey)) {
+            columns.forEach((col) => {
+                const pair = pairOf(col.leaf);
+                const colKey = `${screen.itemId}::${apartado.id}::col-${col.leaf.suffix}`;
+                rows.push(buildAccessRow({ depth: depth + 1, label: col.label, level: 'column', pairs: [pair], nodeKey: colKey, historyKeys: keysOf([pair]), toggle: toggleFor(colKey) }));
+                if (expandedRealNodes.has(colKey)) {
+                    rows.push(buildAccessRow({
+                        depth: depth + 2, label: Dashboard.t('main.permEditar'), level: 'action', pairs: [pair], nodeKey: `${screen.itemId}::${realLeafSubItemId(apartado, col.leaf)}`, isLeaf: true,
+                    }));
+                }
+            });
+        }
+    }
+    // Columnas o acciones por fila que el apartado pudiera traer (este no): se dibujan sueltas, igual que siempre.
+    leaves.filter((l) => !l.suffix.startsWith('a')).forEach((leaf) => rows.push(buildAccessRow({
+        depth, label: leaf.label, level: leaf.suffix.startsWith('c') ? 'column' : 'action', pairs: [pairOf(leaf)], nodeKey: `${screen.itemId}::${realLeafSubItemId(apartado, leaf)}`, isLeaf: true,
+    })));
+}
+
 // Renders `apartado`'s own row (chevron + casilla de acceso del apartado completo) into
 // `rows`, recursing into its body when expanded. Used identically for a screen's top-level
 // apartados and for a nested modal popping up from one of their columns/acciones.
 function renderApartadoNode(screen, apartado, depth, rows) {
+    if (apartado.presentacion && !apartado.nestUnder) { renderPresentedApartado(screen, apartado, depth, rows); return; }
     const nodeKey = `${screen.itemId}::${apartado.id}`;
     const expanded = expandedRealNodes.has(nodeKey);
     rows.push(buildAccessRow({
