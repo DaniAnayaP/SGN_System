@@ -340,6 +340,27 @@ function buildActionLeaves(apartado) {
 function leafKey(screen, apartado, leaf) {
     return `${apartadoKey(screen, apartado)}::${leaf.suffix}`;
 }
+// Una pantalla cuyo apartado trae `presentacion` (ver SaasAdminCatalog.js) reparte sus acciones como las ve quien la usa: unas son Botones y otras son las
+// columnas de su Tabla principal (p. ej. Árbol de Permisos Maestro: Estatus, Web y App, Costos y Clasificación). Solo cambia dónde se dibuja cada una: la
+// llave de cada hoja (apartado::aN) y su estatus guardado son los de siempre.
+function tablaPresentadaKey(screen) {
+    return `${screen.itemId}::tabla-principal`;
+}
+function splitScreenActionEntries(screen, screenApartados) {
+    const entries = screenApartados.flatMap((apartado) => (
+        apartado.acciones && apartado.acciones.length ? buildActionLeaves(apartado).map((leaf) => ({ apartado, leaf })) : []
+    ));
+    const columns = [];
+    screenApartados.forEach((apartado) => {
+        if (!apartado.presentacion || apartado.nestUnder) return;
+        (apartado.presentacion.columnas || []).forEach((col) => {
+            const entry = entries.find((e) => e.apartado === apartado && e.leaf.suffix === `a${col.accion}`);
+            if (entry) columns.push({ ...entry, columnLabel: col.label });
+        });
+    });
+    const inTable = new Set(columns.map((c) => leafKey(screen, c.apartado, c.leaf)));
+    return { buttons: entries.filter((e) => !inTable.has(leafKey(screen, e.apartado, e.leaf))), columns };
+}
 
 function collectLeafKeysForScreens(screens) {
     const keys = [];
@@ -592,17 +613,22 @@ function buildStatusChildrenMap() {
         orderedScreens(group).forEach((screen) => {
             registerStatusChild(group.groupId, screen.itemId);
             const screenApartados = orderedApartados(screen);
-            const screenActionEntries = screenApartados.flatMap((apartado) => (
-                apartado.acciones && apartado.acciones.length
-                    ? buildActionLeaves(apartado).map((leaf) => ({ apartado, leaf }))
-                    : []
-            ));
+            const { buttons: screenActionEntries, columns: screenTableColumns } = splitScreenActionEntries(screen, screenApartados);
             if (screenActionEntries.length) {
                 const botonesKey = `${screen.itemId}::botones`;
                 registerStatusChild(screen.itemId, botonesKey);
                 screenActionEntries.forEach(({ apartado, leaf }) => {
                     const key = leafKey(screen, apartado, leaf);
                     registerStatusChild(botonesKey, key);
+                    registerLeafStatusDescendants(screen, key, leaf, null);
+                });
+            }
+            if (screenTableColumns.length) {
+                const tablaKey = tablaPresentadaKey(screen);
+                registerStatusChild(screen.itemId, tablaKey);
+                screenTableColumns.forEach(({ apartado, leaf }) => {
+                    const key = leafKey(screen, apartado, leaf);
+                    registerStatusChild(tablaKey, key);
                     registerLeafStatusDescendants(screen, key, leaf, null);
                 });
             }
@@ -2662,11 +2688,7 @@ function renderList() {
             // by the SCREEN itself (not any one apartado) -- each leaf's
             // own key still comes from ITS OWN apartado (leafKey), so
             // already-saved Estatus stays valid unchanged.
-            const screenActionEntries = screenApartados.flatMap((apartado) => (
-                apartado.acciones && apartado.acciones.length
-                    ? buildActionLeaves(apartado).map((leaf) => ({ apartado, leaf }))
-                    : []
-            ));
+            const { buttons: screenActionEntries, columns: screenTableColumns } = splitScreenActionEntries(screen, screenApartados);
             if (screenActionEntries.length) {
                 const actionLeafKeys = screenActionEntries.map(({ apartado, leaf }) => leafKey(screen, apartado, leaf));
                 const botonesKey = `${screen.itemId}::botones`;
@@ -2688,7 +2710,32 @@ function renderList() {
                 }
             }
 
+            // "Tabla principal" de una pantalla con `presentacion`: sus columnas (cada una es una hoja de siempre, solo dibujada aquí), hermana de Botones.
+            if (screenTableColumns.length) {
+                const columnLeafKeys = screenTableColumns.map(({ apartado, leaf }) => leafKey(screen, apartado, leaf));
+                const tablaKey = tablaPresentadaKey(screen);
+                const tablaCtx = buildLevelBadgeCtx('tabla');
+                const tablaRow = document.createElement('div');
+                tablaRow.className = 'perm-tree-row perm-tree-depth-2 perm-tree-row-classification';
+                tablaRow.appendChild(spacer());
+                tablaRow.appendChild(toggleBtn(`cls:${tablaKey}`, isExpanded(`cls:${tablaKey}`)));
+                tablaRow.appendChild(rollupEl(computeRollup(columnLeafKeys, 'web'), computeRollup(columnLeafKeys, 'app')));
+                tablaRow.appendChild(labelEl('Tabla principal'));
+                tablaRow.appendChild(countBadge(columnLeafKeys.length));
+                tablaRow.appendChild(buildControls(tablaKey, columnLeafKeys, screen.href, tablaCtx, 'Tabla principal'));
+                tablaRow.dataset.nodeKey = tablaKey;
+                listEl.appendChild(tablaRow);
+                if (isExpanded(`cls:${tablaKey}`)) {
+                    screenTableColumns.forEach(({ apartado, leaf, columnLabel }) => {
+                        renderLeafWithLevels(screen, apartado, { ...leaf, label: columnLabel }, 3, apartadoKey(screen, apartado), null, tablaCtx, columnLabel, null, null);
+                    });
+                }
+            }
+
             screenApartados.filter((apartado) => !apartado.nestUnder).forEach((apartado) => {
+                // Un apartado que solo existe para repartir sus acciones (`presentacion`) no dibuja su propia fila vacía, salvo que tenga un estatus guardado: esa fila es
+                // la que lo cambia, y sus hojas lo heredan por prefijo de llave.
+                if (apartado.presentacion && !buildLeaves(apartado).length && !statuses.some((s) => s.itemId === apartadoKey(screen, apartado))) return;
                 renderApartadoNode(screen, apartado, 2, { draggable: true });
             });
         });
