@@ -213,6 +213,8 @@ const {
     canDeleteColumn,
     getSearchGatedColumns,
     publishDataChangeNotice,
+    publishButtonActionNotice,
+    publishIconUpdateNotice,
     publishAccessChangeNotice,
     userIdsOfJobPosition,
     canCreateColumn,
@@ -4362,6 +4364,24 @@ function notifyDataChange({ clientId, tableKey, recordLabel, fieldKey, oldValue,
         console.error('[notificar] no se pudo avisar de un cambio de datos:', err.message);
     }
 }
+// Notificar en botones e íconos (ver publishButtonActionNotice / publishIconUpdateNotice en db.js). Nunca rompen la acción: si el aviso falla, solo se anota.
+function notifyButtonAction(req, tableKey, action, recordLabel) {
+    try {
+        const screenKey = (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || tableKey;
+        publishButtonActionNotice({ clientId: req.user.clientId, tableKey, screenKey, action, recordLabel, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    } catch (err) {
+        console.error('[notificar] no se pudo avisar de un botón:', err.message);
+    }
+}
+function notifyIconUpdate(req, { tableKey, iconId, action, name, scope }) {
+    if (scope !== 'global') return;
+    try {
+        const screenKey = (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || tableKey;
+        publishIconUpdateNotice({ clientId: req.user.clientId, tableKey, screenKey, iconId, action, name, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    } catch (err) {
+        console.error('[notificar] no se pudo avisar de un ícono:', err.message);
+    }
+}
 // Avisos de cambios de accesos: un solo aviso por Guardar, con el detalle adentro (ver publishAccessChangeNotice en db.js). Nunca rompe el guardado.
 function notifyAccessChange({ req, affectedUsers, scopeKind, scopeName = '', before, after }) {
     try {
@@ -4547,6 +4567,7 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
             clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
             recordLabel: costCenter.code, action: 'create', changedBy: changedByLabel(req),
         });
+        notifyButtonAction(req, 'centros-costo', 'create', costCenter.code);
         res.status(201).json({ costCenter: mapCostCenter(costCenter, client.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -4747,6 +4768,7 @@ app.post('/api/business/field-fill-rules', requireAuth, requireClientAdmin, (req
         clientId: req.user.clientId, tableKey: 'reglas-orden-llenado', recordId: rule.id,
         recordLabel: `${rule.gate_label} → ${rule.dependent_label}`, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'reglas-orden-llenado', 'create', `${rule.gate_label} → ${rule.dependent_label}`);
     res.status(201).json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
 });
 app.patch('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
@@ -4796,6 +4818,7 @@ app.delete('/api/business/field-fill-rules/:id', requireAuth, (req, res) => {
             clientId: req.user.clientId, tableKey: 'reglas-orden-llenado', recordId: ruleToDelete.id,
             recordLabel: `${ruleToDelete.gate_label} → ${ruleToDelete.dependent_label}`, action: 'delete', changedBy: changedByLabel(req),
         });
+        notifyButtonAction(req, 'reglas-orden-llenado', 'delete', `${ruleToDelete.gate_label} → ${ruleToDelete.dependent_label}`);
     }
     res.status(204).end();
 });
@@ -4882,6 +4905,7 @@ app.post('/api/business/job-positions', requireAuth, requireClientAdmin, (req, r
             clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: jobPosition.id,
             recordLabel: jobPosition.name, action: 'create', changedBy: changedByLabel(req),
         });
+        notifyButtonAction(req, 'puestos-trabajo', 'create', jobPosition.name);
         res.status(201).json({ jobPosition: mapJobPosition(jobPosition, getClientById(req.user.clientId)?.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -4930,6 +4954,7 @@ app.delete('/api/business/job-positions/:id', requireAuth, requireClientAdmin, (
         clientId: req.user.clientId, tableKey: 'puestos-trabajo', recordId: existing.id,
         recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'puestos-trabajo', 'delete', existing.name);
     deleteJobPosition(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -4972,6 +4997,7 @@ app.post('/api/business/hr-status-catalog', requireAuth, requireClientAdmin, (re
             clientId: req.user.clientId, tableKey: 'estatus-rh', recordId: hrStatus.id,
             recordLabel: hrStatus.name, action: 'create', changedBy: changedByLabel(req),
         });
+        notifyButtonAction(req, 'estatus-rh', 'create', hrStatus.name);
         res.status(201).json({ hrStatus });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -5011,6 +5037,7 @@ app.delete('/api/business/hr-status-catalog/:id', requireAuth, requireClientAdmi
         clientId: req.user.clientId, tableKey: 'estatus-rh', recordId: existing.id,
         recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'estatus-rh', 'delete', existing.name);
     deleteHrStatusCatalogEntry(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -5223,6 +5250,7 @@ app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: report.id,
         recordLabel: report.name, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'transacciones-inteligentes', 'create', report.name);
     res.status(201).json({ report: mapIntelligentReport(report, getClientById(req.user.clientId)?.company_name) });
 });
 
@@ -5262,6 +5290,7 @@ app.delete('/api/business/intelligent-reports/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'transacciones-inteligentes', recordId: existing.id,
         recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'transacciones-inteligentes', 'delete', existing.name);
     deleteIntelligentReport(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -5350,6 +5379,7 @@ app.post('/api/business/scheduled-reports', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: scheduledReport.id,
         recordLabel: scheduledReport.name, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'reportes-programados', 'create', scheduledReport.name);
     res.status(201).json({ scheduledReport: mapScheduledReport(scheduledReport, getClientById(req.user.clientId)?.company_name) });
 });
 
@@ -5388,6 +5418,7 @@ app.delete('/api/business/scheduled-reports/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'reportes-programados', recordId: existing.id,
         recordLabel: existing.name, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'reportes-programados', 'delete', existing.name);
     res.status(204).end();
 });
 
@@ -5496,6 +5527,7 @@ app.post('/api/business/fuel-records', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: record.id,
         recordLabel: record.eco_unit, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'registro-combustible', 'create', record.eco_unit);
     const client = getClientById(req.user.clientId);
     res.status(201).json({ record: mapFuelRecord(record, null, client?.company_name) });
 });
@@ -5535,6 +5567,7 @@ app.delete('/api/business/fuel-records/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'registro-combustible', recordId: existing.id,
         recordLabel: existing.eco_unit, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'registro-combustible', 'delete', existing.eco_unit);
     deleteFuelRecord(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -5596,6 +5629,7 @@ app.post('/api/business/fuel-loading-records', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: record.id,
         recordLabel: record.db_id, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'carga-combustible', 'create', record.db_id);
     const client = getClientById(req.user.clientId);
     res.status(201).json({ record: mapFuelLoadingRecord(record, null, client?.company_name) });
 });
@@ -5629,6 +5663,7 @@ app.delete('/api/business/fuel-loading-records/:id', requireAuth, (req, res) => 
         clientId: req.user.clientId, tableKey: 'carga-combustible', recordId: existing.id,
         recordLabel: existing.eco_unit || existing.db_id, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'carga-combustible', 'delete', existing.eco_unit || existing.db_id);
     deleteFuelLoadingRecord(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -5680,6 +5715,7 @@ app.post('/api/business/unit-types', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: unitType.id,
         recordLabel: unitType.code, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'tipos-unidad', 'create', unitType.code);
     const client = getClientById(req.user.clientId);
     res.status(201).json({ unitType: mapUnitTypeRecord(unitType, null, client?.company_name) });
 });
@@ -5709,6 +5745,7 @@ app.delete('/api/business/unit-types/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'tipos-unidad', recordId: existing.id,
         recordLabel: existing.code, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'tipos-unidad', 'delete', existing.code);
     deleteUnitType(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -5767,6 +5804,7 @@ app.post('/api/business/fleet-units', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: fleetUnit.id,
         recordLabel: `#${fleetUnit.id}`, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'nuestras-unidades', 'create', `#${fleetUnit.id}`);
     const client = getClientById(req.user.clientId);
     res.status(201).json({ fleetUnit: mapFleetUnitRecord(fleetUnit, null, client?.company_name) });
 });
@@ -5802,6 +5840,7 @@ app.delete('/api/business/fleet-units/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'nuestras-unidades', recordId: existing.id,
         recordLabel: existing.eco_id || `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'nuestras-unidades', 'delete', existing.eco_id || `#${existing.id}`);
     deleteFleetUnit(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -5877,6 +5916,7 @@ app.post('/api/business/sku-items', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: skuItem.id,
         recordLabel: `#${skuItem.id}`, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'nuestros-articulos', 'create', `#${skuItem.id}`);
     const client = getClientById(req.user.clientId);
     res.status(201).json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
 });
@@ -5924,6 +5964,7 @@ app.delete('/api/business/sku-items/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: existing.id,
         recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'nuestros-articulos', 'delete', `#${existing.id}`);
     deleteSkuItem(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -6026,6 +6067,7 @@ app.post('/api/business/article-categories/:categoryType', requireAuth, (req, re
         clientId: req.user.clientId, tableKey: config.tableKey, recordId: category.id,
         recordLabel: `#${category.id}`, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, config.tableKey, 'create', `#${category.id}`);
     const client = getClientById(req.user.clientId);
     res.status(201).json({ category: mapArticleCategoryRecord(category, null, client?.company_name) });
 });
@@ -6059,6 +6101,7 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (r
         clientId: req.user.clientId, tableKey: config.tableKey, recordId: existing.id,
         recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, config.tableKey, 'delete', `#${existing.id}`);
     deleteArticleCategory(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -6230,6 +6273,7 @@ app.post('/api/business/catalog-requests/:id/approve', requireAuth, (req, res) =
         recordLabel: `#${category.id}`, action: 'create', changedBy: changedByLabel(req),
         requestedBy: request.requested_by_label, authorizedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, articleCategoryTypeConfig(request.category_type).tableKey, 'create', `#${category.id}`);
     res.json({ request: mapCatalogValueRequestRecord(resolved), category });
 });
 
@@ -6322,6 +6366,7 @@ app.post('/api/business/freight-quotes', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'nuestras-cotizaciones', recordId: freightQuote.id,
         recordLabel: `#${freightQuote.id}`, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'nuestras-cotizaciones', 'create', `#${freightQuote.id}`);
     const client = getClientById(req.user.clientId);
     res.status(201).json({ freightQuote: mapFreightQuoteRecord(freightQuote, null, client?.company_name) });
 });
@@ -6351,6 +6396,7 @@ app.delete('/api/business/freight-quotes/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'nuestras-cotizaciones', recordId: existing.id,
         recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'nuestras-cotizaciones', 'delete', `#${existing.id}`);
     deleteFreightQuote(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -6418,6 +6464,7 @@ app.post('/api/business/transfers', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'nuestros-traslados', recordId: transfer.id,
         recordLabel: `#${transfer.id}`, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'nuestros-traslados', 'create', `#${transfer.id}`);
     const client = getClientById(req.user.clientId);
     res.status(201).json({ transfer: mapTransferRecord(transfer, null, client?.company_name) });
 });
@@ -6447,6 +6494,7 @@ app.delete('/api/business/transfers/:id', requireAuth, (req, res) => {
         clientId: req.user.clientId, tableKey: 'nuestros-traslados', recordId: existing.id,
         recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'nuestros-traslados', 'delete', `#${existing.id}`);
     deleteTransfer(req.params.id, req.user.clientId);
     res.status(204).end();
 });
@@ -6746,6 +6794,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
         clientId: req.user.clientId, tableKey: 'mi-recurso-humano', recordId: worker.id,
         recordLabel: worker.full_name, action: 'create', changedBy: changedByLabel(req),
     });
+    notifyButtonAction(req, 'mi-recurso-humano', 'create', worker.full_name);
     res.status(201).json({ worker: mapHrWorker(worker, null, getClientById(req.user.clientId)?.company_name) });
 });
 
@@ -6959,6 +7008,7 @@ app.post('/api/business/saved-searches', requireAuth, (req, res) => {
         scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
         audience: finalScope === 'global' ? audience : undefined,
     });
+    notifyIconUpdate(req, { tableKey, iconId: 'iconSavedSearch', action: 'created', name: row.name || name, scope: finalScope });
     res.status(201).json({ search: row });
 });
 
@@ -6977,7 +7027,9 @@ app.put('/api/business/saved-searches/:id', requireAuth, (req, res) => {
         { scope: row.scope, ownerUserId: row.ownerUserId, name, ignoreId: row.id })) {
         return res.status(409).json({ message: savedNameTakenMessage('una búsqueda guardada') });
     }
-    res.json({ search: updateSavedSearch(row.id, { name: name.trim(), filter }) });
+    const updatedSearch = updateSavedSearch(row.id, { name: name.trim(), filter });
+    notifyIconUpdate(req, { tableKey: row.tableKey, iconId: 'iconSavedSearch', action: 'updated', name: name.trim(), scope: row.scope });
+    res.json({ search: updatedSearch });
 });
 
 app.delete('/api/business/saved-searches/:id', requireAuth, (req, res) => {
@@ -6987,6 +7039,7 @@ app.delete('/api/business/saved-searches/:id', requireAuth, (req, res) => {
     const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
     if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar esta búsqueda guardada.' });
     deleteSavedSearch(row.id);
+    notifyIconUpdate(req, { tableKey: row.tableKey, iconId: 'iconSavedSearch', action: 'deleted', name: row.name, scope: row.scope });
     res.json({ ok: true });
 });
 
@@ -7105,6 +7158,7 @@ app.post('/api/business/saved-layouts', requireAuth, (req, res) => {
         scope: finalScope, ownerUserId: req.user.sub, createdByUserId: req.user.sub,
         audience: finalScope === 'global' ? audience : undefined,
     });
+    notifyIconUpdate(req, { tableKey, iconId: 'iconSavedLayout', action: 'created', name: row.name || name, scope: finalScope });
     res.status(201).json({ layout: row });
 });
 
@@ -7123,7 +7177,9 @@ app.put('/api/business/saved-layouts/:id', requireAuth, (req, res) => {
         { scope: row.scope, ownerUserId: row.ownerUserId, name, ignoreId: row.id })) {
         return res.status(409).json({ message: savedNameTakenMessage('un acomodo guardado') });
     }
-    res.json({ layout: updateSavedLayout(row.id, { name: name.trim(), layout }) });
+    const updatedLayout = updateSavedLayout(row.id, { name: name.trim(), layout });
+    notifyIconUpdate(req, { tableKey: row.tableKey, iconId: 'iconSavedLayout', action: 'updated', name: name.trim(), scope: row.scope });
+    res.json({ layout: updatedLayout });
 });
 
 app.delete('/api/business/saved-layouts/:id', requireAuth, (req, res) => {
@@ -7133,6 +7189,7 @@ app.delete('/api/business/saved-layouts/:id', requireAuth, (req, res) => {
     const isOwner = row.scope === 'personal' && row.ownerUserId === req.user.sub;
     if (!isOwner && !req.user.isClientAdmin) return res.status(403).json({ message: 'No tienes permiso para eliminar este acomodo guardado.' });
     deleteSavedLayout(row.id);
+    notifyIconUpdate(req, { tableKey: row.tableKey, iconId: 'iconSavedLayout', action: 'deleted', name: row.name, scope: row.scope });
     res.json({ ok: true });
 });
 

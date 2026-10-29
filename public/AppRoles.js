@@ -180,7 +180,8 @@ async function loadCostCentersForTree() {
 // Roles de escritorio. Es la MISMA regla que Dashboard.buildGrantLimits y que clampNewGrantsToLimits (db.js) aplica al guardar: si cambia una, cambian las
 // tres. Esta página no carga Dashboard.js, así que el Estatus se resuelve aquí con el perfil del negocio. Sin conexión (o si algo falla) no hay candados en
 // pantalla; el servidor igual quita lo que no cabe y avisa.
-const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar)$/;
+const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|notificar|buscar-filtrar|buscar-reordenar|buscar-ordenar)$/;
+const GRANT_ICON_NOTIFY_SUFFIX = /\/icon[A-Za-z]+\/notificar$/;
 function buildAppGrantLimits(contractGrants, visibleStatuses, statusOverrides) {
     const keyOf = (s, i, sub) => `${s}::${i || ''}::${sub || ''}`;
     const contract = Array.isArray(contractGrants) ? contractGrants : null;
@@ -211,7 +212,7 @@ function buildAppGrantLimits(contractGrants, visibleStatuses, statusOverrides) {
             if (!rawSet || sectionId === 'main' || !submenuId) return null;
             if (itemId === 'cc-list' || String(submenuId).startsWith('cc-')) return null;
             const base = String(submenuId).replace(/#app$/, '');
-            const contractKey = GRANT_COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(GRANT_COLUMN_LEVEL_SUFFIX, '/solo-ver') : base;
+            const contractKey = GRANT_ICON_NOTIFY_SUFFIX.test(base) ? base.replace(/\/notificar$/, '') : (GRANT_COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(GRANT_COLUMN_LEVEL_SUFFIX, '/solo-ver') : base);
             return covered(sectionId, itemId, contractKey) ? null : 'contract';
         },
     };

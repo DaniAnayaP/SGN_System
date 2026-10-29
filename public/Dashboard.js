@@ -100,7 +100,9 @@ function limitErrorMessage(body) {
 //   'contract' : una pantalla o columna fuera del plan y los adicionales de la empresa (General, centros de costo y los permisos gruesos no
 //                cuentan; sin plan no se evalúa). El sufijo #app y el nivel de una columna se comparan contra la pantalla / el solo-ver.
 // Si cambias algo aquí, cámbialo también en el servidor: hay una prueba que compara los dos.
-const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|buscar-filtrar|buscar-reordenar|buscar-ordenar)$/;
+const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|notificar|buscar-filtrar|buscar-reordenar|buscar-ordenar)$/;
+// El Notificar de un ÍCONO (<pantalla>/<ícono>/notificar) se compara contra el propio ícono, no contra un solo-ver.
+const GRANT_ICON_NOTIFY_SUFFIX = /\/icon[A-Za-z]+\/notificar$/;
 function buildGrantLimits(contractGrants) {
     const contract = Array.isArray(contractGrants) ? contractGrants : null;
     const keyOf = (s, i, sub) => `${s}::${i || ''}::${sub || ''}`;
@@ -112,7 +114,7 @@ function buildGrantLimits(contractGrants) {
             if (!rawSet || sectionId === 'main' || !submenuId) return null;
             if (itemId === 'cc-list' || String(submenuId).startsWith('cc-')) return null;
             const base = String(submenuId).replace(/#app$/, '');
-            const contractKey = GRANT_COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(GRANT_COLUMN_LEVEL_SUFFIX, '/solo-ver') : base;
+            const contractKey = GRANT_ICON_NOTIFY_SUFFIX.test(base) ? base.replace(/\/notificar$/, '') : (GRANT_COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(GRANT_COLUMN_LEVEL_SUFFIX, '/solo-ver') : base);
             return covered(sectionId, itemId, contractKey) ? null : 'contract';
         },
     };
@@ -9816,7 +9818,12 @@ function renderDataChangeNoticeRow(item) {
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
-    tag.textContent = t(item.action === 'fill' ? 'main.noticeDataFilled' : 'main.noticeDataChanged');
+    const ICON_LABEL_KEYS = { iconSavedSearch: 'main.savedSearchBtn', iconSavedLayout: 'main.savedLayoutBtn' };
+    const NOTICE_TAGS = {
+        fill: 'main.noticeDataFilled', change: 'main.noticeDataChanged', create: 'main.noticeRecordCreated', delete: 'main.noticeRecordDeleted',
+        'icon-created': 'main.noticeIconCreated', 'icon-updated': 'main.noticeIconUpdated', 'icon-deleted': 'main.noticeIconDeleted',
+    };
+    tag.textContent = t(NOTICE_TAGS[item.action] || 'main.noticeDataChanged');
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
     meta.textContent = `${t(item.screenKey || '')} · ${formatNotificationDate(item.createdAt)}`;
@@ -9826,7 +9833,9 @@ function renderDataChangeNoticeRow(item) {
     const empty = t('main.noticeEmptyValue');
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
-    desc.textContent = t('main.noticeDataLine', { column, record: item.recordLabel || '—', from: item.from || empty, to: item.to || empty });
+    if (item.action === 'create' || item.action === 'delete') desc.textContent = item.recordLabel || '—';
+    else if (String(item.action || '').startsWith('icon-')) desc.textContent = `${t(ICON_LABEL_KEYS[item.colKey] || item.colKey || '')} · ${item.recordLabel || '—'}`;
+    else desc.textContent = t('main.noticeDataLine', { column, record: item.recordLabel || '—', from: item.from || empty, to: item.to || empty });
     const by = document.createElement('div');
     by.className = 'notifications-item-meta';
     const who = item.actorLabel || '—';
@@ -9838,7 +9847,7 @@ function renderDataChangeNoticeRow(item) {
 // Cambios de accesos (kind 'access-change', ver publishAccessChangeNotice en db.js): quién lo hizo, a quién, el detalle (dado / editado / quitado) y por qué te llegó.
 const ACCESS_LEVEL_LABEL_KEYS = {
     'solo-ver': 'main.permSoloVer', 'ver-y-operar': 'main.permVerYOperar', editar: 'main.permEditar', autorizar: 'main.permAutorizar', eliminar: 'main.permEliminar',
-    'notificar-llenado': 'main.permNotificarLlenado', 'notificar-cambio': 'main.permNotificarCambio',
+    'notificar-llenado': 'main.permNotificarLlenado', 'notificar-cambio': 'main.permNotificarCambio', notificar: 'main.permNotificar',
     'buscar-filtrar': 'main.permBuscarFiltrar', 'buscar-reordenar': 'main.permBuscarReordenar', 'buscar-ordenar': 'main.permBuscarOrdenar',
 };
 function renderAccessChangeNoticeRow(item) {
@@ -9863,14 +9872,15 @@ function renderAccessChangeNoticeRow(item) {
     else if (item.scopeKind === 'perfil') desc.textContent = t('main.noticeAccessProfile', { actor, profile: item.scopeName || '', count: item.affectedCount || 0 });
     else desc.textContent = t('main.noticeAccessOther', { actor, names: (item.affected || []).join(', ') });
     row.append(tag, meta, desc);
-    const levelText = (levels) => (levels || []).map((l) => (ACCESS_LEVEL_LABEL_KEYS[l] ? t(ACCESS_LEVEL_LABEL_KEYS[l]) : l)).join(', ');
+    // El Notificar de un ícono (nodo que termina en iconXxx) se llama "Notificar actualizado"; el de un botón, "Notificar".
+    const levelText = (levels, node) => (levels || []).map((l) => (l === 'notificar' && /(^|\/)icon[A-Za-z]+$/.test(node || '') ? t('main.permNotificarActualizado') : (ACCESS_LEVEL_LABEL_KEYS[l] ? t(ACCESS_LEVEL_LABEL_KEYS[l]) : l))).join(', ');
     const shown = changes.slice(0, 8);
     shown.forEach((c) => {
         const line = document.createElement('div');
         line.className = 'notifications-item-meta';
         const where = resolveGrantLabel({ sectionId: c.sectionId, itemId: c.itemId, submenuId: c.node || null });
         const head = t(c.kind === 'given' ? 'main.noticeAccessLineGiven' : c.kind === 'edited' ? 'main.noticeAccessLineEdited' : 'main.noticeAccessLineRemoved');
-        const detail = c.kind === 'edited' ? `${levelText([c.from])} → ${levelText([c.to])}` : levelText(c.levels);
+        const detail = c.kind === 'edited' ? `${levelText([c.from], c.node)} → ${levelText([c.to], c.node)}` : levelText(c.levels, c.node);
         line.textContent = `${head} · ${where}${detail ? `: ${detail}` : ''}`;
         row.appendChild(line);
     });

@@ -839,7 +839,7 @@
         // Same independent-5th-toggle treatment as Autorizar -- see
         // canDeleteColumn in db.js for what actually reads this leaf.
         const COLUMN_ELIMINAR = { id: 'eliminar', labelKey: 'main.permEliminar' };
-        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash', 'notificar-llenado': 'bx-bell', 'notificar-cambio': 'bx-bell-ring', 'buscar-filtrar': 'bx-filter-alt', 'buscar-reordenar': 'bx-move-horizontal', 'buscar-ordenar': 'bx-sort-a-z' };
+        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash', 'notificar-llenado': 'bx-bell', 'notificar-cambio': 'bx-bell-ring', 'buscar-filtrar': 'bx-filter-alt', 'buscar-reordenar': 'bx-move-horizontal', 'buscar-ordenar': 'bx-sort-a-z', notificar: 'bx-bell' };
         // statusMode only -- the same 4 non-"Solo Ver" levels above (Ver y
         // Operar/Editar/Autorizar/Eliminar), each now also its own
         // independent Estatus/Web·App/$ cost row one level under its own
@@ -861,10 +861,18 @@
             { id: 'buscar-reordenar', labelKey: 'main.permBuscarReordenar' },
             { id: 'buscar-ordenar', labelKey: 'main.permBuscarOrdenar' },
         ];
-        const ALL_COLUMN_STATUS_LEVELS = [...COLUMN_STATUS_LEVELS, ...COLUMN_NOTIFY_LEVELS, ...COLUMN_SEARCH_LEVELS];
+        // Notificar en un BOTÓN (+ Nuevo, Eliminar...: las columnas de la clasificación Botones, hoja <botón>/notificar): avisa cuando alguien usa ese botón (crea o elimina un registro).
+        // Y en los ÍCONOS que guardan algo que otros pueden usar (Búsqueda guardada, Acomodo guardado: hoja <pantalla>/<ícono>/notificar, "Notificar actualizado"). Mismo
+        // permiso independiente que los de las columnas; ver canNotifyColumn / canNotifyIcon en db.js y notifyButtonAction / notifyIconUpdate en server.js.
+        const BUTTON_NOTIFY = { id: 'notificar', labelKey: 'main.permNotificar' };
+        const ICON_NOTIFY = { id: 'notificar', labelKey: 'main.permNotificarActualizado' };
+        const ICON_NOTIFY_IDS = new Set(['iconSavedSearch', 'iconSavedLayout']);
+        const ALL_COLUMN_STATUS_LEVELS = [...COLUMN_STATUS_LEVELS, ...COLUMN_NOTIFY_LEVELS, ...COLUMN_SEARCH_LEVELS, BUTTON_NOTIFY];
+        function columnIsButton(base) { return /(^|\/)class-botones\//.test(base); }
         function columnTakesNotify(base) { return !/(^|\/)class-(control-interno|botones)\//.test(base); }
         function columnTakesSearch(base) { return !/(^|\/)class-botones\//.test(base); }
         function columnStatusLevelsFor(base) {
+            if (columnIsButton(base)) return BUTTON_STATUS_LEVELS;
             return [...COLUMN_STATUS_LEVELS, ...(columnTakesNotify(base) ? COLUMN_NOTIFY_LEVELS : []), ...(columnTakesSearch(base) ? COLUMN_SEARCH_LEVELS : [])];
         }
 
@@ -1048,6 +1056,17 @@
                 });
                 container.appendChild(buildLevelSequenceRow(depth + 1, searchItems, { heading: t('main.searchOptionsHeading'), noSeparators: true }));
             }
+            // Un botón (+ Nuevo, Eliminar...) lleva su propio Notificar.
+            if (columnIsButton(base)) {
+                const buttonNotifyKey = keyOf(section.id, item.id, `${base}/${BUTTON_NOTIFY.id}`);
+                container.appendChild(buildLevelSequenceRow(depth + 1, [{
+                    icon: COLUMN_LEVEL_ICONS.notificar,
+                    label: t(BUTTON_NOTIFY.labelKey),
+                    checked: grantSet.has(buttonNotifyKey),
+                    disabled: subBlocked || (!!colLimitReason && !grantSet.has(buttonNotifyKey)),
+                    onChange: (checked) => { setKeys([buttonNotifyKey], checked); render(); },
+                }], { noSeparators: true }));
+            }
         }
 
         // A classification (e.g. "Control Interno") groups several columns
@@ -1213,7 +1232,10 @@
 
         function cascadeIcons(section, item, sm, subSm, checked) {
             (subSm.iconsSubmenu || []).forEach((icon) => {
-                setKeys([keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`)], checked);
+                const iconNodeKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
+                setKeys([iconNodeKey], checked);
+                // Quitar el ícono quita también su Notificar (nunca se marca solo al marcar todos).
+                if (!checked && ICON_NOTIFY_IDS.has(icon.id)) setKeys([`${iconNodeKey}/${ICON_NOTIFY.id}`], false);
             });
         }
 
@@ -1381,11 +1403,23 @@
                     iconRow.input.checked = grantSet.has(iconKey);
                     iconRow.input.addEventListener('change', () => {
                         setKeys([iconKey], iconRow.input.checked);
+                        if (!iconRow.input.checked && ICON_NOTIFY_IDS.has(icon.id)) setKeys([`${iconKey}/${ICON_NOTIFY.id}`], false);
                         render();
                     });
                     applyLimitLock(iconRow, limitReasonKey(iconKey), iconRow.input.checked);
                 }
                 container.appendChild(iconRow.row);
+                // Los íconos que guardan algo que otros pueden usar llevan su Notificar actualizado debajo.
+                if (ICON_NOTIFY_IDS.has(icon.id)) {
+                    const iconNotifyKey = `${iconKey}/${ICON_NOTIFY.id}`;
+                    container.appendChild(buildLevelSequenceRow(6, [{
+                        icon: COLUMN_LEVEL_ICONS.notificar,
+                        label: t(ICON_NOTIFY.labelKey),
+                        checked: grantSet.has(iconNotifyKey),
+                        disabled: subBlocked || (!!limitReasonKey(iconNotifyKey) && !grantSet.has(iconNotifyKey)),
+                        onChange: (checked) => { setKeys([iconNotifyKey], checked); render(); },
+                    }], { noSeparators: true }));
+                }
             });
         }
 
@@ -3212,7 +3246,7 @@
         // LEVELS never made sense stacked on a button already named
         // "Eliminar" (confirmed with the user: "qué lógica da, eliminar
         // un botón?").
-        const BUTTON_STATUS_LEVELS = [COLUMN_LEVELS.find((level) => level.id === 'ver-y-operar'), COLUMN_AUTHORIZE];
+        const BUTTON_STATUS_LEVELS = [COLUMN_LEVELS.find((level) => level.id === 'ver-y-operar'), COLUMN_AUTHORIZE, BUTTON_NOTIFY];
         // A classification's own color has to stay FIXED regardless of
         // which row is showing it (confirmed with the user: it must not
         // look like plain, unstyled text) -- Control Interno keeps the
@@ -4546,6 +4580,12 @@
                     iconId: icon.id,
                 } : null;
                 container.appendChild(statusRow(t(icon.labelKey), 5 + depthOffset, iconKey, null, selfStateRollup(iconKey), null, ancestorLocked, null, previewInfo, buildLevelBadgeCtx('icono')));
+                if (ICON_NOTIFY_IDS.has(icon.id)) {
+                    const iconNotifyKey = `${iconKey}/${ICON_NOTIFY.id}`;
+                    if (!(grantOrderMode && !subtreeHasGrant(iconNotifyKey))) {
+                        container.appendChild(statusRow(t(ICON_NOTIFY.labelKey), 6 + depthOffset, iconNotifyKey, null, selfStateRollup(iconNotifyKey), null, ancestorLocked, null, null, buildLevelBadgeCtx('icono')));
+                    }
+                }
             });
         }
 
@@ -4770,7 +4810,9 @@
                                 const iconsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`);
                                 addChild(subKey, iconsKey);
                                 subSm.iconsSubmenu.forEach((icon) => {
-                                    addChild(iconsKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`));
+                                    const iconNodeKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
+                                    addChild(iconsKey, iconNodeKey);
+                                    if (ICON_NOTIFY_IDS.has(icon.id)) addChild(iconNodeKey, keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}/${ICON_NOTIFY.id}`));
                                 });
                             }
                         });
@@ -4956,7 +4998,10 @@
                             if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
                                 const iconsKey = keyOf(section.id, item.id, `${sm.id}/${subSm.id}/__icons__`);
                                 setBlock(iconsKey, subWeb, subApp);
-                                subSm.iconsSubmenu.forEach((icon) => setBlock(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`), subWeb, subApp));
+                                subSm.iconsSubmenu.forEach((icon) => {
+                                    setBlock(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`), subWeb, subApp);
+                                    if (ICON_NOTIFY_IDS.has(icon.id)) setBlock(keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}/${ICON_NOTIFY.id}`), subWeb, subApp);
+                                });
                             }
                         });
                     });

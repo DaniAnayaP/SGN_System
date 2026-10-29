@@ -3571,7 +3571,38 @@ function canCreateColumn(grants, tableKey, colKey, pathOverride) {
 // Notificar (2026-10-22, diseño de Daniel): hojas <columna>/notificar-llenado y <columna>/notificar-cambio, independientes de Operar/Modificar. Quien las tiene recibe un
 // aviso (con quién fue y qué se hizo) cuando alguien LLENA por primera vez (llenado) o CAMBIA un dato ya registrado (cambio) esa columna. Ver publishDataChangeNotice
 // y checkAndLogFieldChanges / la ruta de autorizar en server.js. Quedan dentro de lo contratado de la columna (ver COLUMN_LEVEL_SUFFIX).
-const NOTIFY_COLUMN_LEAF = { fill: 'notificar-llenado', change: 'notificar-cambio' };
+// create / delete: el Notificar de un BOTÓN (<botón>/notificar, p. ej. la columna colFuelCreateAuth de la clasificación Botones, ver BUTTON_NOTIFY_COLUMNS).
+const NOTIFY_COLUMN_LEAF = { fill: 'notificar-llenado', change: 'notificar-cambio', create: 'notificar', delete: 'notificar' };
+// Qué columna de botón (en la clasificación Botones del árbol) representa "crear" y "eliminar" en cada tabla: son las mismas que ya revisan canCreateColumn / canDeleteColumn.
+const CATEGORY_BUTTON_NOTIFY = { create: 'colCatCreateAuth', delete: 'colCatDeleteAuth' };
+const BUTTON_NOTIFY_COLUMNS = {
+    'registro-combustible': { create: 'colFuelCreateAuth', delete: 'colFuelDeleteAuth' },
+    'carga-combustible': { create: 'colCargaCreateAuth', delete: 'colCargaDeleteAuth' },
+    'tipos-unidad': { create: 'colUnitTypeCreateAuth', delete: 'colUnitTypeDeleteAuth' },
+    'nuestras-unidades': { create: 'colFleetCreateAuth', delete: 'colFleetDeleteAuth' },
+    'nuestros-articulos': { create: 'colArticuloCreateAuth', delete: 'colArticuloDeleteAuth' },
+    'nuestras-cotizaciones': { create: 'colCotCreateAuth', delete: 'colCotDeleteAuth' },
+    'nuestros-traslados': { create: 'colTrasladoCreateAuth', delete: 'colTrasladoDeleteAuth' },
+    'mi-recurso-humano': { create: 'colHrWorkerCreateAuth' },
+    'reglas-orden-llenado': { delete: 'colFieldRuleAuthorization' },
+    'transacciones-inteligentes': { delete: 'colReportAuthorization' },
+    'reportes-programados': { delete: 'colScheduledAuthorizedBy' },
+    'categorias-inventario': CATEGORY_BUTTON_NOTIFY,
+    'categorias-compra': CATEGORY_BUTTON_NOTIFY,
+    'categorias-almacenamiento': CATEGORY_BUTTON_NOTIFY,
+    'categorias-rotacion': CATEGORY_BUTTON_NOTIFY,
+    'categorias-manejo': CATEGORY_BUTTON_NOTIFY,
+    'categorias-riesgo': CATEGORY_BUTTON_NOTIFY,
+    'categorias-vidautil': CATEGORY_BUTTON_NOTIFY,
+    'unidad-medida': CATEGORY_BUTTON_NOTIFY,
+};
+// Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
+const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout'];
+function canNotifyIcon(grants, tableKey, iconId) {
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path || !NOTIFY_ICON_IDS.includes(iconId)) return false;
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}/notificar`);
+}
 function canNotifyColumn(grants, tableKey, colKey, kind, pathOverride) {
     const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
     const leaf = NOTIFY_COLUMN_LEAF[kind];
@@ -8115,7 +8146,7 @@ function listTreeNoticesForUser(userId) {
 // Aviso de un cambio de datos (Notificar): una fila por persona en saas_tree_notices (kind 'data-change', scope 'data'). El texto dice QUIÉN lo hizo (actor_label),
 // QUÉ se hizo (action: 'fill' = llenó por primera vez, 'change' = modificó; from -> to) y DÓNDE (pantalla, columna, registro). Devuelve a quién le llegó.
 function publishDataChangeNotice({ clientId, tableKey, screenKey, colKey, recordLabel, action, oldValue, newValue, actorUserId, actorLabel, authorizedBy = '', skipUserIds = null }) {
-    const kind = action === 'fill' ? 'fill' : 'change';
+    const kind = ['fill', 'create', 'delete'].includes(action) ? action : 'change';
     const recipients = listColumnNotifyRecipientUserIds(clientId, tableKey, colKey, kind, skipUserIds || [actorUserId]);
     if (!recipients.length) return [];
     const clip = (v) => {
@@ -8214,6 +8245,25 @@ function publishAccessChangeNotice({ clientId, actorUserId, actorLabel, affected
     const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'access-change', 'access', ?, ?, ?)");
     db.transaction(() => recipients.forEach((why, userId) => insert.run(userId, JSON.stringify({ ...base, reasons: why }), actorUserId == null ? null : actorUserId, actorLabel || '')))();
     return Array.from(recipients.keys());
+}
+// Notificar en un botón: alguien creó o eliminó un registro con ese botón. Mismo almacén y fila de campana que los cambios de datos (kind 'data-change'); si la tabla no tiene
+// columna de botón para esa acción, no pasa nada.
+function publishButtonActionNotice({ clientId, tableKey, screenKey, action, recordLabel, actorUserId, actorLabel }) {
+    const colKey = BUTTON_NOTIFY_COLUMNS[tableKey] && BUTTON_NOTIFY_COLUMNS[tableKey][action];
+    if (!colKey) return [];
+    return publishDataChangeNotice({ clientId, tableKey, screenKey, colKey, recordLabel, action, oldValue: '', newValue: '', actorUserId, actorLabel });
+}
+// Notificar actualizado de un ícono: se creó, actualizó o eliminó una búsqueda o un acomodo guardado COMPARTIDO (los personales no avisan a nadie).
+function publishIconUpdateNotice({ clientId, tableKey, screenKey, iconId, action, name, actorUserId, actorLabel }) {
+    if (!NOTIFY_ICON_IDS.includes(iconId) || !['created', 'updated', 'deleted'].includes(action)) return [];
+    const skip = new Set([actorUserId].filter((id) => id != null));
+    const recipients = db.prepare('SELECT id FROM users WHERE client_id = ? AND active != 0').all(clientId).map((u) => u.id)
+        .filter((id) => !skip.has(id) && canNotifyIcon(getUserEffectiveGrantsRaw(id), tableKey, iconId) && canNotifyIcon(getUserEffectiveGrants(id), tableKey, iconId));
+    if (!recipients.length) return [];
+    const payload = JSON.stringify({ tableKey, screenKey: screenKey || tableKey, colKey: iconId, recordLabel: String(name || '').slice(0, 160), action: `icon-${action}`, from: '', to: '', authorizedBy: '' });
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'data-change', 'data', ?, ?, ?)");
+    db.transaction(() => recipients.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return recipients;
 }
 function markTreeNoticesSeen(userId) {
     db.prepare("UPDATE saas_tree_notices SET seen_at = datetime('now') WHERE user_id = ? AND seen_at IS NULL").run(userId);
@@ -9758,9 +9808,12 @@ function hasSaasGrant(grants, itemId, subItemId = null, isSuperAdmin = false) {
 // ---------------------------------------------------------------------------
 // Un permiso de columna lleva su nivel al final (solo-ver / ver-y-operar / editar / autorizar / eliminar) y, en la App, #app; el contrato
 // del plan guarda cada columna una sola vez como solo-ver, así que se compara contra eso. Los de centros de costo no son parte del plan.
-const COLUMN_LEVEL_SUFFIX = new RegExp('/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|buscar-filtrar|buscar-reordenar|buscar-ordenar)$');
+const COLUMN_LEVEL_SUFFIX = new RegExp('/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|notificar|buscar-filtrar|buscar-reordenar|buscar-ordenar)$');
+// El Notificar de un ÍCONO (<pantalla>/<ícono>/notificar) se compara contra el propio ícono, no contra un solo-ver.
+const ICON_NOTIFY_SUFFIX = /\/icon[A-Za-z]+\/notificar$/;
 function contractKeyForGrant(submenuId) {
     const base = String(submenuId).replace(/#app$/, '');
+    if (ICON_NOTIFY_SUFFIX.test(base)) return base.replace(/\/notificar$/, '');
     return COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(COLUMN_LEVEL_SUFFIX, '/solo-ver') : base;
 }
 function isCostCenterGrant(g) {
@@ -10269,6 +10322,8 @@ module.exports = {
     canNotifyColumn,
     getSearchGatedColumns,
     publishDataChangeNotice,
+    publishButtonActionNotice,
+    publishIconUpdateNotice,
     publishAccessChangeNotice,
     userIdsOfJobPosition,
     canCreateColumn,
