@@ -3956,6 +3956,14 @@ body.dark-mode .status-card-hab .mini-self-match{ color: #7fd99a; }
     cursor: not-allowed;
     opacity: 0.5;
 }
+/* Título de una fila de opciones sueltas (Opciones de Búsqueda): no son escalones de una secuencia, así que no llevan flechas. */
+.perm-tree-level-heading{
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-right: 0.3rem;
+    white-space: nowrap;
+}
 .perm-tree-level-sep{
     font-size: 0.75rem;
     color: var(--color-text-secondary);

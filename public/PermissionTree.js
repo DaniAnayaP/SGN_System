@@ -839,7 +839,7 @@
         // Same independent-5th-toggle treatment as Autorizar -- see
         // canDeleteColumn in db.js for what actually reads this leaf.
         const COLUMN_ELIMINAR = { id: 'eliminar', labelKey: 'main.permEliminar' };
-        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash', 'notificar-llenado': 'bx-bell', 'notificar-cambio': 'bx-bell-ring' };
+        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash', 'notificar-llenado': 'bx-bell', 'notificar-cambio': 'bx-bell-ring', 'buscar-filtrar': 'bx-filter-alt', 'buscar-reordenar': 'bx-move-horizontal', 'buscar-ordenar': 'bx-sort-a-z' };
         // statusMode only -- the same 4 non-"Solo Ver" levels above (Ver y
         // Operar/Editar/Autorizar/Eliminar), each now also its own
         // independent Estatus/Web·App/$ cost row one level under its own
@@ -853,9 +853,20 @@
         const COLUMN_NOTIFY_FILL = { id: 'notificar-llenado', labelKey: 'main.permNotificarLlenado' };
         const COLUMN_NOTIFY_CHANGE = { id: 'notificar-cambio', labelKey: 'main.permNotificarCambio' };
         const COLUMN_NOTIFY_LEVELS = [COLUMN_NOTIFY_FILL, COLUMN_NOTIFY_CHANGE];
-        const ALL_COLUMN_STATUS_LEVELS = [...COLUMN_STATUS_LEVELS, ...COLUMN_NOTIFY_LEVELS];
+        // Opciones de Búsqueda: lo que esa columna puede hacer en la tabla (filtrar por su embudo, arrastrarla para reordenar columnas, ordenar las filas al tocar su
+        // encabezado). Tres permisos independientes (hojas <columna>/buscar-filtrar | buscar-reordenar | buscar-ordenar), en TODAS las columnas de datos, también las de
+        // Control Interno; solo los Botones no son columnas. Ver hasColumnSearchGrant en Dashboard.js, que es quien los revisa en la tabla.
+        const COLUMN_SEARCH_LEVELS = [
+            { id: 'buscar-filtrar', labelKey: 'main.permBuscarFiltrar' },
+            { id: 'buscar-reordenar', labelKey: 'main.permBuscarReordenar' },
+            { id: 'buscar-ordenar', labelKey: 'main.permBuscarOrdenar' },
+        ];
+        const ALL_COLUMN_STATUS_LEVELS = [...COLUMN_STATUS_LEVELS, ...COLUMN_NOTIFY_LEVELS, ...COLUMN_SEARCH_LEVELS];
         function columnTakesNotify(base) { return !/(^|\/)class-(control-interno|botones)\//.test(base); }
-        function columnStatusLevelsFor(base) { return columnTakesNotify(base) ? ALL_COLUMN_STATUS_LEVELS : COLUMN_STATUS_LEVELS; }
+        function columnTakesSearch(base) { return !/(^|\/)class-botones\//.test(base); }
+        function columnStatusLevelsFor(base) {
+            return [...COLUMN_STATUS_LEVELS, ...(columnTakesNotify(base) ? COLUMN_NOTIFY_LEVELS : []), ...(columnTakesSearch(base) ? COLUMN_SEARCH_LEVELS : [])];
+        }
 
         // Ver y Operar/Editar/Autorizar as one connected row instead of 3
         // stacked plain checkboxes — the user's own complaint looking at
@@ -866,7 +877,7 @@
         // disconnected list rows. readOnly mode swaps each checkbox for a
         // small status badge, same information buildRow's own badge branch
         // already shows elsewhere in this file.
-        function buildLevelSequenceRow(depth, items) {
+        function buildLevelSequenceRow(depth, items, options = {}) {
             const row = document.createElement('div');
             row.className = `perm-tree-row perm-tree-depth-${depth}`;
             const spacer = document.createElement('span');
@@ -874,8 +885,15 @@
             row.appendChild(spacer);
             const group = document.createElement('div');
             group.className = 'perm-tree-level-group';
+            // options.heading: título de una fila de opciones sueltas; options.noSeparators: sin flechas entre ellas (no son una secuencia de escalones).
+            if (options.heading) {
+                const heading = document.createElement('span');
+                heading.className = 'perm-tree-level-heading';
+                heading.textContent = options.heading;
+                group.appendChild(heading);
+            }
             items.forEach((item, i) => {
-                if (i > 0) {
+                if (i > 0 && !options.noSeparators) {
                     const sep = document.createElement('i');
                     sep.className = 'bx bx-chevron-right perm-tree-level-sep';
                     sep.setAttribute('aria-hidden', 'true');
@@ -1014,7 +1032,21 @@
                         onChange: (checked) => { setKeys([notifyKey], checked); render(); },
                     };
                 });
-                container.appendChild(buildLevelSequenceRow(depth + 1, notifyItems));
+                container.appendChild(buildLevelSequenceRow(depth + 1, notifyItems, { noSeparators: true }));
+            }
+            // Opciones de Búsqueda: Filtrar / Reordenar columna / Ordenar filas, otra fila debajo (permisos independientes).
+            if (columnTakesSearch(base)) {
+                const searchItems = COLUMN_SEARCH_LEVELS.map((level) => {
+                    const searchKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                    return {
+                        icon: COLUMN_LEVEL_ICONS[level.id],
+                        label: t(level.labelKey),
+                        checked: grantSet.has(searchKey),
+                        disabled: subBlocked || (!!colLimitReason && !grantSet.has(searchKey)),
+                        onChange: (checked) => { setKeys([searchKey], checked); render(); },
+                    };
+                });
+                container.appendChild(buildLevelSequenceRow(depth + 1, searchItems, { heading: t('main.searchOptionsHeading'), noSeparators: true }));
             }
         }
 

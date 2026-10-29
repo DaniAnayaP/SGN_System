@@ -5847,6 +5847,80 @@ function seedColumnLevelGrants() {
 }
 seedColumnLevelGrants();
 
+// --- One-time data migration (2026-10-22): "Opciones de Búsqueda" por columna ---------------------------------------------------------------------------
+// Filtrar (el embudo del encabezado), Reordenar columna (arrastrarla) y Ordenar filas (tocar el encabezado) pasan a ser permisos de cada columna: hojas
+// <columna>/buscar-filtrar | buscar-reordenar | buscar-ordenar. Hasta hoy cualquiera que viera una tabla los usaba en todas sus columnas; sin esta siembra, al activarse la
+// revisión nadie que no sea administrador del cliente podría filtrar, ordenar ni mover columnas. Se les da, en TODAS las columnas de esa tabla, a quien YA ve la pantalla
+// (su hoja, un permiso más ancho de su ítem o departamento, o cualquier hoja de una columna suya). Corre UNA sola vez (schema_migrations_data): quien después quite una
+// opción a propósito no la recupera en el siguiente reinicio. Solo job_position_grants y user_grants (profile_grants ya no cuenta para el acceso efectivo).
+const COLUMN_SEARCH_OPTION_LEAVES = ['buscar-filtrar', 'buscar-reordenar', 'buscar-ordenar'];
+const COLUMN_SEARCH_SEED_KEY = 'seed-column-search-options-v1';
+// Las columnas de datos de una tabla como las dibuja el árbol: sueltas bajo la pantalla o dentro de una clasificación (menos Botones, que no son columnas).
+function treeDataColumnEntries(path) {
+    const pantalla = findPantallaNode(path.sectionId, path.itemId, path.submenuPrefix);
+    if (!pantalla) return [];
+    const entries = [];
+    (pantalla.submenu || []).forEach((entry) => {
+        if (entry.isClassification) {
+            if (entry.id === 'class-botones') return;
+            (entry.submenu || []).forEach((c) => entries.push({ id: c.id, base: `${path.submenuPrefix}/${entry.id}/${c.id}` }));
+        } else {
+            entries.push({ id: entry.id, base: `${path.submenuPrefix}/${entry.id}` });
+        }
+    });
+    return entries;
+}
+// { tableKey: [ids de columna que el árbol conoce] }: el navegador solo revisa las columnas que aparecen aquí (las calculadas, que no están en el árbol, quedan siempre disponibles).
+let searchGatedColumnsCache = null;
+function getSearchGatedColumns() {
+    if (!searchGatedColumnsCache) {
+        searchGatedColumnsCache = {};
+        Object.entries(TABLE_GRANT_PATHS).forEach(([tableKey, path]) => {
+            const ids = treeDataColumnEntries(path).map((e) => e.id);
+            if (ids.length) searchGatedColumnsCache[tableKey] = ids;
+        });
+    }
+    return searchGatedColumnsCache;
+}
+function seedColumnSearchOptionGrants() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(COLUMN_SEARCH_SEED_KEY)) return;
+    let inserted = 0;
+    const seed = db.transaction(() => {
+        for (const [ownerTable, ownerColumn] of [['job_position_grants', 'job_position_id'], ['user_grants', 'user_id']]) {
+            const hasGrant = db.prepare(`SELECT 1 FROM ${ownerTable} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
+            const insertGrant = db.prepare(`INSERT INTO ${ownerTable} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
+            for (const path of Object.values(TABLE_GRANT_PATHS)) {
+                const entries = treeDataColumnEntries(path);
+                if (!entries.length) continue;
+                const under = `${path.submenuPrefix}/`;
+                const owners = db.prepare(`
+                    SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${ownerTable}
+                    WHERE section_id = ? AND (
+                        (item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?))
+                        OR (item_id = ? AND submenu_id IS NULL)
+                        OR (item_id IS NULL AND submenu_id IS NULL)
+                    )
+                `).all(path.sectionId, path.itemId, path.submenuPrefix, under.length, under, path.itemId);
+                owners.forEach(({ ownerId }) => {
+                    entries.forEach((entry) => {
+                        COLUMN_SEARCH_OPTION_LEAVES.forEach((leaf) => {
+                            const submenuId = `${entry.base}/${leaf}`;
+                            if (!hasGrant.get(ownerId, path.sectionId, path.itemId, submenuId)) {
+                                insertGrant.run(ownerId, path.sectionId, path.itemId, submenuId);
+                                inserted += 1;
+                            }
+                        });
+                    });
+                });
+            }
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(COLUMN_SEARCH_SEED_KEY);
+    });
+    seed();
+    console.log(`[db] Seeded Opciones de Búsqueda (Filtrar, Reordenar columna, Ordenar filas) for pre-existing table access: ${inserted} grants (one-time migration).`);
+}
+// Se llama al FINAL del archivo (ver más abajo, antes de module.exports): findPantallaNode usa el árbol injertado de Administración del Negocio, que se arma más adelante.
+
 // --- One-time data migration: seed pantalla-visibility for pre-existing --
 // --- access ("Pantalla habilitada" in the permission tree) ---------------
 // Before this round, the department sidebar showed every pantalla (real
@@ -9599,7 +9673,7 @@ function hasSaasGrant(grants, itemId, subItemId = null, isSuperAdmin = false) {
 // ---------------------------------------------------------------------------
 // Un permiso de columna lleva su nivel al final (solo-ver / ver-y-operar / editar / autorizar / eliminar) y, en la App, #app; el contrato
 // del plan guarda cada columna una sola vez como solo-ver, así que se compara contra eso. Los de centros de costo no son parte del plan.
-const COLUMN_LEVEL_SUFFIX = new RegExp('/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio)$');
+const COLUMN_LEVEL_SUFFIX = new RegExp('/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|buscar-filtrar|buscar-reordenar|buscar-ordenar)$');
 function contractKeyForGrant(submenuId) {
     const base = String(submenuId).replace(/#app$/, '');
     return COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(COLUMN_LEVEL_SUFFIX, '/solo-ver') : base;
@@ -10053,6 +10127,9 @@ function setUserGrants(userId, grants, changedBy) {
 // --- Query helpers: user <-> profile assignment -------------------------------
 const systemReset = createSystemReset(db, DATA_DIR);
 
+// Siembra de Opciones de Búsqueda (definida arriba): aquí ya existe todo lo que usa findPantallaNode.
+seedColumnSearchOptionGrants();
+
 module.exports = {
     db,
     systemReset,
@@ -10105,6 +10182,7 @@ module.exports = {
     canAuthorizeColumn,
     canDeleteColumn,
     canNotifyColumn,
+    getSearchGatedColumns,
     publishDataChangeNotice,
     canCreateColumn,
     listClientEvidenceFiles,

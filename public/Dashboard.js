@@ -100,7 +100,7 @@ function limitErrorMessage(body) {
 //   'contract' : una pantalla o columna fuera del plan y los adicionales de la empresa (General, centros de costo y los permisos gruesos no
 //                cuentan; sin plan no se evalúa). El sufijo #app y el nivel de una columna se comparan contra la pantalla / el solo-ver.
 // Si cambias algo aquí, cámbialo también en el servidor: hay una prueba que compara los dos.
-const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio)$/;
+const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|buscar-filtrar|buscar-reordenar|buscar-ordenar)$/;
 function buildGrantLimits(contractGrants) {
     const contract = Array.isArray(contractGrants) ? contractGrants : null;
     const keyOf = (s, i, sub) => `${s}::${i || ''}::${sub || ''}`;
@@ -2685,6 +2685,7 @@ async function loadBusinessProfile() {
         }
         const { profile } = await res.json();
         cachedBusinessProfile = profile;
+        refreshColumnSearchGates();
         renderBusinessProfile();
     } catch (err) {
         shellLoadFailed = true;
@@ -3112,7 +3113,7 @@ function applyDataTableColumnLayout(tableId) {
 
     Array.from(headerRow.cells).forEach((th) => {
         applyPinStyle(th, th.dataset.col, state);
-        th.draggable = !config.pinned.includes(th.dataset.col);
+        th.draggable = !config.pinned.includes(th.dataset.col) && hasColumnSearchGrant(tableId, th.dataset.col, 'reorder');
     });
 
     // <col display:none> already shrinks the empty-state colspan cell's
@@ -3607,9 +3608,10 @@ function sortTableByColumn(tableId, key) {
 function attachSortHandler(th, tableId) {
     if (th.dataset.sortBound) return;
     th.dataset.sortBound = '1';
-    th.classList.add('data-table-col-sortable');
+    if (hasColumnSearchGrant(tableId, th.dataset.col, 'sort')) th.classList.add('data-table-col-sortable');
     th.addEventListener('click', (event) => {
         if (event.target.closest('.data-table-col-resize-handle') || event.target.closest('.data-table-col-filter-trigger')) return;
+        if (!hasColumnSearchGrant(tableId, th.dataset.col, 'sort')) return;
         sortTableByColumn(tableId, th.dataset.col);
     });
 }
@@ -4387,6 +4389,7 @@ document.addEventListener('keydown', (event) => {
 // dashboard:language-changed pass (see below) is what keeps it alive.
 function attachColumnFilterTrigger(th, tableId) {
     if (th.dataset.col === 'actions') return; // nothing meaningful to filter by in this column
+    if (!hasColumnSearchGrant(tableId, th.dataset.col, 'filter')) return;
     if (th.querySelector('.data-table-col-filter-trigger')) return;
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -12160,6 +12163,36 @@ function hasColumnDeleteGrant(tableKey, colKey) {
     const base = columnSubmenuBase(path, colKey);
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
+}
+
+// Opciones de Búsqueda por columna (Filtrar / Reordenar columna / Ordenar filas): hojas <columna>/buscar-filtrar | buscar-reordenar | buscar-ordenar. Solo se revisan las
+// columnas que el árbol conoce (profile.searchGatedColumns, de db.js: las calculadas no están en menu.json, no tienen hoja y quedan siempre disponibles), en tablas con
+// ruta en el árbol y para quien no es administrador del cliente. La hoja se busca por su final (/<columna>/<opción>) bajo la pantalla, así no depende de en qué
+// clasificación esté la columna. Mientras no carguen los permisos no se esconde nada; refreshColumnSearchGates lo vuelve a aplicar al cargarlos.
+const SEARCH_OPTION_LEAF = { filter: 'buscar-filtrar', reorder: 'buscar-reordenar', sort: 'buscar-ordenar' };
+function hasColumnSearchGrant(tableKey, colKey, option) {
+    if (!!currentUser?.isClientAdmin || !currentUser?.clientId) return true;
+    if (DIALOG_TABLE_KEYS.has(tableKey)) return true;
+    const path = TABLE_GRANT_PATHS[tableKey];
+    const profile = cachedBusinessProfile;
+    const gated = profile && profile.searchGatedColumns && profile.searchGatedColumns[tableKey];
+    if (!path || !gated || !colKey || !gated.includes(colKey)) return true;
+    const prefix = `${path.submenuPrefix}/`;
+    const suffix = `/${colKey}/${SEARCH_OPTION_LEAF[option]}`;
+    return (profile.effectiveGrants || []).some((g) => (
+        g.sectionId === path.sectionId && g.itemId === path.itemId && typeof g.submenuId === 'string' && g.submenuId.startsWith(prefix) && g.submenuId.endsWith(suffix)
+    ));
+}
+// Vuelve a aplicar lo que no se puede usar en las tablas que ya se armaron (los permisos pueden llegar después que la tabla): quita el embudo, el ordenar y el arrastre.
+function refreshColumnSearchGates() {
+    dataTableColumnState.forEach((state, tableId) => {
+        Array.from(getHeaderRow(state.table)?.cells || []).forEach((th) => {
+            const col = th.dataset.col;
+            if (!hasColumnSearchGrant(tableId, col, 'filter')) th.querySelector('.data-table-col-filter-trigger')?.remove();
+            if (!hasColumnSearchGrant(tableId, col, 'sort')) th.classList.remove('data-table-col-sortable');
+            if (!hasColumnSearchGrant(tableId, col, 'reorder')) th.draggable = false;
+        });
+    });
 }
 
 // Toolbar icons (Fijar/Visibilidad/Historial/Leyenda/Filtro/Limpiar/Zoom) —

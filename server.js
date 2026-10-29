@@ -211,6 +211,7 @@ const {
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,
+    getSearchGatedColumns,
     publishDataChangeNotice,
     canCreateColumn,
     createPendingChange,
@@ -957,6 +958,8 @@ app.get('/api/me/profile', requireAuth, (req, res) => {
 app.get('/api/me/business-profile', requireAuth, (req, res) => {
     const profile = getUserBusinessProfileById(req.user.sub);
     if (!profile) return res.status(404).json({ message: 'User not found.' });
+    // Las columnas que el árbol conoce en cada tabla: la tabla solo revisa los permisos de Opciones de Búsqueda de esas (ver hasColumnSearchGrant en Dashboard.js).
+    profile.searchGatedColumns = getSearchGatedColumns();
     res.json({ profile });
 });
 
