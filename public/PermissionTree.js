@@ -839,7 +839,7 @@
         // Same independent-5th-toggle treatment as Autorizar -- see
         // canDeleteColumn in db.js for what actually reads this leaf.
         const COLUMN_ELIMINAR = { id: 'eliminar', labelKey: 'main.permEliminar' };
-        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash' };
+        const COLUMN_LEVEL_ICONS = { 'ver-y-operar': 'bx-play', editar: 'bx-edit', autorizar: 'bx-shield-check', eliminar: 'bx-trash', 'notificar-llenado': 'bx-bell', 'notificar-cambio': 'bx-bell-ring' };
         // statusMode only -- the same 4 non-"Solo Ver" levels above (Ver y
         // Operar/Editar/Autorizar/Eliminar), each now also its own
         // independent Estatus/Web·App/$ cost row one level under its own
@@ -847,6 +847,15 @@
         // exceptions anywhere in the tree. Solo Ver stays the implicit
         // baseline, never its own row here either, same as the grant tree.
         const COLUMN_STATUS_LEVELS = [...COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver'), COLUMN_AUTHORIZE, COLUMN_ELIMINAR];
+        // Notificar: quien lo tenga marcado recibe un aviso (con quién fue y qué se hizo) cuando alguien LLENA por primera vez (llenado) o CAMBIA (cambio) el dato de esta
+        // columna. Dos permisos independientes más, igual que Autorizar y Eliminar (hojas <columna>/notificar-llenado y /notificar-cambio; ver canNotifyColumn en db.js).
+        // Solo van en las columnas de datos de una persona: no en Control Interno (las llena el sistema) ni en Botones.
+        const COLUMN_NOTIFY_FILL = { id: 'notificar-llenado', labelKey: 'main.permNotificarLlenado' };
+        const COLUMN_NOTIFY_CHANGE = { id: 'notificar-cambio', labelKey: 'main.permNotificarCambio' };
+        const COLUMN_NOTIFY_LEVELS = [COLUMN_NOTIFY_FILL, COLUMN_NOTIFY_CHANGE];
+        const ALL_COLUMN_STATUS_LEVELS = [...COLUMN_STATUS_LEVELS, ...COLUMN_NOTIFY_LEVELS];
+        function columnTakesNotify(base) { return !/(^|\/)class-(control-interno|botones)\//.test(base); }
+        function columnStatusLevelsFor(base) { return columnTakesNotify(base) ? ALL_COLUMN_STATUS_LEVELS : COLUMN_STATUS_LEVELS; }
 
         // Ver y Operar/Editar/Autorizar as one connected row instead of 3
         // stacked plain checkboxes — the user's own complaint looking at
@@ -993,6 +1002,20 @@
                 },
             ];
             container.appendChild(buildLevelSequenceRow(depth + 1, items));
+            // Notificar llenado / cambio: otra fila debajo, porque no son escalones de Operar > Modificar sino avisos aparte.
+            if (columnTakesNotify(base)) {
+                const notifyItems = COLUMN_NOTIFY_LEVELS.map((level) => {
+                    const notifyKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                    return {
+                        icon: COLUMN_LEVEL_ICONS[level.id],
+                        label: t(level.labelKey),
+                        checked: grantSet.has(notifyKey),
+                        disabled: subBlocked || (!!colLimitReason && !grantSet.has(notifyKey)),
+                        onChange: (checked) => { setKeys([notifyKey], checked); render(); },
+                    };
+                });
+                container.appendChild(buildLevelSequenceRow(depth + 1, notifyItems));
+            }
         }
 
         // A classification (e.g. "Control Interno") groups several columns
@@ -2600,7 +2623,7 @@
                 // node is already the Columna at this point (it has no real
                 // submenu of its own, these levels are plain UI checkboxes,
                 // never menu.json data), always the last segment.
-                const level = COLUMN_STATUS_LEVELS.find((l) => l.id === segments[i]);
+                const level = ALL_COLUMN_STATUS_LEVELS.find((l) => l.id === segments[i]);
                 if (level) return `${t(node.labelKey, node.labelParams)} — ${t(level.labelKey)}`;
                 node = (node.submenu || []).find((entry) => entry.id === segments[i]);
             }
@@ -4344,7 +4367,7 @@
                 readOnlyLabel: cls ? t(cls.labelKey, cls.labelParams) : t('menu.classNone'),
                 readOnlyColor: classificationColor(cls ? cls.id : null),
             });
-            const levels = isFixedClassification ? BUTTON_STATUS_LEVELS : COLUMN_STATUS_LEVELS;
+            const levels = isFixedClassification ? BUTTON_STATUS_LEVELS : columnStatusLevelsFor(base);
             // This column's own "anidados" override -- applies to every one
             // of its own grant-level sub-rows below (Ver y Operar/Editar/
             // Autorizar/Eliminar, or Operar/Autorizar for a fixed one). A
@@ -4607,7 +4630,7 @@
             // renderStatusColumn) -- shared by both places a column gets
             // added below (plain, and under a Clasificación).
             const addColumnLevels = (colKey, sectionId, itemId, colBase) => {
-                COLUMN_STATUS_LEVELS.forEach((level) => {
+                columnStatusLevelsFor(colBase).forEach((level) => {
                     addChild(colKey, keyOf(sectionId, itemId, `${colBase}/${level.id}`));
                 });
             };
@@ -4888,14 +4911,14 @@
                                             const colBase = `${sm.id}/${subSm.id}/${entry.id}/${col.id}`;
                                             const colKey = keyOf(section.id, item.id, colBase);
                                             setBlock(colKey, subWeb, subApp);
-                                            COLUMN_STATUS_LEVELS.forEach((level) => setBlock(keyOf(section.id, item.id, `${colBase}/${level.id}`), subWeb, subApp));
+                                            columnStatusLevelsFor(colBase).forEach((level) => setBlock(keyOf(section.id, item.id, `${colBase}/${level.id}`), subWeb, subApp));
                                         });
                                         return;
                                     }
                                     const colBase = `${sm.id}/${subSm.id}/${entry.id}`;
                                     const colKey = keyOf(section.id, item.id, colBase);
                                     setBlock(colKey, subWeb, subApp);
-                                    COLUMN_STATUS_LEVELS.forEach((level) => setBlock(keyOf(section.id, item.id, `${colBase}/${level.id}`), subWeb, subApp));
+                                    columnStatusLevelsFor(colBase).forEach((level) => setBlock(keyOf(section.id, item.id, `${colBase}/${level.id}`), subWeb, subApp));
                                 });
                             }
                             if (subSm.iconsSubmenu && subSm.iconsSubmenu.length) {
@@ -5997,7 +6020,7 @@
                 // exactly this key shape, regardless of whether it was
                 // rendered (and so already cached) this session.
                 const lastSegment = submenuId ? submenuId.split('/').pop() : null;
-                if (lastSegment && COLUMN_STATUS_LEVELS.some((level) => level.id === lastSegment)) {
+                if (lastSegment && ALL_COLUMN_STATUS_LEVELS.some((level) => level.id === lastSegment)) {
                     return resolveNodeLabel(sectionId, itemId, submenuId);
                 }
                 return statusLabelMap.get(keyOf(sectionId, itemId, submenuId)) || resolveNodeLabel(sectionId, itemId, submenuId);

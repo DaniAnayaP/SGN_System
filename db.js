@@ -3568,6 +3568,28 @@ function canCreateColumn(grants, tableKey, colKey, pathOverride) {
     return level === 'ver-y-operar' || level === 'editar';
 }
 
+// Notificar (2026-10-22, diseño de Daniel): hojas <columna>/notificar-llenado y <columna>/notificar-cambio, independientes de Operar/Modificar. Quien las tiene recibe un
+// aviso (con quién fue y qué se hizo) cuando alguien LLENA por primera vez (llenado) o CAMBIA un dato ya registrado (cambio) esa columna. Ver publishDataChangeNotice
+// y checkAndLogFieldChanges / la ruta de autorizar en server.js. Quedan dentro de lo contratado de la columna (ver COLUMN_LEVEL_SUFFIX).
+const NOTIFY_COLUMN_LEAF = { fill: 'notificar-llenado', change: 'notificar-cambio' };
+function canNotifyColumn(grants, tableKey, colKey, kind, pathOverride) {
+    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
+    const leaf = NOTIFY_COLUMN_LEAF[kind];
+    if (!path || !leaf) return false;
+    const base = columnSubmenuBase(path, colKey);
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${leaf}`);
+}
+// Las personas de un cliente con ese permiso Notificar, menos las de skipUserIds. Primero se mira lo guardado de cada una (barato) y solo a quien lo trae se le aplican
+// los límites (contrato, Estatus), que son los que de verdad deciden si el permiso vale.
+function listColumnNotifyRecipientUserIds(clientId, tableKey, colKey, kind, skipUserIds = []) {
+    const skip = new Set(skipUserIds.filter((id) => id != null));
+    return db.prepare('SELECT id FROM users WHERE client_id = ? AND active != 0').all(clientId)
+        .map((u) => u.id)
+        .filter((id) => !skip.has(id)
+            && canNotifyColumn(getUserEffectiveGrantsRaw(id), tableKey, colKey, kind)
+            && canNotifyColumn(getUserEffectiveGrants(id), tableKey, colKey, kind));
+}
+
 // --- Pending changes (real approval workflow for "Editar" on an ---------
 // --- already-saved value — see checkAndLogFieldChanges in server.js) -----
 function createPendingChange({ clientId, tableKey, recordId, recordLabel, fieldKey, columnKey, oldValue, newValue, requestedBy, requestedByUserId, escalatedToUserId }) {
@@ -8016,6 +8038,24 @@ function listTreeNoticesForUser(userId) {
         return { ...r, ...payload, payload: undefined };
     });
 }
+// Aviso de un cambio de datos (Notificar): una fila por persona en saas_tree_notices (kind 'data-change', scope 'data'). El texto dice QUIÉN lo hizo (actor_label),
+// QUÉ se hizo (action: 'fill' = llenó por primera vez, 'change' = modificó; from -> to) y DÓNDE (pantalla, columna, registro). Devuelve a quién le llegó.
+function publishDataChangeNotice({ clientId, tableKey, screenKey, colKey, recordLabel, action, oldValue, newValue, actorUserId, actorLabel, authorizedBy = '', skipUserIds = null }) {
+    const kind = action === 'fill' ? 'fill' : 'change';
+    const recipients = listColumnNotifyRecipientUserIds(clientId, tableKey, colKey, kind, skipUserIds || [actorUserId]);
+    if (!recipients.length) return [];
+    const clip = (v) => {
+        const s = v == null ? '' : String(v);
+        if (/^data:/.test(s)) return '[archivo]';
+        return s.length > 160 ? `${s.slice(0, 157)}…` : s;
+    };
+    const payload = JSON.stringify({
+        tableKey, screenKey: screenKey || tableKey, colKey, recordLabel: clip(recordLabel), action: kind, from: clip(oldValue), to: clip(newValue), authorizedBy: clip(authorizedBy),
+    });
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'data-change', 'data', ?, ?, ?)");
+    db.transaction(() => recipients.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return recipients;
+}
 function markTreeNoticesSeen(userId) {
     db.prepare("UPDATE saas_tree_notices SET seen_at = datetime('now') WHERE user_id = ? AND seen_at IS NULL").run(userId);
 }
@@ -9559,7 +9599,7 @@ function hasSaasGrant(grants, itemId, subItemId = null, isSuperAdmin = false) {
 // ---------------------------------------------------------------------------
 // Un permiso de columna lleva su nivel al final (solo-ver / ver-y-operar / editar / autorizar / eliminar) y, en la App, #app; el contrato
 // del plan guarda cada columna una sola vez como solo-ver, así que se compara contra eso. Los de centros de costo no son parte del plan.
-const COLUMN_LEVEL_SUFFIX = new RegExp('/(solo-ver|ver-y-operar|editar|autorizar|eliminar)$');
+const COLUMN_LEVEL_SUFFIX = new RegExp('/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio)$');
 function contractKeyForGrant(submenuId) {
     const base = String(submenuId).replace(/#app$/, '');
     return COLUMN_LEVEL_SUFFIX.test(base) ? base.replace(COLUMN_LEVEL_SUFFIX, '/solo-ver') : base;
@@ -10064,6 +10104,8 @@ module.exports = {
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,
+    canNotifyColumn,
+    publishDataChangeNotice,
     canCreateColumn,
     listClientEvidenceFiles,
     getEvidenceRawValue,

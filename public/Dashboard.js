@@ -100,7 +100,7 @@ function limitErrorMessage(body) {
 //   'contract' : una pantalla o columna fuera del plan y los adicionales de la empresa (General, centros de costo y los permisos gruesos no
 //                cuentan; sin plan no se evalúa). El sufijo #app y el nivel de una columna se comparan contra la pantalla / el solo-ver.
 // Si cambias algo aquí, cámbialo también en el servidor: hay una prueba que compara los dos.
-const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar)$/;
+const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio)$/;
 function buildGrantLimits(contractGrants) {
     const contract = Array.isArray(contractGrants) ? contractGrants : null;
     const keyOf = (s, i, sub) => `${s}::${i || ''}::${sub || ''}`;
@@ -9806,8 +9806,35 @@ function renderAccessDeniedNoticeRow(item) {
     return row;
 }
 
+// Notificar: "Dato llenado" / "Dato modificado" (kind 'data-change', ver publishDataChangeNotice en db.js): dónde, qué columna y registro, el valor de antes y el de después, y quién fue.
+function renderDataChangeNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(item.action === 'fill' ? 'main.noticeDataFilled' : 'main.noticeDataChanged');
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${t(item.screenKey || '')} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const translated = t(`main.${item.colKey}`);
+    const column = translated && translated !== `main.${item.colKey}` ? translated : (item.colKey || '');
+    const empty = t('main.noticeEmptyValue');
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = t('main.noticeDataLine', { column, record: item.recordLabel || '—', from: item.from || empty, to: item.to || empty });
+    const by = document.createElement('div');
+    by.className = 'notifications-item-meta';
+    const who = item.actorLabel || '—';
+    by.textContent = item.authorizedBy ? t('main.noticeChangedByAuthorized', { name: who, authorized: item.authorizedBy }) : t('main.noticeChangedBy', { name: who });
+    row.append(tag, meta, desc, by);
+    return row;
+}
+
 function renderTreeNoticeRow(item) {
     if (item.kind === 'access-denied') return renderAccessDeniedNoticeRow(item);
+    if (item.kind === 'data-change') return renderDataChangeNoticeRow(item);
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const tag = document.createElement('div');
@@ -10232,7 +10259,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (activeNotificationTab === 'alertas') row = renderAlertRow(item);

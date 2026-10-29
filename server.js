@@ -211,6 +211,7 @@ const {
     getColumnGrantLevel,
     canAuthorizeColumn,
     canDeleteColumn,
+    publishDataChangeNotice,
     canCreateColumn,
     createPendingChange,
     getPendingChangeById,
@@ -4329,6 +4330,21 @@ app.get('/api/business/org-chart', requireAuth, (req, res) => {
 // todos modos" on that specific conflict) -- then it's treated as a normal
 // edit of an existing value, except a resulting "pending" always escalates
 // to one specific person (see below) instead of the whole Autorizar pool.
+// Notificar: avisa a quien tenga el permiso de esa columna que alguien llenó (primera vez) o cambió el dato. Nunca rompe el guardado: si el aviso falla, solo se anota.
+function notifyDataChange({ clientId, tableKey, recordLabel, fieldKey, oldValue, newValue, actorUserId, actorLabel, sanitize, authorizedBy = '', skipUserIds = null }) {
+    try {
+        const colKey = String(fieldKey).split('.').pop();
+        const screenKey = (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || tableKey;
+        publishDataChangeNotice({
+            clientId, tableKey, screenKey, colKey, recordLabel, action: oldValue ? 'change' : 'fill',
+            // Un llenado parte de vacío: el 0 que traen por defecto los campos numéricos no es un valor de antes.
+            oldValue: !oldValue ? '' : (sanitize ? sanitize(oldValue) : oldValue), newValue: sanitize ? sanitize(newValue) : newValue,
+            actorUserId, actorLabel, authorizedBy, skipUserIds,
+        });
+    } catch (err) {
+        console.error('[notificar] no se pudo avisar de un cambio de datos:', err.message);
+    }
+}
 function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, recordLabel, sanitizers = {}, options = {}) {
     const { baseline = null, overrideConflicts = [] } = options;
     const applied = [];
@@ -4394,6 +4410,10 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
             oldValue: sanitize ? sanitize(c.oldValue) : c.oldValue,
             newValue: sanitize ? sanitize(c.newValue) : c.newValue,
             changedBy: changedByLabel(req),
+        });
+        notifyDataChange({
+            clientId: existing.client_id, tableKey, recordLabel, fieldKey: c.fieldKey, oldValue: c.oldValue, newValue: c.newValue,
+            actorUserId: req.user.sub, actorLabel: changedByLabel(req), sanitize,
         });
     });
     pending.forEach((c) => createPendingChange({
@@ -7236,6 +7256,11 @@ app.post('/api/business/pending-changes/:id/approve', requireAuth, (req, res) =>
         oldValue: sanitize ? sanitize(pc.old_value) : pc.old_value,
         newValue: sanitize ? sanitize(pc.new_value) : pc.new_value,
         changedBy: pc.requested_by, requestedBy: pc.requested_by, authorizedBy: req.user.name,
+    });
+    // Notificar cambio: el dato se aplicó de verdad en este momento. Quien lo pidió y quien lo autorizó ya lo saben.
+    notifyDataChange({
+        clientId: pc.client_id, tableKey: pc.table_key, recordLabel: pc.record_label, fieldKey: pc.field_key, oldValue: pc.old_value, newValue: pc.new_value,
+        actorUserId: pc.requested_by_user_id, actorLabel: pc.requested_by, sanitize, authorizedBy: req.user.name, skipUserIds: [pc.requested_by_user_id, req.user.sub],
     });
     resolvePendingChange(pc.id, { status: 'approved', resolvedBy: req.user.name, resolvedByUserId: req.user.sub });
     res.json({ ok: true });
