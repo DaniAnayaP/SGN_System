@@ -213,6 +213,8 @@ const {
     canDeleteColumn,
     getSearchGatedColumns,
     publishDataChangeNotice,
+    publishAccessChangeNotice,
+    userIdsOfJobPosition,
     canCreateColumn,
     createPendingChange,
     getPendingChangeById,
@@ -4128,6 +4130,7 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     const savedGrants = setUserGrants(req.params.id, limited.allowed, changedByLabel(req));
     if (grantsSignature(grantsBefore) !== grantsSignature(savedGrants)) {
         logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExtraGrants', grantsBefore.length, savedGrants.length);
+        notifyAccessChange({ req, affectedUsers: [{ id: user.id, name: user.name || user.username }], scopeKind: 'usuario', before: grantsBefore, after: savedGrants });
     }
     res.json({ grants: savedGrants, dropped: summarizeDroppedGrants(limited.dropped) });
 });
@@ -4184,7 +4187,12 @@ app.post('/api/business/users/:id/reset-role', requireAuth, requireClientAdmin, 
     if (!user) return res.status(404).json({ message: 'User not found.' });
     if (user.is_client_admin) return res.status(403).json({ message: "This user's access is managed from GEIPSA, not here." });
     logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyResetRole', '', '');
-    res.json({ grants: setUserGrants(req.params.id, []) });
+    const grantsBeforeReset = getUserGrants(req.params.id);
+    const grantsAfterReset = setUserGrants(req.params.id, []);
+    if (grantsBeforeReset.length) {
+        notifyAccessChange({ req, affectedUsers: [{ id: user.id, name: user.name || user.username }], scopeKind: 'usuario', before: grantsBeforeReset, after: grantsAfterReset });
+    }
+    res.json({ grants: grantsAfterReset });
 });
 
 // Bulk version of the above -- every user at this client (listBusinessUsers
@@ -4223,6 +4231,12 @@ app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmi
     const savedRoleGrants = setJobPositionGrants(req.params.id, limited.allowed);
     if (grantsSignature(roleGrantsBefore) !== grantsSignature(savedRoleGrants)) {
         logBusinessChange(req, 'business-roles', existing.id, existing.name, 'business.historyRoleGrants', roleGrantsBefore.length, savedRoleGrants.length);
+        // A quienes ocupan el puesto les llega el aviso como personas afectadas.
+        const holders = Array.from(userIdsOfJobPosition(existing.id)).map((id) => {
+            const u = getUserById(id, req.user.clientId);
+            return u ? { id: u.id, name: u.name || u.username } : null;
+        }).filter(Boolean);
+        notifyAccessChange({ req, affectedUsers: holders, scopeKind: 'perfil', scopeName: existing.name, before: roleGrantsBefore, after: savedRoleGrants });
     }
     res.json({ grants: savedRoleGrants, dropped: summarizeDroppedGrants(limited.dropped) });
 });
@@ -4346,6 +4360,16 @@ function notifyDataChange({ clientId, tableKey, recordLabel, fieldKey, oldValue,
         });
     } catch (err) {
         console.error('[notificar] no se pudo avisar de un cambio de datos:', err.message);
+    }
+}
+// Avisos de cambios de accesos: un solo aviso por Guardar, con el detalle adentro (ver publishAccessChangeNotice en db.js). Nunca rompe el guardado.
+function notifyAccessChange({ req, affectedUsers, scopeKind, scopeName = '', before, after }) {
+    try {
+        publishAccessChangeNotice({
+            clientId: req.user.clientId, actorUserId: req.user.sub, actorLabel: changedByLabel(req), affectedUsers, scopeKind, scopeName, before, after,
+        });
+    } catch (err) {
+        console.error('[avisos] no se pudo avisar de un cambio de accesos:', err.message);
     }
 }
 function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, recordLabel, sanitizers = {}, options = {}) {

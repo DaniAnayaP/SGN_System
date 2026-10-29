@@ -9835,9 +9835,66 @@ function renderDataChangeNoticeRow(item) {
     return row;
 }
 
+// Cambios de accesos (kind 'access-change', ver publishAccessChangeNotice en db.js): quién lo hizo, a quién, el detalle (dado / editado / quitado) y por qué te llegó.
+const ACCESS_LEVEL_LABEL_KEYS = {
+    'solo-ver': 'main.permSoloVer', 'ver-y-operar': 'main.permVerYOperar', editar: 'main.permEditar', autorizar: 'main.permAutorizar', eliminar: 'main.permEliminar',
+    'notificar-llenado': 'main.permNotificarLlenado', 'notificar-cambio': 'main.permNotificarCambio',
+    'buscar-filtrar': 'main.permBuscarFiltrar', 'buscar-reordenar': 'main.permBuscarReordenar', 'buscar-ordenar': 'main.permBuscarOrdenar',
+};
+function renderAccessChangeNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const changes = item.changes || [];
+    const single = item.total === 1 ? changes[0] : null;
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = single ? t(single.kind === 'given' ? 'main.noticeAccessGiven' : single.kind === 'edited' ? 'main.noticeAccessEdited' : 'main.noticeAccessRemoved') : t('main.noticeAccessMany');
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = formatNotificationDate(item.createdAt);
+    meta.title = timeStampTitle(item.createdAt);
+    const reasons = item.reasons || [];
+    const isAffected = reasons.some((r) => r.why === 'affected');
+    const actor = item.actorLabel || '—';
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    if (isAffected && item.scopeKind === 'usuario') desc.textContent = t('main.noticeAccessSelf', { actor });
+    else if (item.scopeKind === 'perfil') desc.textContent = t('main.noticeAccessProfile', { actor, profile: item.scopeName || '', count: item.affectedCount || 0 });
+    else desc.textContent = t('main.noticeAccessOther', { actor, names: (item.affected || []).join(', ') });
+    row.append(tag, meta, desc);
+    const levelText = (levels) => (levels || []).map((l) => (ACCESS_LEVEL_LABEL_KEYS[l] ? t(ACCESS_LEVEL_LABEL_KEYS[l]) : l)).join(', ');
+    const shown = changes.slice(0, 8);
+    shown.forEach((c) => {
+        const line = document.createElement('div');
+        line.className = 'notifications-item-meta';
+        const where = resolveGrantLabel({ sectionId: c.sectionId, itemId: c.itemId, submenuId: c.node || null });
+        const head = t(c.kind === 'given' ? 'main.noticeAccessLineGiven' : c.kind === 'edited' ? 'main.noticeAccessLineEdited' : 'main.noticeAccessLineRemoved');
+        const detail = c.kind === 'edited' ? `${levelText([c.from])} → ${levelText([c.to])}` : levelText(c.levels);
+        line.textContent = `${head} · ${where}${detail ? `: ${detail}` : ''}`;
+        row.appendChild(line);
+    });
+    const hidden = (item.total || changes.length) - shown.length;
+    if (hidden > 0) {
+        const more = document.createElement('div');
+        more.className = 'notifications-item-meta';
+        more.textContent = t('main.noticeAccessMoreLines', { n: hidden });
+        row.appendChild(more);
+    }
+    if (reasons.length) {
+        const why = document.createElement('div');
+        why.className = 'notifications-item-meta';
+        const text = reasons.map((r) => t(r.why === 'affected' ? 'main.noticeAccessWhyAffected' : r.why === 'access' ? 'main.noticeAccessWhyAccess' : r.why === 'boss-of' ? 'main.noticeAccessWhyBossOf' : 'main.noticeAccessWhyBossOfActor', { name: r.name || '' }));
+        why.textContent = `${t('main.noticeAccessWhy')}: ${text.join(' · ')}`;
+        row.appendChild(why);
+    }
+    return row;
+}
+
 function renderTreeNoticeRow(item) {
     if (item.kind === 'access-denied') return renderAccessDeniedNoticeRow(item);
     if (item.kind === 'data-change') return renderDataChangeNoticeRow(item);
+    if (item.kind === 'access-change') return renderAccessChangeNoticeRow(item);
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const tag = document.createElement('div');
@@ -10262,7 +10319,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (activeNotificationTab === 'alertas') row = renderAlertRow(item);

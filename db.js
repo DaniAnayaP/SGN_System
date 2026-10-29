@@ -8130,6 +8130,91 @@ function publishDataChangeNotice({ clientId, tableKey, screenKey, colKey, record
     db.transaction(() => recipients.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
     return recipients;
 }
+// ---------------------------------------------------------------------------
+// Avisos de cambios de accesos (2026-10-29, diseño de Daniel): cuando se DA, se EDITA (cambia de nivel: Operar → Modificar registro) o se QUITA un acceso en el árbol de
+// un usuario o de un puesto, se manda UN aviso por Guardar (con el detalle adentro) que dice quién lo hizo y qué cambió. Le llega a: la persona afectada (en un puesto, a
+// todas las de ese puesto), a todos los que tienen acceso a lo que cambió (ese nodo o algo debajo de él), al jefe directo de cada persona afectada y al jefe directo de quien
+// da el permiso (si no tiene jefe, como el administrador del cliente, ese grupo no recibe). Una persona en varios grupos recibe un solo aviso con todos sus motivos.
+// Mismo almacén y campana que los avisos de cambios de datos (saas_tree_notices, kind 'access-change', scope 'access').
+// ---------------------------------------------------------------------------
+const GRANT_EXCLUSIVE_LEVELS = ['solo-ver', 'ver-y-operar', 'editar'];
+const ACCESS_CHANGE_MAX_ENTRIES = 40;
+// Del antes y el después de los permisos guardados a una lista corta: [{ kind: 'given'|'removed'|'edited', sectionId, itemId, node, levels?, from?, to? }]. Los permisos de una
+// columna terminan en su nivel (ver COLUMN_LEVEL_SUFFIX): se juntan por columna, y pasar de un nivel excluyente a otro (Operar → Modificar registro) es UN cambio "editado".
+function diffGrantChanges(before, after) {
+    const keyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const inBefore = new Set(before.map(keyOf));
+    const inAfter = new Set(after.map(keyOf));
+    const nodes = new Map();
+    const bucket = (g, kind) => {
+        const sub = g.submenuId || '';
+        const m = COLUMN_LEVEL_SUFFIX.exec(sub);
+        const node = m ? sub.slice(0, m.index) : sub;
+        const level = m ? sub.slice(m.index + 1) : null;
+        const nodeKey = `${g.sectionId}::${g.itemId || ''}::${node}`;
+        if (!nodes.has(nodeKey)) nodes.set(nodeKey, { sectionId: g.sectionId, itemId: g.itemId || null, node, added: [], removed: [] });
+        nodes.get(nodeKey)[kind].push(level);
+    };
+    after.filter((g) => !inBefore.has(keyOf(g))).forEach((g) => bucket(g, 'added'));
+    before.filter((g) => !inAfter.has(keyOf(g))).forEach((g) => bucket(g, 'removed'));
+    const changes = [];
+    nodes.forEach((n) => {
+        const base = { sectionId: n.sectionId, itemId: n.itemId, node: n.node };
+        const addedExclusive = n.added.filter((l) => GRANT_EXCLUSIVE_LEVELS.includes(l));
+        const removedExclusive = n.removed.filter((l) => GRANT_EXCLUSIVE_LEVELS.includes(l));
+        let added = n.added;
+        let removed = n.removed;
+        if (addedExclusive.length && removedExclusive.length) {
+            changes.push({ kind: 'edited', ...base, from: removedExclusive[0], to: addedExclusive[0] });
+            added = added.filter((l) => !GRANT_EXCLUSIVE_LEVELS.includes(l));
+            removed = removed.filter((l) => !GRANT_EXCLUSIVE_LEVELS.includes(l));
+        }
+        if (added.length) changes.push({ kind: 'given', ...base, levels: added.filter(Boolean) });
+        if (removed.length) changes.push({ kind: 'removed', ...base, levels: removed.filter(Boolean) });
+    });
+    return changes;
+}
+// Quién recibe el aviso y por qué: Map(userId -> [{ why: 'affected' | 'access' | 'boss-of' | 'boss-of-actor', name? }]).
+function listAccessChangeRecipients({ clientId, actorUserId, affectedUsers, changes }) {
+    const reasons = new Map();
+    const add = (userId, reason) => {
+        if (userId == null || userId === actorUserId) return;
+        if (!reasons.has(userId)) reasons.set(userId, []);
+        const list = reasons.get(userId);
+        if (!list.some((r) => r.why === reason.why && (r.name || '') === (reason.name || ''))) list.push(reason);
+    };
+    affectedUsers.forEach((u) => add(u.id, { why: 'affected' }));
+    // Todos los que tienen acceso a lo que cambió: un permiso guardado en ese nodo (la columna o la pantalla) o debajo de él.
+    const users = db.prepare('SELECT id FROM users WHERE client_id = ? AND active != 0').all(clientId);
+    const touched = changes.map((c) => ({ sectionId: c.sectionId, itemId: c.itemId, node: c.node }));
+    users.forEach(({ id }) => {
+        if (id === actorUserId) return;
+        const holds = getUserEffectiveGrantsRaw(id).some((g) => touched.some((t) => {
+            if (g.sectionId !== t.sectionId || (g.itemId || null) !== (t.itemId || null)) return false;
+            const sub = g.submenuId || '';
+            return !t.node || sub === t.node || sub.startsWith(`${t.node}/`);
+        }));
+        if (holds) add(id, { why: 'access' });
+    });
+    // El jefe directo de cada persona afectada y el de quien da el permiso.
+    affectedUsers.forEach((u) => { add(resolveDirectSupervisorUserId(u.id), { why: 'boss-of', name: u.name }); });
+    add(resolveDirectSupervisorUserId(actorUserId), { why: 'boss-of-actor' });
+    return reasons;
+}
+// Guarda el aviso para cada destinatario. scopeKind: 'usuario' (el árbol de una persona) o 'perfil' (el de un puesto; scopeName = el puesto). Devuelve a quién le llegó.
+function publishAccessChangeNotice({ clientId, actorUserId, actorLabel, affectedUsers, scopeKind, scopeName = '', before, after }) {
+    const changes = diffGrantChanges(before, after);
+    if (!changes.length) return [];
+    const recipients = listAccessChangeRecipients({ clientId, actorUserId, affectedUsers, changes });
+    if (!recipients.size) return [];
+    const base = {
+        scopeKind, scopeName, affected: affectedUsers.slice(0, 6).map((u) => u.name), affectedCount: affectedUsers.length,
+        changes: changes.slice(0, ACCESS_CHANGE_MAX_ENTRIES), total: changes.length,
+    };
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'access-change', 'access', ?, ?, ?)");
+    db.transaction(() => recipients.forEach((why, userId) => insert.run(userId, JSON.stringify({ ...base, reasons: why }), actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return Array.from(recipients.keys());
+}
 function markTreeNoticesSeen(userId) {
     db.prepare("UPDATE saas_tree_notices SET seen_at = datetime('now') WHERE user_id = ? AND seen_at IS NULL").run(userId);
 }
@@ -10184,6 +10269,8 @@ module.exports = {
     canNotifyColumn,
     getSearchGatedColumns,
     publishDataChangeNotice,
+    publishAccessChangeNotice,
+    userIdsOfJobPosition,
     canCreateColumn,
     listClientEvidenceFiles,
     getEvidenceRawValue,
