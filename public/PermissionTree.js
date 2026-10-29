@@ -866,7 +866,7 @@
         // permiso independiente que los de las columnas; ver canNotifyColumn / canNotifyIcon en db.js y notifyButtonAction / notifyIconUpdate en server.js.
         const BUTTON_NOTIFY = { id: 'notificar', labelKey: 'main.permNotificar' };
         const ICON_NOTIFY = { id: 'notificar', labelKey: 'main.permNotificarActualizado' };
-        const ICON_NOTIFY_IDS = new Set(['iconSavedSearch', 'iconSavedLayout']);
+        const ICON_NOTIFY_IDS = new Set(['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules']);
         const ALL_COLUMN_STATUS_LEVELS = [...COLUMN_STATUS_LEVELS, ...COLUMN_NOTIFY_LEVELS, ...COLUMN_SEARCH_LEVELS, BUTTON_NOTIFY];
         function columnIsButton(base) { return /(^|\/)class-botones\//.test(base); }
         function columnTakesNotify(base) { return !/(^|\/)class-(control-interno|botones)\//.test(base); }
@@ -1764,6 +1764,7 @@
             iconLegend: 'bx-info-circle',
             iconFilter: 'bx-filter-alt',
             iconFilterClear: 'bx-x-circle',
+            iconFieldRules: 'bx-link',
         };
 
         function buildPreviewLegendHtml() {

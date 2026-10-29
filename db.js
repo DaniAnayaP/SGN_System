@@ -3597,7 +3597,14 @@ const BUTTON_NOTIFY_COLUMNS = {
     'unidad-medida': CATEGORY_BUTTON_NOTIFY,
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
-const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout'];
+const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
+// El icono mismo (<pantalla>/<icono>): quien no es administrador del cliente lo usa solo con esa hoja en su arbol. Hoy se pide para iconFieldRules (Reglas de Orden de Llenado,
+// que antes era solo del administrador): crear y editar reglas en server.js y, en pantalla, ver el icono.
+function hasTableIconGrant(grants, tableKey, iconId) {
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return false;
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}`);
+}
 function canNotifyIcon(grants, tableKey, iconId) {
     const path = TABLE_GRANT_PATHS[tableKey];
     if (!path || !NOTIFY_ICON_IDS.includes(iconId)) return false;
@@ -10324,6 +10331,7 @@ module.exports = {
     publishDataChangeNotice,
     publishButtonActionNotice,
     publishIconUpdateNotice,
+    hasTableIconGrant,
     publishAccessChangeNotice,
     userIdsOfJobPosition,
     canCreateColumn,

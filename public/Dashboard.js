@@ -5735,13 +5735,16 @@ function renderFieldRulesModal() {
                 pending.title = t('main.fieldRulesPendingHint');
                 chip.appendChild(pending);
             }
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'field-rules-chip-remove';
-            removeBtn.setAttribute('aria-label', t('admin.delete'));
-            removeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
-            removeBtn.addEventListener('click', () => removeFieldRule(rule.id));
-            chip.appendChild(removeBtn);
+            // Quitar una regla es su propio permiso (Eliminar de la columna de autorización de Reglas de Orden de Llenado): sin él no se ofrece.
+            if (hasColumnDeleteGrant('reglas-orden-llenado', 'colFieldRuleAuthorization')) {
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'field-rules-chip-remove';
+                removeBtn.setAttribute('aria-label', t('admin.delete'));
+                removeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+                removeBtn.addEventListener('click', () => removeFieldRule(rule.id));
+                chip.appendChild(removeBtn);
+            }
             depsRow.appendChild(chip);
         });
         card.appendChild(depsRow);
@@ -8097,12 +8100,11 @@ function renderDataTableColumnControls() {
                 toAppend.push(pill);
             }
 
-            // Reglas de Orden de Llenado — admin-only (it's a configuration
-            // decision, same gating as creating/editing a Centro de Costos),
-            // not wired into Iconos Personalización like the icons above:
-            // this one isn't about what a profile can SEE, it's about who
-            // can change how the table behaves for everyone.
-            if (currentUser?.isClientAdmin) {
+            // Reglas de Orden de Llenado — decide cómo se comporta la tabla para todos,
+            // así que el administrador del cliente lo ve siempre y los demás solo si
+            // se les dio el icono en el árbol (hoja <pantalla>/iconFieldRules, bajo
+            // Iconos Personalización); ver hasFieldRulesIconGrant.
+            if (hasFieldRulesIconGrant(tableKey)) {
                 const rulesBtn = document.createElement('button');
                 rulesBtn.type = 'button';
                 rulesBtn.className = 'data-table-zoom-btn';
@@ -9818,12 +9820,14 @@ function renderDataChangeNoticeRow(item) {
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
-    const ICON_LABEL_KEYS = { iconSavedSearch: 'main.savedSearchBtn', iconSavedLayout: 'main.savedLayoutBtn' };
+    const ICON_LABEL_KEYS = { iconSavedSearch: 'main.savedSearchBtn', iconSavedLayout: 'main.savedLayoutBtn', iconFieldRules: 'main.fieldRulesBtn' };
+    // Una regla de orden de llenado no es un "guardado": su aviso dice regla creada / actualizada / eliminada.
+    const RULE_TAGS = { 'icon-created': 'main.noticeRuleCreated', 'icon-updated': 'main.noticeRuleUpdated', 'icon-deleted': 'main.noticeRuleDeleted' };
     const NOTICE_TAGS = {
         fill: 'main.noticeDataFilled', change: 'main.noticeDataChanged', create: 'main.noticeRecordCreated', delete: 'main.noticeRecordDeleted',
         'icon-created': 'main.noticeIconCreated', 'icon-updated': 'main.noticeIconUpdated', 'icon-deleted': 'main.noticeIconDeleted',
     };
-    tag.textContent = t(NOTICE_TAGS[item.action] || 'main.noticeDataChanged');
+    tag.textContent = t((item.colKey === 'iconFieldRules' && RULE_TAGS[item.action]) || NOTICE_TAGS[item.action] || 'main.noticeDataChanged');
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
     meta.textContent = `${t(item.screenKey || '')} · ${formatNotificationDate(item.createdAt)}`;
@@ -12276,6 +12280,16 @@ function hasIconGrant(tableKey, iconId) {
     return grants.some((g) => (
         g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}`
     ));
+}
+// Icono de Reglas de Orden de Llenado: el administrador del cliente siempre; los demás solo con la hoja <pantalla>/iconFieldRules (espejo de hasTableIconGrant en db.js).
+// Una tabla sin ruta en el árbol no tiene dónde dárselo, así que solo la ve el administrador.
+function hasFieldRulesIconGrant(tableKey) {
+    if (!!currentUser?.isClientAdmin) return true;
+    if (!currentUser?.clientId) return false;
+    const path = TABLE_GRANT_PATHS[tableKey];
+    if (!path) return false;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/iconFieldRules`);
 }
 // Dispatcher every icon-grant check site calls instead of hasIconGrant
 // directly -- hasSaasTableIconGrant returns null for a tableKey it doesn't

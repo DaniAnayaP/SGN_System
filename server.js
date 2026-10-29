@@ -215,6 +215,7 @@ const {
     publishDataChangeNotice,
     publishButtonActionNotice,
     publishIconUpdateNotice,
+    hasTableIconGrant,
     publishAccessChangeNotice,
     userIdsOfJobPosition,
     canCreateColumn,
@@ -4757,10 +4758,17 @@ app.get('/api/business/field-fill-rules/all', requireAuth, (req, res) => {
     const companyName = getClientById(req.user.clientId)?.company_name;
     res.json({ rules: listAllFieldFillRules(req.user.clientId).map((r) => mapFieldFillRule(r, companyName)) });
 });
-app.post('/api/business/field-fill-rules', requireAuth, requireClientAdmin, (req, res) => {
+// Crear y editar reglas: el administrador del cliente o quien tenga el icono de Reglas de Orden de Llenado de esa pantalla en su arbol (hoja <pantalla>/iconFieldRules).
+function canManageFieldRules(req, tableKey) {
+    if (!req.user?.clientId) return false;
+    if (req.user.isClientAdmin) return true;
+    return hasTableIconGrant(getUserEffectiveGrants(req.user.sub), tableKey, 'iconFieldRules');
+}
+app.post('/api/business/field-fill-rules', requireAuth, (req, res) => {
     const error = validateFieldFillRuleBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { tableKey, gateCol, gateLabel, dependentCol, dependentLabel } = req.body;
+    if (!canManageFieldRules(req, tableKey)) return res.status(403).json({ message: 'No tienes permiso para crear reglas aquí.' });
     const rule = createFieldFillRule({
         clientId: req.user.clientId, tableKey, gateCol, gateLabel, dependentCol, dependentLabel, createdBy: req.user.name,
     });
@@ -4769,11 +4777,14 @@ app.post('/api/business/field-fill-rules', requireAuth, requireClientAdmin, (req
         recordLabel: `${rule.gate_label} → ${rule.dependent_label}`, action: 'create', changedBy: changedByLabel(req),
     });
     notifyButtonAction(req, 'reglas-orden-llenado', 'create', `${rule.gate_label} → ${rule.dependent_label}`);
+    notifyIconUpdate(req, { tableKey, iconId: 'iconFieldRules', action: 'created', name: `${rule.gate_label} → ${rule.dependent_label}`, scope: 'global' });
     res.status(201).json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
 });
-app.patch('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin, (req, res) => {
+app.patch('/api/business/field-fill-rules/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(403).json({ message: 'Client access required.' });
     const existing = getFieldFillRuleById(req.params.id, req.user.clientId);
     if (!existing) return res.status(404).json({ message: 'Rule not found.' });
+    if (!canManageFieldRules(req, existing.table_key)) return res.status(403).json({ message: 'No tienes permiso para editar reglas aquí.' });
     const error = validateFieldFillRuleBody({ tableKey: existing.table_key, ...req.body });
     if (error) return res.status(400).json({ message: error });
     const { gateCol, gateLabel, dependentCol, dependentLabel } = req.body;
@@ -4781,6 +4792,7 @@ app.patch('/api/business/field-fill-rules/:id', requireAuth, requireClientAdmin,
         const rule = updateFieldFillRule(req.params.id, req.user.clientId, { gateCol, gateLabel, dependentCol, dependentLabel });
         logBusinessChange(req, 'reglas-orden-llenado', rule.id, `${rule.gate_label} → ${rule.dependent_label}`, 'main.historyFillRule',
             `${existing.gate_label} → ${existing.dependent_label}`, `${rule.gate_label} → ${rule.dependent_label}`);
+        notifyIconUpdate(req, { tableKey: existing.table_key, iconId: 'iconFieldRules', action: 'updated', name: `${rule.gate_label} → ${rule.dependent_label}`, scope: 'global' });
         res.json({ rule: mapFieldFillRule(rule, getClientById(req.user.clientId)?.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -4819,6 +4831,7 @@ app.delete('/api/business/field-fill-rules/:id', requireAuth, (req, res) => {
             recordLabel: `${ruleToDelete.gate_label} → ${ruleToDelete.dependent_label}`, action: 'delete', changedBy: changedByLabel(req),
         });
         notifyButtonAction(req, 'reglas-orden-llenado', 'delete', `${ruleToDelete.gate_label} → ${ruleToDelete.dependent_label}`);
+        notifyIconUpdate(req, { tableKey: ruleToDelete.table_key, iconId: 'iconFieldRules', action: 'deleted', name: `${ruleToDelete.gate_label} → ${ruleToDelete.dependent_label}`, scope: 'global' });
     }
     res.status(204).end();
 });
