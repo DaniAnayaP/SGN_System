@@ -10895,7 +10895,12 @@ function isEstatusVisible(sectionId, itemId, submenuId) {
 function availableAreasForDepartment(deptKey) {
     const areas = orderByIds((deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [], cascadedOrder && (cascadedOrder.areaOrders || {})[deptKey], (a) => a.key);
     const visible = areas.filter((a) => isEstatusVisible(deptKey, a.key, null));
-    if (isUnrestrictedClientAdmin()) return visible;
+    if (isUnrestrictedClientAdmin()) {
+        // El administrador del cliente solo ve las áreas donde se le asignó algo (o todo el departamento).
+        const contract = adminContractGrants();
+        if (!contract) return visible;
+        return visible.filter((a) => contract.some((g) => g.sectionId === deptKey && (!g.itemId || g.itemId === a.key)));
+    }
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     return visible.filter((a) => grants.some((g) => g.sectionId === deptKey && g.itemId === a.key));
 }
@@ -10918,16 +10923,30 @@ function availableAreasForDepartment(deptKey) {
 // or a column inside a classification) now counts as the screen itself
 // being reachable, matching how a worker actually experiences "I was given
 // access to this screen's fields."
-function hasScreenGrant(sectionId, itemId, submenuId) {
-    if (!isEstatusVisible(sectionId, itemId, submenuId)) return false;
-    if (isUnrestrictedClientAdmin()) return true;
-    const grants = cachedBusinessProfile?.effectiveGrants || [];
+// Lo que se le asignó al cliente (el árbol de su plan más los adicionales de Nuestros Clientes): con eso se arma el menú del administrador del cliente,
+// que no tiene permisos propios. null cuando no aplica (cualquier otra cuenta) o cuando el cliente no tiene nada asignado en el árbol (los que se armaron
+// antes del árbol, solo con módulos): ahí el menú sigue siendo por departamento completo, como siempre. General (main) no entra en esto.
+function adminContractGrants() {
+    if (!isUnrestrictedClientAdmin()) return null;
+    const list = cachedBusinessProfile?.contractGrants;
+    return Array.isArray(list) && list.length ? list : null;
+}
+function grantsCoverScreen(grants, sectionId, itemId, submenuId) {
     return grants.some((g) => (
         (g.sectionId === sectionId && g.itemId === itemId && g.submenuId === submenuId)
         || (g.sectionId === sectionId && g.itemId === itemId && g.submenuId && g.submenuId.startsWith(`${submenuId}/`))
         || (g.sectionId === sectionId && g.itemId === itemId && !g.submenuId)
         || (g.sectionId === sectionId && !g.itemId && !g.submenuId)
     ));
+}
+function hasScreenGrant(sectionId, itemId, submenuId) {
+    if (!isEstatusVisible(sectionId, itemId, submenuId)) return false;
+    if (isUnrestrictedClientAdmin()) {
+        const contract = adminContractGrants();
+        if (!contract || sectionId === 'main') return true;
+        return grantsCoverScreen(contract, sectionId, itemId, submenuId);
+    }
+    return grantsCoverScreen(cachedBusinessProfile?.effectiveGrants || [], sectionId, itemId, submenuId);
 }
 
 // Every plain General item (the 7 top-bar buttons, plus Departamento/Área/
@@ -12039,6 +12058,13 @@ async function initDashboardInner({ activePage } = {}) {
         if (!isUnrestrictedClientAdmin()) {
             const grantedSectionIds = new Set((cachedBusinessProfile?.effectiveGrants || []).map((g) => g.sectionId));
             availableDepartments = availableDepartments.filter((d) => grantedSectionIds.has(d.key));
+        } else {
+            // El administrador del cliente: solo los departamentos donde se le asignó algo (plan + adicionales).
+            const contract = adminContractGrants();
+            if (contract) {
+                const contractSectionIds = new Set(contract.map((g) => g.sectionId));
+                availableDepartments = availableDepartments.filter((d) => contractSectionIds.has(d.key));
+            }
         }
         availableDepartments = orderByIds(availableDepartments, cascadedOrder && cascadedOrder.departmentOrder, (d) => d.key);
         if (!availableDepartments.some((d) => d.key === selectedDepartment)) {

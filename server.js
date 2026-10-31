@@ -1272,6 +1272,14 @@ function applyEffectiveEntitlements(clientId) {
     setClientCostCentersLimit(clientId, baseCostCenters + addenda.extraCostCenters);
 }
 
+// Una vez al arrancar: un cliente con adicionales guardados antes de que un adicional abriera su departamento con uno solo asignado no tenía el
+// departamento abierto. Solo agrega (nunca quita) y no hace nada si ya está todo abierto, así que repetirlo en cada arranque no cambia nada.
+try {
+    listClients().forEach((c) => { if (syncClientModulesFromPermissionGrants(c.id)) applyEffectiveEntitlements(c.id); });
+} catch (err) {
+    console.error('[accesos] no se pudieron abrir los departamentos de los adicionales guardados:', err.message);
+}
+
 // Extracts every field createClient/updateClient know how to persist, in one
 // place, so the create and update routes below (and any future one) can't
 // drift out of sync with each other on which fields get passed through.
@@ -1617,11 +1625,11 @@ app.get('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
 // Solo acepta tuplas que el plan del cliente TODAVÍA no cubre — rechazado
 // del lado servidor (no solo escondido en el árbol), para que un
 // "+adicional" nunca pueda duplicar (y cobrar dos veces) algo que el plan
-// ya incluye. Al guardar, sincroniza a acceso real (client_modules)
-// cualquier departamento/botón que haya quedado 100% cubierto por los
-// adicionales de este cliente — nunca al revés, nunca parcial (ver
-// syncClientModulesFromPermissionGrants en db.js, Decisión #6: activar
-// acceso real nunca pasa sin que su costo ya esté sumado).
+// ya incluye. Al guardar, abre (client_modules) el departamento/botón que
+// tenga algún adicional asignado, como ya hacen los planes — nunca al revés
+// (ver syncClientModulesFromPermissionGrants en db.js). Lo que ve el
+// administrador del cliente DENTRO del departamento lo decide lo asignado
+// (plan + adicionales), no el departamento completo.
 app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (req, res) => {
     if (denySaasLeaf(req, res, 'saas-clients', ['tabla::ta1','modal-permisos::a1'], 'No tienes permiso para dar permisos adicionales.')) return;
     const client = getClientById(req.params.id);

@@ -9516,13 +9516,11 @@ function isTupleGranted(grants, sectionId, itemId, submenuId) {
     return false;
 }
 
-// Decisión #6 (ver plan): guardar un adicional en el árbol nunca prende un
-// departamento/botón completo "gratis" — solo se agrega de verdad a
-// extra_modules (acceso real, sidebar) cuando ese MODULE_CATALOG key queda
-// TOTALMENTE cubierto por los adicionales de este cliente (misma regla de
-// "completamente marcado" que decide qué cuenta en el costo), así activar
-// acceso real nunca pasa sin que su costo ya se haya sumado. Solo agrega,
-// nunca quita — desmarcar algo en el árbol no revoca acceso ya otorgado.
+// Un adicional abre su departamento/botón (MODULE_CATALOG key) en cuanto hay UNO asignado en Nuestros Clientes, igual que ya hace el plan
+// (syncPlanModulesFromGrants): el módulo es solo la puerta del departamento. Lo que se ve DENTRO lo decide lo que se asignó (plan + adicionales:
+// getClientAdminContractGrants, que usa el menú del administrador del cliente), no el departamento completo. Antes pedía el departamento 100%
+// marcado y un adicional parcial nunca llegaba al menú. Solo agrega, nunca quita — desmarcar algo en el árbol no revoca el módulo ya abierto;
+// con el menú siguiendo lo asignado, un módulo abierto sin nada asignado adentro no muestra nada.
 // Only writes extra_modules (returns whether it changed anything) — the
 // caller (server.js, same as every other route that touches
 // extra_modules) is responsible for re-running applyEffectiveEntitlements
@@ -9530,26 +9528,17 @@ function isTupleGranted(grants, sectionId, itemId, submenuId) {
 function syncClientModulesFromPermissionGrants(clientId) {
     const client = getClientById(clientId);
     if (!client) return false;
-    const grantSet = new Set(getClientPermissionGrants(clientId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
-    const fullyChecked = (keys) => keys.length > 0 && keys.every((k) => grantSet.has(k));
+    const extraGrants = getClientPermissionGrants(clientId);
     let extraModules = [];
     try { extraModules = JSON.parse(client.extra_modules || '[]'); } catch { extraModules = []; }
     const extraModulesSet = new Set(extraModules);
     let changed = false;
 
-    buildPlanTreeSections().forEach((section) => {
-        // Department-level MODULE_CATALOG keys (e.g. 'supply-chain').
-        if (MODULE_CATALOG.some((m) => m.key === section.id) && !extraModulesSet.has(section.id)) {
-            const sectionLeafKeys = section.items.flatMap((item) => planItemLeafKeys(section, item));
-            if (fullyChecked(sectionLeafKeys)) { extraModulesSet.add(section.id); changed = true; }
-        }
-        // main-section btn-* items (e.g. 'btn-mensajes') — only ones that
-        // are themselves MODULE_CATALOG keys; most main items aren't.
-        section.items.forEach((item) => {
-            if (!MODULE_CATALOG.some((m) => m.key === item.id) || extraModulesSet.has(item.id)) return;
-            const itemLeafKeys = planItemLeafKeys(section, item);
-            if (fullyChecked(itemLeafKeys)) { extraModulesSet.add(item.id); changed = true; }
-        });
+    // Departamentos (e.g. 'supply-chain') y botones de General (e.g. 'btn-mensajes'): cualquier adicional asignado debajo lo abre.
+    MODULE_CATALOG.forEach((m) => {
+        if (extraModulesSet.has(m.key)) return;
+        const hasAnyGrant = extraGrants.some((g) => g.sectionId === m.key || (g.sectionId === 'main' && g.itemId === m.key));
+        if (hasAnyGrant) { extraModulesSet.add(m.key); changed = true; }
     });
 
     if (changed) {
@@ -9832,6 +9821,15 @@ function getClientContractGrants(clientId) {
     const plan = client && client.plan ? getPlanByName(client.plan) : null;
     return plan ? [...getPlanGrants(plan.id), ...getClientPermissionGrants(clientId)] : null;
 }
+// Lo que el administrador del cliente ve en su menú: lo que se le asignó, o sea el árbol del plan (si tiene) más los adicionales de Nuestros Clientes.
+// A diferencia de getClientContractGrants, con adicionales y sin plan también hay lista. Vacía = el cliente no tiene nada asignado en el árbol (los
+// que se armaron antes del árbol, solo con módulos): ahí el menú sigue como siempre, por departamento.
+function getClientAdminContractGrants(clientId) {
+    const client = clientId ? getClientById(clientId) : null;
+    if (!client) return [];
+    const plan = client.plan ? getPlanByName(client.plan) : null;
+    return [...(plan ? getPlanGrants(plan.id) : []), ...getClientPermissionGrants(clientId)];
+}
 
 // Reglas de límites 2 y 3 al GUARDAR permisos (la 1, departamento no contratado, la hace server.js y rechaza todo el guardado):
 //   status   : el nodo está en un Estatus que quien da el permiso no ve (visibleStatuses) -- un nivel no da más de lo que ve el de arriba.
@@ -10094,10 +10092,15 @@ function getUserBusinessProfileById(id) {
         `)
         .get(id);
     const effectiveGrants = getUserEffectiveGrants(id);
+    // El administrador del cliente sin permisos propios no tiene lista de permisos: su menú sale de lo que se le asignó al cliente (ver
+    // getClientAdminContractGrants). Para cualquier otra cuenta va vacía.
+    const account = db.prepare('SELECT client_id AS clientId, is_client_admin AS isClientAdmin FROM users WHERE id = ?').get(id);
+    const contractGrants = account && account.clientId && account.isClientAdmin && effectiveGrants.length === 0 ? getClientAdminContractGrants(account.clientId) : [];
     return {
         ...user,
         profileNames: jobPosition ? [jobPosition.name] : [],
         effectiveGrants,
+        contractGrants,
         grantsCount: effectiveGrants.length,
         // Estatus visibility gate (see resolveMasterNodeStatus's own
         // comment) -- visibleStatuses is THIS user's own allowlist,
