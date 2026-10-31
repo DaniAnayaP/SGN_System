@@ -145,16 +145,10 @@
     // paletas abiertas en la página, igual que en el árbol.
     const recentColors = [];
     let popoverState = null; // { key, close }
+    let seedCounter = 0; // ids únicos del botón del color representativo (puede haber más de un widget en la página)
 
     function sameHex(a, b) {
         return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
-    }
-
-    function normalizeHex(value) {
-        const clean = String(value || '').trim().replace(/^#/, '');
-        if (/^[0-9a-f]{3}$/i.test(clean)) return '#' + clean.split('').map((c) => c + c).join('').toLowerCase();
-        if (/^[0-9a-f]{6}$/i.test(clean)) return '#' + clean.toLowerCase();
-        return null;
     }
 
     function closePalettePopover() {
@@ -167,7 +161,6 @@
         closePalettePopover();
         const panel = document.createElement('div');
         panel.className = 'perm-tree-color-popover palette-popover';
-        let customOpen = false;
 
         function pick(hex) {
             const idx = recentColors.findIndex((c) => sameHex(c, hex));
@@ -227,58 +220,22 @@
                 panel.appendChild(recentRow);
             }
 
-            // Más colores...: el selector del sistema y un campo de hex, a la vista
-            // dentro de la propia paleta (un clic directo en el selector, no uno
-            // disparado por código, que es lo que algunos navegadores bloquean).
-            if (customOpen) {
-                const custom = document.createElement('div');
-                custom.className = 'palette-popover-custom';
-                const native = document.createElement('input');
-                native.type = 'color';
-                native.value = normalizeHex(current) || '#000000';
-                native.setAttribute('aria-label', t('admin.masterTreeMoreColors'));
-                const hexField = document.createElement('input');
-                hexField.type = 'text';
-                hexField.className = 'palette-popover-hex';
-                hexField.maxLength = 7;
-                hexField.spellcheck = false;
-                hexField.value = (normalizeHex(current) || '').toUpperCase();
-                hexField.placeholder = '#RRGGBB';
-                hexField.setAttribute('aria-label', t('admin.masterTreeColorHex'));
-                // Sin volver a dibujar la paleta mientras se arrastra: se cerraría
-                // el selector del sistema que está abierto.
-                native.addEventListener('input', () => {
-                    hexField.value = native.value.toUpperCase();
-                    onPick(native.value);
-                });
-                native.addEventListener('change', () => pick(native.value));
-                const applyHex = () => {
-                    const hex = normalizeHex(hexField.value);
-                    if (!hex) { hexField.value = (normalizeHex(getCurrent()) || '').toUpperCase(); return; }
-                    native.value = hex;
-                    hexField.value = hex.toUpperCase();
-                    if (!sameHex(hex, getCurrent())) pick(hex);
-                };
-                hexField.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter') { event.preventDefault(); applyHex(); render(); place(); }
-                });
-                hexField.addEventListener('blur', applyHex);
-                custom.append(native, hexField);
-                panel.appendChild(custom);
-            }
-
             const footer = document.createElement('div');
             footer.className = 'perm-tree-color-footer';
+            // Más colores...: la ventana completa de ColorDialog.js (Estándar y
+            // Personalizado), la misma que usa el árbol para el color de una columna.
+            // La paleta se cierra al abrirla; al Aceptar el color se aplica y queda en
+            // "recientes" igual que uno de los cuadros. Cancelar no cambia nada.
             const moreBtn = document.createElement('button');
             moreBtn.type = 'button';
             moreBtn.className = 'perm-tree-color-more-btn';
             moreBtn.textContent = t('admin.masterTreeMoreColors');
-            moreBtn.setAttribute('aria-expanded', String(customOpen));
             moreBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
-                customOpen = !customOpen;
-                render();
-                place();
+                const startHex = getCurrent();
+                closePalettePopover();
+                if (!window.ColorDialog) return;
+                window.ColorDialog.open({ title: t('admin.colorDialogTitle'), currentHex: startHex, onAccept: (hex) => pick(hex) });
             });
             // Restablecer: este color vuelve al que se sugiere a partir del color
             // representativo del cliente; apagado si ya es ese.
@@ -360,12 +317,52 @@
         seedField.className = 'admin-field';
         const seedLabel = document.createElement('label');
         seedLabel.textContent = t('admin.paletteSeedLabel');
+        // Igual que los colores de la tabla de abajo: un círculo con su código y el lápiz
+        // abren la paleta del árbol. El input de color queda oculto: solo guarda el valor
+        // (y normaliza el hex) que lee el resto del widget.
         const seedInput = document.createElement('input');
         seedInput.type = 'color';
+        seedInput.className = 'palette-color-input';
+        seedInput.tabIndex = -1;
+        seedInput.setAttribute('aria-hidden', 'true');
         seedInput.value = seedValue;
-        seedInput.setAttribute('aria-label', t('admin.paletteSeedLabel'));
-        seedInput.setAttribute('data-help-key', 'paletteSeed');
-        seedField.append(seedLabel, seedInput);
+        const seedValueRow = document.createElement('div');
+        seedValueRow.className = 'palette-seed-value';
+        const seedSwatch = document.createElement('button');
+        seedSwatch.type = 'button';
+        seedSwatch.className = 'palette-swatch';
+        seedSwatch.id = `palette-seed-btn-${seedCounter += 1}`;
+        seedSwatch.setAttribute('aria-label', t('admin.paletteSeedLabel'));
+        seedSwatch.setAttribute('data-help-key', 'paletteSeed');
+        seedLabel.htmlFor = seedSwatch.id;
+        const seedHexText = document.createElement('span');
+        seedHexText.className = 'palette-hex';
+        const seedEditBtn = document.createElement('button');
+        seedEditBtn.type = 'button';
+        seedEditBtn.className = 'admin-icon-btn';
+        seedEditBtn.setAttribute('aria-label', t('admin.edit'));
+        seedEditBtn.setAttribute('data-help-key', 'paletteEditColor');
+        seedEditBtn.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+        seedValueRow.append(seedSwatch, seedHexText, seedEditBtn, seedInput);
+        seedField.append(seedLabel, seedValueRow);
+        function syncSeedDisplay() {
+            seedSwatch.style.backgroundColor = seedInput.value;
+            seedHexText.textContent = seedInput.value.toUpperCase();
+        }
+        syncSeedDisplay();
+        const openSeedPicker = () => {
+            if (popoverState && popoverState.key === 'seed') { closePalettePopover(); return; }
+            openPalettePopover({
+                key: 'seed',
+                anchors: [seedSwatch, seedEditBtn],
+                getCurrent: () => seedInput.value,
+                // Restablecer: el azul con el que arranca el sistema.
+                resetTo: () => DEFAULT_PALETTE.seed,
+                onPick: (hex) => { seedInput.value = hex; syncSeedDisplay(); },
+            });
+        };
+        seedSwatch.addEventListener('click', openSeedPicker);
+        seedEditBtn.addEventListener('click', openSeedPicker);
         const suggestBtn = document.createElement('button');
         suggestBtn.type = 'button';
         suggestBtn.className = 'btn btn-secondary';
@@ -393,39 +390,174 @@
         previewToggleBtn.setAttribute('data-help-key', 'paletteShowPreview');
         container.appendChild(previewToggleBtn);
 
+        // Vista previa: dos pantallas reales (Inicio y una tabla) pintadas con la paleta que
+        // se está editando, más la lista de "dónde se usa cada color". Oculta hasta pedirla.
+        // Pasar el mouse (o el foco) por un color de la tabla de arriba o de la lista marca en
+        // la pantalla dónde se usa. Las zonas que NO salen de la paleta (columnas de Control
+        // Interno, insignia de estatus) se marcan como "No cambia con la paleta".
         const preview = document.createElement('div');
-        preview.className = 'palette-preview';
+        preview.className = 'palette-pv';
         preview.hidden = true;
-        preview.innerHTML = `
-            <div class="palette-preview-bar"></div>
-            <div class="palette-preview-body">
-                <div class="palette-preview-item palette-preview-item-active"></div>
-                <div class="palette-preview-item"></div>
-                <div class="palette-preview-btn"></div>
-            </div>
-        `;
         container.appendChild(preview);
 
         previewToggleBtn.addEventListener('click', () => { preview.hidden = !preview.hidden; });
 
         const fieldInputs = {};
+        let previewTab = 'home';
+
+        const ICON = (name) => `<i class="bx ${name}" aria-hidden="true"></i>`;
+        function previewScreenMarkup() {
+            const tableRows = [
+                ['29/oct/2026', '#1042', 'ECO-14', 'Beto Contador', '120'],
+                ['29/oct/2026', '#1043', 'ECO-21', 'Ana Contadora', '85'],
+                ['28/oct/2026', '#1041', 'ECO-07', 'Adela Administradora', '140'],
+                ['28/oct/2026', '#1040', 'ECO-14', 'Beto Contador', '96'],
+            ].map(([date, reg, unit, driver, liters]) => `
+                <tr>
+                    <td class="pvx-sys" data-r="fixed">Distribuidora Ejemplo</td><td class="pvx-sys" data-r="fixed">${date}</td><td class="pvx-sys" data-r="fixed">${reg}</td>
+                    <td>${unit}</td><td>${driver}</td><td>${liters}</td>
+                    <td><span class="pvx-status" data-r="fixed">${t('admin.palettePvStatusActive')}</span></td>
+                </tr>`).join('');
+            return `
+            <div class="pvx-screen" data-tab="home">
+                <aside class="pvx-sb" data-r="surface">
+                    <div class="pvx-brand" data-r="accent accentText"><i></i><span>Distribuidora Ejemplo</span></div>
+                    <div class="pvx-hr" data-r="border"></div>
+                    <div class="pvx-srch" data-r="border textSecondary">${ICON('bx-search')}${t('sidebar.searchPlaceholder')}</div>
+                    <nav class="pvx-menu">
+                        <div class="pvx-mi pvx-act pvx-v-home" data-r="accent accentText">${ICON('bx-home-alt-2')}${t('menu.home')}</div>
+                        <div class="pvx-mi pvx-v-table" data-r="textSecondary">${ICON('bx-home-alt-2')}${t('menu.home')}</div>
+                        <div class="pvx-mi" data-r="textSecondary">${ICON('bx-grid-alt')}${t('menu.panel')}<span class="pvx-tip" data-r="tooltipBg tooltipText">${t('menu.panel')}</span></div>
+                        <div class="pvx-mi" data-r="textSecondary">${ICON('bx-bar-chart-alt-2')}${t('menu.dashboard')}</div>
+                    </nav>
+                    <div class="pvx-foot" data-r="border">
+                        <div class="pvx-ucard"><span class="pvx-av" data-r="accent textSecondary">DA</span><div><div class="pvx-un" data-r="textPrimary">Daniel Anaya</div><div class="pvx-ur" data-r="textSecondary">${t('main.userCardRoleClientAdmin')}</div></div></div>
+                        <div class="pvx-mi" data-r="textSecondary">${ICON('bx-log-out-circle')}${t('sidebar.logout')}</div>
+                    </div>
+                </aside>
+                <div class="pvx-mn" data-r="bg">
+                    <div class="pvx-tb" data-r="surface border">
+                        <span class="pvx-welcome pvx-v-home" data-r="textPrimary">${t('main.welcome')}</span>
+                        <span class="pvx-welcome pvx-v-table" data-r="textPrimary">${t('menu.opTransVolCombustible')}</span>
+                        <span class="pvx-sp"></span>
+                        <span class="pvx-ico" data-r="textSecondary"><span>${ICON('bx-help-circle')}</span><span>${ICON('bx-chevron-up')}</span></span>
+                    </div>
+                    <div class="pvx-bc" data-r="bg border">
+                        <span class="pvx-bc-list">
+                            <b class="pvx-v-home" data-r="textPrimary">${t('menu.home')}</b>
+                            <span class="pvx-v-table" data-r="textSecondary">${t('menu.home')} ›</span>
+                            <b class="pvx-v-table" data-r="textPrimary">${t('menu.opTransVolCombustible')}</b>
+                        </span>
+                        <span class="pvx-ico" data-r="textSecondary"><span>${ICON('bx-map')}</span><span>${ICON('bx-chevron-up')}</span></span>
+                    </div>
+                    <div class="pvx-blank pvx-v-home"></div>
+                    <div class="pvx-pane pvx-v-table">
+                        <div class="pvx-tool">
+                            <span class="pvx-newbtn" data-r="surface border textPrimary">+ ${t('main.newRecord')}</span>
+                            <span class="pvx-sp"></span>
+                            ${['bx-zoom-out', 'bx-zoom-in', 'bx-pin', 'bx-show', 'bx-history', 'bx-filter-alt'].map((i) => `<span class="pvx-rb" data-r="surface border textSecondary">${ICON(i)}</span>`).join('')}
+                        </div>
+                        <div class="pvx-tw" data-r="surface border">
+                            <table class="pvx-dt">
+                                <thead>
+                                    <tr class="pvx-band"><th colspan="3" data-r="fixed">${t('menu.classControlInterno')}</th><th colspan="4" class="pvx-gb" data-r="bg textSecondary">${t('admin.palettePvGroupData')}</th></tr>
+                                    <tr class="pvx-hd" data-r="bg textSecondary"><th>${t('main.colSysEmpresa')}</th><th>${t('admin.palettePvColDate')}</th><th>${t('admin.palettePvColRecord')}</th><th>${t('admin.palettePvColUnit')}</th><th>${t('main.colFuelDriver')}</th><th>${t('admin.palettePvColLiters')}</th><th>${t('admin.palettePvColStatus')}</th></tr>
+                                </thead>
+                                <tbody data-r="textPrimary">${tableRows}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+        const PV_ROLE_USE = {
+            bg: 'Bg', surface: 'Surface', border: 'Border', textPrimary: 'TextPrimary', textSecondary: 'TextSecondary',
+            accent: 'Accent', tooltipBg: 'TooltipBg', tooltipText: 'TooltipText',
+        };
+
+        function highlightRole(roleKey, on) {
+            preview.querySelectorAll(`[data-r~="${roleKey}"]`).forEach((el) => el.classList.toggle('pvx-hl', on));
+            preview.querySelectorAll('.pvx-role').forEach((li) => li.classList.toggle('pvx-role-on', on && li.dataset.role === roleKey));
+        }
+
+        function renderLegend() {
+            const list = preview.querySelector('.pvx-roles');
+            if (!list) return;
+            const tabSuffix = previewTab === 'table' ? 'Table' : 'Home';
+            list.innerHTML = '';
+            const entries = ROLE_FIELDS.map(({ key, labelKey }) => ({ key, name: t(labelKey), use: t(`admin.palettePvUse${PV_ROLE_USE[key]}${tabSuffix}`), color: palette[key] }));
+            if (previewTab === 'table') entries.push({ key: 'fixed', name: t('admin.palettePvFixed'), use: t('admin.palettePvUseFixedTable'), color: null });
+            entries.forEach((entry) => {
+                const li = document.createElement('li');
+                li.className = `pvx-role${entry.color ? '' : ' pvx-role-fixed'}`;
+                li.tabIndex = 0;
+                li.dataset.role = entry.key;
+                const dot = document.createElement('i');
+                dot.className = `pvx-dot${entry.color ? '' : ' pvx-dot-fixed'}`;
+                if (entry.color) dot.style.backgroundColor = entry.color;
+                const head = document.createElement('b');
+                head.textContent = entry.name;
+                if (entry.color) {
+                    const code = document.createElement('code');
+                    code.textContent = entry.color.toUpperCase();
+                    head.appendChild(code);
+                }
+                const use = document.createElement('span');
+                use.textContent = entry.use;
+                li.append(dot, head, use);
+                li.addEventListener('mouseenter', () => highlightRole(entry.key, true));
+                li.addEventListener('mouseleave', () => highlightRole(entry.key, false));
+                li.addEventListener('focus', () => highlightRole(entry.key, true));
+                li.addEventListener('blur', () => highlightRole(entry.key, false));
+                list.appendChild(li);
+            });
+        }
+
+        function setPreviewTab(tab) {
+            previewTab = tab;
+            preview.querySelectorAll('.pvx-hl').forEach((el) => el.classList.remove('pvx-hl'));
+            const screen = preview.querySelector('.pvx-screen');
+            if (screen) screen.dataset.tab = tab;
+            preview.querySelectorAll('[data-pvx-tab]').forEach((btn) => btn.setAttribute('aria-pressed', String(btn.dataset.pvxTab === tab)));
+            const title = preview.querySelector('.pvx-title');
+            if (title) title.textContent = t(tab === 'table' ? 'admin.palettePvTitleTable' : 'admin.palettePvTitleHome');
+            const hint = preview.querySelector('.pvx-hint');
+            if (hint) hint.textContent = t(tab === 'table' ? 'admin.palettePvHintTable' : 'admin.palettePvHintHome');
+            renderLegend();
+        }
+
+        function buildPreview() {
+            preview.innerHTML = `
+                <div class="pvx-tabs" role="group" aria-label="${t('admin.palettePvTabsLabel')}" data-help-key="palettePreviewTabs">
+                    <button type="button" data-pvx-tab="home" aria-pressed="true">${t('menu.home')}</button>
+                    <button type="button" data-pvx-tab="table" aria-pressed="false">${t('admin.palettePvTabTable')}</button>
+                </div>
+                <div class="pvx-stage">
+                    <div class="pvx-screen-wrap">
+                        <div class="pvx-label pvx-title"></div>
+                        ${previewScreenMarkup()}
+                        <p class="pvx-hint"></p>
+                    </div>
+                    <div class="pvx-legend" data-help-key="palettePreviewLegend">
+                        <div class="pvx-label">${t('admin.palettePvLegend')}</div>
+                        <ul class="pvx-roles"></ul>
+                    </div>
+                </div>`;
+            preview.querySelectorAll('[data-pvx-tab]').forEach((btn) => btn.addEventListener('click', () => setPreviewTab(btn.dataset.pvxTab)));
+            setPreviewTab(previewTab);
+        }
 
         function renderPreview() {
-            const bar = preview.querySelector('.palette-preview-bar');
-            const body = preview.querySelector('.palette-preview-body');
-            const activeItem = preview.querySelector('.palette-preview-item-active');
-            const plainItem = preview.querySelector('.palette-preview-item:not(.palette-preview-item-active)');
-            const btn = preview.querySelector('.palette-preview-btn');
-            bar.style.background = palette.accent;
-            bar.style.color = palette.accentText;
-            body.style.background = palette.bg;
-            activeItem.style.background = palette.accent;
-            activeItem.style.color = palette.accentText;
-            plainItem.style.color = palette.textSecondary;
-            plainItem.style.background = palette.surface;
-            plainItem.style.borderColor = palette.border;
-            btn.style.background = palette.accent;
-            btn.style.color = palette.accentText;
+            const screen = preview.querySelector('.pvx-screen');
+            if (!screen) return;
+            const vars = {
+                '--p-bg': palette.bg, '--p-surface': palette.surface, '--p-border': palette.border,
+                '--p-tp': palette.textPrimary, '--p-ts': palette.textSecondary,
+                '--p-accent': palette.accent, '--p-accent-text': palette.accentText,
+                '--p-tt-bg': palette.tooltipBg, '--p-tt-text': palette.tooltipText,
+            };
+            Object.entries(vars).forEach(([name, value]) => screen.style.setProperty(name, value));
+            renderLegend();
         }
 
         function renderGrid() {
@@ -487,6 +619,8 @@
                 function applyColor(hex) {
                     input.value = hex;
                     palette = { ...palette, [key]: input.value };
+                    // El texto que va sobre el acento (blanco o negro) se vuelve a calcular solo.
+                    if (key === 'accent') palette.accentText = readableTextColor(input.value);
                     syncValueDisplay();
                     renderPreview();
                 }
@@ -504,6 +638,11 @@
                 editBtn.addEventListener('click', openPicker);
 
                 fieldInputs[key] = input;
+                // Pasar el mouse (o el foco) por el color marca en la vista previa dónde se usa.
+                tr.addEventListener('mouseenter', () => highlightRole(key, true));
+                tr.addEventListener('mouseleave', () => highlightRole(key, false));
+                tr.addEventListener('focusin', () => highlightRole(key, true));
+                tr.addEventListener('focusout', () => highlightRole(key, false));
                 tr.append(tdRole, tdValue, tdEdit);
                 tbody.appendChild(tr);
             });
@@ -517,6 +656,7 @@
             renderGrid();
         });
 
+        buildPreview();
         renderGrid();
 
         return {
@@ -526,12 +666,16 @@
             setPalette(newPalette) {
                 palette = { ...DEFAULT_PALETTE, ...(newPalette || {}) };
                 seedInput.value = palette.seed || seedInput.value;
+                syncSeedDisplay();
                 renderGrid();
             },
             refreshLabels() {
                 seedLabel.textContent = t('admin.paletteSeedLabel');
+                seedSwatch.setAttribute('aria-label', t('admin.paletteSeedLabel'));
+                seedEditBtn.setAttribute('aria-label', t('admin.edit'));
                 suggestBtn.textContent = t('admin.paletteSuggest');
                 hint.textContent = t('admin.paletteHint');
+                buildPreview();
                 renderGrid();
             },
         };
