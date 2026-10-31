@@ -240,7 +240,7 @@
       "abbrKey": "menu.catGestionAbbr",
       "icon": "bx-list-check",
       "submenu": [
-        { "id": "cat-gestion-reglas-orden", "labelKey": "menu.fieldRulesScreen", "icon": "bx-link", "href": "Business-ReglasOrden.html" },
+        { "id": "cat-gestion-reglas-orden", "labelKey": "menu.fieldRulesScreen", "abbrKeys": ["menu.fieldRulesScreenAbbr1", "menu.fieldRulesScreenAbbr2", "menu.fieldRulesScreenAbbr3"], "icon": "bx-link", "href": "Business-ReglasOrden.html" },
         { "id": "cat-gestion-2", "labelKey": "menu.catGestionItem2", "icon": "bx-window", "href": "#" }
       ]
     },
@@ -252,7 +252,7 @@
       "submenu": [
         { "id": "reportes-nativos", "labelKey": "menu.reportesNativos", "icon": "bx-window", "submenu": [] },
         { "id": "reportes-personalizados", "labelKey": "menu.reportesPersonalizados", "icon": "bx-window", "submenu": [] },
-        { "id": "reportes-programados", "labelKey": "menu.scheduledReportsScreen", "icon": "bx-calendar-event", "href": "ReportesProgramados.html" }
+        { "id": "reportes-programados", "labelKey": "menu.scheduledReportsScreen", "abbrKeys": ["menu.scheduledReportsScreenAbbr1", "menu.scheduledReportsScreenAbbr2"], "icon": "bx-calendar-event", "href": "ReportesProgramados.html" }
       ]
     },
     {
@@ -261,7 +261,7 @@
       "abbrKey": "menu.catMaterialApoyoAbbr",
       "icon": "bx-support",
       "submenu": [
-        { "id": "cat-material-apoyo-funcionalidad", "labelKey": "menu.catMaterialApoyoFuncionalidad", "icon": "bx-window-alt", "href": "MaterialApoyo-Funcionalidad.html",
+        { "id": "cat-material-apoyo-funcionalidad", "labelKey": "menu.catMaterialApoyoFuncionalidad", "abbrKeys": ["menu.catMaterialApoyoFuncionalidadAbbr1", "menu.catMaterialApoyoFuncionalidadAbbr2"], "icon": "bx-window-alt", "href": "MaterialApoyo-Funcionalidad.html",
           "submenu": [ { "id": "colMaterialApoyoFuncionalidad", "labelKey": "main.colMaterialApoyoFuncionalidad", "permissionOnly": true } ]
         },
         { "id": "cat-material-apoyo-flujo", "labelKey": "menu.catMaterialApoyoFlujo", "icon": "bx-git-branch", "href": "MaterialApoyo-Flujo.html",
@@ -715,7 +715,7 @@
       "cat-catalogos": [
         { "id": "cat-catalogos-centro-dist-codigos", "labelKey": "menu.catCentroDistCodigos", "icon": "bx-window", "href": "#" },
         {
-          "id": "cat-catalogos-centro-dist-categorias-inventario", "labelKey": "menu.catCentroDistCategoriasInventario", "icon": "bx-package", "href": "CatCentroDistCategoriasInventario.html",
+          "id": "cat-catalogos-centro-dist-categorias-inventario", "labelKey": "menu.catCentroDistCategoriasInventario", "abbrKeys": ["menu.catCentroDistCategoriasInventarioAbbr1", "menu.catCentroDistCategoriasInventarioAbbr2", "menu.catCentroDistCategoriasInventarioAbbr3"], "icon": "bx-package", "href": "CatCentroDistCategoriasInventario.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -762,7 +762,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-compra", "labelKey": "menu.catCentroDistCategoriasCompra", "icon": "bx-cart-alt", "href": "CatCentroDistCategoriasCompra.html",
+          "id": "cat-catalogos-centro-dist-categorias-compra", "labelKey": "menu.catCentroDistCategoriasCompra", "abbrKeys": ["menu.catCentroDistCategoriasCompraAbbr1", "menu.catCentroDistCategoriasCompraAbbr2"], "icon": "bx-cart-alt", "href": "CatCentroDistCategoriasCompra.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -809,7 +809,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-almacenamiento", "labelKey": "menu.catCentroDistCategoriasAlmacenamiento", "icon": "bx-buildings", "href": "CatCentroDistCategoriasAlmacenamiento.html",
+          "id": "cat-catalogos-centro-dist-categorias-almacenamiento", "labelKey": "menu.catCentroDistCategoriasAlmacenamiento", "abbrKeys": ["menu.catCentroDistCategoriasAlmacenamientoAbbr1", "menu.catCentroDistCategoriasAlmacenamientoAbbr2", "menu.catCentroDistCategoriasAlmacenamientoAbbr3"], "icon": "bx-buildings", "href": "CatCentroDistCategoriasAlmacenamiento.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -856,7 +856,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-rotacion", "labelKey": "menu.catCentroDistCategoriasRotacion", "icon": "bx-refresh", "href": "CatCentroDistCategoriasRotacion.html",
+          "id": "cat-catalogos-centro-dist-categorias-rotacion", "labelKey": "menu.catCentroDistCategoriasRotacion", "abbrKeys": ["menu.catCentroDistCategoriasRotacionAbbr1", "menu.catCentroDistCategoriasRotacionAbbr2"], "icon": "bx-refresh", "href": "CatCentroDistCategoriasRotacion.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -903,7 +903,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-manejo", "labelKey": "menu.catCentroDistCategoriasManejo", "icon": "bx-move", "href": "CatCentroDistCategoriasManejoEspecial.html",
+          "id": "cat-catalogos-centro-dist-categorias-manejo", "labelKey": "menu.catCentroDistCategoriasManejo", "abbrKeys": ["menu.catCentroDistCategoriasManejoAbbr1", "menu.catCentroDistCategoriasManejoAbbr2", "menu.catCentroDistCategoriasManejoAbbr3", "menu.catCentroDistCategoriasManejoAbbr4"], "icon": "bx-move", "href": "CatCentroDistCategoriasManejoEspecial.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -950,7 +950,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-riesgo", "labelKey": "menu.catCentroDistCategoriasRiesgo", "icon": "bx-error", "href": "CatCentroDistCategoriasRiesgo.html",
+          "id": "cat-catalogos-centro-dist-categorias-riesgo", "labelKey": "menu.catCentroDistCategoriasRiesgo", "abbrKeys": ["menu.catCentroDistCategoriasRiesgoAbbr1", "menu.catCentroDistCategoriasRiesgoAbbr2"], "icon": "bx-error", "href": "CatCentroDistCategoriasRiesgo.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -997,7 +997,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-vidautil", "labelKey": "menu.catCentroDistCategoriasVidautil", "icon": "bx-time-five", "href": "CatCentroDistCategoriasVidaUtil.html",
+          "id": "cat-catalogos-centro-dist-categorias-vidautil", "labelKey": "menu.catCentroDistCategoriasVidautil", "abbrKeys": ["menu.catCentroDistCategoriasVidautilAbbr1", "menu.catCentroDistCategoriasVidautilAbbr2", "menu.catCentroDistCategoriasVidautilAbbr3"], "icon": "bx-time-five", "href": "CatCentroDistCategoriasVidaUtil.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -1044,7 +1044,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-unidad-medida", "labelKey": "menu.catCentroDistUnidadMedida", "icon": "bx-ruler", "href": "CatCentroDistUnidadMedida.html",
+          "id": "cat-catalogos-centro-dist-unidad-medida", "labelKey": "menu.catCentroDistUnidadMedida", "abbrKeys": ["menu.catCentroDistUnidadMedidaAbbr1", "menu.catCentroDistUnidadMedidaAbbr2"], "icon": "bx-ruler", "href": "CatCentroDistUnidadMedida.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -1093,7 +1093,7 @@
       ],
       "cat-operaciones": [
         {
-          "id": "cat-operaciones-centro-dist-alta-articulos", "labelKey": "menu.opCentroDistAltaArticulos", "icon": "bx-package", "href": "OpCentroDistAltaArticulos.html",
+          "id": "cat-operaciones-centro-dist-alta-articulos", "labelKey": "menu.opCentroDistAltaArticulos", "abbrKeys": ["menu.opCentroDistAltaArticulosAbbr1", "menu.opCentroDistAltaArticulosAbbr2", "menu.opCentroDistAltaArticulosAbbr3"], "icon": "bx-package", "href": "OpCentroDistAltaArticulos.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,

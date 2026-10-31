@@ -1823,6 +1823,11 @@ function wireMenuInteractions() {
                 }
                 ancestor = ancestor.parentElement?.closest('.menu-item-dropdown.sub-menu-toggle');
             }
+            // Al abrir o cerrar un apartado la lista crece o se encoge y puede aparecer o desaparecer la barra de desplazamiento: el menú se estrecha o se
+            // ensancha unos píxeles y lo que cabía ya no cabe (o al revés). Las abreviaturas se miden otra vez con el ancho de ese momento: una ahora y otra al
+            // terminar la animación (0.3 s).
+            applySubmenuAbbreviations();
+            setTimeout(applySubmenuAbbreviations, 380);
         });
     });
 
