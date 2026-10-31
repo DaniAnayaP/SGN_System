@@ -11637,13 +11637,34 @@ function crumbFromItem(item) {
 // reused under whichever department + área the sidebar currently has
 // selected (see applyAreaFilter) — that part of the path isn't in the tree
 // itself, so it's read from the picker state instead.
+//
+// Las pantallas propias de un área (menu.json areaOverrides, como las de C. Distribución) no están en esa plantilla compartida: se buscan primero en lo
+// que la barra dibuja para el departamento y área elegidos (plantilla + pantallas del área, sin lo no asignado y con los grupos como "Categorías"), así
+// la ruta sigue los mismos clics que el menú; si la persona abrió por dirección una pantalla que no tiene asignada, en la lista completa del área; y si
+// el selector quedó en otra área, en las pantallas propias de cada área, con el departamento y área de esa pantalla.
 function findAreaCategoryTrail(targetFile) {
-    const catTrail = findHrefTrail(menuData?.areaCategories || [], targetFile);
+    let dept = selectedDepartment;
+    let area = selectedArea;
+    let catTrail = null;
+    if (menuData && selectedDepartment && selectedArea) {
+        const shown = applyScreenGrantFilter(applyAreaFilter(applyDepartmentFilter(menuData)));
+        catTrail = findHrefTrail(shown.sections.find((sec) => sec.id === selectedDepartment)?.items || [], targetFile)
+            || findHrefTrail(effectiveAreaCategories(menuData), targetFile);
+    }
+    if (!catTrail) {
+        const base = menuData?.areaCategories || [];
+        for (const [scope, overrides] of Object.entries(menuData?.areaOverrides || {})) {
+            const merged = base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat));
+            const found = findHrefTrail(merged, targetFile);
+            if (found) { catTrail = found; [dept, area] = scope.split('/'); break; }
+        }
+    }
+    if (!catTrail) catTrail = findHrefTrail(menuData?.areaCategories || [], targetFile);
     if (!catTrail) return null;
     const crumbs = [];
-    const deptDef = DEPARTMENTS.find((d) => d.key === selectedDepartment);
+    const deptDef = DEPARTMENTS.find((d) => d.key === dept);
     if (deptDef) crumbs.push({ label: t(deptDef.labelKey), href: null });
-    const areaDef = availableAreasForDepartment(selectedDepartment).find((a) => a.key === selectedArea);
+    const areaDef = availableAreasForDepartment(dept).find((a) => a.key === area);
     if (areaDef) crumbs.push({ label: t(areaDef.labelKey, areaDef.labelParams || {}), href: null });
     catTrail.forEach((item) => crumbs.push(crumbFromItem(item)));
     return crumbs;
