@@ -27,6 +27,7 @@ on:
       - 'public/access-screen.js'
       - 'public/AppConfig.js'
       - 'public/ColorPalette.js'
+      - 'public/ColorDialog.js'
       - 'public/AppOfflineSync.js'
       - 'public/PermissionTree.js'
       - 'public/Admin.css'
