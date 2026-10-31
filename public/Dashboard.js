@@ -1272,6 +1272,33 @@ function applyAreaFilter(data) {
 // dangling empty heading in the sidebar. selectedDepartment/selectedArea
 // are read directly (not threaded through `data`) since this only ever
 // runs against the currently-selected department's own section.
+// Menús desplegables que solo existen en la barra lateral: las pantallas de una categoría que comparten `sidebarGroup` (menu.json) se juntan en un
+// menú con el nombre del grupo, cerrado por defecto, para no ver toda la lista cuando no se necesita (Daniel, 2026-10-31: las 7 categorías de
+// Catálogos de C. Distribución bajo "Categorías"). El árbol de permisos, Panel y la ruta de arriba siguen con las pantallas sueltas: no cambia ninguna
+// llave de permiso. Se arma después del filtro de permisos, así cuenta solo lo que esa persona sí ve; con menos de 2 pantallas visibles no se agrupa.
+const SIDEBAR_GROUPS = {
+    categorias: { labelKey: 'menu.catCentroDistCategorias', icon: 'bx-category' },
+};
+function groupSidebarScreens(pantallas, categoryId) {
+    const counts = {};
+    pantallas.forEach((p) => { if (p.sidebarGroup && SIDEBAR_GROUPS[p.sidebarGroup]) counts[p.sidebarGroup] = (counts[p.sidebarGroup] || 0) + 1; });
+    const placed = new Set();
+    const out = [];
+    pantallas.forEach((p) => {
+        const key = p.sidebarGroup;
+        if (!key || !SIDEBAR_GROUPS[key] || counts[key] < 2) { out.push(p); return; }
+        if (placed.has(key)) return;
+        placed.add(key);
+        out.push({
+            id: `grp-${categoryId}-${key}`,
+            labelKey: SIDEBAR_GROUPS[key].labelKey,
+            icon: SIDEBAR_GROUPS[key].icon,
+            href: '#',
+            submenu: pantallas.filter((q) => q.sidebarGroup === key),
+        });
+    });
+    return out;
+}
 function applyScreenGrantFilter(data) {
     if (!selectedDepartment || !selectedArea) return data;
     return {
@@ -1283,9 +1310,9 @@ function applyScreenGrantFilter(data) {
                 items: s.items
                     .map((cat) => ({
                         ...cat,
-                        submenu: (cat.submenu || []).filter((pantalla) => (
+                        submenu: groupSidebarScreens((cat.submenu || []).filter((pantalla) => (
                             pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.id}`)
-                        )),
+                        )), cat.id),
                     }))
                     .filter((cat) => (cat.submenu || []).length > 0),
             };
@@ -1691,12 +1718,20 @@ function renderMenu(data) {
 // on resize/collapse-toggle since the sidebar's available width isn't
 // otherwise re-checked once rendered; harmless to call for a menu with no
 // abbreviated items (the selector just matches nothing).
+// scrollWidth y clientWidth son enteros: un texto que se pasa por menos de 1 px (95.4 en una caja de 95.2) parece caber y aun así se corta con "…".
+// Se compara también el ancho real del texto con el de la caja.
+function submenuSpanFits(span) {
+    if (span.scrollWidth > span.clientWidth) return false;
+    const range = document.createRange();
+    range.selectNodeContents(span);
+    return range.getBoundingClientRect().width <= span.getBoundingClientRect().width + 0.05;
+}
 function applySubmenuAbbreviations() {
     document.querySelectorAll('.sub-menu-link span[data-abbr-ladder], .menu-link span[data-abbr-ladder]').forEach((span) => {
         const ladder = JSON.parse(span.dataset.abbrLadder);
         for (const text of ladder) {
             span.textContent = text;
-            if (span.scrollWidth <= span.clientWidth) return;
+            if (submenuSpanFits(span)) return;
         }
         // Nothing in the ladder fit -- left on the shortest step, which
         // still ellipsizes via the same CSS every other sub-menu label
@@ -10449,6 +10484,11 @@ function getSearchableLinks() {
     )).filter((a) => a.textContent.trim().length > 0);
 }
 
+// El nombre completo de la opción: la barra abierta dibuja una abreviatura ("Cat. Invent.") y buscar "Inventarios" no la encontraría.
+function searchableLabel(anchor) {
+    return (sidebarEntryLabel(anchor) || anchor.textContent).trim();
+}
+
 function getResultIcon(anchor) {
     const icon = anchor.classList.contains('sub-menu-link')
         ? anchor.closest('.menu-item')?.querySelector('.menu-link i:first-child')
@@ -10488,7 +10528,7 @@ function renderSidebarSearchResults(query) {
         return;
     }
     const matches = getSearchableLinks()
-        .filter((a) => normalizeSearchText(a.textContent).includes(q))
+        .filter((a) => normalizeSearchText(searchableLabel(a)).includes(q))
         .slice(0, 8);
     if (!matches.length) {
         const li = document.createElement('li');
@@ -10507,7 +10547,7 @@ function renderSidebarSearchResults(query) {
         icon.className = getResultIcon(anchor);
         icon.setAttribute('aria-hidden', 'true');
         const span = document.createElement('span');
-        span.textContent = anchor.textContent.trim();
+        span.textContent = searchableLabel(anchor);
         btn.append(icon, span);
         btn.addEventListener('click', () => selectSidebarSearchResult(anchor));
         li.appendChild(btn);

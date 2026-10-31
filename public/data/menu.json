@@ -715,7 +715,7 @@
       "cat-catalogos": [
         { "id": "cat-catalogos-centro-dist-codigos", "labelKey": "menu.catCentroDistCodigos", "icon": "bx-window", "href": "#" },
         {
-          "id": "cat-catalogos-centro-dist-categorias-inventario", "labelKey": "menu.catCentroDistCategoriasInventario", "abbrKeys": ["menu.catCentroDistCategoriasInventarioAbbr1", "menu.catCentroDistCategoriasInventarioAbbr2", "menu.catCentroDistCategoriasInventarioAbbr3"], "icon": "bx-package", "href": "CatCentroDistCategoriasInventario.html",
+          "id": "cat-catalogos-centro-dist-categorias-inventario", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasInventario", "abbrKeys": ["menu.catCentroDistCategoriasInventarioAbbr1", "menu.catCentroDistCategoriasInventarioAbbr2", "menu.catCentroDistCategoriasInventarioAbbr3"], "icon": "bx-package", "href": "CatCentroDistCategoriasInventario.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -762,7 +762,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-compra", "labelKey": "menu.catCentroDistCategoriasCompra", "abbrKeys": ["menu.catCentroDistCategoriasCompraAbbr1", "menu.catCentroDistCategoriasCompraAbbr2"], "icon": "bx-cart-alt", "href": "CatCentroDistCategoriasCompra.html",
+          "id": "cat-catalogos-centro-dist-categorias-compra", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasCompra", "abbrKeys": ["menu.catCentroDistCategoriasCompraAbbr1", "menu.catCentroDistCategoriasCompraAbbr2"], "icon": "bx-cart-alt", "href": "CatCentroDistCategoriasCompra.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -809,7 +809,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-almacenamiento", "labelKey": "menu.catCentroDistCategoriasAlmacenamiento", "abbrKeys": ["menu.catCentroDistCategoriasAlmacenamientoAbbr1", "menu.catCentroDistCategoriasAlmacenamientoAbbr2", "menu.catCentroDistCategoriasAlmacenamientoAbbr3"], "icon": "bx-buildings", "href": "CatCentroDistCategoriasAlmacenamiento.html",
+          "id": "cat-catalogos-centro-dist-categorias-almacenamiento", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasAlmacenamiento", "abbrKeys": ["menu.catCentroDistCategoriasAlmacenamientoAbbr1", "menu.catCentroDistCategoriasAlmacenamientoAbbr2", "menu.catCentroDistCategoriasAlmacenamientoAbbr3"], "icon": "bx-buildings", "href": "CatCentroDistCategoriasAlmacenamiento.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -856,7 +856,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-rotacion", "labelKey": "menu.catCentroDistCategoriasRotacion", "abbrKeys": ["menu.catCentroDistCategoriasRotacionAbbr1", "menu.catCentroDistCategoriasRotacionAbbr2"], "icon": "bx-refresh", "href": "CatCentroDistCategoriasRotacion.html",
+          "id": "cat-catalogos-centro-dist-categorias-rotacion", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasRotacion", "abbrKeys": ["menu.catCentroDistCategoriasRotacionAbbr1", "menu.catCentroDistCategoriasRotacionAbbr2"], "icon": "bx-refresh", "href": "CatCentroDistCategoriasRotacion.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -903,7 +903,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-manejo", "labelKey": "menu.catCentroDistCategoriasManejo", "abbrKeys": ["menu.catCentroDistCategoriasManejoAbbr1", "menu.catCentroDistCategoriasManejoAbbr2", "menu.catCentroDistCategoriasManejoAbbr3", "menu.catCentroDistCategoriasManejoAbbr4"], "icon": "bx-move", "href": "CatCentroDistCategoriasManejoEspecial.html",
+          "id": "cat-catalogos-centro-dist-categorias-manejo", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasManejo", "abbrKeys": ["menu.catCentroDistCategoriasManejoAbbr1", "menu.catCentroDistCategoriasManejoAbbr2", "menu.catCentroDistCategoriasManejoAbbr3", "menu.catCentroDistCategoriasManejoAbbr4"], "icon": "bx-move", "href": "CatCentroDistCategoriasManejoEspecial.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -950,7 +950,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-riesgo", "labelKey": "menu.catCentroDistCategoriasRiesgo", "abbrKeys": ["menu.catCentroDistCategoriasRiesgoAbbr1", "menu.catCentroDistCategoriasRiesgoAbbr2"], "icon": "bx-error", "href": "CatCentroDistCategoriasRiesgo.html",
+          "id": "cat-catalogos-centro-dist-categorias-riesgo", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasRiesgo", "abbrKeys": ["menu.catCentroDistCategoriasRiesgoAbbr1", "menu.catCentroDistCategoriasRiesgoAbbr2"], "icon": "bx-error", "href": "CatCentroDistCategoriasRiesgo.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -997,7 +997,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-vidautil", "labelKey": "menu.catCentroDistCategoriasVidautil", "abbrKeys": ["menu.catCentroDistCategoriasVidautilAbbr1", "menu.catCentroDistCategoriasVidautilAbbr2", "menu.catCentroDistCategoriasVidautilAbbr3"], "icon": "bx-time-five", "href": "CatCentroDistCategoriasVidaUtil.html",
+          "id": "cat-catalogos-centro-dist-categorias-vidautil", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasVidautil", "abbrKeys": ["menu.catCentroDistCategoriasVidautilAbbr1", "menu.catCentroDistCategoriasVidautilAbbr2", "menu.catCentroDistCategoriasVidautilAbbr3"], "icon": "bx-time-five", "href": "CatCentroDistCategoriasVidaUtil.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
