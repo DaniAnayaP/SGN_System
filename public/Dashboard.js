@@ -11797,6 +11797,20 @@ function setBreadcrumbCollapsed(collapsed) {
     sizeDataTableWrappers();
 }
 
+// El contenido de la pantalla (todo lo que sigue a la ruta dentro de <main>) va en su propio contenedor con barra desplazadora: la barra de arriba y la ruta se quedan quietas y la
+// barra desplazadora empieza justo debajo de la ruta (ver .sgn-scroll-shell / .page-scroll en Admin.css). Se hace aquí, al crear la ruta, para que ninguna página tenga que cambiar su HTML.
+function wrapPageScrollArea(breadcrumb) {
+    if (document.getElementById('page-scroll')) return;
+    const main = breadcrumb.parentElement;
+    if (!main || main.tagName !== 'MAIN') return;
+    const area = document.createElement('div');
+    area.id = 'page-scroll';
+    area.className = 'page-scroll';
+    while (breadcrumb.nextSibling) area.appendChild(breadcrumb.nextSibling);
+    breadcrumb.after(area);
+    document.body.classList.add('sgn-scroll-shell');
+}
+
 // Built once per page and inserted right after .top-bar — every dashboard
 // page already has that element, so no HTML file needs editing for the bar
 // to show up everywhere.
@@ -11825,6 +11839,7 @@ function ensureBreadcrumbBar() {
 
     bar.append(list, toggle);
     topBar.insertAdjacentElement('afterend', bar);
+    wrapPageScrollArea(bar);
     return bar;
 }
 

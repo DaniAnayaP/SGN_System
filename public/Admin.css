@@ -7440,3 +7440,9 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .vf-field b{ font-size: 0.86rem; font-weight: 600; overflow-wrap: anywhere; }
 .vf-loc{ display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; border: 1px solid var(--color-border); border-radius: 0.7rem; padding: 0.6rem 0.8rem; }
 .vf-loc-tags{ display: flex; gap: 0.4rem; }
+
+/* La barra desplazadora empieza en la ruta hacia abajo: la barra de arriba y la ruta no se mueven; solo baja el contenido (.page-scroll, que Dashboard.js arma al crear la ruta). */
+body.sgn-scroll-shell{ height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+body.sgn-scroll-shell > main{ height: 100vh; height: 100dvh; min-height: 0; display: flex; flex-direction: column; padding-bottom: 0; }
+body.sgn-scroll-shell > main > .top-bar, body.sgn-scroll-shell > main > .breadcrumb-bar{ flex: none; }
+body.sgn-scroll-shell > main > .page-scroll{ flex: 1 1 auto; min-height: 0; overflow: auto; margin-right: -1rem; padding-right: 1rem; padding-bottom: 3rem; }
