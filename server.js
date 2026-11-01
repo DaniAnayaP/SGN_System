@@ -6075,7 +6075,9 @@ function buildPublicLayoutPayload(clientId, row) {
         spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h })),
         obstacles: [], power: [],
     };
-    return { companyName: (client && client.company_name) || '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis(pub) };
+    // Color representativo del cliente (el que se elige al darlo de alta): la hoja y la vista pública se pintan con él. Sin color válido va vacío y todo se ve como siempre.
+    const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
+    return { companyName: (client && client.company_name) || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis(pub) };
 }
 
 function layoutSummary(layout, section) {

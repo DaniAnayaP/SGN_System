@@ -41,6 +41,7 @@
 
     function render(data) {
         const k = data.kpis;
+        const theme = window.LayoutMapSvg.theme(data.companyColor);
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
         const kpis = [[k.total, 'kpiTotal'], [k.offices, 'kpiOffices'], [k.aisles, 'kpiAisles'], [k.docks, 'kpiDocks'], [k.storage, 'kpiStorage'], [k.dead, 'kpiDead'], [k.volume, 'kpiVolume']]
             .map(([value, key]) => `<div class="kpi"><b>${fmt(value)} ${key === 'kpiVolume' ? 'm³' : 'm²'}</b><span>${esc(TEXT[key])}</span></div>`);
@@ -48,10 +49,19 @@
         document.getElementById('wrap').innerHTML = `
             <div class="brand"><span class="brand-mark">${esc(initials)}</span><span class="brand-name">${esc(data.companyName)}</span></div>
             <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${esc(TEXT.version)} ${data.version} · ${esc(TEXT.updated)} ${esc(stamp(data.updatedAt))}</p></div>
-            <div class="map">${window.LayoutMapSvg.mapSvg(data.layout)}</div>
+            <div class="map">${window.LayoutMapSvg.mapSvg(data.layout, { theme })}</div>
             <div class="kpis">${kpis.join('')}</div>
             <h2>${esc(TEXT.zones)}</h2>${zones}
             <div class="footer">${esc(TEXT.footer)}</div>`;
+        // Con color de cliente, la marca, los títulos, las tarjetas y los marcos van en su escala; sin color la página se ve como siempre.
+        const wrap = document.getElementById('wrap');
+        ['--brand', '--brand-ink', '--brand-soft', '--brand-line'].forEach((name) => wrap.style.removeProperty(name));
+        if (theme.custom) {
+            wrap.style.setProperty('--brand', theme.chrome.badge);
+            wrap.style.setProperty('--brand-ink', theme.chrome.ink);
+            wrap.style.setProperty('--brand-soft', theme.chrome.cardBg);
+            wrap.style.setProperty('--brand-line', theme.chrome.cardBorder);
+        }
     }
 
     (async function init() {

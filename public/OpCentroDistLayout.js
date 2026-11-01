@@ -414,7 +414,7 @@ function renderSvg() {
                 s += `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
                 const a = LC.zoneLabelAnchor(z);
                 zoneLabels += `<text class="lt" x="${X(a.x)}" y="${Y(a.y) - 1}" text-anchor="middle">${esc(z.name)}</text><text class="lt2" x="${X(a.x)}" y="${Y(a.y) + 10}" text-anchor="middle">${fmt(LC.zoneArea(z))} m²</text>`;
-                if (z.active !== false) measureLabels += measureText(z.pts, 26);
+                if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureLabels += measureText(z.pts, 30);
             } else if (z.pts.length) {
                 if (z.pts.length > 1) s += `<polyline class="lz-open" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
                 s += `<circle class="lv" cx="${X(z.pts[0][0])}" cy="${Y(z.pts[0][1])}" r="4"/>`;
@@ -428,7 +428,7 @@ function renderSvg() {
         const anchor = spot.right ? 'end' : 'start';
         zoneLabels += `<text class="lt" x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(z.name)}</text>`;
         if (z.w * sc > 26) zoneLabels += `<text class="lt2" x="${tx}" y="${ty + 11}" text-anchor="${anchor}">${fmt(z.l * z.w)} m²</text>`;
-        if (z.active !== false) measureLabels += measureText(LC.zonePoints(z), 26);
+        if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureLabels += measureText(LC.zonePoints(z), 30);
     });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     d.obstacles.forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
@@ -949,7 +949,7 @@ function sheetLabels() {
         kpiDocks: t('main.layoutHojaKpiAndenes'), kpiStorage: t('main.layoutHojaKpiAlmacenamiento'), kpiDead: t('main.layoutHojaKpiMuertos'), kpiVolume: t('main.layoutHojaKpiVolumen'),
         scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'),
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
-        aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'),
+        aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'), dock: typeLabel('zone', 'dock'), office: typeLabel('zone', 'office'), none: t('main.layoutSinZona'),
         printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
     };
 }
@@ -959,10 +959,11 @@ async function downloadSheet(kind) {
     else Dashboard.showToast(t('main.layoutPreparandoHoja'), 'info');
     const data = await fetchQrData();
     if (!data) return;
-    const mapInner = window.LayoutMapSvg.mapSvg(data.layout).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+    const theme = window.LayoutMapSvg.theme(data.companyColor);
+    const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
     const svg = window.LayoutSheet.buildSheetSvg({
         companyName: data.companyName, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
-        url: data.url, qrRows: data.qrRows, kpis: data.kpis, layout: data.layout, mapInner,
+        url: data.url, qrRows: data.qrRows, kpis: data.kpis, layout: data.layout, mapInner, theme,
     }, sheetLabels(), Dashboard.lang);
     const blob = kind === 'pdf' ? await window.LayoutSheet.renderPdf(svg) : await window.LayoutSheet.renderPng(svg);
     const day = new Date().toISOString().slice(0, 10);

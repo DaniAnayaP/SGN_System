@@ -11,11 +11,52 @@
         // zona todavía sin tipo asignado
         none: ['#ECECF1', '#8E94AB', '3 3'],
     };
+    // Tema de color. Sin color de cliente es el de siempre (neutro, con el negro de la hoja); con color del cliente, los marcos, el título, las tarjetas, la nave y los pasillos van en
+    // una escala de ese color (10 tonos, del más claro al más oscuro) y cada tipo de zona conserva su propio color para distinguirse a simple vista aunque se imprima; la zona seca
+    // toma el tono claro del color del cliente.
+    const DEFAULT_THEME = {
+        custom: false, scale: [],
+        chrome: { badge: '#14161F', ink: '#14161F', rule: '#14161F', cardBg: '#FFFFFF', cardBorder: '#C9CCDA', cardInk: '#14161F', frame: '#C9CCDA', nave: '#3F435D', line: '#6B7089' },
+        types: ZONE_COLORS,
+    };
+    const LIGHTNESS = [97, 92, 84, 74, 63, 52, 42, 33, 24, 15];
+    function hexToHsl(hex) {
+        const r = parseInt(hex.slice(1, 3), 16) / 255; const g = parseInt(hex.slice(3, 5), 16) / 255; const b = parseInt(hex.slice(5, 7), 16) / 255;
+        const max = Math.max(r, g, b); const min = Math.min(r, g, b); const l = (max + min) / 2; const d = max - min;
+        if (!d) return [0, 0, l * 100];
+        const s = d / (1 - Math.abs(2 * l - 1));
+        let h;
+        if (max === r) h = ((g - b) / d) % 6; else if (max === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+        return [(h * 60 + 360) % 360, s * 100, l * 100];
+    }
+    function hslToHex(h, s, l) {
+        const sat = s / 100; const lig = l / 100;
+        const c = (1 - Math.abs(2 * lig - 1)) * sat; const x = c * (1 - Math.abs(((h / 60) % 2) - 1)); const m = lig - c / 2;
+        const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+        return `#${to(r)}${to(g)}${to(b)}`;
+    }
+    function theme(seedColor) {
+        if (!/^#[0-9a-fA-F]{6}$/.test(seedColor || '')) return DEFAULT_THEME;
+        const [h, s0] = hexToHsl(seedColor);
+        // un color casi gris (blanco, negro, gris) da una escala gris; cualquier otro conserva su tono con una saturación entre 30 y 65
+        const sat = s0 < 8 ? 0 : Math.max(30, Math.min(65, s0));
+        const sc = LIGHTNESS.map((l) => hslToHex(h, sat, l));
+        return {
+            custom: true, scale: sc,
+            chrome: { badge: sc[7], ink: sc[9], rule: sc[7], cardBg: sc[0], cardBorder: sc[2], cardInk: sc[8], frame: sc[2], nave: sc[8], line: sc[6] },
+            types: {
+                dry: [sc[1], sc[5], ''], cold: ['#D5EFEC', '#2E8F85', ''], chemical: ['#FBE8C8', '#C58A1B', ''], finished: ['#F8DCE6', '#C0507A', ''],
+                dock: ['#E3E6F6', '#5A64B4', ''], office: ['#DCE8F8', '#4A7BC2', '3 2'], aisle: ['url(#lh-main)', sc[6], '4 3'], aisle2: ['url(#lh-between)', sc[6], ''], none: ['#ECECF1', '#8E94AB', '3 3'],
+            },
+        };
+    }
     const FONT = 'Poppins, Arial, Helvetica, sans-serif';
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmt = (n) => (Number.isFinite(n) ? n : 0).toLocaleString('es-MX', { maximumFractionDigits: 2 });
 
     function mapSvg(layout, options = {}) {
+        const T = options.theme || DEFAULT_THEME;
         const W = options.width || 700;
         const H = options.height || 460;
         const M = 34;
@@ -30,12 +71,12 @@
         const Y = (y) => M + (y - y0) * sc;
         let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${FONT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Layout">`;
         // Pasillos sombreados con rayas (principal: rayas; entre anaqueles: puntos).
-        s += '<defs><pattern id="lh-main" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#FFFFFF"/><line x1="0" y1="0" x2="0" y2="8" stroke="#6B7089" stroke-width="2.4" opacity="0.45"/></pattern><pattern id="lh-between" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#F5F6FA"/><circle cx="3" cy="3" r="1.15" fill="#6B7089" opacity="0.55"/></pattern></defs>';
+        s += `<defs><pattern id="lh-main" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#FFFFFF"/><line x1="0" y1="0" x2="0" y2="8" stroke="${T.chrome.line}" stroke-width="2.4" opacity="0.45"/></pattern><pattern id="lh-between" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#F5F6FA"/><circle cx="3" cy="3" r="1.15" fill="${T.chrome.line}" opacity="0.55"/></pattern></defs>`;
         // El nombre y los m² de cada zona van al final (encima de anaqueles y paredes), con un contorno blanco, y en la esquina que no tape ningún espacio.
         const halo = 'stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke"';
         let zoneLabels = '';
         (layout.zones || []).forEach((z) => {
-            const c = z.type ? (ZONE_COLORS[z.type] || ZONE_COLORS.dock) : ZONE_COLORS.none;
+            const c = z.type ? (T.types[z.type] || T.types.dock) : T.types.none;
             const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
             if (LC.hasPoints(z)) {
                 // Zona de cualquier forma: se dibuja con sus esquinas y el nombre va en el punto más holgado de adentro.
@@ -65,14 +106,14 @@
         };
         if (options.measures !== false) {
             measure(layout.vertices, true, 24);
-            (layout.zones || []).forEach((z) => measure(LC.zonePoints(z), false, 26));
+            (layout.zones || []).forEach((z) => { if (Math.min(z.l, z.w) * sc >= 44) measure(LC.zonePoints(z), false, 30); });
         }
-        s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="#3F435D" stroke-width="3" stroke-linejoin="round"/>`;
+        s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${T.chrome.nave}" stroke-width="3" stroke-linejoin="round"/>`;
         (layout.spaces || []).forEach((sp) => {
             const w = Math.max(sp.l * sc, 4);
             const h = Math.max(sp.d * sc, 4);
-            s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="#FFFFFF" stroke="#6B7089" stroke-width="1"/>`;
-            if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="600" fill="#3F435D" text-anchor="middle">${esc(sp.code)}</text>`;
+            s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="#FFFFFF" stroke="${T.chrome.line}" stroke-width="1"/>`;
+            if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="600" fill="${T.chrome.cardInk}" text-anchor="middle">${esc(sp.code)}</text>`;
         });
         s += zoneLabels + measureLabels;
         (layout.doors || []).forEach((d) => {
@@ -82,9 +123,9 @@
             s += `<line x1="${X(ax)}" y1="${Y(ay)}" x2="${X(ax + w.ux * d.width)}" y2="${Y(ay + w.uy * d.width)}" stroke="#1E7E34" stroke-width="7"/>`;
         });
         const bar = 5 * sc;
-        s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" stroke="#3F435D" stroke-width="2"/><text x="${M + bar + 6}" y="${H - 8}" font-size="8.5" fill="#6B7089">5 m</text>`;
+        s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" stroke="${T.chrome.nave}" stroke-width="2"/><text x="${M + bar + 6}" y="${H - 8}" font-size="8.5" fill="#6B7089">5 m</text>`;
         return `${s}</svg>`;
     }
 
-    window.LayoutMapSvg = { mapSvg };
+    window.LayoutMapSvg = { mapSvg, theme, DEFAULT_THEME };
 }());
