@@ -2339,6 +2339,29 @@ if (!articleCategoryColumns.some((c) => c.name === 'parent_id')) db.exec('ALTER 
 if (!articleCategoryColumns.some((c) => c.name === 'kind')) db.exec("ALTER TABLE article_categories ADD COLUMN kind TEXT NOT NULL DEFAULT ''");
 if (!articleCategoryColumns.some((c) => c.name === 'locations')) db.exec("ALTER TABLE article_categories ADD COLUMN locations TEXT NOT NULL DEFAULT ''");
 
+// Relación Código (Operaciones, C. Distribución): dónde vive un código. Una fila por LUGAR (un mismo artículo puede tener varios): centro de costos > almacén > sub almacén >
+// zona > anaquel > nivel > espacio. Lo que está debajo del almacén es opcional (la fila queda "A medias" hasta completarlo). Zonas y anaqueles son ids del Layout guardado.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS code_relations (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id        INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id            TEXT NOT NULL,
+        record_number    INTEGER NOT NULL,
+        sku_item_id      INTEGER NOT NULL REFERENCES sku_items(id) ON DELETE CASCADE,
+        cost_center_id   INTEGER,
+        warehouse_id     INTEGER,
+        sub_warehouse_id INTEGER,
+        zone_id          TEXT NOT NULL DEFAULT '',
+        space_id         TEXT NOT NULL DEFAULT '',
+        level            INTEGER,
+        slot             INTEGER,
+        is_test_data     INTEGER NOT NULL DEFAULT 0,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_code_relations_client ON code_relations(client_id, is_test_data);
+    CREATE INDEX IF NOT EXISTS idx_code_relations_sku ON code_relations(sku_item_id);
+`);
+
 // public_token: set once (see maybeIssuePublicToken in server.js) the
 // instant an artículo's own 24 fields are all filled in -- the opaque id a
 // QR code encodes to reach its public, no-login ficha (Ficha.html). Random,
@@ -3104,6 +3127,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'reglas-orden-llenado': { area: '', modulo: 'Configuración', pantalla: 'Reglas de Orden de Llenado' },
     'roles': { area: '', modulo: 'Administración del Negocio', pantalla: 'Roles' },
     'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
+    'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
 };
 
 // "Nuestros Cambios" — every row any pantalla has ever logged via
@@ -3436,6 +3460,7 @@ const TABLE_GRANT_PATHS = {
     'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
     'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
     'layout': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-layout' },
+    'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
     'usuarios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-users' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
@@ -3632,6 +3657,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'almacenes': CATEGORY_BUTTON_NOTIFY,
     'sub-almacenes': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
+    'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -5135,6 +5161,88 @@ function deleteArticleCategory(id, clientId) {
     db.prepare('DELETE FROM article_categories WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
+// --- Relación Código (Operaciones, C. Distribución) -------------------------
+// Una fila por LUGAR de un código: centro de costos > almacén > sub almacén > zona > anaquel > nivel > espacio. Los dos primeros niveles son obligatorios; lo demás se completa
+// después (la fila queda "A medias"). Las zonas y anaqueles son ids del Layout guardado; los nombres se leen siempre del Layout y de los catálogos, nunca se copian aquí.
+const CODE_RELATION_PATCHABLE_FIELDS = {
+    skuItemId: { column: 'sku_item_id', fieldKey: 'main.colRelSku' },
+    costCenterId: { column: 'cost_center_id', fieldKey: 'main.colRelCentroCostos' },
+    warehouseId: { column: 'warehouse_id', fieldKey: 'main.colRelAlmacen' },
+    subWarehouseId: { column: 'sub_warehouse_id', fieldKey: 'main.colRelSubAlmacen' },
+    zoneId: { column: 'zone_id', fieldKey: 'main.colRelZona' },
+    spaceId: { column: 'space_id', fieldKey: 'main.colRelEstante' },
+    level: { column: 'level', fieldKey: 'main.colRelNivel' },
+    slot: { column: 'slot', fieldKey: 'main.colRelEspacio' },
+};
+const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number
+    FROM code_relations r LEFT JOIN sku_items s ON s.id = r.sku_item_id`;
+
+function listCodeRelations(clientId, forTestAccount = false) {
+    return db.prepare(`${CODE_RELATION_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? ORDER BY r.record_number ASC`).all(clientId, forTestAccount ? 1 : 0);
+}
+
+function getCodeRelationById(id, clientId, forTestAccount = false) {
+    return db.prepare(`${CODE_RELATION_SELECT} WHERE r.id = ? AND r.client_id = ? AND r.is_test_data = ?`).get(id, clientId, forTestAccount ? 1 : 0);
+}
+
+function createCodeRelation({ clientId, isTestData = false, values }) {
+    const recordNumber = db
+        .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM code_relations WHERE client_id = ? AND is_test_data = ?')
+        .get(clientId, isTestData ? 1 : 0).n;
+    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @isTestData)`).run({
+        clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0,
+        skuItemId: values.skuItemId, costCenterId: values.costCenterId ?? null, warehouseId: values.warehouseId ?? null, subWarehouseId: values.subWarehouseId ?? null,
+        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null,
+    });
+    return getCodeRelationById(result.lastInsertRowid, clientId, isTestData);
+}
+
+function updateCodeRelation(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(CODE_RELATION_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = patch[key];
+        }
+    }
+    if (sets.length) db.prepare(`UPDATE code_relations SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    return getCodeRelationById(id, clientId, forTestAccount);
+}
+
+function deleteCodeRelation(id, clientId) {
+    db.prepare('DELETE FROM code_relations WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+
+// Filas que usan un valor (para no borrar un almacén, un sub almacén, un centro de costos o un código que ya está en Relación Código). Solo columnas conocidas.
+function listCodeRelationsBy(clientId, forTestAccount, column, value) {
+    if (!['sku_item_id', 'cost_center_id', 'warehouse_id', 'sub_warehouse_id'].includes(column)) return [];
+    return db.prepare(`SELECT * FROM code_relations WHERE client_id = ? AND is_test_data = ? AND ${column} = ?`).all(clientId, forTestAccount ? 1 : 0, value);
+}
+
+// ¿Ya hay otro código exactamente en ese espacio (anaquel + nivel + espacio)? Devuelve la fila (con su SKU) o undefined.
+function findCodeRelationInSlot(clientId, forTestAccount, spaceId, level, slot, exceptId = 0) {
+    return db.prepare(`${CODE_RELATION_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? AND r.space_id = ? AND r.level = ? AND r.slot = ? AND r.id != ?`)
+        .get(clientId, forTestAccount ? 1 : 0, spaceId, level, slot, exceptId);
+}
+
+// ¿Ya existe esta misma relación completa para el mismo código?
+function findCodeRelationDuplicate(clientId, forTestAccount, v, exceptId = 0) {
+    return db.prepare(`SELECT id FROM code_relations WHERE client_id = @clientId AND is_test_data = @isTest AND sku_item_id = @skuItemId AND cost_center_id IS @costCenterId AND warehouse_id IS @warehouseId
+        AND sub_warehouse_id IS @subWarehouseId AND zone_id = @zoneId AND space_id = @spaceId AND level IS @level AND slot IS @slot AND id != @exceptId`)
+        .get({ clientId, isTest: forTestAccount ? 1 : 0, skuItemId: v.skuItemId, costCenterId: v.costCenterId ?? null, warehouseId: v.warehouseId ?? null, subWarehouseId: v.subWarehouseId ?? null, zoneId: v.zoneId || '', spaceId: v.spaceId || '', level: v.level ?? null, slot: v.slot ?? null, exceptId });
+}
+
+// Búsqueda de artículos por SKU (con ceros), UPC o descripción para el selector de código.
+function searchSkuItems(clientId, term, forTestAccount = false, limit = 20) {
+    const like = `%${String(term || '').trim().replace(/[%_]/g, '')}%`;
+    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom FROM sku_items
+        WHERE client_id = ? AND is_test_data = ? AND (printf('%06d', record_number) LIKE ? OR upc LIKE ? OR unique_description LIKE ? OR known_description LIKE ? OR custom_description LIKE ?)
+        ORDER BY record_number ASC LIMIT ?`).all(clientId, forTestAccount ? 1 : 0, like, like, like, like, like, limit);
+}
+
+
 // --- "+ Solicitar nuevo X" -- generic catalog-value request/escalation -----
 // See catalog_value_requests' own DDL comment for the overall shape. One
 // hop at a time, always a person's own choice (see forwardCatalogValueRequest)
@@ -6356,6 +6464,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'roles', labelKey: 'menu.roles' },
     { key: 'nuestros-articulos', labelKey: 'menu.opCentroDistAltaArticulos' },
     { key: 'layout', labelKey: 'menu.opCentroDistLayout' },
+    { key: 'relacion-codigo', labelKey: 'menu.opCentroDistRelacionCodigo' },
     { key: 'categorias-inventario', labelKey: 'menu.catCentroDistCategoriasInventario' },
     { key: 'categorias-compra', labelKey: 'menu.catCentroDistCategoriasCompra' },
     { key: 'categorias-almacenamiento', labelKey: 'menu.catCentroDistCategoriasAlmacenamiento' },
@@ -10492,6 +10601,16 @@ module.exports = {
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     articleCategoryPatchableFields,
     updateArticleCategory,
+    CODE_RELATION_PATCHABLE_FIELDS,
+    listCodeRelations,
+    getCodeRelationById,
+    createCodeRelation,
+    updateCodeRelation,
+    deleteCodeRelation,
+    listCodeRelationsBy,
+    findCodeRelationInSlot,
+    findCodeRelationDuplicate,
+    searchSkuItems,
     deleteArticleCategory,
     resolveEscalationHolder,
     getCatalogValueRequestById,

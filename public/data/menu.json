@@ -1259,6 +1259,61 @@
           ]
         },
         {
+          "id": "cat-operaciones-centro-dist-relacion-codigo", "labelKey": "menu.opCentroDistRelacionCodigo", "abbrKeys": ["menu.opCentroDistRelacionCodigoAbbr1", "menu.opCentroDistRelacionCodigoAbbr2"], "icon": "bx-map-pin", "href": "OpCentroDistRelacionCodigo.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colRelSku", "labelKey": "main.colRelSku", "permissionOnly": true },
+            { "id": "colRelUpc", "labelKey": "main.colRelUpc", "permissionOnly": true },
+            { "id": "colRelDescripcion", "labelKey": "main.colRelDescripcion", "permissionOnly": true },
+            { "id": "colRelCentroCostos", "labelKey": "main.colRelCentroCostos", "permissionOnly": true },
+            { "id": "colRelAlmacen", "labelKey": "main.colRelAlmacen", "permissionOnly": true },
+            { "id": "colRelSubAlmacen", "labelKey": "main.colRelSubAlmacen", "permissionOnly": true },
+            { "id": "colRelZona", "labelKey": "main.colRelZona", "permissionOnly": true },
+            { "id": "colRelEstante", "labelKey": "main.colRelEstante", "permissionOnly": true },
+            { "id": "colRelNivel", "labelKey": "main.colRelNivel", "permissionOnly": true },
+            { "id": "colRelEspacio", "labelKey": "main.colRelEspacio", "permissionOnly": true },
+            { "id": "colRelEstado", "labelKey": "main.colRelEstado", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colRelDeleteAuth", "labelKey": "main.colRelDeleteAuth", "permissionOnly": true },
+                { "id": "colRelCreateAuth", "labelKey": "main.colRelCreateAuth", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
+        {
           "id": "cat-operaciones-centro-dist-layout", "labelKey": "menu.opCentroDistLayout", "icon": "bx-map-alt", "href": "OpCentroDistLayout.html",
           "submenu": [
             { "id": "colLayoutKpis", "labelKey": "main.colLayoutKpis", "permissionOnly": true },

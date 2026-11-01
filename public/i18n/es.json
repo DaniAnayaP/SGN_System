@@ -332,6 +332,9 @@
     "catMaterialApoyoFuncionalidadAbbr1": "Func. Pantallas",
     "catMaterialApoyoFuncionalidadAbbr2": "Func. Pant.",
     "opCentroDistLayout": "Layout",
+    "opCentroDistRelacionCodigo": "Relación Código",
+    "opCentroDistRelacionCodigoAbbr1": "Relación Código",
+    "opCentroDistRelacionCodigoAbbr2": "Rel. Código",
     "opCentroDistVerificadorSku": "Verificador Código (SKU)",
     "opCentroDistVerificadorSkuAbbr1": "Verif. Código (SKU)",
     "opCentroDistVerificadorSkuAbbr2": "Verif. SKU",
@@ -2173,6 +2176,63 @@
     "colCatDeleteAuth": "Autorización para Eliminar",
     "colCatCreateAuth": "Autorización para Crear",
     "newArticleCategory": "Nueva Categoría",
+    "colRelSku": "Código (SKU)",
+    "colRelUpc": "UPC",
+    "colRelDescripcion": "Descripción Única",
+    "colRelCentroCostos": "Centro de Costos",
+    "colRelAlmacen": "Almacén",
+    "colRelSubAlmacen": "Sub almacén",
+    "colRelZona": "Zona",
+    "colRelEstante": "Estante",
+    "colRelNivel": "Nivel",
+    "colRelEspacio": "Espacio",
+    "colRelEstado": "Ubicación",
+    "colRelCreateAuth": "Autorización para Crear",
+    "colRelDeleteAuth": "Autorización para Eliminar",
+    "newRelation": "Nueva Relación",
+    "relDialogNew": "Nueva relación",
+    "relDialogEdit": "Editar relación",
+    "relCode": "Código",
+    "relSearchPlaceholder": "Escribe SKU, UPC o descripción",
+    "relNoMatches": "Sin resultados",
+    "relPickCode": "Elige un código para ver su ficha.",
+    "relChooseCost": "Elige un centro de costos",
+    "relChooseWarehouse": "Elige un almacén",
+    "relChooseSub": "Elige un sub almacén",
+    "relChooseZone": "Elige una zona",
+    "relChooseRack": "Elige un estante",
+    "relLevelShort": "Nivel",
+    "relSlotShort": "Espacio",
+    "relFirstCost": "Primero el centro de costos",
+    "relFirstWarehouse": "Primero el almacén",
+    "relFirstSub": "Primero el sub almacén",
+    "relFirstZone": "Primero la zona",
+    "relSubVirtual": "Sub almacén virtual: sin ubicación física",
+    "relSubNoKind": "Este sub almacén aún no es Físico ni Virtual",
+    "relNoZonesForSub": "Este sub almacén no tiene zonas asignadas",
+    "relRackTitle": "Estante {code}",
+    "relRackSub": "{levels} niveles · {slots} espacios por nivel",
+    "relRackEmpty": "Aquí aparece el estante, con sus niveles y espacios.",
+    "relRackPick": "Elige zona y estante para verlo de frente",
+    "relFree": "Libre",
+    "relOccupied": "Ocupado por otro código",
+    "relSelected": "El que eliges",
+    "relPath": "Así quedaría",
+    "relSave": "Guardar relación",
+    "relClear": "Limpiar",
+    "relMissing": "Falta {x}.",
+    "relMissingCode": "el código",
+    "relMissingCost": "el centro de costos",
+    "relMissingWarehouse": "el almacén",
+    "relReady": "Lista para guardar: el código quedará ubicado.",
+    "relReadyPartial": "Se puede guardar así; quedará «A medias» hasta completar la ubicación.",
+    "relStatusLocated": "Ubicado",
+    "relStatusPartial": "A medias",
+    "relEdit": "Editar relación",
+    "relSaved": "Relación guardada.",
+    "relLevelN": "Nivel {n}",
+    "relSlotN": "Espacio {n}",
+    "relOccupiedBy": "Ocupado por {sku}",
     "colAlmCentroCostos": "Centro de Costos",
     "colSubAlmAlmacen": "Almacén",
     "colSubAlmTipo": "Tipo",
@@ -3066,6 +3126,50 @@
     "layoutDeleteRow": {
       "what": "Elimina esta zona o este espacio de forma definitiva al guardar. A diferencia de Desactivar, ya no se conserva ni su historial de m². Solo aparece si tu cuenta tiene el permiso Eliminar en el árbol.",
       "example": "quitas un anaquel que nunca existió en la nave y que capturaron por error."
+    },
+    "relCodeSearch": {
+      "what": "Busca el código que vas a ubicar por su SKU (con o sin ceros), su UPC o su descripción. Salen los códigos de Alta Artículos.",
+      "example": "000124, o paracetamol."
+    },
+    "relCostCenter": {
+      "what": "El centro de costos al que pertenece este lugar del código. La lista sale de Servicio Contratado.",
+      "example": "CEDIS Monterrey."
+    },
+    "relWarehouse": {
+      "what": "El almacén de ese centro de costos. Solo salen los almacenes activos del centro elegido.",
+      "example": "Almacén General."
+    },
+    "relSubWarehouse": {
+      "what": "El sub almacén de ese almacén. Es opcional: sin él la relación queda «A medias».",
+      "example": "Medicamentos."
+    },
+    "relZone": {
+      "what": "La zona del Layout donde está. Solo salen las zonas asignadas a ese sub almacén, y solo si es Físico.",
+      "example": "Zona 1."
+    },
+    "relRack": {
+      "what": "El estante (anaquel) de esa zona. Si al sub almacén solo se le asignaron algunos anaqueles, solo salen esos.",
+      "example": "R-01."
+    },
+    "relLevel": {
+      "what": "El nivel del estante, de abajo hacia arriba. Cada estante tiene los niveles que dice el Layout.",
+      "example": "Nivel 2."
+    },
+    "relSlot": {
+      "what": "El espacio (hueco) dentro de ese nivel. Cada estante tiene los espacios por nivel que dice el Layout, y cada espacio solo puede tener un código.",
+      "example": "Espacio 3."
+    },
+    "relPath": {
+      "what": "La ruta completa que se va armando con lo que eliges, de centro de costos hasta espacio.",
+      "example": "CEDIS Monterrey › Almacén General › Medicamentos › Zona 1 › R-01 › Nivel 2 › Espacio 3."
+    },
+    "relSave": {
+      "what": "Guarda la relación. Con el centro de costos y el almacén ya se puede guardar; lo que falte se completa después.",
+      "example": "Guardas con solo el almacén y luego editas para agregar el estante."
+    },
+    "relEdit": {
+      "what": "Cambia la ubicación de este renglón en la misma ventana. Cada dato pide su propia hoja en el árbol.",
+      "example": "Pasar el código del nivel 2 al nivel 3."
     },
     "whCostCenter": {
       "what": "El centro de costos al que pertenece este almacén. La lista sale de Servicio Contratado.",

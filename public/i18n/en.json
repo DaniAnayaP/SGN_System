@@ -332,6 +332,9 @@
     "catMaterialApoyoFuncionalidadAbbr1": "Screen Function.",
     "catMaterialApoyoFuncionalidadAbbr2": "Screen Func.",
     "opCentroDistLayout": "Layout",
+    "opCentroDistRelacionCodigo": "Code Relation",
+    "opCentroDistRelacionCodigoAbbr1": "Code Relation",
+    "opCentroDistRelacionCodigoAbbr2": "Code Rel.",
     "opCentroDistVerificadorSku": "Code Verifier (SKU)",
     "opCentroDistVerificadorSkuAbbr1": "Code Verif. (SKU)",
     "opCentroDistVerificadorSkuAbbr2": "Verif. SKU",
@@ -2174,6 +2177,63 @@
     "colCatDeleteAuth": "Delete Authorization",
     "colCatCreateAuth": "Create Authorization",
     "newArticleCategory": "New Category",
+    "colRelSku": "Code (SKU)",
+    "colRelUpc": "UPC",
+    "colRelDescripcion": "Unique Description",
+    "colRelCentroCostos": "Cost Center",
+    "colRelAlmacen": "Warehouse",
+    "colRelSubAlmacen": "Sub-warehouse",
+    "colRelZona": "Zone",
+    "colRelEstante": "Rack",
+    "colRelNivel": "Level",
+    "colRelEspacio": "Slot",
+    "colRelEstado": "Location",
+    "colRelCreateAuth": "Authorization to Create",
+    "colRelDeleteAuth": "Authorization to Delete",
+    "newRelation": "New Relation",
+    "relDialogNew": "New relation",
+    "relDialogEdit": "Edit relation",
+    "relCode": "Code",
+    "relSearchPlaceholder": "Type SKU, UPC or description",
+    "relNoMatches": "No matches",
+    "relPickCode": "Choose a code to see its card.",
+    "relChooseCost": "Choose a cost center",
+    "relChooseWarehouse": "Choose a warehouse",
+    "relChooseSub": "Choose a sub-warehouse",
+    "relChooseZone": "Choose a zone",
+    "relChooseRack": "Choose a rack",
+    "relLevelShort": "Level",
+    "relSlotShort": "Slot",
+    "relFirstCost": "Cost center first",
+    "relFirstWarehouse": "Warehouse first",
+    "relFirstSub": "Sub-warehouse first",
+    "relFirstZone": "Zone first",
+    "relSubVirtual": "Virtual sub-warehouse: no physical location",
+    "relSubNoKind": "This sub-warehouse is not Physical or Virtual yet",
+    "relNoZonesForSub": "This sub-warehouse has no zones assigned",
+    "relRackTitle": "Rack {code}",
+    "relRackSub": "{levels} levels · {slots} slots per level",
+    "relRackEmpty": "The rack appears here, with its levels and slots.",
+    "relRackPick": "Choose a zone and a rack to see it from the front",
+    "relFree": "Free",
+    "relOccupied": "Taken by another code",
+    "relSelected": "Your choice",
+    "relPath": "It would look like this",
+    "relSave": "Save relation",
+    "relClear": "Clear",
+    "relMissing": "Missing {x}.",
+    "relMissingCode": "the code",
+    "relMissingCost": "the cost center",
+    "relMissingWarehouse": "the warehouse",
+    "relReady": "Ready to save: the code will be located.",
+    "relReadyPartial": "You can save it like this; it stays \"Partial\" until the location is complete.",
+    "relStatusLocated": "Located",
+    "relStatusPartial": "Partial",
+    "relEdit": "Edit relation",
+    "relSaved": "Relation saved.",
+    "relLevelN": "Level {n}",
+    "relSlotN": "Slot {n}",
+    "relOccupiedBy": "Taken by {sku}",
     "colAlmCentroCostos": "Cost Center",
     "colSubAlmAlmacen": "Warehouse",
     "colSubAlmTipo": "Type",
@@ -3067,6 +3127,50 @@
     "layoutDeleteRow": {
       "what": "Permanently deletes this zone or space when you save. Unlike Deactivate, it is not kept at all. It only appears if your account has the Delete permission in the access tree.",
       "example": "you remove a rack that never existed in the warehouse and was entered by mistake."
+    },
+    "relCodeSearch": {
+      "what": "Finds the code you will locate by its SKU (with or without zeros), UPC or description. It lists the codes from Article Setup.",
+      "example": "000124, or paracetamol."
+    },
+    "relCostCenter": {
+      "what": "The cost center this place of the code belongs to. The list comes from Contracted Service.",
+      "example": "CEDIS Monterrey."
+    },
+    "relWarehouse": {
+      "what": "The warehouse of that cost center. Only the active warehouses of the chosen center appear.",
+      "example": "General Warehouse."
+    },
+    "relSubWarehouse": {
+      "what": "The sub-warehouse of that warehouse. It is optional: without it the relation stays \"Partial\".",
+      "example": "Medicines."
+    },
+    "relZone": {
+      "what": "The Layout zone it is in. Only the zones assigned to that sub-warehouse appear, and only if it is Physical.",
+      "example": "Zone 1."
+    },
+    "relRack": {
+      "what": "The rack of that zone. If the sub-warehouse was assigned only some racks, only those appear.",
+      "example": "R-01."
+    },
+    "relLevel": {
+      "what": "The level of the rack, from the bottom up. Each rack has the levels the Layout says.",
+      "example": "Level 2."
+    },
+    "relSlot": {
+      "what": "The slot inside that level. Each rack has the slots per level the Layout says, and each slot can hold only one code.",
+      "example": "Slot 3."
+    },
+    "relPath": {
+      "what": "The full route built from what you choose, from cost center down to slot.",
+      "example": "CEDIS Monterrey › General Warehouse › Medicines › Zone 1 › R-01 › Level 2 › Slot 3."
+    },
+    "relSave": {
+      "what": "Saves the relation. With the cost center and warehouse it can already be saved; the rest is completed later.",
+      "example": "You save with just the warehouse and later edit to add the rack."
+    },
+    "relEdit": {
+      "what": "Changes the location of this row in the same window. Each field needs its own leaf in the tree.",
+      "example": "Move the code from level 2 to level 3."
     },
     "whCostCenter": {
       "what": "The cost center this warehouse belongs to. The list comes from Contracted Service.",

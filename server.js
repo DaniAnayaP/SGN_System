@@ -157,6 +157,16 @@ const {
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     articleCategoryPatchableFields,
     updateArticleCategory,
+    CODE_RELATION_PATCHABLE_FIELDS,
+    listCodeRelations,
+    getCodeRelationById,
+    createCodeRelation,
+    updateCodeRelation,
+    deleteCodeRelation,
+    listCodeRelationsBy,
+    findCodeRelationInSlot,
+    findCodeRelationDuplicate,
+    searchSkuItems,
     deleteArticleCategory,
     resolveEscalationHolder,
     getCatalogValueRequestById,
@@ -5987,6 +5997,9 @@ app.delete('/api/business/sku-items/:id', requireAuth, (req, res) => {
             return res.status(403).json({ message: 'No tienes permiso para eliminar artículos.' });
         }
     }
+    if (listCodeRelationsBy(req.user.clientId, req.user.isTestAccount, 'sku_item_id', existing.id).length) {
+        return res.status(409).json({ message: 'Este código ya tiene ubicaciones en Relación Código. Quítalas primero.' });
+    }
     logTableChange({
         clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: existing.id,
         recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
@@ -6418,6 +6431,15 @@ function prepareWarehousePatch(req, categoryType, existing, patch) {
             const conflict = findWarehouseLocationConflict(clientId, isTestAccount, existing.id, parseWarehouseLocations(locations), idx);
             if (conflict) return { error: { status: 409, message: conflict } };
         }
+        // Si ya hay códigos ubicados en una zona o anaquel de este sub almacén, no se le puede quitar (ni pasarlo a Virtual) sin quitar primero esos códigos.
+        if (has('locations') || has('kind')) {
+            const used = listCodeRelationsBy(clientId, isTestAccount, 'sub_warehouse_id', existing.id).filter((r) => r.zone_id);
+            if (used.length) {
+                const entries = kind === 'physical' ? parseWarehouseLocations(locations) : [];
+                const outside = used.find((r) => { const e = entries.find((x) => x.zoneId === r.zone_id); return !e || (e.spaceIds.length && !e.spaceIds.includes(r.space_id)); });
+                if (outside) return { error: { status: 409, message: 'Hay códigos ubicados en esas zonas o anaqueles (Relación Código). Quítalos primero.' } };
+            }
+        }
     }
     const nameOf = (v) => {
         if (v == null || v === '') return '';
@@ -6519,6 +6541,10 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (r
         && listArticleCategories(req.user.clientId, 'sub-almacenes', req.user.isTestAccount).some((r) => r.parent_id === existing.id)) {
         return res.status(409).json({ message: 'Este almacén tiene sub almacenes. Quítalos primero o márcalo como Inactivo.' });
     }
+    if (WAREHOUSE_TYPES.has(req.params.categoryType)
+        && listCodeRelationsBy(req.user.clientId, req.user.isTestAccount, req.params.categoryType === 'almacenes' ? 'warehouse_id' : 'sub_warehouse_id', existing.id).length) {
+        return res.status(409).json({ message: 'Ya hay códigos relacionados en Relación Código. Quítalos primero o márcalo como Inactivo.' });
+    }
     logTableChange({
         clientId: req.user.clientId, tableKey: config.tableKey, recordId: existing.id,
         recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
@@ -6552,6 +6578,264 @@ app.get('/api/business/warehouse-options', requireAuth, (req, res) => {
         warehouses: listArticleCategories(clientId, 'almacenes', isTestAccount).map((r) => ({ id: r.id, name: r.name, status: r.status, parentId: r.parent_id })),
         zones: idx.zones.map((z) => ({ id: z.id, name: z.name, spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type })) })),
     });
+});
+
+// --- Relación Código (Operaciones > Cadena de Suministro > C. Distribución) -------------------
+// Dónde vive un código: una fila por LUGAR (un mismo código puede tener varios). centro de costos > almacén (obligatorios) > sub almacén > zona > anaquel > nivel > espacio.
+// Zona, anaquel, nivel y espacio solo existen si el sub almacén es Físico y la zona (o el anaquel) está asignada a él en Nuestros Sub Almacenes; el Layout da los anaqueles, sus
+// niveles y sus espacios por nivel. Un espacio solo puede tener UN código. Cada dato lleva su propia hoja en el árbol (Ver y Operar para llenarlo, Modificar para cambiarlo).
+const CODE_RELATION_TABLE_KEY = 'relacion-codigo';
+const CODE_RELATION_AREA_LABEL = 'C. Distribución';
+const CODE_RELATION_MODULE_LABEL = 'Cadena de Suministro';
+const CODE_RELATION_SCREEN_LABEL = 'Relación Código';
+const CODE_RELATION_COLS = {
+    skuItemId: 'colRelSku', costCenterId: 'colRelCentroCostos', warehouseId: 'colRelAlmacen', subWarehouseId: 'colRelSubAlmacen',
+    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio',
+};
+const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot'];
+const CODE_RELATION_TEXT_KEYS = ['zoneId', 'spaceId'];
+const padSku = (n) => String(n || 0).padStart(6, '0');
+
+function codeRelationContext(req) {
+    const { clientId, isTestAccount } = req.user;
+    const warehouses = new Map();
+    ['almacenes', 'sub-almacenes'].forEach((t) => listArticleCategories(clientId, t, isTestAccount).forEach((r) => warehouses.set(r.id, r)));
+    return { costCenters: new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c])), warehouses, layout: warehouseLayoutIndex(clientId) };
+}
+
+function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
+    if (!row) return row;
+    const cc = ctx.costCenters.get(row.cost_center_id);
+    const wh = ctx.warehouses.get(row.warehouse_id);
+    const sub = ctx.warehouses.get(row.sub_warehouse_id);
+    const zone = ctx.layout.zoneById.get(row.zone_id);
+    const space = ctx.layout.spaceById.get(row.space_id);
+    // Ubicado = un sub almacén virtual (no tiene dónde más) o el camino físico completo hasta el espacio; lo demás queda A medias.
+    const located = !!row.sub_warehouse_id && ((sub && sub.kind === 'virtual') || (row.space_id && row.level && row.slot));
+    return {
+        id: row.id,
+        registroUnico: row.db_id,
+        skuItemId: row.sku_item_id,
+        sku: padSku(row.sku_number),
+        upc: row.sku_upc || '',
+        description: row.sku_description || row.sku_known || '',
+        costCenterId: row.cost_center_id, centroCostos: cc ? cc.name : '',
+        warehouseId: row.warehouse_id, warehouseName: wh ? wh.name : '',
+        subWarehouseId: row.sub_warehouse_id, subWarehouseName: sub ? sub.name : '', subKind: sub ? sub.kind : '',
+        zoneId: row.zone_id, zoneName: zone ? zone.name : '',
+        spaceId: row.space_id, spaceCode: space ? space.code : '',
+        level: row.level, slot: row.slot,
+        status: located ? 'located' : 'partial',
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({
+            companyName, area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: CODE_RELATION_SCREEN_LABEL,
+            centroCostos: cc ? cc.name : '', createdAt: row.created_at,
+        }),
+    };
+}
+
+// Lo que se escribe en el historial: nombres, no números.
+function codeRelationSanitizers(ctx, req) {
+    const { clientId, isTestAccount } = req.user;
+    return {
+        skuItemId: (v) => { const s = v ? getSkuItemById(v, clientId, isTestAccount) : null; return s ? padSku(s.record_number) : (v == null ? '' : String(v)); },
+        costCenterId: (v) => { const c = ctx.costCenters.get(Number(v)); return c ? c.name : (v == null ? '' : String(v)); },
+        warehouseId: (v) => { const w = ctx.warehouses.get(Number(v)); return w ? w.name : (v == null ? '' : String(v)); },
+        subWarehouseId: (v) => { const w = ctx.warehouses.get(Number(v)); return w ? w.name : (v == null ? '' : String(v)); },
+        zoneId: (v) => { const z = ctx.layout.zoneById.get(v); return z ? z.name : (v || ''); },
+        spaceId: (v) => { const s = ctx.layout.spaceById.get(v); return s ? s.code : (v || ''); },
+        level: (v) => (v == null ? '' : String(v)),
+        slot: (v) => (v == null ? '' : String(v)),
+    };
+}
+
+function normalizeCodeRelationInput(body) {
+    const values = {};
+    for (const key of CODE_RELATION_INT_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+        const raw = body[key];
+        if (raw === '' || raw == null) { values[key] = null; continue; }
+        const n = Number(raw);
+        if (!Number.isInteger(n) || n < 0) return { error: 'Uno de los datos no es un número válido.' };
+        values[key] = n;
+    }
+    for (const key of CODE_RELATION_TEXT_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+        const raw = body[key];
+        if (raw == null || raw === '') { values[key] = ''; continue; }
+        if (typeof raw !== 'string' || raw.length > 60) return { error: 'Uno de los datos no es válido.' };
+        values[key] = raw;
+    }
+    return { values };
+}
+
+// Revisa la relación completa tal como quedaría (lo guardado + lo que cambia). existing = fila actual (o null); con ella un almacén o sub almacén que ya quedó Inactivo se respeta si no se cambia.
+function validateCodeRelationState(req, state, selfId, existing, ctx) {
+    const { clientId, isTestAccount } = req.user;
+    const bad = (message, status = 400) => ({ error: { status, message } });
+    if (!state.skuItemId || !getSkuItemById(state.skuItemId, clientId, isTestAccount)) return bad('Elige un código de Alta Artículos.');
+    if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
+    const wh = state.warehouseId ? ctx.warehouses.get(state.warehouseId) : null;
+    if (!wh || wh.category_type !== 'almacenes') return bad('Elige un almacén.');
+    if (wh.parent_id !== state.costCenterId) return bad('Ese almacén no pertenece a ese centro de costos.');
+    if (wh.status !== 'active' && !(existing && existing.warehouse_id === wh.id)) return bad('Ese almacén está inactivo. Elige uno activo.');
+    const hasSub = !!state.subWarehouseId;
+    const hasZone = !!state.zoneId;
+    const hasSpace = !!state.spaceId;
+    const hasLevel = state.level != null;
+    const hasSlot = state.slot != null;
+    if (!hasSub && (hasZone || hasSpace || hasLevel || hasSlot)) return bad('Falta el sub almacén.');
+    let sub = null;
+    if (hasSub) {
+        sub = ctx.warehouses.get(state.subWarehouseId);
+        if (!sub || sub.category_type !== 'sub-almacenes') return bad('Ese sub almacén no existe.');
+        if (sub.parent_id !== state.warehouseId) return bad('Ese sub almacén no pertenece a ese almacén.');
+        if (sub.status !== 'active' && !(existing && existing.sub_warehouse_id === sub.id)) return bad('Ese sub almacén está inactivo. Elige uno activo.');
+    }
+    if (!hasZone && (hasSpace || hasLevel || hasSlot)) return bad('Falta la zona.');
+    if (hasZone) {
+        if (!sub || sub.kind !== 'physical') return bad('Este sub almacén no es físico: no lleva zona, anaquel, nivel ni espacio.');
+        const entry = parseWarehouseLocations(sub.locations).find((e) => e.zoneId === state.zoneId);
+        if (!entry || !ctx.layout.zoneById.has(state.zoneId)) return bad('Esa zona no está asignada a ese sub almacén.');
+        if (hasSpace) {
+            const space = ctx.layout.spaceById.get(state.spaceId);
+            if (!space || space.zoneId !== state.zoneId) return bad('Ese anaquel no está en esa zona.');
+            if (entry.spaceIds.length && !entry.spaceIds.includes(state.spaceId)) return bad('Ese anaquel no está asignado a ese sub almacén.');
+            if (hasLevel) {
+                if (state.level < 1 || state.level > (space.levels || 1)) return bad('Ese nivel no existe en ese anaquel.');
+                if (hasSlot && (state.slot < 1 || state.slot > (space.slots || 1))) return bad('Ese espacio no existe en ese nivel.');
+            } else if (hasSlot) return bad('Falta el nivel.');
+        } else if (hasLevel || hasSlot) return bad('Falta el anaquel.');
+    }
+    if (hasSpace && hasLevel && hasSlot) {
+        const occupant = findCodeRelationInSlot(clientId, isTestAccount, state.spaceId, state.level, state.slot, selfId || 0);
+        if (occupant) return bad(`Ese espacio ya lo ocupa el código ${padSku(occupant.sku_number)}. Elige otro espacio.`, 409);
+    }
+    if (findCodeRelationDuplicate(clientId, isTestAccount, state, selfId || 0)) return bad('Este código ya tiene esa misma ubicación.', 409);
+    return { ok: true };
+}
+
+// Qué pasaría con un dato que cambia: se aplica de inmediato, queda pendiente de autorización o se rechaza (mismo criterio que checkAndLogFieldChanges).
+function codeRelationPatchOutcome(grants, existing, key) {
+    const colKey = CODE_RELATION_COLS[key];
+    const level = getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey);
+    const oldValue = existing[CODE_RELATION_PATCHABLE_FIELDS[key].column];
+    if (!oldValue) return level === 'ver-y-operar' || level === 'editar' ? 'apply' : 'reject';
+    return level === 'editar' ? 'pending' : 'reject';
+}
+
+app.get('/api/business/code-relations', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, CODE_RELATION_TABLE_KEY);
+    const client = getClientById(req.user.clientId);
+    const ctx = codeRelationContext(req);
+    res.json({ relations: listCodeRelations(req.user.clientId, req.user.isTestAccount).map((r) => mapCodeRelation(r, pendingByRecord, client?.company_name, ctx)) });
+});
+
+// Todo lo que necesita la ventana "Nueva relación": centros de costos, almacenes, sub almacenes (con sus ubicaciones), zonas y anaqueles del Layout y los espacios que ya están ocupados.
+app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const ctx = codeRelationContext(req);
+    const sub = [...ctx.warehouses.values()].filter((r) => r.category_type === 'sub-almacenes');
+    const almacenes = [...ctx.warehouses.values()].filter((r) => r.category_type === 'almacenes');
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        costCenters: [...ctx.costCenters.values()].map((c) => ({ id: c.id, code: c.code, name: c.name })),
+        warehouses: almacenes.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, status: r.status })),
+        subWarehouses: sub.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, status: r.status, kind: r.kind, locations: r.kind === 'physical' ? parseWarehouseLocations(r.locations) : [] })),
+        zones: ctx.layout.zones.map((z) => ({
+            id: z.id, name: z.name,
+            spaces: ctx.layout.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, levels: s.levels || 1, slots: s.slots || 1 })),
+        })),
+        occupied: listCodeRelations(clientId, isTestAccount).filter((r) => r.space_id && r.level && r.slot).map((r) => ({ id: r.id, spaceId: r.space_id, level: r.level, slot: r.slot, sku: padSku(r.sku_number) })),
+    });
+});
+
+// Buscador del campo Código: por SKU (con o sin ceros), UPC o descripción.
+app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const term = String(req.query.q || '').slice(0, 80);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        skus: searchSkuItems(req.user.clientId, term, req.user.isTestAccount).map((s) => ({
+            id: s.id, sku: padSku(s.record_number), upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', uom: s.main_uom || '',
+        })),
+    });
+});
+
+app.post('/api/business/code-relations', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const grants = req.user.isClientAdmin ? null : getUserEffectiveGrants(req.user.sub);
+    if (grants && !canCreateColumn(grants, CODE_RELATION_TABLE_KEY, 'colRelCreateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    }
+    const norm = normalizeCodeRelationInput(req.body || {});
+    if (norm.error) return res.status(400).json({ message: norm.error });
+    const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, ...norm.values };
+    // Llenar un dato vacío pide su propia hoja (Ver y Operar o Modificar), igual que al llenar una celda de otra tabla.
+    if (grants) {
+        const missing = Object.entries(CODE_RELATION_COLS)
+            .filter(([key, colKey]) => state[key] !== null && state[key] !== '' && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey)))
+            .map(([key]) => CODE_RELATION_PATCHABLE_FIELDS[key].fieldKey);
+        if (missing.length) return res.status(403).json({ message: 'No tienes permiso para llenar uno de los datos de esta relación.', fields: missing });
+    }
+    const ctx = codeRelationContext(req);
+    const check = validateCodeRelationState(req, state, 0, null, ctx);
+    if (check.error) return res.status(check.error.status).json({ message: check.error.message });
+    const row = createCodeRelation({ clientId, isTestData: isTestAccount, values: state });
+    logTableChange({ clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: row.id, recordLabel: `#${row.id}`, action: 'create', changedBy: changedByLabel(req) });
+    const sanitizers = codeRelationSanitizers(ctx, req);
+    Object.entries(CODE_RELATION_PATCHABLE_FIELDS).forEach(([key, { fieldKey }]) => {
+        if (state[key] === null || state[key] === '') return;
+        logTableChange({ clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: row.id, recordLabel: `#${row.id}`, action: 'update', fieldKey, oldValue: '', newValue: sanitizers[key](state[key]), changedBy: changedByLabel(req) });
+    });
+    notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'create', `#${row.id}`);
+    const client = getClientById(clientId);
+    res.status(201).json({ relation: mapCodeRelation(row, null, client?.company_name, ctx) });
+});
+
+app.patch('/api/business/code-relations/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getCodeRelationById(req.params.id, clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Relation not found.' });
+    const { baseline, overrideConflicts, ...raw } = req.body || {};
+    const norm = normalizeCodeRelationInput(raw);
+    if (norm.error) return res.status(400).json({ message: norm.error });
+    const ctx = codeRelationContext(req);
+    const state = {
+        skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
+        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, ...norm.values,
+    };
+    const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
+    if (check.error) return res.status(check.error.status).json({ message: check.error.message });
+    // Cuando cambian varios datos a la vez (la ubicación depende de ella misma) no se permite que unos se apliquen y otros queden pendientes o rechazados.
+    const changedKeys = Object.keys(norm.values).filter((key) => String(existing[CODE_RELATION_PATCHABLE_FIELDS[key].column] ?? '') !== String(norm.values[key] ?? ''));
+    if (!req.user.isClientAdmin && changedKeys.length > 1) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        if (changedKeys.some((key) => codeRelationPatchOutcome(grants, existing, key) !== 'apply')) {
+            return res.status(403).json({ message: 'Para cambiar varios datos a la vez necesitas poder llenarlos o cambiarlos todos sin autorización. Cámbialos de uno en uno.' });
+        }
+    }
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, norm.values, CODE_RELATION_PATCHABLE_FIELDS, CODE_RELATION_TABLE_KEY, `#${existing.id}`, codeRelationSanitizers(ctx, req), { baseline, overrideConflicts });
+    const row = updateCodeRelation(existing.id, clientId, appliedPatch, isTestAccount);
+    const client = getClientById(clientId);
+    res.json({ relation: mapCodeRelation(row, null, client?.company_name, ctx), pendingFields, rejectedFields, conflictFields });
+});
+
+app.delete('/api/business/code-relations/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getCodeRelationById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Relation not found.' });
+    if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), CODE_RELATION_TABLE_KEY, 'colRelDeleteAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para eliminar registros aquí.' });
+    }
+    logTableChange({ clientId: req.user.clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: existing.id, recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req) });
+    notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'delete', `#${existing.id}`);
+    deleteCodeRelation(existing.id, req.user.clientId);
+    res.status(204).end();
 });
 
 // --- "+ Solicitar nuevo X" -- catalog-value requests, generic across every
