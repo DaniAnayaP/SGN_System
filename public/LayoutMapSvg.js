@@ -114,6 +114,8 @@
         const W = options.width || 700;
         const H = options.height || 460;
         const M = 34;
+        // options.layers = los pasos activos del croquis (contorno, puertas, luz, zonas, espacios); sin él se dibuja todo. options.measures = false quita las medidas.
+        const on = (key) => !Array.isArray(options.layers) || options.layers.includes(key);
         const xs = layout.vertices.map((p) => p[0]);
         const ys = layout.vertices.map((p) => p[1]);
         const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
@@ -129,7 +131,7 @@
         // El nombre y los m² de cada zona van al final (encima de anaqueles y paredes), con un contorno blanco, y en la esquina que no tape ningún espacio.
         const halo = 'stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke"';
         let zoneLabels = '';
-        (layout.zones || []).forEach((z) => {
+        (on('zonas') ? (layout.zones || []) : []).forEach((z) => {
             const c = z.type ? (T.types[z.type] || T.types.dock) : T.types.none;
             const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
             if (LC.hasPoints(z)) {
@@ -160,21 +162,29 @@
         };
         if (options.measures !== false) {
             measure(layout.vertices, true, 24);
-            (layout.zones || []).forEach((z) => { if (Math.min(z.l, z.w) * sc >= 44) measure(LC.zonePoints(z), false, 30); });
+            (on('zonas') ? (layout.zones || []) : []).forEach((z) => { if (Math.min(z.l, z.w) * sc >= 44) measure(LC.zonePoints(z), false, 30); });
         }
         s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${T.chrome.nave}" stroke-width="3" stroke-linejoin="round"/>`;
-        (layout.spaces || []).forEach((sp) => {
+        (on('espacios') ? (layout.spaces || []) : []).forEach((sp) => {
             const w = Math.max(sp.l * sc, 4);
             const h = Math.max(sp.d * sc, 4);
             s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="#FFFFFF" stroke="${T.chrome.line}" stroke-width="1"/>`;
             if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="600" fill="${T.chrome.cardInk}" text-anchor="middle">${esc(sp.code)}</text>`;
         });
         s += zoneLabels + measureLabels;
-        (layout.doors || []).forEach((d) => {
+        (on('puertas') ? (layout.doors || []) : []).forEach((d) => {
             const w = LC.wallSegment(layout.vertices, d.wall);
             const ax = w.p[0] + w.ux * d.dist;
             const ay = w.p[1] + w.uy * d.dist;
             s += `<line x1="${X(ax)}" y1="${Y(ay)}" x2="${X(ax + w.ux * d.width)}" y2="${Y(ay + w.uy * d.width)}" stroke="#1E7E34" stroke-width="7"/>`;
+        });
+        // Columnas (con el contorno) y conexiones de luz (con su paso): solo las trae el reporte con sesión; la vista pública nunca las lleva.
+        (on('contorno') ? (layout.obstacles || []) : []).forEach((o) => {
+            s += `<rect x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}" fill="#6B7089" opacity="0.8"/>`;
+        });
+        (on('luz') ? (layout.power || []) : []).forEach((e) => {
+            const w = LC.wallSegment(layout.vertices, e.wall);
+            s += `<circle cx="${X(w.p[0] + w.ux * e.dist)}" cy="${Y(w.p[1] + w.uy * e.dist)}" r="5.5" fill="#FBF0DE" stroke="#D9A441" stroke-width="1.6"/>`;
         });
         const bar = 5 * sc;
         s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" stroke="${T.chrome.nave}" stroke-width="2"/><text x="${M + bar + 6}" y="${H - 8}" font-size="8.5" fill="#6B7089">5 m</text>`;

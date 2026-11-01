@@ -51,6 +51,10 @@
         const tiny = Math.min(W, H) / PX_CM < 13;
         const dateFmt = (d) => d.toLocaleString(lang === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         const utc = (d) => `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        // data.view = cómo se está viendo el croquis: sus capas activas y si lleva medidas; el reporte sale igual.
+        const view = data.view || {};
+        const layers = Array.isArray(view.layers) ? view.layers : null;
+        const on = (key) => !layers || layers.includes(key);
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
         const xs = data.layout.vertices.map((p) => p[0]);
         const ys = data.layout.vertices.map((p) => p[1]);
@@ -59,7 +63,7 @@
         const hMin = Math.min(...hs);
         const hMax = Math.max(...hs);
         const heightText = hMin === hMax ? `${fmt(hMin, lang)} m` : `${fmt(hMin, lang)} – ${fmt(hMax, lang)} m`;
-        const meta = `${dims} · ${labels.height} ${heightText} · ${data.layout.spaces.length} ${labels.spaces}`;
+        const meta = `${dims} · ${labels.height} ${heightText}${on('espacios') ? ` · ${data.layout.spaces.length} ${labels.spaces}` : ''}`;
         const allCards = [
             [`${fmt(k.total, lang)} m²`, labels.kpiTotal], [`${fmt(k.offices, lang)} m²`, labels.kpiOffices], [`${fmt(k.aisles, lang)} m²`, labels.kpiAisles],
             [`${fmt(k.docks, lang)} m²`, labels.kpiDocks], [`${fmt(k.storage, lang)} m²`, labels.kpiStorage], [`${fmt(k.dead, lang)} m²`, labels.kpiDead], [`${fmt(k.volume, lang)} m³`, labels.kpiVolume],
@@ -91,9 +95,16 @@
         // pie
         const lineY = H - 91 * f;
         // leyenda: los tipos de zona (con los mismos colores del mapa) y, después, cada zona con formato propio con su nombre y su muestra; se acomoda en los renglones que haga falta
-        const leg = [['door', labels.door], ['space', labels.space], ['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished],
-            ['dock', labels.dock], ['office', labels.office], ['aisle', labels.aisle], ['aisle2', labels.aisle2], ['none', labels.none]];
-        (data.layout.zones || []).filter((z) => z.fmt).slice(0, 12).forEach((z) => leg.push([`zone:${z.id}`, z.name, z]));
+        // La leyenda solo nombra lo que se ve en el croquis.
+        const leg = [];
+        if (on('puertas')) leg.push(['door', labels.door]);
+        if (on('luz') && (data.layout.power || []).length) leg.push(['power', labels.power]);
+        if (on('contorno') && (data.layout.obstacles || []).length) leg.push(['column', labels.column]);
+        if (on('espacios')) leg.push(['space', labels.space]);
+        if (on('zonas')) {
+            leg.push(['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished], ['dock', labels.dock], ['office', labels.office], ['aisle', labels.aisle], ['aisle2', labels.aisle2], ['none', labels.none]);
+            (data.layout.zones || []).filter((z) => z.fmt).slice(0, 12).forEach((z) => leg.push([`zone:${z.id}`, z.name, z]));
+        }
         const legPos = [];
         let legX = m;
         let legRow = 0;
@@ -143,7 +154,7 @@
         const innerW = frameW - 20 * f;
         const innerH = frameH - 20 * f;
         const h700 = Math.max(120, Math.round((700 * innerH) / Math.max(innerW, 1)));
-        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700 }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
         s += `<svg x="${frameX + 10 * f}" y="${top + 10 * f}" width="${innerW}" height="${innerH}" viewBox="0 0 700 ${h700}" preserveAspectRatio="xMidYMid meet">${mapInner}</svg>`;
         legPos.forEach(({ item: [key, text, zone], x, row }) => {
             if (tiny) return;
@@ -154,6 +165,8 @@
             } else {
                 let paint;
                 if (key === 'door') paint = 'fill="#1E7E34" stroke="#1E7E34"';
+                else if (key === 'power') paint = 'fill="#FBF0DE" stroke="#D9A441"';
+                else if (key === 'column') paint = 'fill="#6B7089" stroke="#6B7089"';
                 else if (key === 'space') paint = `fill="#FFFFFF" stroke="${C.line}"`;
                 else { const c = th.types[key]; paint = `fill="${c[0]}" stroke="${c[1]}"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`; }
                 s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" ${paint} stroke-width="${1.5 * f}"/>`;
@@ -187,7 +200,7 @@
         return `${s}</g></svg>`;
     }
 
-    // data: { companyName, logoDataUrl, logoRatio, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
+    // data: { companyName, logoDataUrl, logoRatio, view: { layers, measures }, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
     // options: { widthCm, heightCm, cut } (el espacio que se imprime y si se dibuja la línea punteada para recortar).
     function buildSheetSvg(data, labels, lang, options = {}) {
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));

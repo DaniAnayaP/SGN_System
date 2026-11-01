@@ -3322,11 +3322,11 @@
       "example": "you download the sheet, print it and stick it at the warehouse entrance."
     },
     "layoutQrPdf": {
-      "what": "Opens the window to download the sheet as a PDF: there you choose the size (A3, A4, Letter, Half letter, Card or any width and length in cm), see how it will look and download it with the map, the KPIs and the QR, ready to print. It has what was last saved.",
-      "example": "you send it to be printed at a copy shop."
+      "what": "Opens the window to download the sheet as a PDF: there you choose the size (A3, A4, Letter, Half letter, Card or any width and length in cm), see how it will look and download it with the map, the KPIs and the QR, ready to print. The sheet comes out as you see the sketch: if you hid the measures or left only some steps active (doors, power, zones...), it only has that. It has what was last saved.",
+      "example": "you leave only Zones active, hide the measures and the sheet comes out with only the zones, no doors or measures."
     },
     "layoutQrPng": {
-      "what": "Opens the same window to download the sheet as an image, at the size you choose, to send by message or email. It has what was last saved.",
+      "what": "Opens the same window to download the sheet as an image, at the size you choose, to send by message or email. It comes out as you see the sketch (same layers and measures). It has what was last saved.",
       "example": "you send it by message to a supervisor."
     },
     "layoutQrLink": {

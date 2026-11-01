@@ -3321,11 +3321,11 @@
       "example": "descargas la hoja, la imprimes y la pegas en la entrada de la nave."
     },
     "layoutQrPdf": {
-      "what": "Abre la ventana para bajar la hoja en PDF: ahí eliges el tamaño (A3, A4, Carta, Media carta, Tarjeta o el ancho y largo en cm que quieras), ves cómo va a quedar y la bajas con el mapa, los KPIs y el QR, lista para imprimir. Trae lo último guardado.",
-      "example": "la mandas a imprimir en una copiadora."
+      "what": "Abre la ventana para bajar la hoja en PDF: ahí eliges el tamaño (A3, A4, Carta, Media carta, Tarjeta o el ancho y largo en cm que quieras), ves cómo va a quedar y la bajas con el mapa, los KPIs y el QR, lista para imprimir. La hoja sale como ves el croquis: si ocultaste las medidas o dejaste activos solo algunos pasos (puertas, luz, zonas...), solo trae eso. Trae lo último guardado.",
+      "example": "dejas activas solo Zonas, ocultas las medidas y la hoja sale solo con las zonas, sin puertas ni medidas."
     },
     "layoutQrPng": {
-      "what": "Abre la misma ventana para bajar la hoja como imagen, con el tamaño que elijas, para mandarla por mensaje o correo. Trae lo último guardado.",
+      "what": "Abre la misma ventana para bajar la hoja como imagen, con el tamaño que elijas, para mandarla por mensaje o correo. Sale como ves el croquis (con las mismas capas y medidas). Trae lo último guardado.",
       "example": "se la mandas por mensaje a un supervisor."
     },
     "layoutQrLink": {

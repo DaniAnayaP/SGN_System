@@ -6235,7 +6235,8 @@ app.get('/api/business/layout/qr', requireAuth, (req, res) => {
     const rows = [];
     for (let r = 0; r < size; r++) rows.push(Array.from({ length: size }, (_, c) => (qr.modules.get(r, c) ? '1' : '0')).join(''));
     res.set('Cache-Control', 'no-store');
-    res.json({ url, qrRows: rows, canRegenerate: perms.canRegenerateQr, logoDataUrl: clientLogoDataUrl(req.user.clientId), ...buildPublicLayoutPayload(req.user.clientId, row) });
+    // extras: lo que el reporte con sesión puede dibujar y la vista pública nunca lleva (columnas y conexiones de luz), según las capas activas del croquis.
+    res.json({ url, qrRows: rows, canRegenerate: perms.canRegenerateQr, logoDataUrl: clientLogoDataUrl(req.user.clientId), extras: { obstacles: row.layout.obstacles || [], power: row.layout.power || [] }, ...buildPublicLayoutPayload(req.user.clientId, row) });
 });
 
 // Las categorías de cada zona con su QR, para la tarjeta que se imprime. Cada QR lleva la dirección fija del Layout más la zona y la categoría (el QR no cambia nunca; ahí aparecerán los
