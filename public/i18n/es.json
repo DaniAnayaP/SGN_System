@@ -326,13 +326,9 @@
     "catMaterialApoyoFuncionalidadAbbr1": "Func. Pantallas",
     "catMaterialApoyoFuncionalidadAbbr2": "Func. Pant.",
     "opCentroDistLayout": "Layout",
-    "opCentroDistVerificador": "Verificador",
-    "opCentroDistInventarioVenta": "Inventario Venta",
-    "opCentroDistInventarioVentaAbbr1": "Invent. Venta",
-    "opCentroDistInventarioVentaAbbr2": "Inv. Venta",
-    "opCentroDistInventarioInterno": "Inventario Interno",
-    "opCentroDistInventarioInternoAbbr1": "Invent. Interno",
-    "opCentroDistInventarioInternoAbbr2": "Inv. Interno",
+    "opCentroDistVerificadorSku": "Verificador Código (SKU)",
+    "opCentroDistVerificadorSkuAbbr1": "Verif. Código (SKU)",
+    "opCentroDistVerificadorSkuAbbr2": "Verif. SKU",
     "catMaterialApoyoFlujo": "Flujo Sistema",
     "catMaterialApoyoProcesos": "Nuestros Procesos",
     "ourSupportMaterial": "Nuestro Material de Apoyo",
@@ -1545,8 +1541,7 @@
     "colVerificadorConsulta": "Buscar y ver la ficha",
     "colVerificadorEscaner": "Escanear UPC",
     "layoutEmptyState": "Aún no hay un Layout de la nave.",
-    "inventarioVentaEmptyState": "Aún no hay artículos que se vendan.",
-    "inventarioInternoEmptyState": "Aún no hay artículos de uso interno.",
+    "verificadorSkuEmptyState": "Aún no hay códigos que verificar.",
     "layoutKpiVolumen": "m³ de la nave",
     "layoutQrMenu": "QR y descarga",
     "layoutDescargarPdf": "Descargar PDF",
@@ -2865,13 +2860,9 @@
       "what": "Empieza sin plano: capturas el contorno de la nave, sus puertas y conexiones de luz, y el sistema dibuja el croquis.",
       "example": "escribes que la nave mide 48 por 28 metros y el croquis aparece solo."
     },
-    "inventarioVentaEmpty": {
-      "what": "Aquí vas a consultar los artículos que se venden: buscarlos, escanear su código y ver su ficha.",
-      "example": "escaneas el UPC de una caja y ves qué artículo es y dónde está."
-    },
-    "inventarioInternoEmpty": {
-      "what": "Aquí vas a consultar los artículos que son para uso interno: buscarlos, escanear su código y ver su ficha.",
-      "example": "buscas la harina de trigo y ves en qué anaquel está."
+    "verificadorSkuEmpty": {
+      "what": "Aquí vas a verificar un código (SKU): escanearlo o buscarlo para ver qué artículo es, dónde está y, con sesión, lo demás de su ficha.",
+      "example": "escaneas el UPC de una caja y ves qué artículo es y en qué anaquel está."
     },
     "layoutSteps": {
       "what": "Los pasos para armar el Layout. Cada uno es una parte de la nave y se asigna por separado en los accesos.",

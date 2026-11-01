@@ -326,13 +326,9 @@
     "catMaterialApoyoFuncionalidadAbbr1": "Screen Function.",
     "catMaterialApoyoFuncionalidadAbbr2": "Screen Func.",
     "opCentroDistLayout": "Layout",
-    "opCentroDistVerificador": "Verifier",
-    "opCentroDistInventarioVenta": "Sales Inventory",
-    "opCentroDistInventarioVentaAbbr1": "Sales Inv.",
-    "opCentroDistInventarioVentaAbbr2": "Sales",
-    "opCentroDistInventarioInterno": "Internal Inventory",
-    "opCentroDistInventarioInternoAbbr1": "Internal Inv.",
-    "opCentroDistInventarioInternoAbbr2": "Internal",
+    "opCentroDistVerificadorSku": "Code Verifier (SKU)",
+    "opCentroDistVerificadorSkuAbbr1": "Code Verif. (SKU)",
+    "opCentroDistVerificadorSkuAbbr2": "Verif. SKU",
     "catMaterialApoyoFlujo": "System Flow",
     "catMaterialApoyoProcesos": "Our Processes",
     "ourSupportMaterial": "Our Support Material",
@@ -1545,8 +1541,7 @@
     "colVerificadorConsulta": "Search and view the sheet",
     "colVerificadorEscaner": "Scan UPC",
     "layoutEmptyState": "There is no warehouse Layout yet.",
-    "inventarioVentaEmptyState": "There are no articles for sale yet.",
-    "inventarioInternoEmptyState": "There are no articles for internal use yet.",
+    "verificadorSkuEmptyState": "There are no codes to verify yet.",
     "layoutKpiVolumen": "Warehouse m³",
     "layoutQrMenu": "QR and download",
     "layoutDescargarPdf": "Download PDF",
@@ -2866,13 +2861,9 @@
       "what": "Start without a plan: you enter the outline of the warehouse, its doors and power connections, and the system draws the map.",
       "example": "you type that the warehouse is 48 by 28 meters and the map appears by itself."
     },
-    "inventarioVentaEmpty": {
-      "what": "Here you will look up the articles that are sold: search for them, scan their code and see their sheet.",
-      "example": "you scan the UPC on a box and see which article it is and where it is."
-    },
-    "inventarioInternoEmpty": {
-      "what": "Here you will look up the articles meant for internal use: search for them, scan their code and see their sheet.",
-      "example": "you search for wheat flour and see which rack it is on."
+    "verificadorSkuEmpty": {
+      "what": "Here you verify a code (SKU): scan it or search for it to see which article it is, where it is and, when signed in, the rest of its sheet.",
+      "example": "you scan the UPC of a box and see which article it is and which rack it is on."
     },
     "layoutSteps": {
       "what": "The steps to build the Layout. Each one is a part of the warehouse and is assigned separately in the access tree.",
