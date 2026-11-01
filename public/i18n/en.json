@@ -1708,9 +1708,13 @@
     "layoutMedidasOcultar": "Hide measures",
     "layoutMedidasVer": "Show measures",
     "layoutAreaBtn": "Show and hide the m² of the zones",
+    "layoutGirarBtn": "Rotate the sketch",
     "layoutHojaContenido": "Print with",
     "layoutHojaConMedidas": "Measures",
     "layoutHojaConM2": "Zone m²",
+    "layoutHojaConTotales": "Totals",
+    "layoutTotalesOcultar": "Remove the totals from the sheet",
+    "layoutTotalesVer": "Put the totals on the sheet",
     "layoutAreaOcultar": "Hide m²",
     "layoutAreaVer": "Show m²",
     "layoutFiltrosBtn": "Layout table filters",
@@ -3420,8 +3424,12 @@
       "example": "you hide the m² so the sketch only shows the zone names and show them again to check how big each one is."
     },
     "layoutSheetContent": {
-      "what": "Choose what the downloaded sheet carries: the measures (length of each wall, corner heights and the measure of each zone side) and the m² of each zone. When off, that part is not printed. It only changes this download: the screen is not touched, and the preview updates at once.",
+      "what": "Choose what the downloaded sheet carries: the measures (length of each wall, corner heights and the measure of each zone side), the m² of each zone and the totals (the m² and m³ figures at the bottom: total area, offices, aisles, storage, dead space and volume). When off, that part is not printed and the sketch takes its place. It only changes this download: the screen is not touched, and the preview updates at once.",
       "example": "to stick the Layout at the entrance you turn the measures off and the sheet shows only the zone names; for the construction plan you leave them on."
+    },
+    "layoutRotate": {
+      "what": "Rotates the sketch a quarter turn to the right each time you tap it (90°, 180°, 270° and back to the start). Use it to arrange the sketch the way you will print it, for example with the warehouse lying down or standing up. It only turns the drawing: the tables and what is saved do not change, the texts stay upright and the rotation is remembered in this browser. The downloaded sheet comes out with this rotation (you can change it right there for that download only).",
+      "example": "the warehouse is long and the sheet is portrait: you rotate the sketch a quarter turn and it fills the sheet better."
     },
     "layoutSite": {
       "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",

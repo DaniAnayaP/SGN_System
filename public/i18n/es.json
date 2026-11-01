@@ -1708,9 +1708,13 @@
     "layoutMedidasOcultar": "Ocultar medidas",
     "layoutMedidasVer": "Ver medidas",
     "layoutAreaBtn": "Ver y ocultar los m² de las zonas",
+    "layoutGirarBtn": "Girar el croquis",
     "layoutHojaContenido": "Imprimir con",
     "layoutHojaConMedidas": "Medidas",
     "layoutHojaConM2": "m² de las zonas",
+    "layoutHojaConTotales": "Totales",
+    "layoutTotalesOcultar": "Quitar los totales de la hoja",
+    "layoutTotalesVer": "Poner los totales en la hoja",
     "layoutAreaOcultar": "Ocultar m²",
     "layoutAreaVer": "Ver m²",
     "layoutFiltrosBtn": "Filtros de las tablas del Layout",
@@ -3419,8 +3423,12 @@
       "example": "ocultas los m² para que el croquis solo diga los nombres de las zonas y los vuelves a mostrar para revisar cuánto mide cada una."
     },
     "layoutSheetContent": {
-      "what": "Elige qué lleva la hoja que vas a descargar: las medidas (largo de cada pared, altura de las esquinas y medida de cada lado de las zonas) y los m² de cada zona. Apagado, esa parte no se imprime. Solo cambia esta descarga: lo que ves en la pantalla no se toca, y la vista previa se actualiza al momento.",
+      "what": "Elige qué lleva la hoja que vas a descargar: las medidas (largo de cada pared, altura de las esquinas y medida de cada lado de las zonas), los m² de cada zona y los totales (las cifras de m² y m³ de abajo: superficie total, oficinas, pasillos, almacenamiento, espacios muertos y volumen). Apagado, esa parte no se imprime y el croquis ocupa su lugar. Solo cambia esta descarga: lo que ves en la pantalla no se toca, y la vista previa se actualiza al momento.",
       "example": "para pegar el Layout en la entrada apagas las medidas y la hoja sale solo con los nombres de las zonas; para el plano de obra las dejas encendidas."
+    },
+    "layoutRotate": {
+      "what": "Gira el croquis un cuarto de vuelta a la derecha cada vez que lo tocas (90°, 180°, 270° y de nuevo como estaba). Sirve para acomodarlo como lo vas a imprimir, por ejemplo con la nave acostada o parada. Solo gira el dibujo: las tablas y lo guardado no cambian, los textos siguen derechos y el giro se recuerda en este navegador. La hoja que se descarga sale con este giro (ahí mismo se puede cambiar solo para esa descarga).",
+      "example": "la nave es larga y la hoja es vertical: giras el croquis un cuarto de vuelta y llena mejor la hoja."
     },
     "layoutSite": {
       "what": "El nombre del lugar (el sitio). Sale arriba del nombre de la empresa en el encabezado de la hoja del Layout y de las tarjetas que se imprimen. Si lo dejas vacío sale el texto de siempre. Más adelante saldrá de la configuración.",

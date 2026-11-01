@@ -558,6 +558,38 @@
     }
 
     // Qué datos tiene cada sección (para saber si "Ver y Operar" todavía puede llenarla).
+    // Gira el Layout (SOLO para dibujarlo; lo guardado no cambia) en cuartos de vuelta hacia la derecha: 0, 1 (90°), 2 (180°) o 3 (270°). Se giran las esquinas, las zonas (con sus
+    // esquinas si son de forma libre), los espacios y las columnas; las puertas y las conexiones de luz van por número de pared, así que siguen a su pared solas. Los textos del
+    // dibujo no se giran: se vuelven a poner derechos sobre la figura ya girada.
+    function rotateLayout(layout, quarters) {
+        const q = ((Math.round(Number(quarters)) % 4) + 4) % 4;
+        if (!q || !layout) return layout;
+        const pt = (x, y) => (q === 1 ? [-y, x] : (q === 2 ? [-x, -y] : [y, -x]));
+        const box = (o, lKey, wKey) => {
+            const a = pt(o.x, o.y);
+            const b = pt(o.x + o[lKey], o.y + o[wKey]);
+            return { x: round2(Math.min(a[0], b[0])), y: round2(Math.min(a[1], b[1])), [lKey]: round2(Math.abs(b[0] - a[0])), [wKey]: round2(Math.abs(b[1] - a[1])) };
+        };
+        const turn = (p) => { const r = pt(p[0], p[1]); return [round2(r[0]), round2(r[1])]; };
+        return {
+            ...layout,
+            vertices: (layout.vertices || []).map((p) => [...turn(p), p[2]]),
+            obstacles: (layout.obstacles || []).map((o) => ({ ...o, ...box(o, 'l', 'w') })),
+            spaces: (layout.spaces || []).map((s) => ({ ...s, ...box(s, 'l', 'd') })),
+            zones: (layout.zones || []).map((z) => {
+                if (Array.isArray(z.pts)) {
+                    const pts = z.pts.map(turn);
+                    const xs = pts.map((p) => p[0]);
+                    const ys = pts.map((p) => p[1]);
+                    const x = Math.min(...xs);
+                    const y = Math.min(...ys);
+                    return { ...z, pts, x, y, l: round2(Math.max(...xs) - x), w: round2(Math.max(...ys) - y) };
+                }
+                return { ...z, ...box(z, 'l', 'w') };
+            }),
+        };
+    }
+
     function sectionData(layout, section) {
         if (!layout) return null;
         if (section === 'contorno') return { vertices: layout.vertices, obstacles: layout.obstacles, siteName: layout.siteName || '' };
@@ -576,7 +608,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData, rotateLayout,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

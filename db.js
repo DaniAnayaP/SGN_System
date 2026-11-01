@@ -6288,6 +6288,13 @@ function seedLayoutNewIconGrants() {
 // --- One-time data migration (2026-11-01): Catálogos > Códigos y Operaciones > Edición Código para quien ya tiene Alta Nuestros Artículos -------------------------------
 // Alta deja de mostrar los códigos completos: pasan a Códigos (solo lectura) y se corrigen desde Edición Código. Quien hoy puede trabajar con los códigos en Alta recibe las dos
 // pantallas nuevas, para no perder lo que ya podía hacer (administrador del cliente aparte, que no depende de hojas). Mismos niveles y reglas que la siembra de los iconos del Layout.
+// El icono Girar el croquis (iconLayoutGirar) se da igual, una sola vez, a quien ya tiene la pantalla Layout (mismos niveles que la siembra de los otros tres iconos).
+const LAYOUT_ROTATE_SEED_KEY = 'seed-layout-rotate-icon-v1';
+function seedLayoutRotateIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_ROTATE_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutGirar`], 'the Layout rotate icon');
+}
 const CODIGOS_SCREENS_SEED_KEY = 'seed-codigos-edicion-screens-v1';
 function seedCodigosScreensGrants() {
     const path = TABLE_GRANT_PATHS['nuestros-articulos'];
@@ -10619,6 +10626,7 @@ const systemReset = createSystemReset(db, DATA_DIR);
 seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
 seedCodigosScreensGrants();
+seedLayoutRotateIconGrants();
 
 module.exports = {
     db,

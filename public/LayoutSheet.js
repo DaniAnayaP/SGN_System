@@ -121,41 +121,47 @@
         let frameX = m;
         let frameW;
         let frameH;
+        // Los totales (las tarjetas de m² y m³) se pueden quitar de la hoja (data.view.totals = false): el mapa ocupa el lugar que dejan.
+        const showTotals = view.totals !== false;
         if (land) {
-            const cw = clamp(394 * f, 120, W * 0.27);
-            const gap = 28 * f;
+            const cw = showTotals ? clamp(394 * f, 120, W * 0.27) : 0;
+            const gap = showTotals ? 28 * f : 0;
             frameW = W - 2 * m - cw - gap;
             frameH = frameBottom - top;
-            const pitch = (frameH - 82 * f) / Math.max(cards.length - 1, 1);
-            const cardH = Math.min(82 * f, pitch - 8 * f);
-            const kk = cardH / (82 * f);
-            cards.forEach((c, i) => {
-                const y = top + i * pitch;
-                s += `<rect x="${W - m - cw}" y="${y}" width="${cw}" height="${cardH}" rx="${10 * f}" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="${2 * f}"/>`;
-                s += `<text x="${W - m - cw + 22 * f}" y="${y + 41 * f * kk}" font-size="${32 * f}" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="${W - m - cw + 22 * f}" y="${y + 68 * f * kk}" font-size="${17 * f}" fill="#3F435D">${esc(c[1])}</text>`;
-            });
+            if (showTotals) {
+                const pitch = (frameH - 82 * f) / Math.max(cards.length - 1, 1);
+                const cardH = Math.min(82 * f, pitch - 8 * f);
+                const kk = cardH / (82 * f);
+                cards.forEach((c, i) => {
+                    const y = top + i * pitch;
+                    s += `<rect x="${W - m - cw}" y="${y}" width="${cw}" height="${cardH}" rx="${10 * f}" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="${2 * f}"/>`;
+                    s += `<text x="${W - m - cw + 22 * f}" y="${y + 41 * f * kk}" font-size="${32 * f}" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="${W - m - cw + 22 * f}" y="${y + 68 * f * kk}" font-size="${17 * f}" fill="#3F435D">${esc(c[1])}</text>`;
+                });
+            }
         } else {
-            const rows = Math.ceil(cards.length / 2);
+            const rows = showTotals ? Math.ceil(cards.length / 2) : 0;
             const gp = 12 * f;
             const cardH = Math.min(82 * f, Math.max((frameBottom - top) * 0.1, 40 * f));
-            const cardsH = rows * cardH + (rows - 1) * gp;
+            const cardsH = showTotals ? rows * cardH + (rows - 1) * gp : 0;
             frameW = W - 2 * m;
-            frameH = frameBottom - top - cardsH - 20 * f;
-            const cw = (frameW - gp) / 2;
-            const kk = cardH / (82 * f);
-            cards.forEach((c, i) => {
-                const x = m + (i % 2) * (cw + gp);
-                const y = frameBottom - cardsH + Math.floor(i / 2) * (cardH + gp);
-                s += `<rect x="${x}" y="${y}" width="${cw}" height="${cardH}" rx="${10 * f}" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="${2 * f}"/>`;
-                s += `<text x="${x + 22 * f}" y="${y + 41 * f * kk}" font-size="${32 * f}" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="${x + 22 * f}" y="${y + 68 * f * kk}" font-size="${17 * f}" fill="#3F435D">${esc(c[1])}</text>`;
-            });
+            frameH = frameBottom - top - cardsH - (showTotals ? 20 * f : 0);
+            if (showTotals) {
+                const cw = (frameW - gp) / 2;
+                const kk = cardH / (82 * f);
+                cards.forEach((c, i) => {
+                    const x = m + (i % 2) * (cw + gp);
+                    const y = frameBottom - cardsH + Math.floor(i / 2) * (cardH + gp);
+                    s += `<rect x="${x}" y="${y}" width="${cw}" height="${cardH}" rx="${10 * f}" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="${2 * f}"/>`;
+                    s += `<text x="${x + 22 * f}" y="${y + 41 * f * kk}" font-size="${32 * f}" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="${x + 22 * f}" y="${y + 68 * f * kk}" font-size="${17 * f}" fill="#3F435D">${esc(c[1])}</text>`;
+                });
+            }
         }
         s += `<rect x="${frameX}" y="${top}" width="${frameW}" height="${frameH}" rx="${10 * f}" fill="#FFFFFF" stroke="${C.frame}" stroke-width="${2 * f}"/>`;
         // el mapa se dibuja en un lienzo de 700 px de ancho con la forma del marco, para aprovecharlo entero
         const innerW = frameW - 20 * f;
         const innerH = frameH - 20 * f;
         const h700 = Math.max(120, Math.round((700 * innerH) / Math.max(innerW, 1)));
-        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false, area: view.area !== false }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false, area: view.area !== false, rotation: view.rotation || 0 }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
         s += `<svg x="${frameX + 10 * f}" y="${top + 10 * f}" width="${innerW}" height="${innerH}" viewBox="0 0 700 ${h700}" preserveAspectRatio="xMidYMid meet">${mapInner}</svg>`;
         legPos.forEach(({ item: [key, text, zone], x, row }) => {
             if (tiny) return;
@@ -201,7 +207,7 @@
         return `${s}</g></svg>`;
     }
 
-    // data: { companyName, siteName (el Sitio que va arriba del nombre; sin él sale labels.area), logoDataUrl, logoRatio, view: { layers, measures }, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
+    // data: { companyName, siteName (el Sitio que va arriba del nombre; sin él sale labels.area), logoDataUrl, logoRatio, view: { layers, measures, area, totals, rotation }, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
     // options: { widthCm, heightCm, cut } (el espacio que se imprime y si se dibuja la línea punteada para recortar).
     function buildSheetSvg(data, labels, lang, options = {}) {
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));

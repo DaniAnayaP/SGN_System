@@ -6210,6 +6210,8 @@ function layoutPermissions(req) {
         canFilterTables: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFiltros'),
         // "QR y descarga" por Zona (la hoja con las categorías de los códigos que hay en la zona) se usa con el icono Imprimir por zona (hoja <pantalla>/iconLayoutImprimirZona).
         canPrintZone: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutImprimirZona'),
+        // Girar el croquis (en pantalla y en la hoja que se descarga) usa el icono Girar (hoja <pantalla>/iconLayoutGirar del árbol).
+        canRotate: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutGirar'),
         // Las categorías de las zonas se capturan con el icono Categorías de la zona y su tarjeta con QR se baja con el icono Tarjeta de categorías (hojas <pantalla>/iconLayoutCategorias e iconLayoutTarjeta).
         canEditCategories: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCategorias'),
         canUseCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjeta'),

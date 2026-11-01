@@ -110,6 +110,8 @@
     const fmt = (n) => (Number.isFinite(n) ? n : 0).toLocaleString('es-MX', { maximumFractionDigits: 2 });
 
     function mapSvg(layout, options = {}) {
+        // options.rotation = cuartos de vuelta a la derecha (0 a 3): el croquis sale girado; los textos siguen derechos.
+        if (options.rotation) layout = LC.rotateLayout(layout, options.rotation);
         const T = options.theme || DEFAULT_THEME;
         const W = options.width || 700;
         const H = options.height || 460;

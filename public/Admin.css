@@ -7287,6 +7287,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-measures-btn.off::after{ content: ""; position: absolute; width: 1.5rem; border-top: 2px solid currentColor; transform: rotate(-45deg); }
 /* el icono de m² va junto al de medidas */
 .layout-area-btn{ right: 3rem; }
+.layout-rotate-btn{ right: 5.5rem; }
+.layout-rotate-btn.off::after{ display: none; } /* girar no se "apaga": el icono no lleva la raya */
 
 /* simbología: al lado del croquis cuando el cuadro es ancho; debajo cuando es angosto */
 .layout-canvas{ container-type: inline-size; }
@@ -7494,4 +7496,5 @@ body.sgn-scroll-shell > main > .page-scroll{ flex: 1 1 auto; min-height: 0; over
 .layout-sheet-tgl i{ font-size: 1.05rem; }
 .layout-sheet-tgl.off{ background: transparent; color: var(--color-text-secondary); border-color: var(--color-border); }
 .layout-sheet-tgl.off i{ position: relative; }
+.layout-sheet-tgl.layout-sheet-rot.off i::after{ display: none; } /* girar no se "apaga": sin giro el icono no lleva la raya */
 .layout-sheet-tgl.off i::after{ content: ""; position: absolute; left: -2px; right: -2px; top: 50%; border-top: 2px solid currentColor; transform: rotate(-45deg); }

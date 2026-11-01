@@ -13,7 +13,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
+    saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -484,7 +484,9 @@ function renderPanel() {
 // ---- croquis -----------------------------------------------------------------------------------------------------------
 const ZONE_CLASS = { dry: 'lz-dry', cold: 'lz-cold', chemical: 'lz-chem', finished: 'lz-fin', dock: 'lz-dock', office: 'lz-office', aisle: 'lz-aisle', aisle2: 'lz-aisle2' };
 function renderSvg() {
-    const d = state.draft;
+    // El croquis puede estar girado (icono Girar): todo se dibuja desde una copia girada del borrador; lo guardado y las tablas no se tocan.
+    const rot = state.rotation || 0;
+    const d = rot ? LC.rotateLayout(state.draft, rot) : state.draft;
     const on = stepOn;
     const W = 700;
     const H = 460;
@@ -492,7 +494,7 @@ function renderSvg() {
     const xs = d.vertices.map((p) => p[0]);
     const ys = d.vertices.map((p) => p[1]);
     let x0 = Math.min(...xs); let x1 = Math.max(...xs); let y0 = Math.min(...ys); let y1 = Math.max(...ys);
-    if (state.planImage && d.plan) {
+    if (state.planImage && d.plan && !rot) {
         x0 = Math.min(x0, 0); y0 = Math.min(y0, 0); x1 = Math.max(x1, d.plan.widthM); y1 = Math.max(y1, d.plan.widthM * state.planAspect);
     }
     const spanX = Math.max(x1 - x0, 1);
@@ -502,10 +504,10 @@ function renderSvg() {
     const oy = M;
     const X = (x) => ox + (x - x0) * sc;
     const Y = (y) => oy + (y - y0) * sc;
-    view = { sc, W };
+    view = { sc, W, rot };
     // Los pasillos van sombreados con rayas (principal: rayas; entre anaqueles: puntos).
     let s = '<defs><pattern id="lh-main" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="var(--color-surface)"/><line x1="0" y1="0" x2="0" y2="8" stroke="var(--color-text-secondary)" stroke-width="2.4" opacity="0.4"/></pattern><pattern id="lh-between" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="var(--color-surface)"/><circle cx="3" cy="3" r="1.15" fill="var(--color-text-secondary)" opacity="0.5"/></pattern></defs>';
-    if (state.planImage && d.plan) s += `<image href="${state.planImage}" x="${X(0)}" y="${Y(0)}" width="${d.plan.widthM * sc}" height="${d.plan.widthM * state.planAspect * sc}" opacity="0.55" preserveAspectRatio="none"/>`;
+    if (state.planImage && d.plan && !rot) s += `<image href="${state.planImage}" x="${X(0)}" y="${Y(0)}" width="${d.plan.widthM * sc}" height="${d.plan.widthM * state.planAspect * sc}" opacity="0.55" preserveAspectRatio="none"/>`;
     // El nombre y los m² de cada zona se dibujan al final (encima de anaqueles y paredes) y en la esquina de la zona que no tape ningún espacio; las zonas que no son
     // rectángulos llevan el nombre en el punto más holgado de adentro. La medida real de cada lado se escribe adentro de la zona.
     let zoneLabels = '';
@@ -655,6 +657,23 @@ function updateAreaBtn() {
     btn.setAttribute('aria-label', t(state.showArea ? 'main.layoutAreaOcultar' : 'main.layoutAreaVer'));
 }
 try { state.showArea = localStorage.getItem(AREA_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se ven */ }
+// Icono Girar el croquis: da un cuarto de vuelta a la derecha cada vez (0°, 90°, 180°, 270°); se recuerda en este navegador y la hoja que se descarga sale con ese giro.
+const ROTATION_KEY = 'sgn_layout_rotation';
+function updateRotateBtn() {
+    const btn = $('layout-rotate-btn');
+    btn.hidden = !(state.perms && state.perms.canRotate);
+    btn.classList.toggle('off', !state.rotation);
+    btn.setAttribute('aria-pressed', String(!!state.rotation));
+    btn.setAttribute('aria-label', `${t('main.layoutGirarBtn')} (${state.rotation * 90}°)`);
+    btn.title = `${t('main.layoutGirarBtn')} (${state.rotation * 90}°)`;
+}
+try { state.rotation = Math.max(0, Math.min(3, parseInt(localStorage.getItem(ROTATION_KEY), 10) || 0)); } catch (err) { /* sin almacenamiento: sin giro */ }
+$('layout-rotate-btn').addEventListener('click', () => {
+    state.rotation = ((state.rotation || 0) + 1) % 4;
+    try { localStorage.setItem(ROTATION_KEY, String(state.rotation)); } catch (err) { /* no se recuerda */ }
+    updateRotateBtn();
+    if (state.draft) renderSvg();
+});
 $('layout-area-btn').addEventListener('click', () => {
     state.showArea = !state.showArea;
     try { localStorage.setItem(AREA_KEY, state.showArea ? '1' : '0'); } catch (err) { /* no se recuerda */ }
@@ -665,6 +684,7 @@ function showEditor() {
     updateQrMenu();
     updateMeasuresBtn();
     updateAreaBtn();
+    updateRotateBtn();
     $('layout-empty').hidden = true;
     $('layout-plan-width').hidden = true;
     $('layout-editor').hidden = false;
@@ -1259,6 +1279,10 @@ window.addEventListener('pointermove', (event) => {
     const k = view.W / rect.width / view.sc;
     let dx = (event.clientX - drag.px) * k;
     let dy = (event.clientY - drag.py) * k;
+    // Con el croquis girado, el movimiento que se ve en pantalla se regresa a los ejes del Layout (giro inverso).
+    if (view.rot === 1) [dx, dy] = [dy, -dx];
+    else if (view.rot === 2) [dx, dy] = [-dx, -dy];
+    else if (view.rot === 3) [dx, dy] = [-dy, dx];
     if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 0.2) return;
     drag.moved = true;
     const xs = [];
@@ -1476,7 +1500,7 @@ async function loadSheetData() {
     return { data, logoRatio: await logoRatioOf(data.logoDataUrl) };
 }
 // Con o sin medidas y m² para lo que se imprime: lo que se eligió en la ventana de descarga (si está abierta) o, si no, lo que se ve en el croquis.
-const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea };
+const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, totals: true, rotation: state.rotation || 0 };
 function buildSheetSvgFrom(loaded) {
     const { data, logoRatio } = loaded;
     return window.LayoutSheet.buildSheetSvg({
@@ -1485,7 +1509,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: state.steps.slice(), measures: sheetView().measures, area: sheetView().area },
+        view: { layers: state.steps.slice(), measures: sheetView().measures, area: sheetView().area, totals: sheetView().totals, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {
@@ -1505,7 +1529,9 @@ function ensureSheetModal() {
             <div class="layout-sizebar-row"><label>${esc(t('main.layoutHojaAncho'))}<input type="number" id="layout-size-w" min="6" max="120" step="0.1"></label><label>${esc(t('main.layoutHojaLargo'))}<input type="number" id="layout-size-h" min="6" max="120" step="0.1"></label><button type="button" class="btn btn-secondary" id="layout-size-swap">${esc(t('main.layoutHojaGirar'))}</button><label class="layout-check"><input type="checkbox" id="layout-size-cut"> ${esc(t('main.layoutHojaLinea'))}</label></div>
             <div class="layout-sizebar-row layout-sheet-content" data-help-key="layoutSheetContent"><span class="layout-sizebar-title">${esc(t('main.layoutHojaContenido'))}</span>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-measures" data-sheet-tgl="measures" aria-pressed="true"><i class="bx bx-ruler" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConMedidas'))}</span></button>
-                <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-area" data-sheet-tgl="area" aria-pressed="true"><i class="bx bx-area" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConM2'))}</span></button></div>
+                <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-area" data-sheet-tgl="area" aria-pressed="true"><i class="bx bx-area" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConM2'))}</span></button>
+                <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-totals" data-sheet-tgl="totals" aria-pressed="true"><i class="bx bx-bar-chart-alt-2" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConTotales'))}</span></button>
+                <button type="button" class="layout-sheet-tgl layout-sheet-rot" id="layout-sheet-rot" data-sheet-rot="1" aria-pressed="false"><i class="bx bx-rotate-right" aria-hidden="true"></i><span>${esc(t('main.layoutGirarBtn'))}</span></button></div>
             <div class="layout-sizebar-info" id="layout-size-info"></div></div>
         <div class="layout-sheet-preview layout-card-preview" id="layout-sheet-preview"></div>
         <div class="layout-fmt-footer"><button type="button" class="btn" id="layout-sheet-pdf" data-help-key="layoutQrPdf">${esc(t('main.layoutDescargarPdf'))}</button><button type="button" class="btn btn-secondary" id="layout-sheet-png" data-help-key="layoutQrPng">${esc(t('main.layoutDescargarPng'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-sheet-close">${esc(t('main.layoutFormatoCerrar'))}</button></div>
@@ -1514,9 +1540,17 @@ function ensureSheetModal() {
     sheetModalEl.addEventListener('click', async (event) => {
         if (event.target === sheetModalEl || event.target.closest('#layout-sheet-close')) { closeSheetDialog(); return; }
         // Con o sin medidas / m²: solo cambia lo que se imprime (la pantalla no se toca) y la vista previa se actualiza al momento.
+        if (event.target.closest('[data-sheet-rot]') && sheetDialog) {
+            sheetDialog.view.rotation = ((sheetDialog.view.rotation || 0) + 1) % 4;
+            syncSheetToggles();
+            renderSheetPreview();
+            return;
+        }
         const tgl = event.target.closest('[data-sheet-tgl]');
         if (tgl && sheetDialog) {
             sheetDialog.view[tgl.dataset.sheetTgl] = !sheetDialog.view[tgl.dataset.sheetTgl];
+            // Con o sin los totales se recuerda en este navegador (como el tamaño de la hoja); medidas y m² siguen lo que se ve en el croquis.
+            if (tgl.dataset.sheetTgl === 'totals') { try { localStorage.setItem(SHEET_TOTALS_KEY, sheetDialog.view.totals ? '1' : '0'); } catch (err) { /* no se recuerda */ } }
             syncSheetToggles();
             renderSheetPreview();
             return;
@@ -1550,9 +1584,11 @@ function ensureSheetModal() {
     });
 }
 // Los dos iconos de la ventana (medidas y m²): solo salen si se tiene el icono correspondiente del árbol, igual que en el croquis.
+const SHEET_TOTALS_KEY = 'sgn_layout_sheet_totals';
 function syncSheetToggles() {
     if (!sheetDialog || !sheetModalEl) return;
-    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer']].forEach(([key, perm, hideKey, showKey]) => {
+    // Los totales (las cifras de m² y m³ de abajo) no tienen icono propio en el croquis: quien puede descargar la hoja (Códigos QR) puede elegir si los lleva.
+    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer'], ['totals', 'canUseQr', 'main.layoutTotalesOcultar', 'main.layoutTotalesVer']].forEach(([key, perm, hideKey, showKey]) => {
         const btn = sheetModalEl.querySelector(`[data-sheet-tgl="${key}"]`);
         const allowed = !!(state.perms && state.perms[perm]);
         btn.hidden = !allowed;
@@ -1562,8 +1598,16 @@ function syncSheetToggles() {
         btn.setAttribute('aria-label', t(on ? hideKey : showKey));
         btn.title = t(on ? hideKey : showKey);
     });
-    // sin ninguno de los dos permisos no hay nada que elegir: la fila no se muestra
-    sheetModalEl.querySelector('.layout-sheet-content').hidden = !(state.perms && (state.perms.canToggleMeasures || state.perms.canToggleArea));
+    // El giro (solo para esta descarga) lo puede elegir quien puede girar el croquis.
+    const rotBtn = sheetModalEl.querySelector('[data-sheet-rot]');
+    rotBtn.hidden = !(state.perms && state.perms.canRotate);
+    const turns = sheetDialog.view.rotation || 0;
+    rotBtn.classList.toggle('off', !turns);
+    rotBtn.setAttribute('aria-pressed', String(!!turns));
+    rotBtn.title = `${t('main.layoutGirarBtn')} (${turns * 90}°)`;
+    rotBtn.setAttribute('aria-label', rotBtn.title);
+    // sin ningún icono permitido no hay nada que elegir: la fila no se muestra
+    sheetModalEl.querySelector('.layout-sheet-content').hidden = ![...sheetModalEl.querySelectorAll('[data-sheet-tgl], [data-sheet-rot]')].some((b) => !b.hidden);
 }
 async function openSheetDialog(kind) {
     if (isDirty()) Dashboard.showToast(t('main.layoutDescargaGuardado'), 'info');
@@ -1571,7 +1615,9 @@ async function openSheetDialog(kind) {
     if (!loaded) return;
     ensureSheetModal();
     // Al abrir, la hoja sale como se ve el croquis (con o sin medidas y m²); aquí mismo se puede cambiar solo para esta descarga.
-    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea } };
+    let totals = true;
+    try { totals = localStorage.getItem(SHEET_TOTALS_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se incluyen */ }
+    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea, totals, rotation: state.rotation || 0 } };
     syncSheetToggles();
     $('layout-size-w').value = sheetSize.w;
     $('layout-size-h').value = sheetSize.h;
