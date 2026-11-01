@@ -1278,6 +1278,7 @@ function applyAreaFilter(data) {
 // llave de permiso. Se arma después del filtro de permisos, así cuenta solo lo que esa persona sí ve; con menos de 2 pantallas visibles no se agrupa.
 const SIDEBAR_GROUPS = {
     categorias: { labelKey: 'menu.catCentroDistCategorias', icon: 'bx-category' },
+    verificador: { labelKey: 'menu.opCentroDistVerificador', icon: 'bx-scan' },
 };
 function groupSidebarScreens(pantallas, categoryId) {
     const counts = {};
@@ -12276,6 +12277,9 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-transporte-vol-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-admin/cat-operaciones-transporte-vol-traslados' },
     'cat-catalogos-puestos-trabajo': { sectionId: 'human-resources', itemId: 'hr-area-personnel-admin', submenuPrefix: 'cat-catalogos/cat-catalogos-puestos-trabajo' },
     'cat-gestion-reglas-orden': TABLE_GRANT_PATHS['reglas-orden-llenado'],
+    'cat-operaciones-centro-dist-layout': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-layout' },
+    'cat-operaciones-centro-dist-inventario-venta': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-inventario-venta' },
+    'cat-operaciones-centro-dist-inventario-interno': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-inventario-interno' },
 };
 
 function hasScreenAccess(activePage) {

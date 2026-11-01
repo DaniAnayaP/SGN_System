@@ -325,6 +325,14 @@
     "catMaterialApoyoFuncionalidad": "Screen Functionality",
     "catMaterialApoyoFuncionalidadAbbr1": "Screen Function.",
     "catMaterialApoyoFuncionalidadAbbr2": "Screen Func.",
+    "opCentroDistLayout": "Layout",
+    "opCentroDistVerificador": "Verifier",
+    "opCentroDistInventarioVenta": "Sales Inventory",
+    "opCentroDistInventarioVentaAbbr1": "Sales Inv.",
+    "opCentroDistInventarioVentaAbbr2": "Sales",
+    "opCentroDistInventarioInterno": "Internal Inventory",
+    "opCentroDistInventarioInternoAbbr1": "Internal Inv.",
+    "opCentroDistInventarioInternoAbbr2": "Internal",
     "catMaterialApoyoFlujo": "System Flow",
     "catMaterialApoyoProcesos": "Our Processes",
     "ourSupportMaterial": "Our Support Material",
@@ -1515,6 +1523,27 @@
     "colBackupRecordDate": "Record Date",
     "backupsClientSelectPlaceholder": "Select a client...",
     "colMaterialApoyoFuncionalidad": "Screen Functionality Access",
+    "colLayoutContorno": "Warehouse outline",
+    "colLayoutPuertas": "Doors",
+    "colLayoutLuz": "Power connections",
+    "colLayoutZonas": "Zones",
+    "colLayoutEspacios": "Racks, cabinets and pallets",
+    "colLayoutQr": "QR codes",
+    "colLayoutKpis": "m² summary",
+    "colLayoutCargarPlano": "Upload floor plan",
+    "colLayoutCrearDesdeCero": "Start from scratch",
+    "layoutKpiTotal": "Total m²",
+    "layoutKpiOficinas": "Office m²",
+    "layoutKpiPasillos": "Aisle m²",
+    "layoutKpiAlmacenamiento": "Storage space m²",
+    "layoutKpiMuertos": "Dead space m²",
+    "layoutCargarPlano": "Upload floor plan",
+    "layoutCrearDesdeCero": "Start from scratch",
+    "colVerificadorConsulta": "Search and view the sheet",
+    "colVerificadorEscaner": "Scan UPC",
+    "layoutEmptyState": "There is no warehouse Layout yet.",
+    "inventarioVentaEmptyState": "There are no articles for sale yet.",
+    "inventarioInternoEmptyState": "There are no articles for internal use yet.",
     "colMaterialApoyoFlujo": "System Flow Access",
     "colMaterialApoyoProcesos": "Our Processes Access",
     "materialApoyoUploadBtn": "+ Upload File",
@@ -2696,6 +2725,30 @@
     "sidebarNavigation": {
       "what": "Takes you to that screen in the system.",
       "example": "you tap a screen's name in the menu to open it."
+    },
+    "layoutEmpty": {
+      "what": "Here you will see the map of your distribution center, with its zones, racks and cabinets, and their sizes in m² and m³.",
+      "example": "you see on the map where rack A-R03 is and how much space it takes."
+    },
+    "layoutKpis": {
+      "what": "A summary of the square meters of your warehouse: total, offices, aisles, storage spaces and dead space. It updates by itself every time you change the Layout.",
+      "example": "you add a rack and the storage m² go up while the dead space m² go down."
+    },
+    "layoutCargarPlano": {
+      "what": "Upload the floor plan of your warehouse, as an image or PDF, and draw the spaces on top of it.",
+      "example": "you upload the plan the architect gave you and mark the zones and racks."
+    },
+    "layoutCrearDesdeCero": {
+      "what": "Start without a plan: you enter the outline of the warehouse, its doors and power connections, and the system draws the map.",
+      "example": "you type that the warehouse is 48 by 28 meters and the map appears by itself."
+    },
+    "inventarioVentaEmpty": {
+      "what": "Here you will look up the articles that are sold: search for them, scan their code and see their sheet.",
+      "example": "you scan the UPC on a box and see which article it is and where it is."
+    },
+    "inventarioInternoEmpty": {
+      "what": "Here you will look up the articles meant for internal use: search for them, scan their code and see their sheet.",
+      "example": "you search for wheat flour and see which rack it is on."
     },
     "sidebarFlyoutSection": {
       "what": "This is the name of the section you hovered over. Its options unfold once you reach it; a click opens the sidebar with the section expanded.",

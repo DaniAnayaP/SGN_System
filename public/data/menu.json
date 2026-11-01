@@ -1159,6 +1159,39 @@
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
             { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
           ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-layout", "labelKey": "menu.opCentroDistLayout", "icon": "bx-map-alt", "href": "OpCentroDistLayout.html",
+          "submenu": [
+            { "id": "colLayoutKpis", "labelKey": "main.colLayoutKpis", "permissionOnly": true },
+            { "id": "colLayoutContorno", "labelKey": "main.colLayoutContorno", "permissionOnly": true },
+            { "id": "colLayoutPuertas", "labelKey": "main.colLayoutPuertas", "permissionOnly": true },
+            { "id": "colLayoutLuz", "labelKey": "main.colLayoutLuz", "permissionOnly": true },
+            { "id": "colLayoutZonas", "labelKey": "main.colLayoutZonas", "permissionOnly": true },
+            { "id": "colLayoutEspacios", "labelKey": "main.colLayoutEspacios", "permissionOnly": true },
+            { "id": "colLayoutQr", "labelKey": "main.colLayoutQr", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colLayoutCargarPlano", "labelKey": "main.colLayoutCargarPlano", "permissionOnly": true },
+                { "id": "colLayoutCrearDesdeCero", "labelKey": "main.colLayoutCrearDesdeCero", "permissionOnly": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-inventario-venta", "sidebarGroup": "verificador", "labelKey": "menu.opCentroDistInventarioVenta", "abbrKeys": ["menu.opCentroDistInventarioVentaAbbr1", "menu.opCentroDistInventarioVentaAbbr2"], "icon": "bx-package", "href": "OpCentroDistInventarioVenta.html",
+          "submenu": [
+            { "id": "colVerificadorConsulta", "labelKey": "main.colVerificadorConsulta", "permissionOnly": true },
+            { "id": "colVerificadorEscaner", "labelKey": "main.colVerificadorEscaner", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-inventario-interno", "sidebarGroup": "verificador", "labelKey": "menu.opCentroDistInventarioInterno", "abbrKeys": ["menu.opCentroDistInventarioInternoAbbr1", "menu.opCentroDistInventarioInternoAbbr2"], "icon": "bx-package", "href": "OpCentroDistInventarioInterno.html",
+          "submenu": [
+            { "id": "colVerificadorConsulta", "labelKey": "main.colVerificadorConsulta", "permissionOnly": true },
+            { "id": "colVerificadorEscaner", "labelKey": "main.colVerificadorEscaner", "permissionOnly": true }
+          ]
         }
       ]
     },

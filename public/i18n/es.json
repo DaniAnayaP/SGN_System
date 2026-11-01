@@ -325,6 +325,14 @@
     "catMaterialApoyoFuncionalidad": "Funcionalidad Pantallas",
     "catMaterialApoyoFuncionalidadAbbr1": "Func. Pantallas",
     "catMaterialApoyoFuncionalidadAbbr2": "Func. Pant.",
+    "opCentroDistLayout": "Layout",
+    "opCentroDistVerificador": "Verificador",
+    "opCentroDistInventarioVenta": "Inventario Venta",
+    "opCentroDistInventarioVentaAbbr1": "Invent. Venta",
+    "opCentroDistInventarioVentaAbbr2": "Inv. Venta",
+    "opCentroDistInventarioInterno": "Inventario Interno",
+    "opCentroDistInventarioInternoAbbr1": "Invent. Interno",
+    "opCentroDistInventarioInternoAbbr2": "Inv. Interno",
     "catMaterialApoyoFlujo": "Flujo Sistema",
     "catMaterialApoyoProcesos": "Nuestros Procesos",
     "ourSupportMaterial": "Nuestro Material de Apoyo",
@@ -1515,6 +1523,27 @@
     "backupsClientSelectPlaceholder": "Selecciona un cliente...",
     "backupDownloadError": "No se pudo generar el link de descarga.",
     "colMaterialApoyoFuncionalidad": "Acceso a Funcionalidad Pantallas",
+    "colLayoutContorno": "Contorno de la nave",
+    "colLayoutPuertas": "Puertas",
+    "colLayoutLuz": "Conexiones de luz",
+    "colLayoutZonas": "Zonas",
+    "colLayoutEspacios": "Anaqueles, gabetas y tarimas",
+    "colLayoutQr": "Códigos QR",
+    "colLayoutKpis": "Resumen de m²",
+    "colLayoutCargarPlano": "Cargar plano",
+    "colLayoutCrearDesdeCero": "Crear desde cero",
+    "layoutKpiTotal": "m² totales",
+    "layoutKpiOficinas": "m² de oficinas",
+    "layoutKpiPasillos": "m² de pasillos",
+    "layoutKpiAlmacenamiento": "m² de espacios de almacenamiento",
+    "layoutKpiMuertos": "m² de espacios muertos",
+    "layoutCargarPlano": "Cargar plano",
+    "layoutCrearDesdeCero": "Crear desde cero",
+    "colVerificadorConsulta": "Buscar y ver la ficha",
+    "colVerificadorEscaner": "Escanear UPC",
+    "layoutEmptyState": "Aún no hay un Layout de la nave.",
+    "inventarioVentaEmptyState": "Aún no hay artículos que se vendan.",
+    "inventarioInternoEmptyState": "Aún no hay artículos de uso interno.",
     "colMaterialApoyoFlujo": "Acceso a Flujo Sistema",
     "colMaterialApoyoProcesos": "Acceso a Nuestros Procesos",
     "materialApoyoUploadBtn": "+ Subir Archivo",
@@ -2695,6 +2724,30 @@
     "sidebarNavigation": {
       "what": "Te lleva a esa pantalla del sistema.",
       "example": "tocas el nombre de una pantalla en el menú para abrirla."
+    },
+    "layoutEmpty": {
+      "what": "Aquí vas a ver el croquis de tu centro de distribución, con sus zonas, anaqueles y gabetas, y sus medidas en m² y m³.",
+      "example": "ves en el mapa dónde está el anaquel A-R03 y cuánto espacio ocupa."
+    },
+    "layoutKpis": {
+      "what": "Resumen de los metros cuadrados de tu nave: totales, oficinas, pasillos, espacios de almacenamiento y espacios muertos. Se actualiza solo cada vez que cambias el Layout.",
+      "example": "agregas un anaquel y los m² de almacenamiento suben y los m² muertos bajan."
+    },
+    "layoutCargarPlano": {
+      "what": "Sube el plano de tu nave, como imagen o PDF, y dibuja los espacios encima.",
+      "example": "subes el plano que te dio el arquitecto y marcas las zonas y los anaqueles."
+    },
+    "layoutCrearDesdeCero": {
+      "what": "Empieza sin plano: capturas el contorno de la nave, sus puertas y conexiones de luz, y el sistema dibuja el croquis.",
+      "example": "escribes que la nave mide 48 por 28 metros y el croquis aparece solo."
+    },
+    "inventarioVentaEmpty": {
+      "what": "Aquí vas a consultar los artículos que se venden: buscarlos, escanear su código y ver su ficha.",
+      "example": "escaneas el UPC de una caja y ves qué artículo es y dónde está."
+    },
+    "inventarioInternoEmpty": {
+      "what": "Aquí vas a consultar los artículos que son para uso interno: buscarlos, escanear su código y ver su ficha.",
+      "example": "buscas la harina de trigo y ves en qué anaquel está."
     },
     "sidebarFlyoutSection": {
       "what": "Es el nombre de la sección sobre la que pasaste el mouse. Al llegar aquí se despliegan sus opciones; con clic se abre la barra con la sección desplegada.",
