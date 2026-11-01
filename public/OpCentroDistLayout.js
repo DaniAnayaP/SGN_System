@@ -133,7 +133,7 @@ function renderPanel() {
 }
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
-const ZONE_CLASS = { dry: 'lz-dry', cold: 'lz-cold', chemical: 'lz-chem', finished: 'lz-fin', dock: 'lz-dock', office: 'lz-office', aisle: 'lz-aisle' };
+const ZONE_CLASS = { dry: 'lz-dry', cold: 'lz-cold', chemical: 'lz-chem', finished: 'lz-fin', dock: 'lz-dock', office: 'lz-office', aisle: 'lz-aisle', aisle2: 'lz-aisle2' };
 function renderSvg() {
     const d = state.draft;
     const W = 700;
@@ -152,12 +152,19 @@ function renderSvg() {
     const oy = M;
     const X = (x) => ox + (x - x0) * sc;
     const Y = (y) => oy + (y - y0) * sc;
-    let s = '';
+    // Los pasillos van sombreados con rayas (principal: rayas; entre anaqueles: puntos).
+    let s = '<defs><pattern id="lh-main" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="var(--color-surface)"/><line x1="0" y1="0" x2="0" y2="8" stroke="var(--color-text-secondary)" stroke-width="2.4" opacity="0.4"/></pattern><pattern id="lh-between" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="var(--color-surface)"/><circle cx="3" cy="3" r="1.15" fill="var(--color-text-secondary)" opacity="0.5"/></pattern></defs>';
     if (state.planImage && d.plan) s += `<image href="${state.planImage}" x="${X(0)}" y="${Y(0)}" width="${d.plan.widthM * sc}" height="${d.plan.widthM * state.planAspect * sc}" opacity="0.55" preserveAspectRatio="none"/>`;
+    // El nombre y los m² de cada zona se dibujan al final (encima de anaqueles y paredes) y en la esquina de la zona que no tape ningún espacio.
+    let zoneLabels = '';
     d.zones.forEach((z) => {
         s += `<rect class="lz ${ZONE_CLASS[z.type] || 'lz-dock'}${z.active === false ? ' lz-off' : ''}" x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4"><title>${esc(z.name)} · ${esc(typeLabel('zone', z.type))}</title></rect>`;
-        s += `<text class="lt" x="${X(z.x) + 5}" y="${Y(z.y) + 12}">${esc(z.name)}</text>`;
-        if (z.w * sc > 26) s += `<text class="lt2" x="${X(z.x) + 5}" y="${Y(z.y) + 23}">${fmt(z.l * z.w)} m²</text>`;
+        const spot = LC.zoneLabelSpot(z, d.spaces, sc);
+        const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
+        const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
+        const anchor = spot.right ? 'end' : 'start';
+        zoneLabels += `<text class="lt" x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(z.name)}</text>`;
+        if (z.w * sc > 26) zoneLabels += `<text class="lt2" x="${tx}" y="${ty + 11}" text-anchor="${anchor}">${fmt(z.l * z.w)} m²</text>`;
     });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     d.obstacles.forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
@@ -167,6 +174,7 @@ function renderSvg() {
         s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
     });
+    s += zoneLabels;
     d.doors.forEach((door) => {
         const w = LC.wallSegment(d.vertices, door.wall);
         const a = { x: w.p[0] + w.ux * door.dist, y: w.p[1] + w.uy * door.dist };
@@ -518,6 +526,7 @@ function sheetLabels() {
         kpiStorage: t('main.layoutHojaKpiAlmacenamiento'), kpiDead: t('main.layoutHojaKpiMuertos'), kpiVolume: t('main.layoutHojaKpiVolumen'),
         scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'),
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
+        aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'),
         printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
     };
 }

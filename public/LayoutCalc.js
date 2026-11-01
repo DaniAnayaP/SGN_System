@@ -8,7 +8,7 @@
     if (typeof module === 'object' && module.exports) module.exports = factory();
     else root.LayoutCalc = factory();
 }(typeof self !== 'undefined' ? self : this, function () {
-    const ZONE_TYPES = ['dry', 'cold', 'chemical', 'finished', 'dock', 'office', 'aisle'];
+    const ZONE_TYPES = ['dry', 'cold', 'chemical', 'finished', 'dock', 'office', 'aisle', 'aisle2'];
     // Zonas donde se almacena producto (las demás son andenes, oficinas o pasillos).
     const STORAGE_ZONE_TYPES = ['dry', 'cold', 'chemical', 'finished'];
     const SPACE_TYPES = ['rack', 'cabinet', 'pallet'];
@@ -131,7 +131,8 @@
         const zoneArea = (z) => (z.l || 0) * (z.w || 0);
         const sumType = (type) => zones.filter((z) => z.type === type).reduce((acc, z) => acc + zoneArea(z), 0);
         const offices = sumType('office');
-        const aisles = sumType('aisle');
+        // Los dos tipos de pasillo (principal y entre anaqueles) suman en los m² de pasillos.
+        const aisles = sumType('aisle') + sumType('aisle2');
         const docks = sumType('dock');
         const footprint = spaces.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0), 0);
         const storageVolume = spaces.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0) * (s.h || 0), 0);
@@ -266,6 +267,32 @@
         return { ok: errors.length === 0, errors, layout: out };
     }
 
+    // Dónde poner el nombre y los m² de una zona para que no lo tape un anaquel: la primera esquina (arriba-izquierda, arriba-derecha, abajo-izquierda,
+    // abajo-derecha) cuyo recuadro de texto no toca ningún espacio; si todas lo tocan, la que menos. sc = píxeles por metro del dibujo.
+    function zoneLabelSpot(zone, spaces, sc) {
+        const w = Math.min(Math.max(((zone.name || '').length * 6.2 + 12) / sc, 54 / sc), zone.l);
+        const h = Math.min(30 / sc, zone.w);
+        const spots = [
+            { right: false, bottom: false, x: zone.x, y: zone.y },
+            { right: true, bottom: false, x: zone.x + zone.l - w, y: zone.y },
+            { right: false, bottom: true, x: zone.x, y: zone.y + zone.w - h },
+            { right: true, bottom: true, x: zone.x + zone.l - w, y: zone.y + zone.w - h },
+        ];
+        const overlap = (b) => (spaces || []).filter((s) => s.active !== false).reduce((acc, s) => {
+            const ox = Math.min(s.x + s.l, b.x + w) - Math.max(s.x, b.x);
+            const oy = Math.min(s.y + s.d, b.y + h) - Math.max(s.y, b.y);
+            return ox > 0 && oy > 0 ? acc + ox * oy : acc;
+        }, 0);
+        let best = spots[0];
+        let bestOverlap = overlap(best);
+        for (const spot of spots.slice(1)) {
+            if (bestOverlap === 0) break;
+            const o = overlap(spot);
+            if (o < bestOverlap) { best = spot; bestOverlap = o; }
+        }
+        return { right: best.right, bottom: best.bottom };
+    }
+
     // Qué datos tiene cada sección (para saber si "Ver y Operar" todavía puede llenarla).
     function sectionData(layout, section) {
         if (!layout) return null;
@@ -286,6 +313,6 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData,
-        normalize, heightRange, volumeOf, triangulate,
+        normalize, heightRange, volumeOf, triangulate, zoneLabelSpot,
     };
 }));

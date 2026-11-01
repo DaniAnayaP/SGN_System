@@ -7073,6 +7073,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-legend .lg-power{ background: var(--color-report-calc-bg); border-color: var(--color-report-calc-text); }
 .layout-legend .lg-col{ background: var(--color-text-secondary); }
 .layout-legend .lg-space{ background: var(--color-surface); border-color: var(--color-text-secondary); }
+.layout-legend .lg-aisle{ background: repeating-linear-gradient(45deg, var(--color-surface) 0 2px, var(--color-text-secondary) 2px 3px); border-color: var(--color-text-secondary); }
+.layout-legend .lg-aisle2{ background: radial-gradient(var(--color-text-secondary) 1px, transparent 1.3px) 0 0 / 4px 4px, var(--color-surface); border-color: var(--color-text-secondary); }
 .layout-summary{
     margin-top: 1rem;
     overflow-x: auto;
@@ -7098,15 +7100,16 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lz-fin{ fill: var(--color-column-system-bg); stroke: var(--color-column-system-text); }
 .lz-dock{ fill: var(--color-surface); stroke: var(--color-border); }
 .lz-office{ fill: var(--color-table-band-fuel-band-bg); stroke: var(--color-table-band-fuel-text); stroke-dasharray: 3 2; }
-.lz-aisle{ fill: var(--color-surface); stroke: var(--color-border); stroke-dasharray: 4 3; }
+.lz-aisle{ fill: url(#lh-main); stroke: var(--color-text-secondary); stroke-dasharray: 4 3; }
+.lz-aisle2{ fill: url(#lh-between); stroke: var(--color-text-secondary); stroke-opacity: 0.6; }
 .lz-off{ opacity: 0.4; stroke-dasharray: 3 3; }
 .lo{ fill: var(--color-text-secondary); opacity: 0.8; }
 .ls{ fill: var(--color-surface); stroke: var(--color-text-secondary); stroke-width: 1; }
 .ld{ stroke: var(--color-report-base-text); stroke-width: 7; stroke-linecap: butt; }
 .le{ fill: var(--color-report-calc-bg); stroke: var(--color-report-calc-text); stroke-width: 1.5; }
 .lv{ fill: var(--color-text-secondary); }
-.lt{ font: 600 10px var(--font-family, system-ui, sans-serif); fill: var(--color-text-primary); }
-.lt2{ font: 500 8.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); }
+.lt{ font: 600 10px var(--font-family, system-ui, sans-serif); fill: var(--color-text-primary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }
+.lt2{ font: 500 8.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }
 .lt3{ font: 600 7.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); pointer-events: none; }
 .lscale{ stroke: var(--color-text-secondary); stroke-width: 2; }
 

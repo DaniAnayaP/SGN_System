@@ -7,7 +7,7 @@
     const LC = window.LayoutCalc;
     const ZONE_COLORS = {
         dry: ['#E3ECF9', '#7C9CD6', ''], cold: ['#E3F6E8', '#4C9B64', ''], chemical: ['#FBF0DE', '#D9A441', ''], finished: ['#ECECF1', '#B7BAC9', ''],
-        dock: ['#F5F6FA', '#B7BAC9', ''], office: ['#D2E1F6', '#7C9CD6', '3 2'], aisle: ['#FFFFFF', '#C9CCDA', '4 3'],
+        dock: ['#F5F6FA', '#B7BAC9', ''], office: ['#D2E1F6', '#7C9CD6', '3 2'], aisle: ['url(#lh-main)', '#6B7089', '4 3'], aisle2: ['url(#lh-between)', '#8E94AB', ''],
     };
     const FONT = 'Poppins, Arial, Helvetica, sans-serif';
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -27,11 +27,20 @@
         const X = (x) => ox + (x - x0) * sc;
         const Y = (y) => M + (y - y0) * sc;
         let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${FONT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Layout">`;
+        // Pasillos sombreados con rayas (principal: rayas; entre anaqueles: puntos).
+        s += '<defs><pattern id="lh-main" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#FFFFFF"/><line x1="0" y1="0" x2="0" y2="8" stroke="#6B7089" stroke-width="2.4" opacity="0.45"/></pattern><pattern id="lh-between" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#F5F6FA"/><circle cx="3" cy="3" r="1.15" fill="#6B7089" opacity="0.55"/></pattern></defs>';
+        // El nombre y los m² de cada zona van al final (encima de anaqueles y paredes), con un contorno blanco, y en la esquina que no tape ningún espacio.
+        const halo = 'stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke"';
+        let zoneLabels = '';
         (layout.zones || []).forEach((z) => {
             const c = ZONE_COLORS[z.type] || ZONE_COLORS.dock;
             s += `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}/>`;
-            s += `<text x="${X(z.x) + 5}" y="${Y(z.y) + 12}" font-size="10" font-weight="600" fill="#14161F">${esc(z.name)}</text>`;
-            if (z.w * sc > 26) s += `<text x="${X(z.x) + 5}" y="${Y(z.y) + 23}" font-size="8.5" fill="#6B7089">${fmt(z.l * z.w)} m²</text>`;
+            const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
+            const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
+            const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
+            const anchor = spot.right ? 'end' : 'start';
+            zoneLabels += `<text x="${tx}" y="${ty}" font-size="10" font-weight="600" fill="#14161F" text-anchor="${anchor}" ${halo}>${esc(z.name)}</text>`;
+            if (z.w * sc > 26) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
         });
         s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="#3F435D" stroke-width="3" stroke-linejoin="round"/>`;
         (layout.spaces || []).forEach((sp) => {
@@ -40,6 +49,7 @@
             s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="#FFFFFF" stroke="#6B7089" stroke-width="1"/>`;
             if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="600" fill="#3F435D" text-anchor="middle">${esc(sp.code)}</text>`;
         });
+        s += zoneLabels;
         (layout.doors || []).forEach((d) => {
             const w = LC.wallSegment(layout.vertices, d.wall);
             const ax = w.p[0] + w.ux * d.dist;

@@ -59,11 +59,11 @@
             s += `<text x="1180" y="${y + 46}" font-size="36" font-weight="700" fill="#14161F">${esc(c[0])}</text><text x="1180" y="${y + 76}" font-size="18" fill="#3F435D">${esc(c[1])}</text>`;
         });
         // leyenda
-        const leg = [['#1E7E34', labels.door], ['#FFFFFF', labels.space], ['#E3ECF9', labels.dry], ['#E3F6E8', labels.cold], ['#FBF0DE', labels.chemical], ['#ECECF1', labels.finished]];
+        const leg = [['#1E7E34', labels.door], ['#FFFFFF', labels.space], ['#E3ECF9', labels.dry], ['#E3F6E8', labels.cold], ['#FBF0DE', labels.chemical], ['#ECECF1', labels.finished], ['url(#lh-main)', labels.aisle], ['url(#lh-between)', labels.aisle2]];
         let lx = 48;
         leg.forEach((l) => {
-            s += `<rect x="${lx}" y="988" width="20" height="20" rx="4" fill="${l[0]}" stroke="#3F435D" stroke-width="1.5"/><text x="${lx + 30}" y="1004" font-size="17" fill="#3F435D">${esc(l[1])}</text>`;
-            lx += 30 + l[1].length * 9.6 + 34;
+            s += `<rect x="${lx}" y="988" width="20" height="20" rx="4" fill="${l[0]}" stroke="#3F435D" stroke-width="1.5"/><text x="${lx + 30}" y="1004" font-size="16" fill="#3F435D">${esc(l[1])}</text>`;
+            lx += 30 + l[1].length * 8.6 + 26;
         });
         s += `<line x1="48" y1="1040" x2="${W - 48}" y2="1040" stroke="#C9CCDA" stroke-width="2"/>`;
         s += `<text x="48" y="1074" font-size="19" fill="#3F435D">${esc(labels.printed)} <tspan font-weight="700" fill="#14161F">${esc(dateFmt(data.printedAt))}</tspan>. ${esc(labels.snapshot)}</text>`;
