@@ -1269,7 +1269,7 @@ window.addEventListener('beforeunload', (event) => {
 });
 document.addEventListener('dashboard:language-changed', () => {
     if (!state.loaded) return;
-    if (state.draft) { renderPanel(); refreshLive(); renderSizeBar(); } else showEmpty();
+    if (state.draft) { renderPanel(); refreshLive(); } else showEmpty();
 });
 
 // ---- QR y descarga -----------------------------------------------------------------------------------------------------
@@ -1280,14 +1280,13 @@ function updateQrMenu() {
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
     if (!show) closeQrPop();
-    renderSizeBar();
 }
 
-// ---- tamaño de la hoja que se descarga (arriba del croquis) -----------------------------------------------------------------------------
-// Ancho y largo en cm del espacio que se imprime y si se dibuja la línea punteada para recortar. Con "Ver la hoja" el croquis se cambia por la hoja tal como saldrá (con lo último
-// guardado) y el PDF y la imagen salen con esa medida. Se recuerda la última medida en este navegador. Va con el acceso de Códigos QR (el mismo de descargar la hoja).
+// ---- el reporte que se descarga: ventana con el tamaño de la hoja ---------------------------------------------------------------------
+// "Descargar PDF" (o imagen) abre una ventana donde se elige el tamaño (A3, A4, Carta, Media carta, Tarjeta o el ancho y largo en cm que se quiera), si lleva línea punteada para recortar y
+// se ve cómo va a quedar la hoja, ya con lo ÚLTIMO GUARDADO; ahí mismo se baja en PDF o en imagen. Se recuerda la última medida en este navegador. Va con el acceso de Códigos QR.
 const SIZE_KEY = 'sgn_layout_sheet_size';
-const sheetSize = { w: 42, h: 29.7, cut: true, preview: false };
+const sheetSize = { w: 42, h: 29.7, cut: true };
 try {
     const raw = JSON.parse(localStorage.getItem(SIZE_KEY) || 'null');
     if (raw && raw.w >= 6 && raw.w <= 120 && raw.h >= 6 && raw.h <= 120) { sheetSize.w = raw.w; sheetSize.h = raw.h; sheetSize.cut = raw.cut !== false; }
@@ -1296,6 +1295,9 @@ function saveSheetSize() {
     try { localStorage.setItem(SIZE_KEY, JSON.stringify({ w: sheetSize.w, h: sheetSize.h, cut: sheetSize.cut })); } catch (err) { /* no se recuerda */ }
 }
 const sheetOptions = () => ({ widthCm: sheetSize.w, heightCm: sheetSize.h, cut: sheetSize.cut });
+let sheetModalEl = null;
+let sheetDialog = null; // { kind: 'pdf' | 'png', loaded: { data, logoRatio } }
+
 function updateSizeInfo() {
     const info = $('layout-size-info');
     if (!info) return;
@@ -1306,86 +1308,102 @@ function updateSizeInfo() {
     const orient = sheetSize.w / sheetSize.h >= 1.12 ? t('main.layoutHojaHorizontal') : t('main.layoutHojaVertical');
     const chica = Math.min(sheetSize.w, sheetSize.h) < 13 ? ` · ${t('main.layoutHojaChica')}` : '';
     info.innerHTML = `<span>${esc(t('main.layoutHojaEspacio'))}: <b>${fmt(sheetSize.w, 1)} × ${fmt(sheetSize.h, 1)} cm</b></span><span>${esc(t('main.layoutHojaArchivo'))}: <b>${esc(archivo)}</b></span><span>${esc(orient + chica)}</span>`;
-    document.querySelectorAll('[data-pre]').forEach((b) => {
+    document.querySelectorAll('#layout-sheet-modal [data-pre]').forEach((b) => {
         const p = window.LayoutSheet.PRESETS.find((x) => x[0] === b.dataset.pre);
         b.setAttribute('aria-pressed', String(!!p && Math.abs(p[1] - sheetSize.w) < 0.05 && Math.abs(p[2] - sheetSize.h) < 0.05));
     });
 }
-function renderSizeBar() {
-    const bar = $('layout-sizebar');
-    const show = !!(state.perms && state.perms.canUseQr && state.saved && !state.creating);
-    bar.hidden = !show;
-    if (!show) { if (sheetSize.preview) { sheetSize.preview = false; applyPreview(); } return; }
-    const presets = window.LayoutSheet.PRESETS.map(([id]) => `<button type="button" class="layout-pre" data-pre="${id}" aria-pressed="false">${esc(t(`main.layoutHojaPre_${id}`))}</button>`).join('');
-    bar.innerHTML = `<div class="layout-sizebar-row"><span class="layout-sizebar-title">${esc(t('main.layoutHojaTamano'))}</span><div class="layout-presets" role="group" aria-label="${esc(t('main.layoutHojaTamano'))}">${presets}</div></div>
-        <div class="layout-sizebar-row"><label>${esc(t('main.layoutHojaAncho'))}<input type="number" id="layout-size-w" min="6" max="120" step="0.1" value="${sheetSize.w}"></label><label>${esc(t('main.layoutHojaLargo'))}<input type="number" id="layout-size-h" min="6" max="120" step="0.1" value="${sheetSize.h}"></label><button type="button" class="btn btn-secondary" id="layout-size-swap">${esc(t('main.layoutHojaGirar'))}</button><label class="layout-check"><input type="checkbox" id="layout-size-cut"${sheetSize.cut ? ' checked' : ''}> ${esc(t('main.layoutHojaLinea'))}</label><button type="button" class="btn btn-secondary" id="layout-size-preview" aria-pressed="${sheetSize.preview}">${esc(t(sheetSize.preview ? 'main.layoutHojaVerCroquis' : 'main.layoutHojaVer'))}</button></div>
-        <div class="layout-sizebar-info" id="layout-size-info"></div>`;
-    updateSizeInfo();
-}
-// La hoja armada con lo último guardado (la misma que se descarga), con la medida elegida.
-async function buildSheetFromSaved() {
+
+// Lo guardado que trae GET /api/business/layout/qr y la forma del logo (ancho / alto) para darle su lugar en el encabezado sin deformarlo.
+async function loadSheetData() {
     const data = await fetchQrData();
     if (!data) return null;
-    const theme = window.LayoutMapSvg.theme(data.companyColor);
-    // La forma del logo (ancho / alto) para darle su lugar en el encabezado sin deformarlo.
     const logoRatio = data.logoDataUrl ? await new Promise((resolve) => {
         const img = new Image();
         img.onload = () => resolve(img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1);
         img.onerror = () => resolve(1);
         img.src = data.logoDataUrl;
     }) : 1;
-    const svg = window.LayoutSheet.buildSheetSvg({
+    return { data, logoRatio };
+}
+function buildSheetSvgFrom(loaded) {
+    const { data, logoRatio } = loaded;
+    return window.LayoutSheet.buildSheetSvg({
         companyName: data.companyName, logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
-        url: data.url, qrRows: data.qrRows, kpis: data.kpis, layout: data.layout, theme,
+        url: data.url, qrRows: data.qrRows, kpis: data.kpis, layout: data.layout, theme: window.LayoutMapSvg.theme(data.companyColor),
     }, sheetLabels(), Dashboard.lang, sheetOptions());
-    return { svg, data };
 }
-async function renderSheetPreview() {
-    if (!sheetSize.preview) return;
-    const built = await buildSheetFromSaved();
-    if (!sheetSize.preview) return;
-    if (!built) { sheetSize.preview = false; applyPreview(); return; }
-    $('layout-sheet-preview').innerHTML = built.svg;
+function renderSheetPreview() {
+    if (!sheetDialog) return;
+    $('layout-sheet-preview').innerHTML = buildSheetSvgFrom(sheetDialog.loaded);
 }
-function applyPreview() {
-    const on = sheetSize.preview;
-    $('layout-sheet-preview').hidden = !on;
-    $('layout-svg').hidden = on;
-    const legend = document.querySelector('.layout-legend');
-    if (legend) legend.hidden = on;
-    const btn = $('layout-size-preview');
-    if (btn) { btn.setAttribute('aria-pressed', String(on)); btn.textContent = t(on ? 'main.layoutHojaVerCroquis' : 'main.layoutHojaVer'); }
-    if (on) renderSheetPreview();
+function ensureSheetModal() {
+    if (sheetModalEl) return;
+    sheetModalEl = document.createElement('div');
+    sheetModalEl.className = 'modal-overlay';
+    sheetModalEl.id = 'layout-sheet-modal';
+    sheetModalEl.hidden = true;
+    const presets = window.LayoutSheet.PRESETS.map(([id]) => `<button type="button" class="layout-pre" data-pre="${id}" aria-pressed="false">${esc(t(`main.layoutHojaPre_${id}`))}</button>`).join('');
+    sheetModalEl.innerHTML = `<div class="modal-panel layout-card-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-sheet-title">
+        <h3 id="layout-sheet-title">${esc(t('main.layoutDescargarTitulo'))}</h3>
+        <div class="layout-sizebar layout-card-bar" data-help-key="layoutSheetSize"><div class="layout-sizebar-row"><span class="layout-sizebar-title">${esc(t('main.layoutHojaTamano'))}</span><div class="layout-presets" role="group" aria-label="${esc(t('main.layoutHojaTamano'))}">${presets}</div></div>
+            <div class="layout-sizebar-row"><label>${esc(t('main.layoutHojaAncho'))}<input type="number" id="layout-size-w" min="6" max="120" step="0.1"></label><label>${esc(t('main.layoutHojaLargo'))}<input type="number" id="layout-size-h" min="6" max="120" step="0.1"></label><button type="button" class="btn btn-secondary" id="layout-size-swap">${esc(t('main.layoutHojaGirar'))}</button><label class="layout-check"><input type="checkbox" id="layout-size-cut"> ${esc(t('main.layoutHojaLinea'))}</label></div>
+            <div class="layout-sizebar-info" id="layout-size-info"></div></div>
+        <div class="layout-sheet-preview layout-card-preview" id="layout-sheet-preview"></div>
+        <div class="layout-fmt-footer"><button type="button" class="btn" id="layout-sheet-pdf" data-help-key="layoutQrPdf">${esc(t('main.layoutDescargarPdf'))}</button><button type="button" class="btn btn-secondary" id="layout-sheet-png" data-help-key="layoutQrPng">${esc(t('main.layoutDescargarPng'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-sheet-close">${esc(t('main.layoutFormatoCerrar'))}</button></div>
+    </div>`;
+    document.body.appendChild(sheetModalEl);
+    sheetModalEl.addEventListener('click', async (event) => {
+        if (event.target === sheetModalEl || event.target.closest('#layout-sheet-close')) { closeSheetDialog(); return; }
+        const pre = event.target.closest('[data-pre]');
+        if (pre) {
+            const p = window.LayoutSheet.PRESETS.find((x) => x[0] === pre.dataset.pre);
+            sheetSize.w = p[1]; sheetSize.h = p[2];
+        } else if (event.target.closest('#layout-size-swap')) {
+            [sheetSize.w, sheetSize.h] = [sheetSize.h, sheetSize.w];
+        } else if (event.target.closest('#layout-sheet-pdf') || event.target.closest('#layout-sheet-png')) {
+            await downloadSheet(event.target.closest('#layout-sheet-pdf') ? 'pdf' : 'png');
+            return;
+        } else return;
+        $('layout-size-w').value = sheetSize.w;
+        $('layout-size-h').value = sheetSize.h;
+        saveSheetSize();
+        updateSizeInfo();
+        renderSheetPreview();
+    });
+    sheetModalEl.addEventListener('input', (event) => {
+        if (event.target.id === 'layout-size-w' || event.target.id === 'layout-size-h') {
+            const v = parseFloat(event.target.value);
+            if (!(v >= 6 && v <= 120)) return;
+            if (event.target.id === 'layout-size-w') sheetSize.w = v; else sheetSize.h = v;
+        } else if (event.target.id === 'layout-size-cut') sheetSize.cut = event.target.checked;
+        else return;
+        saveSheetSize();
+        updateSizeInfo();
+        renderSheetPreview();
+    });
 }
-$('layout-sizebar').addEventListener('click', (event) => {
-    const pre = event.target.closest('[data-pre]');
-    if (pre) {
-        const p = window.LayoutSheet.PRESETS.find((x) => x[0] === pre.dataset.pre);
-        sheetSize.w = p[1]; sheetSize.h = p[2];
-    } else if (event.target.closest('#layout-size-swap')) {
-        [sheetSize.w, sheetSize.h] = [sheetSize.h, sheetSize.w];
-    } else if (event.target.closest('#layout-size-preview')) {
-        sheetSize.preview = !sheetSize.preview;
-        applyPreview();
-        return;
-    } else return;
+async function openSheetDialog(kind) {
+    if (isDirty()) Dashboard.showToast(t('main.layoutDescargaGuardado'), 'info');
+    const loaded = await loadSheetData();
+    if (!loaded) return;
+    ensureSheetModal();
+    sheetDialog = { kind, loaded };
     $('layout-size-w').value = sheetSize.w;
     $('layout-size-h').value = sheetSize.h;
-    saveSheetSize();
+    $('layout-size-cut').checked = sheetSize.cut;
+    // el botón del formato que se pidió va resaltado
+    $('layout-sheet-pdf').className = kind === 'pdf' ? 'btn' : 'btn btn-secondary';
+    $('layout-sheet-png').className = kind === 'png' ? 'btn' : 'btn btn-secondary';
     updateSizeInfo();
     renderSheetPreview();
-});
-$('layout-sizebar').addEventListener('input', (event) => {
-    if (event.target.id === 'layout-size-w' || event.target.id === 'layout-size-h') {
-        const v = parseFloat(event.target.value);
-        if (!(v >= 6 && v <= 120)) return;
-        if (event.target.id === 'layout-size-w') sheetSize.w = v; else sheetSize.h = v;
-    } else if (event.target.id === 'layout-size-cut') sheetSize.cut = event.target.checked;
-    else return;
-    saveSheetSize();
-    updateSizeInfo();
-    renderSheetPreview();
-});
+    sheetModalEl.hidden = false;
+}
+function closeSheetDialog() {
+    if (sheetModalEl) sheetModalEl.hidden = true;
+    sheetDialog = null;
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && sheetDialog) closeSheetDialog(); });
 function closeQrPop() {
     $('layout-qr-pop').hidden = true;
     $('layout-qr-btn').setAttribute('aria-expanded', 'false');
@@ -1419,14 +1437,19 @@ function sheetLabels() {
 }
 const slug = (text) => String(text || 'Layout').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'Layout';
 async function downloadSheet(kind) {
-    if (isDirty()) Dashboard.showToast(t('main.layoutDescargaGuardado'), 'info');
-    else Dashboard.showToast(t('main.layoutPreparandoHoja'), 'info');
-    const built = await buildSheetFromSaved();
-    if (!built) return;
-    const blob = kind === 'pdf' ? await window.LayoutSheet.renderPdf(built.svg) : await window.LayoutSheet.renderPng(built.svg);
-    const day = new Date().toISOString().slice(0, 10);
-    window.LayoutSheet.saveBlob(blob, `Layout_${slug(built.data.companyName)}_v${built.data.version}_${day}.${kind === 'pdf' ? 'pdf' : 'png'}`);
-    Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
+    if (!sheetDialog) return;
+    try {
+        Dashboard.showToast(t('main.layoutPreparandoHoja'), 'info');
+        const { loaded } = sheetDialog;
+        const svg = buildSheetSvgFrom(loaded);
+        const blob = kind === 'pdf' ? await window.LayoutSheet.renderPdf(svg) : await window.LayoutSheet.renderPng(svg);
+        const day = new Date().toISOString().slice(0, 10);
+        window.LayoutSheet.saveBlob(blob, `Layout_${slug(loaded.data.companyName)}_v${loaded.data.version}_${day}.${kind === 'pdf' ? 'pdf' : 'png'}`);
+        Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
+    } catch (err) {
+        console.error('Layout: la hoja no se pudo descargar', err);
+        Dashboard.showToast(t('main.layoutDescargaError'), 'error');
+    }
 }
 async function copyQrLink() {
     const data = await fetchQrData();
@@ -1456,7 +1479,7 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
     closeQrPop();
     try {
         const kind = item.dataset.qr;
-        if (kind === 'pdf' || kind === 'png') await downloadSheet(kind);
+        if (kind === 'pdf' || kind === 'png') await openSheetDialog(kind);
         else if (kind === 'link') await copyQrLink();
         else if (kind === 'regen') await regenerateQr();
     } catch (err) {

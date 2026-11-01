@@ -1553,10 +1553,11 @@
     "verificadorSkuEmptyState": "Aún no hay códigos que verificar.",
     "layoutKpiVolumen": "m³ de la nave",
     "layoutQrMenu": "QR y descarga",
+    "layoutDescargarTitulo": "Descargar el reporte del Layout",
     "layoutDescargarPdf": "Descargar PDF",
-    "layoutDescargarPdfSub": "La hoja con el mapa y el QR, con el tamaño de arriba, para imprimir",
+    "layoutDescargarPdfSub": "Eliges el tamaño de la hoja y la bajas con el mapa y el QR, para imprimir",
     "layoutDescargarPng": "Descargar imagen PNG",
-    "layoutDescargarPngSub": "La misma hoja como imagen, para mandar por mensaje",
+    "layoutDescargarPngSub": "La misma hoja como imagen, con el tamaño que elijas, para mandar por mensaje",
     "layoutCopiarEnlace": "Copiar el enlace del QR",
     "layoutCopiarEnlaceSub": "Es el mismo que lleva el QR",
     "layoutRegenerarQr": "Cambiar el QR",
@@ -3320,11 +3321,11 @@
       "example": "descargas la hoja, la imprimes y la pegas en la entrada de la nave."
     },
     "layoutQrPdf": {
-      "what": "Baja la hoja en PDF con el mapa, los KPIs y el QR, lista para imprimir, con el tamaño que elegiste arriba del croquis. Trae lo último guardado.",
+      "what": "Abre la ventana para bajar la hoja en PDF: ahí eliges el tamaño (A3, A4, Carta, Media carta, Tarjeta o el ancho y largo en cm que quieras), ves cómo va a quedar y la bajas con el mapa, los KPIs y el QR, lista para imprimir. Trae lo último guardado.",
       "example": "la mandas a imprimir en una copiadora."
     },
     "layoutQrPng": {
-      "what": "Baja la misma hoja como imagen, para mandarla por mensaje o correo. Trae lo último guardado.",
+      "what": "Abre la misma ventana para bajar la hoja como imagen, con el tamaño que elijas, para mandarla por mensaje o correo. Trae lo último guardado.",
       "example": "se la mandas por mensaje a un supervisor."
     },
     "layoutQrLink": {

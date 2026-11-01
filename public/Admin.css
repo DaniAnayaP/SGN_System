@@ -7362,3 +7362,5 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .rel-foot{ display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: flex-end; }
 .rel-foot .rel-muted{ margin-right: auto; }
 .rel-results[hidden]{ display: none; }
+.layout-card-preview{ max-height: 42vh; }
+.layout-card-dialog .layout-fmt-footer{ position: sticky; bottom: -1px; background: var(--color-surface); padding-top: 0.6rem; }

@@ -1553,10 +1553,11 @@
     "verificadorSkuEmptyState": "There are no codes to verify yet.",
     "layoutKpiVolumen": "Warehouse m³",
     "layoutQrMenu": "QR and download",
+    "layoutDescargarTitulo": "Download the Layout report",
     "layoutDescargarPdf": "Download PDF",
-    "layoutDescargarPdfSub": "The sheet with the map and the QR, at the size above, to print",
+    "layoutDescargarPdfSub": "You choose the sheet size and download it with the map and the QR, to print",
     "layoutDescargarPng": "Download PNG image",
-    "layoutDescargarPngSub": "The same sheet as an image, to send in a message",
+    "layoutDescargarPngSub": "The same sheet as an image, at the size you choose, to send in a message",
     "layoutCopiarEnlace": "Copy the QR link",
     "layoutCopiarEnlaceSub": "It is the same one the QR carries",
     "layoutRegenerarQr": "Change the QR",
@@ -3321,11 +3322,11 @@
       "example": "you download the sheet, print it and stick it at the warehouse entrance."
     },
     "layoutQrPdf": {
-      "what": "Downloads the sheet as a PDF with the map, the KPIs and the QR, ready to print, at the size you chose above the sketch. It has what was last saved.",
+      "what": "Opens the window to download the sheet as a PDF: there you choose the size (A3, A4, Letter, Half letter, Card or any width and length in cm), see how it will look and download it with the map, the KPIs and the QR, ready to print. It has what was last saved.",
       "example": "you send it to be printed at a copy shop."
     },
     "layoutQrPng": {
-      "what": "Downloads the same sheet as an image, to send by message or email. It has what was last saved.",
+      "what": "Opens the same window to download the sheet as an image, at the size you choose, to send by message or email. It has what was last saved.",
       "example": "you send it by message to a supervisor."
     },
     "layoutQrLink": {
