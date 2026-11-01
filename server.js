@@ -146,6 +146,9 @@ const {
     setSkuItemPublicToken,
     getClientLayout,
     saveClientLayout,
+    ensureLayoutPublicToken,
+    regenerateLayoutPublicToken,
+    getLayoutByPublicToken,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,
@@ -6036,6 +6039,7 @@ app.get('/api/public/ficha/:token', (req, res) => {
 // pantalla; llenarla por primera vez pide "Ver y Operar" o "Modificar" en su columna, y cambiar lo que ya tiene pide "Modificar" (igual que cualquier
 // columna, ver canEditField en Dashboard.js). Crear el Layout pide además el botón Crear desde cero o Cargar plano.
 const LayoutCalc = require('./public/LayoutCalc.js');
+const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
 const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Anaqueles, gabetas y tarimas' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
@@ -6047,7 +6051,28 @@ function layoutPermissions(req) {
     const sections = {};
     Object.entries(LayoutCalc.SECTIONS).forEach(([key, col]) => { sections[key] = level(col); });
     const canButton = (col) => admin || canCreateColumn(grants, LAYOUT_TABLE_KEY, col);
-    return { sections, canCreateFromScratch: canButton('colLayoutCrearDesdeCero'), canLoadPlan: canButton('colLayoutCargarPlano') };
+    // El QR (ver y descargar la hoja) pide "Ver y Operar" en la columna Códigos QR; cambiarlo a propósito pide "Modificar".
+    const qrLevel = level('colLayoutQr');
+    return {
+        sections, canCreateFromScratch: canButton('colLayoutCrearDesdeCero'), canLoadPlan: canButton('colLayoutCargarPlano'),
+        canUseQr: qrLevel === 'ver-y-operar' || qrLevel === 'editar', canRegenerateQr: qrLevel === 'editar',
+    };
+}
+
+// Lo ÚNICO que sale por la vista pública del QR (sin sesión): paredes, zonas activas, espacios activos con su código, puertas y los KPIs. Nunca las
+// conexiones de luz, las columnas ni el plano de fondo. La hoja que se descarga se arma con este mismo contenido, para que traiga lo mismo que se ve al escanear.
+function buildPublicLayoutPayload(clientId, row) {
+    const l = row.layout;
+    const client = getClientById(clientId);
+    const pub = {
+        heightM: l.heightM,
+        vertices: l.vertices,
+        doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width })),
+        zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w })),
+        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h })),
+        obstacles: [], power: [],
+    };
+    return { companyName: (client && client.company_name) || '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis(pub) };
 }
 
 function layoutSummary(layout, section) {
@@ -6132,6 +6157,53 @@ app.put('/api/business/layout', requireAuth, (req, res) => {
     });
     if (creating && next.mode !== 'plan') notifyButtonAction(req, LAYOUT_TABLE_KEY, 'create', 'Layout');
     res.status(creating ? 201 : 200).json({ version: result.version, changed });
+});
+
+// QR del Layout. Datos para la hoja que se descarga: la dirección fija, los módulos del QR y lo público del Layout guardado.
+app.get('/api/business/layout/qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const perms = layoutPermissions(req);
+    if (!perms.canUseQr) return res.status(403).json({ message: 'No tienes permiso para usar el QR del Layout.' });
+    const row = getClientLayout(req.user.clientId);
+    if (!row) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    const token = ensureLayoutPublicToken(req.user.clientId);
+    const url = `${req.protocol}://${req.get('host')}/q/${token}`;
+    const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
+    const size = qr.modules.size;
+    const rows = [];
+    for (let r = 0; r < size; r++) rows.push(Array.from({ length: size }, (_, c) => (qr.modules.get(r, c) ? '1' : '0')).join(''));
+    res.set('Cache-Control', 'no-store');
+    res.json({ url, qrRows: rows, canRegenerate: perms.canRegenerateQr, ...buildPublicLayoutPayload(req.user.clientId, row) });
+});
+
+// Cambiar el QR a propósito (por ejemplo si lo fotografiaron fuera de la empresa): el anterior deja de funcionar y hay que volver a imprimir.
+app.post('/api/business/layout/qr/regenerate', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canRegenerateQr) return res.status(403).json({ message: 'No tienes permiso para cambiar el QR del Layout.' });
+    if (!req.body || req.body.confirm !== true) return res.status(400).json({ message: 'Falta confirmar el cambio del QR.' });
+    if (!getClientLayout(req.user.clientId)) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    if (!regenerateLayoutPublicToken(req.user.clientId)) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    logTableChange({
+        clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordId: 1, recordLabel: 'Layout', action: 'update',
+        fieldKey: 'colLayoutQr', oldValue: 'QR anterior', newValue: 'QR nuevo', changedBy: changedByLabel(req),
+    });
+    notifyDataChange({ clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordLabel: 'Layout', fieldKey: 'colLayoutQr', oldValue: 'QR anterior', newValue: 'QR nuevo', actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    res.json({ ok: true });
+});
+
+// --- Vista pública del Layout (sin sesión) -----------------------------------
+// Lo que abre el QR del Layout. Como la ficha pública de un artículo, NO pasa por requireAuth y lo único que se busca es el código aleatorio (128 bits, no se
+// puede adivinar). Siempre trae la versión guardada más reciente (no-store). Un tope por IP frena a quien pruebe códigos.
+const publicLayoutLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+app.get('/q/:token', publicLayoutLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
+    res.sendFile(path.join(PUBLIC_DIR, 'LayoutPublico.html'));
+});
+app.get('/api/public/layout/:token', publicLayoutLimiter, (req, res) => {
+    const row = getLayoutByPublicToken(req.params.token);
+    if (!row) return res.status(404).json({ message: 'Layout not found.' });
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json(buildPublicLayoutPayload(row.clientId, row));
 });
 
 // --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----

@@ -6843,7 +6843,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 
 /* Layout: editor (formularios + croquis) y resumen por zona. */
 /* Estos bloques ponen su propio display (flex/grid): sin esto el atributo hidden no los esconde. */
-.empty-state[hidden], .layout-plan-width[hidden], .layout-editor[hidden], .layout-dirty[hidden]{
+.empty-state[hidden], .layout-plan-width[hidden], .layout-editor[hidden], .layout-dirty[hidden], .layout-qrmenu[hidden], .layout-qr-pop[hidden], .layout-qr-pop button[hidden]{
     display: none;
 }
 .layout-kpi em{
@@ -7109,3 +7109,47 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lt2{ font: 500 8.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); }
 .lt3{ font: 600 7.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); pointer-events: none; }
 .lscale{ stroke: var(--color-text-secondary); stroke-width: 2; }
+
+/* Layout: menú "QR y descarga". */
+.layout-qrmenu{
+    position: relative;
+}
+.layout-qr-pop{
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.35rem);
+    z-index: 30;
+    min-width: 18rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.35rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.layout-qr-pop button{
+    font: inherit;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.5rem 0.65rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--color-text-primary);
+    cursor: pointer;
+}
+.layout-qr-pop button:hover{
+    background: var(--color-column-system-bg);
+}
+.layout-qr-pop button b{
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+.layout-qr-pop button span{
+    font-size: 0.7rem;
+    color: var(--color-text-secondary);
+}

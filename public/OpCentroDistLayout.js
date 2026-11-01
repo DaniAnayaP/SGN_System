@@ -219,6 +219,7 @@ function refreshLive() {
 }
 
 function showEmpty() {
+    updateQrMenu();
     $('layout-empty').hidden = false;
     $('layout-editor').hidden = true;
     $('layout-plan-width').hidden = true;
@@ -228,6 +229,7 @@ function showEmpty() {
     renderKpis();
 }
 function showEditor() {
+    updateQrMenu();
     $('layout-empty').hidden = true;
     $('layout-plan-width').hidden = true;
     $('layout-editor').hidden = false;
@@ -461,6 +463,98 @@ window.addEventListener('beforeunload', (event) => {
 document.addEventListener('dashboard:language-changed', () => {
     if (!state.loaded) return;
     if (state.draft) { renderPanel(); refreshLive(); } else showEmpty();
+});
+
+// ---- QR y descarga -----------------------------------------------------------------------------------------------------
+// El QR del Layout es fijo (lo crea el servidor la primera vez que se guarda) y abre la versión guardada más reciente. La hoja que se descarga se arma
+// aquí con lo ÚLTIMO GUARDADO que trae GET /api/business/layout/qr (lo mismo que se ve al escanear), no con lo que está a medio capturar.
+function updateQrMenu() {
+    const show = !!(state.perms && state.perms.canUseQr && state.saved && !state.creating);
+    $('layout-qrmenu').hidden = !show;
+    $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
+    if (!show) closeQrPop();
+}
+function closeQrPop() {
+    $('layout-qr-pop').hidden = true;
+    $('layout-qr-btn').setAttribute('aria-expanded', 'false');
+}
+$('layout-qr-btn').addEventListener('click', (event) => {
+    event.stopPropagation();
+    const open = $('layout-qr-pop').hidden;
+    $('layout-qr-pop').hidden = !open;
+    $('layout-qr-btn').setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('click', (event) => { if (!event.target.closest('#layout-qrmenu')) closeQrPop(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeQrPop(); });
+
+async function fetchQrData() {
+    const res = await fetch('/api/business/layout/qr', { credentials: 'include' });
+    if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return null; }
+    if (res.status === 404) { Dashboard.showToast(t('main.layoutQrSinLayout'), 'warning'); return null; }
+    if (!res.ok) throw new Error('layout qr failed');
+    return res.json();
+}
+function sheetLabels() {
+    return {
+        area: t('main.layoutHojaArea'), title: t('main.layoutHojaTitulo'), height: t('main.layoutHojaAltura'), spaces: t('main.layoutHojaEspacios'),
+        kpiTotal: t('main.layoutHojaKpiTotal'), kpiOffices: t('main.layoutHojaKpiOficinas'), kpiAisles: t('main.layoutHojaKpiPasillos'),
+        kpiStorage: t('main.layoutHojaKpiAlmacenamiento'), kpiDead: t('main.layoutHojaKpiMuertos'), kpiVolume: t('main.layoutHojaKpiVolumen'),
+        scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'),
+        dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
+        printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
+    };
+}
+const slug = (text) => String(text || 'Layout').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'Layout';
+async function downloadSheet(kind) {
+    if (isDirty()) Dashboard.showToast(t('main.layoutDescargaGuardado'), 'info');
+    else Dashboard.showToast(t('main.layoutPreparandoHoja'), 'info');
+    const data = await fetchQrData();
+    if (!data) return;
+    const mapInner = window.LayoutMapSvg.mapSvg(data.layout).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+    const svg = window.LayoutSheet.buildSheetSvg({
+        companyName: data.companyName, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
+        url: data.url, qrRows: data.qrRows, kpis: data.kpis, layout: data.layout, mapInner,
+    }, sheetLabels(), Dashboard.lang);
+    const blob = kind === 'pdf' ? await window.LayoutSheet.renderPdf(svg) : await window.LayoutSheet.renderPng(svg);
+    const day = new Date().toISOString().slice(0, 10);
+    window.LayoutSheet.saveBlob(blob, `Layout_${slug(data.companyName)}_v${data.version}_${day}.${kind === 'pdf' ? 'pdf' : 'png'}`);
+    Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
+}
+async function copyQrLink() {
+    const data = await fetchQrData();
+    if (!data) return;
+    try {
+        await navigator.clipboard.writeText(data.url);
+    } catch {
+        const box = document.createElement('textarea');
+        box.value = data.url;
+        document.body.appendChild(box);
+        box.select();
+        try { document.execCommand('copy'); } catch { /* sin portapapeles: el aviso igual muestra que se intentó */ }
+        box.remove();
+    }
+    Dashboard.showToast(t('main.layoutEnlaceCopiado'), 'success');
+}
+async function regenerateQr() {
+    if (!(await Dashboard.confirm(t('main.layoutRegenerarQrConfirm')))) return;
+    const res = await fetch('/api/business/layout/qr/regenerate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ confirm: true }) });
+    if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
+    if (!res.ok) throw new Error('layout qr regenerate failed');
+    Dashboard.showToast(t('main.layoutQrCambiado'), 'success');
+}
+$('layout-qr-pop').addEventListener('click', async (event) => {
+    const item = event.target.closest('[data-qr]');
+    if (!item) return;
+    closeQrPop();
+    try {
+        const kind = item.dataset.qr;
+        if (kind === 'pdf' || kind === 'png') await downloadSheet(kind);
+        else if (kind === 'link') await copyQrLink();
+        else if (kind === 'regen') await regenerateQr();
+    } catch (err) {
+        console.error('Layout: acción de QR falló', err);
+        Dashboard.showToast(t('main.layoutDescargaError'), 'error');
+    }
 });
 
 (async function init() {

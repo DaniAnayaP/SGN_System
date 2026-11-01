@@ -2358,6 +2358,13 @@ db.exec(`
         updated_by  TEXT NOT NULL DEFAULT ''
     );
 `);
+// QR del Layout: un código aleatorio que se crea UNA vez y no cambia (salvo que alguien con permiso lo cambie a propósito). El QR de la hoja impresa lleva solo
+// este código, nunca la versión ni la fecha: lo que cambia es lo que la dirección devuelve cada vez que se guarda el Layout.
+const clientLayoutColumns = db.prepare('PRAGMA table_info(client_layouts)').all();
+if (!clientLayoutColumns.some((c) => c.name === 'public_token')) {
+    db.exec("ALTER TABLE client_layouts ADD COLUMN public_token TEXT NOT NULL DEFAULT ''");
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_client_layouts_public_token ON client_layouts(public_token)');
 
 // --- Indexes -------------------------------------------------------------
 // Only for FK/lookup columns that actually appear in a WHERE clause below
@@ -4969,6 +4976,32 @@ function getClientLayout(clientId, { withPlanImage = false } = {}) {
     };
 }
 
+// QR del Layout (ver public_token arriba). ensure: los Layouts guardados antes de que existiera el QR reciben su código la primera vez que se pide.
+function ensureLayoutPublicToken(clientId) {
+    const row = db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ?').get(clientId);
+    if (!row) return '';
+    if (row.public_token) return row.public_token;
+    const token = generatePublicToken();
+    db.prepare('UPDATE client_layouts SET public_token = ? WHERE client_id = ? AND public_token = ?').run(token, clientId, '');
+    return db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ?').get(clientId).public_token;
+}
+// Cambiar el QR a propósito: el anterior deja de funcionar al instante (las hojas impresas con él ya no abren nada).
+function regenerateLayoutPublicToken(clientId) {
+    const token = generatePublicToken();
+    const result = db.prepare('UPDATE client_layouts SET public_token = ? WHERE client_id = ?').run(token, clientId);
+    return result.changes ? token : '';
+}
+// La ÚNICA búsqueda que usa la vista pública: por el código, nunca por cliente (el visitante no tiene sesión).
+function getLayoutByPublicToken(token) {
+    if (typeof token !== 'string' || !/^[0-9a-f]{32}$/.test(token)) return null;
+    const row = db.prepare('SELECT client_id, data, version, updated_at FROM client_layouts WHERE public_token = ?').get(token);
+    if (!row) return null;
+    let layout = null;
+    try { layout = JSON.parse(row.data); } catch { layout = null; }
+    if (!layout || typeof layout !== 'object') return null;
+    return { clientId: row.client_id, layout, version: row.version, updatedAt: row.updated_at };
+}
+
 // Crea o reemplaza el Layout del cliente. expectedVersion = la versión que la persona tenía abierta (0 = todavía no había Layout): si ya cambió, no se
 // pisa y se avisa. planImage: undefined = dejar el plano como está, '' = quitarlo, texto = plano nuevo.
 function saveClientLayout({ clientId, layout, planImage, expectedVersion, updatedBy }) {
@@ -4978,7 +5011,7 @@ function saveClientLayout({ clientId, layout, planImage, expectedVersion, update
         if (currentVersion !== expectedVersion) return { conflict: true, currentVersion };
         const data = JSON.stringify(layout);
         if (!current) {
-            db.prepare('INSERT INTO client_layouts (client_id, data, plan_image, version, updated_by) VALUES (?, ?, ?, 1, ?)').run(clientId, data, planImage || '', updatedBy || '');
+            db.prepare('INSERT INTO client_layouts (client_id, data, plan_image, version, updated_by, public_token) VALUES (?, ?, ?, 1, ?, ?)').run(clientId, data, planImage || '', updatedBy || '', generatePublicToken());
             return { conflict: false, version: 1 };
         }
         if (planImage === undefined) {
@@ -10415,6 +10448,9 @@ module.exports = {
     setSkuItemPublicToken,
     getClientLayout,
     saveClientLayout,
+    ensureLayoutPublicToken,
+    regenerateLayoutPublicToken,
+    getLayoutByPublicToken,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,

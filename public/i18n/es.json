@@ -1545,6 +1545,40 @@
     "inventarioVentaEmptyState": "Aún no hay artículos que se vendan.",
     "inventarioInternoEmptyState": "Aún no hay artículos de uso interno.",
     "layoutKpiVolumen": "m³ de la nave",
+    "layoutQrMenu": "QR y descarga",
+    "layoutDescargarPdf": "Descargar PDF",
+    "layoutDescargarPdfSub": "Hoja A3 horizontal con el mapa y el QR, para imprimir",
+    "layoutDescargarPng": "Descargar imagen PNG",
+    "layoutDescargarPngSub": "La misma hoja como imagen, para mandar por mensaje",
+    "layoutCopiarEnlace": "Copiar el enlace del QR",
+    "layoutCopiarEnlaceSub": "Es el mismo que lleva el QR",
+    "layoutRegenerarQr": "Cambiar el QR",
+    "layoutRegenerarQrSub": "El QR actual dejará de funcionar",
+    "layoutRegenerarQrConfirm": "Si cambias el QR, todas las hojas impresas con el QR actual dejarán de abrir el Layout y tendrás que imprimirlas de nuevo. ¿Cambiar el QR?",
+    "layoutQrCambiado": "QR cambiado. Descarga la hoja nueva.",
+    "layoutEnlaceCopiado": "Enlace copiado.",
+    "layoutPreparandoHoja": "Preparando la hoja…",
+    "layoutDescargaLista": "Descarga lista.",
+    "layoutDescargaError": "No se pudo preparar la descarga.",
+    "layoutDescargaGuardado": "La hoja trae lo guardado: los cambios sin guardar no salen.",
+    "layoutQrSinPermiso": "No tienes permiso para usar el QR del Layout.",
+    "layoutQrSinLayout": "Todavía no hay un Layout guardado.",
+    "layoutHojaArea": "C. Distribución · Cadena de Suministro",
+    "layoutHojaTitulo": "Layout de la nave",
+    "layoutHojaAltura": "altura libre",
+    "layoutHojaEspacios": "espacios de almacenamiento",
+    "layoutHojaKpiTotal": "Superficie total",
+    "layoutHojaKpiOficinas": "Oficinas",
+    "layoutHojaKpiPasillos": "Pasillos",
+    "layoutHojaKpiAlmacenamiento": "Espacios de almacenamiento",
+    "layoutHojaKpiMuertos": "Espacios muertos",
+    "layoutHojaKpiVolumen": "Volumen de la nave",
+    "layoutHojaEscanea": "Escanea para ver el Layout vigente",
+    "layoutHojaNoCambia": "Este QR no cambia.",
+    "layoutHojaImpreso": "Impreso el",
+    "layoutHojaFoto": "Esta hoja es una foto de ese momento: el QR siempre abre la versión más reciente.",
+    "layoutHojaActualizado": "Layout actualizado el",
+    "layoutHojaVersion": "Versión",
     "layoutKpiVolumenAlm": "m³ de almacenamiento",
     "layoutGuardar": "Guardar",
     "layoutDescartar": "Descartar cambios",
@@ -2889,6 +2923,26 @@
     "layoutPlanWidth": {
       "what": "El ancho real del plano, en metros. Con ese dato el sistema sabe a qué escala dibujar tu nave sobre el plano.",
       "example": "el plano mide 48 metros de ancho y lo escribes."
+    },
+    "layoutQrMenu": {
+      "what": "Descarga la hoja del Layout con el mapa y el QR, o copia el enlace del QR. El QR no cambia nunca y siempre abre el Layout guardado más reciente.",
+      "example": "descargas la hoja, la imprimes y la pegas en la entrada de la nave."
+    },
+    "layoutQrPdf": {
+      "what": "Baja una hoja A3 horizontal en PDF con el mapa, los KPIs y el QR, lista para imprimir. Trae lo último guardado.",
+      "example": "la mandas a imprimir en una copiadora."
+    },
+    "layoutQrPng": {
+      "what": "Baja la misma hoja como imagen, para mandarla por mensaje o correo. Trae lo último guardado.",
+      "example": "se la mandas por mensaje a un supervisor."
+    },
+    "layoutQrLink": {
+      "what": "Copia la dirección que lleva el QR, por si la necesitas en un lugar donde no se imprime.",
+      "example": "la pegas en un correo para que la abran desde el celular."
+    },
+    "layoutQrRegen": {
+      "what": "Cambia el QR por uno nuevo. El anterior deja de funcionar y hay que volver a imprimir las hojas. Úsalo solo si el QR salió de la empresa.",
+      "example": "alguien fotografió el QR fuera de la nave y prefieres anularlo."
     },
     "sidebarFlyoutSection": {
       "what": "Es el nombre de la sección sobre la que pasaste el mouse. Al llegar aquí se despliegan sus opciones; con clic se abre la barra con la sección desplegada.",

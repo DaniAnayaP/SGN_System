@@ -401,6 +401,19 @@
             <div class="layout-editor" id="layout-editor" hidden>
                 <div class="layout-bar">
                     <span class="layout-dirty" id="layout-dirty" hidden data-i18n="main.layoutSinGuardar">Unsaved changes</span>
+                    <div class="layout-qrmenu" id="layout-qrmenu" hidden>
+                        <button type="button" class="btn btn-secondary" id="layout-qr-btn" aria-haspopup="true" aria-expanded="false" data-help-key="layoutQrMenu">
+                            <i class="bx bx-qr" aria-hidden="true"></i>
+                            <span data-i18n="main.layoutQrMenu">QR and download</span>
+                            <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                        </button>
+                        <div class="layout-qr-pop" id="layout-qr-pop" role="menu" hidden>
+                            <button type="button" role="menuitem" data-qr="pdf" data-help-key="layoutQrPdf"><b data-i18n="main.layoutDescargarPdf">Download PDF</b><span data-i18n="main.layoutDescargarPdfSub">A3 landscape sheet with the map and the QR, to print</span></button>
+                            <button type="button" role="menuitem" data-qr="png" data-help-key="layoutQrPng"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutDescargarPngSub">The same sheet as an image, to send in a message</span></button>
+                            <button type="button" role="menuitem" data-qr="link" data-help-key="layoutQrLink"><b data-i18n="main.layoutCopiarEnlace">Copy the QR link</b><span data-i18n="main.layoutCopiarEnlaceSub">It is the same one the QR carries</span></button>
+                            <button type="button" role="menuitem" data-qr="regen" id="layout-qr-regen" data-help-key="layoutQrRegen" hidden><b data-i18n="main.layoutRegenerarQr">Change the QR</b><span data-i18n="main.layoutRegenerarQrSub">The current QR will stop working</span></button>
+                        </div>
+                    </div>
                     <button type="button" class="btn btn-secondary" id="layout-discard" data-help-key="layoutDiscard" disabled data-i18n="main.layoutDescartar">Discard changes</button>
                     <button type="button" class="btn" id="layout-save" data-help-key="layoutSave" disabled data-i18n="main.layoutGuardar">Save</button>
                 </div>
@@ -477,6 +490,8 @@
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
     <script src="LayoutCalc.js"></script>
+    <script src="LayoutMapSvg.js"></script>
+    <script src="LayoutSheet.js"></script>
     <script src="OpCentroDistLayout.js"></script>
 </body>
 </html>
