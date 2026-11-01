@@ -1624,6 +1624,7 @@
     "layoutDesactivar": "Deactivate",
     "layoutReactivar": "Reactivate",
     "layoutLado": "Side",
+    "layoutInsertarLado": "Add a side after this one",
     "layoutHaciaDonde": "Direction",
     "layoutInclinacion": "Tilt (°)",
     "layoutMide": "Length (m)",
@@ -2974,6 +2975,10 @@
     "layoutSideAdd": {
       "what": "Adds a side at the end. Sides are typed in order, going around the shape on the inside.",
       "example": "after Right 6.30 you add Down 6.17."
+    },
+    "layoutSideInsert": {
+      "what": "Adds a side right after this one without touching the others. This side is split into two equal parts and the shape still closes; then you change which way the new part goes or how long it is.",
+      "example": "you need a notch between side 2 and side 3: you tap + on side 2 and set the new part to Down, 1 m."
     },
     "layoutSideClose": {
       "what": "Adds the straight sides that are missing to get back to the corner where you started.",

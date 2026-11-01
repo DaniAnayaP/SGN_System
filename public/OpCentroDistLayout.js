@@ -190,7 +190,7 @@ function sidesBlockHtml(key, dis) {
     const tiltCell = (s, i) => (typeof s[0] === 'string'
         ? '<td class="layout-calc">—</td>'
         : `<td><input type="number" step="0.1" min="0.1" max="89.9" ${attr}="tilt:${idx(i)}" data-help-key="layoutSideTilt" value="${Math.round(sideTilt(s) * 100) / 100}"${dis ? ' disabled' : ''}></td>`);
-    const rows = sh.sides.map((s, i) => `<tr><td class="layout-calc">${esc(t('main.layoutLado'))} ${i + 1}</td><td><select ${attr}="dir:${idx(i)}" data-help-key="layoutSideDir"${dis ? ' disabled' : ''}>${dirOptions(sideDirKey(s))}</select></td>${tiltCell(s, i)}<td><input type="number" step="0.01" min="0" ${attr}="len:${idx(i)}" data-help-key="layoutSideLen" value="${s[1]}"${dis ? ' disabled' : ''}></td>${isC ? `<td><input type="number" step="0.1" min="0" ${attr}="h:${idx(i)}" value="${sh.heights[i] != null ? sh.heights[i] : ''}"${dis ? ' disabled' : ''}></td>` : ''}<td><button type="button" class="layout-x" data-sdel="${esc(key)}:${i}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${dis ? ' disabled' : ''}>✕</button></td></tr>`);
+    const rows = sh.sides.map((s, i) => `<tr><td class="layout-calc">${esc(t('main.layoutLado'))} ${i + 1}</td><td><select ${attr}="dir:${idx(i)}" data-help-key="layoutSideDir"${dis ? ' disabled' : ''}>${dirOptions(sideDirKey(s))}</select></td>${tiltCell(s, i)}<td><input type="number" step="0.01" min="0" ${attr}="len:${idx(i)}" data-help-key="layoutSideLen" value="${s[1]}"${dis ? ' disabled' : ''}></td>${isC ? `<td><input type="number" step="0.1" min="0" ${attr}="h:${idx(i)}" value="${sh.heights[i] != null ? sh.heights[i] : ''}"${dis ? ' disabled' : ''}></td>` : ''}<td><div class="layout-rowbtns"><button type="button" class="layout-x" data-sins="${esc(key)}:${i}" data-help-key="layoutSideInsert" aria-label="${esc(t('main.layoutInsertarLado'))}"${dis ? ' disabled' : ''}>+</button><button type="button" class="layout-x" data-sdel="${esc(key)}:${i}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${dis ? ' disabled' : ''}>✕</button></div></td></tr>`);
     const head = isC ? ['main.layoutLado', 'main.layoutHaciaDonde', 'main.layoutInclinacion', 'main.layoutMide', 'main.layoutAlturaEsquina', ''] : ['main.layoutLado', 'main.layoutHaciaDonde', 'main.layoutInclinacion', 'main.layoutMide', ''];
     return `<div class="layout-fl"><label>${esc(t('main.layoutEmpiezaX'))}<input type="number" step="0.05" ${attr}="ox${sfx}" data-help-key="layoutOrigin" value="${sh.origin[0]}"${dis ? ' disabled' : ''}></label><label>${esc(t('main.layoutEmpiezaY'))}<input type="number" step="0.05" ${attr}="oy${sfx}" data-help-key="layoutOrigin" value="${sh.origin[1]}"${dis ? ' disabled' : ''}></label></div>${table(head, rows)}<div class="layout-sidesbar"><button type="button" class="btn btn-secondary layout-add" data-sadd="${esc(key)}" data-help-key="layoutSideAdd"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarLado'))}</button><span data-sides-status="${esc(key)}">${sidesStatusHtml(key, dis)}</span></div>`;
 }
@@ -232,6 +232,25 @@ function removeSide(key, i) {
     const heights = sh.heights.slice();
     sides.splice(i, 1);
     heights.splice(i, 1);
+    sh.apply(sh.origin, sides, heights);
+}
+// Agrega un lado después del lado i: ese lado se divide en dos partes iguales, la primera se queda con su renglón y la segunda es la nueva. La figura no cambia (sigue
+// cerrando); la esquina nueva toma la altura intermedia entre las dos que la rodean.
+function insertSide(key, i) {
+    const sh = shapeOf(key);
+    if (!sh || !sh.sides[i]) return;
+    const sides = sh.sides.map((s) => s.slice());
+    const heights = sh.heights.slice();
+    const side = sides[i];
+    const k = typeof side[0] === 'number' ? 1000 : 100;
+    const first = Math.round((side[1] / 2) * k) / k;
+    const second = Math.round((side[1] - first) * k) / k;
+    sides[i] = [side[0], first];
+    sides.splice(i + 1, 0, [side[0], second]);
+    if (heights.length) {
+        const next = heights[(i + 1) % heights.length];
+        heights.splice(i + 1, 0, round2(((Number(heights[i]) || 0) + (Number(next) || 0)) / 2));
+    }
     sh.apply(sh.origin, sides, heights);
 }
 function closeSides(key) {
@@ -697,6 +716,15 @@ $('layout-panel').addEventListener('click', (event) => {
         const v = sdel.dataset.sdel;
         const at = v.lastIndexOf(':');
         removeSide(v.slice(0, at), Number(v.slice(at + 1)));
+        renderPanel();
+        refreshLive();
+        return;
+    }
+    const sins = event.target.closest('[data-sins]');
+    if (sins) {
+        const v = sins.dataset.sins;
+        const at = v.lastIndexOf(':');
+        insertSide(v.slice(0, at), Number(v.slice(at + 1)));
         renderPanel();
         refreshLive();
         return;

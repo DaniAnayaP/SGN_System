@@ -1624,6 +1624,7 @@
     "layoutDesactivar": "Desactivar",
     "layoutReactivar": "Reactivar",
     "layoutLado": "Lado",
+    "layoutInsertarLado": "Agregar un lado después de este",
     "layoutHaciaDonde": "Hacia dónde",
     "layoutInclinacion": "Inclinación (°)",
     "layoutMide": "Mide (m)",
@@ -2973,6 +2974,10 @@
     "layoutSideAdd": {
       "what": "Agrega un lado al final. Los lados se escriben en orden, rodeando la figura por dentro.",
       "example": "después de Derecha 6.30 agregas Abajo 6.17."
+    },
+    "layoutSideInsert": {
+      "what": "Agrega un lado justo después de este, sin tocar los demás. Este lado se divide en dos partes iguales y la figura sigue cerrando; después cambias hacia dónde va o cuánto mide la parte nueva.",
+      "example": "necesitas una muesca entre el lado 2 y el lado 3: tocas + en el lado 2 y a la parte nueva le pones Abajo, 1 m."
     },
     "layoutSideClose": {
       "what": "Agrega los lados derechos que faltan para regresar a la esquina donde empezaste.",
