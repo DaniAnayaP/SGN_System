@@ -1544,6 +1544,87 @@
     "layoutEmptyState": "There is no warehouse Layout yet.",
     "inventarioVentaEmptyState": "There are no articles for sale yet.",
     "inventarioInternoEmptyState": "There are no articles for internal use yet.",
+    "layoutKpiVolumen": "Warehouse m³",
+    "layoutKpiVolumenAlm": "Storage m³",
+    "layoutGuardar": "Save",
+    "layoutDescartar": "Discard changes",
+    "layoutSinGuardar": "Unsaved changes",
+    "layoutGuardado": "Layout saved.",
+    "layoutErrorGuardar": "The Layout could not be saved.",
+    "layoutConflicto": "The Layout changed while you were editing it. The latest version was opened.",
+    "layoutSinPermiso": "You do not have permission to save these changes.",
+    "layoutDatosInvalidos": "Check the data:",
+    "layoutDescartarConfirm": "Discard the unsaved changes?",
+    "layoutStepContorno": "Outline",
+    "layoutStepPuertas": "Doors",
+    "layoutStepLuz": "Power connections",
+    "layoutStepZonas": "Zones",
+    "layoutStepEspacios": "Racks and cabinets",
+    "layoutAltura": "Clear height (m)",
+    "layoutEsquina": "Corner",
+    "layoutX": "X (m)",
+    "layoutY": "Y (m)",
+    "layoutPared": "Wall",
+    "layoutAgregarEsquina": "+ Add corner",
+    "layoutColumnasTitulo": "Columns and obstacles",
+    "layoutNombre": "Name",
+    "layoutLargo": "Length (m)",
+    "layoutAncho": "Width (m)",
+    "layoutAlto": "Height (m)",
+    "layoutFondo": "Depth (m)",
+    "layoutAgregarObstaculo": "+ Add obstacle",
+    "layoutTipo": "Type",
+    "layoutDistancia": "Distance (m)",
+    "layoutAgregarPuerta": "+ Add door",
+    "layoutAlturaPiso": "Height from floor (m)",
+    "layoutAgregarConexion": "+ Add connection",
+    "layoutSuperficie": "Area",
+    "layoutAgregarZona": "+ Add zone",
+    "layoutCodigo": "Code",
+    "layoutZona": "Zone",
+    "layoutNiveles": "Levels",
+    "layoutCajones": "Drawers (rows × columns)",
+    "layoutHuellaVolumen": "Footprint and volume",
+    "layoutAgregarEspacio": "+ Add space",
+    "layoutQuitar": "Remove",
+    "layoutDesactivar": "Deactivate",
+    "layoutReactivar": "Reactivate",
+    "layoutPuertaNueva": "New door",
+    "layoutColumna": "Column",
+    "layoutSoloVer": "You can only view this section",
+    "layoutYaLlena": "It already has data: you need the Modify permission to change it",
+    "layoutEspacios": "Spaces",
+    "layoutHuella": "Footprint",
+    "layoutOcupacion": "Occupancy",
+    "layoutVolumen": "Volume",
+    "layoutSinZonas": "There are no zones yet. Add them in the Zones step.",
+    "layoutPlanAnchoLabel": "How many meters wide is the plan?",
+    "layoutContinuar": "Continue",
+    "layoutCancelar": "Cancel",
+    "layoutPlanSoloImagen": "Choose a JPG, PNG or WebP image.",
+    "layoutPlanError": "The plan could not be prepared.",
+    "layoutPlanAnchoInvalido": "Enter the real width of the plan in meters.",
+    "layoutLeyendaPuerta": "Door",
+    "layoutLeyendaLuz": "Power connection",
+    "layoutLeyendaColumna": "Column",
+    "layoutLeyendaEspacio": "Rack, cabinet or pallet",
+    "layoutType_zone_dry": "Dry",
+    "layoutType_zone_cold": "Refrigerated",
+    "layoutType_zone_chemical": "Chemicals",
+    "layoutType_zone_finished": "Finished goods",
+    "layoutType_zone_dock": "Dock",
+    "layoutType_zone_office": "Office",
+    "layoutType_zone_aisle": "Aisle",
+    "layoutType_space_rack": "Rack",
+    "layoutType_space_cabinet": "Cabinet",
+    "layoutType_space_pallet": "Floor pallet",
+    "layoutType_door_dock": "Dock",
+    "layoutType_door_staff": "Staff access",
+    "layoutType_door_emergency": "Emergency exit",
+    "layoutType_power_panel": "Electrical panel",
+    "layoutType_power_outlet110": "110 V outlet",
+    "layoutType_power_outlet220": "220 V outlet",
+    "layoutType_power_three-phase": "Three-phase",
     "colMaterialApoyoFlujo": "System Flow Access",
     "colMaterialApoyoProcesos": "Our Processes Access",
     "materialApoyoUploadBtn": "+ Upload File",
@@ -2749,6 +2830,66 @@
     "inventarioInternoEmpty": {
       "what": "Here you will look up the articles meant for internal use: search for them, scan their code and see their sheet.",
       "example": "you search for wheat flour and see which rack it is on."
+    },
+    "layoutSteps": {
+      "what": "The steps to build the Layout. Each one is a part of the warehouse and is assigned separately in the access tree.",
+      "example": "you move from Outline to Doors once you have entered the corners."
+    },
+    "layoutSec_contorno": {
+      "what": "The corners of the warehouse in meters, its clear height and its columns or obstacles. The total m² and m³ come from here.",
+      "example": "a rectangular warehouse has 4 corners; an L-shaped one has 6."
+    },
+    "layoutSec_puertas": {
+      "what": "The doors of the warehouse: which wall they are on, how many meters from the corner and how big they are.",
+      "example": "the receiving dock is on wall 1, 6 meters from the corner, and is 3.5 wide."
+    },
+    "layoutSec_luz": {
+      "what": "The electrical panels and outlets of the warehouse: which wall, how far from the corner and how high from the floor.",
+      "example": "a 220 V outlet on wall 3, 20 meters from the corner and 1.2 meters from the floor."
+    },
+    "layoutSec_zonas": {
+      "what": "The zones of the warehouse: storage, docks, offices and aisles. The office and aisle m² come from here.",
+      "example": "you define Zone A, dry goods, 22 by 11 meters."
+    },
+    "layoutSec_espacios": {
+      "what": "The racks, cabinets and pallets, with their code, place and size. The storage m² and m³ come from here.",
+      "example": "you register rack R-01, 3 by 1.1 meters, 4.5 high and 4 levels."
+    },
+    "layoutLocked": {
+      "what": "This section cannot be changed with your current access.",
+      "example": "you can see the doors but not change them because you do not have the Modify permission."
+    },
+    "layoutAddRow": {
+      "what": "Adds a new row to this list.",
+      "example": "you add a new door for staff access."
+    },
+    "layoutRemoveRow": {
+      "what": "Removes this row from the list. Nothing is deleted until you save.",
+      "example": "you remove a door you entered by mistake."
+    },
+    "layoutToggleRow": {
+      "what": "Deactivates or reactivates a zone or space that was already saved. It is not deleted: it stops counting in the m² and its history is kept.",
+      "example": "you deactivate a rack that was removed from the warehouse."
+    },
+    "layoutCanvas": {
+      "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections.",
+      "example": "you change the width of a zone and the map updates instantly."
+    },
+    "layoutSave": {
+      "what": "Saves the Layout with all the changes. Until you save, only you can see them.",
+      "example": "you finish entering the doors and save so others can see the Layout."
+    },
+    "layoutDiscard": {
+      "what": "Undoes the changes you have not saved and goes back to the last saved Layout.",
+      "example": "you entered something by mistake and go back to how it was."
+    },
+    "layoutSummary": {
+      "what": "A summary of each zone: its m², how many spaces it has, how much floor they take and how many storage m³ there are.",
+      "example": "you see that Zone A is 25% occupied by its racks."
+    },
+    "layoutPlanWidth": {
+      "what": "The real width of the plan, in meters. With it the system knows the scale to draw your warehouse over the plan.",
+      "example": "the plan is 48 meters wide and you type it in."
     },
     "sidebarFlyoutSection": {
       "what": "This is the name of the section you hovered over. Its options unfold once you reach it; a click opens the sidebar with the section expanded.",

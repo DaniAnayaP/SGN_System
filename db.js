@@ -2343,6 +2343,22 @@ if (!skuItemColumns.some((c) => c.name === 'public_token')) {
     db.exec("ALTER TABLE sku_items ADD COLUMN public_token TEXT NOT NULL DEFAULT ''");
 }
 
+// Layout de la nave (Operaciones, C. Distribución): UN solo Layout por cliente, que se va modificando. Todo el croquis (contorno, puertas, conexiones de luz,
+// zonas, anaqueles/gabetas/tarimas) vive como un documento JSON validado por public/LayoutCalc.js (sanitizeLayout); cada elemento lleva un id estable, que es
+// lo que más adelante usarán la ubicación de un artículo y los QR. version evita que dos personas se pisen; plan_image es el plano subido (imagen ya
+// comprimida en el navegador, como data URL) o '' si no hay.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS client_layouts (
+        client_id   INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+        data        TEXT NOT NULL DEFAULT '{}',
+        plan_image  TEXT NOT NULL DEFAULT '',
+        version     INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_by  TEXT NOT NULL DEFAULT ''
+    );
+`);
+
 // --- Indexes -------------------------------------------------------------
 // Only for FK/lookup columns that actually appear in a WHERE clause below
 // and aren't already covered by a UNIQUE constraint's implicit index (e.g.
@@ -3073,6 +3089,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'reportes-programados': { area: 'Negocio Inteligente', modulo: 'Configuración', pantalla: 'Reportes Programados' },
     'reglas-orden-llenado': { area: '', modulo: 'Configuración', pantalla: 'Reglas de Orden de Llenado' },
     'roles': { area: '', modulo: 'Administración del Negocio', pantalla: 'Roles' },
+    'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
 };
 
 // "Nuestros Cambios" — every row any pantalla has ever logged via
@@ -3404,6 +3421,7 @@ const TABLE_GRANT_PATHS = {
     'reportes-programados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-negocio-inteligente/nit-reportes-programados' },
     'reglas-orden-llenado': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-gestion-reglas-orden' },
     'roles': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-roles' },
+    'layout': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-layout' },
     'usuarios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-users' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
@@ -3595,6 +3613,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'categorias-riesgo': CATEGORY_BUTTON_NOTIFY,
     'categorias-vidautil': CATEGORY_BUTTON_NOTIFY,
     'unidad-medida': CATEGORY_BUTTON_NOTIFY,
+    'layout': { create: 'colLayoutCrearDesdeCero' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -4936,6 +4955,42 @@ function setSkuItemPublicToken(id, clientId, token) {
     db.prepare('UPDATE sku_items SET public_token = ? WHERE id = ? AND client_id = ?').run(token, id, clientId);
 }
 
+// --- Layout de la nave -------------------------------------------------------
+// withPlanImage: el plano pesa; solo se lee cuando de verdad se va a dibujar (GET .../layout/plan-image).
+function getClientLayout(clientId, { withPlanImage = false } = {}) {
+    const row = db.prepare('SELECT data, plan_image, version, created_at, updated_at, updated_by FROM client_layouts WHERE client_id = ?').get(clientId);
+    if (!row) return null;
+    let layout = null;
+    try { layout = JSON.parse(row.data); } catch { layout = null; }
+    if (!layout || typeof layout !== 'object') return null;
+    return {
+        layout, version: row.version, createdAt: row.created_at, updatedAt: row.updated_at, updatedBy: row.updated_by,
+        hasPlanImage: !!row.plan_image, planImage: withPlanImage ? row.plan_image : undefined,
+    };
+}
+
+// Crea o reemplaza el Layout del cliente. expectedVersion = la versión que la persona tenía abierta (0 = todavía no había Layout): si ya cambió, no se
+// pisa y se avisa. planImage: undefined = dejar el plano como está, '' = quitarlo, texto = plano nuevo.
+function saveClientLayout({ clientId, layout, planImage, expectedVersion, updatedBy }) {
+    const run = db.transaction(() => {
+        const current = db.prepare('SELECT version FROM client_layouts WHERE client_id = ?').get(clientId);
+        const currentVersion = current ? current.version : 0;
+        if (currentVersion !== expectedVersion) return { conflict: true, currentVersion };
+        const data = JSON.stringify(layout);
+        if (!current) {
+            db.prepare('INSERT INTO client_layouts (client_id, data, plan_image, version, updated_by) VALUES (?, ?, ?, 1, ?)').run(clientId, data, planImage || '', updatedBy || '');
+            return { conflict: false, version: 1 };
+        }
+        if (planImage === undefined) {
+            db.prepare("UPDATE client_layouts SET data = ?, version = version + 1, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(data, updatedBy || '', clientId);
+        } else {
+            db.prepare("UPDATE client_layouts SET data = ?, plan_image = ?, version = version + 1, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(data, planImage, updatedBy || '', clientId);
+        }
+        return { conflict: false, version: currentVersion + 1 };
+    });
+    return run();
+}
+
 // --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----
 // --- Distribución) -- 7 near-identical catalogs sharing one table (see -----
 // article_categories' own DDL comment). ARTICLE_CATEGORY_TYPES is the single
@@ -6236,6 +6291,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'reglas-orden-llenado', labelKey: 'menu.fieldRulesGroup' },
     { key: 'roles', labelKey: 'menu.roles' },
     { key: 'nuestros-articulos', labelKey: 'menu.opCentroDistAltaArticulos' },
+    { key: 'layout', labelKey: 'menu.opCentroDistLayout' },
     { key: 'categorias-inventario', labelKey: 'menu.catCentroDistCategoriasInventario' },
     { key: 'categorias-compra', labelKey: 'menu.catCentroDistCategoriasCompra' },
     { key: 'categorias-almacenamiento', labelKey: 'menu.catCentroDistCategoriasAlmacenamiento' },
@@ -10357,6 +10413,8 @@ module.exports = {
     generatePublicToken,
     getSkuItemByPublicToken,
     setSkuItemPublicToken,
+    getClientLayout,
+    saveClientLayout,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,

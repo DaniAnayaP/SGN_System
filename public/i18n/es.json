@@ -1544,6 +1544,87 @@
     "layoutEmptyState": "Aún no hay un Layout de la nave.",
     "inventarioVentaEmptyState": "Aún no hay artículos que se vendan.",
     "inventarioInternoEmptyState": "Aún no hay artículos de uso interno.",
+    "layoutKpiVolumen": "m³ de la nave",
+    "layoutKpiVolumenAlm": "m³ de almacenamiento",
+    "layoutGuardar": "Guardar",
+    "layoutDescartar": "Descartar cambios",
+    "layoutSinGuardar": "Cambios sin guardar",
+    "layoutGuardado": "Layout guardado.",
+    "layoutErrorGuardar": "No se pudo guardar el Layout.",
+    "layoutConflicto": "El Layout cambió mientras lo editabas. Se abrió la versión más reciente.",
+    "layoutSinPermiso": "No tienes permiso para guardar estos cambios.",
+    "layoutDatosInvalidos": "Revisa los datos:",
+    "layoutDescartarConfirm": "¿Descartar los cambios sin guardar?",
+    "layoutStepContorno": "Contorno",
+    "layoutStepPuertas": "Puertas",
+    "layoutStepLuz": "Conexiones de luz",
+    "layoutStepZonas": "Zonas",
+    "layoutStepEspacios": "Anaqueles y gabetas",
+    "layoutAltura": "Altura libre (m)",
+    "layoutEsquina": "Esquina",
+    "layoutX": "X (m)",
+    "layoutY": "Y (m)",
+    "layoutPared": "Pared",
+    "layoutAgregarEsquina": "+ Agregar esquina",
+    "layoutColumnasTitulo": "Columnas y obstáculos",
+    "layoutNombre": "Nombre",
+    "layoutLargo": "Largo (m)",
+    "layoutAncho": "Ancho (m)",
+    "layoutAlto": "Alto (m)",
+    "layoutFondo": "Fondo (m)",
+    "layoutAgregarObstaculo": "+ Agregar obstáculo",
+    "layoutTipo": "Tipo",
+    "layoutDistancia": "Distancia (m)",
+    "layoutAgregarPuerta": "+ Agregar puerta",
+    "layoutAlturaPiso": "Altura del piso (m)",
+    "layoutAgregarConexion": "+ Agregar conexión",
+    "layoutSuperficie": "Superficie",
+    "layoutAgregarZona": "+ Agregar zona",
+    "layoutCodigo": "Código",
+    "layoutZona": "Zona",
+    "layoutNiveles": "Niveles",
+    "layoutCajones": "Cajones (filas × columnas)",
+    "layoutHuellaVolumen": "Huella y volumen",
+    "layoutAgregarEspacio": "+ Agregar espacio",
+    "layoutQuitar": "Quitar",
+    "layoutDesactivar": "Desactivar",
+    "layoutReactivar": "Reactivar",
+    "layoutPuertaNueva": "Puerta nueva",
+    "layoutColumna": "Columna",
+    "layoutSoloVer": "Solo puedes ver esta sección",
+    "layoutYaLlena": "Ya tiene datos: para cambiarla necesitas el permiso Modificar",
+    "layoutEspacios": "Espacios",
+    "layoutHuella": "Huella",
+    "layoutOcupacion": "Ocupación",
+    "layoutVolumen": "Volumen",
+    "layoutSinZonas": "Aún no hay zonas. Agrégalas en el paso Zonas.",
+    "layoutPlanAnchoLabel": "¿Cuántos metros mide de ancho el plano?",
+    "layoutContinuar": "Continuar",
+    "layoutCancelar": "Cancelar",
+    "layoutPlanSoloImagen": "Elige una imagen JPG, PNG o WebP.",
+    "layoutPlanError": "No se pudo preparar el plano.",
+    "layoutPlanAnchoInvalido": "Escribe el ancho real del plano en metros.",
+    "layoutLeyendaPuerta": "Puerta",
+    "layoutLeyendaLuz": "Conexión de luz",
+    "layoutLeyendaColumna": "Columna",
+    "layoutLeyendaEspacio": "Anaquel, gabeta o tarima",
+    "layoutType_zone_dry": "Seco",
+    "layoutType_zone_cold": "Refrigerado",
+    "layoutType_zone_chemical": "Químicos",
+    "layoutType_zone_finished": "Producto terminado",
+    "layoutType_zone_dock": "Andén",
+    "layoutType_zone_office": "Oficina",
+    "layoutType_zone_aisle": "Pasillo",
+    "layoutType_space_rack": "Anaquel",
+    "layoutType_space_cabinet": "Gabeta",
+    "layoutType_space_pallet": "Tarima en piso",
+    "layoutType_door_dock": "Andén",
+    "layoutType_door_staff": "Acceso de personal",
+    "layoutType_door_emergency": "Salida de emergencia",
+    "layoutType_power_panel": "Tablero eléctrico",
+    "layoutType_power_outlet110": "Contacto 110 V",
+    "layoutType_power_outlet220": "Contacto 220 V",
+    "layoutType_power_three-phase": "Trifásico",
     "colMaterialApoyoFlujo": "Acceso a Flujo Sistema",
     "colMaterialApoyoProcesos": "Acceso a Nuestros Procesos",
     "materialApoyoUploadBtn": "+ Subir Archivo",
@@ -2748,6 +2829,66 @@
     "inventarioInternoEmpty": {
       "what": "Aquí vas a consultar los artículos que son para uso interno: buscarlos, escanear su código y ver su ficha.",
       "example": "buscas la harina de trigo y ves en qué anaquel está."
+    },
+    "layoutSteps": {
+      "what": "Los pasos para armar el Layout. Cada uno es una parte de la nave y se asigna por separado en los accesos.",
+      "example": "pasas de Contorno a Puertas cuando ya terminaste de capturar las esquinas."
+    },
+    "layoutSec_contorno": {
+      "what": "Las esquinas de la nave en metros, su altura libre y las columnas u obstáculos. De aquí salen los m² y los m³ totales.",
+      "example": "una nave rectangular son 4 esquinas; una en L son 6."
+    },
+    "layoutSec_puertas": {
+      "what": "Las puertas de la nave: en qué pared están, a cuántos metros de la esquina y cuánto miden.",
+      "example": "el andén de recepción está en la pared 1, a 6 metros de la esquina, y mide 3.5 de ancho."
+    },
+    "layoutSec_luz": {
+      "what": "Los tableros y contactos de luz de la nave: en qué pared están, a qué distancia de la esquina y a qué altura del piso.",
+      "example": "un contacto de 220 V en la pared 3, a 20 metros de la esquina y a 1.2 metros del piso."
+    },
+    "layoutSec_zonas": {
+      "what": "Las zonas de la nave: almacenamiento, andenes, oficinas y pasillos. De aquí salen los m² de oficinas y de pasillos.",
+      "example": "defines la Zona A, de producto seco, de 22 por 11 metros."
+    },
+    "layoutSec_espacios": {
+      "what": "Los anaqueles, gabetas y tarimas, con su código, su lugar y sus medidas. De aquí salen los m² y m³ de almacenamiento.",
+      "example": "registras el anaquel R-01 de 3 por 1.1 metros, 4.5 de alto y 4 niveles."
+    },
+    "layoutLocked": {
+      "what": "Esta sección no se puede cambiar con tus accesos actuales.",
+      "example": "puedes ver las puertas, pero no cambiarlas porque no tienes el permiso Modificar."
+    },
+    "layoutAddRow": {
+      "what": "Agrega un renglón nuevo a esta lista.",
+      "example": "agregas una puerta nueva para el acceso de personal."
+    },
+    "layoutRemoveRow": {
+      "what": "Quita este renglón de la lista. Aún no se borra nada hasta que guardes.",
+      "example": "quitas una puerta que capturaste por error."
+    },
+    "layoutToggleRow": {
+      "what": "Desactiva o reactiva una zona o espacio que ya estaba guardado. No se borra: deja de contar en los m² y se conserva su historial.",
+      "example": "desactivas un anaquel que ya retiraron de la nave."
+    },
+    "layoutCanvas": {
+      "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz.",
+      "example": "cambias el ancho de una zona y el croquis se actualiza al instante."
+    },
+    "layoutSave": {
+      "what": "Guarda el Layout con todos los cambios. Mientras no guardes, solo los ves tú.",
+      "example": "terminas de capturar las puertas y guardas para que los demás vean el Layout."
+    },
+    "layoutDiscard": {
+      "what": "Deshace los cambios que no has guardado y regresa al último Layout guardado.",
+      "example": "capturaste algo por error y vuelves a como estaba."
+    },
+    "layoutSummary": {
+      "what": "Resumen de cada zona: sus m², cuántos espacios tiene, cuánto piso ocupan y cuántos m³ de almacenamiento hay.",
+      "example": "ves que la Zona A está ocupada al 25% por sus anaqueles."
+    },
+    "layoutPlanWidth": {
+      "what": "El ancho real del plano, en metros. Con ese dato el sistema sabe a qué escala dibujar tu nave sobre el plano.",
+      "example": "el plano mide 48 metros de ancho y lo escribes."
     },
     "sidebarFlyoutSection": {
       "what": "Es el nombre de la sección sobre la que pasaste el mouse. Al llegar aquí se despliegan sus opciones; con clic se abre la barra con la sección desplegada.",

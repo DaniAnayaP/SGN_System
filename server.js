@@ -144,6 +144,8 @@ const {
     generatePublicToken,
     getSkuItemByPublicToken,
     setSkuItemPublicToken,
+    getClientLayout,
+    saveClientLayout,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,
@@ -6027,6 +6029,109 @@ app.get('/api/public/ficha/:token', (req, res) => {
             console.error('Ficha pública: failed to build photo URLs', err);
             res.status(500).json({ message: 'Failed to load ficha.' });
         });
+});
+
+// --- Layout de la nave (Operaciones > C. Distribución) ------------------------
+// UN Layout por cliente. Los permisos salen de las columnas de la pantalla en el árbol (menu.json, colLayout*): cada sección se puede VER con el acceso a la
+// pantalla; llenarla por primera vez pide "Ver y Operar" o "Modificar" en su columna, y cambiar lo que ya tiene pide "Modificar" (igual que cualquier
+// columna, ver canEditField en Dashboard.js). Crear el Layout pide además el botón Crear desde cero o Cargar plano.
+const LayoutCalc = require('./public/LayoutCalc.js');
+const LAYOUT_TABLE_KEY = 'layout';
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Anaqueles, gabetas y tarimas' };
+const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
+
+function layoutPermissions(req) {
+    const admin = !!req.user.isClientAdmin;
+    const grants = admin ? [] : getUserEffectiveGrants(req.user.sub);
+    const level = (col) => (admin ? 'editar' : getColumnGrantLevel(grants, LAYOUT_TABLE_KEY, col));
+    const sections = {};
+    Object.entries(LayoutCalc.SECTIONS).forEach(([key, col]) => { sections[key] = level(col); });
+    const canButton = (col) => admin || canCreateColumn(grants, LAYOUT_TABLE_KEY, col);
+    return { sections, canCreateFromScratch: canButton('colLayoutCrearDesdeCero'), canLoadPlan: canButton('colLayoutCargarPlano') };
+}
+
+function layoutSummary(layout, section) {
+    if (!layout) return '';
+    if (section === 'contorno') return `${(layout.vertices || []).length} esquinas, altura ${layout.heightM} m, ${(layout.obstacles || []).length} obstáculos`;
+    if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
+    if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
+    if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
+    return `${(layout.spaces || []).length} espacios`;
+}
+
+app.get('/api/business/layout', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const row = getClientLayout(req.user.clientId);
+    res.json({
+        layout: row ? row.layout : null, version: row ? row.version : 0, updatedAt: row ? row.updatedAt : '', updatedBy: row ? row.updatedBy : '',
+        hasPlanImage: row ? row.hasPlanImage : false, permissions: layoutPermissions(req),
+    });
+});
+
+app.get('/api/business/layout/plan-image', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const row = getClientLayout(req.user.clientId, { withPlanImage: true });
+    if (!row || !row.planImage) return res.status(404).json({ message: 'Plan not found.' });
+    res.json({ image: row.planImage });
+});
+
+app.put('/api/business/layout', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const body = req.body || {};
+    const checked = LayoutCalc.sanitizeLayout(body.layout);
+    if (!checked.ok) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: checked.errors });
+    const next = checked.layout;
+
+    let planImage;
+    if (body.planImage !== undefined) {
+        planImage = typeof body.planImage === 'string' ? body.planImage : '';
+        if (planImage && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(planImage)) return res.status(400).json({ message: 'El plano no es una imagen válida.' });
+        if (planImage.length > LAYOUT_PLAN_IMAGE_MAX_BYTES * 1.4) return res.status(413).json({ message: 'El plano es demasiado grande.' });
+    }
+    if (planImage && !(next.plan && next.plan.widthM > 0)) return res.status(400).json({ message: 'Falta el ancho real del plano.' });
+
+    const existing = getClientLayout(req.user.clientId);
+    const expectedVersion = Number(body.baseVersion) || 0;
+    if ((existing ? existing.version : 0) !== expectedVersion) {
+        return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
+    }
+
+    const perms = layoutPermissions(req);
+    const creating = !existing;
+    if (creating) {
+        const allowed = next.mode === 'plan' ? perms.canLoadPlan : perms.canCreateFromScratch;
+        if (!allowed) return res.status(403).json({ message: 'No tienes permiso para crear el Layout.' });
+    } else if (planImage !== undefined && !perms.canLoadPlan) {
+        return res.status(403).json({ message: 'No tienes permiso para cargar un plano.' });
+    }
+    const changed = [];
+    for (const section of Object.keys(LayoutCalc.SECTIONS)) {
+        const before = JSON.stringify(LayoutCalc.sectionData(existing ? existing.layout : null, section) ?? null);
+        const after = JSON.stringify(LayoutCalc.sectionData(next, section) ?? null);
+        if (before === after) continue;
+        const level = perms.sections[section];
+        const hadData = existing ? LayoutCalc.sectionHasData(existing.layout, section) : false;
+        const allowed = level === 'editar' || (level === 'ver-y-operar' && !hadData);
+        if (!allowed) return res.status(403).json({ message: `No tienes permiso para modificar: ${LAYOUT_SECTION_LABELS[section]}.`, section });
+        changed.push(section);
+    }
+    if (!changed.length && planImage === undefined && existing) return res.json({ version: existing.version, changed: [] });
+
+    const result = saveClientLayout({ clientId: req.user.clientId, layout: next, planImage, expectedVersion, updatedBy: changedByLabel(req) });
+    if (result.conflict) return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: result.currentVersion });
+
+    const actor = { actorUserId: req.user.sub, actorLabel: changedByLabel(req) };
+    changed.forEach((section) => {
+        const before = existing ? layoutSummary(existing.layout, section) : '';
+        const after = layoutSummary(next, section);
+        logTableChange({
+            clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordId: 1, recordLabel: 'Layout',
+            action: creating ? 'create' : 'update', fieldKey: LayoutCalc.SECTIONS[section], oldValue: before, newValue: after, changedBy: changedByLabel(req),
+        });
+        notifyDataChange({ clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordLabel: 'Layout', fieldKey: LayoutCalc.SECTIONS[section], oldValue: before, newValue: after, ...actor });
+    });
+    if (creating && next.mode !== 'plan') notifyButtonAction(req, LAYOUT_TABLE_KEY, 'create', 'Layout');
+    res.status(creating ? 201 : 200).json({ version: result.version, changed });
 });
 
 // --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----
