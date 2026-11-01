@@ -7297,10 +7297,10 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 @container (min-width: 34rem){
     .layout-canvas-body{ flex-direction: row; align-items: stretch; }
     .layout-canvas-body .layout-map{ flex: 1 1 auto; }
-    /* la simbología queda centrada en la columna (arriba y abajo y a los lados), con su título */
-    .layout-canvas-body .layout-legend{ flex: 0 0 11rem; flex-direction: column; flex-wrap: nowrap; justify-content: center; align-items: center; gap: 0.9rem; padding: 1rem 0.9rem; border-top: 0; border-left: 1px solid var(--color-border); font-size: 0.74rem; }
+    /* el título "Simbología" se queda arriba de la columna; la lista queda centrada (arriba y abajo y a los lados) en el espacio que queda debajo */
+    .layout-canvas-body .layout-legend{ flex: 0 0 11rem; flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-items: center; gap: 0.9rem; padding: 1rem 0.9rem; border-top: 0; border-left: 1px solid var(--color-border); font-size: 0.74rem; }
     .layout-canvas-body .layout-legend-title{ display: block; width: 100%; padding-bottom: 0.55rem; border-bottom: 1px solid var(--color-border); text-align: center; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); }
-    .layout-canvas-body .layout-legend-list{ display: flex; flex-direction: column; gap: 0.75rem; }
+    .layout-canvas-body .layout-legend-list{ display: flex; flex-direction: column; gap: 0.75rem; margin-block: auto; }
     .layout-canvas-body .layout-legend-list > span{ align-items: flex-start; line-height: 1.3; color: var(--color-text-primary); }
     .layout-canvas-body .layout-legend i{ flex: none; width: 0.85rem; height: 0.85rem; margin-top: 0.12rem; }
 }

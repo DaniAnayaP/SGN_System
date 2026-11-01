@@ -261,23 +261,24 @@
             s += `<text x="${hx}" y="${cursor + weak.size * 0.82}" font-size="${weak.size}" fill="#6B7089" font-family='${SERIF}'${squeeze(ln, weak.size, weak.k)}>${esc(ln)}</text>`;
             cursor += weak.size * 1.2;
         });
-        // El título es solo el nombre de la zona.
+        // El título es solo el nombre de la zona, centrado.
         const titleText = String(card.zoneName || '').toUpperCase();
         const titleSize = Math.min(17 * f, ((W - 2 * m) / Math.max(titleText.length, 1)) * 1.75);
-        s += `<text x="${m}" y="${m + 62 * f}" font-size="${titleSize}" font-weight="700" fill="${ink}">${esc(titleText)}</text>`;
+        s += `<text x="${W / 2}" y="${m + 62 * f}" font-size="${titleSize}" font-weight="700" fill="${ink}" text-anchor="middle">${esc(titleText)}</text>`;
         const cols = wide && n > 1 ? 2 : 1;
         const gap = 18 * f;
         // El espacio de las categorías lleva su contorno (un marco con las esquinas redondeadas) y todo va adentro, con un poco de aire.
         const pad = 10 * f;
         const colW = (W - 2 * m - 2 * pad - gap * (cols - 1)) / cols;
-        // Las categorías (con su encabezado) van centradas arriba y abajo en el espacio que queda entre el título y el pie; con muchas, llenan todo el espacio.
-        const areaTop = m + 74 * f;
+        // El contorno abarca TODO el espacio donde caben categorías (de abajo del nombre de la zona, con un espacio mínimo, hasta arriba del pie), aunque hoy haya pocas: las categorías
+        // se acomodan arriba, dentro del marco, y el resto queda libre para las que se agreguen. Con muchas, los renglones se achican para caber.
+        const areaTop = m + 72 * f;
         const bottom = H - m - 22 * f;
         const headH = 14 * f;
         const perCol = Math.ceil(n / cols) || 1;
-        const rowH = Math.min(78 * f, (bottom - areaTop - headH - 2 * pad) / perCol);
-        const frameH = headH + perCol * rowH + 2 * pad;
-        const frameTop = areaTop + Math.max(0, (bottom - areaTop - frameH) / 2);
+        const frameH = bottom - areaTop;
+        const rowH = Math.min(78 * f, (frameH - headH - 2 * pad) / perCol);
+        const frameTop = areaTop;
         const blockTop = frameTop + pad;
         const headY = blockTop + 8 * f;
         const top = blockTop + headH;
