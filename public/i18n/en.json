@@ -1627,6 +1627,13 @@
     "layoutCodigo": "Code",
     "layoutZona": "Zone",
     "layoutTipoZona": "Zone type",
+    "layoutSitio": "Site",
+    "layoutSitioEjemplo": "E.g. Chihuahua Distribution Center",
+    "layoutUsoZona": "Zone use",
+    "layoutUsoSinDefinir": "Not set",
+    "layoutType_use_storage": "Storage",
+    "layoutType_use_operations": "Operations",
+    "layoutType_use_facilities": "Facilities",
     "layoutNiveles": "Levels",
     "layoutEspaciosNivel": "Spaces per level",
     "layoutCajones": "Drawers (rows × columns)",
@@ -1662,7 +1669,7 @@
     "layoutTarjetaArea": "Distribution Center",
     "layoutTarjetaTitulo": "Categories of",
     "layoutTarjetaCategoria": "CATEGORY",
-    "layoutTarjetaRevisame": "CHECK ME",
+    "layoutTarjetaRevisame": "FIND ME",
     "layoutTarjetaPie": "Scan the QR to see photos and location",
     "layoutHojaTamano": "Sheet size",
     "layoutHojaAncho": "Width (cm)",
@@ -3399,6 +3406,14 @@
     "layoutArea": {
       "what": "Shows or hides the m² under each zone name on the sketch. The name stays. The downloaded sheet (PDF or image) comes out as you see it; the public QR view does not change and the zones table still shows the surface.",
       "example": "you hide the m² so the sketch only shows the zone names and show them again to check how big each one is."
+    },
+    "layoutSite": {
+      "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",
+      "example": "you type Chihuahua Distribution Center and the header shows it on top with the company name below."
+    },
+    "layoutZoneUse": {
+      "what": "What the zone is used for, apart from its type (Dry, Refrigerated…): Storage (product is kept), Operations (work happens: receiving, picking, shipping) or Facilities (restroom, pumps, electrical room and other building services). It can be left not set.",
+      "example": "Zone 1 is Dry and used for Storage; the Restroom is Facilities; the Dock is Operations."
     },
     "layoutQrBy": {
       "what": "Choose what to print: the whole Layout (the sheet with the map and the QR, as always) or a Zone (a sheet with the categories of the codes in that zone, each with its QR). It only shows if you have both accesses.",

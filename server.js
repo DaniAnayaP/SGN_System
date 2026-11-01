@@ -6172,7 +6172,9 @@ function layoutPermissions(req) {
 function clientLogoDataUrl(clientId) {
     const client = getClientById(clientId);
     const logo = client && client.logo_data_url;
-    return typeof logo === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(logo) && logo.length < 600000 ? logo : '';
+    // Los logos que acepta Nuestros Clientes (cualquier data:image/ de hasta ~500 KB) también salen en el reporte y la tarjeta, SVG incluido; solo se descarta lo que no sea una dirección de datos
+    // sencilla (sin comillas, espacios ni signos < >) porque se escribe dentro de un SVG.
+    return typeof logo === 'string' && /^data:image\/(png|jpe?g|webp|gif|svg\+xml)(;[A-Za-z0-9=._-]+)*,[^\s"'<>]+$/.test(logo) && logo.length <= 600000 ? logo : '';
 }
 
 function buildPublicLayoutPayload(clientId, row) {
@@ -6319,7 +6321,7 @@ app.get('/api/business/layout/qr', requireAuth, (req, res) => {
     for (let r = 0; r < size; r++) rows.push(Array.from({ length: size }, (_, c) => (qr.modules.get(r, c) ? '1' : '0')).join(''));
     res.set('Cache-Control', 'no-store');
     // extras: lo que el reporte con sesión puede dibujar y la vista pública nunca lleva (columnas y conexiones de luz), según las capas activas del croquis.
-    res.json({ url, qrRows: rows, canRegenerate: perms.canRegenerateQr, logoDataUrl: clientLogoDataUrl(req.user.clientId), extras: { obstacles: row.layout.obstacles || [], power: row.layout.power || [] }, ...buildPublicLayoutPayload(req.user.clientId, row) });
+    res.json({ url, qrRows: rows, canRegenerate: perms.canRegenerateQr, logoDataUrl: clientLogoDataUrl(req.user.clientId), siteName: row.layout.siteName || '', extras: { obstacles: row.layout.obstacles || [], power: row.layout.power || [] }, ...buildPublicLayoutPayload(req.user.clientId, row) });
 });
 
 // Las categorías de cada zona con su QR, para la tarjeta que se imprime. Cada QR lleva la dirección fija del Layout más la zona y la categoría (el QR no cambia nunca; ahí aparecerán los
@@ -6347,7 +6349,7 @@ app.get('/api/business/layout/categories-qr', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     // El logo del cliente (si lo tiene y no es enorme) va en el encabezado de la tarjeta.
     const logo = clientLogoDataUrl(req.user.clientId);
-    res.json({ companyName: (client && client.company_name) || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', logoDataUrl: logo, version: row.version, updatedAt: row.updatedAt, zones });
+    res.json({ companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', logoDataUrl: logo, version: row.version, updatedAt: row.updatedAt, zones });
 });
 
 // Hoja por Zona: las categorías (de UNA de las 7, la que se elija) de los códigos que Relación Código tiene en una zona, con cuántos códigos hay de cada una y su QR.
@@ -6392,7 +6394,7 @@ app.get('/api/business/layout/zone-categories', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
         zone: { id: zone.id, name: zone.name }, type, categories, without, total,
-        companyName: (client && client.company_name) || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seedColor) ? seedColor.toLowerCase() : '', logoDataUrl: clientLogoDataUrl(req.user.clientId),
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seedColor) ? seedColor.toLowerCase() : '', logoDataUrl: clientLogoDataUrl(req.user.clientId),
         version: row.version, updatedAt: row.updatedAt,
     });
 });
@@ -6424,10 +6426,13 @@ app.get('/q/:token', publicLayoutLimiter, (req, res) => {
 app.get('/api/public/layout/:token/logo', publicLayoutLimiter, (req, res) => {
     const row = getLayoutByPublicToken(req.params.token);
     if (!row) return res.status(404).end();
-    const match = clientLogoDataUrl(row.clientId).match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
+    const match = clientLogoDataUrl(row.clientId).match(/^data:(image\/(?:png|jpe?g|webp|gif|svg\+xml))((?:;[A-Za-z0-9=._-]+)*),(.+)$/);
     if (!match) return res.status(404).end();
-    res.set({ 'Content-Type': match[1], 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex, nofollow' });
-    res.send(Buffer.from(match[2], 'base64'));
+    let body;
+    try { body = /;base64$/i.test(match[2]) ? Buffer.from(match[3], 'base64') : Buffer.from(decodeURIComponent(match[3])); } catch { return res.status(404).end(); }
+    // Un SVG sirve como imagen dentro de la página, pero si alguien abre esta dirección sola no debe poder ejecutar nada: sandbox y sin sniffing.
+    res.set({ 'Content-Type': match[1], 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" });
+    res.send(body);
 });
 // Lo que muestra el QR de una categoría de la hoja por Zona (?z=<zona>&k=<tipo.número>): el nombre ACTUAL de la categoría y cuántos códigos hay hoy en esa zona. Solo eso:
 // ni la lista de códigos ni fotos (esa vista sería otra pieza). Nunca cambia la dirección; sí lo que responde.

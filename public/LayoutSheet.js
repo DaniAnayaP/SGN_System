@@ -67,7 +67,7 @@
         const nameSize = (tiny ? 27 : 36) * f;
         // El logo del cliente (si lo tiene) va en lugar de las iniciales; ancho según su forma (data.logoRatio = ancho / alto, hasta 2.4 veces el alto).
         const logoW = data.logoDataUrl ? bs * clamp(Number(data.logoRatio) || 1, 0.5, 2.4) : bs;
-        if (data.logoDataUrl) s += `<image href="${data.logoDataUrl}" x="${m}" y="${m}" width="${logoW.toFixed(2)}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
+        if (data.logoDataUrl) s += `<image href="${esc(data.logoDataUrl)}" x="${m}" y="${m}" width="${logoW.toFixed(2)}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
         else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${18 * f}" fill="${C.badge}"/><text x="${m + bs / 2}" y="${m + bs * 0.667}" font-size="${36 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(initials)}</text>`;
         // Arriba el Sitio (data.siteName: hoy un texto escrito a mano; después saldrá de la configuración) y abajo el nombre de la compañía.
         s += `<text x="${m + logoW + 20 * f}" y="${m + 30 * f}" font-size="${21 * f}" fill="#3F435D">${esc(data.siteName || labels.area)}</text><text x="${m + logoW + 20 * f}" y="${m + 70 * f}" font-size="${nameSize}" font-weight="700" fill="${C.ink}">${esc(data.companyName)}</text>`;
@@ -199,7 +199,7 @@
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));
     }
 
-    // La tarjeta de categorías de una zona: card = { companyName, logoDataUrl, theme, zoneName, categories: [{ name, desc, icon, color, qrRows }] }. Una columna de renglones
+    // La tarjeta de categorías de una zona: card = { companyName, siteName (el Sitio, arriba del nombre; sin él sale labels.cardArea), logoDataUrl, logoRatio, theme, zoneName, categories: [{ name, desc, icon, color, qrRows }] }. Una columna de renglones
     // (icono, nombre, descripción y QR de cada categoría) y, si el espacio es ancho, dos columnas. Con 10.5 × 14.8 cm queda como la tarjeta impresa.
     function cardContent(card, labels, W, H) {
         const th = card.theme || window.LayoutMapSvg.DEFAULT_THEME;
@@ -212,12 +212,37 @@
         const wide = W / H > 1.25;
         const SERIF = 'Georgia, "Times New Roman", serif';
         let s = `<rect width="${W}" height="${H}" fill="#FFFFFF"/>`;
-        // encabezado: logo (o iniciales), cliente y área
+        // encabezado: logo (o iniciales) y, a su lado, el Sitio arriba y el nombre de la empresa abajo. El nombre nunca pasa del margen derecho (el espacio de corte): baja de
+        // tamaño, se parte en dos renglones y, si aun así no cabe, se comprime (textLength).
         const bs = 34 * f;
-        if (card.logoDataUrl) s += `<image href="${card.logoDataUrl}" x="${m}" y="${m}" width="${bs * 1.4}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
+        const logoW = card.logoDataUrl ? bs * clamp(Number(card.logoRatio) || 1.4, 0.5, 2.4) : bs;
+        if (card.logoDataUrl) s += `<image href="${esc(card.logoDataUrl)}" x="${m}" y="${m}" width="${logoW}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
         else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${8 * f}" fill="${brand}"/><text x="${m + bs / 2}" y="${m + bs * 0.66}" font-size="${15 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc((card.companyName || '').trim().slice(0, 2).toUpperCase() || '··')}</text>`;
-        const hx = m + (card.logoDataUrl ? bs * 1.4 : bs) + 12 * f;
-        s += `<text x="${hx}" y="${m + 15 * f}" font-size="${13.5 * f}" font-weight="700" fill="${brand}" font-family='${SERIF}'>${esc((card.companyName || '').toUpperCase())}</text><text x="${hx}" y="${m + 29 * f}" font-size="${8 * f}" fill="#3F435D" font-family='${SERIF}'>${esc(labels.cardArea)}</text>`;
+        const hx = m + logoW + 12 * f;
+        const avail = Math.max(W - m - hx, 20 * f);
+        const site = String(card.siteName || labels.cardArea || '').trim();
+        const company = String(card.companyName || '').trim().toUpperCase();
+        const est = (txt, size) => txt.length * size * 0.74; // ancho aproximado de mayúsculas en negritas con serif
+        const splitTwo = (txt, size) => {
+            let l1 = '';
+            let l2 = '';
+            txt.split(/\s+/).forEach((w) => { if (!l2 && est(`${l1} ${w}`.trim(), size) <= avail) l1 = `${l1} ${w}`.trim(); else l2 = `${l2} ${w}`.trim(); });
+            return l2 ? [l1, l2] : [l1];
+        };
+        const tries = [[1, 13.5], [1, 12], [2, 12], [2, 11], [1, 10], [2, 10], [2, 9]];
+        let fit = null;
+        for (const [count, px] of tries) {
+            const size = px * f;
+            const lines = count === 1 ? [company] : splitTwo(company, size);
+            if (lines.every((ln) => est(ln, size) <= avail)) { fit = { lines, size }; break; }
+        }
+        if (!fit) { const size = 9 * f; fit = { lines: splitTwo(company, size), size }; }
+        const siteY = m + (fit.lines.length === 1 ? 12 : 9) * f;
+        const firstY = site ? (fit.lines.length === 1 ? m + 28 * f : m + 21 * f) : (fit.lines.length === 1 ? m + 21 * f : m + 15 * f);
+        if (site) s += `<text x="${hx}" y="${siteY}" font-size="${8 * f}" fill="#3F435D" font-family='${SERIF}'${est(site, 8 * f) > avail ? ` textLength="${avail}" lengthAdjust="spacingAndGlyphs"` : ''}>${esc(site)}</text>`;
+        fit.lines.forEach((ln, k) => {
+            s += `<text x="${hx}" y="${firstY + k * fit.size * 1.1}" font-size="${fit.size}" font-weight="700" fill="${brand}" font-family='${SERIF}'${est(ln, fit.size) > avail ? ` textLength="${avail}" lengthAdjust="spacingAndGlyphs"` : ''}>${esc(ln)}</text>`;
+        });
         // El título es solo el nombre de la zona.
         const titleText = String(card.zoneName || '').toUpperCase();
         const titleSize = Math.min(17 * f, ((W - 2 * m) / Math.max(titleText.length, 1)) * 1.75);

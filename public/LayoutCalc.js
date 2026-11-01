@@ -11,6 +11,9 @@
     const ZONE_TYPES = ['dry', 'cold', 'chemical', 'finished', 'dock', 'office', 'aisle', 'aisle2'];
     // Zonas donde se almacena producto (las demás son andenes, oficinas o pasillos).
     const STORAGE_ZONE_TYPES = ['dry', 'cold', 'chemical', 'finished'];
+    // Para qué se usa una zona (es aparte del tipo: una zona Seca puede ser de almacenamiento o de operaciones): almacenamiento, operaciones o instalaciones (baño, bombas, etc.).
+    // Es opcional: una zona sin uso definido se guarda exactamente igual que antes.
+    const ZONE_USES = ['storage', 'operations', 'facilities'];
     const SPACE_TYPES = ['rack', 'cabinet', 'pallet'];
     // Formato propio de una zona (como Formato de celdas de Excel): color de fondo, rayas o patrón y su color, y estilo y color del borde.
     const FMT_PATTERNS = ['none', 'solid', 'diag1', 'diag2', 'horiz', 'vert', 'grid', 'dots', 'cross'];
@@ -365,7 +368,7 @@
             const zFootprint = mine.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0), 0);
             const area = zoneArea(z);
             return {
-                id: z.id, name: z.name, type: z.type, area: round2(area), spaces: mine.length,
+                id: z.id, name: z.name, type: z.type, use: z.use || '', area: round2(area), spaces: mine.length,
                 footprint: round2(zFootprint), occupancy: area ? round2((zFootprint / area) * 100) : 0,
                 volume: round2(mine.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0) * (s.h || 0), 0)),
             };
@@ -411,6 +414,9 @@
         };
 
         const out = { mode: src.mode === 'plan' ? 'plan' : 'scratch' };
+        // Sitio: el lugar que va arriba del nombre de la empresa en el reporte y en la tarjeta (por ejemplo "CEDIS Chihuahua"). Opcional: sin él se guarda exactamente igual que antes.
+        const siteName = text(src.siteName, 'Sitio', false);
+        if (siteName) out.siteName = siteName;
         // Cada esquina trae su altura [x, y, altura]. Una esquina sin altura (Layout de antes) hereda heightM, la altura única de entonces.
         const legacyHeight = Number(src.heightM);
         out.vertices = list(src.vertices, LIMITS.vertices, 'Esquinas').map((p, i) => {
@@ -463,6 +469,7 @@
             // type '' = zona sin asignar todavía; una zona de antes sin tipo se queda como seca, como siempre.
             const type = z && z.type === '' ? '' : oneOf(z && z.type, ZONE_TYPES, 'dry');
             const planM2 = z && z.planM2 != null && z.planM2 !== '' ? meters(z.planM2, label) : 0;
+            const use = oneOf(z && z.use, ZONE_USES, '');
             const fmt = sanitizeFmt(z && z.fmt);
             // Categorías de la zona: solo se guardan si hay (una zona de antes sin categorías se guarda exactamente igual).
             const catIds = new Set();
@@ -473,7 +480,7 @@
                 if (desc.length > LIMITS.categoryText) errors.push(`${cl}: descripción demasiado larga`);
                 return { id: idOf(c && c.id, catIds, cl), name: text(c && c.name, cl, true), desc: desc.slice(0, LIMITS.categoryText), icon: oneOf(c && c.icon, CATEGORY_ICONS, 'tag'), color };
             });
-            const extra = { ...(planM2 > 0 ? { planM2 } : {}), ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
+            const extra = { ...(use ? { use } : {}), ...(planM2 > 0 ? { planM2 } : {}), ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
             const active = !(z && z.active === false);
             if (z && z.pts != null) {
                 // Zona de cualquier forma: sus esquinas son la verdad; x, y, largo y ancho son el recuadro que la envuelve.
@@ -553,7 +560,7 @@
     // Qué datos tiene cada sección (para saber si "Ver y Operar" todavía puede llenarla).
     function sectionData(layout, section) {
         if (!layout) return null;
-        if (section === 'contorno') return { vertices: layout.vertices, obstacles: layout.obstacles };
+        if (section === 'contorno') return { vertices: layout.vertices, obstacles: layout.obstacles, siteName: layout.siteName || '' };
         if (section === 'puertas') return layout.doors;
         if (section === 'luz') return layout.power;
         if (section === 'zonas') return layout.zones;
@@ -568,7 +575,7 @@
     }
 
     return {
-        ZONE_TYPES, STORAGE_ZONE_TYPES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

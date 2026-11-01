@@ -1627,6 +1627,13 @@
     "layoutCodigo": "Código",
     "layoutZona": "Zona",
     "layoutTipoZona": "Tipo de zona",
+    "layoutSitio": "Sitio",
+    "layoutSitioEjemplo": "Ej. Centro de Distribución Chihuahua",
+    "layoutUsoZona": "Uso de la zona",
+    "layoutUsoSinDefinir": "Sin definir",
+    "layoutType_use_storage": "Almacenamiento",
+    "layoutType_use_operations": "Operaciones",
+    "layoutType_use_facilities": "Instalaciones",
     "layoutNiveles": "Niveles",
     "layoutEspaciosNivel": "Espacios por nivel",
     "layoutCajones": "Cajones (filas × columnas)",
@@ -1662,7 +1669,7 @@
     "layoutTarjetaArea": "Centro de Distribución",
     "layoutTarjetaTitulo": "Categorías de",
     "layoutTarjetaCategoria": "CATEGORÍA",
-    "layoutTarjetaRevisame": "REVÍSAME",
+    "layoutTarjetaRevisame": "BÚSCAME",
     "layoutTarjetaPie": "Escanea el QR para ver fotos y ubicación",
     "layoutHojaTamano": "Tamaño de la hoja",
     "layoutHojaAncho": "Ancho (cm)",
@@ -3398,6 +3405,14 @@
     "layoutArea": {
       "what": "Muestra u oculta los m² que van debajo del nombre de cada zona en el croquis. El nombre se queda. La hoja que se descarga (PDF o imagen) sale igual que lo ves; la vista pública del QR no cambia y la tabla de zonas sigue mostrando la superficie.",
       "example": "ocultas los m² para que el croquis solo diga los nombres de las zonas y los vuelves a mostrar para revisar cuánto mide cada una."
+    },
+    "layoutSite": {
+      "what": "El nombre del lugar (el sitio). Sale arriba del nombre de la empresa en el encabezado de la hoja del Layout y de las tarjetas que se imprimen. Si lo dejas vacío sale el texto de siempre. Más adelante saldrá de la configuración.",
+      "example": "escribes Centro de Distribución Chihuahua y el encabezado queda con ese nombre arriba y el de la empresa abajo."
+    },
+    "layoutZoneUse": {
+      "what": "Para qué se usa la zona, aparte de su tipo (Seco, Refrigerado…): Almacenamiento (se guarda producto), Operaciones (se trabaja: recibir, surtir, embarcar) o Instalaciones (baño, bombas, cuarto eléctrico y demás servicios del edificio). Se puede dejar sin definir.",
+      "example": "la Zona 1 es Seca y es de Almacenamiento; el Baño es de Instalaciones; el Andén es de Operaciones."
     },
     "layoutQrBy": {
       "what": "Elige qué imprimir: el Layout completo (la hoja con el croquis y el QR, como siempre) o una Zona (una hoja con las categorías de los códigos que hay en esa zona, cada una con su QR). Solo sale si tienes los dos accesos.",

@@ -403,7 +403,7 @@ function stepHtml(step) {
         const shape = mode === 'sides'
             ? sidesBlockHtml('contorno', dis)
             : `${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows)}${addButton('vertices', 'main.layoutAgregarEsquina', dis)}`;
-        return `${modeBar}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label></div>
+        return `${modeBar}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label><label data-help-key="layoutSite">${esc(t('main.layoutSitio'))}<input type="text" maxlength="${LC.LIMITS.text}" data-l="siteName" value="${esc(d.siteName || '')}" placeholder="${esc(t('main.layoutSitioEjemplo'))}"${dis ? ' disabled' : ''}></label></div>
             ${shape}
             <h4 class="layout-sub">${esc(t('main.layoutColumnasTitulo'))}</h4>
             ${table(['main.layoutNombre', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', ''], obstacles)}${addButton('obstacles', 'main.layoutAgregarObstaculo', dis)}`;
@@ -436,9 +436,12 @@ function stepHtml(step) {
                 ? `<button type="button" class="btn btn-secondary layout-toggle layout-cats${state.catsOpen === z.id ? ' on' : ''}" data-catszone="${esc(z.id)}" data-help-key="layoutZoneCats" aria-label="${esc(t('main.layoutCatDe').replace('{name}', z.name))}"><i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>${catCount ? `<span class="layout-cats-n">${catCount}</span>` : ''}</button>`
                 : '';
             const planBox = `<td><input type="number" step="0.01" min="0" data-l="zones" data-i="${i}" data-k="planM2" data-help-key="layoutZonePlanM2" value="${z.planM2 > 0 ? z.planM2 : ''}"${dis ? ' disabled' : ''}></td>`;
-            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
+            // Uso de la zona (aparte del tipo): almacenamiento, operaciones o instalaciones. Se puede dejar sin definir.
+            const useOptions = `<option value=""${z.use ? '' : ' selected'}>${esc(t('main.layoutUsoSinDefinir'))}</option>${optionsHtml('use', LC.ZONE_USES, z.use)}`;
+            const useBox = `<td><select data-l="zones" data-i="${i}" data-k="use" data-help-key="layoutZoneUse"${dis ? ' disabled' : ''}>${useOptions}</select></td>`;
+            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${useBox}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
         });
-        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
+        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
@@ -577,9 +580,9 @@ function renderSvg() {
 
 function renderSummary() {
     const k = LC.computeKpis(state.draft);
-    const rows = k.zones.map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
+    const rows = k.zones.map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${esc(z.use ? typeLabel('use', z.use) : '—')}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
     $('layout-summary').innerHTML = rows.length
-        ? `<table class="layout-table layout-summary-table"><thead><tr><th>${esc(t('main.layoutZona'))}</th><th>${esc(t('main.layoutTipoZona'))}</th><th>${esc(t('main.layoutSuperficie'))}</th><th>${esc(t('main.layoutEspacios'))}</th><th>${esc(t('main.layoutHuella'))}</th><th>${esc(t('main.layoutOcupacion'))}</th><th>${esc(t('main.layoutVolumen'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
+        ? `<table class="layout-table layout-summary-table"><thead><tr><th>${esc(t('main.layoutZona'))}</th><th>${esc(t('main.layoutTipoZona'))}</th><th>${esc(t('main.layoutUsoZona'))}</th><th>${esc(t('main.layoutSuperficie'))}</th><th>${esc(t('main.layoutEspacios'))}</th><th>${esc(t('main.layoutHuella'))}</th><th>${esc(t('main.layoutOcupacion'))}</th><th>${esc(t('main.layoutVolumen'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
         : `<p class="layout-muted">${esc(t('main.layoutSinZonas'))}</p>`;
 }
 
@@ -813,7 +816,11 @@ function onEdit(event) {
     if (!list || !state.draft) return;
     const isNumber = el.type === 'number';
     const value = isNumber ? (parseFloat(el.value) || 0) : el.value;
-    if (list === 'allHeights') {
+    if (list === 'siteName') {
+        // El Sitio (arriba del nombre de la empresa en el reporte y la tarjeta): sin texto se guarda sin ese campo.
+        const site = String(value).trim();
+        if (site) state.draft.siteName = site; else delete state.draft.siteName;
+    } else if (list === 'allHeights') {
         // Misma altura en todas las esquinas: se escribe una vez y se copia a cada renglón (los renglones ya dibujados se actualizan sin redibujar el formulario).
         if (value > 0) {
             state.draft.vertices.forEach((p, i) => {
@@ -837,6 +844,8 @@ function onEdit(event) {
             syncZoneBox(row);
         } else if (key === 'planM2') {
             if (value > 0) row.planM2 = value; else delete row.planM2;
+        } else if (key === 'use') {
+            if (value) row.use = value; else delete row.use; // sin definir = la zona se guarda sin ese campo
         } else if (key === 'slots') {
             const n = Math.max(1, Math.round(value) || 1);
             if (n > 1) row.slots = Math.min(n, LC.LIMITS.slots); else delete row.slots;
@@ -1138,7 +1147,7 @@ function cardSvg() {
     const data = cardState.data;
     const zone = (data.zones || []).find((z) => z.id === cardState.zoneId);
     return window.LayoutSheet.buildCardSvg({
-        companyName: data.companyName, logoDataUrl: data.logoDataUrl, theme: window.LayoutMapSvg.theme(data.companyColor), zoneName: cardState.zoneName, categories: zone ? zone.categories : [],
+        companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio: cardState.logoRatio, theme: window.LayoutMapSvg.theme(data.companyColor), zoneName: cardState.zoneName, categories: zone ? zone.categories : [],
     }, cardLabels(), { widthCm: cardSize.w, heightCm: cardSize.h, cut: cardSize.cut });
 }
 function renderCardPreview() {
@@ -1216,7 +1225,8 @@ async function openCardDialog(zoneId) {
     if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
     if (!res.ok) { Dashboard.showToast(t('main.layoutDescargaError'), 'error'); return; }
     ensureCardModal();
-    cardState = { zoneId, zoneName: zone.name, data: await res.json() };
+    const cardData = await res.json();
+    cardState = { zoneId, zoneName: zone.name, data: cardData, logoRatio: await logoRatioOf(cardData.logoDataUrl) };
     $('layout-card-title').textContent = t('main.layoutTarjetaDe').replace('{name}', zone.name);
     cardModalEl.hidden = false;
     renderCardPreview();
@@ -1415,7 +1425,7 @@ async function openZoneSheetDialog() {
     const data = qrZoneData;
     ensureCardModal();
     const categories = data.categories.map((c) => ({ name: c.name, desc: codesText(c.codes), ...LC.categoryLook(c.seed), qrRows: c.qrRows }));
-    cardState = { zoneId: data.zone.id, zoneName: data.zone.name, data: { companyName: data.companyName, companyColor: data.companyColor, logoDataUrl: data.logoDataUrl, zones: [{ id: data.zone.id, categories }] } };
+    cardState = { zoneId: data.zone.id, zoneName: data.zone.name, logoRatio: await logoRatioOf(data.logoDataUrl), data: { companyName: data.companyName, siteName: data.siteName, companyColor: data.companyColor, logoDataUrl: data.logoDataUrl, zones: [{ id: data.zone.id, categories }] } };
     $('layout-card-title').textContent = t('main.layoutTarjetaDe').replace('{name}', data.zone.name);
     cardModalEl.hidden = false;
     renderCardPreview();
@@ -1454,22 +1464,22 @@ function updateSizeInfo() {
 }
 
 // Lo guardado que trae GET /api/business/layout/qr y la forma del logo (ancho / alto) para darle su lugar en el encabezado sin deformarlo.
+const logoRatioOf = (dataUrl) => (dataUrl ? new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1);
+    img.onerror = () => resolve(1);
+    img.src = dataUrl;
+}) : Promise.resolve(1));
 async function loadSheetData() {
     const data = await fetchQrData();
     if (!data) return null;
-    const logoRatio = data.logoDataUrl ? await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1);
-        img.onerror = () => resolve(1);
-        img.src = data.logoDataUrl;
-    }) : 1;
-    return { data, logoRatio };
+    return { data, logoRatio: await logoRatioOf(data.logoDataUrl) };
 }
 function buildSheetSvgFrom(loaded) {
     const { data, logoRatio } = loaded;
     return window.LayoutSheet.buildSheetSvg({
-        // Sitio: por ahora el texto de siempre, escrito a mano; después se llenará de la configuración (aquí es donde se conecta).
-        companyName: data.companyName, siteName: t('main.layoutHojaArea'), logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
+        // Sitio: el que se escribe a mano en el Layout (Contorno > Sitio); sin él sale el texto de siempre. Después se llenará de la configuración (aquí es donde se conecta).
+        companyName: data.companyName, siteName: data.siteName || t('main.layoutHojaArea'), logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
