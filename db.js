@@ -4963,6 +4963,7 @@ function setSkuItemPublicToken(id, clientId, token) {
 }
 
 // --- Layout de la nave -------------------------------------------------------
+const LayoutCalc = require('./public/LayoutCalc.js');
 // withPlanImage: el plano pesa; solo se lee cuando de verdad se va a dibujar (GET .../layout/plan-image).
 function getClientLayout(clientId, { withPlanImage = false } = {}) {
     const row = db.prepare('SELECT data, plan_image, version, created_at, updated_at, updated_by FROM client_layouts WHERE client_id = ?').get(clientId);
@@ -4970,6 +4971,7 @@ function getClientLayout(clientId, { withPlanImage = false } = {}) {
     let layout = null;
     try { layout = JSON.parse(row.data); } catch { layout = null; }
     if (!layout || typeof layout !== 'object') return null;
+    layout = LayoutCalc.normalize(layout);
     return {
         layout, version: row.version, createdAt: row.created_at, updatedAt: row.updated_at, updatedBy: row.updated_by,
         hasPlanImage: !!row.plan_image, planImage: withPlanImage ? row.plan_image : undefined,
@@ -4999,7 +5001,7 @@ function getLayoutByPublicToken(token) {
     let layout = null;
     try { layout = JSON.parse(row.data); } catch { layout = null; }
     if (!layout || typeof layout !== 'object') return null;
-    return { clientId: row.client_id, layout, version: row.version, updatedAt: row.updated_at };
+    return { clientId: row.client_id, layout: LayoutCalc.normalize(layout), version: row.version, updatedAt: row.updated_at };
 }
 
 // Crea o reemplaza el Layout del cliente. expectedVersion = la versión que la persona tenía abierta (0 = todavía no había Layout): si ya cambió, no se

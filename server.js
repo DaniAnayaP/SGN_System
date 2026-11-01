@@ -6077,7 +6077,11 @@ function buildPublicLayoutPayload(clientId, row) {
 
 function layoutSummary(layout, section) {
     if (!layout) return '';
-    if (section === 'contorno') return `${(layout.vertices || []).length} esquinas, altura ${layout.heightM} m, ${(layout.obstacles || []).length} obstáculos`;
+    if (section === 'contorno') {
+        const range = LayoutCalc.heightRange(layout.vertices || []);
+        const height = range.min === range.max ? `${range.min}` : `${range.min} a ${range.max}`;
+        return `${(layout.vertices || []).length} esquinas, altura ${height} m, ${(layout.obstacles || []).length} obstáculos`;
+    }
     if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;

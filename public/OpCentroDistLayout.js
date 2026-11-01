@@ -88,11 +88,13 @@ function stepHtml(step) {
     if (step === 'contorno') {
         const rows = d.vertices.map((p, i) => {
             const seg = LC.wallSegment(d.vertices, i + 1);
-            return `<tr><td class="layout-calc">${esc(t('main.layoutEsquina'))} ${i + 1}</td>${cellNum('vertices', i, '0', p[0], dis)}${cellNum('vertices', i, '1', p[1], dis)}<td class="layout-calc" data-wall-len="${i}">${esc(t('main.layoutPared'))} ${i + 1}: ${fmt(seg.length)} m</td>${d.vertices.length > 3 ? removeCell('vertices', i, dis) : '<td></td>'}</tr>`;
+            return `<tr><td class="layout-calc">${esc(t('main.layoutEsquina'))} ${i + 1}</td>${cellNum('vertices', i, '0', p[0], dis)}${cellNum('vertices', i, '1', p[1], dis)}${cellNum('vertices', i, '2', p[2], dis)}<td class="layout-calc" data-wall-len="${i}">${esc(t('main.layoutPared'))} ${i + 1}: ${fmt(seg.length)} m</td>${d.vertices.length > 3 ? removeCell('vertices', i, dis) : '<td></td>'}</tr>`;
         });
         const obstacles = d.obstacles.map((o, i) => `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${cellNum('obstacles', i, 'x', o.x, dis)}${cellNum('obstacles', i, 'y', o.y, dis)}${cellNum('obstacles', i, 'l', o.l, dis)}${cellNum('obstacles', i, 'w', o.w, dis)}${removeCell('obstacles', i, dis)}</tr>`);
-        return `<div class="layout-fl"><label>${esc(t('main.layoutAltura'))}<input type="number" step="0.1" min="0" data-l="heightM" value="${d.heightM}"${dis ? ' disabled' : ''}></label></div>
-            ${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutPared', ''], rows)}${addButton('vertices', 'main.layoutAgregarEsquina', dis)}
+        const heights = d.vertices.map((p) => p[2]);
+        const sameHeight = heights.every((h) => h === heights[0]) ? heights[0] : '';
+        return `<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label></div>
+            ${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows)}${addButton('vertices', 'main.layoutAgregarEsquina', dis)}
             <h4 class="layout-sub">${esc(t('main.layoutColumnasTitulo'))}</h4>
             ${table(['main.layoutNombre', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', ''], obstacles)}${addButton('obstacles', 'main.layoutAgregarObstaculo', dis)}`;
     }
@@ -187,7 +189,7 @@ function renderSvg() {
         const out = ((mx - cx) * nx + (my - cy) * ny) >= 0 ? 1 : -1;
         s += `<text class="lt2" text-anchor="middle" x="${X(mx) + nx * out * 15}" y="${Y(my) + ny * out * 15 + 3}">P${i} · ${fmt(w.length)} m</text>`;
     }
-    d.vertices.forEach((p, i) => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/><text class="lt2" x="${X(p[0]) + (p[0] <= cx ? -8 : 8)}" y="${Y(p[1]) + (p[1] <= cy ? -7 : 14)}" text-anchor="${p[0] <= cx ? 'end' : 'start'}">${i + 1}</text>`; });
+    d.vertices.forEach((p, i) => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/><text class="lt2" x="${X(p[0]) + (p[0] <= cx ? -8 : 8)}" y="${Y(p[1]) + (p[1] <= cy ? -7 : 14)}" text-anchor="${p[0] <= cx ? 'end' : 'start'}">${i + 1} · ${fmt(p[2])} m</text>`; });
     const bar = 5 * sc;
     s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" class="lscale"/><text class="lt2" x="${M + bar + 6}" y="${H - 8}">5 m</text>`;
     $('layout-svg').innerHTML = s;
@@ -203,9 +205,16 @@ function renderSummary() {
 
 // Cada vez que cambia el borrador: KPIs, croquis, resumen y estado del botón Guardar. El formulario NO se redibuja (así no se pierde el cursor al teclear).
 function refreshLive() {
+    state.draft.heightM = Math.round((state.draft.vertices.reduce((acc, p) => acc + (Number(p[2]) || 0), 0) / Math.max(state.draft.vertices.length, 1)) * 100) / 100;
     renderKpis();
     renderSvg();
     renderSummary();
+    // "Misma altura en todas": muestra la altura común, o queda vacía si las esquinas ya tienen alturas distintas (sin tocarla mientras se escribe en ella).
+    const sameBox = document.querySelector('[data-l="allHeights"]');
+    if (sameBox && document.activeElement !== sameBox) {
+        const hs = state.draft.vertices.map((p) => p[2]);
+        sameBox.value = hs.every((h) => h === hs[0]) ? hs[0] : '';
+    }
     const dirty = isDirty();
     $('layout-save').disabled = !dirty;
     $('layout-discard').disabled = !dirty;
@@ -327,7 +336,7 @@ $('layout-plan-width-ok').addEventListener('click', () => {
     const h = Math.round(w * state.pendingPlan.aspect * 100) / 100;
     const base = LC.emptyLayout();
     base.mode = 'plan';
-    base.vertices = [[0, 0], [w, 0], [w, h], [0, h]];
+    base.vertices = [[0, 0, base.heightM], [w, 0, base.heightM], [w, h, base.heightM], [0, h, base.heightM]];
     base.plan = { widthM: w };
     state.draft = base;
     state.creating = true;
@@ -352,7 +361,7 @@ function nextCode(type) {
     return `${prefix}-${uid('')}`;
 }
 const ROW_FACTORY = {
-    vertices: () => { const last = state.draft.vertices[state.draft.vertices.length - 1] || [0, 0]; return [last[0], last[1]]; },
+    vertices: () => { const last = state.draft.vertices[state.draft.vertices.length - 1] || [0, 0, 9]; return [last[0], last[1], last[2]]; },
     doors: () => ({ id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wall: 1, dist: 0, width: 1.2, height: 2.1 }),
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
@@ -367,8 +376,16 @@ function onEdit(event) {
     if (!list || !state.draft) return;
     const isNumber = el.type === 'number';
     const value = isNumber ? (parseFloat(el.value) || 0) : el.value;
-    if (list === 'heightM') state.draft.heightM = value;
-    else if (list === 'vertices') state.draft.vertices[Number(el.getAttribute('data-i'))][Number(el.getAttribute('data-k'))] = value;
+    if (list === 'allHeights') {
+        // Misma altura en todas las esquinas: se escribe una vez y se copia a cada renglón (los renglones ya dibujados se actualizan sin redibujar el formulario).
+        if (value > 0) {
+            state.draft.vertices.forEach((p, i) => {
+                p[2] = value;
+                const box = document.querySelector(`[data-l="vertices"][data-i="${i}"][data-k="2"]`);
+                if (box) box.value = value;
+            });
+        }
+    } else if (list === 'vertices') state.draft.vertices[Number(el.getAttribute('data-i'))][Number(el.getAttribute('data-k'))] = value;
     else {
         const row = state.draft[list][Number(el.getAttribute('data-i'))];
         const key = el.getAttribute('data-k');

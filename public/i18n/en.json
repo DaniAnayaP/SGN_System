@@ -1595,6 +1595,8 @@
     "layoutStepZonas": "Zones",
     "layoutStepEspacios": "Racks and cabinets",
     "layoutAltura": "Clear height (m)",
+    "layoutAlturaEsquina": "Height (m)",
+    "layoutAlturaTodas": "Same height at every corner (m)",
     "layoutEsquina": "Corner",
     "layoutX": "X (m)",
     "layoutY": "Y (m)",
@@ -2870,8 +2872,8 @@
       "example": "you move from Outline to Doors once you have entered the corners."
     },
     "layoutSec_contorno": {
-      "what": "The corners of the warehouse in meters, its clear height and its columns or obstacles. The total m² and m³ come from here.",
-      "example": "a rectangular warehouse has 4 corners; an L-shaped one has 6."
+      "what": "The corners of the warehouse in meters, with the height of each one, and the columns or obstacles. The total m² come from here and, with the heights, the m³.",
+      "example": "a warehouse with a higher roof on one side has 6 meters at two corners and 10 at the other two."
     },
     "layoutSec_puertas": {
       "what": "The doors of the warehouse: which wall they are on, how many meters from the corner and how big they are.",

@@ -54,10 +54,68 @@
         return sum;
     }
 
+    // ---- altura por esquina ------------------------------------------------------------------------------------------
+    // Cada esquina es [x, y, altura]. heightM (la altura promedio de las esquinas) se conserva solo como resumen y para leer lo guardado antes de que
+    // existiera la altura por esquina (esquinas [x, y] y una sola altura para toda la nave).
+    const meanHeight = (vertices) => (vertices.length ? vertices.reduce((acc, p) => acc + (Number(p[2]) || 0), 0) / vertices.length : 0);
+    function heightRange(vertices) {
+        const hs = vertices.map((p) => Number(p[2])).filter((h) => Number.isFinite(h));
+        return hs.length ? { min: Math.min(...hs), max: Math.max(...hs) } : { min: 0, max: 0 };
+    }
+    function normalize(layout) {
+        if (!layout || !Array.isArray(layout.vertices)) return layout;
+        const legacy = Number(layout.heightM) || 0;
+        const vertices = layout.vertices.map((p) => {
+            const h = Number(p[2]);
+            return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
+        });
+        return { ...layout, vertices, heightM: round2(meanHeight(vertices)) };
+    }
+    // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
+    function triangulate(pts) {
+        const n = pts.length;
+        if (n < 3) return [];
+        const idx = pts.map((_, i) => i);
+        let s = 0;
+        for (let i = 0; i < n; i++) { const p = pts[i]; const q = pts[(i + 1) % n]; s += p[0] * q[1] - q[0] * p[1]; }
+        if (s < 0) idx.reverse();
+        const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+        const inTri = (p, a, b, c) => cross(a, b, p) >= 0 && cross(b, c, p) >= 0 && cross(c, a, p) >= 0;
+        const tris = [];
+        while (idx.length > 3) {
+            let clipped = false;
+            for (let i = 0; i < idx.length; i++) {
+                const a = idx[(i + idx.length - 1) % idx.length];
+                const b = idx[i];
+                const c = idx[(i + 1) % idx.length];
+                if (cross(pts[a], pts[b], pts[c]) <= 1e-9) continue;
+                if (idx.some((k) => k !== a && k !== b && k !== c && inTri(pts[k], pts[a], pts[b], pts[c]))) continue;
+                tris.push([a, b, c]);
+                idx.splice(i, 1);
+                clipped = true;
+                break;
+            }
+            if (!clipped) return null;
+        }
+        tris.push([idx[0], idx[1], idx[2]]);
+        return tris;
+    }
+    // Volumen bajo el techo que forman las alturas de las esquinas: en cada triángulo del contorno, su área por el promedio de las alturas de sus 3 esquinas
+    // (exacto para un techo plano o inclinado). Con la misma altura en todas las esquinas es simplemente área x altura.
+    function volumeOf(vertices) {
+        if (vertices.length < 3) return 0;
+        const tris = triangulate(vertices);
+        if (!tris) return polygonArea(vertices) * meanHeight(vertices);
+        return tris.reduce((acc, [a, b, c]) => {
+            const area = polygonArea([vertices[a], vertices[b], vertices[c]]);
+            return acc + area * ((Number(vertices[a][2]) || 0) + (Number(vertices[b][2]) || 0) + (Number(vertices[c][2]) || 0)) / 3;
+        }, 0);
+    }
+
     function emptyLayout() {
         return {
             mode: 'scratch', heightM: 9,
-            vertices: [[0, 0], [30, 0], [30, 20], [0, 20]],
+            vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
             doors: [], power: [], obstacles: [], zones: [], spaces: [],
             plan: null,
         };
@@ -91,7 +149,8 @@
         return {
             total: round2(total), offices: round2(offices), aisles: round2(aisles), docks: round2(docks),
             storage: round2(footprint), dead: round2(dead),
-            volume: round2(total * (layout.heightM || 0)), storageVolume: round2(storageVolume),
+            volume: round2(volumeOf(layout.vertices || [])), storageVolume: round2(storageVolume),
+            heightMin: round2(heightRange(layout.vertices || []).min), heightMax: round2(heightRange(layout.vertices || []).max),
             perimeter: round2(perimeter(layout.vertices || [])), zones: perZone,
         };
     }
@@ -128,16 +187,18 @@
         };
 
         const out = { mode: src.mode === 'plan' ? 'plan' : 'scratch' };
-        out.heightM = meters(src.heightM, 'Altura libre', 0);
-        if (!(out.heightM > 0)) errors.push('Altura libre: debe ser mayor que 0');
-
+        // Cada esquina trae su altura [x, y, altura]. Una esquina sin altura (Layout de antes) hereda heightM, la altura única de entonces.
+        const legacyHeight = Number(src.heightM);
         out.vertices = list(src.vertices, LIMITS.vertices, 'Esquinas').map((p, i) => {
-            if (!Array.isArray(p) || p.length !== 2 || !isNum(Number(p[0])) || !isNum(Number(p[1]))) { errors.push(`Esquina ${i + 1}: coordenadas no válidas`); return [0, 0]; }
+            if (!Array.isArray(p) || (p.length !== 2 && p.length !== 3) || !isNum(Number(p[0])) || !isNum(Number(p[1]))) { errors.push(`Esquina ${i + 1}: coordenadas no válidas`); return [0, 0, 0]; }
             const x = Number(p[0]);
             const y = Number(p[1]);
             if (Math.abs(x) > LIMITS.maxM || Math.abs(y) > LIMITS.maxM) errors.push(`Esquina ${i + 1}: fuera de rango`);
-            return [round2(x), round2(y)];
+            const h = p.length === 3 ? Number(p[2]) : legacyHeight;
+            if (!(Number.isFinite(h) && h > 0 && h <= LIMITS.maxHeight)) errors.push(`Esquina ${i + 1}: la altura debe ser mayor que 0 (máximo ${LIMITS.maxHeight} m)`);
+            return [round2(x), round2(y), Number.isFinite(h) ? round2(h) : 0];
         });
+        out.heightM = round2(meanHeight(out.vertices));
         if (out.vertices.length < 3) errors.push('Contorno: se necesitan al menos 3 esquinas');
         else if (!(polygonArea(out.vertices) > 0)) errors.push('Contorno: las esquinas no forman una superficie');
         const walls = out.vertices.length;
@@ -208,7 +269,7 @@
     // Qué datos tiene cada sección (para saber si "Ver y Operar" todavía puede llenarla).
     function sectionData(layout, section) {
         if (!layout) return null;
-        if (section === 'contorno') return { heightM: layout.heightM, vertices: layout.vertices, obstacles: layout.obstacles };
+        if (section === 'contorno') return { vertices: layout.vertices, obstacles: layout.obstacles };
         if (section === 'puertas') return layout.doors;
         if (section === 'luz') return layout.power;
         if (section === 'zonas') return layout.zones;
@@ -225,5 +286,6 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData,
+        normalize, heightRange, volumeOf, triangulate,
     };
 }));

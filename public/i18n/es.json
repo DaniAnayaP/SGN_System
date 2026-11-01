@@ -1595,6 +1595,8 @@
     "layoutStepZonas": "Zonas",
     "layoutStepEspacios": "Anaqueles y gabetas",
     "layoutAltura": "Altura libre (m)",
+    "layoutAlturaEsquina": "Altura (m)",
+    "layoutAlturaTodas": "Misma altura en todas las esquinas (m)",
     "layoutEsquina": "Esquina",
     "layoutX": "X (m)",
     "layoutY": "Y (m)",
@@ -2869,8 +2871,8 @@
       "example": "pasas de Contorno a Puertas cuando ya terminaste de capturar las esquinas."
     },
     "layoutSec_contorno": {
-      "what": "Las esquinas de la nave en metros, su altura libre y las columnas u obstáculos. De aquí salen los m² y los m³ totales.",
-      "example": "una nave rectangular son 4 esquinas; una en L son 6."
+      "what": "Las esquinas de la nave en metros, con la altura de cada una, y las columnas u obstáculos. De aquí salen los m² totales y, con las alturas, los m³.",
+      "example": "una nave con el techo más alto de un lado tiene 6 metros en dos esquinas y 10 en las otras dos."
     },
     "layoutSec_puertas": {
       "what": "Las puertas de la nave: en qué pared están, a cuántos metros de la esquina y cuánto miden.",

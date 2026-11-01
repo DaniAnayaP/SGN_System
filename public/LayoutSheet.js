@@ -30,7 +30,11 @@
         const xs = data.layout.vertices.map((p) => p[0]);
         const ys = data.layout.vertices.map((p) => p[1]);
         const dims = `${fmt(Math.max(...xs) - Math.min(...xs), lang)} × ${fmt(Math.max(...ys) - Math.min(...ys), lang)} m`;
-        const meta = `${dims} · ${labels.height} ${fmt(data.layout.heightM, lang)} m · ${data.layout.spaces.length} ${labels.spaces}`;
+        const hs = data.layout.vertices.map((p) => Number(p[2])).filter((h) => Number.isFinite(h));
+        const hMin = Math.min(...hs);
+        const hMax = Math.max(...hs);
+        const heightText = hMin === hMax ? `${fmt(hMin, lang)} m` : `${fmt(hMin, lang)} – ${fmt(hMax, lang)} m`;
+        const meta = `${dims} · ${labels.height} ${heightText} · ${data.layout.spaces.length} ${labels.spaces}`;
         const cards = [
             [`${fmt(k.total, lang)} m²`, labels.kpiTotal], [`${fmt(k.offices, lang)} m²`, labels.kpiOffices], [`${fmt(k.aisles, lang)} m²`, labels.kpiAisles],
             [`${fmt(k.storage, lang)} m²`, labels.kpiStorage], [`${fmt(k.dead, lang)} m²`, labels.kpiDead], [`${fmt(k.volume, lang)} m³`, labels.kpiVolume],
