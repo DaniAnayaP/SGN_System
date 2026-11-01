@@ -292,6 +292,12 @@
     "catCentroDistUnidadMedida": "Our Unit of Measure",
     "catCentroDistUnidadMedidaAbbr1": "Unit of Measure",
     "catCentroDistUnidadMedidaAbbr2": "Unit Measure",
+    "catCentroDistAlmacenes": "Our Warehouses",
+    "catCentroDistAlmacenesAbbr1": "Warehouses",
+    "catCentroDistAlmacenesAbbr2": "Whs.",
+    "catCentroDistSubAlmacenes": "Our Sub-warehouses",
+    "catCentroDistSubAlmacenesAbbr1": "Sub-warehouses",
+    "catCentroDistSubAlmacenesAbbr2": "Sub-whs.",
     "opTransVolNuestrosTraslados": "Our Transfers",
     "opTransVolCotizaciones": "Our Quotes",
     "classCotizaciones": "Our Quotes",
@@ -2168,6 +2174,28 @@
     "colCatDeleteAuth": "Delete Authorization",
     "colCatCreateAuth": "Create Authorization",
     "newArticleCategory": "New Category",
+    "colAlmCentroCostos": "Cost Center",
+    "colSubAlmAlmacen": "Warehouse",
+    "colSubAlmTipo": "Type",
+    "colSubAlmUbicacion": "Assigned location",
+    "newWarehouse": "New Warehouse",
+    "newSubWarehouse": "New Sub-warehouse",
+    "whChoose": "Choose…",
+    "whPhysical": "Physical",
+    "whVirtual": "Virtual",
+    "whNotApplicable": "Not applicable (virtual)",
+    "whChooseKindFirst": "Choose Physical first",
+    "whAssign": "Assign…",
+    "whAssignTitle": "Location of {name}",
+    "whWholeZone": "Whole zone",
+    "whWhole": "whole",
+    "whNoZones": "There are no zones in the Layout yet. Create them in Operations > Layout.",
+    "whNoRacks": "This zone has no racks.",
+    "whSave": "Save",
+    "whClose": "Close",
+    "whSelected": "{n} selected",
+    "whNone": "No location",
+    "whNoName": "No name",
     "newSkuItem": "New Article",
     "articleTypeSelect": "Select...",
     "articleTypeFinished": "Finished Article",
@@ -3039,6 +3067,30 @@
     "layoutDeleteRow": {
       "what": "Permanently deletes this zone or space when you save. Unlike Deactivate, it is not kept at all. It only appears if your account has the Delete permission in the access tree.",
       "example": "you remove a rack that never existed in the warehouse and was entered by mistake."
+    },
+    "whCostCenter": {
+      "what": "The cost center this warehouse belongs to. The list comes from Contracted Service.",
+      "example": "CEDIS Monterrey."
+    },
+    "whParentWarehouse": {
+      "what": "The warehouse this sub-warehouse belongs to. Only active warehouses are offered.",
+      "example": "General Warehouse."
+    },
+    "whKind": {
+      "what": "Physical: it exists in the building and gets Layout zones or racks assigned. Virtual: it takes no room in the building, for example goods in transit or on consignment.",
+      "example": "Medicines is physical; In transit is virtual."
+    },
+    "whLocationBtn": {
+      "what": "Assigns this sub-warehouse the whole zones or the Layout racks that belong to it. A zone or a rack can belong to only one sub-warehouse.",
+      "example": "Medicines: all of Zone 1. Dressings: racks B-01 and B-02 of Zone 2."
+    },
+    "whZoneAll": {
+      "what": "Marks the whole zone: all its racks stay in this sub-warehouse.",
+      "example": "Zone 1 (whole)."
+    },
+    "whRackCheck": {
+      "what": "Marks only this rack; the rest of the zone can belong to another sub-warehouse.",
+      "example": "A-03."
     },
     "layoutZoneCats": {
       "what": "Opens this zone's categories: the zone is the title and it holds its categories inside (several if there are different products), each with a name, short description, icon, color and its QR.",

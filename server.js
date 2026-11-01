@@ -155,6 +155,7 @@ const {
     listActiveArticleCategoryNames,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
+    articleCategoryPatchableFields,
     updateArticleCategory,
     deleteArticleCategory,
     resolveEscalationHolder,
@@ -6288,7 +6289,149 @@ function articleCategoryTypeConfig(categoryType) {
     return ARTICLE_CATEGORY_TYPES[categoryType] || null;
 }
 
-function mapArticleCategoryRecord(row, pendingByRecord, companyName) {
+// --- Almacenes y Sub almacenes (Catálogos > C. Distribución) -----------------
+// Mismo catálogo genérico de arriba (código, nombre, descripción, estatus) con campos propios:
+//  almacenes     -> parentId = centro de costos (Servicio Contratado)
+//  sub-almacenes -> parentId = almacén; kind = physical | virtual; locations = zonas (completas) y anaqueles del Layout que le pertenecen (solo si es físico).
+// Una zona o un anaquel solo puede pertenecer a UN sub almacén físico activo; el Layout es la fuente de las zonas y anaqueles.
+const WAREHOUSE_TYPES = new Set(['almacenes', 'sub-almacenes']);
+const SUB_WAREHOUSE_KIND_LABELS = { physical: 'Físico', virtual: 'Virtual' };
+
+function warehouseLayoutIndex(clientId) {
+    const row = getClientLayout(clientId);
+    const zones = ((row && row.layout.zones) || []).filter((z) => z.active !== false);
+    const spaces = ((row && row.layout.spaces) || []).filter((s) => s.active !== false);
+    return { zones, spaces, zoneById: new Map(zones.map((z) => [z.id, z])), spaceById: new Map(spaces.map((s) => [s.id, s])) };
+}
+
+// locations se guarda como texto JSON canónico: [{"z":"<zona>"}] = zona completa, [{"z":"<zona>","s":["<anaquel>",...]}] = solo esos anaqueles.
+function parseWarehouseLocations(text) {
+    let list;
+    try { list = JSON.parse(text || '[]'); } catch { return []; }
+    if (!Array.isArray(list)) return [];
+    return list.filter((e) => e && typeof e.z === 'string').map((e) => ({ zoneId: e.z, spaceIds: Array.isArray(e.s) ? e.s.filter((x) => typeof x === 'string') : [] }));
+}
+
+// Recibe [{ zoneId, spaceIds: [] }] ([] = zona completa), lo valida contra el Layout guardado y lo deja en orden del Layout.
+function canonicalWarehouseLocations(clientId, input) {
+    if (input === '' || input == null) return { value: '', entries: [] };
+    if (!Array.isArray(input)) return { error: 'Las ubicaciones no tienen el formato correcto.' };
+    const idx = warehouseLayoutIndex(clientId);
+    const byZone = new Map();
+    for (const raw of input) {
+        const zoneId = raw && typeof raw.zoneId === 'string' ? raw.zoneId : '';
+        if (!idx.zoneById.has(zoneId)) return { error: 'Una de las zonas ya no existe en el Layout. Vuelve a elegirla.' };
+        const ids = Array.isArray(raw.spaceIds) ? raw.spaceIds : [];
+        const cur = byZone.get(zoneId) || { spaceIds: new Set(), whole: false };
+        if (!ids.length) cur.whole = true;
+        for (const sid of ids) {
+            const space = idx.spaceById.get(sid);
+            if (!space || space.zoneId !== zoneId) return { error: 'Uno de los anaqueles ya no está en esa zona del Layout. Vuelve a elegirlo.' };
+            cur.spaceIds.add(sid);
+        }
+        byZone.set(zoneId, cur);
+    }
+    const entries = [];
+    idx.zones.forEach((z) => {
+        const cur = byZone.get(z.id);
+        if (!cur) return;
+        entries.push({ zoneId: z.id, spaceIds: cur.whole ? [] : idx.spaces.filter((s) => cur.spaceIds.has(s.id)).map((s) => s.id) });
+    });
+    const value = entries.length ? JSON.stringify(entries.map((e) => (e.spaceIds.length ? { z: e.zoneId, s: e.spaceIds } : { z: e.zoneId }))) : '';
+    return { value, entries };
+}
+
+function describeWarehouseLocations(idx, text) {
+    return parseWarehouseLocations(text).map((e) => {
+        const zone = idx.zoneById.get(e.zoneId);
+        if (!zone) return '';
+        if (!e.spaceIds.length) return `${zone.name} (toda)`;
+        const codes = e.spaceIds.map((sid) => (idx.spaceById.get(sid) || {}).code).filter(Boolean);
+        return codes.length ? `${zone.name}: ${codes.join(', ')}` : '';
+    }).filter(Boolean).join(' · ');
+}
+
+// Si otro sub almacén físico y activo ya tiene la zona (o alguno de los anaqueles pedidos) devuelve el mensaje; si no, ''.
+function findWarehouseLocationConflict(clientId, isTest, selfId, entries, idx) {
+    for (const other of listArticleCategories(clientId, 'sub-almacenes', isTest)) {
+        if (other.id === selfId || other.status !== 'active' || other.kind !== 'physical') continue;
+        const label = other.name || `SUB-${String(other.record_number).padStart(3, '0')}`;
+        for (const oe of parseWarehouseLocations(other.locations)) {
+            for (const e of entries) {
+                if (e.zoneId !== oe.zoneId) continue;
+                const zoneName = (idx.zoneById.get(e.zoneId) || {}).name || '';
+                if (!e.spaceIds.length || !oe.spaceIds.length) {
+                    return `La zona "${zoneName}" ya está asignada al sub almacén "${label}" (completa o con alguno de sus anaqueles). Una zona o un anaquel solo puede pertenecer a un sub almacén.`;
+                }
+                const shared = e.spaceIds.find((sid) => oe.spaceIds.includes(sid));
+                if (shared) return `El anaquel "${(idx.spaceById.get(shared) || {}).code || ''}" ya está asignado al sub almacén "${label}". Un anaquel solo puede pertenecer a un sub almacén.`;
+            }
+        }
+    }
+    return '';
+}
+
+function warehouseContext(req, categoryType) {
+    if (!WAREHOUSE_TYPES.has(categoryType)) return null;
+    const { clientId, isTestAccount } = req.user;
+    return {
+        costCenters: new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c.name])),
+        warehouses: new Map(listArticleCategories(clientId, 'almacenes', isTestAccount).map((r) => [r.id, r.name])),
+    };
+}
+
+// Revisa y deja listo el PATCH de un almacén o sub almacén (los demás catálogos pasan igual). Devuelve { error: { status, message } } o { patch, sanitizers }.
+function prepareWarehousePatch(req, categoryType, existing, patch) {
+    const sanitizers = {};
+    if (!WAREHOUSE_TYPES.has(categoryType)) return { patch, sanitizers };
+    const { clientId, isTestAccount } = req.user;
+    const out = { ...patch };
+    const has = (key) => Object.prototype.hasOwnProperty.call(out, key);
+    const bad = (message) => ({ error: { status: 400, message } });
+    if (has('parentId')) {
+        if (out.parentId === '' || out.parentId == null) out.parentId = null;
+        else {
+            const id = Number(out.parentId);
+            if (!Number.isInteger(id)) return bad('Elige una opción de la lista.');
+            if (categoryType === 'almacenes') {
+                if (!getCostCenterById(id, clientId, isTestAccount)) return bad('Ese centro de costos no existe.');
+            } else {
+                const wh = getArticleCategoryById(id, clientId, isTestAccount);
+                if (!wh || wh.category_type !== 'almacenes') return bad('Ese almacén no existe.');
+                if (wh.status !== 'active' && wh.id !== existing.parent_id) return bad('Ese almacén está inactivo. Elige uno activo.');
+            }
+            out.parentId = id;
+        }
+    }
+    const idx = warehouseLayoutIndex(clientId);
+    if (categoryType === 'sub-almacenes') {
+        if (has('kind') && !['', 'physical', 'virtual'].includes(out.kind)) return bad('El tipo debe ser Físico o Virtual.');
+        if (has('locations')) {
+            const canon = canonicalWarehouseLocations(clientId, out.locations);
+            if (canon.error) return bad(canon.error);
+            out.locations = canon.value;
+        }
+        const kind = has('kind') ? out.kind : existing.kind;
+        const locations = has('locations') ? out.locations : existing.locations;
+        if (has('locations') && out.locations && kind !== 'physical') return bad('Un sub almacén virtual (o sin tipo) no lleva ubicación física. Primero elige Físico.');
+        if (kind === 'physical' && locations && (has('locations') || has('kind'))) {
+            const conflict = findWarehouseLocationConflict(clientId, isTestAccount, existing.id, parseWarehouseLocations(locations), idx);
+            if (conflict) return { error: { status: 409, message: conflict } };
+        }
+    }
+    const nameOf = (v) => {
+        if (v == null || v === '') return '';
+        const id = Number(v);
+        const row = categoryType === 'almacenes' ? getCostCenterById(id, clientId, isTestAccount) : getArticleCategoryById(id, clientId, isTestAccount);
+        return (row && row.name) || String(v);
+    };
+    sanitizers.parentId = nameOf;
+    sanitizers.kind = (v) => SUB_WAREHOUSE_KIND_LABELS[v] || '';
+    sanitizers.locations = (v) => describeWarehouseLocations(idx, v);
+    return { patch: out, sanitizers };
+}
+
+function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null) {
     if (!row) return row;
     const config = articleCategoryTypeConfig(row.category_type);
     return {
@@ -6298,6 +6441,11 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName) {
         name: row.name,
         description: row.description,
         status: row.status,
+        ...(ctx && row.category_type === 'almacenes' ? { parentId: row.parent_id, parentName: ctx.costCenters.get(row.parent_id) || '' } : {}),
+        ...(ctx && row.category_type === 'sub-almacenes' ? {
+            parentId: row.parent_id, parentName: ctx.warehouses.get(row.parent_id) || '',
+            kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
+        } : {}),
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
             companyName,
@@ -6318,7 +6466,7 @@ app.get('/api/business/article-categories/:categoryType', requireAuth, (req, res
     const client = getClientById(req.user.clientId);
     res.json({
         categories: listArticleCategories(req.user.clientId, req.params.categoryType, req.user.isTestAccount)
-            .map((r) => mapArticleCategoryRecord(r, pendingByRecord, client?.company_name)),
+            .map((r) => mapArticleCategoryRecord(r, pendingByRecord, client?.company_name, warehouseContext(req, req.params.categoryType))),
     });
 });
 
@@ -6336,7 +6484,7 @@ app.post('/api/business/article-categories/:categoryType', requireAuth, (req, re
     });
     notifyButtonAction(req, config.tableKey, 'create', `#${category.id}`);
     const client = getClientById(req.user.clientId);
-    res.status(201).json({ category: mapArticleCategoryRecord(category, null, client?.company_name) });
+    res.status(201).json({ category: mapArticleCategoryRecord(category, null, client?.company_name, warehouseContext(req, req.params.categoryType)) });
 });
 
 app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, (req, res) => {
@@ -6345,11 +6493,13 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, (re
     if (!config) return res.status(404).json({ message: 'Unknown category type.' });
     const existing = getArticleCategoryById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing || existing.category_type !== req.params.categoryType) return res.status(404).json({ message: 'Category not found.' });
-    const { baseline, overrideConflicts, ...patch } = req.body || {};
-    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, ARTICLE_CATEGORY_PATCHABLE_FIELDS, config.tableKey, `#${existing.id}`, {}, { baseline, overrideConflicts });
+    const { baseline, overrideConflicts, ...rawPatch } = req.body || {};
+    const prepared = prepareWarehousePatch(req, req.params.categoryType, existing, rawPatch);
+    if (prepared.error) return res.status(prepared.error.status).json({ message: prepared.error.message });
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, articleCategoryPatchableFields(req.params.categoryType), config.tableKey, `#${existing.id}`, prepared.sanitizers, { baseline, overrideConflicts });
     const category = updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
-    res.json({ category: mapArticleCategoryRecord(category, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
+    res.json({ category: mapArticleCategoryRecord(category, null, client?.company_name, warehouseContext(req, req.params.categoryType)), pendingFields, rejectedFields, conflictFields });
 });
 
 app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (req, res) => {
@@ -6363,6 +6513,11 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (r
         if (!canDeleteColumn(grants, config.tableKey, 'colCatDeleteAuth')) {
             return res.status(403).json({ message: 'No tienes permiso para eliminar categorías.' });
         }
+    }
+    // Un almacén con sub almacenes no se borra (se deja Inactivo): los sub almacenes quedarían sin almacén.
+    if (req.params.categoryType === 'almacenes'
+        && listArticleCategories(req.user.clientId, 'sub-almacenes', req.user.isTestAccount).some((r) => r.parent_id === existing.id)) {
+        return res.status(409).json({ message: 'Este almacén tiene sub almacenes. Quítalos primero o márcalo como Inactivo.' });
     }
     logTableChange({
         clientId: req.user.clientId, tableKey: config.tableKey, recordId: existing.id,
@@ -6384,6 +6539,19 @@ app.get('/api/business/article-categories-active', requireAuth, (req, res) => {
         options[categoryType] = listActiveArticleCategoryNames(req.user.clientId, categoryType, req.user.isTestAccount);
     });
     res.json({ options });
+});
+
+// Lo que necesitan las pantallas Almacenes y Sub almacenes para sus listas: centros de costos, almacenes y las zonas / anaqueles del Layout guardado.
+app.get('/api/business/warehouse-options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const idx = warehouseLayoutIndex(clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        costCenters: listCostCenters(clientId, isTestAccount).map((c) => ({ id: c.id, code: c.code, name: c.name })),
+        warehouses: listArticleCategories(clientId, 'almacenes', isTestAccount).map((r) => ({ id: r.id, name: r.name, status: r.status, parentId: r.parent_id })),
+        zones: idx.zones.map((z) => ({ id: z.id, name: z.name, spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type })) })),
+    });
 });
 
 // --- "+ Solicitar nuevo X" -- catalog-value requests, generic across every

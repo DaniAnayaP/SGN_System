@@ -2332,6 +2332,13 @@ for (const col of ['category_inventario', 'category_compra', 'category_almacenam
     }
 }
 
+// Almacenes y Sub almacenes (Catálogos, C. Distribución) reusan article_categories: parent_id = centro de costos (almacén) o almacén (sub almacén); kind = physical | virtual
+// (solo sub almacén); locations = zonas y anaqueles del Layout asignados a un sub almacén físico (JSON canónico, ver canonicalWarehouseLocations en server.js).
+const articleCategoryColumns = db.prepare('PRAGMA table_info(article_categories)').all();
+if (!articleCategoryColumns.some((c) => c.name === 'parent_id')) db.exec('ALTER TABLE article_categories ADD COLUMN parent_id INTEGER');
+if (!articleCategoryColumns.some((c) => c.name === 'kind')) db.exec("ALTER TABLE article_categories ADD COLUMN kind TEXT NOT NULL DEFAULT ''");
+if (!articleCategoryColumns.some((c) => c.name === 'locations')) db.exec("ALTER TABLE article_categories ADD COLUMN locations TEXT NOT NULL DEFAULT ''");
+
 // public_token: set once (see maybeIssuePublicToken in server.js) the
 // instant an artículo's own 24 fields are all filled in -- the opaque id a
 // QR code encodes to reach its public, no-login ficha (Ficha.html). Random,
@@ -3441,6 +3448,8 @@ const TABLE_GRANT_PATHS = {
     'categorias-riesgo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-riesgo' },
     'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
+    'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
+    'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
@@ -3620,6 +3629,8 @@ const BUTTON_NOTIFY_COLUMNS = {
     'categorias-riesgo': CATEGORY_BUTTON_NOTIFY,
     'categorias-vidautil': CATEGORY_BUTTON_NOTIFY,
     'unidad-medida': CATEGORY_BUTTON_NOTIFY,
+    'almacenes': CATEGORY_BUTTON_NOTIFY,
+    'sub-almacenes': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
@@ -5050,6 +5061,9 @@ const ARTICLE_CATEGORY_TYPES = {
     // ARTICLE_CATEGORY_AREA_LABEL's own default for this one (see
     // mapArticleCategoryRecord in server.js).
     'tipos-cliente': { prefix: 'TCL', tableKey: 'tipos-cliente', pantalla: 'Nuestros Tipos Cliente', area: 'Transporte Volumen' },
+    // Almacenes y Sub almacenes: misma forma (código, nombre, descripción, estatus) más sus campos propios (ver ARTICLE_CATEGORY_EXTRA_FIELDS).
+    almacenes: { prefix: 'ALN', tableKey: 'almacenes', pantalla: 'Nuestros Almacenes' },
+    'sub-almacenes': { prefix: 'SUB', tableKey: 'sub-almacenes', pantalla: 'Nuestros Sub Almacenes' },
 };
 
 function listArticleCategories(clientId, categoryType, forTestAccount = false) {
@@ -5086,11 +5100,26 @@ const ARTICLE_CATEGORY_PATCHABLE_FIELDS = {
     description: { column: 'description', fieldKey: 'main.colCatDescription' },
     status: { column: 'status', fieldKey: 'main.colCatStatus' },
 };
+// Campos propios de cada catálogo que tiene más que nombre/descripción/estatus. parentId = centro de costos (almacén) o almacén (sub almacén).
+const ARTICLE_CATEGORY_EXTRA_FIELDS = {
+    almacenes: {
+        parentId: { column: 'parent_id', fieldKey: 'main.colAlmCentroCostos' },
+    },
+    'sub-almacenes': {
+        parentId: { column: 'parent_id', fieldKey: 'main.colSubAlmAlmacen' },
+        kind: { column: 'kind', fieldKey: 'main.colSubAlmTipo' },
+        locations: { column: 'locations', fieldKey: 'main.colSubAlmUbicacion' },
+    },
+};
+function articleCategoryPatchableFields(categoryType) {
+    return { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, ...(ARTICLE_CATEGORY_EXTRA_FIELDS[categoryType] || {}) };
+}
+const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
     const params = { id, clientId };
-    for (const [key, { column }] of Object.entries(ARTICLE_CATEGORY_PATCHABLE_FIELDS)) {
+    for (const [key, { column }] of Object.entries(ARTICLE_CATEGORY_UPDATE_COLUMNS)) {
         if (Object.prototype.hasOwnProperty.call(patch, key)) {
             sets.push(`${column} = @${key}`);
             params[key] = patch[key];
@@ -6335,6 +6364,8 @@ const WEB_SCREEN_CATALOG = [
     { key: 'categorias-riesgo', labelKey: 'menu.catCentroDistCategoriasRiesgo' },
     { key: 'categorias-vidautil', labelKey: 'menu.catCentroDistCategoriasVidautil' },
     { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
+    { key: 'almacenes', labelKey: 'menu.catCentroDistAlmacenes' },
+    { key: 'sub-almacenes', labelKey: 'menu.catCentroDistSubAlmacenes' },
     { key: 'nuestras-cotizaciones', labelKey: 'menu.opTransVolCotizaciones' },
     { key: 'nuestros-traslados', labelKey: 'menu.opTransVolNuestrosTraslados' },
     { key: 'tipos-cliente', labelKey: 'menu.catTransVolTiposCliente' },
@@ -10459,6 +10490,7 @@ module.exports = {
     listActiveArticleCategoryNames,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
+    articleCategoryPatchableFields,
     updateArticleCategory,
     deleteArticleCategory,
     resolveEscalationHolder,

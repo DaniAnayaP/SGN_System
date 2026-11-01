@@ -295,6 +295,12 @@
     "catCentroDistUnidadMedida": "Nuestras Unidad Medida",
     "catCentroDistUnidadMedidaAbbr1": "Unidad Medida",
     "catCentroDistUnidadMedidaAbbr2": "Unid. Medida",
+    "catCentroDistAlmacenes": "Nuestros Almacenes",
+    "catCentroDistAlmacenesAbbr1": "Almacenes",
+    "catCentroDistAlmacenesAbbr2": "Alm.",
+    "catCentroDistSubAlmacenes": "Nuestros Sub Almacenes",
+    "catCentroDistSubAlmacenesAbbr1": "Sub Almacenes",
+    "catCentroDistSubAlmacenesAbbr2": "Sub Alm.",
     "opTransVolNuestrosTraslados": "Nuestros Traslados",
     "opTransVolCotizaciones": "Nuestras Cotizaciones",
     "classCotizaciones": "Nuestras Cotizaciones",
@@ -2167,6 +2173,28 @@
     "colCatDeleteAuth": "Autorización para Eliminar",
     "colCatCreateAuth": "Autorización para Crear",
     "newArticleCategory": "Nueva Categoría",
+    "colAlmCentroCostos": "Centro de Costos",
+    "colSubAlmAlmacen": "Almacén",
+    "colSubAlmTipo": "Tipo",
+    "colSubAlmUbicacion": "Ubicación asignada",
+    "newWarehouse": "Nuevo Almacén",
+    "newSubWarehouse": "Nuevo Sub Almacén",
+    "whChoose": "Elige…",
+    "whPhysical": "Físico",
+    "whVirtual": "Virtual",
+    "whNotApplicable": "No aplica (virtual)",
+    "whChooseKindFirst": "Primero elige Físico",
+    "whAssign": "Asignar…",
+    "whAssignTitle": "Ubicación de {name}",
+    "whWholeZone": "Toda la zona",
+    "whWhole": "toda",
+    "whNoZones": "Todavía no hay zonas en el Layout. Créalas en Operaciones > Layout.",
+    "whNoRacks": "Esta zona no tiene anaqueles.",
+    "whSave": "Guardar",
+    "whClose": "Cerrar",
+    "whSelected": "{n} elegidos",
+    "whNone": "Sin ubicación",
+    "whNoName": "Sin nombre",
     "newSkuItem": "Nuevo Artículo",
     "articleTypeSelect": "Selecciona...",
     "articleTypeFinished": "Artículo Terminado",
@@ -3038,6 +3066,30 @@
     "layoutDeleteRow": {
       "what": "Elimina esta zona o este espacio de forma definitiva al guardar. A diferencia de Desactivar, ya no se conserva ni su historial de m². Solo aparece si tu cuenta tiene el permiso Eliminar en el árbol.",
       "example": "quitas un anaquel que nunca existió en la nave y que capturaron por error."
+    },
+    "whCostCenter": {
+      "what": "El centro de costos al que pertenece este almacén. La lista sale de Servicio Contratado.",
+      "example": "CEDIS Monterrey."
+    },
+    "whParentWarehouse": {
+      "what": "El almacén al que pertenece este sub almacén. Solo ofrece almacenes activos.",
+      "example": "Almacén General."
+    },
+    "whKind": {
+      "what": "Físico: existe en la nave y se le asignan zonas o anaqueles del Layout. Virtual: no ocupa lugar en la nave, por ejemplo mercancía en tránsito o en consignación.",
+      "example": "Medicamentos es físico; En tránsito es virtual."
+    },
+    "whLocationBtn": {
+      "what": "Asigna a este sub almacén las zonas completas o los anaqueles del Layout que le pertenecen. Una zona o un anaquel solo puede ser de un sub almacén.",
+      "example": "Medicamentos: la Zona 1 completa. Material de curación: los anaqueles B-01 y B-02 de la Zona 2."
+    },
+    "whZoneAll": {
+      "what": "Marca la zona completa: todos sus anaqueles quedan en este sub almacén.",
+      "example": "Zona 1 (toda)."
+    },
+    "whRackCheck": {
+      "what": "Marca solo este anaquel; el resto de la zona puede ser de otro sub almacén.",
+      "example": "A-03."
     },
     "layoutZoneCats": {
       "what": "Abre las categorías de esta zona: la zona es el título y adentro lleva sus categorías (varias si hay productos distintos), cada una con nombre, descripción corta, icono, color y su QR.",

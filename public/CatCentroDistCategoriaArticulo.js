@@ -27,17 +27,25 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     // con la clave "undefined").
     udm: 'unidad-medida',
     'tipos-cliente': 'tipos-cliente',
+    // Catálogos con campos propios (centro de costos / almacén, tipo físico o virtual, ubicación asignada): ver buildExtraCells.
+    almacenes: 'almacenes',
+    'sub-almacenes': 'sub-almacenes',
 };
 
 const CATEGORY_TYPE = document.body.dataset.categoryType;
 const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
 const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
+const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
+const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : 'main.newArticleCategory';
+// Centros de costos, almacenes y las zonas / anaqueles del Layout guardado (GET /api/business/warehouse-options).
+let warehouseOptions = { costCenters: [], warehouses: [], zones: [] };
 
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
+        if (IS_WAREHOUSE) await loadWarehouseOptions();
         renderNewRecordButton();
         await refreshTable();
     } catch (err) {
@@ -218,6 +226,7 @@ function buildRow(record) {
         textCell('colCatCode', record.code),
         tdName,
         tdDescription,
+        ...buildExtraCells(record),
         buildStatusCell(record),
         buildActionsCell(record, tr),
     );
@@ -235,7 +244,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 18;
+    td.colSpan = document.querySelectorAll('table.data-table thead th').length;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
@@ -265,7 +274,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !haystack.includes(text);
@@ -279,7 +288,7 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear
 // ensureCreatedThenPatch), so clicking this and never touching the row never
 // leaves a blank category behind.
 function createNewCategory() {
-    const draft = { id: null, registroUnico: '', code: '', name: '', description: '', status: '', pendingFields: [] };
+    const draft = { id: null, registroUnico: '', code: '', name: '', description: '', status: '', parentId: null, parentName: '', kind: '', locations: [], pendingFields: [] };
     const tbody = getTbody();
     const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
     if (emptyRow) emptyRow.remove();
@@ -294,7 +303,222 @@ function renderNewRecordButton() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'data-table-new-record-btn';
-    btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="main.newArticleCategory">${Dashboard.t('main.newArticleCategory')}</span>`;
+    btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="${NEW_RECORD_KEY}">${Dashboard.t(NEW_RECORD_KEY)}</span>`;
     btn.addEventListener('click', createNewCategory);
     toolbar.prepend(btn);
 }
+
+// ---------------------------------------------------------------------------
+// Almacenes y Sub almacenes: columnas propias
+//   Almacenes     -> Centro de Costos (lista de Servicio Contratado)
+//   Sub almacenes -> Almacén (lista de almacenes activos), Tipo (Físico / Virtual) y Ubicación asignada (zonas completas o anaqueles del Layout; solo si es Físico)
+// ---------------------------------------------------------------------------
+async function loadWarehouseOptions() {
+    try {
+        const res = await fetch('/api/business/warehouse-options', { credentials: 'include' });
+        if (!res.ok) throw new Error('options failed');
+        warehouseOptions = await res.json();
+    } catch (err) {
+        console.error('Almacenes: failed to load options', err);
+    }
+}
+
+// Select de un campo propio: la opción actual siempre aparece aunque ya no esté en la lista (por ejemplo un almacén que quedó inactivo).
+function buildOptionCell(record, colId, apiKey, helpKey, items, currentValue, currentLabel, toPatch) {
+    const td = document.createElement('td');
+    td.dataset.col = colId;
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    select.setAttribute('data-help-key', helpKey);
+    const list = items.slice();
+    if (currentValue !== null && currentValue !== undefined && currentValue !== '' && !list.some((i) => String(i.value) === String(currentValue))) {
+        list.unshift({ value: currentValue, label: currentLabel || String(currentValue) });
+    }
+    select.innerHTML = '';
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = Dashboard.t('main.whChoose');
+    select.appendChild(blank);
+    list.forEach((i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i.value);
+        opt.textContent = i.label;
+        select.appendChild(opt);
+    });
+    select.value = currentValue === null || currentValue === undefined ? '' : String(currentValue);
+    select.disabled = isPending(record, apiKey) || !Dashboard.canEditField(TABLE_KEY, colId, currentValue === null || currentValue === undefined ? '' : String(currentValue));
+    if (select.disabled) select.title = Dashboard.t(isPending(record, apiKey) ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => ensureCreatedThenPatch(record, toPatch(select.value)));
+    td.appendChild(select);
+    return td;
+}
+
+function describeLocations(locations) {
+    const parts = (locations || []).map((e) => {
+        const zone = warehouseOptions.zones.find((z) => z.id === e.zoneId);
+        if (!zone) return '';
+        if (!e.spaceIds.length) return `${zone.name} (${Dashboard.t('main.whWhole')})`;
+        const codes = e.spaceIds.map((sid) => (zone.spaces.find((s) => s.id === sid) || {}).code).filter(Boolean);
+        return codes.length ? `${zone.name}: ${codes.join(', ')}` : '';
+    }).filter(Boolean);
+    return parts.join(' · ');
+}
+
+function buildLocationCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colSubAlmUbicacion';
+    if (record.kind !== 'physical') {
+        td.textContent = record.kind === 'virtual' ? Dashboard.t('main.whNotApplicable') : Dashboard.t('main.whChooseKindFirst');
+        td.classList.add('wh-muted');
+        return td;
+    }
+    const summary = describeLocations(record.locations);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-secondary wh-location-btn';
+    btn.setAttribute('data-help-key', 'whLocationBtn');
+    btn.textContent = summary || Dashboard.t('main.whAssign');
+    btn.title = summary || Dashboard.t('main.whAssign');
+    btn.disabled = isPending(record, 'locations') || !Dashboard.canEditField(TABLE_KEY, 'colSubAlmUbicacion', summary);
+    if (btn.disabled) btn.title = Dashboard.t(isPending(record, 'locations') ? 'main.changePending' : 'main.fieldLocked');
+    btn.addEventListener('click', () => openLocationDialog(record));
+    td.appendChild(btn);
+    return td;
+}
+
+function buildExtraCells(record) {
+    if (CATEGORY_TYPE === 'almacenes') {
+        return [buildOptionCell(record, 'colAlmCentroCostos', 'parentId', 'whCostCenter',
+            warehouseOptions.costCenters.map((c) => ({ value: c.id, label: c.name })), record.parentId, record.parentName,
+            (v) => ({ parentId: v === '' ? null : Number(v) }))];
+    }
+    if (CATEGORY_TYPE === 'sub-almacenes') {
+        const active = warehouseOptions.warehouses.filter((w) => w.status === 'active');
+        return [
+            buildOptionCell(record, 'colSubAlmAlmacen', 'parentId', 'whParentWarehouse',
+                active.map((w) => ({ value: w.id, label: w.name || Dashboard.t('main.whNoName') })), record.parentId, record.parentName,
+                (v) => ({ parentId: v === '' ? null : Number(v) })),
+            buildOptionCell(record, 'colSubAlmTipo', 'kind', 'whKind',
+                [{ value: 'physical', label: Dashboard.t('main.whPhysical') }, { value: 'virtual', label: Dashboard.t('main.whVirtual') }], record.kind || '', '',
+                // al pasar a Virtual (o a sin tipo) se quitan las ubicaciones en el mismo guardado
+                (v) => (v !== 'physical' && record.locations && record.locations.length ? { kind: v, locations: [] } : { kind: v })),
+            buildLocationCell(record),
+        ];
+    }
+    return [];
+}
+
+// --- Selector de ubicación de un sub almacén físico: zonas completas o anaqueles sueltos del Layout --------------------------------
+let locModalEl = null;
+let locState = null; // { record, picked: Map(zoneId -> { whole, spaces: Set }) }
+
+function ensureLocationModal() {
+    if (locModalEl) return;
+    locModalEl = document.createElement('div');
+    locModalEl.className = 'modal-overlay';
+    locModalEl.id = 'wh-location-modal';
+    locModalEl.hidden = true;
+    locModalEl.innerHTML = `<div class="modal-panel wh-location-dialog" role="dialog" aria-modal="true" aria-labelledby="wh-location-title">
+        <h3 id="wh-location-title"></h3>
+        <div class="wh-location-list" id="wh-location-list"></div>
+        <div class="admin-form-actions"><button type="button" class="btn" id="wh-location-save">${Dashboard.t('main.whSave')}</button><button type="button" class="btn btn-secondary" id="wh-location-close">${Dashboard.t('main.whClose')}</button></div>
+    </div>`;
+    document.body.appendChild(locModalEl);
+    locModalEl.addEventListener('click', (event) => {
+        if (event.target === locModalEl || event.target.closest('#wh-location-close')) { closeLocationDialog(); return; }
+        if (event.target.closest('#wh-location-save')) { saveLocationDialog(); return; }
+    });
+    locModalEl.addEventListener('change', (event) => {
+        const box = event.target;
+        if (!(box instanceof HTMLInputElement) || !locState) return;
+        const zoneId = box.getAttribute('data-zone') || box.getAttribute('data-zone-space');
+        const cur = locState.picked.get(zoneId) || { whole: false, spaces: new Set() };
+        if (box.hasAttribute('data-zone')) {
+            cur.whole = box.checked;
+            if (box.checked) cur.spaces.clear();
+        } else if (box.checked) cur.spaces.add(box.value); else cur.spaces.delete(box.value);
+        if (!cur.whole && !cur.spaces.size) locState.picked.delete(zoneId); else locState.picked.set(zoneId, cur);
+        renderLocationList();
+    });
+}
+
+function renderLocationList() {
+    const list = document.getElementById('wh-location-list');
+    list.innerHTML = '';
+    if (!warehouseOptions.zones.length) {
+        const p = document.createElement('p');
+        p.className = 'wh-muted';
+        p.textContent = Dashboard.t('main.whNoZones');
+        list.appendChild(p);
+        return;
+    }
+    warehouseOptions.zones.forEach((zone) => {
+        const cur = locState.picked.get(zone.id) || { whole: false, spaces: new Set() };
+        const box = document.createElement('div');
+        box.className = 'wh-zone';
+        const head = document.createElement('label');
+        head.className = 'wh-zone-all';
+        head.setAttribute('data-help-key', 'whZoneAll');
+        const all = document.createElement('input');
+        all.type = 'checkbox';
+        all.setAttribute('data-zone', zone.id);
+        all.checked = cur.whole;
+        const title = document.createElement('b');
+        title.textContent = zone.name;
+        const hint = document.createElement('span');
+        hint.className = 'wh-muted';
+        hint.textContent = Dashboard.t('main.whWholeZone');
+        head.append(all, title, hint);
+        box.appendChild(head);
+        const racks = document.createElement('div');
+        racks.className = 'wh-racks';
+        if (!zone.spaces.length) {
+            const none = document.createElement('span');
+            none.className = 'wh-muted';
+            none.textContent = Dashboard.t('main.whNoRacks');
+            racks.appendChild(none);
+        }
+        zone.spaces.forEach((space) => {
+            const label = document.createElement('label');
+            label.className = 'wh-rack';
+            label.setAttribute('data-help-key', 'whRackCheck');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.setAttribute('data-zone-space', zone.id);
+            cb.value = space.id;
+            cb.checked = cur.whole || cur.spaces.has(space.id);
+            cb.disabled = cur.whole;
+            const text = document.createElement('span');
+            text.textContent = `${space.code} · ${Dashboard.t(`main.layoutType_space_${space.type}`)}`;
+            label.append(cb, text);
+            racks.appendChild(label);
+        });
+        box.appendChild(racks);
+        list.appendChild(box);
+    });
+}
+
+function openLocationDialog(record) {
+    ensureLocationModal();
+    const picked = new Map();
+    (record.locations || []).forEach((e) => picked.set(e.zoneId, { whole: !e.spaceIds.length, spaces: new Set(e.spaceIds) }));
+    locState = { record, picked };
+    document.getElementById('wh-location-title').textContent = Dashboard.t('main.whAssignTitle').replace('{name}', record.name || record.code || '');
+    renderLocationList();
+    locModalEl.hidden = false;
+}
+
+function closeLocationDialog() {
+    if (locModalEl) locModalEl.hidden = true;
+    locState = null;
+}
+
+function saveLocationDialog() {
+    if (!locState) return;
+    const { record, picked } = locState;
+    const locations = [];
+    picked.forEach((cur, zoneId) => { locations.push({ zoneId, spaceIds: cur.whole ? [] : Array.from(cur.spaces) }); });
+    closeLocationDialog();
+    ensureCreatedThenPatch(record, { locations });
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && locState) closeLocationDialog(); });

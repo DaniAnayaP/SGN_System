@@ -7311,3 +7311,13 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-card-bar{ padding-right: 0.9rem; }
 .layout-card-preview{ max-height: 60vh; overflow: auto; }
 .layout-card-preview svg{ max-width: 34rem; margin: 0 auto; }
+
+/* Almacenes y Sub almacenes: selector de ubicación asignada */
+.wh-muted{ color: var(--color-text-secondary); font-size: 0.8rem; }
+.wh-location-btn{ max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wh-location-dialog{ max-width: 34rem; width: 100%; max-height: calc(100vh - 2rem); overflow: auto; }
+.wh-location-list{ display: flex; flex-direction: column; gap: 0.6rem; margin: 0.75rem 0 1rem; }
+.wh-zone{ border: 1px solid var(--color-border); border-radius: 0.6rem; padding: 0.55rem 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.wh-zone-all{ display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.wh-racks{ display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; padding-left: 1.5rem; }
+.wh-rack{ display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; cursor: pointer; }
