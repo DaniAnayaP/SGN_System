@@ -2943,8 +2943,8 @@
       "example": "you scan the UPC of a box and see which article it is and which rack it is on."
     },
     "layoutSteps": {
-      "what": "The steps to build the Layout, like layers: you can turn on one or several at once. The sketch always shows the outline plus only what belongs to the steps you have on. Each one is assigned separately in the access tree.",
-      "example": "you turn on Doors and Power connections: the sketch shows the outline with the doors and the power, and nothing else."
+      "what": "The steps to build the Layout, like layers. Tap a step to see it on the sketch and edit it: only the step you tapped shows below. You can keep several on at once and the sketch shows the outline plus all of them. To hide a step, tap it again while it is the one you are editing.",
+      "example": "you tap Doors and then Power connections: you see both on the sketch and edit only the power below; you tap Doors again to edit the doors."
     },
     "layoutSec_contorno": {
       "what": "The corners of the warehouse in meters, with the height of each one, and the columns or obstacles. The total m² come from here and, with the heights, the m³.",

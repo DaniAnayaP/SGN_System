@@ -2942,8 +2942,8 @@
       "example": "escaneas el UPC de una caja y ves qué artículo es y en qué anaquel está."
     },
     "layoutSteps": {
-      "what": "Los pasos para armar el Layout, como capas: puedes activar uno o varios a la vez. El croquis muestra siempre el contorno y, además, solo lo de los pasos que tengas activos. Cada uno se asigna por separado en los accesos.",
-      "example": "activas Puertas y Conexiones de luz: el croquis muestra el contorno con las puertas y la luz, y nada más."
+      "what": "Los pasos para armar el Layout, como capas. Toca un paso para verlo en el croquis y editarlo: abajo solo sale lo del paso que tocaste. Puedes dejar varios activos a la vez y el croquis muestra la nave más todos ellos. Para ocultar un paso, tócalo otra vez cuando sea el que estás editando.",
+      "example": "tocas Puertas y luego Conexiones de luz: ves ambas en el croquis y abajo editas solo la luz; tocas Puertas otra vez para editar las puertas."
     },
     "layoutSec_contorno": {
       "what": "Las esquinas de la nave en metros, con la altura de cada una, y las columnas u obstáculos. De aquí salen los m² totales y, con las alturas, los m³.",

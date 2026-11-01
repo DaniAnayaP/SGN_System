@@ -13,7 +13,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, showMeasures: true, steps: ['contorno'], creating: false,
+    saved: null, draft: null, version: 0, perms: null, showMeasures: true, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -367,20 +367,33 @@ function stepHtml(step) {
     return `${table(['main.layoutTipo', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutNiveles', 'main.layoutCajones', 'main.layoutHuellaVolumen', ''], rows)}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
 }
 
-// Los pasos son capas: se pueden tener activos varios a la vez (el formulario de cada uno se apila) y el croquis muestra siempre el contorno más solo lo de los pasos activos.
+// Los pasos son capas del croquis: se pueden tener activos varios a la vez y el croquis muestra siempre la nave más lo de los pasos activos. Abajo solo sale el formulario del
+// paso enfocado (el último que se tocó): al tocar Puertas, abajo solo se edita Puertas.
 const stepOn = (step) => state.steps.includes(step);
-function showStep(step) { if (!stepOn(step)) state.steps = [...state.steps, step]; }
+function focusStep(step) {
+    state.focus = step;
+    state.focusStack = [...state.focusStack.filter((x) => x !== step), step];
+}
+function showStep(step) { if (!stepOn(step)) state.steps = [...state.steps, step]; focusStep(step); }
+function pressStep(step) {
+    if (!stepOn(step)) { showStep(step); return; }
+    if (state.focus !== step) { focusStep(step); return; }
+    if (state.steps.length < 2) return; // siempre queda al menos un paso
+    state.steps = state.steps.filter((x) => x !== step);
+    state.focusStack = state.focusStack.filter((x) => x !== step);
+    const next = [...state.focusStack].reverse().find(stepOn) || state.steps[0];
+    focusStep(next);
+}
 function renderPanel() {
-    const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" class="layout-step${stepOn(s) ? ' active' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
-    const sections = SECTION_ORDER.filter(stepOn).map((s) => {
-        const level = sectionLevel(s);
-        const locked = !canEdit(s);
-        return `<div class="layout-section" data-help-key="layoutSec_${s}">
-            <div class="layout-section-head"><h3>${esc(t(SECTION_LABEL_KEYS[s]))}</h3>${locked ? `<span class="layout-lock" data-help-key="layoutLocked"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t(level === 'solo-ver' ? 'main.layoutSoloVer' : 'main.layoutYaLlena'))}</span>` : ''}</div>
-            ${stepHtml(s)}
-        </div>`;
-    }).join('');
-    $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${tabs}</div>${sections}`;
+    const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
+    const s = state.focus;
+    const level = sectionLevel(s);
+    const locked = !canEdit(s);
+    const section = `<div class="layout-section" data-help-key="layoutSec_${s}">
+        <div class="layout-section-head"><h3>${esc(t(SECTION_LABEL_KEYS[s]))}</h3>${locked ? `<span class="layout-lock" data-help-key="layoutLocked"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t(level === 'solo-ver' ? 'main.layoutSoloVer' : 'main.layoutYaLlena'))}</span>` : ''}</div>
+        ${stepHtml(s)}
+    </div>`;
+    $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${tabs}</div>${section}`;
 }
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
@@ -602,6 +615,8 @@ function newDraftFromScratch() {
     state.planImage = '';
     state.planNew = false;
     state.steps = ['contorno'];
+    state.focus = 'contorno';
+    state.focusStack = ['contorno'];
     showEditor();
 }
 
@@ -659,6 +674,8 @@ $('layout-plan-width-ok').addEventListener('click', () => {
     state.planNew = true;
     state.pendingPlan = null;
     state.steps = ['contorno'];
+    state.focus = 'contorno';
+    state.focusStack = ['contorno'];
     showEditor();
 });
 $('layout-from-scratch').addEventListener('click', newDraftFromScratch);
@@ -737,8 +754,7 @@ $('layout-panel').addEventListener('change', onEdit);
 $('layout-panel').addEventListener('click', (event) => {
     const stepBtn = event.target.closest('[data-step]');
     if (stepBtn) {
-        const s = stepBtn.dataset.step;
-        if (stepOn(s)) { if (state.steps.length > 1) state.steps = state.steps.filter((x) => x !== s); } else state.steps = [...state.steps, s];
+        pressStep(stepBtn.dataset.step);
         renderPanel();
         refreshLive();
         return;
@@ -1036,8 +1052,12 @@ $('layout-save').addEventListener('click', async () => {
         if (res.status === 400) { Dashboard.showToast(`${t('main.layoutDatosInvalidos')} ${(payload.errors && payload.errors[0]) || ''}`.trim(), 'warning'); return; }
         if (!res.ok) throw new Error('layout save failed');
         const keepSteps = state.steps;
+        const keepFocus = state.focus;
+        const keepStack = state.focusStack;
         await loadLayout();
         state.steps = keepSteps;
+        state.focus = keepFocus;
+        state.focusStack = keepStack;
         if (state.draft) showEditor();
         Dashboard.showToast(t('main.layoutGuardado'), 'success');
     } catch (err) {

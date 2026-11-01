@@ -7268,3 +7268,6 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-measures-btn i{ font-size: 1.1rem; }
 .layout-measures-btn.off{ color: var(--color-text-secondary); background: var(--color-bg, var(--color-surface)); }
 .layout-measures-btn.off::after{ content: ""; position: absolute; width: 1.5rem; border-top: 2px solid currentColor; transform: rotate(-45deg); }
+
+/* paso enfocado: el que se está editando abajo (los demás activos solo se ven en el croquis) */
+.layout-step.focus{ box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text-primary); }
