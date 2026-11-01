@@ -87,6 +87,28 @@ function render(data) {
     ].forEach((row) => { if (row) info.appendChild(row); });
     wrap.appendChild(info);
 
+    // Dónde está: un renglón por lugar (de Relación Código), con la ruta completa.
+    if ((data.locations || []).length) {
+        const where = document.createElement('div');
+        where.className = 'where';
+        const title = document.createElement('h2');
+        title.textContent = 'Dónde está';
+        where.appendChild(title);
+        data.locations.forEach((loc) => {
+            const item = document.createElement('div');
+            item.className = 'loc';
+            const route = document.createElement('span');
+            route.className = 'loc-route';
+            route.textContent = loc.route.join(' › ');
+            const tag = document.createElement('span');
+            tag.className = `loc-tag ${loc.located ? 'ok' : 'partial'}`;
+            tag.textContent = loc.virtual ? 'Virtual' : (loc.located ? 'Ubicado' : 'A medias');
+            item.append(route, tag);
+            where.appendChild(item);
+        });
+        wrap.appendChild(where);
+    }
+
     const footer = document.createElement('div');
     footer.className = 'footer';
     footer.textContent = 'Ficha generada por SGN';

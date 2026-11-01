@@ -48,6 +48,9 @@
         return `<div class="catbanner" style="border-left-color:${esc(cat.color)}"><span class="catmark" style="background:${esc(cat.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(cat.icon, '#FFFFFF', 2)}</svg></span><div><div class="cattitle">${esc(cat.name)}</div><div class="catsub">${esc(TEXT.zoneWord)} ${esc(zone.name)}${cat.desc ? ` · ${esc(cat.desc)}` : ''}</div><p class="catnote">${esc(TEXT.noCodes)}</p></div></div>`;
     }
 
+    // /q/<token>: el token es el último tramo de la dirección.
+    const publicToken = () => decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
+
     function render(data) {
         const k = data.kpis;
         const theme = window.LayoutMapSvg.theme(data.companyColor);
@@ -56,7 +59,7 @@
             .map(([value, key]) => `<div class="kpi"><b>${fmt(value)} ${key === 'kpiVolume' ? 'm³' : 'm²'}</b><span>${esc(TEXT[key])}</span></div>`);
         const zones = k.zones.map((z) => `<div class="row"><span>${esc(z.name)} · ${esc(z.type ? (TEXT.zone[z.type] || z.type) : TEXT.noZone)}</span><span>${fmt(z.area)} m²${z.spaces ? ` · ${z.spaces} ${esc(TEXT.spaces)}` : ''}</span></div>`).join('');
         document.getElementById('wrap').innerHTML = `
-            <div class="brand"><span class="brand-mark">${esc(initials)}</span><span class="brand-name">${esc(data.companyName)}</span></div>
+            <div class="brand">${data.hasLogo ? `<img class="brand-logo" src="/api/public/layout/${encodeURIComponent(publicToken())}/logo" alt="">` : `<span class="brand-mark">${esc(initials)}</span>`}<span class="brand-name">${esc(data.companyName)}</span></div>
             ${categoryBanner(data)}
             <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${esc(TEXT.version)} ${data.version} · ${esc(TEXT.updated)} ${esc(stamp(data.updatedAt))}</p></div>
             <div class="map">${window.LayoutMapSvg.mapSvg(data.layout, { theme })}</div>

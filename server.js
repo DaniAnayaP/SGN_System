@@ -6106,6 +6106,14 @@ app.get('/api/public/ficha/:token', (req, res) => {
                 width: skuItem.width,
                 articleWeight: skuItem.article_weight,
                 packageWeight: skuItem.package_weight,
+                // Dónde está (de Relación Código): un renglón por lugar, con la ruta completa; la ubicación exacta (anaquel, nivel y espacio) solo si ya se sabe.
+                locations: (() => {
+                    const ctx = codeRelationContextFor(skuItem.client_id, !!skuItem.is_test_data);
+                    return listCodeRelations(skuItem.client_id, !!skuItem.is_test_data).filter((r) => r.sku_item_id === skuItem.id).map((r) => mapCodeRelation(r, null, '', ctx)).map((loc) => ({
+                        route: [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.spaceCode, loc.level ? `Nivel ${loc.level}` : '', loc.slot ? `Espacio ${loc.slot}` : ''].filter(Boolean),
+                        virtual: loc.subKind === 'virtual', located: loc.status === 'located',
+                    }));
+                })(),
                 photos,
             });
         })
@@ -6172,7 +6180,7 @@ function buildPublicLayoutPayload(clientId, row) {
     };
     // Color representativo del cliente (el que se elige al darlo de alta): la hoja y la vista pública se pintan con él. Sin color válido va vacío y todo se ve como siempre.
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
-    return { companyName: (client && client.company_name) || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis(pub) };
+    return { companyName: (client && client.company_name) || '', hasLogo: !!clientLogoDataUrl(clientId), companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis(pub) };
 }
 
 function layoutSummary(layout, section) {
@@ -6356,6 +6364,15 @@ const publicLayoutLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardH
 app.get('/q/:token', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
     res.sendFile(path.join(PUBLIC_DIR, 'LayoutPublico.html'));
+});
+// El logo del cliente para la vista pública del Layout: es la imagen tal cual (no va metida en el JSON, que se pide siempre sin caché). Se guarda 5 minutos en el navegador.
+app.get('/api/public/layout/:token/logo', publicLayoutLimiter, (req, res) => {
+    const row = getLayoutByPublicToken(req.params.token);
+    if (!row) return res.status(404).end();
+    const match = clientLogoDataUrl(row.clientId).match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
+    if (!match) return res.status(404).end();
+    res.set({ 'Content-Type': match[1], 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.send(Buffer.from(match[2], 'base64'));
 });
 app.get('/api/public/layout/:token', publicLayoutLimiter, (req, res) => {
     const row = getLayoutByPublicToken(req.params.token);
@@ -6672,7 +6689,9 @@ const CODE_RELATION_TEXT_KEYS = ['zoneId', 'spaceId'];
 const padSku = (n) => String(n || 0).padStart(6, '0');
 
 function codeRelationContext(req) {
-    const { clientId, isTestAccount } = req.user;
+    return codeRelationContextFor(req.user.clientId, req.user.isTestAccount);
+}
+function codeRelationContextFor(clientId, isTestAccount) {
     const warehouses = new Map();
     ['almacenes', 'sub-almacenes'].forEach((t) => listArticleCategories(clientId, t, isTestAccount).forEach((r) => warehouses.set(r.id, r)));
     return { costCenters: new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c])), warehouses, layout: warehouseLayoutIndex(clientId) };
