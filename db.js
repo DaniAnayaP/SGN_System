@@ -2331,6 +2331,11 @@ for (const col of ['category_inventario', 'category_compra', 'category_almacenam
         db.exec(`ALTER TABLE sku_items ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
     }
 }
+// Un código ya completo se ve en Catálogos > Códigos (solo lectura). Al elegir Editar pasa a Operaciones > Edición Código (editing = 1), donde se corrige, y al terminar
+// la edición regresa a Códigos. Alta Nuestros Artículos solo muestra los incompletos que no están en edición.
+if (!skuItemColumns.some((c) => c.name === 'editing')) {
+    db.exec('ALTER TABLE sku_items ADD COLUMN editing INTEGER NOT NULL DEFAULT 0');
+}
 
 // Almacenes y Sub almacenes (Catálogos, C. Distribución) reusan article_categories: parent_id = centro de costos (almacén) o almacén (sub almacén); kind = physical | virtual
 // (solo sub almacén); locations = zonas y anaqueles del Layout asignados a un sub almacén físico (JSON canónico, ver canonicalWarehouseLocations en server.js).
@@ -4965,6 +4970,12 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     categoryVidautil: { column: 'category_vidautil', fieldKey: 'main.colArticuloCategoriaVidautil' },
 };
 
+// Pasa un código a Edición Código (flag = true) o lo regresa a Códigos (flag = false).
+function setSkuItemEditing(id, clientId, flag, forTestAccount = false) {
+    db.prepare('UPDATE sku_items SET editing = ? WHERE id = ? AND client_id = ? AND is_test_data = ?').run(flag ? 1 : 0, id, clientId, forTestAccount ? 1 : 0);
+    return getSkuItemById(id, clientId, forTestAccount);
+}
+
 function updateSkuItem(id, clientId, patch, forTestAccount = false) {
     const sets = [];
     const params = { id, clientId };
@@ -6220,11 +6231,11 @@ function seedColumnSearchOptionGrants() {
 //     contrato (limitKindsForGrant) descartaría el icono aunque el puesto lo tenga. Aquí solo se agrega si el plan no lo cubre ya con un permiso más ancho.
 // No quita nada, no toca otros iconos ni pantallas (Formato de zona, Medidas, Categorías, Tarjeta, Almacenes, Relación Código... siguen como estaban) y corre una sola vez
 // (schema_migrations_data): quien después quite un icono a propósito no lo recupera en el siguiente reinicio.
-const LAYOUT_NEW_ICON_LEAVES = ['iconLayoutArea', 'iconLayoutFiltros', 'iconLayoutImprimirZona'];
-const LAYOUT_ICONS_SEED_KEY = 'seed-layout-new-icons-v1';
-function seedLayoutNewIconGrants() {
-    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(LAYOUT_ICONS_SEED_KEY)) return;
-    const path = TABLE_GRANT_PATHS.layout;
+// Siembra de una sola vez: da unas hojas nuevas (submenuIds completos) a quien YA tiene una pantalla en cada nivel por el que pasa el acceso (ver el comentario de arriba).
+// screenPath = { sectionId, itemId, submenuPrefix } de la pantalla que se toma como "ya la tiene"; leafSubmenuIds = lo que se da (las hojas pueden estar en otra pantalla).
+function seedLeavesForScreenHolders(seedKey, screenPath, leafSubmenuIds, label) {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(seedKey)) return;
+    const path = screenPath;
     if (!path) return;
     const under = `${path.submenuPrefix}/`;
     const counts = {};
@@ -6251,8 +6262,7 @@ function seedLayoutNewIconGrants() {
             let inserted = 0;
             owners.forEach(({ ownerId }) => {
                 if (broad && broad.get(ownerId, path.sectionId, path.itemId)) return;
-                LAYOUT_NEW_ICON_LEAVES.forEach((leaf) => {
-                    const submenuId = `${path.submenuPrefix}/${leaf}`;
+                leafSubmenuIds.forEach((submenuId) => {
                     if (!hasGrant.get(ownerId, path.sectionId, path.itemId, submenuId)) {
                         insertGrant.run(ownerId, path.sectionId, path.itemId, submenuId);
                         inserted += 1;
@@ -6261,10 +6271,28 @@ function seedLayoutNewIconGrants() {
             });
             counts[table] = inserted;
         }
-        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_ICONS_SEED_KEY);
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(seedKey);
     });
     seed();
-    console.log(`[db] Seeded the 3 new Layout icons for pre-existing Layout access (one-time migration): ${JSON.stringify(counts)}.`);
+    console.log(`[db] Seeded ${label} for pre-existing access (one-time migration): ${JSON.stringify(counts)}.`);
+}
+
+const LAYOUT_NEW_ICON_LEAVES = ['iconLayoutArea', 'iconLayoutFiltros', 'iconLayoutImprimirZona'];
+const LAYOUT_ICONS_SEED_KEY = 'seed-layout-new-icons-v1';
+function seedLayoutNewIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_ICONS_SEED_KEY, path, LAYOUT_NEW_ICON_LEAVES.map((leaf) => `${path.submenuPrefix}/${leaf}`), 'the 3 new Layout icons');
+}
+
+// --- One-time data migration (2026-11-01): Catálogos > Códigos y Operaciones > Edición Código para quien ya tiene Alta Nuestros Artículos -------------------------------
+// Alta deja de mostrar los códigos completos: pasan a Códigos (solo lectura) y se corrigen desde Edición Código. Quien hoy puede trabajar con los códigos en Alta recibe las dos
+// pantallas nuevas, para no perder lo que ya podía hacer (administrador del cliente aparte, que no depende de hojas). Mismos niveles y reglas que la siembra de los iconos del Layout.
+const CODIGOS_SCREENS_SEED_KEY = 'seed-codigos-edicion-screens-v1';
+function seedCodigosScreensGrants() {
+    const path = TABLE_GRANT_PATHS['nuestros-articulos'];
+    if (!path) return;
+    seedLeavesForScreenHolders(CODIGOS_SCREENS_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-codigos', 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo'], 'Códigos and Edición Código screens');
 }
 
 // --- One-time data migration: seed pantalla-visibility for pre-existing --
@@ -10590,6 +10618,7 @@ const systemReset = createSystemReset(db, DATA_DIR);
 // Siembra de Opciones de Búsqueda (definida arriba): aquí ya existe todo lo que usa findPantallaNode.
 seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
+seedCodigosScreensGrants();
 
 module.exports = {
     db,
@@ -10665,6 +10694,7 @@ module.exports = {
     getSkuItemById,
     createSkuItem,
     updateSkuItem,
+    setSkuItemEditing,
     deleteSkuItem,
     SKU_ITEM_PATCHABLE_FIELDS,
     generatePublicToken,

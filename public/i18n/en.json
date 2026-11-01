@@ -250,6 +250,7 @@
     "catCentroDistCategorias": "Categories",
     "catCentroDistUdm": "UOM",
     "opCentroDistAltaArticulos": "New Sku Registration",
+    "opCentroDistEdicionCodigo": "Code Editing",
     "opCentroDistAltaArticulosAbbr1": "Sku Registration",
     "opCentroDistAltaArticulosAbbr2": "New Sku",
     "opCentroDistAltaArticulosAbbr3": "Sku Reg.",
@@ -1627,6 +1628,14 @@
     "layoutCodigo": "Code",
     "layoutZona": "Zone",
     "layoutTipoZona": "Zone type",
+    "codigoPasoACatalogo": "Code {sku} is complete: it is no longer listed here, it moved to Catalogs > Codes.",
+    "skuEditarBtn": "Edit",
+    "skuTerminarEdicionBtn": "Finish editing",
+    "skuPasoAEdicion": "Code {sku} moved to Operations > Code Editing.",
+    "skuTerminoEdicion": "Code {sku} finished editing and went back to Catalogs > Codes.",
+    "skuFaltanDatos": "The code is missing data: fill it in to finish editing.",
+    "skuUbicacionPantalla": "Code screen",
+    "skuSoloLectura": "Read only: to fix a code, choose Edit.",
     "layoutSitio": "Site",
     "layoutSitioEjemplo": "E.g. Chihuahua Distribution Center",
     "layoutUsoZona": "Zone use",
@@ -3410,6 +3419,14 @@
     "layoutSite": {
       "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",
       "example": "you type Chihuahua Distribution Center and the header shows it on top with the company name below."
+    },
+    "skuEditar": {
+      "what": "Sends this code to Operations > Code Editing so you can fix it. Here, in Codes, they are only viewed. It is noted in the code history.",
+      "example": "you got the weight wrong: you choose Edit, fix it in Code Editing and when finished it comes back here."
+    },
+    "skuTerminarEdicion": {
+      "what": "Finishes this code editing and sends it back to Catalogs > Codes. It is only possible when the code has all 24 data filled in.",
+      "example": "you fixed the weight and the photos are complete: you choose Finish editing."
     },
     "layoutZoneUse": {
       "what": "What the zone is used for, apart from its type (Dry, Refrigerated…): Storage (product is kept), Operations (work happens: receiving, picking, shipping) or Facilities (restroom, pumps, electrical room and other building services). It can be left not set.",

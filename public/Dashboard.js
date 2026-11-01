@@ -12350,6 +12350,10 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-layout': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-layout' },
     'cat-operaciones-centro-dist-verificador-sku': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-verificador-sku' },
     'cat-operaciones-centro-dist-relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
+    // Catálogos > Códigos (los códigos ya completos, solo lectura) y Operaciones > Edición Código (los que se mandaron a corregir): su acceso es el de cada pantalla; sus columnas e
+    // iconos siguen los de Alta Nuestros Artículos (es la misma tabla).
+    'cat-catalogos-centro-dist-codigos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-codigos' },
+    'cat-operaciones-centro-dist-edicion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo' },
 };
 
 function hasScreenAccess(activePage) {

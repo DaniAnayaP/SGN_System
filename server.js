@@ -140,6 +140,7 @@ const {
     createSkuItem,
     SKU_ITEM_PATCHABLE_FIELDS,
     updateSkuItem,
+    setSkuItemEditing,
     deleteSkuItem,
     generatePublicToken,
     getSkuItemByPublicToken,
@@ -5928,6 +5929,9 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         categoryRiesgo: row.category_riesgo,
         categoryVidautil: row.category_vidautil,
         publicToken: row.public_token,
+        // ¿Ya tiene sus 24 datos? Si sí, ya no se ve en Alta Nuestros Artículos y pasa a Catálogos > Códigos (solo lectura). editing = lo mandaron a Operaciones > Edición Código.
+        complete: isSkuItemComplete(row),
+        editing: !!row.editing,
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
             companyName,
@@ -5944,7 +5948,16 @@ app.get('/api/business/sku-items', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const pendingByRecord = getPendingColumnsByRecord(req.user.clientId, 'nuestros-articulos');
     const client = getClientById(req.user.clientId);
-    res.json({ skuItems: listSkuItems(req.user.clientId, req.user.isTestAccount).map((r) => mapSkuItemRecord(r, pendingByRecord, client?.company_name)) });
+    // scope=pending: los que aún les falta algún dato (Alta Nuestros Artículos); scope=complete: los que ya tienen los 24 (Catálogos > Códigos, solo lectura); scope=editing: los que
+    // se mandaron a corregir (Operaciones > Edición Código). Sin scope salen todos (la App, por ahora).
+    const scope = ['pending', 'complete', 'editing'].includes(req.query.scope) ? req.query.scope : 'all';
+    const inScope = (r) => {
+        if (scope === 'all') return true;
+        if (scope === 'editing') return !!r.editing;
+        return !r.editing && isSkuItemComplete(r) === (scope === 'complete');
+    };
+    const rows = listSkuItems(req.user.clientId, req.user.isTestAccount).filter(inScope);
+    res.json({ skuItems: rows.map((r) => mapSkuItemRecord(r, pendingByRecord, client?.company_name)) });
 });
 
 app.post('/api/business/sku-items', requireAuth, (req, res) => {
@@ -6043,6 +6056,43 @@ app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
     });
     if (created.length) notifyButtonAction(req, 'nuestros-articulos', 'import', `${created.length} (${created[0].sku} – ${created[created.length - 1].sku})`);
     res.json({ created, failed });
+});
+
+// Editar un código ya completo: pasa de Catálogos > Códigos (solo lectura) a Operaciones > Edición Código, donde se corrige con las mismas reglas de siempre (permisos por columna,
+// historial). Al terminar la edición (con los 24 datos llenos) regresa a Códigos. Se pide la hoja de la pantalla Edición Código del árbol; el administrador del cliente no depende de hojas.
+const EDICION_CODIGO_SCREEN = { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuId: 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo' };
+function canUseEdicionCodigo(req) {
+    return !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), EDICION_CODIGO_SCREEN.sectionId, EDICION_CODIGO_SCREEN.itemId, EDICION_CODIGO_SCREEN.submenuId);
+}
+function logSkuScreenMove(req, skuItem, from, to) {
+    logTableChange({
+        clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: skuItem.id, recordLabel: `#${skuItem.id}`, action: 'update',
+        fieldKey: 'main.skuUbicacionPantalla', oldValue: from, newValue: to, changedBy: changedByLabel(req),
+    });
+}
+app.post('/api/business/sku-items/:id/edit', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canUseEdicionCodigo(req)) return res.status(403).json({ message: 'No tienes permiso para mandar códigos a Edición Código.' });
+    const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
+    if (existing.editing) return res.status(409).json({ message: 'Este código ya está en Edición Código.' });
+    if (!isSkuItemComplete(existing)) return res.status(409).json({ message: 'Este código todavía no está completo: se termina de llenar en Alta Nuestros Artículos.' });
+    const skuItem = setSkuItemEditing(existing.id, req.user.clientId, true, req.user.isTestAccount);
+    logSkuScreenMove(req, skuItem, 'Códigos', 'Edición Código');
+    const client = getClientById(req.user.clientId);
+    res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
+});
+app.post('/api/business/sku-items/:id/finish-edit', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canUseEdicionCodigo(req)) return res.status(403).json({ message: 'No tienes permiso para terminar la edición de códigos.' });
+    const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
+    if (!existing.editing) return res.status(409).json({ message: 'Este código no está en Edición Código.' });
+    if (!isSkuItemComplete(existing)) return res.status(409).json({ message: 'Al código le faltan datos: llénalos para terminar la edición.', code: 'incomplete' });
+    const skuItem = setSkuItemEditing(existing.id, req.user.clientId, false, req.user.isTestAccount);
+    logSkuScreenMove(req, skuItem, 'Edición Código', 'Códigos');
+    const client = getClientById(req.user.clientId);
+    res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
 });
 
 app.patch('/api/business/sku-items/:id', requireAuth, (req, res) => {

@@ -250,6 +250,7 @@
     "catCentroDistCategorias": "Categorías",
     "catCentroDistUdm": "UDM",
     "opCentroDistAltaArticulos": "Alta Nuestros Artículos (Sku)",
+    "opCentroDistEdicionCodigo": "Edición Código",
     "opCentroDistAltaArticulosAbbr1": "Alta Artículos (Sku)",
     "opCentroDistAltaArticulosAbbr2": "Alta Artículos",
     "opCentroDistAltaArticulosAbbr3": "Alta Art.",
@@ -1627,6 +1628,14 @@
     "layoutCodigo": "Código",
     "layoutZona": "Zona",
     "layoutTipoZona": "Tipo de zona",
+    "codigoPasoACatalogo": "El código {sku} quedó completo: ya no se ve aquí, pasó a Catálogos > Códigos.",
+    "skuEditarBtn": "Editar",
+    "skuTerminarEdicionBtn": "Terminar edición",
+    "skuPasoAEdicion": "El código {sku} pasó a Operaciones > Edición Código.",
+    "skuTerminoEdicion": "El código {sku} terminó su edición y regresó a Catálogos > Códigos.",
+    "skuFaltanDatos": "Al código le faltan datos: llénalos para terminar la edición.",
+    "skuUbicacionPantalla": "Pantalla del código",
+    "skuSoloLectura": "Solo lectura: para corregir un código, elige Editar.",
     "layoutSitio": "Sitio",
     "layoutSitioEjemplo": "Ej. Centro de Distribución Chihuahua",
     "layoutUsoZona": "Uso de la zona",
@@ -3409,6 +3418,14 @@
     "layoutSite": {
       "what": "El nombre del lugar (el sitio). Sale arriba del nombre de la empresa en el encabezado de la hoja del Layout y de las tarjetas que se imprimen. Si lo dejas vacío sale el texto de siempre. Más adelante saldrá de la configuración.",
       "example": "escribes Centro de Distribución Chihuahua y el encabezado queda con ese nombre arriba y el de la empresa abajo."
+    },
+    "skuEditar": {
+      "what": "Manda este código a Operaciones > Edición Código para corregirlo. Aquí, en Códigos, solo se ven. Queda anotado en el historial del código.",
+      "example": "te equivocaste en el peso: eliges Editar, lo corriges en Edición Código y al terminar regresa aquí."
+    },
+    "skuTerminarEdicion": {
+      "what": "Termina la edición de este código y lo regresa a Catálogos > Códigos. Solo se puede si el código tiene sus 24 datos llenos.",
+      "example": "ya corregiste el peso y las fotos están completas: eliges Terminar edición."
     },
     "layoutZoneUse": {
       "what": "Para qué se usa la zona, aparte de su tipo (Seco, Refrigerado…): Almacenamiento (se guarda producto), Operaciones (se trabaja: recibir, surtir, embarcar) o Instalaciones (baño, bombas, cuarto eléctrico y demás servicios del edificio). Se puede dejar sin definir.",

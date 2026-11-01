@@ -20,12 +20,24 @@
 // /api/business/sku-items.
 // ---------------------------------------------------------------------------
 
+// Esta misma pantalla sirve a tres páginas, las tres sobre la misma tabla de artículos:
+//   - Alta Nuestros Artículos: los códigos a los que todavía les falta algún dato. Aquí se dan de alta (formulario o plantilla) y se terminan de llenar; en cuanto queda lleno el último
+//     dato el código sale de Alta y pasa a Catálogos > Códigos.
+//   - Catálogos > Códigos (CatCentroDistCodigos.html): los códigos ya completos, SOLO LECTURA. Para corregir uno se elige Editar.
+//   - Operaciones > Edición Código (OpCentroDistEdicionCodigo.html): los códigos que se mandaron a corregir con Editar. Se editan como en Alta y, con los 24 datos llenos, se elige
+//     Terminar edición y regresan a Códigos.
+const PAGE = document.body.dataset.activePage;
+const CODES_MODE = PAGE === 'cat-catalogos-centro-dist-codigos';
+const EDIT_MODE = PAGE === 'cat-operaciones-centro-dist-edicion-codigo';
+const ACTIVE_PAGE = CODES_MODE || EDIT_MODE ? PAGE : 'cat-operaciones-centro-dist-alta-articulos';
+const SKU_SCOPE = CODES_MODE ? 'complete' : (EDIT_MODE ? 'editing' : 'pending');
+
 (async function init() {
     try {
-        const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-centro-dist-alta-articulos' });
+        const role = await Dashboard.initDashboard({ activePage: ACTIVE_PAGE });
         if (!role) return;
         await loadCategoryOptions();
-        renderNewRecordButton();
+        if (!CODES_MODE && !EDIT_MODE) renderNewRecordButton();
         await refreshTable();
     } catch (err) {
         console.error('Alta Nuestros Artículos failed to initialize:', err);
@@ -184,6 +196,30 @@ function ensureCreatedThenPatch(record, patch) {
     return patchSkuItem(record.id, patch);
 }
 
+// Avisa cuando un código cambió de pantalla con lo que se acaba de guardar: en Alta, el que quedó completo pasa a Catálogos > Códigos.
+function announceMoved(skuItem) {
+    if (!skuItem) return;
+    if (!CODES_MODE && !EDIT_MODE && skuItem.complete) Dashboard.showToast(Dashboard.t('main.codigoPasoACatalogo').replace('{sku}', skuItem.sku), 'success');
+}
+
+// Editar (en Códigos): manda el código a Edición Código. Terminar edición (en Edición Código): lo regresa a Códigos; solo si ya tiene los 24 datos.
+async function moveSkuItem(record, action) {
+    try {
+        const res = await fetch(`/api/business/sku-items/${record.id}/${action}`, { method: 'POST', credentials: 'include' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            Dashboard.showToast(body.code === 'incomplete' ? Dashboard.t('main.skuFaltanDatos') : (body.message || Dashboard.t('admin.saveError')), body.code === 'incomplete' ? 'warning' : 'error');
+            await refreshTable();
+            return;
+        }
+        Dashboard.showToast(Dashboard.t(action === 'edit' ? 'main.skuPasoAEdicion' : 'main.skuTerminoEdicion').replace('{sku}', record.sku), 'success');
+        await refreshTable();
+    } catch (err) {
+        console.error('Códigos: failed to move the record', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
 async function patchSkuItem(id, patch) {
     try {
         const res = await fetch(`/api/business/sku-items/${id}`, {
@@ -204,6 +240,7 @@ async function patchSkuItem(id, patch) {
         } else if (body.pendingFields?.length) {
             Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
         }
+        announceMoved(body.skuItem);
         await refreshTable();
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to save change', err);
@@ -344,7 +381,20 @@ function buildActionsCell(record, tr) {
     historyBtn.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
     td.appendChild(historyBtn);
-    if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth')) {
+    // Códigos: solo lectura, con Editar (lo manda a Edición Código). Edición Código: Terminar edición (lo regresa a Códigos). Los dos piden la hoja de Edición Código.
+    if ((CODES_MODE || EDIT_MODE) && Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo')) {
+        const moveBtn = document.createElement('button');
+        moveBtn.type = 'button';
+        moveBtn.className = 'admin-icon-btn';
+        moveBtn.setAttribute('data-help-key', CODES_MODE ? 'skuEditar' : 'skuTerminarEdicion');
+        const label = Dashboard.t(CODES_MODE ? 'main.skuEditarBtn' : 'main.skuTerminarEdicionBtn');
+        moveBtn.setAttribute('aria-label', label);
+        moveBtn.title = label;
+        moveBtn.innerHTML = `<i class="bx ${CODES_MODE ? 'bx-edit' : 'bx-check-circle'}" aria-hidden="true"></i>`;
+        moveBtn.addEventListener('click', () => moveSkuItem(record, CODES_MODE ? 'edit' : 'finish-edit'));
+        td.appendChild(moveBtn);
+    }
+    if (!CODES_MODE && Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth')) {
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
@@ -372,6 +422,19 @@ async function deleteSkuItem(id, tr) {
         console.error('Alta Nuestros Artículos: failed to delete record', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
+}
+
+// Catálogos > Códigos es de solo lectura: las celdas no se abren y los selectores y fotos no se pueden cambiar (las fotos sí se pueden ver). Para corregir se usa Editar.
+function makeRowReadOnly(tr) {
+    tr.querySelectorAll('td.editable-cell, td.editable-cell-locked').forEach((td) => {
+        td.onclick = null;
+        td.classList.remove('editable-cell');
+        td.removeAttribute('title');
+    });
+    tr.querySelectorAll('select').forEach((select) => { select.disabled = true; select.title = Dashboard.t('main.skuSoloLectura'); });
+    tr.querySelectorAll('input[type="file"]').forEach((input) => { input.disabled = true; });
+    // el botón de la cámara (foto que falta) no sube archivos aquí
+    tr.querySelectorAll('td button.admin-icon-btn i.bx-camera').forEach((icon) => { const btn = icon.closest('button'); btn.disabled = true; btn.title = Dashboard.t('main.skuSoloLectura'); });
 }
 
 function buildRow(record) {
@@ -442,6 +505,7 @@ function buildRow(record) {
         buildQrCell(record),
         buildActionsCell(record, tr),
     );
+    if (CODES_MODE) makeRowReadOnly(tr);
     tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell'));
     return tr;
 }
@@ -469,7 +533,7 @@ async function refreshTable() {
     const tbody = getTbody();
     if (tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
     try {
-        const res = await fetch('/api/business/sku-items', { credentials: 'include' });
+        const res = await fetch(`/api/business/sku-items?scope=${SKU_SCOPE}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { skuItems } = await res.json();
         tbody.innerHTML = '';
@@ -684,30 +748,32 @@ createForm?.addEventListener('submit', async (event) => {
             const input = createForm.elements.namedItem(apiKey);
             if (input && !input.disabled) patch[apiKey] = input.value;
         });
-        await fetch(`/api/business/sku-items/${skuItem.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(patch),
-        });
+        // La respuesta de cada guardado dice si el código ya quedó completo (entonces ya no se ve aquí: pasa a Catálogos > Códigos).
+        let lastSaved = null;
+        const patchNew = async (body) => {
+            const patched = await fetch(`/api/business/sku-items/${skuItem.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(body),
+            });
+            if (patched.ok) lastSaved = (await patched.json().catch(() => null))?.skuItem || lastSaved;
+        };
+        await patchNew(patch);
 
         for (const [, key] of EVIDENCE_FIELDS) {
             const file = createEvidenceFiles.get(key);
             if (!file) continue;
             try {
                 const evidenceKey = await Dashboard.uploadEvidenceFile(file, { tableKey: TABLE_KEY, recordId: skuItem.id, fieldKey: key });
-                await fetch(`/api/business/sku-items/${skuItem.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ [key]: evidenceKey }),
-                });
+                await patchNew({ [key]: evidenceKey });
             } catch (err) {
                 console.error(`Alta Nuestros Artículos: evidence upload failed for ${key}`, err);
             }
         }
 
         closeCreateModal();
+        announceMoved(lastSaved);
         await refreshTable();
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to save new record', err);

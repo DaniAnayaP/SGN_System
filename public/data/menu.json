@@ -713,7 +713,7 @@
     },
     "supply-chain/sc-area-distribution-center": {
       "cat-catalogos": [
-        { "id": "cat-catalogos-centro-dist-codigos", "labelKey": "menu.catCentroDistCodigos", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-centro-dist-codigos", "labelKey": "menu.catCentroDistCodigos", "icon": "bx-window", "href": "CatCentroDistCodigos.html" },
         {
           "id": "cat-catalogos-centro-dist-categorias-inventario", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasInventario", "abbrKeys": ["menu.catCentroDistCategoriasInventarioAbbr1", "menu.catCentroDistCategoriasInventarioAbbr2", "menu.catCentroDistCategoriasInventarioAbbr3"], "icon": "bx-package", "href": "CatCentroDistCategoriasInventario.html",
           "submenu": [
@@ -1314,6 +1314,7 @@
             { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
           ]
         },
+        { "id": "cat-operaciones-centro-dist-edicion-codigo", "labelKey": "menu.opCentroDistEdicionCodigo", "icon": "bx-edit", "href": "OpCentroDistEdicionCodigo.html" },
         {
           "id": "cat-operaciones-centro-dist-layout", "labelKey": "menu.opCentroDistLayout", "icon": "bx-map-alt", "href": "OpCentroDistLayout.html",
           "submenu": [
