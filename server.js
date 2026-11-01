@@ -153,6 +153,9 @@ const {
     listArticleCategories,
     getArticleCategoryById,
     listActiveArticleCategoryNames,
+    ZONE_CATEGORY_COLUMNS,
+    countZoneCodesByCategory,
+    countZoneCodesInCategory,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     articleCategoryPatchableFields,
@@ -6155,6 +6158,8 @@ function layoutPermissions(req) {
         // Ver u ocultar los m² de cada zona en el croquis (y en la hoja que se descarga) es otro icono con su hoja (iconLayoutArea); los filtros de las tablas del panel, otro (iconLayoutFiltros).
         canToggleArea: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutArea'),
         canFilterTables: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFiltros'),
+        // "QR y descarga" por Zona (la hoja con las categorías de los códigos que hay en la zona) se usa con el icono Imprimir por zona (hoja <pantalla>/iconLayoutImprimirZona).
+        canPrintZone: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutImprimirZona'),
         // Las categorías de las zonas se capturan con el icono Categorías de la zona y su tarjeta con QR se baja con el icono Tarjeta de categorías (hojas <pantalla>/iconLayoutCategorias e iconLayoutTarjeta).
         canEditCategories: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCategorias'),
         canUseCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjeta'),
@@ -6345,6 +6350,53 @@ app.get('/api/business/layout/categories-qr', requireAuth, (req, res) => {
     res.json({ companyName: (client && client.company_name) || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', logoDataUrl: logo, version: row.version, updatedAt: row.updatedAt, zones });
 });
 
+// Hoja por Zona: las categorías (de UNA de las 7, la que se elija) de los códigos que Relación Código tiene en una zona, con cuántos códigos hay de cada una y su QR.
+// REGLA DE LOS QR IMPRESOS: no cambian nunca. Cada QR lleva la dirección fija del Layout + el id de la zona + la categoría del CATÁLOGO por su número (nunca su nombre ni una
+// cantidad), así la hoja impresa sigue sirviendo aunque se renombre la categoría o cambien los códigos; lo que se ve al escanear se lee en ese momento
+// (GET /api/public/layout/:token/category). Una categoría que ya no está en el catálogo (el código conserva su texto) lleva el texto en la clave: "tipo.n:<texto>".
+const ZONE_CATEGORY_KEY_RE = /^([a-z]+)\.(\d{1,9}|n:.{1,200})$/;
+function layoutQrRows(url) {
+    const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
+    const size = qr.modules.size;
+    const rows = [];
+    for (let r = 0; r < size; r++) rows.push(Array.from({ length: size }, (_, k) => (qr.modules.get(r, k) ? '1' : '0')).join(''));
+    return rows;
+}
+app.get('/api/business/layout/zone-categories', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canPrintZone) return res.status(403).json({ message: 'No tienes permiso para imprimir por zona.' });
+    const type = String(req.query.type || 'inventario');
+    if (!ZONE_CATEGORY_COLUMNS[type]) return res.status(400).json({ message: 'Esa categoría no existe.' });
+    const row = getClientLayout(req.user.clientId);
+    if (!row) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    const zone = (row.layout.zones || []).find((z) => z.id === String(req.query.zone || '') && z.active !== false);
+    if (!zone) return res.status(404).json({ message: 'Esa zona no está en el Layout guardado.' });
+    const isTest = !!req.user.isTestAccount;
+    const byName = new Map();
+    listArticleCategories(req.user.clientId, type, isTest).forEach((c) => { if (!byName.has(c.name) || c.status === 'active') byName.set(c.name, c); });
+    const base = `${req.protocol}://${req.get('host')}/q/${ensureLayoutPublicToken(req.user.clientId)}`;
+    let without = 0;
+    let total = 0;
+    const categories = [];
+    countZoneCodesByCategory(req.user.clientId, isTest, zone.id, type).forEach(({ name, codes }) => {
+        total += codes;
+        if (!name) { without += codes; return; }
+        const entry = byName.get(name);
+        const key = entry ? `${type}.${entry.id}` : `${type}.n:${name}`;
+        const url = `${base}?z=${encodeURIComponent(zone.id)}&k=${encodeURIComponent(key)}`;
+        categories.push({ key, name, codes, seed: entry ? entry.record_number : 0, url, qrRows: layoutQrRows(url) });
+    });
+    categories.sort((a, b) => b.codes - a.codes || a.name.localeCompare(b.name, 'es'));
+    const client = getClientById(req.user.clientId);
+    const seedColor = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        zone: { id: zone.id, name: zone.name }, type, categories, without, total,
+        companyName: (client && client.company_name) || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seedColor) ? seedColor.toLowerCase() : '', logoDataUrl: clientLogoDataUrl(req.user.clientId),
+        version: row.version, updatedAt: row.updatedAt,
+    });
+});
+
 // Cambiar el QR a propósito (por ejemplo si lo fotografiaron fuera de la empresa): el anterior deja de funcionar y hay que volver a imprimir.
 app.post('/api/business/layout/qr/regenerate', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -6376,6 +6428,27 @@ app.get('/api/public/layout/:token/logo', publicLayoutLimiter, (req, res) => {
     if (!match) return res.status(404).end();
     res.set({ 'Content-Type': match[1], 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex, nofollow' });
     res.send(Buffer.from(match[2], 'base64'));
+});
+// Lo que muestra el QR de una categoría de la hoja por Zona (?z=<zona>&k=<tipo.número>): el nombre ACTUAL de la categoría y cuántos códigos hay hoy en esa zona. Solo eso:
+// ni la lista de códigos ni fotos (esa vista sería otra pieza). Nunca cambia la dirección; sí lo que responde.
+app.get('/api/public/layout/:token/category', publicLayoutLimiter, (req, res) => {
+    const row = getLayoutByPublicToken(req.params.token);
+    if (!row) return res.status(404).json({ message: 'Layout not found.' });
+    const zone = (row.layout.zones || []).find((z) => z.id === String(req.query.z || '') && z.active !== false);
+    const match = ZONE_CATEGORY_KEY_RE.exec(String(req.query.k || ''));
+    if (!zone || !match || !ZONE_CATEGORY_COLUMNS[match[1]]) return res.status(404).json({ message: 'Category not found.' });
+    let name;
+    let seed = 0;
+    if (match[2].startsWith('n:')) {
+        name = match[2].slice(2);
+    } else {
+        const entry = getArticleCategoryById(Number(match[2]), row.clientId, false);
+        if (!entry || entry.category_type !== match[1]) return res.status(404).json({ message: 'Category not found.' });
+        name = entry.name;
+        seed = entry.record_number;
+    }
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({ zoneName: zone.name, type: match[1], name, seed, codes: countZoneCodesInCategory(row.clientId, false, zone.id, match[1], name) });
 });
 app.get('/api/public/layout/:token', publicLayoutLimiter, (req, res) => {
     const row = getLayoutByPublicToken(req.params.token);

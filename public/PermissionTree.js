@@ -1769,6 +1769,7 @@
             iconLayoutMedidas: 'bx-ruler',
             iconLayoutArea: 'bx-area',
             iconLayoutFiltros: 'bx-filter-alt',
+            iconLayoutImprimirZona: 'bx-printer',
             iconLayoutCategorias: 'bx-purchase-tag-alt',
             iconLayoutTarjeta: 'bx-id-card',
         };

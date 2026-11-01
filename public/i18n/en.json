@@ -1697,6 +1697,23 @@
     "layoutFiltrosBtn": "Layout table filters",
     "layoutFiltroQuitar": "Clear filters",
     "layoutFiltroNota": "Filtering: showing {shown} of {total} rows",
+    "layoutImprimirZonaBtn": "Print by zone (code categories)",
+    "layoutQrPor": "By",
+    "layoutQrPorLayout": "Layout",
+    "layoutQrPorZona": "Zone",
+    "layoutQrZona": "Zone",
+    "layoutQrCategoriasSegun": "Categories by",
+    "layoutQrZonaSub": "The zone sheet, in the size you choose",
+    "layoutQrZonaPngSub": "The same sheet as an image",
+    "layoutQrZonaSinZonas": "There are no saved zones yet.",
+    "layoutQrZonaCargando": "Reading the zone's codes…",
+    "layoutQrZonaSinCodigos": "There are no Code Relation codes in this zone yet.",
+    "layoutQrZonaNingunaCategoria": "The {n} codes in this zone have no value for that category, so none appear.",
+    "layoutQrZonaSinCategoria": "{n} codes in this zone have no value for that category and do not appear.",
+    "layoutQrZonaSinCategoriaUno": "1 code in this zone has no value for that category and does not appear.",
+    "layoutQrZonaTodasTienen": "Every code in this zone has that category.",
+    "layoutZonaCodigos": "{n} codes in this zone",
+    "layoutZonaCodigosUno": "1 code in this zone",
     "layoutFormatoZonaBtn": "Zone format (color, stripes and border)",
     "layoutFormatoZona": "Zone format",
     "layoutFormatoRelleno": "Fill",
@@ -3382,6 +3399,22 @@
     "layoutArea": {
       "what": "Shows or hides the m² under each zone name on the sketch. The name stays. The downloaded sheet (PDF or image) comes out as you see it; the public QR view does not change and the zones table still shows the surface.",
       "example": "you hide the m² so the sketch only shows the zone names and show them again to check how big each one is."
+    },
+    "layoutQrBy": {
+      "what": "Choose what to print: the whole Layout (the sheet with the map and the QR, as always) or a Zone (a sheet with the categories of the codes in that zone, each with its QR). It only shows if you have both accesses.",
+      "example": "for the rack in Zone 1 you pick Zone; for the office you pick Layout."
+    },
+    "layoutQrZonePick": {
+      "what": "The zone the sheet is made for. The zones of the saved Layout are listed.",
+      "example": "you pick Zone 2 · Refrigerated."
+    },
+    "layoutQrZoneType": {
+      "what": "Which of the 7 code categories the list is made from: Inventory, Purchasing, Storage, Rotation, Special handling, Risk or Shelf life. Each code appears under the category written for it in Item Registration. Codes without that category are left out.",
+      "example": "with Inventory Category the list says Medications, Wound care and Solutions."
+    },
+    "layoutQrZoneSheet": {
+      "what": "Downloads the zone sheet (PDF or image) with the list of categories, how many codes each has and one QR per category. The QRs never change: scanning one always shows what is current, even if the sheet was printed months ago. The list comes from what is saved in Code Relation.",
+      "example": "you print the Zone 1 sheet on half letter and stick it at the zone entrance."
     },
     "layoutFilterClear": {
       "what": "Removes every filter from this table and shows all its rows again. Filters are set with the funnel in each header, like in the other tables.",

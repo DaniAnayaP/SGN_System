@@ -5106,6 +5106,26 @@ function getArticleCategoryById(id, clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM article_categories WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
+// Hoja por Zona (Layout > QR y descarga): los códigos que Relación Código tiene en una zona, agrupados por el valor de UNA de sus 7 categorías. Cada código cuenta una vez
+// aunque esté en varios lugares de la zona. Las categorías se guardan como texto en sku_items (ver arriba), por eso aquí se agrupa por ese texto; '' = sin categoría.
+const ZONE_CATEGORY_COLUMNS = {
+    inventario: 'category_inventario', compra: 'category_compra', almacenamiento: 'category_almacenamiento', rotacion: 'category_rotacion',
+    manejo: 'category_manejo', riesgo: 'category_riesgo', vidautil: 'category_vidautil',
+};
+function countZoneCodesByCategory(clientId, forTestAccount, zoneId, categoryType) {
+    const column = ZONE_CATEGORY_COLUMNS[categoryType];
+    if (!column) return null;
+    return db.prepare(`SELECT s.${column} AS name, COUNT(DISTINCT r.sku_item_id) AS codes
+        FROM code_relations r JOIN sku_items s ON s.id = r.sku_item_id
+        WHERE r.client_id = ? AND r.is_test_data = ? AND r.zone_id = ? GROUP BY s.${column}`).all(clientId, forTestAccount ? 1 : 0, zoneId);
+}
+function countZoneCodesInCategory(clientId, forTestAccount, zoneId, categoryType, name) {
+    const column = ZONE_CATEGORY_COLUMNS[categoryType];
+    if (!column) return 0;
+    return db.prepare(`SELECT COUNT(DISTINCT r.sku_item_id) AS n FROM code_relations r JOIN sku_items s ON s.id = r.sku_item_id
+        WHERE r.client_id = ? AND r.is_test_data = ? AND r.zone_id = ? AND s.${column} = ?`).get(clientId, forTestAccount ? 1 : 0, zoneId, name).n;
+}
+
 // Options a "Categoría X" select on Alta Nuestros Artículos may offer for
 // NEW selections -- Inactivo values are excluded here but never removed from
 // an artículo that already carries one (that's just the plain text value
@@ -10602,6 +10622,9 @@ module.exports = {
     listArticleCategories,
     getArticleCategoryById,
     listActiveArticleCategoryNames,
+    ZONE_CATEGORY_COLUMNS,
+    countZoneCodesByCategory,
+    countZoneCodesInCategory,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     articleCategoryPatchableFields,

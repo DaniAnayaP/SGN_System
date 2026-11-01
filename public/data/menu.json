@@ -1328,6 +1328,7 @@
             { "id": "iconLayoutMedidas", "labelKey": "main.layoutMedidasBtn", "permissionOnly": true },
             { "id": "iconLayoutArea", "labelKey": "main.layoutAreaBtn", "permissionOnly": true },
             { "id": "iconLayoutFiltros", "labelKey": "main.layoutFiltrosBtn", "permissionOnly": true },
+            { "id": "iconLayoutImprimirZona", "labelKey": "main.layoutImprimirZonaBtn", "permissionOnly": true },
             { "id": "iconLayoutCategorias", "labelKey": "main.layoutCategoriasBtn", "permissionOnly": true },
             { "id": "iconLayoutTarjeta", "labelKey": "main.layoutTarjetaBtn", "permissionOnly": true },
             {

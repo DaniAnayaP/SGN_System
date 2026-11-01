@@ -410,11 +410,30 @@
                             <span data-i18n="main.layoutQrMenu">QR and download</span>
                             <i class="bx bx-chevron-down" aria-hidden="true"></i>
                         </button>
-                        <div class="layout-qr-pop" id="layout-qr-pop" role="menu" hidden>
-                            <button type="button" role="menuitem" data-qr="pdf" data-help-key="layoutQrPdf"><b data-i18n="main.layoutDescargarPdf">Download PDF</b><span data-i18n="main.layoutDescargarPdfSub">A3 landscape sheet with the map and the QR, to print</span></button>
-                            <button type="button" role="menuitem" data-qr="png" data-help-key="layoutQrPng"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutDescargarPngSub">The same sheet as an image, to send in a message</span></button>
-                            <button type="button" role="menuitem" data-qr="link" data-help-key="layoutQrLink"><b data-i18n="main.layoutCopiarEnlace">Copy the QR link</b><span data-i18n="main.layoutCopiarEnlaceSub">It is the same one the QR carries</span></button>
-                            <button type="button" role="menuitem" data-qr="regen" id="layout-qr-regen" data-help-key="layoutQrRegen" hidden><b data-i18n="main.layoutRegenerarQr">Change the QR</b><span data-i18n="main.layoutRegenerarQrSub">The current QR will stop working</span></button>
+                        <div class="layout-qr-pop" id="layout-qr-pop" hidden>
+                            <div class="layout-qr-by" id="layout-qr-by" data-help-key="layoutQrBy" hidden>
+                                <span data-i18n="main.layoutQrPor">By</span>
+                                <div class="layout-seg" role="group" data-help-key="layoutQrBy">
+                                    <button type="button" class="layout-seg-btn active" id="layout-qr-by-layout" data-qrby="layout" aria-pressed="true" data-i18n="main.layoutQrPorLayout">Layout</button>
+                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-zone" data-qrby="zone" aria-pressed="false" data-i18n="main.layoutQrPorZona">Zone</button>
+                                </div>
+                            </div>
+                            <div class="layout-qr-pane" id="layout-qr-pane-layout" role="menu">
+                                <button type="button" role="menuitem" data-qr="pdf" data-help-key="layoutQrPdf"><b data-i18n="main.layoutDescargarPdf">Download PDF</b><span data-i18n="main.layoutDescargarPdfSub">A3 landscape sheet with the map and the QR, to print</span></button>
+                                <button type="button" role="menuitem" data-qr="png" data-help-key="layoutQrPng"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutDescargarPngSub">The same sheet as an image, to send in a message</span></button>
+                                <button type="button" role="menuitem" data-qr="link" data-help-key="layoutQrLink"><b data-i18n="main.layoutCopiarEnlace">Copy the QR link</b><span data-i18n="main.layoutCopiarEnlaceSub">It is the same one the QR carries</span></button>
+                                <button type="button" role="menuitem" data-qr="regen" id="layout-qr-regen" data-help-key="layoutQrRegen" hidden><b data-i18n="main.layoutRegenerarQr">Change the QR</b><span data-i18n="main.layoutRegenerarQrSub">The current QR will stop working</span></button>
+                            </div>
+                            <div class="layout-qr-pane" id="layout-qr-pane-zone" hidden>
+                                <div class="layout-qr-fields">
+                                    <label data-help-key="layoutQrZonePick"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-zone"></select></label>
+                                    <label data-help-key="layoutQrZoneType"><span data-i18n="main.layoutQrCategoriasSegun">Categories by</span><select id="layout-qr-type"></select></label>
+                                </div>
+                                <div class="layout-qr-chips" id="layout-qr-chips" aria-live="polite"></div>
+                                <p class="layout-qr-fine" id="layout-qr-fine"></p>
+                                <button type="button" data-qr="zone-pdf" id="layout-qr-zone-pdf" data-help-key="layoutQrZoneSheet"><b data-i18n="main.layoutDescargarPdf">Download PDF</b><span data-i18n="main.layoutQrZonaSub">The zone sheet, in the size you choose</span></button>
+                                <button type="button" data-qr="zone-png" id="layout-qr-zone-png" data-help-key="layoutQrZoneSheet"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutQrZonaPngSub">The same sheet as an image</span></button>
+                            </div>
                         </div>
                     </div>
                     <button type="button" class="btn btn-secondary" id="layout-discard" data-help-key="layoutDiscard" disabled data-i18n="main.layoutDescartar">Discard changes</button>
@@ -430,12 +449,15 @@
                                 <svg id="layout-svg" viewBox="0 0 700 460" role="img" aria-label="Layout"></svg>
                             </div>
                             <div class="layout-legend">
-                                <span><i class="lg-door"></i><span data-i18n="main.layoutLeyendaPuerta">Door</span></span>
-                                <span><i class="lg-power"></i><span data-i18n="main.layoutLeyendaLuz">Power connection</span></span>
-                                <span><i class="lg-col"></i><span data-i18n="main.layoutLeyendaColumna">Column</span></span>
-                                <span><i class="lg-space"></i><span data-i18n="main.layoutLeyendaEspacio">Rack, cabinet or pallet</span></span>
-                                <span><i class="lg-aisle"></i><span data-i18n="main.layoutType_zone_aisle">Main aisle</span></span>
-                                <span><i class="lg-aisle2"></i><span data-i18n="main.layoutType_zone_aisle2">Aisle between racks</span></span>
+                                <div class="layout-legend-title" data-i18n="main.columnLegendTitle">Symbology</div>
+                                <div class="layout-legend-list">
+                                    <span><i class="lg-door"></i><span data-i18n="main.layoutLeyendaPuerta">Door</span></span>
+                                    <span><i class="lg-power"></i><span data-i18n="main.layoutLeyendaLuz">Power connection</span></span>
+                                    <span><i class="lg-col"></i><span data-i18n="main.layoutLeyendaColumna">Column</span></span>
+                                    <span><i class="lg-space"></i><span data-i18n="main.layoutLeyendaEspacio">Rack, cabinet or pallet</span></span>
+                                    <span><i class="lg-aisle"></i><span data-i18n="main.layoutType_zone_aisle">Main aisle</span></span>
+                                    <span><i class="lg-aisle2"></i><span data-i18n="main.layoutType_zone_aisle2">Aisle between racks</span></span>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -1697,6 +1697,23 @@
     "layoutFiltrosBtn": "Filtros de las tablas del Layout",
     "layoutFiltroQuitar": "Quitar filtros",
     "layoutFiltroNota": "Filtrando: se ven {shown} de {total} filas",
+    "layoutImprimirZonaBtn": "Imprimir por zona (categorías de los códigos)",
+    "layoutQrPor": "Por",
+    "layoutQrPorLayout": "Layout",
+    "layoutQrPorZona": "Zona",
+    "layoutQrZona": "Zona",
+    "layoutQrCategoriasSegun": "Categorías según",
+    "layoutQrZonaSub": "La hoja de la zona, con el tamaño que elijas",
+    "layoutQrZonaPngSub": "La misma hoja como imagen",
+    "layoutQrZonaSinZonas": "Todavía no hay zonas guardadas.",
+    "layoutQrZonaCargando": "Leyendo los códigos de la zona…",
+    "layoutQrZonaSinCodigos": "Todavía no hay códigos de Relación Código en esta zona.",
+    "layoutQrZonaNingunaCategoria": "Los {n} códigos de esta zona no tienen esa categoría y no aparece ninguna.",
+    "layoutQrZonaSinCategoria": "{n} códigos de esta zona no tienen esa categoría y no aparecen.",
+    "layoutQrZonaSinCategoriaUno": "1 código de esta zona no tiene esa categoría y no aparece.",
+    "layoutQrZonaTodasTienen": "Todos los códigos de esta zona tienen esa categoría.",
+    "layoutZonaCodigos": "{n} códigos en esta zona",
+    "layoutZonaCodigosUno": "1 código en esta zona",
     "layoutFormatoZonaBtn": "Formato de zona (color, rayas y borde)",
     "layoutFormatoZona": "Formato de la zona",
     "layoutFormatoRelleno": "Relleno",
@@ -3381,6 +3398,22 @@
     "layoutArea": {
       "what": "Muestra u oculta los m² que van debajo del nombre de cada zona en el croquis. El nombre se queda. La hoja que se descarga (PDF o imagen) sale igual que lo ves; la vista pública del QR no cambia y la tabla de zonas sigue mostrando la superficie.",
       "example": "ocultas los m² para que el croquis solo diga los nombres de las zonas y los vuelves a mostrar para revisar cuánto mide cada una."
+    },
+    "layoutQrBy": {
+      "what": "Elige qué imprimir: el Layout completo (la hoja con el croquis y el QR, como siempre) o una Zona (una hoja con las categorías de los códigos que hay en esa zona, cada una con su QR). Solo sale si tienes los dos accesos.",
+      "example": "para pegar en el anaquel de la Zona 1 eliges Zona; para la oficina eliges Layout."
+    },
+    "layoutQrZonePick": {
+      "what": "La zona de la que se arma la hoja. Salen las zonas del Layout ya guardado.",
+      "example": "eliges Zona 2 · Refrigerado."
+    },
+    "layoutQrZoneType": {
+      "what": "De cuál de las 7 categorías de los códigos se hace la lista: Inventario, Compra, Almacenamiento, Rotación, Manejo especial, Riesgo o Vida útil. Cada código aparece en la categoría que tiene escrita en Alta Artículos. Los códigos sin esa categoría no salen.",
+      "example": "con Categoría Inventario la lista dice Medicamentos, Material de curación y Soluciones."
+    },
+    "layoutQrZoneSheet": {
+      "what": "Baja la hoja de la zona (PDF o imagen) con la lista de categorías, cuántos códigos hay de cada una y un QR por categoría. Los QR no cambian nunca: al escanear uno siempre se ve lo actual, aunque la hoja se haya impreso hace meses. La lista sale de lo guardado en Relación Código.",
+      "example": "imprimes la hoja de la Zona 1 en media carta y la pegas en la entrada de la zona."
     },
     "layoutFilterClear": {
       "what": "Quita todos los filtros de esta tabla y vuelve a mostrar todas sus filas. Los filtros se ponen con el embudo de cada encabezado, igual que en las demás tablas.",

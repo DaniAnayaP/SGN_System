@@ -1335,10 +1335,90 @@ document.addEventListener('dashboard:language-changed', () => {
 // El QR del Layout es fijo (lo crea el servidor la primera vez que se guarda) y abre la versión guardada más reciente. La hoja que se descarga se arma
 // aquí con lo ÚLTIMO GUARDADO que trae GET /api/business/layout/qr (lo mismo que se ve al escanear), no con lo que está a medio capturar.
 function updateQrMenu() {
-    const show = !!(state.perms && state.perms.canUseQr && state.saved && !state.creating);
+    const canLayout = !!(state.perms && state.perms.canUseQr);
+    const canZone = !!(state.perms && state.perms.canPrintZone);
+    const show = !!((canLayout || canZone) && state.saved && !state.creating);
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
+    // "Por: Layout | Zona" solo sale si se puede usar de las dos formas; con una sola, el menú abre directo en esa.
+    $('layout-qr-by').hidden = !(canLayout && canZone);
+    if (!qrBy || (qrBy === 'layout' && !canLayout)) qrBy = canLayout ? 'layout' : 'zone';
+    if (qrBy === 'zone' && !canZone) qrBy = 'layout';
+    renderQrBy();
     if (!show) closeQrPop();
+}
+
+// ---- QR y descarga por Zona ---------------------------------------------------------------------------------------------
+// "Por Zona" baja una hoja con las categorías de los códigos que Relación Código tiene en esa zona (de la categoría que se elija: Inventario, Compra…), cada una con cuántos códigos
+// hay y su QR. Los QR no cambian nunca (llevan la zona y la categoría por su número); lo que se ve al escanear es lo de ese momento. La hoja es la misma tarjeta de categorías (tamaño
+// libre, PDF o imagen). Se arma con lo guardado: la lista sale de la base, no del borrador.
+let qrBy = '';
+let qrZoneData = null; // lo último que respondió el servidor para la zona y la categoría elegidas
+let qrZoneSeq = 0;
+const ZONE_CATEGORY_TYPES = [['inventario', 'colArticuloCategoriaInventario'], ['compra', 'colArticuloCategoriaCompra'], ['almacenamiento', 'colArticuloCategoriaAlmacenamiento'], ['rotacion', 'colArticuloCategoriaRotacion'], ['manejo', 'colArticuloCategoriaManejo'], ['riesgo', 'colArticuloCategoriaRiesgo'], ['vidautil', 'colArticuloCategoriaVidautil']];
+function renderQrBy() {
+    const zone = qrBy === 'zone';
+    $('layout-qr-by-layout').classList.toggle('active', !zone);
+    $('layout-qr-by-layout').setAttribute('aria-pressed', String(!zone));
+    $('layout-qr-by-zone').classList.toggle('active', zone);
+    $('layout-qr-by-zone').setAttribute('aria-pressed', String(zone));
+    $('layout-qr-pane-layout').hidden = zone;
+    $('layout-qr-pane-zone').hidden = !zone;
+    if (zone && !$('layout-qr-pop').hidden) loadQrZone(); // con el menú cerrado no se pide nada; se lee al abrirlo
+}
+function qrZoneOptions() {
+    const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
+    const select = $('layout-qr-zone');
+    const current = select.value;
+    select.innerHTML = zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}${z.type ? ` · ${esc(typeLabel('zone', z.type))}` : ''}</option>`).join('');
+    if (zones.some((z) => z.id === current)) select.value = current;
+    const typeSelect = $('layout-qr-type');
+    if (!typeSelect.options.length) typeSelect.innerHTML = ZONE_CATEGORY_TYPES.map(([key, label]) => `<option value="${key}">${esc(t(`main.${label}`))}</option>`).join('');
+    return zones;
+}
+function codesText(n) {
+    return t(n === 1 ? 'main.layoutZonaCodigosUno' : 'main.layoutZonaCodigos').replace('{n}', fmt(n));
+}
+async function loadQrZone() {
+    const zones = qrZoneOptions();
+    const chips = $('layout-qr-chips');
+    const fine = $('layout-qr-fine');
+    const buttons = ['layout-qr-zone-pdf', 'layout-qr-zone-png'].map($);
+    qrZoneData = null;
+    buttons.forEach((b) => { b.disabled = true; });
+    if (!zones.length) { chips.innerHTML = ''; fine.textContent = t('main.layoutQrZonaSinZonas'); return; }
+    const seq = ++qrZoneSeq;
+    chips.innerHTML = '';
+    fine.textContent = t('main.layoutQrZonaCargando');
+    try {
+        const res = await fetch(`/api/business/layout/zone-categories?zone=${encodeURIComponent($('layout-qr-zone').value)}&type=${encodeURIComponent($('layout-qr-type').value)}`, { credentials: 'include' });
+        if (seq !== qrZoneSeq) return; // se cambió la zona mientras llegaba: vale la última
+        if (res.status === 403) { fine.textContent = t('main.layoutQrSinPermiso'); return; }
+        if (!res.ok) throw new Error('zone categories failed');
+        const data = await res.json();
+        qrZoneData = data;
+        chips.innerHTML = data.categories.map((c) => `<div class="layout-qr-chip"><i style="background:${esc(LC.categoryLook(c.seed).color)}"></i><span>${esc(c.name)}</span><small>${esc(codesText(c.codes))}</small></div>`).join('');
+        const sin = data.without;
+        fine.textContent = !data.total ? t('main.layoutQrZonaSinCodigos')
+            : !data.categories.length ? t('main.layoutQrZonaNingunaCategoria').replace('{n}', fmt(sin))
+                : sin ? t(sin === 1 ? 'main.layoutQrZonaSinCategoriaUno' : 'main.layoutQrZonaSinCategoria').replace('{n}', fmt(sin)) : t('main.layoutQrZonaTodasTienen');
+        buttons.forEach((b) => { b.disabled = !data.categories.length; });
+    } catch (err) {
+        if (seq !== qrZoneSeq) return;
+        console.error('Layout: no se pudo leer la lista de la zona', err);
+        fine.textContent = t('main.layoutDescargaError');
+    }
+}
+// La hoja de la zona: la misma tarjeta de categorías, con las categorías que salen de los códigos (nombre, cuántos códigos hay, su icono y color de siempre y su QR).
+async function openZoneSheetDialog() {
+    if (!qrZoneData || !qrZoneData.categories.length) return;
+    const data = qrZoneData;
+    ensureCardModal();
+    const categories = data.categories.map((c) => ({ name: c.name, desc: codesText(c.codes), ...LC.categoryLook(c.seed), qrRows: c.qrRows }));
+    cardState = { zoneId: data.zone.id, zoneName: data.zone.name, data: { companyName: data.companyName, companyColor: data.companyColor, logoDataUrl: data.logoDataUrl, zones: [{ id: data.zone.id, categories }] } };
+    $('layout-card-title').textContent = t('main.layoutTarjetaDe').replace('{name}', data.zone.name);
+    cardModalEl.hidden = false;
+    renderCardPreview();
 }
 
 // ---- el reporte que se descarga: ventana con el tamaño de la hoja ---------------------------------------------------------------------
@@ -1476,7 +1556,10 @@ $('layout-qr-btn').addEventListener('click', (event) => {
     const open = $('layout-qr-pop').hidden;
     $('layout-qr-pop').hidden = !open;
     $('layout-qr-btn').setAttribute('aria-expanded', String(open));
+    if (open && qrBy === 'zone') loadQrZone(); // la lista de la zona se lee otra vez cada vez que se abre: refleja lo último guardado
 });
+$('layout-qr-zone').addEventListener('change', loadQrZone);
+$('layout-qr-type').addEventListener('change', loadQrZone);
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-qrmenu')) closeQrPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeQrPop(); });
 
@@ -1538,12 +1621,15 @@ async function regenerateQr() {
     Dashboard.showToast(t('main.layoutQrCambiado'), 'success');
 }
 $('layout-qr-pop').addEventListener('click', async (event) => {
+    const by = event.target.closest('[data-qrby]');
+    if (by) { qrBy = by.dataset.qrby; renderQrBy(); return; }
     const item = event.target.closest('[data-qr]');
     if (!item) return;
     closeQrPop();
     try {
         const kind = item.dataset.qr;
-        if (kind === 'pdf' || kind === 'png') await openSheetDialog(kind);
+        if (kind === 'zone-pdf' || kind === 'zone-png') await openZoneSheetDialog();
+        else if (kind === 'pdf' || kind === 'png') await openSheetDialog(kind);
         else if (kind === 'link') await copyQrLink();
         else if (kind === 'regen') await regenerateQr();
     } catch (err) {
