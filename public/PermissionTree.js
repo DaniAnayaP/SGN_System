@@ -1773,6 +1773,7 @@
             iconLayoutGirar: 'bx-rotate-right',
             iconLayoutCategorias: 'bx-purchase-tag-alt',
             iconLayoutTarjeta: 'bx-id-card',
+            iconLayoutTarjetaCentrar: 'bx-align-middle',
         };
 
         function buildPreviewLegendHtml() {

@@ -6215,6 +6215,8 @@ function layoutPermissions(req) {
         // Las categorías de las zonas se capturan con el icono Categorías de la zona y su tarjeta con QR se baja con el icono Tarjeta de categorías (hojas <pantalla>/iconLayoutCategorias e iconLayoutTarjeta).
         canEditCategories: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCategorias'),
         canUseCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjeta'),
+        // Elegir "Arriba / Centradas" para las categorías de la tarjeta (solo cambia cómo se dibuja la tarjeta) usa el icono Centrar categorías (hoja <pantalla>/iconLayoutTarjetaCentrar).
+        canCenterCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjetaCentrar'),
     };
 }
 

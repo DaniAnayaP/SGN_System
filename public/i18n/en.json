@@ -1709,6 +1709,10 @@
     "layoutMedidasVer": "Show measures",
     "layoutAreaBtn": "Show and hide the m² of the zones",
     "layoutGirarBtn": "Rotate the sketch",
+    "layoutCentrarBtn": "Center the card categories",
+    "layoutCardAcomodo": "Category layout",
+    "layoutCardArriba": "Top",
+    "layoutCardCentradas": "Centered",
     "layoutHojaContenido": "Print with",
     "layoutHojaConMedidas": "Measures",
     "layoutHojaConM2": "Zone m²",
@@ -3430,6 +3434,10 @@
     "layoutRotate": {
       "what": "Rotates the sketch a quarter turn to the right each time you tap it (90°, 180°, 270° and back to the start). Use it to arrange the sketch the way you will print it, for example with the warehouse lying down or standing up. It only turns the drawing: the tables and what is saved do not change, the texts stay upright and the rotation is remembered in this browser. The downloaded sheet comes out with this rotation (you can change it right there for that download only).",
       "example": "the warehouse is long and the sheet is portrait: you rotate the sketch a quarter turn and it fills the sheet better."
+    },
+    "layoutCardAlign": {
+      "what": "Choose where the categories go inside the card outline. Top keeps them right under CATEGORY / FIND ME, as always. Centered keeps CATEGORY / FIND ME on top and centers the categories in the space left in the outline; with many categories there is no spare room and it looks the same. It only changes how the card is drawn: each category's QR and what is saved do not change. The PDF and image come out as shown in the preview and the choice is remembered in this browser.",
+      "example": "the zone only has General Warehouse: with Centered it sits in the middle of the outline instead of stuck to the top with all the empty space below."
     },
     "layoutSite": {
       "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",

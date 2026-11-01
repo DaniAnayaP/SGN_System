@@ -213,7 +213,7 @@
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));
     }
 
-    // La tarjeta de categorías de una zona: card = { companyName, siteName (el Sitio, arriba del nombre; sin él sale labels.cardArea), logoDataUrl, logoRatio, theme, zoneName, categories: [{ name, desc, icon, color, qrRows }] }. Una columna de renglones
+    // La tarjeta de categorías de una zona: card = { companyName, siteName (el Sitio, arriba del nombre; sin él sale labels.cardArea), logoDataUrl, logoRatio, theme, zoneName, align ('center' = categorías centradas en el contorno; si no, arriba), categories: [{ name, desc, icon, color, qrRows }] }. Una columna de renglones
     // (icono, nombre, descripción y QR de cada categoría) y, si el espacio es ancho, dos columnas. Con 10.5 × 14.8 cm queda como la tarjeta impresa.
     function cardContent(card, labels, W, H) {
         const th = card.theme || window.LayoutMapSvg.DEFAULT_THEME;
@@ -285,6 +285,8 @@
         const frameH = bottom - areaTop;
         const rowH = Math.min(78 * f, (frameH - headH - 2 * pad) / perCol);
         const frameTop = areaTop;
+        // card.align === 'center': CATEGORÍA / BÚSCAME se queda arriba y los renglones se centran en lo que queda libre del contorno (con muchas categorías no queda espacio y no se nota).
+        const shiftY = card.align === 'center' ? Math.max(0, (frameH - 2 * pad - headH - perCol * rowH) / 2) : 0;
         const blockTop = frameTop + pad;
         const headY = blockTop + 8 * f;
         const top = blockTop + headH;
@@ -298,7 +300,7 @@
             const col = Math.floor(i / perCol);
             const row = i % perCol;
             const x0 = m + pad + col * (colW + gap);
-            const y = top + row * rowH;
+            const y = top + shiftY + row * rowH;
             const isz = Math.min(34 * f, rowH * 0.56);
             const qs = Math.min(rowH - 10 * f, 76 * f);
             s += `<rect x="${x0}" y="${y + f}" width="${4 * f}" height="${rowH - 2 * f}" fill="${esc(cat.color)}"/>`;

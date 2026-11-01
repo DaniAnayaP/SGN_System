@@ -6295,6 +6295,13 @@ function seedLayoutRotateIconGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(LAYOUT_ROTATE_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutGirar`], 'the Layout rotate icon');
 }
+// El icono Centrar las categorías de la tarjeta (iconLayoutTarjetaCentrar) también se da una sola vez a quien ya tiene la pantalla Layout.
+const LAYOUT_CARD_CENTER_SEED_KEY = 'seed-layout-card-center-v1';
+function seedLayoutCardCenterGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_CARD_CENTER_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutTarjetaCentrar`], 'the Layout card-centering icon');
+}
 const CODIGOS_SCREENS_SEED_KEY = 'seed-codigos-edicion-screens-v1';
 function seedCodigosScreensGrants() {
     const path = TABLE_GRANT_PATHS['nuestros-articulos'];
@@ -10627,6 +10634,7 @@ seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
 seedCodigosScreensGrants();
 seedLayoutRotateIconGrants();
+seedLayoutCardCenterGrants();
 
 module.exports = {
     db,
