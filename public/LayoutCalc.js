@@ -12,6 +12,9 @@
     // Zonas donde se almacena producto (las demás son andenes, oficinas o pasillos).
     const STORAGE_ZONE_TYPES = ['dry', 'cold', 'chemical', 'finished'];
     const SPACE_TYPES = ['rack', 'cabinet', 'pallet'];
+    // Formato propio de una zona (como Formato de celdas de Excel): color de fondo, rayas o patrón y su color, y estilo y color del borde.
+    const FMT_PATTERNS = ['none', 'solid', 'diag1', 'diag2', 'horiz', 'vert', 'grid', 'dots', 'cross'];
+    const FMT_LINES = ['none', 'thin', 'mid', 'thick', 'dash', 'dot', 'dashdot', 'double'];
     const DOOR_TYPES = ['dock', 'staff', 'emergency'];
     const POWER_TYPES = ['panel', 'outlet110', 'outlet220', 'three-phase'];
     // Cada sección del Layout cuelga de una columna del árbol de accesos (ver menu.json, colLayout*).
@@ -254,6 +257,14 @@
         return out;
     }
 
+    // Formato de una zona tal como llega: lo que no sea válido se corrige (no se rechaza). null si no trae formato (la zona usa el color de su tipo).
+    function sanitizeFmt(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const hex = (v, fallback) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : fallback);
+        const oneOf = (v, list, fallback) => (list.includes(v) ? v : fallback);
+        return { fill: hex(raw.fill, '#ffffff'), pattern: oneOf(raw.pattern, FMT_PATTERNS, 'solid'), pcolor: hex(raw.pcolor, '#6b7089'), line: oneOf(raw.line, FMT_LINES, 'thin'), bcolor: hex(raw.bcolor, '#6b7089') };
+    }
+
     function emptyLayout() {
         return {
             mode: 'scratch', heightM: 9,
@@ -443,7 +454,8 @@
             // type '' = zona sin asignar todavía; una zona de antes sin tipo se queda como seca, como siempre.
             const type = z && z.type === '' ? '' : oneOf(z && z.type, ZONE_TYPES, 'dry');
             const planM2 = z && z.planM2 != null && z.planM2 !== '' ? meters(z.planM2, label) : 0;
-            const extra = planM2 > 0 ? { planM2 } : {};
+            const fmt = sanitizeFmt(z && z.fmt);
+            const extra = { ...(planM2 > 0 ? { planM2 } : {}), ...(fmt ? { fmt } : {}) };
             const active = !(z && z.active === false);
             if (z && z.pts != null) {
                 // Zona de cualquier forma: sus esquinas son la verdad; x, y, largo y ancho son el recuadro que la envuelve.
@@ -538,6 +550,6 @@
         ZONE_TYPES, STORAGE_ZONE_TYPES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, coveredArea,
-        zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
+        FMT_PATTERNS, FMT_LINES, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
 }));

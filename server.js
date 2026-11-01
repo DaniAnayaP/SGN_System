@@ -6059,6 +6059,8 @@ function layoutPermissions(req) {
         // Eliminar una zona o un espacio YA guardado pide el permiso Eliminar de su columna en el árbol (antes solo se podían desactivar).
         canDeleteZones: admin || canDeleteColumn(grants, LAYOUT_TABLE_KEY, 'colLayoutZonas'),
         canDeleteSpaces: admin || canDeleteColumn(grants, LAYOUT_TABLE_KEY, 'colLayoutEspacios'),
+        // Cambiar el color, las rayas o el borde de una zona pide además el icono Formato de zona (hoja <pantalla>/iconLayoutFormatoZona del árbol).
+        canFormatZones: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoZona'),
     };
 }
 
@@ -6071,7 +6073,7 @@ function buildPublicLayoutPayload(clientId, row) {
         heightM: l.heightM,
         vertices: l.vertices,
         doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width })),
-        zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}) })),
+        zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}) })),
         spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h })),
         obstacles: [], power: [],
     };
@@ -6159,6 +6161,13 @@ app.put('/api/business/layout', requireAuth, (req, res) => {
         const removedCount = (key) => (existing.layout[key] || []).filter((row) => !(next[key] || []).some((n) => n.id === row.id)).length;
         if (removedCount('zones') && !perms.canDeleteZones) return res.status(403).json({ message: 'No tienes permiso para eliminar zonas.', section: 'zonas' });
         if (removedCount('spaces') && !perms.canDeleteSpaces) return res.status(403).json({ message: 'No tienes permiso para eliminar espacios.', section: 'espacios' });
+    }
+    // El formato de las zonas (color, rayas, borde) solo lo cambia quien tiene el icono Formato de zona.
+    if (!perms.canFormatZones) {
+        const before = new Map(((existing && existing.layout.zones) || []).map((z) => [z.id, JSON.stringify(z.fmt || null)]));
+        if ((next.zones || []).some((z) => JSON.stringify(z.fmt || null) !== (before.has(z.id) ? before.get(z.id) : 'null'))) {
+            return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de las zonas.', section: 'zonas' });
+        }
     }
     if (!changed.length && planImage === undefined && existing) return res.json({ version: existing.version, changed: [] });
 

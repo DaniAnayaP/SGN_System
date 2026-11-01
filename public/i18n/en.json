@@ -1623,6 +1623,41 @@
     "layoutQuitar": "Remove",
     "layoutDesactivar": "Deactivate",
     "layoutReactivar": "Reactivate",
+    "layoutFormatoZonaBtn": "Zone format (color, stripes and border)",
+    "layoutFormatoZona": "Zone format",
+    "layoutFormatoRelleno": "Fill",
+    "layoutFormatoBorde": "Border",
+    "layoutColorFondo": "Background color",
+    "layoutRayasPatrones": "Stripes and patterns",
+    "layoutColorRayas": "Stripe color",
+    "layoutEstiloLinea": "Line style",
+    "layoutColorBorde": "Border color",
+    "layoutElegirColor": "Choose color",
+    "layoutVistaPrevia": "Preview",
+    "layoutQuitarFormato": "Remove format",
+    "layoutFormatoAceptar": "Accept",
+    "layoutFormatoCancelar": "Cancel",
+    "layoutFormatoCerrar": "Close",
+    "layoutElegirPatron": "Pick a stripe pattern to use it.",
+    "layoutConFormato": "Formatted",
+    "layoutDelTipo": "From type",
+    "layoutPat_none": "No fill",
+    "layoutPat_solid": "Solid",
+    "layoutPat_diag1": "Diagonal /",
+    "layoutPat_diag2": "Diagonal \\",
+    "layoutPat_horiz": "Horizontal",
+    "layoutPat_vert": "Vertical",
+    "layoutPat_grid": "Grid",
+    "layoutPat_dots": "Dots",
+    "layoutPat_cross": "Crossed stripes",
+    "layoutLine_none": "None",
+    "layoutLine_thin": "Thin solid",
+    "layoutLine_mid": "Medium solid",
+    "layoutLine_thick": "Thick solid",
+    "layoutLine_dash": "Dashed",
+    "layoutLine_dot": "Dotted",
+    "layoutLine_dashdot": "Dash-dot",
+    "layoutLine_double": "Double",
     "layoutLado": "Side",
     "layoutInsertarLado": "Add a side after this one",
     "layoutHaciaDonde": "Direction",
@@ -2905,8 +2940,8 @@
       "example": "you scan the UPC of a box and see which article it is and which rack it is on."
     },
     "layoutSteps": {
-      "what": "The steps to build the Layout. Each one is a part of the warehouse and is assigned separately in the access tree.",
-      "example": "you move from Outline to Doors once you have entered the corners."
+      "what": "The steps to build the Layout, like layers: you can turn on one or several at once. The sketch always shows the outline plus only what belongs to the steps you have on. Each one is assigned separately in the access tree.",
+      "example": "you turn on Doors and Power connections: the sketch shows the outline with the doors and the power, and nothing else."
     },
     "layoutSec_contorno": {
       "what": "The corners of the warehouse in meters, with the height of each one, and the columns or obstacles. The total m² come from here and, with the heights, the m³.",
@@ -2947,6 +2982,26 @@
     "layoutDeleteRow": {
       "what": "Permanently deletes this zone or space when you save. Unlike Deactivate, it is not kept at all. It only appears if your account has the Delete permission in the access tree.",
       "example": "you remove a rack that never existed in the warehouse and was entered by mistake."
+    },
+    "layoutZoneFmt": {
+      "what": "Opens this zone's format, like Excel's Format Cells: background color, stripes or pattern, and border style and color. Without its own format, the zone uses its type color.",
+      "example": "you give the Warehouse purple diagonal stripes and a dashed border to tell it apart from other dry zones."
+    },
+    "layoutFmtColor": {
+      "what": "Opens the system color window (the same one used in the trees) to pick this color; the change shows right away in the preview.",
+      "example": "you pick a light yellow background and an amber for the stripes."
+    },
+    "layoutFmtPattern": {
+      "what": "Fill stripes or pattern: diagonal, horizontal, vertical, grid, dots or crossed stripes. Solid is one color and No fill shows what is underneath.",
+      "example": "diagonal stripes to mark a zone under construction."
+    },
+    "layoutFmtLine": {
+      "what": "Line style of the zone border: solid (thin, medium or thick), dashed, dotted, dash-dot, double or none.",
+      "example": "a dashed border for a temporary zone."
+    },
+    "layoutFmtReset": {
+      "what": "Removes this zone's own format: it goes back to its type color.",
+      "example": "the zone no longer needs its own color and looks like the other dry zones again."
     },
     "layoutZonePlanM2": {
       "what": "The m² your plan states for this room. The system compares what you drew against that number and warns if they differ (more than 3%). It is optional.",

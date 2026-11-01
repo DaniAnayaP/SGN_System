@@ -1623,6 +1623,41 @@
     "layoutQuitar": "Quitar",
     "layoutDesactivar": "Desactivar",
     "layoutReactivar": "Reactivar",
+    "layoutFormatoZonaBtn": "Formato de zona (color, rayas y borde)",
+    "layoutFormatoZona": "Formato de la zona",
+    "layoutFormatoRelleno": "Relleno",
+    "layoutFormatoBorde": "Borde",
+    "layoutColorFondo": "Color de fondo",
+    "layoutRayasPatrones": "Rayas y patrones",
+    "layoutColorRayas": "Color de las rayas",
+    "layoutEstiloLinea": "Estilo de línea",
+    "layoutColorBorde": "Color del borde",
+    "layoutElegirColor": "Elegir color",
+    "layoutVistaPrevia": "Vista previa",
+    "layoutQuitarFormato": "Quitar formato",
+    "layoutFormatoAceptar": "Aceptar",
+    "layoutFormatoCancelar": "Cancelar",
+    "layoutFormatoCerrar": "Cerrar",
+    "layoutElegirPatron": "Elige un patrón de rayas para usarlo.",
+    "layoutConFormato": "Con formato",
+    "layoutDelTipo": "Del tipo",
+    "layoutPat_none": "Sin relleno",
+    "layoutPat_solid": "Sólido",
+    "layoutPat_diag1": "Diagonal /",
+    "layoutPat_diag2": "Diagonal \\",
+    "layoutPat_horiz": "Horizontales",
+    "layoutPat_vert": "Verticales",
+    "layoutPat_grid": "Cuadrícula",
+    "layoutPat_dots": "Puntos",
+    "layoutPat_cross": "Rayas cruzadas",
+    "layoutLine_none": "Ninguno",
+    "layoutLine_thin": "Continua fina",
+    "layoutLine_mid": "Continua media",
+    "layoutLine_thick": "Continua gruesa",
+    "layoutLine_dash": "Guiones",
+    "layoutLine_dot": "Punteada",
+    "layoutLine_dashdot": "Guion y punto",
+    "layoutLine_double": "Doble",
     "layoutLado": "Lado",
     "layoutInsertarLado": "Agregar un lado después de este",
     "layoutHaciaDonde": "Hacia dónde",
@@ -2904,8 +2939,8 @@
       "example": "escaneas el UPC de una caja y ves qué artículo es y en qué anaquel está."
     },
     "layoutSteps": {
-      "what": "Los pasos para armar el Layout. Cada uno es una parte de la nave y se asigna por separado en los accesos.",
-      "example": "pasas de Contorno a Puertas cuando ya terminaste de capturar las esquinas."
+      "what": "Los pasos para armar el Layout, como capas: puedes activar uno o varios a la vez. El croquis muestra siempre el contorno y, además, solo lo de los pasos que tengas activos. Cada uno se asigna por separado en los accesos.",
+      "example": "activas Puertas y Conexiones de luz: el croquis muestra el contorno con las puertas y la luz, y nada más."
     },
     "layoutSec_contorno": {
       "what": "Las esquinas de la nave en metros, con la altura de cada una, y las columnas u obstáculos. De aquí salen los m² totales y, con las alturas, los m³.",
@@ -2946,6 +2981,26 @@
     "layoutDeleteRow": {
       "what": "Elimina esta zona o este espacio de forma definitiva al guardar. A diferencia de Desactivar, ya no se conserva ni su historial de m². Solo aparece si tu cuenta tiene el permiso Eliminar en el árbol.",
       "example": "quitas un anaquel que nunca existió en la nave y que capturaron por error."
+    },
+    "layoutZoneFmt": {
+      "what": "Abre el formato de esta zona, como Formato de celdas de Excel: color de fondo, rayas o patrón y estilo y color del borde. Sin formato propio, la zona usa el color de su tipo.",
+      "example": "a la Bodega le pones rayas diagonales moradas y un borde de guiones para distinguirla de las demás zonas secas."
+    },
+    "layoutFmtColor": {
+      "what": "Abre la ventana de colores del sistema (la misma de los árboles) para elegir este color; el cambio se ve de inmediato en la vista previa.",
+      "example": "eliges un amarillo claro de fondo y un ámbar para las rayas."
+    },
+    "layoutFmtPattern": {
+      "what": "Rayas o patrón del relleno: diagonales, horizontales, verticales, cuadrícula, puntos o rayas cruzadas. Sólido es un solo color y Sin relleno deja ver lo que haya debajo.",
+      "example": "rayas diagonales para marcar una zona en obra."
+    },
+    "layoutFmtLine": {
+      "what": "Estilo de la línea del borde de la zona: continua (fina, media o gruesa), guiones, punteada, guion y punto, doble o ninguna.",
+      "example": "borde de guiones para una zona provisional."
+    },
+    "layoutFmtReset": {
+      "what": "Quita el formato propio de esta zona: vuelve a verse con el color de su tipo.",
+      "example": "la zona ya no necesita color propio y vuelve a verse como las demás secas."
     },
     "layoutZonePlanM2": {
       "what": "Los m² que dice tu plano para este cuarto. El sistema compara lo dibujado contra ese número y avisa si no coinciden (más de 3 %). Es opcional.",

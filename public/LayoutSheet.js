@@ -53,29 +53,46 @@
         s += `<text x="${W - 48 - 250}" y="218" font-size="19" fill="#3F435D" text-anchor="end">${esc(labels.fixed)}</text>`;
         s += `<text x="${W - 48}" y="292" font-size="14" font-family="Consolas, Menlo, monospace" fill="#6B7089" text-anchor="end">${esc(data.url)}</text>`;
         s += `<line x1="48" y1="306" x2="${W - 48}" y2="306" stroke="${C.rule}" stroke-width="3"/>`;
-        // mapa
-        s += `<rect x="48" y="326" width="1082" height="646" rx="10" fill="#FFFFFF" stroke="${C.frame}" stroke-width="2"/>`;
-        s += `<svg x="58" y="336" width="1062" height="626" viewBox="0 0 700 460" preserveAspectRatio="xMidYMid meet">${data.mapInner}</svg>`;
-        // KPIs
-        cards.forEach((c, i) => {
-            const y = 326 + i * 94;
-            s += `<rect x="1158" y="${y}" width="394" height="82" rx="10" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="2"/>`;
-            s += `<text x="1180" y="${y + 41}" font-size="32" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="1180" y="${y + 68}" font-size="17" fill="#3F435D">${esc(c[1])}</text>`;
-        });
-        // leyenda
-        // leyenda: todos los tipos de zona, en dos renglones, con los mismos colores del mapa
+        // leyenda: los tipos de zona (con los mismos colores del mapa) y, después, cada zona con formato propio con su nombre y su muestra. Se acomoda en los renglones que
+        // haga falta; si pasan de dos, el mapa y las tarjetas se encogen para dejarles lugar.
         const leg = [['door', labels.door], ['space', labels.space], ['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished],
             ['dock', labels.dock], ['office', labels.office], ['aisle', labels.aisle], ['aisle2', labels.aisle2], ['none', labels.none]];
-        let lx = 48;
-        let ly = 976;
-        leg.forEach(([key, text], i) => {
-            if (i === 6) { lx = 48; ly = 1004; }
-            let paint;
-            if (key === 'door') paint = 'fill="#1E7E34" stroke="#1E7E34"';
-            else if (key === 'space') paint = `fill="#FFFFFF" stroke="${C.line}"`;
-            else { const c = th.types[key]; paint = `fill="${c[0]}" stroke="${c[1]}"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`; }
-            s += `<rect x="${lx}" y="${ly}" width="20" height="20" rx="4" ${paint} stroke-width="1.5"/><text x="${lx + 30}" y="${ly + 16}" font-size="16" fill="#3F435D">${esc(text)}</text>`;
-            lx += 30 + text.length * 8.6 + 26;
+        (data.layout.zones || []).filter((z) => z.fmt).slice(0, 12).forEach((z) => leg.push([`zone:${z.id}`, z.name, z]));
+        const legPos = [];
+        let legX = 48;
+        let legRow = 0;
+        leg.forEach((item) => {
+            const textW = item[1].length * 8.6;
+            if (legX > 48 && legX + 30 + textW > W - 48) { legX = 48; legRow += 1; }
+            legPos.push({ item, x: legX, row: legRow });
+            legX += 30 + textW + 26;
+        });
+        const frameH = legRow + 1 > 2 ? 646 - 28 * legRow + 28 : 646;
+        const legY0 = 326 + frameH + 4;
+        // mapa
+        s += `<rect x="48" y="326" width="1082" height="${frameH}" rx="10" fill="#FFFFFF" stroke="${C.frame}" stroke-width="2"/>`;
+        s += `<svg x="58" y="336" width="1062" height="${frameH - 20}" viewBox="0 0 700 460" preserveAspectRatio="xMidYMid meet">${data.mapInner}</svg>`;
+        // KPIs
+        const pitch = (frameH - 82) / 6;
+        const cardH = Math.min(82, pitch - 8);
+        const kk = cardH / 82;
+        cards.forEach((c, i) => {
+            const y = 326 + i * pitch;
+            s += `<rect x="1158" y="${y}" width="394" height="${cardH}" rx="10" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="2"/>`;
+            s += `<text x="1180" y="${y + 41 * kk}" font-size="32" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="1180" y="${y + 68 * kk}" font-size="17" fill="#3F435D">${esc(c[1])}</text>`;
+        });
+        legPos.forEach(({ item: [key, text, zone], x, row }) => {
+            const ly = legY0 + row * 28;
+            if (zone) {
+                s += window.LayoutMapSvg.zonePaint(`lg-${zone.id}`, zone.fmt).markup(`${x},${ly} ${x + 20},${ly} ${x + 20},${ly + 20} ${x},${ly + 20}`);
+            } else {
+                let paint;
+                if (key === 'door') paint = 'fill="#1E7E34" stroke="#1E7E34"';
+                else if (key === 'space') paint = `fill="#FFFFFF" stroke="${C.line}"`;
+                else { const c = th.types[key]; paint = `fill="${c[0]}" stroke="${c[1]}"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`; }
+                s += `<rect x="${x}" y="${ly}" width="20" height="20" rx="4" ${paint} stroke-width="1.5"/>`;
+            }
+            s += `<text x="${x + 30}" y="${ly + 16}" font-size="16" fill="#3F435D">${esc(text)}</text>`;
         });
         s += `<line x1="48" y1="1040" x2="${W - 48}" y2="1040" stroke="${C.cardBorder}" stroke-width="2"/>`;
         s += `<text x="48" y="1074" font-size="19" fill="#3F435D">${esc(labels.printed)} <tspan font-weight="700" fill="${C.ink}">${esc(dateFmt(data.printedAt))}</tspan>. ${esc(labels.snapshot)}</text>`;

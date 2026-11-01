@@ -1765,6 +1765,7 @@
             iconFilter: 'bx-filter-alt',
             iconFilterClear: 'bx-x-circle',
             iconFieldRules: 'bx-link',
+            iconLayoutFormatoZona: 'bx-palette',
         };
 
         function buildPreviewLegendHtml() {

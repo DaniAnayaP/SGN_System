@@ -13,7 +13,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, step: 'contorno', creating: false,
+    saved: null, draft: null, version: 0, perms: null, steps: ['contorno'], creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -351,8 +351,11 @@ function stepHtml(step) {
             const shapeButton = free
                 ? `<button type="button" class="btn btn-secondary layout-toggle" data-sidesopen="${esc(z.id)}" data-help-key="layoutSidesOpen"${dis ? ' disabled' : ''}>${esc(t('main.layoutLados'))}</button>`
                 : `<button type="button" class="btn btn-secondary layout-toggle" data-freeshape="${i}" data-help-key="layoutFreeShape"${dis ? ' disabled' : ''}>${esc(t('main.layoutFormaLibre'))}</button>`;
+            const fmtButton = state.perms && state.perms.canFormatZones
+                ? `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${z.fmt ? ' on' : ''}" data-fmtzone="${i}" data-help-key="layoutZoneFmt" aria-label="${esc(t('main.layoutFormatoZona'))}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i>${z.fmt ? `<span class="layout-fmt-dot" style="background:${esc(z.fmt.fill)};border-color:${esc(z.fmt.bcolor)}"></span>` : ''}</button>`
+                : '';
             const planBox = `<td><input type="number" step="0.01" min="0" data-l="zones" data-i="${i}" data-k="planM2" data-help-key="layoutZonePlanM2" value="${z.planM2 > 0 ? z.planM2 : ''}"${dis ? ' disabled' : ''}></td>`;
-            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, shapeButton) : removeCell('zones', i, dis, shapeButton)}</tr>`;
+            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + shapeButton) : removeCell('zones', i, dis, fmtButton + shapeButton)}</tr>`;
         });
         return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows)}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}`;
     }
@@ -364,21 +367,27 @@ function stepHtml(step) {
     return `${table(['main.layoutTipo', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutNiveles', 'main.layoutCajones', 'main.layoutHuellaVolumen', ''], rows)}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
 }
 
+// Los pasos son capas: se pueden tener activos varios a la vez (el formulario de cada uno se apila) y el croquis muestra siempre el contorno más solo lo de los pasos activos.
+const stepOn = (step) => state.steps.includes(step);
+function showStep(step) { if (!stepOn(step)) state.steps = [...state.steps, step]; }
 function renderPanel() {
-    const steps = SECTION_ORDER.map((s) => `<button type="button" role="tab" aria-selected="${s === state.step}" class="layout-step${s === state.step ? ' active' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
-    const level = sectionLevel(state.step);
-    const locked = !canEdit(state.step);
-    $('layout-panel').innerHTML = `<div class="layout-steps" role="tablist" data-help-key="layoutSteps">${steps}</div>
-        <div class="layout-section" data-help-key="layoutSec_${state.step}">
-            <div class="layout-section-head"><h3>${esc(t(SECTION_LABEL_KEYS[state.step]))}</h3>${locked ? `<span class="layout-lock" data-help-key="layoutLocked"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t(level === 'solo-ver' ? 'main.layoutSoloVer' : 'main.layoutYaLlena'))}</span>` : ''}</div>
-            ${stepHtml(state.step)}
+    const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" class="layout-step${stepOn(s) ? ' active' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
+    const sections = SECTION_ORDER.filter(stepOn).map((s) => {
+        const level = sectionLevel(s);
+        const locked = !canEdit(s);
+        return `<div class="layout-section" data-help-key="layoutSec_${s}">
+            <div class="layout-section-head"><h3>${esc(t(SECTION_LABEL_KEYS[s]))}</h3>${locked ? `<span class="layout-lock" data-help-key="layoutLocked"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t(level === 'solo-ver' ? 'main.layoutSoloVer' : 'main.layoutYaLlena'))}</span>` : ''}</div>
+            ${stepHtml(s)}
         </div>`;
+    }).join('');
+    $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${tabs}</div>${sections}`;
 }
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
 const ZONE_CLASS = { dry: 'lz-dry', cold: 'lz-cold', chemical: 'lz-chem', finished: 'lz-fin', dock: 'lz-dock', office: 'lz-office', aisle: 'lz-aisle', aisle2: 'lz-aisle2' };
 function renderSvg() {
     const d = state.draft;
+    const on = stepOn;
     const W = 700;
     const H = 460;
     const M = 36;
@@ -405,13 +414,15 @@ function renderSvg() {
     let measureLabels = '';
     const draggable = canEdit('zonas');
     const measureText = (pts, minPx) => LC.sideMeasures(pts, false).filter((m) => m.len * sc >= minPx && !LC.onPolygonEdge(m.mx, m.my, d.vertices)).map((m) => `<text class="lm" x="${(X(m.mx) + m.nx * 9).toFixed(1)}" y="${(Y(m.my) + m.ny * 9 + 3).toFixed(1)}" text-anchor="middle">${fmt(m.len)}</text>`).join('');
-    d.zones.forEach((z) => {
+    (on('zonas') ? d.zones : []).forEach((z) => {
         const typeText = z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona');
         const cls = `lz ${z.type ? (ZONE_CLASS[z.type] || 'lz-dock') : 'lz-none'}${z.active === false ? ' lz-off' : ''}${state.open.zones[z.id] ? ' lz-warn' : ''}${draggable ? ' lz-drag' : ''}`;
         const title = `<title>${esc(z.name)} · ${esc(typeText)}</title>`;
         if (Array.isArray(z.pts)) {
             if (z.pts.length >= 3) {
-                s += `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
+                s += z.fmt
+                    ? `<g class="lzf${z.active === false ? ' lz-off' : ''}${draggable ? ' lz-drag' : ''}" data-zid="${esc(z.id)}">${window.LayoutMapSvg.zonePaint(`ef-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' '))}${title}</g>`
+                    : `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
                 const a = LC.zoneLabelAnchor(z);
                 zoneLabels += `<text class="lt" x="${X(a.x)}" y="${Y(a.y) - 1}" text-anchor="middle">${esc(z.name)}</text><text class="lt2" x="${X(a.x)}" y="${Y(a.y) + 10}" text-anchor="middle">${fmt(LC.zoneArea(z))} m²</text>`;
                 if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureLabels += measureText(z.pts, 30);
@@ -421,7 +432,9 @@ function renderSvg() {
             }
             return;
         }
-        s += `<rect class="${cls}" data-zid="${esc(z.id)}" x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4">${title}</rect>`;
+        s += z.fmt
+            ? `<g class="lzf${z.active === false ? ' lz-off' : ''}${draggable ? ' lz-drag' : ''}" data-zid="${esc(z.id)}">${window.LayoutMapSvg.zonePaint(`ef-${z.id}`, z.fmt).markup(LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' '))}${title}</g>`
+            : `<rect class="${cls}" data-zid="${esc(z.id)}" x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4">${title}</rect>`;
         const spot = LC.zoneLabelSpot(z, d.spaces, sc);
         const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
         const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
@@ -431,21 +444,21 @@ function renderSvg() {
         if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureLabels += measureText(LC.zonePoints(z), 30);
     });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
-    d.obstacles.forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
-    d.spaces.forEach((sp) => {
+    (on('contorno') ? d.obstacles : []).forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
+    (on('espacios') ? d.spaces : []).forEach((sp) => {
         const w = Math.max(sp.l * sc, 4);
         const h = Math.max(sp.d * sc, 4);
         s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
     });
     s += zoneLabels + measureLabels;
-    d.doors.forEach((door) => {
+    (on('puertas') ? d.doors : []).forEach((door) => {
         const w = LC.wallSegment(d.vertices, door.wall);
         const a = { x: w.p[0] + w.ux * door.dist, y: w.p[1] + w.uy * door.dist };
         const b = { x: a.x + w.ux * door.width, y: a.y + w.uy * door.width };
         s += `<line class="ld" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"><title>${esc(door.name)}</title></line>`;
     });
-    d.power.forEach((e) => {
+    (on('luz') ? d.power : []).forEach((e) => {
         const w = LC.wallSegment(d.vertices, e.wall);
         const a = { x: w.p[0] + w.ux * e.dist, y: w.p[1] + w.uy * e.dist };
         s += `<circle class="le" cx="${X(a.x)}" cy="${Y(a.y)}" r="6"><title>${esc(typeLabel('power', e.type))}</title></circle><text class="lt" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">⚡</text>`;
@@ -571,7 +584,7 @@ function newDraftFromScratch() {
     state.creating = true;
     state.planImage = '';
     state.planNew = false;
-    state.step = 'contorno';
+    state.steps = ['contorno'];
     showEditor();
 }
 
@@ -628,7 +641,7 @@ $('layout-plan-width-ok').addEventListener('click', () => {
     state.planAspect = state.pendingPlan.aspect;
     state.planNew = true;
     state.pendingPlan = null;
-    state.step = 'contorno';
+    state.steps = ['contorno'];
     showEditor();
 });
 $('layout-from-scratch').addEventListener('click', newDraftFromScratch);
@@ -706,7 +719,13 @@ $('layout-panel').addEventListener('input', onEdit);
 $('layout-panel').addEventListener('change', onEdit);
 $('layout-panel').addEventListener('click', (event) => {
     const stepBtn = event.target.closest('[data-step]');
-    if (stepBtn) { state.step = stepBtn.dataset.step; renderPanel(); return; }
+    if (stepBtn) {
+        const s = stepBtn.dataset.step;
+        if (stepOn(s)) { if (state.steps.length > 1) state.steps = state.steps.filter((x) => x !== s); } else state.steps = [...state.steps, s];
+        renderPanel();
+        refreshLive();
+        return;
+    }
     const cmode = event.target.closest('[data-cmode]');
     if (cmode) { state.contornoMode = cmode.dataset.cmode; renderPanel(); return; }
     const sadd = event.target.closest('[data-sadd]');
@@ -733,6 +752,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (sclose) { closeSides(sclose.dataset.sclose); renderPanel(); refreshLive(); return; }
     const sline = event.target.closest('[data-sline]');
     if (sline) { closeLine(sline.dataset.sline); renderPanel(); refreshLive(); return; }
+    const fmtZone = event.target.closest('[data-fmtzone]');
+    if (fmtZone) { openFmtDialog(Number(fmtZone.dataset.fmtzone)); return; }
     const freeShape = event.target.closest('[data-freeshape]');
     if (freeShape) {
         // Un rectángulo pasa a forma libre con sus 4 esquinas; de ahí se cambian sus lados.
@@ -813,6 +834,122 @@ $('layout-panel').addEventListener('click', (event) => {
     }
 });
 
+// ---- formato de la zona (color, rayas y borde, como Formato de celdas de Excel) -------------------------------------------------------
+// El icono de paleta de cada zona abre esta ventana: pestaña Relleno (color de fondo, rayas o patrón y su color) y pestaña Borde (estilo de línea y color), con vista previa.
+// Los colores se eligen con la misma ventana "Colores" de los árboles (ColorDialog.js). Nada cambia en la zona hasta pulsar Aceptar. Sin formato propio, la zona usa el
+// color de su tipo; "Quitar formato" la regresa ahí.
+const FMT_PATTERNS = ['none', 'solid', 'diag1', 'diag2', 'horiz', 'vert', 'grid', 'dots', 'cross'];
+const FMT_LINES = ['none', 'thin', 'mid', 'thick', 'dash', 'dot', 'dashdot', 'double'];
+const FMT_LINE_SAMPLE = { none: [0, ''], thin: [1.2, ''], mid: [2.4, ''], thick: [4, ''], dash: [2, '8 5'], dot: [2.4, '1.5 4'], dashdot: [2, '9 4 2 4'] };
+let fmtDialog = null; // { zoneId, draft, start, tab, hadFmt }
+let fmtModalEl = null;
+const pickFmt = (o) => ({ fill: o.fill, pattern: o.pattern, pcolor: o.pcolor, line: o.line, bcolor: o.bcolor });
+
+function fmtThumb(pattern, d) {
+    const paint = window.LayoutMapSvg.zonePaint(`fth-${pattern}`, { fill: d.fill, pattern, pcolor: d.pcolor, line: 'thin', bcolor: '#8e94ab' });
+    return `<svg width="46" height="30" viewBox="0 0 46 30" aria-hidden="true">${paint.markup('1,1 45,1 45,29 1,29')}</svg>`;
+}
+function fmtLineSample(id) {
+    if (id === 'none') return '<svg viewBox="0 0 96 12" aria-hidden="true"><text x="0" y="10" font-size="9" fill="currentColor">—</text></svg>';
+    if (id === 'double') return '<svg viewBox="0 0 96 12" aria-hidden="true"><line x1="2" y1="3.5" x2="94" y2="3.5" stroke="currentColor" stroke-width="1.3"/><line x1="2" y1="8.5" x2="94" y2="8.5" stroke="currentColor" stroke-width="1.3"/></svg>';
+    const [w, dash] = FMT_LINE_SAMPLE[id];
+    return `<svg viewBox="0 0 96 12" aria-hidden="true"><line x1="2" y1="6" x2="94" y2="6" stroke="currentColor" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''} stroke-linecap="${id === 'dot' ? 'round' : 'butt'}"/></svg>`;
+}
+function fmtColorButton(key, hex, disabled) {
+    return `<button type="button" class="layout-fmt-color" data-fcolor="${key}" data-help-key="layoutFmtColor"${disabled ? ' disabled' : ''}><span class="layout-fmt-swatch" style="background:${esc(hex)}"></span>${esc(t('main.layoutElegirColor'))}</button><span class="layout-muted">${esc(hex.toUpperCase())}</span>`;
+}
+function renderFmtBody() {
+    const d = fmtDialog.draft;
+    let left;
+    if (fmtDialog.tab === 'fill') {
+        const none = d.pattern === 'none';
+        const plain = none || d.pattern === 'solid';
+        left = `<div><h4>${esc(t('main.layoutColorFondo'))}</h4><div class="layout-fmt-row">${fmtColorButton('fill', d.fill, none)}</div>
+            <h4>${esc(t('main.layoutRayasPatrones'))}</h4>
+            <div class="layout-fmt-patterns" data-help-key="layoutFmtPattern">${FMT_PATTERNS.map((p) => `<button type="button" class="layout-fmt-pat" data-fpat="${p}" aria-pressed="${d.pattern === p}">${fmtThumb(p, d)}<span>${esc(t(`main.layoutPat_${p}`))}</span></button>`).join('')}</div>
+            <h4>${esc(t('main.layoutColorRayas'))}</h4><div class="layout-fmt-row">${fmtColorButton('pcolor', d.pcolor, plain)}${plain ? `<span class="layout-muted">${esc(t('main.layoutElegirPatron'))}</span>` : ''}</div></div>`;
+    } else {
+        left = `<div><h4>${esc(t('main.layoutEstiloLinea'))}</h4>
+            <div class="layout-fmt-lines" data-help-key="layoutFmtLine">${FMT_LINES.map((l) => `<button type="button" class="layout-fmt-line" data-fline="${l}" aria-pressed="${d.line === l}">${fmtLineSample(l)}<span>${esc(t(`main.layoutLine_${l}`))}</span></button>`).join('')}</div>
+            <h4>${esc(t('main.layoutColorBorde'))}</h4><div class="layout-fmt-row">${fmtColorButton('bcolor', d.bcolor, d.line === 'none')}</div></div>`;
+    }
+    const paint = window.LayoutMapSvg.zonePaint('fpv', d);
+    const shape = '30,20 200,20 200,70 130,70 130,130 30,130';
+    const zone = state.draft.zones.find((z) => z.id === fmtDialog.zoneId);
+    const preview = `<div class="layout-fmt-preview"><h4>${esc(t('main.layoutVistaPrevia'))}</h4><svg viewBox="0 0 230 150" role="img" aria-label="${esc(t('main.layoutVistaPrevia'))}">${paint.markup(shape)}<text class="lt" x="80" y="92" text-anchor="middle">${esc(fmtDialog.name || (zone && zone.name) || '')}</text></svg></div>`;
+    $('layout-fmt-body').innerHTML = `${left}${preview}`;
+    document.querySelectorAll('[data-ftab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.ftab === fmtDialog.tab)));
+}
+function ensureFmtModal() {
+    if (fmtModalEl) return;
+    fmtModalEl = document.createElement('div');
+    fmtModalEl.className = 'modal-overlay';
+    fmtModalEl.hidden = true;
+    fmtModalEl.innerHTML = `<div class="modal-panel layout-fmt-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-fmt-title">
+        <h3 id="layout-fmt-title">${esc(t('main.layoutFormatoZona'))}</h3>
+        <div class="layout-fl"><label>${esc(t('main.layoutNombre'))}<input type="text" id="layout-fmt-name" maxlength="${LC.LIMITS.text}"></label></div>
+        <div class="layout-fmt-tabs" role="tablist"><button type="button" role="tab" data-ftab="fill" aria-selected="true">${esc(t('main.layoutFormatoRelleno'))}</button><button type="button" role="tab" data-ftab="border" aria-selected="false">${esc(t('main.layoutFormatoBorde'))}</button></div>
+        <div class="layout-fmt-body" id="layout-fmt-body"></div>
+        <div class="layout-fmt-footer"><button type="button" class="btn btn-secondary" id="layout-fmt-reset" data-help-key="layoutFmtReset">${esc(t('main.layoutQuitarFormato'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-fmt-cancel">${esc(t('main.layoutFormatoCancelar'))}</button><button type="button" class="btn" id="layout-fmt-ok">${esc(t('main.layoutFormatoAceptar'))}</button></div>
+    </div>`;
+    document.body.appendChild(fmtModalEl);
+    fmtModalEl.addEventListener('click', (event) => {
+        if (event.target === fmtModalEl) { closeFmtDialog(); return; }
+        const tabBtn = event.target.closest('[data-ftab]');
+        if (tabBtn) { fmtDialog.tab = tabBtn.dataset.ftab; renderFmtBody(); return; }
+        const pat = event.target.closest('[data-fpat]');
+        if (pat) { fmtDialog.draft.pattern = pat.dataset.fpat; renderFmtBody(); return; }
+        const line = event.target.closest('[data-fline]');
+        if (line) { fmtDialog.draft.line = line.dataset.fline; renderFmtBody(); return; }
+        const color = event.target.closest('[data-fcolor]');
+        if (color && !color.disabled) {
+            const key = color.dataset.fcolor;
+            const title = t(key === 'fill' ? 'main.layoutColorFondo' : key === 'pcolor' ? 'main.layoutColorRayas' : 'main.layoutColorBorde');
+            if (window.ColorDialog) window.ColorDialog.open({ title, currentHex: fmtDialog.draft[key], onAccept: (hex) => { fmtDialog.draft[key] = String(hex).toLowerCase(); renderFmtBody(); } });
+            return;
+        }
+        if (event.target.closest('#layout-fmt-cancel')) { closeFmtDialog(); return; }
+        if (event.target.closest('#layout-fmt-reset')) {
+            const z = state.draft.zones.find((r) => r.id === fmtDialog.zoneId);
+            if (z) { delete z.fmt; const nm = ($('layout-fmt-name').value || '').trim(); if (nm) z.name = nm; }
+            closeFmtDialog();
+            renderPanel();
+            refreshLive();
+            return;
+        }
+        if (event.target.closest('#layout-fmt-ok')) {
+            const z = state.draft.zones.find((r) => r.id === fmtDialog.zoneId);
+            if (z) {
+                const nm = ($('layout-fmt-name').value || '').trim();
+                if (nm) z.name = nm;
+                // si no cambió nada de lo que traía (o de lo que ya se veía por su tipo), la zona no recibe formato propio
+                if (z.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start)) z.fmt = { ...fmtDialog.draft };
+            }
+            closeFmtDialog();
+            renderPanel();
+            refreshLive();
+        }
+    });
+    fmtModalEl.addEventListener('input', (event) => {
+        if (event.target.id === 'layout-fmt-name' && fmtDialog) { fmtDialog.name = event.target.value; renderFmtBody(); }
+    });
+}
+function openFmtDialog(zoneIndex) {
+    const z = state.draft.zones[zoneIndex];
+    if (!z) return;
+    ensureFmtModal();
+    const base = z.fmt ? pickFmt(z.fmt) : window.LayoutMapSvg.defaultFmt(z.type);
+    fmtDialog = { zoneId: z.id, draft: { ...base }, start: { ...base }, tab: 'fill', name: z.name };
+    $('layout-fmt-name').value = z.name;
+    fmtModalEl.hidden = false;
+    renderFmtBody();
+}
+function closeFmtDialog() {
+    if (fmtModalEl) fmtModalEl.hidden = true;
+    fmtDialog = null;
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && fmtDialog && !document.querySelector('.modal-overlay:not([hidden]) .perm-tree-color-dialog')) closeFmtDialog(); });
+
 // ---- acomodar una zona arrastrándola sobre el croquis ------------------------------------------------------------------------------
 // Se arrastra cualquier zona (rectángulo o de forma libre) con el dedo o el mouse; al soltarla cerca de una zona vecina o del contorno se pega a su lado (a menos de 0.3 m).
 const SNAP_M = 0.3;
@@ -867,7 +1004,7 @@ $('layout-save').addEventListener('click', async () => {
     const button = $('layout-save');
     const openShape = firstOpenShape();
     if (openShape) {
-        if (openShape.kind === 'contorno') { state.step = 'contorno'; Dashboard.showToast(t('main.layoutNoCierraContorno'), 'warning'); } else { state.step = 'zonas'; state.zoneOpen = openShape.zone.id; Dashboard.showToast(t('main.layoutNoCierraZona').replace('{name}', openShape.zone.name), 'warning'); }
+        if (openShape.kind === 'contorno') { showStep('contorno'); Dashboard.showToast(t('main.layoutNoCierraContorno'), 'warning'); } else { showStep('zonas'); state.zoneOpen = openShape.zone.id; Dashboard.showToast(t('main.layoutNoCierraZona').replace('{name}', openShape.zone.name), 'warning'); }
         renderPanel();
         return;
     }
@@ -881,9 +1018,9 @@ $('layout-save').addEventListener('click', async () => {
         if (res.status === 403) { Dashboard.showToast(t('main.layoutSinPermiso'), 'warning'); return; }
         if (res.status === 400) { Dashboard.showToast(`${t('main.layoutDatosInvalidos')} ${(payload.errors && payload.errors[0]) || ''}`.trim(), 'warning'); return; }
         if (!res.ok) throw new Error('layout save failed');
-        const keepStep = state.step;
+        const keepSteps = state.steps;
         await loadLayout();
-        state.step = keepStep;
+        state.steps = keepSteps;
         if (state.draft) showEditor();
         Dashboard.showToast(t('main.layoutGuardado'), 'success');
     } catch (err) {

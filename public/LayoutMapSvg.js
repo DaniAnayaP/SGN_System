@@ -51,6 +51,46 @@
             },
         };
     }
+    // ---- formato propio de una zona (como Formato de celdas de Excel) -----------------------------------------------------------------
+    // fmt = { fill, pattern, pcolor, line, bcolor }: color de fondo, rayas o patrón (y su color) y estilo y color del borde.
+    const LINE_STYLES = { none: { w: 0 }, thin: { w: 1.2 }, mid: { w: 2.4 }, thick: { w: 4 }, dash: { w: 2, d: '8 5' }, dot: { w: 2.4, d: '1.5 4', round: true }, dashdot: { w: 2, d: '9 4 2 4' }, double: { w: 4, double: true } };
+    function patternDef(id, fill, pattern, color) {
+        let inner = `<rect width="8" height="8" fill="${fill}"/>`;
+        let transform = '';
+        if (pattern === 'diag1') { transform = ' patternTransform="rotate(45)"'; inner += `<line x1="0" y1="0" x2="0" y2="8" stroke="${color}" stroke-width="2.2"/>`; }
+        if (pattern === 'diag2') { transform = ' patternTransform="rotate(-45)"'; inner += `<line x1="0" y1="0" x2="0" y2="8" stroke="${color}" stroke-width="2.2"/>`; }
+        if (pattern === 'horiz') inner += `<line x1="0" y1="4" x2="8" y2="4" stroke="${color}" stroke-width="2"/>`;
+        if (pattern === 'vert') inner += `<line x1="4" y1="0" x2="4" y2="8" stroke="${color}" stroke-width="2"/>`;
+        if (pattern === 'grid') inner += `<line x1="0" y1="4" x2="8" y2="4" stroke="${color}" stroke-width="1.4"/><line x1="4" y1="0" x2="4" y2="8" stroke="${color}" stroke-width="1.4"/>`;
+        if (pattern === 'dots') inner += `<circle cx="4" cy="4" r="1.5" fill="${color}"/>`;
+        if (pattern === 'cross') { transform = ' patternTransform="rotate(45)"'; inner += `<line x1="0" y1="0" x2="0" y2="8" stroke="${color}" stroke-width="1.6"/><line x1="0" y1="4" x2="8" y2="4" stroke="${color}" stroke-width="1.6"/>`; }
+        return `<pattern id="${id}" width="8" height="8" patternUnits="userSpaceOnUse"${transform}>${inner}</pattern>`;
+    }
+    // Pinta una figura (puntos "x,y x,y ...") con ese formato: relleno (o patrón) y borde. id = identificador único del patrón dentro del SVG.
+    function zonePaint(id, fmt) {
+        let defs = '';
+        let fill;
+        if (fmt.pattern === 'none') fill = 'none';
+        else if (fmt.pattern === 'solid') fill = fmt.fill;
+        else { defs = patternDef(id, fmt.fill, fmt.pattern, fmt.pcolor); fill = `url(#${id})`; }
+        const L = LINE_STYLES[fmt.line] || LINE_STYLES.thin;
+        function border(points) {
+            if (!L.w) return '';
+            if (L.double) return `<polygon points="${points}" fill="none" stroke="${fmt.bcolor}" stroke-width="${L.w}" stroke-linejoin="round"/><polygon points="${points}" fill="none" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round"/>`;
+            return `<polygon points="${points}" fill="none" stroke="${fmt.bcolor}" stroke-width="${L.w}"${L.d ? ` stroke-dasharray="${L.d}"` : ''} stroke-linecap="${L.round ? 'round' : 'butt'}" stroke-linejoin="round"/>`;
+        }
+        function markup(points) {
+            return `${defs ? `<defs>${defs}</defs>` : ''}<polygon points="${points}" fill="${fill}"${fill === 'none' ? ' stroke="none"' : ''}/>${border(points)}`;
+        }
+        return { fill, defs, border, markup };
+    }
+    // El formato con el que se ve hoy una zona de ese tipo (para empezar a editarlo desde ahí).
+    function defaultFmt(type, T = DEFAULT_THEME) {
+        const c = (type && T.types[type]) || T.types.none;
+        const pattern = type === 'aisle' ? 'diag1' : type === 'aisle2' ? 'dots' : 'solid';
+        const fill = String(c[0]).indexOf('url(') === 0 ? '#ffffff' : String(c[0]).toLowerCase();
+        return { fill, pattern, pcolor: String(c[1]).toLowerCase(), line: c[2] ? 'dash' : 'thin', bcolor: String(c[1]).toLowerCase() };
+    }
     const FONT = 'Poppins, Arial, Helvetica, sans-serif';
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmt = (n) => (Number.isFinite(n) ? n : 0).toLocaleString('es-MX', { maximumFractionDigits: 2 });
@@ -80,12 +120,12 @@
             const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
             if (LC.hasPoints(z)) {
                 // Zona de cualquier forma: se dibuja con sus esquinas y el nombre va en el punto más holgado de adentro.
-                s += `<polygon points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" stroke-linejoin="round" ${style}/>`;
+                s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<polygon points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" stroke-linejoin="round" ${style}/>`;
                 const a = LC.zoneLabelAnchor(z);
                 zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) - 1}" font-size="10" font-weight="600" fill="#14161F" text-anchor="middle" ${halo}>${esc(z.name)}</text>`;
                 zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) + 10}" font-size="8.5" fill="#6B7089" text-anchor="middle" ${halo}>${fmt(LC.zoneArea(z))} m²</text>`;
             } else {
-                s += `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" ${style}/>`;
+                s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" ${style}/>`;
                 const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
                 const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
                 const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
@@ -127,5 +167,5 @@
         return `${s}</svg>`;
     }
 
-    window.LayoutMapSvg = { mapSvg, theme, DEFAULT_THEME };
+    window.LayoutMapSvg = { mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt };
 }());
