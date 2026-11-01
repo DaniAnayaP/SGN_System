@@ -29,6 +29,8 @@ on:
       - 'public/ColorPalette.js'
       - 'public/ColorDialog.js'
       - 'public/AppOfflineSync.js'
+      - 'public/SimpleXlsx.js'
+      - 'public/SkuTemplate.js'
       - 'public/PermissionTree.js'
       - 'public/Admin.css'
       - 'public/App*.html'

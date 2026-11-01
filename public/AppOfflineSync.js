@@ -50,13 +50,16 @@ function resolveApiUrl(url) {
 // `evidence`, when present, marks this entry as a two-phase evidence upload
 // (compress -> presigned URL -> PUT to R2 -> PATCH the key) instead of a
 // plain single fetch -- see queueOfflineEvidence and flushOfflineQueue below.
-function queueOfflineRequest({ url, method, body, description, recordKey, baseline, evidence }) {
+function queueOfflineRequest({ url, method, body, description, recordKey, baseline, evidence, rejectable, reportFailed }) {
     return openOfflineDb().then((db) => new Promise((resolve, reject) => {
         const store = db.transaction(OFFLINE_STORE_NAME, 'readwrite').objectStore(OFFLINE_STORE_NAME);
         const entry = {
             url: url ? resolveApiUrl(url) : null, method: method || null, body: body || null,
             description, recordKey: recordKey || null, baseline: baseline || null,
             evidence: evidence || null, queuedAt: new Date().toISOString(),
+            // rejectable: si al reconectar el servidor lo rechaza de verdad (4xx) se quita de la cola y se anota en el registro de "no se aplicó" en vez de trabar todo lo que sigue.
+            // reportFailed: una carga por lotes; si el servidor acepta unas filas y rechaza otras, las rechazadas se anotan igual.
+            rejectable: !!rejectable, reportFailed: !!reportFailed,
         };
         const addReq = store.add(entry);
         addReq.onsuccess = () => resolve({ ...entry, id: addReq.result });
@@ -154,13 +157,13 @@ function countOfflineQueueForRecord(recordKey) {
 // genuine rejection (e.g. "Usted no está habilitado..."), not a
 // connectivity problem, and queueing it would just hide the real error
 // until it fails again on replay.
-async function offlineAwareFetch(url, options, description, recordKey, baseline) {
+async function offlineAwareFetch(url, options, description, recordKey, baseline, extra = {}) {
     const resolvedUrl = resolveApiUrl(url);
     try {
         const res = await fetch(resolvedUrl, options);
         return { ok: res.ok, status: res.status, body: await res.json().catch(() => ({})), queued: false };
     } catch {
-        await queueOfflineRequest({ url: resolvedUrl, method: options.method || 'GET', body: options.body || null, description, recordKey, baseline });
+        await queueOfflineRequest({ url: resolvedUrl, method: options.method || 'GET', body: options.body || null, description, recordKey, baseline, rejectable: extra.rejectable, reportFailed: extra.reportFailed });
         document.dispatchEvent(new CustomEvent('sgn:offline-queue-changed'));
         return { ok: true, status: 0, body: {}, queued: true };
     }
@@ -186,6 +189,20 @@ function confirmOfflineOverride(conflict) {
         changedBy: conflict.changedBy || '—',
         field: offlineT(conflict.fieldKey),
     }));
+}
+
+// Registro de lo que se guardó sin señal y el servidor NO aplicó al reconectar (solo en este celular, hasta 50): cada pantalla lo muestra y la persona lo descarta cuando ya lo vio.
+const REJECTED_KEY = 'sgn_offline_rejected';
+function listRejected() {
+    try { return JSON.parse(localStorage.getItem(REJECTED_KEY) || '[]'); } catch { return []; }
+}
+function addRejected(entry) {
+    try { localStorage.setItem(REJECTED_KEY, JSON.stringify([...listRejected(), { ...entry, at: new Date().toISOString() }].slice(-50))); } catch { /* sin almacenamiento */ }
+    document.dispatchEvent(new CustomEvent('sgn:offline-rejected'));
+}
+function clearRejected() {
+    try { localStorage.removeItem(REJECTED_KEY); } catch { /* sin almacenamiento */ }
+    document.dispatchEvent(new CustomEvent('sgn:offline-rejected'));
 }
 
 let flushInFlight = false;
@@ -224,12 +241,20 @@ async function flushOfflineQueue() {
                     body: JSON.stringify(bodyObj),
                 });
                 const resBody = await res.json().catch(() => ({}));
+                if (!res.ok && item.rejectable && [400, 403, 404, 409, 422].includes(res.status)) {
+                    addRejected({ description: item.description, status: res.status, message: resBody.message || '' });
+                    await removeOfflineRequest(item.id);
+                    continue;
+                }
                 if (!res.ok) {
                     // A real rejection surfaced only now that we could
                     // reach the server -- stop here (keep queue order),
                     // rather than silently dropping it; whoever reopens
                     // the record will see the server's real state.
                     break;
+                }
+                if (item.reportFailed && Array.isArray(resBody.failed) && resBody.failed.length) {
+                    addRejected({ description: item.description, status: 200, message: '', failed: resBody.failed.map((x) => ({ n: x.n, message: x.message })), created: (resBody.created || []).length });
                 }
                 if (resBody.conflictFields?.length) {
                     const overrideKeys = resBody.conflictFields.filter(confirmOfflineOverride).map((c) => c.key);
@@ -280,4 +305,6 @@ window.SgnOfflineSync = {
     compressImageToBlob,
     uploadEvidenceNow,
     queueOfflineEvidence,
+    listRejected,
+    clearRejected,
 };

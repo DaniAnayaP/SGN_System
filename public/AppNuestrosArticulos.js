@@ -238,7 +238,8 @@ let currentUser = null;
 let gateMap = {}; // dependentColId -> gateColId, authorized rules only
 let records = []; // real, persisted sku-items from the server
 let openRecordId = null; // id of the record currently open, or null
-let view = 'list'; // 'list' | 'record'
+let view = 'list'; // 'list' | 'record' | 'template' (Cargar por plantilla, ver AppNuestrosArticulosPlantilla.js)
+let templateAllowed = false; // tiene la hoja "Cargar por Plantilla" del árbol
 // "+ Nuevo Artículo" only opens this in-memory draft (no id yet) -- the
 // record is only actually created on the server once its FIRST field is
 // confirmed (see commitFieldValue), same draft pattern as Tipos de Unidad/
@@ -385,6 +386,7 @@ const bodyEl = document.getElementById('carga-body');
 function render() {
     bodyEl.innerHTML = '';
     if (view === 'list') renderListView();
+    else if (view === 'template') window.AppSkuTemplate.render({ bodyEl, titleEl, t, showToast, onLoaded: loadRecords });
     else renderFormView();
 }
 
@@ -400,6 +402,17 @@ function renderListView() {
     newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('home.articuloNewButton')}</span>`;
     newBtn.addEventListener('click', createNewSkuItem);
     bodyEl.appendChild(newBtn);
+
+    // Cargar por plantilla (Excel o filas pegadas): solo con su hoja en el árbol.
+    if (templateAllowed) {
+        const tplBtn = document.createElement('button');
+        tplBtn.type = 'button';
+        tplBtn.className = 'home-carga-secondary-btn';
+        tplBtn.setAttribute('data-help-key', 'tplButton');
+        tplBtn.innerHTML = `<i class="bx bx-upload" aria-hidden="true"></i><span>${t('main.tplButton')}</span>`;
+        tplBtn.addEventListener('click', () => { window.AppSkuTemplate.reset(); view = 'template'; render(); });
+        bodyEl.appendChild(tplBtn);
+    }
 
     const label = document.createElement('div');
     label.className = 'home-picker-section-label';
@@ -842,6 +855,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         if (!meRes.ok) { window.location.replace('Login.html'); return; }
         const { user } = await meRes.json();
         currentUser = user;
+        templateAllowed = window.AppSkuTemplate ? await window.AppSkuTemplate.canUse(user) : false;
         await Promise.all([loadGateMap(), loadRecords(), loadBrandingForTheme(), loadCategoryOptions()]);
         applyStyle(getStoredStyle());
         await refreshOfflinePendingIds();
