@@ -218,22 +218,27 @@
         else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${8 * f}" fill="${brand}"/><text x="${m + bs / 2}" y="${m + bs * 0.66}" font-size="${15 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc((card.companyName || '').trim().slice(0, 2).toUpperCase() || '··')}</text>`;
         const hx = m + (card.logoDataUrl ? bs * 1.4 : bs) + 12 * f;
         s += `<text x="${hx}" y="${m + 15 * f}" font-size="${13.5 * f}" font-weight="700" fill="${brand}" font-family='${SERIF}'>${esc((card.companyName || '').toUpperCase())}</text><text x="${hx}" y="${m + 29 * f}" font-size="${8 * f}" fill="#3F435D" font-family='${SERIF}'>${esc(labels.cardArea)}</text>`;
-        const titleText = `${labels.cardTitle} ${card.zoneName}`.toUpperCase();
+        // El título es solo el nombre de la zona.
+        const titleText = String(card.zoneName || '').toUpperCase();
         const titleSize = Math.min(17 * f, ((W - 2 * m) / Math.max(titleText.length, 1)) * 1.75);
         s += `<text x="${m}" y="${m + 62 * f}" font-size="${titleSize}" font-weight="700" fill="${ink}">${esc(titleText)}</text>`;
-        const headY = m + 84 * f;
         const cols = wide && n > 1 ? 2 : 1;
         const gap = 18 * f;
         const colW = (W - 2 * m - gap * (cols - 1)) / cols;
+        // Las categorías (con su encabezado) van centradas arriba y abajo en el espacio que queda entre el título y el pie; con muchas, llenan todo el espacio.
+        const areaTop = m + 74 * f;
+        const bottom = H - m - 22 * f;
+        const headH = 14 * f;
+        const perCol = Math.ceil(n / cols) || 1;
+        const rowH = Math.min(78 * f, (bottom - areaTop - headH) / perCol);
+        const blockTop = areaTop + Math.max(0, (bottom - areaTop - (headH + perCol * rowH)) / 2);
+        const headY = blockTop + 8 * f;
+        const top = blockTop + headH;
         for (let c = 0; c < cols; c += 1) {
             const x0 = m + c * (colW + gap);
             s += `<text x="${x0}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="#3F435D">${esc(labels.cardCategory)}</text><text x="${x0 + colW}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="${brand}" text-anchor="end">${esc(labels.cardReview)}</text>`;
-            s += `<line x1="${x0}" y1="${headY + 6 * f}" x2="${x0 + colW}" y2="${headY + 6 * f}" stroke="#D9DBE5" stroke-width="${f}"/>`;
+            s += `<line x1="${x0}" y1="${top}" x2="${x0 + colW}" y2="${top}" stroke="#D9DBE5" stroke-width="${f}"/>`;
         }
-        const top = headY + 6 * f;
-        const bottom = H - m - 22 * f;
-        const perCol = Math.ceil(n / cols) || 1;
-        const rowH = Math.min(78 * f, (bottom - top) / perCol);
         card.categories.forEach((cat, i) => {
             const col = Math.floor(i / perCol);
             const row = i % perCol;

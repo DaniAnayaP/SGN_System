@@ -1132,7 +1132,7 @@ try {
 let cardState = null; // { zoneId, zoneName, data }
 let cardModalEl = null;
 function cardLabels() {
-    return { cardArea: t('main.layoutTarjetaArea'), cardTitle: t('main.layoutTarjetaTitulo'), cardCategory: t('main.layoutTarjetaCategoria'), cardReview: t('main.layoutTarjetaRevisame'), cardFooter: t('main.layoutTarjetaPie'), cardEmpty: t('main.layoutCatVacia'), cutCaption: t('main.layoutHojaRecorte') };
+    return { cardArea: t('main.layoutTarjetaArea'), cardCategory: t('main.layoutTarjetaCategoria'), cardReview: t('main.layoutTarjetaRevisame'), cardFooter: t('main.layoutTarjetaPie'), cardEmpty: t('main.layoutCatVacia'), cutCaption: t('main.layoutHojaRecorte') };
 }
 function cardSvg() {
     const data = cardState.data;
