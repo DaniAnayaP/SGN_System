@@ -6056,6 +6056,9 @@ function layoutPermissions(req) {
     return {
         sections, canCreateFromScratch: canButton('colLayoutCrearDesdeCero'), canLoadPlan: canButton('colLayoutCargarPlano'),
         canUseQr: qrLevel === 'ver-y-operar' || qrLevel === 'editar', canRegenerateQr: qrLevel === 'editar',
+        // Eliminar una zona o un espacio YA guardado pide el permiso Eliminar de su columna en el árbol (antes solo se podían desactivar).
+        canDeleteZones: admin || canDeleteColumn(grants, LAYOUT_TABLE_KEY, 'colLayoutZonas'),
+        canDeleteSpaces: admin || canDeleteColumn(grants, LAYOUT_TABLE_KEY, 'colLayoutEspacios'),
     };
 }
 
@@ -6133,9 +6136,14 @@ app.put('/api/business/layout', requireAuth, (req, res) => {
     } else if (planImage !== undefined && !perms.canLoadPlan) {
         return res.status(403).json({ message: 'No tienes permiso para cargar un plano.' });
     }
+    // Al eliminar una zona sus espacios quedan sin zona: ese efecto no cuenta como modificar los espacios (quien puede eliminar la zona no necesita editar los anaqueles).
+    const removedZoneIds = existing ? (existing.layout.zones || []).filter((z) => !(next.zones || []).some((n) => n.id === z.id)).map((z) => z.id) : [];
+    const compareBase = existing && removedZoneIds.length
+        ? { ...existing.layout, spaces: (existing.layout.spaces || []).map((s) => (removedZoneIds.includes(s.zoneId) ? { ...s, zoneId: '' } : s)) }
+        : (existing ? existing.layout : null);
     const changed = [];
     for (const section of Object.keys(LayoutCalc.SECTIONS)) {
-        const before = JSON.stringify(LayoutCalc.sectionData(existing ? existing.layout : null, section) ?? null);
+        const before = JSON.stringify(LayoutCalc.sectionData(compareBase, section) ?? null);
         const after = JSON.stringify(LayoutCalc.sectionData(next, section) ?? null);
         if (before === after) continue;
         const level = perms.sections[section];
@@ -6143,6 +6151,12 @@ app.put('/api/business/layout', requireAuth, (req, res) => {
         const allowed = level === 'editar' || (level === 'ver-y-operar' && !hadData);
         if (!allowed) return res.status(403).json({ message: `No tienes permiso para modificar: ${LAYOUT_SECTION_LABELS[section]}.`, section });
         changed.push(section);
+    }
+    // Quitar una zona o un espacio ya guardado (no solo desactivarlo) pide además el permiso Eliminar de su columna.
+    if (existing) {
+        const removedCount = (key) => (existing.layout[key] || []).filter((row) => !(next[key] || []).some((n) => n.id === row.id)).length;
+        if (removedCount('zones') && !perms.canDeleteZones) return res.status(403).json({ message: 'No tienes permiso para eliminar zonas.', section: 'zonas' });
+        if (removedCount('spaces') && !perms.canDeleteSpaces) return res.status(403).json({ message: 'No tienes permiso para eliminar espacios.', section: 'espacios' });
     }
     if (!changed.length && planImage === undefined && existing) return res.json({ version: existing.version, changed: [] });
 

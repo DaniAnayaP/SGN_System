@@ -1628,6 +1628,9 @@
     "layoutQuitar": "Remove",
     "layoutDesactivar": "Deactivate",
     "layoutReactivar": "Reactivate",
+    "layoutEliminar": "Delete",
+    "layoutEliminarZonaConfirm": "Delete the zone \"{name}\"? Its spaces will be left without a zone. It is deleted when you save and cannot be undone.",
+    "layoutEliminarEspacioConfirm": "Delete the space \"{name}\"? It is deleted when you save and cannot be undone.",
     "layoutPuertaNueva": "New door",
     "layoutColumna": "Column",
     "layoutSoloVer": "You can only view this section",
@@ -2910,6 +2913,10 @@
     "layoutToggleRow": {
       "what": "Deactivates or reactivates a zone or space that was already saved. It is not deleted: it stops counting in the m² and its history is kept.",
       "example": "you deactivate a rack that was removed from the warehouse."
+    },
+    "layoutDeleteRow": {
+      "what": "Permanently deletes this zone or space when you save. Unlike Deactivate, it is not kept at all. It only appears if your account has the Delete permission in the access tree.",
+      "example": "you remove a rack that never existed in the warehouse and was entered by mistake."
     },
     "layoutCanvas": {
       "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections.",

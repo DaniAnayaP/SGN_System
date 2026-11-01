@@ -1628,6 +1628,9 @@
     "layoutQuitar": "Quitar",
     "layoutDesactivar": "Desactivar",
     "layoutReactivar": "Reactivar",
+    "layoutEliminar": "Eliminar",
+    "layoutEliminarZonaConfirm": "¿Eliminar la zona \"{name}\"? Los espacios que tenga quedarán sin zona. Se borra al guardar y no se puede deshacer.",
+    "layoutEliminarEspacioConfirm": "¿Eliminar el espacio \"{name}\"? Se borra al guardar y no se puede deshacer.",
     "layoutPuertaNueva": "Puerta nueva",
     "layoutColumna": "Columna",
     "layoutSoloVer": "Solo puedes ver esta sección",
@@ -2909,6 +2912,10 @@
     "layoutToggleRow": {
       "what": "Desactiva o reactiva una zona o espacio que ya estaba guardado. No se borra: deja de contar en los m² y se conserva su historial.",
       "example": "desactivas un anaquel que ya retiraron de la nave."
+    },
+    "layoutDeleteRow": {
+      "what": "Elimina esta zona o este espacio de forma definitiva al guardar. A diferencia de Desactivar, ya no se conserva ni su historial de m². Solo aparece si tu cuenta tiene el permiso Eliminar en el árbol.",
+      "example": "quitas un anaquel que nunca existió en la nave y que capturaron por error."
     },
     "layoutCanvas": {
       "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz.",

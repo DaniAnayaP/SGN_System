@@ -86,6 +86,13 @@ function table(headKeys, rows) {
 }
 const removeCell = (list, i, disabled) => `<td><button type="button" class="layout-x" data-del="${list}:${i}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${disabled ? ' disabled' : ''}>✕</button></td>`;
 const addButton = (list, labelKey, disabled) => `<button type="button" class="btn btn-secondary layout-add" data-add="${list}" data-help-key="layoutAddRow"${disabled ? ' disabled' : ''}>${esc(t(labelKey))}</button>`;
+// Fila ya guardada de zonas o espacios: Desactivar/Reactivar (se conserva, deja de contar) y, con permiso, Eliminar.
+function savedRowButtons(list, i, active, disabled) {
+    const canDelete = state.perms && (list === 'zones' ? state.perms.canDeleteZones : state.perms.canDeleteSpaces);
+    const toggle = `<button type="button" class="btn btn-secondary layout-toggle" data-toggle="${list}:${i}" data-help-key="layoutToggleRow"${disabled ? ' disabled' : ''}>${esc(t(active === false ? 'main.layoutReactivar' : 'main.layoutDesactivar'))}</button>`;
+    const del = canDelete ? `<button type="button" class="btn btn-secondary layout-toggle layout-delete" data-delete="${list}:${i}" data-help-key="layoutDeleteRow"${disabled ? ' disabled' : ''}>${esc(t('main.layoutEliminar'))}</button>` : '';
+    return `<td><div class="layout-rowbtns">${toggle}${del}</div></td>`;
+}
 const isSavedRow = (list, id) => !!(state.saved && (state.saved[list] || []).some((row) => row.id === id));
 
 function stepHtml(step) {
@@ -115,14 +122,14 @@ function stepHtml(step) {
     if (step === 'zonas') {
         const rows = d.zones.map((z, i) => {
             const saved = isSavedRow('zones', z.id);
-            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', optionsHtml('zone', LC.ZONE_TYPES, z.type), dis)}${cellNum('zones', i, 'x', z.x, dis)}${cellNum('zones', i, 'y', z.y, dis)}${cellNum('zones', i, 'l', z.l, dis)}${cellNum('zones', i, 'w', z.w, dis)}<td class="layout-calc" data-zone-area="${i}">${fmt(z.l * z.w)} m²</td>${saved ? `<td><button type="button" class="btn btn-secondary layout-toggle" data-toggle="zones:${i}" data-help-key="layoutToggleRow"${dis ? ' disabled' : ''}>${esc(t(z.active === false ? 'main.layoutReactivar' : 'main.layoutDesactivar'))}</button></td>` : removeCell('zones', i, dis)}</tr>`;
+            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', optionsHtml('zone', LC.ZONE_TYPES, z.type), dis)}${cellNum('zones', i, 'x', z.x, dis)}${cellNum('zones', i, 'y', z.y, dis)}${cellNum('zones', i, 'l', z.l, dis)}${cellNum('zones', i, 'w', z.w, dis)}<td class="layout-calc" data-zone-area="${i}">${fmt(z.l * z.w)} m²</td>${saved ? savedRowButtons('zones', i, z.active, dis) : removeCell('zones', i, dis)}</tr>`;
         });
         return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', ''], rows)}${addButton('zones', 'main.layoutAgregarZona', dis)}`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
         const saved = isSavedRow('spaces', s.id);
-        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellSelect('spaces', i, 'type', optionsHtml('space', LC.SPACE_TYPES, s.type), dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}${cellNum('spaces', i, 'levels', s.levels, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? `<td><button type="button" class="btn btn-secondary layout-toggle" data-toggle="spaces:${i}" data-help-key="layoutToggleRow"${dis ? ' disabled' : ''}>${esc(t(s.active === false ? 'main.layoutReactivar' : 'main.layoutDesactivar'))}</button></td>` : removeCell('spaces', i, dis)}</tr>`;
+        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellSelect('spaces', i, 'type', optionsHtml('space', LC.SPACE_TYPES, s.type), dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}${cellNum('spaces', i, 'levels', s.levels, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis) : removeCell('spaces', i, dis)}</tr>`;
     });
     return `${table(['main.layoutTipo', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutNiveles', 'main.layoutCajones', 'main.layoutHuellaVolumen', ''], rows)}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
 }
@@ -439,6 +446,24 @@ $('layout-panel').addEventListener('click', (event) => {
         }
         renderPanel();
         refreshLive();
+        return;
+    }
+    const del2 = event.target.closest('[data-delete]');
+    if (del2) {
+        const [list, index] = del2.dataset.delete.split(':');
+        const row = state.draft[list][Number(index)];
+        const name = list === 'zones' ? row.name : row.code;
+        const message = t(list === 'zones' ? 'main.layoutEliminarZonaConfirm' : 'main.layoutEliminarEspacioConfirm').replace('{name}', name);
+        Dashboard.confirm(message).then((ok) => {
+            if (!ok) return;
+            const current = state.draft[list].findIndex((r) => r.id === row.id);
+            if (current < 0) return;
+            state.draft[list].splice(current, 1);
+            // Los espacios de una zona eliminada quedan sin zona (así también los deja el servidor al guardar).
+            if (list === 'zones') state.draft.spaces.forEach((s) => { if (s.zoneId === row.id) s.zoneId = ''; });
+            renderPanel();
+            refreshLive();
+        });
         return;
     }
     const toggle = event.target.closest('[data-toggle]');

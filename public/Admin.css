@@ -7168,3 +7168,12 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-warn[hidden]{
     display: none;
 }
+
+.layout-rowbtns{
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+.layout-delete{
+    color: #c0392b;
+}
