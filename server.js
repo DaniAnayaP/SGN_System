@@ -6085,6 +6085,13 @@ function layoutPermissions(req) {
 
 // Lo ÚNICO que sale por la vista pública del QR (sin sesión): paredes, zonas activas, espacios activos con su código, puertas y los KPIs. Nunca las
 // conexiones de luz, las columnas ni el plano de fondo. La hoja que se descarga se arma con este mismo contenido, para que traiga lo mismo que se ve al escanear.
+// El logo del cliente (si lo tiene y no es enorme) para el reporte y la tarjeta que se imprimen; solo viaja en rutas con sesión, nunca en la vista pública.
+function clientLogoDataUrl(clientId) {
+    const client = getClientById(clientId);
+    const logo = client && client.logo_data_url;
+    return typeof logo === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(logo) && logo.length < 600000 ? logo : '';
+}
+
 function buildPublicLayoutPayload(clientId, row) {
     const l = row.layout;
     const client = getClientById(clientId);
@@ -6228,7 +6235,7 @@ app.get('/api/business/layout/qr', requireAuth, (req, res) => {
     const rows = [];
     for (let r = 0; r < size; r++) rows.push(Array.from({ length: size }, (_, c) => (qr.modules.get(r, c) ? '1' : '0')).join(''));
     res.set('Cache-Control', 'no-store');
-    res.json({ url, qrRows: rows, canRegenerate: perms.canRegenerateQr, ...buildPublicLayoutPayload(req.user.clientId, row) });
+    res.json({ url, qrRows: rows, canRegenerate: perms.canRegenerateQr, logoDataUrl: clientLogoDataUrl(req.user.clientId), ...buildPublicLayoutPayload(req.user.clientId, row) });
 });
 
 // Las categorías de cada zona con su QR, para la tarjeta que se imprime. Cada QR lleva la dirección fija del Layout más la zona y la categoría (el QR no cambia nunca; ahí aparecerán los
@@ -6255,7 +6262,7 @@ app.get('/api/business/layout/categories-qr', requireAuth, (req, res) => {
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
     res.set('Cache-Control', 'no-store');
     // El logo del cliente (si lo tiene y no es enorme) va en el encabezado de la tarjeta.
-    const logo = client && typeof client.logo_data_url === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(client.logo_data_url) && client.logo_data_url.length < 600000 ? client.logo_data_url : '';
+    const logo = clientLogoDataUrl(req.user.clientId);
     res.json({ companyName: (client && client.company_name) || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', logoDataUrl: logo, version: row.version, updatedAt: row.updatedAt, zones });
 });
 

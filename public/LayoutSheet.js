@@ -69,8 +69,11 @@
         // encabezado
         const bs = 84 * f;
         const nameSize = (tiny ? 27 : 36) * f;
-        s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${18 * f}" fill="${C.badge}"/><text x="${m + bs / 2}" y="${m + bs * 0.667}" font-size="${36 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(initials)}</text>`;
-        s += `<text x="${m + bs + 20 * f}" y="${m + 38 * f}" font-size="${nameSize}" font-weight="700" fill="${C.ink}">${esc(data.companyName)}</text><text x="${m + bs + 20 * f}" y="${m + 70 * f}" font-size="${21 * f}" fill="#3F435D">${esc(labels.area)}</text>`;
+        // El logo del cliente (si lo tiene) va en lugar de las iniciales; ancho según su forma (data.logoRatio = ancho / alto, hasta 2.4 veces el alto).
+        const logoW = data.logoDataUrl ? bs * clamp(Number(data.logoRatio) || 1, 0.5, 2.4) : bs;
+        if (data.logoDataUrl) s += `<image href="${data.logoDataUrl}" x="${m}" y="${m}" width="${logoW.toFixed(2)}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
+        else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${18 * f}" fill="${C.badge}"/><text x="${m + bs / 2}" y="${m + bs * 0.667}" font-size="${36 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(initials)}</text>`;
+        s += `<text x="${m + logoW + 20 * f}" y="${m + 38 * f}" font-size="${nameSize}" font-weight="700" fill="${C.ink}">${esc(data.companyName)}</text><text x="${m + logoW + 20 * f}" y="${m + 70 * f}" font-size="${21 * f}" fill="#3F435D">${esc(labels.area)}</text>`;
         s += `<text x="${m}" y="${m + 157 * f}" font-size="${(tiny ? 42 : 58) * f}" font-weight="700" fill="${C.ink}">${esc(labels.title)}</text><text x="${m}" y="${m + 195 * f}" font-size="${(tiny ? 19 : 23) * f}" fill="#3F435D">${esc(meta)}</text>`;
         const qs = clamp(230 * f, 70, Math.min(H * 0.22, W * 0.26));
         const qy = 40 * f;
@@ -184,7 +187,7 @@
         return `${s}</g></svg>`;
     }
 
-    // data: { companyName, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
+    // data: { companyName, logoDataUrl, logoRatio, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
     // options: { widthCm, heightCm, cut } (el espacio que se imprime y si se dibuja la línea punteada para recortar).
     function buildSheetSvg(data, labels, lang, options = {}) {
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));

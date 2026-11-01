@@ -1327,8 +1327,15 @@ async function buildSheetFromSaved() {
     const data = await fetchQrData();
     if (!data) return null;
     const theme = window.LayoutMapSvg.theme(data.companyColor);
+    // La forma del logo (ancho / alto) para darle su lugar en el encabezado sin deformarlo.
+    const logoRatio = data.logoDataUrl ? await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1);
+        img.onerror = () => resolve(1);
+        img.src = data.logoDataUrl;
+    }) : 1;
     const svg = window.LayoutSheet.buildSheetSvg({
-        companyName: data.companyName, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
+        companyName: data.companyName, logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, layout: data.layout, theme,
     }, sheetLabels(), Dashboard.lang, sheetOptions());
     return { svg, data };
