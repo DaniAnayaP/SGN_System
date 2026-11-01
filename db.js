@@ -6211,6 +6211,62 @@ function seedColumnSearchOptionGrants() {
 }
 // Se llama al FINAL del archivo (ver más abajo, antes de module.exports): findPantallaNode usa el árbol injertado de Administración del Negocio, que se arma más adelante.
 
+// --- One-time data migration (2026-11-01): tres iconos nuevos del Layout para quien ya ve la pantalla ---------------------------------------------------
+// Ver y ocultar los m² (iconLayoutArea), Filtros de las tablas (iconLayoutFiltros) e Imprimir por zona (iconLayoutImprimirZona) nacieron solo para el administrador del
+// cliente (el único que no depende de hojas). Se dan, UNA vez, a quien YA tiene la pantalla Layout en cada nivel por el que pasa el acceso:
+//   - Puestos de Trabajo (job_position_grants) y permisos extra de usuarios (user_grants): quien tiene la hoja de la pantalla, una hoja de sus columnas o un permiso más ancho de su
+//     ítem o departamento (el mismo criterio de la siembra de Opciones de Búsqueda).
+//   - Lo contratado: planes (plan_grants), adicionales de clientes (client_permission_grants) y plantillas de giro (sector_grants) que ya incluyen la pantalla. Sin esto el límite de
+//     contrato (limitKindsForGrant) descartaría el icono aunque el puesto lo tenga. Aquí solo se agrega si el plan no lo cubre ya con un permiso más ancho.
+// No quita nada, no toca otros iconos ni pantallas (Formato de zona, Medidas, Categorías, Tarjeta, Almacenes, Relación Código... siguen como estaban) y corre una sola vez
+// (schema_migrations_data): quien después quite un icono a propósito no lo recupera en el siguiente reinicio.
+const LAYOUT_NEW_ICON_LEAVES = ['iconLayoutArea', 'iconLayoutFiltros', 'iconLayoutImprimirZona'];
+const LAYOUT_ICONS_SEED_KEY = 'seed-layout-new-icons-v1';
+function seedLayoutNewIconGrants() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(LAYOUT_ICONS_SEED_KEY)) return;
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    const under = `${path.submenuPrefix}/`;
+    const counts = {};
+    const seed = db.transaction(() => {
+        // [tabla, columna del dueño, ¿es lo contratado?]
+        for (const [table, ownerColumn, contract] of [
+            ['job_position_grants', 'job_position_id', false], ['user_grants', 'user_id', false],
+            ['plan_grants', 'plan_id', true], ['client_permission_grants', 'client_id', true], ['sector_grants', 'business_sector_id', true],
+        ]) {
+            const hasGrant = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
+            const insertGrant = db.prepare(`INSERT INTO ${table} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
+            const withScreen = db.prepare(`
+                SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${table}
+                WHERE section_id = ? AND (
+                    (item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?))
+                    ${contract ? '' : 'OR (item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL)'}
+                )
+            `);
+            const owners = contract
+                ? withScreen.all(path.sectionId, path.itemId, path.submenuPrefix, under.length, under)
+                : withScreen.all(path.sectionId, path.itemId, path.submenuPrefix, under.length, under, path.itemId);
+            // Lo contratado que ya cubre toda el área o todo el departamento no necesita el permiso suelto (isTupleGranted lo da por incluido).
+            const broad = contract ? db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND ((item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL))`) : null;
+            let inserted = 0;
+            owners.forEach(({ ownerId }) => {
+                if (broad && broad.get(ownerId, path.sectionId, path.itemId)) return;
+                LAYOUT_NEW_ICON_LEAVES.forEach((leaf) => {
+                    const submenuId = `${path.submenuPrefix}/${leaf}`;
+                    if (!hasGrant.get(ownerId, path.sectionId, path.itemId, submenuId)) {
+                        insertGrant.run(ownerId, path.sectionId, path.itemId, submenuId);
+                        inserted += 1;
+                    }
+                });
+            });
+            counts[table] = inserted;
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_ICONS_SEED_KEY);
+    });
+    seed();
+    console.log(`[db] Seeded the 3 new Layout icons for pre-existing Layout access (one-time migration): ${JSON.stringify(counts)}.`);
+}
+
 // --- One-time data migration: seed pantalla-visibility for pre-existing --
 // --- access ("Pantalla habilitada" in the permission tree) ---------------
 // Before this round, the department sidebar showed every pantalla (real
@@ -10533,6 +10589,7 @@ const systemReset = createSystemReset(db, DATA_DIR);
 
 // Siembra de Opciones de Búsqueda (definida arriba): aquí ya existe todo lo que usa findPantallaNode.
 seedColumnSearchOptionGrants();
+seedLayoutNewIconGrants();
 
 module.exports = {
     db,

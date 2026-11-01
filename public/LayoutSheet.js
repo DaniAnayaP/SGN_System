@@ -69,11 +69,19 @@
         const logoW = data.logoDataUrl ? bs * clamp(Number(data.logoRatio) || 1, 0.5, 2.4) : bs;
         if (data.logoDataUrl) s += `<image href="${esc(data.logoDataUrl)}" x="${m}" y="${m}" width="${logoW.toFixed(2)}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
         else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${18 * f}" fill="${C.badge}"/><text x="${m + bs / 2}" y="${m + bs * 0.667}" font-size="${36 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(initials)}</text>`;
-        // Arriba el Sitio (data.siteName: hoy un texto escrito a mano; después saldrá de la configuración) y abajo el nombre de la compañía.
-        s += `<text x="${m + logoW + 20 * f}" y="${m + 30 * f}" font-size="${21 * f}" fill="#3F435D">${esc(data.siteName || labels.area)}</text><text x="${m + logoW + 20 * f}" y="${m + 70 * f}" font-size="${nameSize}" font-weight="700" fill="${C.ink}">${esc(data.companyName)}</text>`;
-        s += `<text x="${m}" y="${m + 157 * f}" font-size="${(tiny ? 42 : 58) * f}" font-weight="700" fill="${C.ink}">${esc(labels.title)}</text>`;
+        // Lo fuerte arriba y lo débil abajo: el Sitio (data.siteName: el que se escribe en Contorno > Sitio; después saldrá de la configuración) grande, en negritas y en el color de la marca,
+        // y debajo el nombre de la compañía, más chico y en gris. Los dos se achican si no caben antes del código QR.
         const qs = clamp(230 * f, 70, Math.min(H * 0.22, W * 0.26));
         const qy = 40 * f;
+        const hx = m + logoW + 20 * f;
+        const headAvail = Math.max(W - m - qs - 24 * f - hx, 60 * f);
+        const fitSize = (txt, size, k, min) => Math.max(min, Math.min(size, headAvail / (Math.max(String(txt).length, 1) * k)));
+        const siteText = String(data.siteName || labels.area || '');
+        const companyText = String(data.companyName || '');
+        const siteSize = fitSize(siteText, nameSize, 0.66, 13 * f);
+        const companySize = fitSize(companyText, nameSize * 0.6, 0.6, 10 * f);
+        s += `<text x="${hx}" y="${m + 38 * f}" font-size="${siteSize}" font-weight="700" fill="${C.badge}">${esc(siteText)}</text><text x="${hx}" y="${m + 70 * f}" font-size="${companySize}" fill="#6B7089">${esc(companyText)}</text>`;
+        s += `<text x="${m}" y="${m + 157 * f}" font-size="${(tiny ? 42 : 58) * f}" font-weight="700" fill="${C.ink}">${esc(labels.title)}</text>`;
         s += qrPath(data.qrRows, W - m - qs, qy, qs, C.ink, 3 * f);
         // El aviso del QR va abajo, junto al código: arriba se encimaba con los nombres largos de empresa.
         if (qs >= 110) {
@@ -220,28 +228,38 @@
         else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${8 * f}" fill="${brand}"/><text x="${m + bs / 2}" y="${m + bs * 0.66}" font-size="${15 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc((card.companyName || '').trim().slice(0, 2).toUpperCase() || '··')}</text>`;
         const hx = m + logoW + 12 * f;
         const avail = Math.max(W - m - hx, 20 * f);
+        // Lo fuerte arriba y lo débil abajo: el Sitio (grande, en negritas y en el color de la marca) y debajo el nombre de la empresa (chico y en gris).
         const site = String(card.siteName || labels.cardArea || '').trim();
         const company = String(card.companyName || '').trim().toUpperCase();
-        const est = (txt, size) => txt.length * size * 0.74; // ancho aproximado de mayúsculas en negritas con serif
-        const splitTwo = (txt, size) => {
+        const splitTwo = (txt, size, k) => {
             let l1 = '';
             let l2 = '';
-            txt.split(/\s+/).forEach((w) => { if (!l2 && est(`${l1} ${w}`.trim(), size) <= avail) l1 = `${l1} ${w}`.trim(); else l2 = `${l2} ${w}`.trim(); });
+            txt.split(/\s+/).forEach((w) => { if (!l2 && `${l1} ${w}`.trim().length * size * k <= avail) l1 = `${l1} ${w}`.trim(); else l2 = `${l2} ${w}`.trim(); });
             return l2 ? [l1, l2] : [l1];
         };
-        const tries = [[1, 13.5], [1, 12], [2, 12], [2, 11], [1, 10], [2, 10], [2, 9]];
-        let fit = null;
-        for (const [count, px] of tries) {
-            const size = px * f;
-            const lines = count === 1 ? [company] : splitTwo(company, size);
-            if (lines.every((ln) => est(ln, size) <= avail)) { fit = { lines, size }; break; }
-        }
-        if (!fit) { const size = 9 * f; fit = { lines: splitTwo(company, size), size }; }
-        const siteY = m + (fit.lines.length === 1 ? 12 : 9) * f;
-        const firstY = site ? (fit.lines.length === 1 ? m + 28 * f : m + 21 * f) : (fit.lines.length === 1 ? m + 21 * f : m + 15 * f);
-        if (site) s += `<text x="${hx}" y="${siteY}" font-size="${8 * f}" fill="#3F435D" font-family='${SERIF}'${est(site, 8 * f) > avail ? ` textLength="${avail}" lengthAdjust="spacingAndGlyphs"` : ''}>${esc(site)}</text>`;
-        fit.lines.forEach((ln, k) => {
-            s += `<text x="${hx}" y="${firstY + k * fit.size * 1.1}" font-size="${fit.size}" font-weight="700" fill="${brand}" font-family='${SERIF}'${est(ln, fit.size) > avail ? ` textLength="${avail}" lengthAdjust="spacingAndGlyphs"` : ''}>${esc(ln)}</text>`;
+        // k = ancho aproximado de una letra en em; prueba tamaños de grande a chico, de un renglón a dos, y al final comprime lo que no quepa.
+        const fitText = (txt, tries, k, fallbackPx) => {
+            for (const [count, px] of tries) {
+                const size = px * f;
+                const lines = count === 1 ? [txt] : splitTwo(txt, size, k);
+                if (lines.every((ln) => ln.length * size * k <= avail)) return { lines, size, k };
+            }
+            const size = fallbackPx * f;
+            return { lines: splitTwo(txt, size, k), size, k };
+        };
+        const strong = site ? fitText(site, [[1, 13.5], [1, 12], [2, 12], [2, 11], [1, 10], [2, 10], [2, 9]], 0.74, 9) : { lines: [], size: 0, k: 0.74 };
+        const weak = company ? fitText(company, [[1, 8.5], [1, 8], [2, 8.5], [2, 8]], 0.7, 7.5) : { lines: [], size: 0, k: 0.7 };
+        const stackH = strong.lines.length * strong.size * 1.1 + (strong.lines.length && weak.lines.length ? 3 * f : 0) + weak.lines.length * weak.size * 1.2;
+        let cursor = m + Math.max(0, (bs - stackH) / 2);
+        const squeeze = (ln, size, k) => (ln.length * size * k > avail ? ` textLength="${avail}" lengthAdjust="spacingAndGlyphs"` : '');
+        strong.lines.forEach((ln) => {
+            s += `<text x="${hx}" y="${cursor + strong.size * 0.82}" font-size="${strong.size}" font-weight="700" fill="${brand}" font-family='${SERIF}'${squeeze(ln, strong.size, strong.k)}>${esc(ln)}</text>`;
+            cursor += strong.size * 1.1;
+        });
+        if (strong.lines.length && weak.lines.length) cursor += 3 * f;
+        weak.lines.forEach((ln) => {
+            s += `<text x="${hx}" y="${cursor + weak.size * 0.82}" font-size="${weak.size}" fill="#6B7089" font-family='${SERIF}'${squeeze(ln, weak.size, weak.k)}>${esc(ln)}</text>`;
+            cursor += weak.size * 1.2;
         });
         // El título es solo el nombre de la zona.
         const titleText = String(card.zoneName || '').toUpperCase();
@@ -249,25 +267,30 @@
         s += `<text x="${m}" y="${m + 62 * f}" font-size="${titleSize}" font-weight="700" fill="${ink}">${esc(titleText)}</text>`;
         const cols = wide && n > 1 ? 2 : 1;
         const gap = 18 * f;
-        const colW = (W - 2 * m - gap * (cols - 1)) / cols;
+        // El espacio de las categorías lleva su contorno (un marco con las esquinas redondeadas) y todo va adentro, con un poco de aire.
+        const pad = 10 * f;
+        const colW = (W - 2 * m - 2 * pad - gap * (cols - 1)) / cols;
         // Las categorías (con su encabezado) van centradas arriba y abajo en el espacio que queda entre el título y el pie; con muchas, llenan todo el espacio.
         const areaTop = m + 74 * f;
         const bottom = H - m - 22 * f;
         const headH = 14 * f;
         const perCol = Math.ceil(n / cols) || 1;
-        const rowH = Math.min(78 * f, (bottom - areaTop - headH) / perCol);
-        const blockTop = areaTop + Math.max(0, (bottom - areaTop - (headH + perCol * rowH)) / 2);
+        const rowH = Math.min(78 * f, (bottom - areaTop - headH - 2 * pad) / perCol);
+        const frameH = headH + perCol * rowH + 2 * pad;
+        const frameTop = areaTop + Math.max(0, (bottom - areaTop - frameH) / 2);
+        const blockTop = frameTop + pad;
         const headY = blockTop + 8 * f;
         const top = blockTop + headH;
+        s += `<rect x="${m}" y="${frameTop}" width="${W - 2 * m}" height="${frameH}" rx="${8 * f}" fill="none" stroke="#C9CCDA" stroke-width="${1.4 * f}"/>`;
         for (let c = 0; c < cols; c += 1) {
-            const x0 = m + c * (colW + gap);
+            const x0 = m + pad + c * (colW + gap);
             s += `<text x="${x0}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="#3F435D">${esc(labels.cardCategory)}</text><text x="${x0 + colW}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="${brand}" text-anchor="end">${esc(labels.cardReview)}</text>`;
             s += `<line x1="${x0}" y1="${top}" x2="${x0 + colW}" y2="${top}" stroke="#D9DBE5" stroke-width="${f}"/>`;
         }
         card.categories.forEach((cat, i) => {
             const col = Math.floor(i / perCol);
             const row = i % perCol;
-            const x0 = m + col * (colW + gap);
+            const x0 = m + pad + col * (colW + gap);
             const y = top + row * rowH;
             const isz = Math.min(34 * f, rowH * 0.56);
             const qs = Math.min(rowH - 10 * f, 76 * f);
@@ -281,7 +304,7 @@
             s += qrPath(cat.qrRows, x0 + colW - qs, y + (rowH - qs) / 2, qs, '#FFFFFF', 0);
             s += `<line x1="${x0}" y1="${y + rowH}" x2="${x0 + colW}" y2="${y + rowH}" stroke="#D9DBE5" stroke-width="${f}"/>`;
         });
-        if (!n) s += `<text x="${W / 2}" y="${(top + bottom) / 2}" font-size="${11 * f}" fill="#8E94AB" text-anchor="middle">${esc(labels.cardEmpty)}</text>`;
+        if (!n) s += `<text x="${W / 2}" y="${frameTop + frameH / 2 + 4 * f}" font-size="${11 * f}" fill="#8E94AB" text-anchor="middle">${esc(labels.cardEmpty)}</text>`;
         s += `<text x="${W / 2}" y="${H - m - 6 * f}" font-size="${7.6 * f}" fill="${brand}" text-anchor="middle">${esc(labels.cardFooter)}</text>`;
         return s;
     }
