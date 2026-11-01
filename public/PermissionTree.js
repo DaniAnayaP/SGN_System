@@ -1767,6 +1767,8 @@
             iconFieldRules: 'bx-link',
             iconLayoutFormatoZona: 'bx-palette',
             iconLayoutMedidas: 'bx-ruler',
+            iconLayoutCategorias: 'bx-purchase-tag-alt',
+            iconLayoutTarjeta: 'bx-id-card',
         };
 
         function buildPreviewLegendHtml() {

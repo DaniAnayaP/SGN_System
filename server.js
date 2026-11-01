@@ -6063,6 +6063,9 @@ function layoutPermissions(req) {
         canFormatZones: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoZona'),
         // Ver u ocultar las medidas del croquis es solo de pantalla, pero también es un icono con su propia hoja en el árbol (iconLayoutMedidas).
         canToggleMeasures: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutMedidas'),
+        // Las categorías de las zonas se capturan con el icono Categorías de la zona y su tarjeta con QR se baja con el icono Tarjeta de categorías (hojas <pantalla>/iconLayoutCategorias e iconLayoutTarjeta).
+        canEditCategories: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCategorias'),
+        canUseCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjeta'),
     };
 }
 
@@ -6075,7 +6078,7 @@ function buildPublicLayoutPayload(clientId, row) {
         heightM: l.heightM,
         vertices: l.vertices,
         doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width })),
-        zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}) })),
+        zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
         spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h })),
         obstacles: [], power: [],
     };
@@ -6165,6 +6168,13 @@ app.put('/api/business/layout', requireAuth, (req, res) => {
         if (removedCount('spaces') && !perms.canDeleteSpaces) return res.status(403).json({ message: 'No tienes permiso para eliminar espacios.', section: 'espacios' });
     }
     // El formato de las zonas (color, rayas, borde) solo lo cambia quien tiene el icono Formato de zona.
+    // Las categorías de las zonas solo las cambia quien tiene el icono Categorías de la zona.
+    if (!perms.canEditCategories) {
+        const beforeCats = new Map(((existing && existing.layout.zones) || []).map((z) => [z.id, JSON.stringify(z.categories || null)]));
+        if ((next.zones || []).some((z) => JSON.stringify(z.categories || null) !== (beforeCats.has(z.id) ? beforeCats.get(z.id) : 'null'))) {
+            return res.status(403).json({ message: 'No tienes permiso para cambiar las categorías de las zonas.', section: 'zonas' });
+        }
+    }
     if (!perms.canFormatZones) {
         const before = new Map(((existing && existing.layout.zones) || []).map((z) => [z.id, JSON.stringify(z.fmt || null)]));
         if ((next.zones || []).some((z) => JSON.stringify(z.fmt || null) !== (before.has(z.id) ? before.get(z.id) : 'null'))) {
@@ -6205,6 +6215,34 @@ app.get('/api/business/layout/qr', requireAuth, (req, res) => {
     for (let r = 0; r < size; r++) rows.push(Array.from({ length: size }, (_, c) => (qr.modules.get(r, c) ? '1' : '0')).join(''));
     res.set('Cache-Control', 'no-store');
     res.json({ url, qrRows: rows, canRegenerate: perms.canRegenerateQr, ...buildPublicLayoutPayload(req.user.clientId, row) });
+});
+
+// Las categorías de cada zona con su QR, para la tarjeta que se imprime. Cada QR lleva la dirección fija del Layout más la zona y la categoría (el QR no cambia nunca; ahí aparecerán los
+// códigos de esa categoría cuando se agreguen). Se arma con lo último guardado y pide el icono Tarjeta de categorías.
+app.get('/api/business/layout/categories-qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canUseCard) return res.status(403).json({ message: 'No tienes permiso para usar la tarjeta de categorías.' });
+    const row = getClientLayout(req.user.clientId);
+    if (!row) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    const token = ensureLayoutPublicToken(req.user.clientId);
+    const base = `${req.protocol}://${req.get('host')}/q/${token}`;
+    const zones = (row.layout.zones || []).filter((z) => z.active !== false && Array.isArray(z.categories) && z.categories.length).map((z) => ({
+        id: z.id, name: z.name,
+        categories: z.categories.map((c) => {
+            const url = `${base}?z=${encodeURIComponent(z.id)}&c=${encodeURIComponent(c.id)}`;
+            const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
+            const size = qr.modules.size;
+            const rows = [];
+            for (let r = 0; r < size; r++) rows.push(Array.from({ length: size }, (_, k) => (qr.modules.get(r, k) ? '1' : '0')).join(''));
+            return { id: c.id, name: c.name, desc: c.desc, icon: c.icon, color: c.color, url, qrRows: rows };
+        }),
+    }));
+    const client = getClientById(req.user.clientId);
+    const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
+    res.set('Cache-Control', 'no-store');
+    // El logo del cliente (si lo tiene y no es enorme) va en el encabezado de la tarjeta.
+    const logo = client && typeof client.logo_data_url === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(client.logo_data_url) && client.logo_data_url.length < 600000 ? client.logo_data_url : '';
+    res.json({ companyName: (client && client.company_name) || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', logoDataUrl: logo, version: row.version, updatedAt: row.updatedAt, zones });
 });
 
 // Cambiar el QR a propósito (por ejemplo si lo fotografiaron fuera de la empresa): el anterior deja de funcionar y hay que volver a imprimir.

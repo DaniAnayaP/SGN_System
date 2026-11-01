@@ -13,7 +13,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, showMeasures: true, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], creating: false,
+    saved: null, draft: null, version: 0, perms: null, showMeasures: true, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -310,6 +310,46 @@ function firstOpenShape() {
     return z ? { kind: 'zone', zone: z } : null;
 }
 
+// ---- categorías dentro de cada zona -----------------------------------------------------------------------------------------------------
+// La zona es el título y adentro lleva sus categorías (se escriben a mano, varias por zona): nombre, descripción corta, icono y color. Cada una tiene su QR en la tarjeta que se imprime.
+// Panel debajo de la tabla de zonas: se abre con el botón de etiqueta de cada zona.
+const CAT_COLORS = ['#1f3a6b', '#3f6b2f', '#d08a1e', '#2f4fc9', '#c77fa3', '#7a1f1a', '#2f8a9b', '#4c5fb0', '#6b3e98', '#5b6272'];
+function catGlyph(icon, stroke = '#FFFFFF') {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(icon, stroke, 2)}</svg>`;
+}
+function catEditorHtml(c, dis) {
+    const icons = LC.CATEGORY_ICONS.map((k) => `<button type="button" class="layout-cat-ig" data-cat-icon="${esc(c.id)}:${k}" aria-pressed="${c.icon === k}" aria-label="${esc(t(`main.layoutCatIcon_${k}`))}" title="${esc(t(`main.layoutCatIcon_${k}`))}"${dis ? ' disabled' : ''}>${catGlyph(k, 'currentColor')}</button>`).join('');
+    const colors = CAT_COLORS.map((k) => `<button type="button" class="layout-cat-cg" data-cat-color="${esc(c.id)}:${k}" aria-pressed="${c.color.toLowerCase() === k}" style="background:${k}" aria-label="${esc(k)}"${dis ? ' disabled' : ''}></button>`).join('');
+    return `<div class="layout-cat-editor"><h4>${esc(t('main.layoutCatIcono'))}</h4><div class="layout-cat-igrid">${icons}</div><h4>${esc(t('main.layoutCatColor'))}</h4><div class="layout-cat-cgrid">${colors}<button type="button" class="btn btn-secondary layout-toggle" data-cat-more="${esc(c.id)}" data-help-key="layoutFmtColor"${dis ? ' disabled' : ''}>${esc(t('main.layoutElegirColor'))}</button></div></div>`;
+}
+function zoneCatsPanelHtml(dis) {
+    const z = state.draft.zones.find((r) => r.id === state.catsOpen);
+    if (!z) return '';
+    const cats = z.categories || [];
+    const rows = cats.map((c) => `<div class="layout-cat${state.catEdit === c.id ? ' open' : ''}"><button type="button" class="layout-cat-icon" data-cat-edit="${esc(c.id)}" style="background:${esc(c.color)}" data-help-key="layoutCatLook" aria-label="${esc(t('main.layoutCatIconoColor'))}"${dis ? ' disabled' : ''}>${catGlyph(c.icon)}</button>
+        <div class="layout-cat-fields"><input type="text" maxlength="${LC.LIMITS.text}" data-cat="${esc(c.id)}:name" data-help-key="layoutCatName" value="${esc(c.name)}" placeholder="${esc(t('main.layoutCatNombre'))}"${dis ? ' disabled' : ''}><input type="text" maxlength="${LC.LIMITS.categoryText}" data-cat="${esc(c.id)}:desc" data-help-key="layoutCatDesc" value="${esc(c.desc)}" placeholder="${esc(t('main.layoutCatDescripcion'))}"${dis ? ' disabled' : ''}></div>
+        <button type="button" class="layout-x" data-cat-del="${esc(c.id)}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${dis ? ' disabled' : ''}>✕</button></div>${state.catEdit === c.id ? catEditorHtml(c, dis) : ''}`).join('');
+    const cardBtn = state.perms && state.perms.canUseCard
+        ? `<button type="button" class="btn btn-secondary layout-add" data-card-open="${esc(z.id)}" data-help-key="layoutCardBtn">${esc(t('main.layoutTarjetaAbrir'))}</button>`
+        : '';
+    return `<div class="layout-zone-sides layout-cats-panel"><h4 class="layout-sub">${esc(t('main.layoutCatDe').replace('{name}', z.name))}</h4>${rows || `<p class="layout-muted">${esc(t('main.layoutCatVacia'))}</p>`}<div class="layout-sidesbar"><button type="button" class="btn btn-secondary layout-add" data-cat-add="${esc(z.id)}" data-help-key="layoutCatAdd"${dis || cats.length >= LC.LIMITS.categories ? ' disabled' : ''}>${esc(t('main.layoutCatAgregar'))}</button>${cardBtn}</div></div>`;
+}
+function addCategory(zone) {
+    zone.categories = zone.categories || [];
+    const n = zone.categories.length;
+    const cat = { id: uid('c'), name: `${t('main.layoutCategoria')} ${n + 1}`, desc: '', icon: LC.CATEGORY_ICONS[n % LC.CATEGORY_ICONS.length], color: CAT_COLORS[n % CAT_COLORS.length] };
+    zone.categories.push(cat);
+    state.catEdit = cat.id;
+}
+function onCategoryEdit(el) {
+    const [id, field] = el.getAttribute('data-cat').split(':');
+    const zone = state.draft.zones.find((r) => (r.categories || []).some((c) => c.id === id));
+    const cat = zone && zone.categories.find((c) => c.id === id);
+    if (!cat) return;
+    cat[field === 'desc' ? 'desc' : 'name'] = el.value;
+    refreshLive();
+}
+
 function stepHtml(step) {
     const d = state.draft;
     const dis = !canEdit(step);
@@ -354,10 +394,14 @@ function stepHtml(step) {
             const fmtButton = state.perms && state.perms.canFormatZones
                 ? `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${z.fmt ? ' on' : ''}" data-fmtzone="${i}" data-help-key="layoutZoneFmt" aria-label="${esc(t('main.layoutFormatoZona'))}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i>${z.fmt ? `<span class="layout-fmt-dot" style="background:${esc(z.fmt.fill)};border-color:${esc(z.fmt.bcolor)}"></span>` : ''}</button>`
                 : '';
+            const catCount = (z.categories || []).length;
+            const catButton = state.perms && state.perms.canEditCategories
+                ? `<button type="button" class="btn btn-secondary layout-toggle layout-cats${state.catsOpen === z.id ? ' on' : ''}" data-catszone="${esc(z.id)}" data-help-key="layoutZoneCats" aria-label="${esc(t('main.layoutCatDe').replace('{name}', z.name))}"><i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>${catCount ? `<span class="layout-cats-n">${catCount}</span>` : ''}</button>`
+                : '';
             const planBox = `<td><input type="number" step="0.01" min="0" data-l="zones" data-i="${i}" data-k="planM2" data-help-key="layoutZonePlanM2" value="${z.planM2 > 0 ? z.planM2 : ''}"${dis ? ' disabled' : ''}></td>`;
-            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + shapeButton) : removeCell('zones', i, dis, fmtButton + shapeButton)}</tr>`;
+            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
         });
-        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows)}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}`;
+        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows)}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
@@ -709,6 +753,7 @@ function onEdit(event) {
         if (event.type === 'change' && /^dir:/.test(el.getAttribute('data-cs') || el.getAttribute('data-zs'))) renderPanel();
         return;
     }
+    if (state.draft && el.getAttribute('data-cat') !== null) { onCategoryEdit(el); return; }
     const list = el.getAttribute('data-l');
     if (!list || !state.draft) return;
     const isNumber = el.type === 'number';
@@ -785,6 +830,36 @@ $('layout-panel').addEventListener('click', (event) => {
     if (sclose) { closeSides(sclose.dataset.sclose); renderPanel(); refreshLive(); return; }
     const sline = event.target.closest('[data-sline]');
     if (sline) { closeLine(sline.dataset.sline); renderPanel(); refreshLive(); return; }
+    const catsZone = event.target.closest('[data-catszone]');
+    if (catsZone) { const id = catsZone.dataset.catszone; state.catsOpen = state.catsOpen === id ? null : id; state.catEdit = null; renderPanel(); return; }
+    const catAdd = event.target.closest('[data-cat-add]');
+    if (catAdd) { const z = state.draft.zones.find((r) => r.id === catAdd.dataset.catAdd); if (z) { addCategory(z); renderPanel(); refreshLive(); } return; }
+    const catDel = event.target.closest('[data-cat-del]');
+    if (catDel) {
+        const z = state.draft.zones.find((r) => (r.categories || []).some((c) => c.id === catDel.dataset.catDel));
+        if (z) { z.categories = z.categories.filter((c) => c.id !== catDel.dataset.catDel); if (!z.categories.length) delete z.categories; if (state.catEdit === catDel.dataset.catDel) state.catEdit = null; renderPanel(); refreshLive(); }
+        return;
+    }
+    const catEdit = event.target.closest('[data-cat-edit]');
+    if (catEdit) { state.catEdit = state.catEdit === catEdit.dataset.catEdit ? null : catEdit.dataset.catEdit; renderPanel(); return; }
+    const catIcon = event.target.closest('[data-cat-icon]');
+    const catColor = event.target.closest('[data-cat-color]');
+    const catMore = event.target.closest('[data-cat-more]');
+    if (catIcon || catColor || catMore) {
+        const raw = (catIcon && catIcon.dataset.catIcon) || (catColor && catColor.dataset.catColor) || catMore.dataset.catMore;
+        const sep = raw.indexOf(':');
+        const id = sep < 0 ? raw : raw.slice(0, sep);
+        const value = sep < 0 ? '' : raw.slice(sep + 1);
+        const zone = state.draft.zones.find((r) => (r.categories || []).some((c) => c.id === id));
+        const cat = zone && zone.categories.find((c) => c.id === id);
+        if (!cat) return;
+        if (catIcon) { cat.icon = value; renderPanel(); refreshLive(); return; }
+        if (catColor) { cat.color = value; renderPanel(); refreshLive(); return; }
+        if (window.ColorDialog) window.ColorDialog.open({ title: t('main.layoutCatColor'), currentHex: cat.color, onAccept: (hex) => { cat.color = String(hex).toLowerCase(); renderPanel(); refreshLive(); } });
+        return;
+    }
+    const cardOpen = event.target.closest('[data-card-open]');
+    if (cardOpen) { openCardDialog(cardOpen.dataset.cardOpen); return; }
     const fmtZone = event.target.closest('[data-fmtzone]');
     if (fmtZone) { openFmtDialog(Number(fmtZone.dataset.fmtzone)); return; }
     const freeShape = event.target.closest('[data-freeshape]');
@@ -827,7 +902,7 @@ $('layout-panel').addEventListener('click', (event) => {
     if (del) {
         const [list, index] = del.dataset.del.split(':');
         const removed = state.draft[list].splice(Number(index), 1)[0];
-        if (list === 'zones' && removed) { delete state.open.zones[removed.id]; if (state.zoneOpen === removed.id) state.zoneOpen = null; }
+        if (list === 'zones' && removed) { delete state.open.zones[removed.id]; if (state.zoneOpen === removed.id) state.zoneOpen = null; if (state.catsOpen === removed.id) state.catsOpen = null; }
         if (list === 'vertices') {
             state.open.contorno = false;
             const walls = state.draft.vertices.length;
@@ -849,7 +924,7 @@ $('layout-panel').addEventListener('click', (event) => {
             const current = state.draft[list].findIndex((r) => r.id === row.id);
             if (current < 0) return;
             state.draft[list].splice(current, 1);
-            if (list === 'zones') { delete state.open.zones[row.id]; if (state.zoneOpen === row.id) state.zoneOpen = null; }
+            if (list === 'zones') { delete state.open.zones[row.id]; if (state.zoneOpen === row.id) state.zoneOpen = null; if (state.catsOpen === row.id) state.catsOpen = null; }
             // Los espacios de una zona eliminada quedan sin zona (así también los deja el servidor al guardar).
             if (list === 'zones') state.draft.spaces.forEach((s) => { if (s.zoneId === row.id) s.zoneId = ''; });
             renderPanel();
@@ -982,6 +1057,113 @@ function closeFmtDialog() {
     fmtDialog = null;
 }
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && fmtDialog && !document.querySelector('.modal-overlay:not([hidden]) .perm-tree-color-dialog')) closeFmtDialog(); });
+
+// ---- tarjeta de categorías de una zona (para imprimir, con el QR de cada categoría) ---------------------------------------------------------
+// Se arma con lo ÚLTIMO GUARDADO (GET /api/business/layout/categories-qr). Tiene la misma medida libre (ancho y largo en cm) y línea punteada para recortar que la hoja del Layout;
+// por omisión mide 10.5 × 14.8 cm. Los QR llevan la dirección fija del Layout con la zona y la categoría: no cambian nunca y ahí aparecerán los códigos cuando se agreguen.
+const CARD_SIZE_KEY = 'sgn_layout_card_size';
+const cardSize = { w: 10.5, h: 14.8, cut: true };
+try {
+    const raw = JSON.parse(localStorage.getItem(CARD_SIZE_KEY) || 'null');
+    if (raw && raw.w >= 6 && raw.w <= 120 && raw.h >= 6 && raw.h <= 120) { cardSize.w = raw.w; cardSize.h = raw.h; cardSize.cut = raw.cut !== false; }
+} catch (err) { /* sin almacenamiento */ }
+let cardState = null; // { zoneId, zoneName, data }
+let cardModalEl = null;
+function cardLabels() {
+    return { cardArea: t('main.layoutTarjetaArea'), cardTitle: t('main.layoutTarjetaTitulo'), cardCategory: t('main.layoutTarjetaCategoria'), cardReview: t('main.layoutTarjetaRevisame'), cardFooter: t('main.layoutTarjetaPie'), cardEmpty: t('main.layoutCatVacia'), cutCaption: t('main.layoutHojaRecorte') };
+}
+function cardSvg() {
+    const data = cardState.data;
+    const zone = (data.zones || []).find((z) => z.id === cardState.zoneId);
+    return window.LayoutSheet.buildCardSvg({
+        companyName: data.companyName, logoDataUrl: data.logoDataUrl, theme: window.LayoutMapSvg.theme(data.companyColor), zoneName: cardState.zoneName, categories: zone ? zone.categories : [],
+    }, cardLabels(), { widthCm: cardSize.w, heightCm: cardSize.h, cut: cardSize.cut });
+}
+function renderCardPreview() {
+    if (!cardState) return;
+    $('layout-card-preview').innerHTML = cardSvg();
+    const page = window.LayoutSheet.pageFor(cardSize.w, cardSize.h, cardSize.cut);
+    const archivo = page.small ? `${t(`main.layoutHojaPag_${page.name}`)} (${fmt(page.w, 1)} × ${fmt(page.h, 1)} cm)` : t('main.layoutHojaMismo').replace('{w}', fmt(cardSize.w, 1)).replace('{h}', fmt(cardSize.h, 1));
+    $('layout-card-info').innerHTML = `<span>${esc(t('main.layoutHojaEspacio'))}: <b>${fmt(cardSize.w, 1)} × ${fmt(cardSize.h, 1)} cm</b></span><span>${esc(t('main.layoutHojaArchivo'))}: <b>${esc(archivo)}</b></span>`;
+    document.querySelectorAll('#layout-card-modal [data-cpre]').forEach((b) => {
+        const p = window.LayoutSheet.PRESETS.find((x) => x[0] === b.dataset.cpre);
+        b.setAttribute('aria-pressed', String(!!p && Math.abs(p[1] - cardSize.w) < 0.05 && Math.abs(p[2] - cardSize.h) < 0.05));
+    });
+}
+function saveCardSize() {
+    try { localStorage.setItem(CARD_SIZE_KEY, JSON.stringify({ w: cardSize.w, h: cardSize.h, cut: cardSize.cut })); } catch (err) { /* no se recuerda */ }
+}
+function ensureCardModal() {
+    if (cardModalEl) return;
+    cardModalEl = document.createElement('div');
+    cardModalEl.className = 'modal-overlay';
+    cardModalEl.id = 'layout-card-modal';
+    cardModalEl.hidden = true;
+    const presets = window.LayoutSheet.PRESETS.map(([id]) => `<button type="button" class="layout-pre" data-cpre="${id}" aria-pressed="false">${esc(t(`main.layoutHojaPre_${id}`))}</button>`).join('');
+    cardModalEl.innerHTML = `<div class="modal-panel layout-card-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-card-title">
+        <h3 id="layout-card-title"></h3>
+        <div class="layout-sizebar layout-card-bar" data-help-key="layoutSheetSize"><div class="layout-sizebar-row"><span class="layout-sizebar-title">${esc(t('main.layoutHojaTamano'))}</span><div class="layout-presets" role="group">${presets}</div></div>
+            <div class="layout-sizebar-row"><label>${esc(t('main.layoutHojaAncho'))}<input type="number" id="layout-card-w" min="6" max="120" step="0.1" value="${cardSize.w}"></label><label>${esc(t('main.layoutHojaLargo'))}<input type="number" id="layout-card-h" min="6" max="120" step="0.1" value="${cardSize.h}"></label><button type="button" class="btn btn-secondary" id="layout-card-swap">${esc(t('main.layoutHojaGirar'))}</button><label class="layout-check"><input type="checkbox" id="layout-card-cut"${cardSize.cut ? ' checked' : ''}> ${esc(t('main.layoutHojaLinea'))}</label></div>
+            <div class="layout-sizebar-info" id="layout-card-info"></div></div>
+        <div class="layout-sheet-preview layout-card-preview" id="layout-card-preview"></div>
+        <div class="layout-fmt-footer"><button type="button" class="btn" id="layout-card-pdf" data-help-key="layoutQrPdf">${esc(t('main.layoutDescargarPdf'))}</button><button type="button" class="btn btn-secondary" id="layout-card-png" data-help-key="layoutQrPng">${esc(t('main.layoutDescargarPng'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-card-close">${esc(t('main.layoutFormatoCerrar'))}</button></div>
+    </div>`;
+    document.body.appendChild(cardModalEl);
+    cardModalEl.addEventListener('click', async (event) => {
+        if (event.target === cardModalEl || event.target.closest('#layout-card-close')) { closeCardDialog(); return; }
+        const pre = event.target.closest('[data-cpre]');
+        if (pre) {
+            const p = window.LayoutSheet.PRESETS.find((x) => x[0] === pre.dataset.cpre);
+            cardSize.w = p[1]; cardSize.h = p[2];
+        } else if (event.target.closest('#layout-card-swap')) {
+            [cardSize.w, cardSize.h] = [cardSize.h, cardSize.w];
+        } else if (event.target.closest('#layout-card-pdf') || event.target.closest('#layout-card-png')) {
+            const pdf = !!event.target.closest('#layout-card-pdf');
+            try {
+                const svg = cardSvg();
+                const blob = pdf ? await window.LayoutSheet.renderPdf(svg) : await window.LayoutSheet.renderPng(svg);
+                window.LayoutSheet.saveBlob(blob, `Categorias_${slug(cardState.zoneName)}_${new Date().toISOString().slice(0, 10)}.${pdf ? 'pdf' : 'png'}`);
+                Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
+            } catch (err) {
+                console.error('Layout: la tarjeta no se pudo descargar', err);
+                Dashboard.showToast(t('main.layoutDescargaError'), 'error');
+            }
+            return;
+        } else return;
+        $('layout-card-w').value = cardSize.w;
+        $('layout-card-h').value = cardSize.h;
+        saveCardSize();
+        renderCardPreview();
+    });
+    cardModalEl.addEventListener('input', (event) => {
+        if (event.target.id === 'layout-card-w' || event.target.id === 'layout-card-h') {
+            const v = parseFloat(event.target.value);
+            if (!(v >= 6 && v <= 120)) return;
+            if (event.target.id === 'layout-card-w') cardSize.w = v; else cardSize.h = v;
+        } else if (event.target.id === 'layout-card-cut') cardSize.cut = event.target.checked;
+        else return;
+        saveCardSize();
+        renderCardPreview();
+    });
+}
+async function openCardDialog(zoneId) {
+    const zone = state.draft.zones.find((z) => z.id === zoneId);
+    if (!zone) return;
+    if (isDirty() || !isSavedRow('zones', zone.id)) { Dashboard.showToast(t('main.layoutTarjetaGuardar'), 'warning'); return; }
+    const res = await fetch('/api/business/layout/categories-qr', { credentials: 'include' });
+    if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
+    if (!res.ok) { Dashboard.showToast(t('main.layoutDescargaError'), 'error'); return; }
+    ensureCardModal();
+    cardState = { zoneId, zoneName: zone.name, data: await res.json() };
+    $('layout-card-title').textContent = t('main.layoutTarjetaDe').replace('{name}', zone.name);
+    cardModalEl.hidden = false;
+    renderCardPreview();
+}
+function closeCardDialog() {
+    if (cardModalEl) cardModalEl.hidden = true;
+    cardState = null;
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && cardState) closeCardDialog(); });
 
 // ---- acomodar una zona arrastrándola sobre el croquis ------------------------------------------------------------------------------
 // Se arrastra cualquier zona (rectángulo o de forma libre) con el dedo o el mouse; al soltarla cerca de una zona vecina o del contorno se pega a su lado (a menos de 0.3 m).

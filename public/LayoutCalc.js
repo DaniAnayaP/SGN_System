@@ -15,6 +15,8 @@
     // Formato propio de una zona (como Formato de celdas de Excel): color de fondo, rayas o patrón y su color, y estilo y color del borde.
     const FMT_PATTERNS = ['none', 'solid', 'diag1', 'diag2', 'horiz', 'vert', 'grid', 'dots', 'cross'];
     const FMT_LINES = ['none', 'thin', 'mid', 'thick', 'dash', 'dot', 'dashdot', 'double'];
+    // Categorías dentro de una zona (se capturan a mano): nombre, descripción corta, icono y color; cada una tiene su QR.
+    const CATEGORY_ICONS = ['shield', 'pill', 'flask', 'drop', 'alert', 'box', 'paper', 'bottle', 'cross', 'tag'];
     const DOOR_TYPES = ['dock', 'staff', 'emergency'];
     const POWER_TYPES = ['panel', 'outlet110', 'outlet220', 'three-phase'];
     // Cada sección del Layout cuelga de una columna del árbol de accesos (ver menu.json, colLayout*).
@@ -25,7 +27,7 @@
         zonas: 'colLayoutZonas',
         espacios: 'colLayoutEspacios',
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -455,7 +457,16 @@
             const type = z && z.type === '' ? '' : oneOf(z && z.type, ZONE_TYPES, 'dry');
             const planM2 = z && z.planM2 != null && z.planM2 !== '' ? meters(z.planM2, label) : 0;
             const fmt = sanitizeFmt(z && z.fmt);
-            const extra = { ...(planM2 > 0 ? { planM2 } : {}), ...(fmt ? { fmt } : {}) };
+            // Categorías de la zona: solo se guardan si hay (una zona de antes sin categorías se guarda exactamente igual).
+            const catIds = new Set();
+            const categories = list(z && z.categories, LIMITS.categories, `${label}: categorías`).map((c, k) => {
+                const cl = `${label}, categoría ${k + 1}`;
+                const color = c && typeof c.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color.toLowerCase() : '#5b6272';
+                const desc = typeof (c && c.desc) === 'string' ? c.desc.trim() : '';
+                if (desc.length > LIMITS.categoryText) errors.push(`${cl}: descripción demasiado larga`);
+                return { id: idOf(c && c.id, catIds, cl), name: text(c && c.name, cl, true), desc: desc.slice(0, LIMITS.categoryText), icon: oneOf(c && c.icon, CATEGORY_ICONS, 'tag'), color };
+            });
+            const extra = { ...(planM2 > 0 ? { planM2 } : {}), ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
             const active = !(z && z.active === false);
             if (z && z.pts != null) {
                 // Zona de cualquier forma: sus esquinas son la verdad; x, y, largo y ancho son el recuadro que la envuelve.
@@ -550,6 +561,6 @@
         ZONE_TYPES, STORAGE_ZONE_TYPES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, coveredArea,
-        FMT_PATTERNS, FMT_LINES, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
+        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
 }));

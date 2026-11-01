@@ -1623,6 +1623,35 @@
     "layoutQuitar": "Quitar",
     "layoutDesactivar": "Desactivar",
     "layoutReactivar": "Reactivar",
+    "layoutCategoriasBtn": "Categorías de la zona",
+    "layoutTarjetaBtn": "Tarjeta de categorías (imprimir con QR)",
+    "layoutCatDe": "Categorías de {name}",
+    "layoutCatVacia": "Esta zona todavía no tiene categorías.",
+    "layoutCatAgregar": "+ Agregar categoría",
+    "layoutCategoria": "Categoría",
+    "layoutCatNombre": "Nombre de la categoría",
+    "layoutCatDescripcion": "Descripción corta",
+    "layoutCatIcono": "Icono",
+    "layoutCatColor": "Color",
+    "layoutCatIconoColor": "Cambiar icono y color",
+    "layoutCatIcon_shield": "Escudo",
+    "layoutCatIcon_pill": "Pastilla",
+    "layoutCatIcon_flask": "Frasco",
+    "layoutCatIcon_drop": "Gota",
+    "layoutCatIcon_alert": "Alerta",
+    "layoutCatIcon_box": "Caja",
+    "layoutCatIcon_paper": "Papel",
+    "layoutCatIcon_bottle": "Botella",
+    "layoutCatIcon_cross": "Cruz",
+    "layoutCatIcon_tag": "Etiqueta",
+    "layoutTarjetaAbrir": "Tarjeta de categorías",
+    "layoutTarjetaDe": "Tarjeta de categorías de {name}",
+    "layoutTarjetaGuardar": "Guarda el Layout para ver la tarjeta con las categorías nuevas.",
+    "layoutTarjetaArea": "Centro de Distribución",
+    "layoutTarjetaTitulo": "Categorías de",
+    "layoutTarjetaCategoria": "CATEGORÍA",
+    "layoutTarjetaRevisame": "REVÍSAME",
+    "layoutTarjetaPie": "Escanea el QR para ver fotos y ubicación",
     "layoutHojaTamano": "Tamaño de la hoja",
     "layoutHojaAncho": "Ancho (cm)",
     "layoutHojaLargo": "Largo (cm)",
@@ -3008,6 +3037,30 @@
     "layoutDeleteRow": {
       "what": "Elimina esta zona o este espacio de forma definitiva al guardar. A diferencia de Desactivar, ya no se conserva ni su historial de m². Solo aparece si tu cuenta tiene el permiso Eliminar en el árbol.",
       "example": "quitas un anaquel que nunca existió en la nave y que capturaron por error."
+    },
+    "layoutZoneCats": {
+      "what": "Abre las categorías de esta zona: la zona es el título y adentro lleva sus categorías (varias si hay productos distintos), cada una con nombre, descripción corta, icono, color y su QR.",
+      "example": "la Zona 1 lleva Papelería y Soluciones; otra zona lleva Patente, Genérico y Antibiótico."
+    },
+    "layoutCatName": {
+      "what": "El nombre de la categoría tal como se verá en la tarjeta y al escanear su QR.",
+      "example": "Patente."
+    },
+    "layoutCatDesc": {
+      "what": "Una descripción corta que sale debajo del nombre en la tarjeta.",
+      "example": "Marca innovadora."
+    },
+    "layoutCatLook": {
+      "what": "Cambia el icono y el color de esta categoría. El color es la barra y el cuadro de su renglón en la tarjeta.",
+      "example": "Oncología con una alerta guinda."
+    },
+    "layoutCatAdd": {
+      "what": "Agrega otra categoría a esta zona. Si en la misma zona hay otro producto con otra categoría, esta zona lleva las dos.",
+      "example": "la zona de Medicamentos también guarda Soluciones: agregas la segunda categoría."
+    },
+    "layoutCardBtn": {
+      "what": "Abre la tarjeta para imprimir de esta zona: \"Categorías de\" y el nombre de la zona, y por cada categoría su icono, su nombre y su QR. Se arma con lo último guardado y tiene la misma medida libre y línea punteada que la hoja del Layout.",
+      "example": "la imprimes en media carta, la recortas por la línea punteada y la pegas en la zona."
     },
     "layoutSheetSize": {
       "what": "El ancho y el largo, en centímetros, del espacio que se imprime. La hoja se acomoda sola a esa medida (horizontal, vertical o chica) y el PDF y la imagen salen igual. Si el espacio es más chico que una hoja, el archivo sale en la hoja estándar más chica donde quepa con el espacio marcado con una línea punteada para recortar. De 6 a 120 cm por lado.",

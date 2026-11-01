@@ -164,11 +164,10 @@
         return s;
     }
 
-    // data: { companyName, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
-    // options: { widthCm, heightCm, cut } (el espacio que se imprime y si se dibuja la línea punteada para recortar).
-    function buildSheetSvg(data, labels, lang, options = {}) {
-        const wCm = clamp(Number(options.widthCm) || 42, LIMITS.min, LIMITS.max);
-        const hCm = clamp(Number(options.heightCm) || 29.7, LIMITS.min, LIMITS.max);
+    // El archivo completo: el espacio de wCm × hCm (con su línea punteada para recortar) dentro de la hoja que le toca. makeContent(W, H) dibuja lo de adentro.
+    function documentSvg(options, defaults, labels, makeContent) {
+        const wCm = clamp(Number(options.widthCm) || defaults[0], LIMITS.min, LIMITS.max);
+        const hCm = clamp(Number(options.heightCm) || defaults[1], LIMITS.min, LIMITS.max);
         const cut = options.cut !== false;
         const page = pageFor(wCm, hCm, cut);
         const AW = wCm * PX_CM;
@@ -180,9 +179,75 @@
         let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}" width="${PW.toFixed(2)}" height="${PH.toFixed(2)}" font-family="${FONT}" data-page-cm="${page.w} ${page.h}">`;
         s += `<rect width="${PW}" height="${PH}" fill="#FFFFFF"/>`;
         if (page.small) s += `<text x="${PX_CM}" y="${0.95 * PX_CM}" font-size="13" fill="#6B7089">${esc(String(labels.cutCaption || '').replace('{w}', dim(wCm)).replace('{h}', dim(hCm)))}</text>`;
-        s += `<g transform="translate(${ox.toFixed(2)},${oy.toFixed(2)})">${sheetContent(data, labels, lang, AW, AH)}`;
+        s += `<g transform="translate(${ox.toFixed(2)},${oy.toFixed(2)})">${makeContent(AW, AH)}`;
         if (cut) s += `<rect x="1" y="1" width="${(AW - 2).toFixed(2)}" height="${(AH - 2).toFixed(2)}" fill="none" stroke="#8E94AB" stroke-width="2" stroke-dasharray="9 7"/>`;
         return `${s}</g></svg>`;
+    }
+
+    // data: { companyName, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
+    // options: { widthCm, heightCm, cut } (el espacio que se imprime y si se dibuja la línea punteada para recortar).
+    function buildSheetSvg(data, labels, lang, options = {}) {
+        return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));
+    }
+
+    // La tarjeta de categorías de una zona: card = { companyName, logoDataUrl, theme, zoneName, categories: [{ name, desc, icon, color, qrRows }] }. Una columna de renglones
+    // (icono, nombre, descripción y QR de cada categoría) y, si el espacio es ancho, dos columnas. Con 10.5 × 14.8 cm queda como la tarjeta impresa.
+    function cardContent(card, labels, W, H) {
+        const th = card.theme || window.LayoutMapSvg.DEFAULT_THEME;
+        const C = th.chrome;
+        const brand = th.custom ? C.badge : '#6B3E98';
+        const ink = th.custom ? C.ink : '#14161F';
+        const f = clamp(Math.min(W / 400, H / 564), 0.4, 3.2);
+        const m = 22 * f;
+        const n = card.categories.length;
+        const wide = W / H > 1.25;
+        const SERIF = 'Georgia, "Times New Roman", serif';
+        let s = `<rect width="${W}" height="${H}" fill="#FFFFFF"/>`;
+        // encabezado: logo (o iniciales), cliente y área
+        const bs = 34 * f;
+        if (card.logoDataUrl) s += `<image href="${card.logoDataUrl}" x="${m}" y="${m}" width="${bs * 1.4}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
+        else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${8 * f}" fill="${brand}"/><text x="${m + bs / 2}" y="${m + bs * 0.66}" font-size="${15 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc((card.companyName || '').trim().slice(0, 2).toUpperCase() || '··')}</text>`;
+        const hx = m + (card.logoDataUrl ? bs * 1.4 : bs) + 12 * f;
+        s += `<text x="${hx}" y="${m + 15 * f}" font-size="${13.5 * f}" font-weight="700" fill="${brand}" font-family='${SERIF}'>${esc((card.companyName || '').toUpperCase())}</text><text x="${hx}" y="${m + 29 * f}" font-size="${8 * f}" fill="#3F435D" font-family='${SERIF}'>${esc(labels.cardArea)}</text>`;
+        const titleText = `${labels.cardTitle} ${card.zoneName}`.toUpperCase();
+        const titleSize = Math.min(17 * f, ((W - 2 * m) / Math.max(titleText.length, 1)) * 1.75);
+        s += `<text x="${m}" y="${m + 62 * f}" font-size="${titleSize}" font-weight="700" fill="${ink}">${esc(titleText)}</text>`;
+        const headY = m + 84 * f;
+        const cols = wide && n > 1 ? 2 : 1;
+        const gap = 18 * f;
+        const colW = (W - 2 * m - gap * (cols - 1)) / cols;
+        for (let c = 0; c < cols; c += 1) {
+            const x0 = m + c * (colW + gap);
+            s += `<text x="${x0}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="#3F435D">${esc(labels.cardCategory)}</text><text x="${x0 + colW}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="${brand}" text-anchor="end">${esc(labels.cardReview)}</text>`;
+            s += `<line x1="${x0}" y1="${headY + 6 * f}" x2="${x0 + colW}" y2="${headY + 6 * f}" stroke="#D9DBE5" stroke-width="${f}"/>`;
+        }
+        const top = headY + 6 * f;
+        const bottom = H - m - 22 * f;
+        const perCol = Math.ceil(n / cols) || 1;
+        const rowH = Math.min(78 * f, (bottom - top) / perCol);
+        card.categories.forEach((cat, i) => {
+            const col = Math.floor(i / perCol);
+            const row = i % perCol;
+            const x0 = m + col * (colW + gap);
+            const y = top + row * rowH;
+            const isz = Math.min(34 * f, rowH * 0.56);
+            const qs = Math.min(rowH - 10 * f, 76 * f);
+            s += `<rect x="${x0}" y="${y + f}" width="${4 * f}" height="${rowH - 2 * f}" fill="${esc(cat.color)}"/>`;
+            s += `<rect x="${x0 + 14 * f}" y="${y + rowH / 2 - isz / 2}" width="${isz}" height="${isz}" rx="${isz * 0.24}" fill="${esc(cat.color)}"/>`;
+            s += `<g transform="translate(${x0 + 14 * f + isz * 0.2},${y + rowH / 2 - isz * 0.3}) scale(${(isz * 0.6) / 24})">${window.LayoutMapSvg.categoryGlyph(cat.icon, '#FFFFFF', 2.2)}</g>`;
+            const tx = x0 + 14 * f + isz + 12 * f;
+            const nameMax = (colW - (tx - x0) - qs - 12 * f) / Math.max(cat.name.length, 1) * 1.7;
+            s += `<text x="${tx}" y="${y + rowH / 2 - 1 * f}" font-size="${Math.min(13.5 * f, nameMax)}" font-weight="700" fill="${ink}">${esc(cat.name)}</text>`;
+            if (cat.desc) s += `<text x="${tx}" y="${y + rowH / 2 + 12 * f}" font-size="${7.6 * f}" fill="#3F435D">${esc(cat.desc)}</text>`;
+            s += qrPath(cat.qrRows, x0 + colW - qs, y + (rowH - qs) / 2, qs, '#FFFFFF', 0);
+            s += `<line x1="${x0}" y1="${y + rowH}" x2="${x0 + colW}" y2="${y + rowH}" stroke="#D9DBE5" stroke-width="${f}"/>`;
+        });
+        if (!n) s += `<text x="${W / 2}" y="${(top + bottom) / 2}" font-size="${11 * f}" fill="#8E94AB" text-anchor="middle">${esc(labels.cardEmpty)}</text>`;
+        s += `<text x="${W / 2}" y="${H - m - 6 * f}" font-size="${7.6 * f}" fill="${brand}" text-anchor="middle">${esc(labels.cardFooter)}</text>`;
+        return s;
+    }
+    function buildCardSvg(card, labels, options = {}) {
+        return documentSvg(options, [10.5, 14.8], labels, (W, H) => cardContent(card, labels, W, H));
     }
 
     const pageCm = (svg) => { const mt = /data-page-cm="([\d.]+) ([\d.]+)"/.exec(svg); return mt ? [Number(mt[1]), Number(mt[2])] : [42, 29.7]; };
@@ -255,5 +320,5 @@
         setTimeout(() => URL.revokeObjectURL(a.href), 8000);
     }
 
-    window.LayoutSheet = { buildSheetSvg, renderPng, renderPdf, saveBlob, jpegToPdf, pageFor, PRESETS, PAGES, LIMITS, PX_CM, qrPath, svgToCanvas, canvasToBlob, pageCm, clamp };
+    window.LayoutSheet = { buildSheetSvg, buildCardSvg, renderPng, renderPdf, saveBlob, jpegToPdf, pageFor, PRESETS, PAGES, LIMITS, PX_CM, qrPath, svgToCanvas, canvasToBlob, pageCm, clamp };
 }());

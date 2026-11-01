@@ -1623,6 +1623,35 @@
     "layoutQuitar": "Remove",
     "layoutDesactivar": "Deactivate",
     "layoutReactivar": "Reactivate",
+    "layoutCategoriasBtn": "Zone categories",
+    "layoutTarjetaBtn": "Category card (print with QR)",
+    "layoutCatDe": "Categories of {name}",
+    "layoutCatVacia": "This zone has no categories yet.",
+    "layoutCatAgregar": "+ Add category",
+    "layoutCategoria": "Category",
+    "layoutCatNombre": "Category name",
+    "layoutCatDescripcion": "Short description",
+    "layoutCatIcono": "Icon",
+    "layoutCatColor": "Color",
+    "layoutCatIconoColor": "Change icon and color",
+    "layoutCatIcon_shield": "Shield",
+    "layoutCatIcon_pill": "Pill",
+    "layoutCatIcon_flask": "Flask",
+    "layoutCatIcon_drop": "Drop",
+    "layoutCatIcon_alert": "Alert",
+    "layoutCatIcon_box": "Box",
+    "layoutCatIcon_paper": "Paper",
+    "layoutCatIcon_bottle": "Bottle",
+    "layoutCatIcon_cross": "Cross",
+    "layoutCatIcon_tag": "Tag",
+    "layoutTarjetaAbrir": "Category card",
+    "layoutTarjetaDe": "Category card of {name}",
+    "layoutTarjetaGuardar": "Save the Layout to see the card with the new categories.",
+    "layoutTarjetaArea": "Distribution Center",
+    "layoutTarjetaTitulo": "Categories of",
+    "layoutTarjetaCategoria": "CATEGORY",
+    "layoutTarjetaRevisame": "CHECK ME",
+    "layoutTarjetaPie": "Scan the QR to see photos and location",
     "layoutHojaTamano": "Sheet size",
     "layoutHojaAncho": "Width (cm)",
     "layoutHojaLargo": "Length (cm)",
@@ -3009,6 +3038,30 @@
     "layoutDeleteRow": {
       "what": "Permanently deletes this zone or space when you save. Unlike Deactivate, it is not kept at all. It only appears if your account has the Delete permission in the access tree.",
       "example": "you remove a rack that never existed in the warehouse and was entered by mistake."
+    },
+    "layoutZoneCats": {
+      "what": "Opens this zone's categories: the zone is the title and it holds its categories inside (several if there are different products), each with a name, short description, icon, color and its QR.",
+      "example": "Zone 1 holds Stationery and Solutions; another zone holds Brand, Generic and Antibiotic."
+    },
+    "layoutCatName": {
+      "what": "The category name as it will show on the card and when its QR is scanned.",
+      "example": "Brand name."
+    },
+    "layoutCatDesc": {
+      "what": "A short description shown under the name on the card.",
+      "example": "Innovative brand."
+    },
+    "layoutCatLook": {
+      "what": "Changes the icon and color of this category. The color is the bar and the square of its row on the card.",
+      "example": "Oncology with a maroon alert."
+    },
+    "layoutCatAdd": {
+      "what": "Adds another category to this zone. If the same zone holds another product with another category, the zone carries both.",
+      "example": "the Medicines zone also holds Solutions: you add the second category."
+    },
+    "layoutCardBtn": {
+      "what": "Opens this zone's printable card: \"Categories of\" and the zone name, and for each category its icon, name and QR. It is built from what was last saved and has the same free size and dashed cut line as the Layout sheet.",
+      "example": "you print it on half letter, cut along the dashed line and stick it in the zone."
     },
     "layoutSheetSize": {
       "what": "The width and length, in centimeters, of the area you print. The sheet fits itself to that size (landscape, portrait or small) and the PDF and image come out the same. If the area is smaller than a page, the file comes out on the smallest standard page that fits with the area marked by a dashed cut line. From 6 to 120 cm per side.",

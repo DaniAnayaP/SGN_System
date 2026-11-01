@@ -1172,6 +1172,8 @@
             { "id": "colLayoutQr", "labelKey": "main.colLayoutQr", "permissionOnly": true },
             { "id": "iconLayoutFormatoZona", "labelKey": "main.layoutFormatoZonaBtn", "permissionOnly": true },
             { "id": "iconLayoutMedidas", "labelKey": "main.layoutMedidasBtn", "permissionOnly": true },
+            { "id": "iconLayoutCategorias", "labelKey": "main.layoutCategoriasBtn", "permissionOnly": true },
+            { "id": "iconLayoutTarjeta", "labelKey": "main.layoutTarjetaBtn", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
