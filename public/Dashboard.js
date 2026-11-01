@@ -3588,6 +3588,8 @@ function parseSortNumber(raw) {
 }
 function getCellSortValue(td) {
     if (td.dataset.sortValue != null) return td.dataset.sortValue;
+    // Tablas de captura (ver cellFilterValue): se ordena por lo que muestra el campo de la celda, no por su texto.
+    if (td.dataset.filterFrom) return cellFilterValue(td);
     const select = td.querySelector('select');
     if (select) return select.options[select.selectedIndex]?.text ?? '';
     return td.textContent.trim();
@@ -4480,15 +4482,22 @@ function bindExternalColumnFilters(tableId, table) {
     state.wrapper = table.parentElement;
     state.columnKeys = getDataTableColumnKeys(table);
     state.labels = {};
+    // La tabla se dibujó de nuevo (en su orden de siempre): el orden de antes se vuelve a aplicar abajo y el "orden original" se toma otra vez de esta tabla.
+    state.originalRowOrder = null;
     const headers = Array.from(getHeaderRow(table).cells);
     headers.forEach((th) => {
         if (th.dataset.col) state.labels[th.dataset.col] = th.textContent.trim();
         attachColumnFilterTrigger(th, tableId);
+        // Ordenar de la A a la Z / de mayor a menor tocando el encabezado (igual que en las demás tablas).
+        if (th.dataset.col) attachSortHandler(th, tableId);
     });
+    if (state.sortKey && !state.columnKeys.includes(state.sortKey)) { state.sortKey = null; state.sortDir = null; }
     [state.columnFilters, state.columnRules].forEach((filters) => {
         Array.from(filters.keys()).forEach((key) => { if (!state.columnKeys.includes(key)) filters.delete(key); });
     });
     applyColumnValueFilters(tableId);
+    applySortIndicators(tableId);
+    applyTableSort(tableId);
     headers.forEach((th) => updateColumnFilterIndicator(th, state.columnFilters.has(th.dataset.col) || state.columnRules.has(th.dataset.col)));
     return new Set([...state.columnFilters.keys(), ...state.columnRules.keys()]).size;
 }
