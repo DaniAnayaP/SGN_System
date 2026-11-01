@@ -167,6 +167,7 @@ const {
     findCodeRelationInSlot,
     findCodeRelationDuplicate,
     searchSkuItems,
+    listSkuItemUpcs,
     deleteArticleCategory,
     resolveEscalationHolder,
     getCatalogValueRequestById,
@@ -5974,6 +5975,72 @@ function maybeIssueSkuPublicToken(skuItem, clientId, forTestAccount) {
     setSkuItemPublicToken(skuItem.id, clientId, generatePublicToken());
     return getSkuItemById(skuItem.id, clientId, forTestAccount);
 }
+
+// Los UPC que ya existen (con su SKU) para que la ventana de carga por plantilla marque los repetidos antes de cargar.
+app.get('/api/business/sku-items/upcs', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ upcs: listSkuItemUpcs(req.user.clientId, req.user.isTestAccount).map((r) => [r.upc, String(r.record_number).padStart(6, '0')]) });
+});
+
+// Carga por plantilla: da de alta muchos artículos a la vez (Excel o filas pegadas, ya revisadas en pantalla). El servidor vuelve a revisar CADA fila con las mismas reglas
+// (public/SkuTemplate.js): las buenas se cargan y las malas regresan con su motivo, nada se carga a medias. Solo lleva los 11 datos del artículo y sus 7 categorías; las 6 fotos se
+// toman con el producto en la mano, así que el artículo queda sin código QR hasta tenerlas. Pide la hoja "Cargar por Plantilla" y, para cada dato que viene, la hoja de esa columna.
+const SkuTemplate = require('./public/SkuTemplate.js');
+app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const grants = req.user.isClientAdmin ? null : getUserEffectiveGrants(req.user.sub);
+    if (grants && !canCreateColumn(grants, 'nuestros-articulos', 'colArticuloTemplateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para cargar artículos por plantilla.' });
+    }
+    const input = req.body && req.body.rows;
+    if (!Array.isArray(input) || !input.length) return res.status(400).json({ message: 'No hay filas para cargar.' });
+    if (input.length > SkuTemplate.MAX_ROWS) return res.status(400).json({ message: `El máximo es ${SkuTemplate.MAX_ROWS} filas por carga. Parte el archivo en varios.` });
+    const rows = input.map((r, i) => ({ n: Number.isInteger(r && r.n) ? r.n : i + 2, v: r && typeof r.v === 'object' && r.v ? r.v : {} }));
+    // Cada dato que viene necesita su propia hoja (Ver y Operar o Modificar), igual que al llenar una celda vacía de la tabla.
+    if (grants) {
+        const missing = new Set();
+        rows.forEach((r) => SkuTemplate.COLUMNS.forEach((c) => {
+            if (String(r.v[c.key] == null ? '' : r.v[c.key]).trim() && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, 'nuestros-articulos', c.col))) missing.add(SKU_ITEM_PATCHABLE_FIELDS[c.key].fieldKey);
+        }));
+        if (missing.size) return res.status(403).json({ message: 'No tienes permiso para llenar una de las columnas de la plantilla.', fields: [...missing] });
+    }
+    const existing = new Map(listSkuItemUpcs(clientId, isTestAccount).map((r) => [r.upc, String(r.record_number).padStart(6, '0')]));
+    const accepted = new Map();
+    const categories = {};
+    SkuTemplate.COLUMNS.filter((c) => c.kind === 'category').forEach((c) => { categories[c.type] = listActiveArticleCategoryNames(clientId, c.type, isTestAccount); });
+    const ctx = {
+        udm: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount), categories,
+        existingUpc: (upc) => existing.get(upc) || '',
+        priorRowWithUpc: (upc, row) => { const n = accepted.get(upc); return n && n !== row.n ? n : 0; },
+    };
+    const created = [];
+    const failed = [];
+    const changedBy = changedByLabel(req);
+    rows.forEach((row, index) => {
+        const err = SkuTemplate.validateRow(row, ctx);
+        if (err) { failed.push({ index, n: row.n, field: err.field, code: err.code, params: err.params, message: SkuTemplate.message(err) }); return; }
+        try {
+            const patch = SkuTemplate.normalizeRow(row, ctx);
+            let item = createSkuItem({ clientId, isTestData: isTestAccount });
+            item = updateSkuItem(item.id, clientId, patch, isTestAccount);
+            logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'create', changedBy });
+            Object.entries(patch).forEach(([key, value]) => logTableChange({
+                clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update',
+                fieldKey: SKU_ITEM_PATCHABLE_FIELDS[key].fieldKey, oldValue: '', newValue: String(value), changedBy,
+            }));
+            logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update', fieldKey: 'main.articuloOrigenAlta', oldValue: '', newValue: 'Carga por plantilla', changedBy });
+            accepted.set(patch.upc, row.n);
+            created.push({ index, n: row.n, id: item.id, sku: String(item.record_number).padStart(6, '0') });
+        } catch (error) {
+            console.error('Carga por plantilla: no se pudo guardar una fila', error);
+            failed.push({ index, n: row.n, field: '', code: 'serverError', params: {}, message: 'No se pudo guardar esta fila. Inténtalo de nuevo.' });
+        }
+    });
+    if (created.length) notifyButtonAction(req, 'nuestros-articulos', 'import', `${created.length} (${created[0].sku} – ${created[created.length - 1].sku})`);
+    res.json({ created, failed });
+});
 
 app.patch('/api/business/sku-items/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });

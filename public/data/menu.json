@@ -1239,7 +1239,8 @@
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
                 { "id": "colArticuloDeleteAuth", "labelKey": "main.colArticuloDeleteAuth", "permissionOnly": true },
-                { "id": "colArticuloCreateAuth", "labelKey": "main.colArticuloCreateAuth", "permissionOnly": true }
+                { "id": "colArticuloCreateAuth", "labelKey": "main.colArticuloCreateAuth", "permissionOnly": true },
+                { "id": "colArticuloTemplateAuth", "labelKey": "main.colArticuloTemplateAuth", "permissionOnly": true }
               ]
             }
           ],

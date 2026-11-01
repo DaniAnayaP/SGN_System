@@ -3639,7 +3639,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'carga-combustible': { create: 'colCargaCreateAuth', delete: 'colCargaDeleteAuth' },
     'tipos-unidad': { create: 'colUnitTypeCreateAuth', delete: 'colUnitTypeDeleteAuth' },
     'nuestras-unidades': { create: 'colFleetCreateAuth', delete: 'colFleetDeleteAuth' },
-    'nuestros-articulos': { create: 'colArticuloCreateAuth', delete: 'colArticuloDeleteAuth' },
+    'nuestros-articulos': { create: 'colArticuloCreateAuth', delete: 'colArticuloDeleteAuth', import: 'colArticuloTemplateAuth' },
     'nuestras-cotizaciones': { create: 'colCotCreateAuth', delete: 'colCotDeleteAuth' },
     'nuestros-traslados': { create: 'colTrasladoCreateAuth', delete: 'colTrasladoDeleteAuth' },
     'mi-recurso-humano': { create: 'colHrWorkerCreateAuth' },
@@ -4906,6 +4906,11 @@ function deleteFleetUnit(id, clientId) {
 // --- > Operaciones. Same "create blank, fill in one field at a time" shape
 // as fleet_units above; db_id/record_number follow fuel_records' own
 // convention (see the table's own DDL comment for why SKU has no column).
+// Los UPC que ya existen (con su SKU) para que la carga por plantilla no repita ninguno.
+function listSkuItemUpcs(clientId, forTestAccount = false) {
+    return db.prepare("SELECT upc, record_number FROM sku_items WHERE client_id = ? AND is_test_data = ? AND upc != ''").all(clientId, forTestAccount ? 1 : 0);
+}
+
 function listSkuItems(clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM sku_items WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC').all(clientId, forTestAccount ? 1 : 0);
 }
@@ -10611,6 +10616,7 @@ module.exports = {
     findCodeRelationInSlot,
     findCodeRelationDuplicate,
     searchSkuItems,
+    listSkuItemUpcs,
     deleteArticleCategory,
     resolveEscalationHolder,
     getCatalogValueRequestById,

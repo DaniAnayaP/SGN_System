@@ -506,6 +506,8 @@ function renderNewRecordButton() {
     btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="main.newSkuItem">${Dashboard.t('main.newSkuItem')}</span>`;
     btn.addEventListener('click', openCreateModal);
     toolbar.prepend(btn);
+    // "Cargar por plantilla" va junto a este botón (si tiene su hoja en el árbol); al terminar la tabla se vuelve a leer.
+    if (window.SkuTemplateUi) window.SkuTemplateUi.mount(toolbar, btn, refreshTable);
 }
 
 // --- "+ Nuevo Artículo" modal ------------------------------------------------

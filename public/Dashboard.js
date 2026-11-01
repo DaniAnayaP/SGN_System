@@ -9864,7 +9864,7 @@ function renderDataChangeNoticeRow(item) {
     // Una regla de orden de llenado no es un "guardado": su aviso dice regla creada / actualizada / eliminada.
     const RULE_TAGS = { 'icon-created': 'main.noticeRuleCreated', 'icon-updated': 'main.noticeRuleUpdated', 'icon-deleted': 'main.noticeRuleDeleted' };
     const NOTICE_TAGS = {
-        fill: 'main.noticeDataFilled', change: 'main.noticeDataChanged', create: 'main.noticeRecordCreated', delete: 'main.noticeRecordDeleted',
+        fill: 'main.noticeDataFilled', change: 'main.noticeDataChanged', create: 'main.noticeRecordCreated', delete: 'main.noticeRecordDeleted', import: 'main.noticeRecordsImported',
         'icon-created': 'main.noticeIconCreated', 'icon-updated': 'main.noticeIconUpdated', 'icon-deleted': 'main.noticeIconDeleted',
     };
     tag.textContent = t((item.colKey === 'iconFieldRules' && RULE_TAGS[item.action]) || NOTICE_TAGS[item.action] || 'main.noticeDataChanged');
@@ -9877,7 +9877,7 @@ function renderDataChangeNoticeRow(item) {
     const empty = t('main.noticeEmptyValue');
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
-    if (item.action === 'create' || item.action === 'delete') desc.textContent = item.recordLabel || '—';
+    if (item.action === 'create' || item.action === 'delete' || item.action === 'import') desc.textContent = item.recordLabel || '—';
     else if (String(item.action || '').startsWith('icon-')) desc.textContent = `${t(ICON_LABEL_KEYS[item.colKey] || item.colKey || '')} · ${item.recordLabel || '—'}`;
     else desc.textContent = t('main.noticeDataLine', { column, record: item.recordLabel || '—', from: item.from || empty, to: item.to || empty });
     const by = document.createElement('div');
