@@ -37,7 +37,7 @@
         const meta = `${dims} · ${labels.height} ${heightText} · ${data.layout.spaces.length} ${labels.spaces}`;
         const cards = [
             [`${fmt(k.total, lang)} m²`, labels.kpiTotal], [`${fmt(k.offices, lang)} m²`, labels.kpiOffices], [`${fmt(k.aisles, lang)} m²`, labels.kpiAisles],
-            [`${fmt(k.storage, lang)} m²`, labels.kpiStorage], [`${fmt(k.dead, lang)} m²`, labels.kpiDead], [`${fmt(k.volume, lang)} m³`, labels.kpiVolume],
+            [`${fmt(k.docks, lang)} m²`, labels.kpiDocks], [`${fmt(k.storage, lang)} m²`, labels.kpiStorage], [`${fmt(k.dead, lang)} m²`, labels.kpiDead], [`${fmt(k.volume, lang)} m³`, labels.kpiVolume],
         ];
         let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${FONT}">`;
         s += `<rect width="${W}" height="${H}" fill="#FFFFFF"/>`;
@@ -50,13 +50,13 @@
         s += `<text x="${W - 48}" y="292" font-size="14" font-family="Consolas, Menlo, monospace" fill="#6B7089" text-anchor="end">${esc(data.url)}</text>`;
         s += `<line x1="48" y1="306" x2="${W - 48}" y2="306" stroke="#14161F" stroke-width="3"/>`;
         // mapa
-        s += `<rect x="48" y="326" width="1082" height="640" rx="10" fill="#FFFFFF" stroke="#C9CCDA" stroke-width="2"/>`;
-        s += `<svg x="58" y="336" width="1062" height="620" viewBox="0 0 700 460" preserveAspectRatio="xMidYMid meet">${data.mapInner}</svg>`;
+        s += `<rect x="48" y="326" width="1082" height="646" rx="10" fill="#FFFFFF" stroke="#C9CCDA" stroke-width="2"/>`;
+        s += `<svg x="58" y="336" width="1062" height="626" viewBox="0 0 700 460" preserveAspectRatio="xMidYMid meet">${data.mapInner}</svg>`;
         // KPIs
         cards.forEach((c, i) => {
-            const y = 326 + i * 108;
-            s += `<rect x="1158" y="${y}" width="394" height="94" rx="10" fill="#FFFFFF" stroke="#C9CCDA" stroke-width="2"/>`;
-            s += `<text x="1180" y="${y + 46}" font-size="36" font-weight="700" fill="#14161F">${esc(c[0])}</text><text x="1180" y="${y + 76}" font-size="18" fill="#3F435D">${esc(c[1])}</text>`;
+            const y = 326 + i * 94;
+            s += `<rect x="1158" y="${y}" width="394" height="82" rx="10" fill="#FFFFFF" stroke="#C9CCDA" stroke-width="2"/>`;
+            s += `<text x="1180" y="${y + 41}" font-size="32" font-weight="700" fill="#14161F">${esc(c[0])}</text><text x="1180" y="${y + 68}" font-size="17" fill="#3F435D">${esc(c[1])}</text>`;
         });
         // leyenda
         const leg = [['#1E7E34', labels.door], ['#FFFFFF', labels.space], ['#E3ECF9', labels.dry], ['#E3F6E8', labels.cold], ['#FBF0DE', labels.chemical], ['#ECECF1', labels.finished], ['url(#lh-main)', labels.aisle], ['url(#lh-between)', labels.aisle2]];

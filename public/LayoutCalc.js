@@ -121,6 +121,54 @@
         };
     }
 
+    // Superficie de la nave cubierta por al menos una zona: cada zona cuenta una sola vez aunque se encime con otra, y lo que una zona tenga fuera del contorno no
+    // cuenta. Se mide sobre una cuadrícula fina (0.05 a 0.5 m, la más fina que quepa); con medidas en múltiplos de 5 cm es exacta.
+    function coveredArea(vertices, zones) {
+        if (vertices.length < 3 || !zones.length) return 0;
+        const xs = vertices.map((p) => p[0]);
+        const ys = vertices.map((p) => p[1]);
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
+        const w = Math.max(...xs) - minX;
+        const h = Math.max(...ys) - minY;
+        if (!(w > 0 && h > 0)) return 0;
+        const MAX_CELLS = 400000;
+        let step = Math.sqrt((w * h) / MAX_CELLS);
+        for (const s of [0.05, 0.1, 0.2, 0.25, 0.5]) { if ((w / s) * (h / s) <= MAX_CELLS) { step = s; break; } }
+        const nx = Math.ceil(w / step);
+        const ny = Math.ceil(h / step);
+        const grid = new Uint8Array(nx * ny);
+        zones.forEach((z) => {
+            const i0 = Math.max(0, Math.floor((z.x - minX) / step) - 1);
+            const i1 = Math.min(nx - 1, Math.ceil((z.x + z.l - minX) / step) + 1);
+            const j0 = Math.max(0, Math.floor((z.y - minY) / step) - 1);
+            const j1 = Math.min(ny - 1, Math.ceil((z.y + z.w - minY) / step) + 1);
+            for (let j = j0; j <= j1; j++) {
+                const cy = minY + (j + 0.5) * step;
+                if (cy < z.y || cy >= z.y + z.w) continue;
+                for (let i = i0; i <= i1; i++) {
+                    const cx = minX + (i + 0.5) * step;
+                    if (cx >= z.x && cx < z.x + z.l) grid[j * nx + i] = 1;
+                }
+            }
+        });
+        const inside = (x, y) => {
+            let r = false;
+            for (let a = 0, b = vertices.length - 1; a < vertices.length; b = a++) {
+                const xa = vertices[a][0]; const ya = vertices[a][1]; const xb = vertices[b][0]; const yb = vertices[b][1];
+                if ((ya > y) !== (yb > y) && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) r = !r;
+            }
+            return r;
+        };
+        let cells = 0;
+        for (let j = 0; j < ny; j++) {
+            for (let i = 0; i < nx; i++) {
+                if (grid[j * nx + i] && inside(minX + (i + 0.5) * step, minY + (j + 0.5) * step)) cells++;
+            }
+        }
+        return cells * step * step;
+    }
+
     // Lo que se muestra arriba del Layout y se recalcula con cada cambio.
     //  totales = superficie de la nave; oficinas, pasillos y andenes = suma de las zonas de ese tipo; almacenamiento = huella
     //  (largo x fondo) de los anaqueles, gabetas y tarimas activos; muertos = lo que queda de la nave sin ninguno de esos usos.
@@ -134,9 +182,15 @@
         // Los dos tipos de pasillo (principal y entre anaqueles) suman en los m² de pasillos.
         const aisles = sumType('aisle') + sumType('aisle2');
         const docks = sumType('dock');
+        // Almacenamiento = las zonas de almacenamiento (seco, refrigerado, químicos, producto terminado); la huella es lo que ocupan sus anaqueles, gabetas y tarimas.
+        const storageZones = zones.filter((z) => STORAGE_ZONE_TYPES.includes(z.type)).reduce((acc, z) => acc + zoneArea(z), 0);
         const footprint = spaces.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0), 0);
         const storageVolume = spaces.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0) * (s.h || 0), 0);
-        const dead = Math.max(0, total - offices - aisles - docks - footprint);
+        // Espacio muerto = el piso de la nave que no tiene ninguna zona (sin color): el total menos los m² ya definidos. overlap = m² de zonas encimadas entre sí o
+        // fuera de la nave (sumadas de más en los demás KPIs).
+        const covered = coveredArea(layout.vertices || [], zones);
+        const dead = Math.max(0, total - covered);
+        const overlap = Math.max(0, zones.reduce((acc, z) => acc + zoneArea(z), 0) - covered);
         const perZone = zones.map((z) => {
             const mine = spaces.filter((s) => s.zoneId === z.id);
             const zFootprint = mine.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0), 0);
@@ -149,7 +203,7 @@
         });
         return {
             total: round2(total), offices: round2(offices), aisles: round2(aisles), docks: round2(docks),
-            storage: round2(footprint), dead: round2(dead),
+            storage: round2(storageZones), footprint: round2(footprint), covered: round2(covered), overlap: round2(overlap), dead: round2(dead),
             volume: round2(volumeOf(layout.vertices || [])), storageVolume: round2(storageVolume),
             heightMin: round2(heightRange(layout.vertices || []).min), heightMax: round2(heightRange(layout.vertices || []).max),
             perimeter: round2(perimeter(layout.vertices || [])), zones: perZone,
@@ -313,6 +367,6 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData,
-        normalize, heightRange, volumeOf, triangulate, zoneLabelSpot,
+        normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, coveredArea,
     };
 }));

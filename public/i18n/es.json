@@ -1535,7 +1535,10 @@
     "layoutKpiTotal": "m² totales",
     "layoutKpiOficinas": "m² de oficinas",
     "layoutKpiPasillos": "m² de pasillos",
-    "layoutKpiAlmacenamiento": "m² de espacios de almacenamiento",
+    "layoutKpiAlmacenamiento": "m² de zonas de almacenamiento",
+    "layoutKpiAndenes": "m² de andenes",
+    "layoutAvisoEncimadas": "Hay {n} m² de zonas encimadas entre sí o fuera de la nave. Los m² por tipo las suman de más; el espacio muerto las cuenta una sola vez.",
+    "layoutHojaKpiAndenes": "Andenes",
     "layoutKpiMuertos": "m² de espacios muertos",
     "layoutCargarPlano": "Cargar plano",
     "layoutCrearDesdeCero": "Crear desde cero",
@@ -1570,7 +1573,7 @@
     "layoutHojaKpiTotal": "Superficie total",
     "layoutHojaKpiOficinas": "Oficinas",
     "layoutHojaKpiPasillos": "Pasillos",
-    "layoutHojaKpiAlmacenamiento": "Espacios de almacenamiento",
+    "layoutHojaKpiAlmacenamiento": "Zonas de almacenamiento",
     "layoutHojaKpiMuertos": "Espacios muertos",
     "layoutHojaKpiVolumen": "Volumen de la nave",
     "layoutHojaEscanea": "Escanea para ver el Layout vigente",
@@ -2848,8 +2851,8 @@
       "example": "ves en el mapa dónde está el anaquel A-R03 y cuánto espacio ocupa."
     },
     "layoutKpis": {
-      "what": "Resumen de los metros cuadrados de tu nave: totales, oficinas, pasillos, espacios de almacenamiento y espacios muertos. Se actualiza solo cada vez que cambias el Layout.",
-      "example": "agregas un anaquel y los m² de almacenamiento suben y los m² muertos bajan."
+      "what": "Resumen de los metros cuadrados de tu nave: totales, oficinas, pasillos, andenes, zonas de almacenamiento y espacios muertos. El espacio muerto es todo el piso que no tiene ninguna zona: el total menos los m² ya definidos. Se actualiza solo cada vez que cambias el Layout.",
+      "example": "defines una zona de 100 m² y el espacio muerto baja 100 m²."
     },
     "layoutCargarPlano": {
       "what": "Sube el plano de tu nave, como imagen o PDF, y dibuja los espacios encima.",

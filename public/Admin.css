@@ -7156,3 +7156,15 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     font-size: 0.7rem;
     color: var(--color-text-secondary);
 }
+
+.layout-warn{
+    margin: 0 0 1rem;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.78rem;
+    color: var(--color-report-calc-text);
+    background: var(--color-report-calc-bg);
+    border-radius: 0.6rem;
+}
+.layout-warn[hidden]{
+    display: none;
+}

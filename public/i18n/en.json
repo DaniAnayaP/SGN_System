@@ -1535,7 +1535,10 @@
     "layoutKpiTotal": "Total m²",
     "layoutKpiOficinas": "Office m²",
     "layoutKpiPasillos": "Aisle m²",
-    "layoutKpiAlmacenamiento": "Storage space m²",
+    "layoutKpiAlmacenamiento": "Storage zone m²",
+    "layoutKpiAndenes": "Dock m²",
+    "layoutAvisoEncimadas": "There are {n} m² of zones overlapping each other or outside the warehouse. The m² by type add them up twice; dead space counts them once.",
+    "layoutHojaKpiAndenes": "Docks",
     "layoutKpiMuertos": "Dead space m²",
     "layoutCargarPlano": "Upload floor plan",
     "layoutCrearDesdeCero": "Start from scratch",
@@ -1570,7 +1573,7 @@
     "layoutHojaKpiTotal": "Total area",
     "layoutHojaKpiOficinas": "Offices",
     "layoutHojaKpiPasillos": "Aisles",
-    "layoutHojaKpiAlmacenamiento": "Storage spaces",
+    "layoutHojaKpiAlmacenamiento": "Storage zones",
     "layoutHojaKpiMuertos": "Dead space",
     "layoutHojaKpiVolumen": "Warehouse volume",
     "layoutHojaEscanea": "Scan to see the current Layout",
@@ -2849,8 +2852,8 @@
       "example": "you see on the map where rack A-R03 is and how much space it takes."
     },
     "layoutKpis": {
-      "what": "A summary of the square meters of your warehouse: total, offices, aisles, storage spaces and dead space. It updates by itself every time you change the Layout.",
-      "example": "you add a rack and the storage m² go up while the dead space m² go down."
+      "what": "A summary of the square meters of your warehouse: total, offices, aisles, docks, storage zones and dead space. Dead space is all the floor that has no zone: the total minus the m² already defined. It updates by itself every time you change the Layout.",
+      "example": "you define a 100 m² zone and the dead space goes down by 100 m²."
     },
     "layoutCargarPlano": {
       "what": "Upload the floor plan of your warehouse, as an image or PDF, and draw the spaces on top of it.",
