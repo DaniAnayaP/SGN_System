@@ -1545,7 +1545,7 @@
     "layoutKpiVolumen": "m³ de la nave",
     "layoutQrMenu": "QR y descarga",
     "layoutDescargarPdf": "Descargar PDF",
-    "layoutDescargarPdfSub": "Hoja A3 horizontal con el mapa y el QR, para imprimir",
+    "layoutDescargarPdfSub": "La hoja con el mapa y el QR, con el tamaño de arriba, para imprimir",
     "layoutDescargarPng": "Descargar imagen PNG",
     "layoutDescargarPngSub": "La misma hoja como imagen, para mandar por mensaje",
     "layoutCopiarEnlace": "Copiar el enlace del QR",
@@ -1623,6 +1623,30 @@
     "layoutQuitar": "Quitar",
     "layoutDesactivar": "Desactivar",
     "layoutReactivar": "Reactivar",
+    "layoutHojaTamano": "Tamaño de la hoja",
+    "layoutHojaAncho": "Ancho (cm)",
+    "layoutHojaLargo": "Largo (cm)",
+    "layoutHojaGirar": "Girar",
+    "layoutHojaLinea": "Línea punteada para recortar",
+    "layoutHojaVer": "Ver la hoja",
+    "layoutHojaVerCroquis": "Ver el croquis",
+    "layoutHojaEspacio": "Espacio",
+    "layoutHojaArchivo": "Hoja del archivo",
+    "layoutHojaMismo": "{w} × {h} cm (del mismo tamaño)",
+    "layoutHojaHorizontal": "Horizontal: tarjetas a la derecha",
+    "layoutHojaVertical": "Vertical: tarjetas abajo",
+    "layoutHojaChica": "tamaño chico: solo lo principal",
+    "layoutHojaRecorte": "✂ Recorta por la línea punteada ({w} × {h} cm). Imprime al 100 %, sin “Ajustar a la página”.",
+    "layoutHojaPre_a3h": "A3 horizontal",
+    "layoutHojaPre_a4h": "A4 horizontal",
+    "layoutHojaPre_cartah": "Carta horizontal",
+    "layoutHojaPre_a4v": "A4 vertical",
+    "layoutHojaPre_mediacarta": "Media carta",
+    "layoutHojaPre_tarjeta": "Tarjeta",
+    "layoutHojaPag_Carta": "Carta",
+    "layoutHojaPag_A4": "A4",
+    "layoutHojaPag_A3": "A3",
+    "layoutHojaPag_Tabloide": "Tabloide",
     "layoutMedidasBtn": "Ver y ocultar medidas",
     "layoutMedidasOcultar": "Ocultar medidas",
     "layoutMedidasVer": "Ver medidas",
@@ -2985,6 +3009,10 @@
       "what": "Elimina esta zona o este espacio de forma definitiva al guardar. A diferencia de Desactivar, ya no se conserva ni su historial de m². Solo aparece si tu cuenta tiene el permiso Eliminar en el árbol.",
       "example": "quitas un anaquel que nunca existió en la nave y que capturaron por error."
     },
+    "layoutSheetSize": {
+      "what": "El ancho y el largo, en centímetros, del espacio que se imprime. La hoja se acomoda sola a esa medida (horizontal, vertical o chica) y el PDF y la imagen salen igual. Si el espacio es más chico que una hoja, el archivo sale en la hoja estándar más chica donde quepa con el espacio marcado con una línea punteada para recortar. De 6 a 120 cm por lado.",
+      "example": "escribes 10.5 por 14.8 para una tarjeta: sale en una hoja Carta con la tarjeta dibujada con línea punteada, lista para recortar."
+    },
     "layoutMeasures": {
       "what": "Muestra u oculta las medidas del croquis: el largo de cada pared, la altura de cada esquina y la medida de cada lado de las zonas. El nombre y los m² de cada zona se quedan. Solo cambia lo que ves en pantalla; la hoja que se descarga y el QR siguen con sus medidas.",
       "example": "ocultas las medidas cuando el croquis se ve cargado de números y las vuelves a mostrar para revisar un lado."
@@ -3082,7 +3110,7 @@
       "example": "descargas la hoja, la imprimes y la pegas en la entrada de la nave."
     },
     "layoutQrPdf": {
-      "what": "Baja una hoja A3 horizontal en PDF con el mapa, los KPIs y el QR, lista para imprimir. Trae lo último guardado.",
+      "what": "Baja la hoja en PDF con el mapa, los KPIs y el QR, lista para imprimir, con el tamaño que elegiste arriba del croquis. Trae lo último guardado.",
       "example": "la mandas a imprimir en una copiadora."
     },
     "layoutQrPng": {

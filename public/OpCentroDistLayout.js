@@ -1084,7 +1084,7 @@ window.addEventListener('beforeunload', (event) => {
 });
 document.addEventListener('dashboard:language-changed', () => {
     if (!state.loaded) return;
-    if (state.draft) { renderPanel(); refreshLive(); } else showEmpty();
+    if (state.draft) { renderPanel(); refreshLive(); renderSizeBar(); } else showEmpty();
 });
 
 // ---- QR y descarga -----------------------------------------------------------------------------------------------------
@@ -1095,7 +1095,105 @@ function updateQrMenu() {
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
     if (!show) closeQrPop();
+    renderSizeBar();
 }
+
+// ---- tamaño de la hoja que se descarga (arriba del croquis) -----------------------------------------------------------------------------
+// Ancho y largo en cm del espacio que se imprime y si se dibuja la línea punteada para recortar. Con "Ver la hoja" el croquis se cambia por la hoja tal como saldrá (con lo último
+// guardado) y el PDF y la imagen salen con esa medida. Se recuerda la última medida en este navegador. Va con el acceso de Códigos QR (el mismo de descargar la hoja).
+const SIZE_KEY = 'sgn_layout_sheet_size';
+const sheetSize = { w: 42, h: 29.7, cut: true, preview: false };
+try {
+    const raw = JSON.parse(localStorage.getItem(SIZE_KEY) || 'null');
+    if (raw && raw.w >= 6 && raw.w <= 120 && raw.h >= 6 && raw.h <= 120) { sheetSize.w = raw.w; sheetSize.h = raw.h; sheetSize.cut = raw.cut !== false; }
+} catch (err) { /* sin almacenamiento: queda A3 */ }
+function saveSheetSize() {
+    try { localStorage.setItem(SIZE_KEY, JSON.stringify({ w: sheetSize.w, h: sheetSize.h, cut: sheetSize.cut })); } catch (err) { /* no se recuerda */ }
+}
+const sheetOptions = () => ({ widthCm: sheetSize.w, heightCm: sheetSize.h, cut: sheetSize.cut });
+function updateSizeInfo() {
+    const info = $('layout-size-info');
+    if (!info) return;
+    const page = window.LayoutSheet.pageFor(sheetSize.w, sheetSize.h, sheetSize.cut);
+    const archivo = page.small
+        ? `${t(`main.layoutHojaPag_${page.name}`)} (${fmt(page.w, 1)} × ${fmt(page.h, 1)} cm)`
+        : t('main.layoutHojaMismo').replace('{w}', fmt(sheetSize.w, 1)).replace('{h}', fmt(sheetSize.h, 1));
+    const orient = sheetSize.w / sheetSize.h >= 1.12 ? t('main.layoutHojaHorizontal') : t('main.layoutHojaVertical');
+    const chica = Math.min(sheetSize.w, sheetSize.h) < 13 ? ` · ${t('main.layoutHojaChica')}` : '';
+    info.innerHTML = `<span>${esc(t('main.layoutHojaEspacio'))}: <b>${fmt(sheetSize.w, 1)} × ${fmt(sheetSize.h, 1)} cm</b></span><span>${esc(t('main.layoutHojaArchivo'))}: <b>${esc(archivo)}</b></span><span>${esc(orient + chica)}</span>`;
+    document.querySelectorAll('[data-pre]').forEach((b) => {
+        const p = window.LayoutSheet.PRESETS.find((x) => x[0] === b.dataset.pre);
+        b.setAttribute('aria-pressed', String(!!p && Math.abs(p[1] - sheetSize.w) < 0.05 && Math.abs(p[2] - sheetSize.h) < 0.05));
+    });
+}
+function renderSizeBar() {
+    const bar = $('layout-sizebar');
+    const show = !!(state.perms && state.perms.canUseQr && state.saved && !state.creating);
+    bar.hidden = !show;
+    if (!show) { if (sheetSize.preview) { sheetSize.preview = false; applyPreview(); } return; }
+    const presets = window.LayoutSheet.PRESETS.map(([id]) => `<button type="button" class="layout-pre" data-pre="${id}" aria-pressed="false">${esc(t(`main.layoutHojaPre_${id}`))}</button>`).join('');
+    bar.innerHTML = `<div class="layout-sizebar-row"><span class="layout-sizebar-title">${esc(t('main.layoutHojaTamano'))}</span><div class="layout-presets" role="group" aria-label="${esc(t('main.layoutHojaTamano'))}">${presets}</div></div>
+        <div class="layout-sizebar-row"><label>${esc(t('main.layoutHojaAncho'))}<input type="number" id="layout-size-w" min="6" max="120" step="0.1" value="${sheetSize.w}"></label><label>${esc(t('main.layoutHojaLargo'))}<input type="number" id="layout-size-h" min="6" max="120" step="0.1" value="${sheetSize.h}"></label><button type="button" class="btn btn-secondary" id="layout-size-swap">${esc(t('main.layoutHojaGirar'))}</button><label class="layout-check"><input type="checkbox" id="layout-size-cut"${sheetSize.cut ? ' checked' : ''}> ${esc(t('main.layoutHojaLinea'))}</label><button type="button" class="btn btn-secondary" id="layout-size-preview" aria-pressed="${sheetSize.preview}">${esc(t(sheetSize.preview ? 'main.layoutHojaVerCroquis' : 'main.layoutHojaVer'))}</button></div>
+        <div class="layout-sizebar-info" id="layout-size-info"></div>`;
+    updateSizeInfo();
+}
+// La hoja armada con lo último guardado (la misma que se descarga), con la medida elegida.
+async function buildSheetFromSaved() {
+    const data = await fetchQrData();
+    if (!data) return null;
+    const theme = window.LayoutMapSvg.theme(data.companyColor);
+    const svg = window.LayoutSheet.buildSheetSvg({
+        companyName: data.companyName, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
+        url: data.url, qrRows: data.qrRows, kpis: data.kpis, layout: data.layout, theme,
+    }, sheetLabels(), Dashboard.lang, sheetOptions());
+    return { svg, data };
+}
+async function renderSheetPreview() {
+    if (!sheetSize.preview) return;
+    const built = await buildSheetFromSaved();
+    if (!sheetSize.preview) return;
+    if (!built) { sheetSize.preview = false; applyPreview(); return; }
+    $('layout-sheet-preview').innerHTML = built.svg;
+}
+function applyPreview() {
+    const on = sheetSize.preview;
+    $('layout-sheet-preview').hidden = !on;
+    $('layout-svg').hidden = on;
+    const legend = document.querySelector('.layout-legend');
+    if (legend) legend.hidden = on;
+    const btn = $('layout-size-preview');
+    if (btn) { btn.setAttribute('aria-pressed', String(on)); btn.textContent = t(on ? 'main.layoutHojaVerCroquis' : 'main.layoutHojaVer'); }
+    if (on) renderSheetPreview();
+}
+$('layout-sizebar').addEventListener('click', (event) => {
+    const pre = event.target.closest('[data-pre]');
+    if (pre) {
+        const p = window.LayoutSheet.PRESETS.find((x) => x[0] === pre.dataset.pre);
+        sheetSize.w = p[1]; sheetSize.h = p[2];
+    } else if (event.target.closest('#layout-size-swap')) {
+        [sheetSize.w, sheetSize.h] = [sheetSize.h, sheetSize.w];
+    } else if (event.target.closest('#layout-size-preview')) {
+        sheetSize.preview = !sheetSize.preview;
+        applyPreview();
+        return;
+    } else return;
+    $('layout-size-w').value = sheetSize.w;
+    $('layout-size-h').value = sheetSize.h;
+    saveSheetSize();
+    updateSizeInfo();
+    renderSheetPreview();
+});
+$('layout-sizebar').addEventListener('input', (event) => {
+    if (event.target.id === 'layout-size-w' || event.target.id === 'layout-size-h') {
+        const v = parseFloat(event.target.value);
+        if (!(v >= 6 && v <= 120)) return;
+        if (event.target.id === 'layout-size-w') sheetSize.w = v; else sheetSize.h = v;
+    } else if (event.target.id === 'layout-size-cut') sheetSize.cut = event.target.checked;
+    else return;
+    saveSheetSize();
+    updateSizeInfo();
+    renderSheetPreview();
+});
 function closeQrPop() {
     $('layout-qr-pop').hidden = true;
     $('layout-qr-btn').setAttribute('aria-expanded', 'false');
@@ -1124,24 +1222,18 @@ function sheetLabels() {
         scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'),
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
         aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'), dock: typeLabel('zone', 'dock'), office: typeLabel('zone', 'office'), none: t('main.layoutSinZona'),
-        printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
+        cutCaption: t('main.layoutHojaRecorte'), printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
     };
 }
 const slug = (text) => String(text || 'Layout').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'Layout';
 async function downloadSheet(kind) {
     if (isDirty()) Dashboard.showToast(t('main.layoutDescargaGuardado'), 'info');
     else Dashboard.showToast(t('main.layoutPreparandoHoja'), 'info');
-    const data = await fetchQrData();
-    if (!data) return;
-    const theme = window.LayoutMapSvg.theme(data.companyColor);
-    const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
-    const svg = window.LayoutSheet.buildSheetSvg({
-        companyName: data.companyName, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
-        url: data.url, qrRows: data.qrRows, kpis: data.kpis, layout: data.layout, mapInner, theme,
-    }, sheetLabels(), Dashboard.lang);
-    const blob = kind === 'pdf' ? await window.LayoutSheet.renderPdf(svg) : await window.LayoutSheet.renderPng(svg);
+    const built = await buildSheetFromSaved();
+    if (!built) return;
+    const blob = kind === 'pdf' ? await window.LayoutSheet.renderPdf(built.svg) : await window.LayoutSheet.renderPng(built.svg);
     const day = new Date().toISOString().slice(0, 10);
-    window.LayoutSheet.saveBlob(blob, `Layout_${slug(data.companyName)}_v${data.version}_${day}.${kind === 'pdf' ? 'pdf' : 'png'}`);
+    window.LayoutSheet.saveBlob(blob, `Layout_${slug(built.data.companyName)}_v${built.data.version}_${day}.${kind === 'pdf' ? 'pdf' : 'png'}`);
     Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
 }
 async function copyQrLink() {

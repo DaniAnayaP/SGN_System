@@ -1545,7 +1545,7 @@
     "layoutKpiVolumen": "Warehouse m³",
     "layoutQrMenu": "QR and download",
     "layoutDescargarPdf": "Download PDF",
-    "layoutDescargarPdfSub": "A3 landscape sheet with the map and the QR, to print",
+    "layoutDescargarPdfSub": "The sheet with the map and the QR, at the size above, to print",
     "layoutDescargarPng": "Download PNG image",
     "layoutDescargarPngSub": "The same sheet as an image, to send in a message",
     "layoutCopiarEnlace": "Copy the QR link",
@@ -1623,6 +1623,30 @@
     "layoutQuitar": "Remove",
     "layoutDesactivar": "Deactivate",
     "layoutReactivar": "Reactivate",
+    "layoutHojaTamano": "Sheet size",
+    "layoutHojaAncho": "Width (cm)",
+    "layoutHojaLargo": "Length (cm)",
+    "layoutHojaGirar": "Rotate",
+    "layoutHojaLinea": "Dashed cut line",
+    "layoutHojaVer": "View the sheet",
+    "layoutHojaVerCroquis": "View the sketch",
+    "layoutHojaEspacio": "Area",
+    "layoutHojaArchivo": "File page",
+    "layoutHojaMismo": "{w} × {h} cm (same size)",
+    "layoutHojaHorizontal": "Landscape: cards on the right",
+    "layoutHojaVertical": "Portrait: cards below",
+    "layoutHojaChica": "small size: only the essentials",
+    "layoutHojaRecorte": "✂ Cut along the dashed line ({w} × {h} cm). Print at 100 %, without “Fit to page”.",
+    "layoutHojaPre_a3h": "A3 landscape",
+    "layoutHojaPre_a4h": "A4 landscape",
+    "layoutHojaPre_cartah": "Letter landscape",
+    "layoutHojaPre_a4v": "A4 portrait",
+    "layoutHojaPre_mediacarta": "Half letter",
+    "layoutHojaPre_tarjeta": "Card",
+    "layoutHojaPag_Carta": "Letter",
+    "layoutHojaPag_A4": "A4",
+    "layoutHojaPag_A3": "A3",
+    "layoutHojaPag_Tabloide": "Tabloid",
     "layoutMedidasBtn": "Show and hide measures",
     "layoutMedidasOcultar": "Hide measures",
     "layoutMedidasVer": "Show measures",
@@ -2986,6 +3010,10 @@
       "what": "Permanently deletes this zone or space when you save. Unlike Deactivate, it is not kept at all. It only appears if your account has the Delete permission in the access tree.",
       "example": "you remove a rack that never existed in the warehouse and was entered by mistake."
     },
+    "layoutSheetSize": {
+      "what": "The width and length, in centimeters, of the area you print. The sheet fits itself to that size (landscape, portrait or small) and the PDF and image come out the same. If the area is smaller than a page, the file comes out on the smallest standard page that fits with the area marked by a dashed cut line. From 6 to 120 cm per side.",
+      "example": "you type 10.5 by 14.8 for a card: it comes out on a Letter page with the card drawn with a dashed line, ready to cut."
+    },
     "layoutMeasures": {
       "what": "Shows or hides the measures on the sketch: the length of each wall, the height of each corner and the measure of each zone side. The name and m² of each zone stay. It only changes what you see on screen; the downloaded sheet and the QR keep their measures.",
       "example": "you hide the measures when the sketch looks crowded with numbers and show them again to check a side."
@@ -3083,7 +3111,7 @@
       "example": "you download the sheet, print it and stick it at the warehouse entrance."
     },
     "layoutQrPdf": {
-      "what": "Downloads an A3 landscape PDF sheet with the map, the KPIs and the QR, ready to print. It has what was last saved.",
+      "what": "Downloads the sheet as a PDF with the map, the KPIs and the QR, ready to print, at the size you chose above the sketch. It has what was last saved.",
       "example": "you send it to be printed at a copy shop."
     },
     "layoutQrPng": {

@@ -1,32 +1,54 @@
 // ---------------------------------------------------------------------------
-// La hoja que se descarga del Layout: nombre del cliente, mapa, KPIs, QR, versión y fecha. Se arma como un SVG (A3 horizontal), y de ahí salen el PNG
-// (se pinta en un canvas) y el PDF (la misma imagen dentro de una página A3, sin librerías: un PDF de una sola imagen se escribe a mano). Todo ocurre
-// en el navegador con lo ÚLTIMO GUARDADO que trae GET /api/business/layout/qr, así que la hoja trae lo mismo que se ve al escanear el QR.
+// La hoja que se descarga del Layout: nombre del cliente, mapa, KPIs, QR, versión y fecha. Se arma como un SVG con el ancho y el largo (en cm) que se elijan (A3 horizontal
+// si no se dice otra cosa), y de ahí salen el PNG (se pinta en un canvas) y el PDF (la misma imagen dentro de una página, sin librerías: un PDF de una sola imagen se escribe a mano).
+// La hoja se acomoda sola al espacio: horizontal (las tarjetas de m² a la derecha del mapa), vertical (las tarjetas abajo) o chica (solo lo principal). Si el espacio es más chico
+// que una hoja estándar, el archivo sale en la hoja más chica donde quepa (Carta, A4, A3 o Tabloide) con el espacio marcado con una línea punteada para recortar. Todo ocurre en el
+// navegador con lo ÚLTIMO GUARDADO que trae GET /api/business/layout/qr, así que la hoja trae lo mismo que se ve al escanear el QR.
 // ---------------------------------------------------------------------------
 (function () {
-    const W = 1600;
-    const H = 1131; // proporción A3 (1.414)
+    const PX_CM = 1600 / 42; // la hoja A3 de siempre: 42 cm = 1600 px
     const FONT = 'Poppins, Arial, Helvetica, sans-serif';
+    const LIMITS = { min: 6, max: 120 };
+    // Hojas estándar (ancho × largo en cm, en horizontal) y medidas rápidas.
+    const PAGES = [['Carta', 27.94, 21.59], ['A4', 29.7, 21], ['A3', 42, 29.7], ['Tabloide', 43.18, 27.94]];
+    const PRESETS = [['a3h', 42, 29.7], ['a4h', 29.7, 21], ['cartah', 27.94, 21.59], ['a4v', 21, 29.7], ['mediacarta', 21.59, 13.97], ['tarjeta', 10.5, 14.8]];
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmt = (n, lang) => (Number.isFinite(n) ? n : 0).toLocaleString(lang === 'en' ? 'en-US' : 'es-MX', { maximumFractionDigits: 2 });
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const dim = (n) => String(Math.round(n * 10) / 10);
+
+    // La hoja del archivo para un espacio de wCm × hCm: del mismo tamaño, o (si el espacio es más chico que una hoja estándar y se quiere la línea de recorte) la más chica donde quepa.
+    function pageFor(wCm, hCm, cut) {
+        if (cut !== false) {
+            for (const [name, pw, ph] of PAGES) {
+                const fits = (a, b) => (wCm <= a + 0.05 && hCm <= b + 0.05 ? { name, w: a, h: b } : null);
+                const hit = fits(pw, ph) || fits(ph, pw);
+                if (hit) return hit.w - wCm > 1.6 || hit.h - hCm > 1.6 ? { name: hit.name, w: hit.w, h: hit.h, small: true } : { name: '', w: wCm, h: hCm, small: false };
+            }
+        }
+        return { name: '', w: wCm, h: hCm, small: false };
+    }
 
     // Módulos del QR (rows = filas de '0'/'1') como un solo trazo, con su zona blanca alrededor.
-    function qrPath(rows, x, y, size, ink = '#14161F') {
+    function qrPath(rows, x, y, size, ink = '#14161F', sw = 3) {
         const n = rows.length;
         const unit = size / (n + 8);
         let d = '';
         for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
             if (rows[r][c] === '1') d += `M${(x + (c + 4) * unit).toFixed(2)} ${(y + (r + 4) * unit).toFixed(2)}h${unit.toFixed(2)}v${unit.toFixed(2)}h-${unit.toFixed(2)}z`;
         }
-        return `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="#FFFFFF" stroke="${ink}" stroke-width="3" rx="8"/><path d="${d}" fill="#14161F"/>`;
+        return `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="#FFFFFF" stroke="${ink}" stroke-width="${sw}" rx="8"/><path d="${d}" fill="#14161F"/>`;
     }
 
-    // data: { companyName, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout }, labels: textos ya traducidos, lang: 'es' | 'en'
-    function buildSheetSvg(data, labels, lang) {
+    // El contenido de la hoja dentro de un espacio de W × H px (el que se imprime). Con 1600 × 1131 queda como la hoja A3 de siempre.
+    function sheetContent(data, labels, lang, W, H) {
         const k = data.kpis;
-        // tema de color: el del cliente si trae color; si no, el neutro de siempre
         const th = data.theme || window.LayoutMapSvg.DEFAULT_THEME;
         const C = th.chrome;
+        const f = clamp(Math.min(W, H) / 1131, 0.34, 1.8);
+        const m = 48 * f;
+        const land = W / H >= 1.12;
+        const tiny = Math.min(W, H) / PX_CM < 13;
         const dateFmt = (d) => d.toLocaleString(lang === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         const utc = (d) => `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
@@ -38,76 +60,142 @@
         const hMax = Math.max(...hs);
         const heightText = hMin === hMax ? `${fmt(hMin, lang)} m` : `${fmt(hMin, lang)} – ${fmt(hMax, lang)} m`;
         const meta = `${dims} · ${labels.height} ${heightText} · ${data.layout.spaces.length} ${labels.spaces}`;
-        const cards = [
+        const allCards = [
             [`${fmt(k.total, lang)} m²`, labels.kpiTotal], [`${fmt(k.offices, lang)} m²`, labels.kpiOffices], [`${fmt(k.aisles, lang)} m²`, labels.kpiAisles],
             [`${fmt(k.docks, lang)} m²`, labels.kpiDocks], [`${fmt(k.storage, lang)} m²`, labels.kpiStorage], [`${fmt(k.dead, lang)} m²`, labels.kpiDead], [`${fmt(k.volume, lang)} m³`, labels.kpiVolume],
         ];
-        let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${FONT}">`;
-        s += `<rect width="${W}" height="${H}" fill="#FFFFFF"/>`;
-        s += `<rect x="48" y="48" width="84" height="84" rx="18" fill="${C.badge}"/><text x="90" y="104" font-size="36" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(initials)}</text>`;
-        s += `<text x="152" y="86" font-size="36" font-weight="700" fill="${C.ink}">${esc(data.companyName)}</text><text x="152" y="118" font-size="21" fill="#3F435D">${esc(labels.area)}</text>`;
-        s += `<text x="48" y="205" font-size="58" font-weight="700" fill="${C.ink}">${esc(labels.title)}</text><text x="48" y="243" font-size="23" fill="#3F435D">${esc(meta)}</text>`;
-        s += qrPath(data.qrRows, W - 48 - 230, 40, 230, C.ink);
+        const cards = tiny ? [allCards[0], allCards[4], allCards[5], allCards[6]] : allCards;
+        let s = `<rect width="${W}" height="${H}" fill="#FFFFFF"/>`;
+        // encabezado
+        const bs = 84 * f;
+        const nameSize = (tiny ? 27 : 36) * f;
+        s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${18 * f}" fill="${C.badge}"/><text x="${m + bs / 2}" y="${m + bs * 0.667}" font-size="${36 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(initials)}</text>`;
+        s += `<text x="${m + bs + 20 * f}" y="${m + 38 * f}" font-size="${nameSize}" font-weight="700" fill="${C.ink}">${esc(data.companyName)}</text><text x="${m + bs + 20 * f}" y="${m + 70 * f}" font-size="${21 * f}" fill="#3F435D">${esc(labels.area)}</text>`;
+        s += `<text x="${m}" y="${m + 157 * f}" font-size="${(tiny ? 42 : 58) * f}" font-weight="700" fill="${C.ink}">${esc(labels.title)}</text><text x="${m}" y="${m + 195 * f}" font-size="${(tiny ? 19 : 23) * f}" fill="#3F435D">${esc(meta)}</text>`;
+        const qs = clamp(230 * f, 70, Math.min(H * 0.22, W * 0.26));
+        const qy = 40 * f;
+        s += qrPath(data.qrRows, W - m - qs, qy, qs, C.ink, 3 * f);
         // El aviso del QR va abajo, junto al código: arriba se encimaba con los nombres largos de empresa.
-        s += `<text x="${W - 48 - 250}" y="186" font-size="23" font-weight="700" fill="${C.ink}" text-anchor="end">${esc(labels.scan)}</text>`;
-        s += `<text x="${W - 48 - 250}" y="218" font-size="19" fill="#3F435D" text-anchor="end">${esc(labels.fixed)}</text>`;
-        s += `<text x="${W - 48}" y="292" font-size="14" font-family="Consolas, Menlo, monospace" fill="#6B7089" text-anchor="end">${esc(data.url)}</text>`;
-        s += `<line x1="48" y1="306" x2="${W - 48}" y2="306" stroke="${C.rule}" stroke-width="3"/>`;
-        // leyenda: los tipos de zona (con los mismos colores del mapa) y, después, cada zona con formato propio con su nombre y su muestra. Se acomoda en los renglones que
-        // haga falta; si pasan de dos, el mapa y las tarjetas se encogen para dejarles lugar.
+        if (qs >= 110) {
+            s += `<text x="${W - m - qs - 20 * f}" y="${qy + qs - 84 * f}" font-size="${23 * f}" font-weight="700" fill="${C.ink}" text-anchor="end">${esc(labels.scan)}</text>`;
+            s += `<text x="${W - m - qs - 20 * f}" y="${qy + qs - 52 * f}" font-size="${19 * f}" fill="#3F435D" text-anchor="end">${esc(labels.fixed)}</text>`;
+        }
+        const urlY = qy + qs + 22 * f;
+        s += `<text x="${W - m}" y="${urlY}" font-size="${14 * f}" font-family="Consolas, Menlo, monospace" fill="#6B7089" text-anchor="end">${esc(data.url)}</text>`;
+        const ruleY = Math.max(urlY + 14 * f, m + 195 * f + 42 * f);
+        s += `<line x1="${m}" y1="${ruleY}" x2="${W - m}" y2="${ruleY}" stroke="${C.rule}" stroke-width="${3 * f}"/>`;
+        const top = ruleY + 20 * f;
+        // pie
+        const lineY = H - 91 * f;
+        // leyenda: los tipos de zona (con los mismos colores del mapa) y, después, cada zona con formato propio con su nombre y su muestra; se acomoda en los renglones que haga falta
         const leg = [['door', labels.door], ['space', labels.space], ['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished],
             ['dock', labels.dock], ['office', labels.office], ['aisle', labels.aisle], ['aisle2', labels.aisle2], ['none', labels.none]];
         (data.layout.zones || []).filter((z) => z.fmt).slice(0, 12).forEach((z) => leg.push([`zone:${z.id}`, z.name, z]));
         const legPos = [];
-        let legX = 48;
+        let legX = m;
         let legRow = 0;
         leg.forEach((item) => {
-            const textW = item[1].length * 8.6;
-            if (legX > 48 && legX + 30 + textW > W - 48) { legX = 48; legRow += 1; }
+            const textW = item[1].length * 8.6 * f;
+            if (legX > m && legX + 30 * f + textW > W - m) { legX = m; legRow += 1; }
             legPos.push({ item, x: legX, row: legRow });
-            legX += 30 + textW + 26;
+            legX += 30 * f + textW + 26 * f;
         });
-        const frameH = legRow + 1 > 2 ? 646 - 28 * legRow + 28 : 646;
-        const legY0 = 326 + frameH + 4;
-        // mapa
-        s += `<rect x="48" y="326" width="1082" height="${frameH}" rx="10" fill="#FFFFFF" stroke="${C.frame}" stroke-width="2"/>`;
-        s += `<svg x="58" y="336" width="1062" height="${frameH - 20}" viewBox="0 0 700 460" preserveAspectRatio="xMidYMid meet">${data.mapInner}</svg>`;
-        // KPIs
-        const pitch = (frameH - 82) / 6;
-        const cardH = Math.min(82, pitch - 8);
-        const kk = cardH / 82;
-        cards.forEach((c, i) => {
-            const y = 326 + i * pitch;
-            s += `<rect x="1158" y="${y}" width="394" height="${cardH}" rx="10" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="2"/>`;
-            s += `<text x="1180" y="${y + 41 * kk}" font-size="32" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="1180" y="${y + 68 * kk}" font-size="17" fill="#3F435D">${esc(c[1])}</text>`;
-        });
+        const legendH = tiny ? 0 : 28 * f * (legRow + 1) + 12 * f;
+        const frameBottom = lineY - legendH;
+        // mapa y tarjetas
+        let frameX = m;
+        let frameW;
+        let frameH;
+        if (land) {
+            const cw = clamp(394 * f, 120, W * 0.27);
+            const gap = 28 * f;
+            frameW = W - 2 * m - cw - gap;
+            frameH = frameBottom - top;
+            const pitch = (frameH - 82 * f) / Math.max(cards.length - 1, 1);
+            const cardH = Math.min(82 * f, pitch - 8 * f);
+            const kk = cardH / (82 * f);
+            cards.forEach((c, i) => {
+                const y = top + i * pitch;
+                s += `<rect x="${W - m - cw}" y="${y}" width="${cw}" height="${cardH}" rx="${10 * f}" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="${2 * f}"/>`;
+                s += `<text x="${W - m - cw + 22 * f}" y="${y + 41 * f * kk}" font-size="${32 * f}" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="${W - m - cw + 22 * f}" y="${y + 68 * f * kk}" font-size="${17 * f}" fill="#3F435D">${esc(c[1])}</text>`;
+            });
+        } else {
+            const rows = Math.ceil(cards.length / 2);
+            const gp = 12 * f;
+            const cardH = Math.min(82 * f, Math.max((frameBottom - top) * 0.1, 40 * f));
+            const cardsH = rows * cardH + (rows - 1) * gp;
+            frameW = W - 2 * m;
+            frameH = frameBottom - top - cardsH - 20 * f;
+            const cw = (frameW - gp) / 2;
+            const kk = cardH / (82 * f);
+            cards.forEach((c, i) => {
+                const x = m + (i % 2) * (cw + gp);
+                const y = frameBottom - cardsH + Math.floor(i / 2) * (cardH + gp);
+                s += `<rect x="${x}" y="${y}" width="${cw}" height="${cardH}" rx="${10 * f}" fill="${C.cardBg}" stroke="${C.cardBorder}" stroke-width="${2 * f}"/>`;
+                s += `<text x="${x + 22 * f}" y="${y + 41 * f * kk}" font-size="${32 * f}" font-weight="700" fill="${C.cardInk}">${esc(c[0])}</text><text x="${x + 22 * f}" y="${y + 68 * f * kk}" font-size="${17 * f}" fill="#3F435D">${esc(c[1])}</text>`;
+            });
+        }
+        s += `<rect x="${frameX}" y="${top}" width="${frameW}" height="${frameH}" rx="${10 * f}" fill="#FFFFFF" stroke="${C.frame}" stroke-width="${2 * f}"/>`;
+        // el mapa se dibuja en un lienzo de 700 px de ancho con la forma del marco, para aprovecharlo entero
+        const innerW = frameW - 20 * f;
+        const innerH = frameH - 20 * f;
+        const h700 = Math.max(120, Math.round((700 * innerH) / Math.max(innerW, 1)));
+        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700 }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+        s += `<svg x="${frameX + 10 * f}" y="${top + 10 * f}" width="${innerW}" height="${innerH}" viewBox="0 0 700 ${h700}" preserveAspectRatio="xMidYMid meet">${mapInner}</svg>`;
         legPos.forEach(({ item: [key, text, zone], x, row }) => {
-            const ly = legY0 + row * 28;
+            if (tiny) return;
+            const ly = frameBottom + 4 * f + row * 28 * f;
+            const sw = 20 * f;
             if (zone) {
-                s += window.LayoutMapSvg.zonePaint(`lg-${zone.id}`, zone.fmt).markup(`${x},${ly} ${x + 20},${ly} ${x + 20},${ly + 20} ${x},${ly + 20}`);
+                s += window.LayoutMapSvg.zonePaint(`lg-${zone.id}`, zone.fmt).markup(`${x},${ly} ${x + sw},${ly} ${x + sw},${ly + sw} ${x},${ly + sw}`);
             } else {
                 let paint;
                 if (key === 'door') paint = 'fill="#1E7E34" stroke="#1E7E34"';
                 else if (key === 'space') paint = `fill="#FFFFFF" stroke="${C.line}"`;
                 else { const c = th.types[key]; paint = `fill="${c[0]}" stroke="${c[1]}"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`; }
-                s += `<rect x="${x}" y="${ly}" width="20" height="20" rx="4" ${paint} stroke-width="1.5"/>`;
+                s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" ${paint} stroke-width="${1.5 * f}"/>`;
             }
-            s += `<text x="${x + 30}" y="${ly + 16}" font-size="16" fill="#3F435D">${esc(text)}</text>`;
+            s += `<text x="${x + 30 * f}" y="${ly + 16 * f}" font-size="${16 * f}" fill="#3F435D">${esc(text)}</text>`;
         });
-        s += `<line x1="48" y1="1040" x2="${W - 48}" y2="1040" stroke="${C.cardBorder}" stroke-width="2"/>`;
-        s += `<text x="48" y="1074" font-size="19" fill="#3F435D">${esc(labels.printed)} <tspan font-weight="700" fill="${C.ink}">${esc(dateFmt(data.printedAt))}</tspan>. ${esc(labels.snapshot)}</text>`;
-        s += `<text x="48" y="1104" font-size="17" fill="#6B7089">${esc(labels.updated)} ${esc(dateFmt(data.updatedAt))} (UTC ${utc(data.updatedAt)})</text>`;
-        s += `<text x="${W - 48}" y="1090" font-size="34" font-weight="700" fill="${C.ink}" text-anchor="end">${esc(labels.version)} ${data.version}</text>`;
-        return `${s}</svg>`;
+        s += `<line x1="${m}" y1="${lineY}" x2="${W - m}" y2="${lineY}" stroke="${C.cardBorder}" stroke-width="${2 * f}"/>`;
+        s += `<text x="${m}" y="${H - 57 * f}" font-size="${19 * f}" fill="#3F435D">${esc(labels.printed)} <tspan font-weight="700" fill="${C.ink}">${esc(dateFmt(data.printedAt))}</tspan>${tiny ? '' : `. ${esc(labels.snapshot)}`}</text>`;
+        s += `<text x="${m}" y="${H - 27 * f}" font-size="${17 * f}" fill="#6B7089">${esc(labels.updated)} ${esc(dateFmt(data.updatedAt))} (UTC ${utc(data.updatedAt)})</text>`;
+        s += `<text x="${W - m}" y="${H - 41 * f}" font-size="${34 * f}" font-weight="700" fill="${C.ink}" text-anchor="end">${esc(labels.version)} ${data.version}</text>`;
+        return s;
     }
+
+    // data: { companyName, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
+    // options: { widthCm, heightCm, cut } (el espacio que se imprime y si se dibuja la línea punteada para recortar).
+    function buildSheetSvg(data, labels, lang, options = {}) {
+        const wCm = clamp(Number(options.widthCm) || 42, LIMITS.min, LIMITS.max);
+        const hCm = clamp(Number(options.heightCm) || 29.7, LIMITS.min, LIMITS.max);
+        const cut = options.cut !== false;
+        const page = pageFor(wCm, hCm, cut);
+        const AW = wCm * PX_CM;
+        const AH = hCm * PX_CM;
+        const PW = page.w * PX_CM;
+        const PH = page.h * PX_CM;
+        const ox = page.small ? PX_CM : 0;
+        const oy = page.small ? 1.4 * PX_CM : 0;
+        let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}" width="${PW.toFixed(2)}" height="${PH.toFixed(2)}" font-family="${FONT}" data-page-cm="${page.w} ${page.h}">`;
+        s += `<rect width="${PW}" height="${PH}" fill="#FFFFFF"/>`;
+        if (page.small) s += `<text x="${PX_CM}" y="${0.95 * PX_CM}" font-size="13" fill="#6B7089">${esc(String(labels.cutCaption || '').replace('{w}', dim(wCm)).replace('{h}', dim(hCm)))}</text>`;
+        s += `<g transform="translate(${ox.toFixed(2)},${oy.toFixed(2)})">${sheetContent(data, labels, lang, AW, AH)}`;
+        if (cut) s += `<rect x="1" y="1" width="${(AW - 2).toFixed(2)}" height="${(AH - 2).toFixed(2)}" fill="none" stroke="#8E94AB" stroke-width="2" stroke-dasharray="9 7"/>`;
+        return `${s}</g></svg>`;
+    }
+
+    const pageCm = (svg) => { const mt = /data-page-cm="([\d.]+) ([\d.]+)"/.exec(svg); return mt ? [Number(mt[1]), Number(mt[2])] : [42, 29.7]; };
 
     function svgToCanvas(svg, widthPx) {
         return new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => {
+                const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
+                const ratio = vb ? Number(vb[2]) / Number(vb[1]) : 1131 / 1600;
                 const canvas = document.createElement('canvas');
                 canvas.width = widthPx;
-                canvas.height = Math.round((widthPx * H) / W);
+                canvas.height = Math.round(widthPx * ratio);
                 const ctx = canvas.getContext('2d');
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -120,11 +208,13 @@
         });
     }
     const canvasToBlob = (canvas, type, quality) => new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), type, quality));
+    // píxeles del archivo según lo ancha que sea la hoja (unos 210 puntos por pulgada, sin pasar de lo que un navegador pinta con comodidad)
+    const pxFor = (svg) => clamp(Math.round(pageCm(svg)[0] * 83.5), 900, 6500);
 
-    // Un PDF de una sola página (A3 horizontal) con la imagen JPEG ocupando toda la hoja.
-    function jpegToPdf(jpeg, pxW, pxH) {
-        const pageW = 1190.55;
-        const pageH = 841.89;
+    // Un PDF de una sola página (del tamaño de la hoja) con la imagen JPEG ocupando toda la hoja.
+    function jpegToPdf(jpeg, pxW, pxH, pageWpt = 1190.55, pageHpt = 841.89) {
+        const pageW = Math.round(pageWpt * 100) / 100;
+        const pageH = Math.round(pageHpt * 100) / 100;
         const enc = new TextEncoder();
         const parts = [];
         const offsets = [];
@@ -146,13 +236,14 @@
     }
 
     async function renderPng(svg) {
-        const canvas = await svgToCanvas(svg, 3508);
+        const canvas = await svgToCanvas(svg, pxFor(svg));
         return canvasToBlob(canvas, 'image/png');
     }
     async function renderPdf(svg) {
-        const canvas = await svgToCanvas(svg, 3508);
+        const canvas = await svgToCanvas(svg, pxFor(svg));
         const jpeg = new Uint8Array(await (await canvasToBlob(canvas, 'image/jpeg', 0.93)).arrayBuffer());
-        return jpegToPdf(jpeg, canvas.width, canvas.height);
+        const [wCm, hCm] = pageCm(svg);
+        return jpegToPdf(jpeg, canvas.width, canvas.height, (wCm / 2.54) * 72, (hCm / 2.54) * 72);
     }
     function saveBlob(blob, filename) {
         const a = document.createElement('a');
@@ -164,5 +255,5 @@
         setTimeout(() => URL.revokeObjectURL(a.href), 8000);
     }
 
-    window.LayoutSheet = { buildSheetSvg, renderPng, renderPdf, saveBlob, jpegToPdf };
+    window.LayoutSheet = { buildSheetSvg, renderPng, renderPdf, saveBlob, jpegToPdf, pageFor, PRESETS, PAGES, LIMITS, PX_CM, qrPath, svgToCanvas, canvasToBlob, pageCm, clamp };
 }());
