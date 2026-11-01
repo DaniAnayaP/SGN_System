@@ -1475,6 +1475,8 @@ async function loadSheetData() {
     if (!data) return null;
     return { data, logoRatio: await logoRatioOf(data.logoDataUrl) };
 }
+// Con o sin medidas y m² para lo que se imprime: lo que se eligió en la ventana de descarga (si está abierta) o, si no, lo que se ve en el croquis.
+const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea };
 function buildSheetSvgFrom(loaded) {
     const { data, logoRatio } = loaded;
     return window.LayoutSheet.buildSheetSvg({
@@ -1483,7 +1485,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: state.steps.slice(), measures: state.showMeasures, area: state.showArea },
+        view: { layers: state.steps.slice(), measures: sheetView().measures, area: sheetView().area },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {
@@ -1501,6 +1503,9 @@ function ensureSheetModal() {
         <h3 id="layout-sheet-title">${esc(t('main.layoutDescargarTitulo'))}</h3>
         <div class="layout-sizebar layout-card-bar" data-help-key="layoutSheetSize"><div class="layout-sizebar-row"><span class="layout-sizebar-title">${esc(t('main.layoutHojaTamano'))}</span><div class="layout-presets" role="group" aria-label="${esc(t('main.layoutHojaTamano'))}">${presets}</div></div>
             <div class="layout-sizebar-row"><label>${esc(t('main.layoutHojaAncho'))}<input type="number" id="layout-size-w" min="6" max="120" step="0.1"></label><label>${esc(t('main.layoutHojaLargo'))}<input type="number" id="layout-size-h" min="6" max="120" step="0.1"></label><button type="button" class="btn btn-secondary" id="layout-size-swap">${esc(t('main.layoutHojaGirar'))}</button><label class="layout-check"><input type="checkbox" id="layout-size-cut"> ${esc(t('main.layoutHojaLinea'))}</label></div>
+            <div class="layout-sizebar-row layout-sheet-content" data-help-key="layoutSheetContent"><span class="layout-sizebar-title">${esc(t('main.layoutHojaContenido'))}</span>
+                <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-measures" data-sheet-tgl="measures" aria-pressed="true"><i class="bx bx-ruler" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConMedidas'))}</span></button>
+                <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-area" data-sheet-tgl="area" aria-pressed="true"><i class="bx bx-area" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConM2'))}</span></button></div>
             <div class="layout-sizebar-info" id="layout-size-info"></div></div>
         <div class="layout-sheet-preview layout-card-preview" id="layout-sheet-preview"></div>
         <div class="layout-fmt-footer"><button type="button" class="btn" id="layout-sheet-pdf" data-help-key="layoutQrPdf">${esc(t('main.layoutDescargarPdf'))}</button><button type="button" class="btn btn-secondary" id="layout-sheet-png" data-help-key="layoutQrPng">${esc(t('main.layoutDescargarPng'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-sheet-close">${esc(t('main.layoutFormatoCerrar'))}</button></div>
@@ -1508,6 +1513,14 @@ function ensureSheetModal() {
     document.body.appendChild(sheetModalEl);
     sheetModalEl.addEventListener('click', async (event) => {
         if (event.target === sheetModalEl || event.target.closest('#layout-sheet-close')) { closeSheetDialog(); return; }
+        // Con o sin medidas / m²: solo cambia lo que se imprime (la pantalla no se toca) y la vista previa se actualiza al momento.
+        const tgl = event.target.closest('[data-sheet-tgl]');
+        if (tgl && sheetDialog) {
+            sheetDialog.view[tgl.dataset.sheetTgl] = !sheetDialog.view[tgl.dataset.sheetTgl];
+            syncSheetToggles();
+            renderSheetPreview();
+            return;
+        }
         const pre = event.target.closest('[data-pre]');
         if (pre) {
             const p = window.LayoutSheet.PRESETS.find((x) => x[0] === pre.dataset.pre);
@@ -1536,12 +1549,30 @@ function ensureSheetModal() {
         renderSheetPreview();
     });
 }
+// Los dos iconos de la ventana (medidas y m²): solo salen si se tiene el icono correspondiente del árbol, igual que en el croquis.
+function syncSheetToggles() {
+    if (!sheetDialog || !sheetModalEl) return;
+    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer']].forEach(([key, perm, hideKey, showKey]) => {
+        const btn = sheetModalEl.querySelector(`[data-sheet-tgl="${key}"]`);
+        const allowed = !!(state.perms && state.perms[perm]);
+        btn.hidden = !allowed;
+        const on = sheetDialog.view[key];
+        btn.setAttribute('aria-pressed', String(on));
+        btn.classList.toggle('off', !on);
+        btn.setAttribute('aria-label', t(on ? hideKey : showKey));
+        btn.title = t(on ? hideKey : showKey);
+    });
+    // sin ninguno de los dos permisos no hay nada que elegir: la fila no se muestra
+    sheetModalEl.querySelector('.layout-sheet-content').hidden = !(state.perms && (state.perms.canToggleMeasures || state.perms.canToggleArea));
+}
 async function openSheetDialog(kind) {
     if (isDirty()) Dashboard.showToast(t('main.layoutDescargaGuardado'), 'info');
     const loaded = await loadSheetData();
     if (!loaded) return;
     ensureSheetModal();
-    sheetDialog = { kind, loaded };
+    // Al abrir, la hoja sale como se ve el croquis (con o sin medidas y m²); aquí mismo se puede cambiar solo para esta descarga.
+    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea } };
+    syncSheetToggles();
     $('layout-size-w').value = sheetSize.w;
     $('layout-size-h').value = sheetSize.h;
     $('layout-size-cut').checked = sheetSize.cut;
