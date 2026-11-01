@@ -6913,6 +6913,23 @@ app.delete('/api/business/code-relations/:id', requireAuth, (req, res) => {
     res.status(204).end();
 });
 
+// Verificador Código (SKU): la ficha de un artículo (sin fotos ni Control Interno) y DÓNDE ESTÁ, que sale de Relación Código (un renglón por cada lugar). Con sesión.
+app.get('/api/business/verificador/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const item = getSkuItemById(req.params.id, clientId, isTestAccount);
+    if (!item) return res.status(404).json({ message: 'Sku item not found.' });
+    const client = getClientById(clientId);
+    const full = mapSkuItemRecord(item, null, client?.company_name);
+    const article = {};
+    ['id', 'sku', 'upc', 'uniqueDescription', 'knownDescription', 'customDescription', 'mainUom', 'articleType', 'height', 'length', 'width', 'articleWeight', 'packageWeight',
+        'categoryInventario', 'categoryCompra', 'categoryAlmacenamiento', 'categoryRotacion', 'categoryManejo', 'categoryRiesgo', 'categoryVidautil'].forEach((key) => { article[key] = full[key]; });
+    const ctx = codeRelationContext(req);
+    const locations = listCodeRelations(clientId, isTestAccount).filter((r) => r.sku_item_id === item.id).map((r) => mapCodeRelation(r, null, client?.company_name, ctx));
+    res.set('Cache-Control', 'no-store');
+    res.json({ article, locations });
+});
+
 // --- "+ Solicitar nuevo X" -- catalog-value requests, generic across every
 // ARTICLE_CATEGORY_TYPES catalog (Tipos Cliente today, any future one
 // tomorrow). See catalog_value_requests' own DDL comment in db.js for the

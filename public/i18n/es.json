@@ -2177,6 +2177,11 @@
     "colCatDeleteAuth": "Autorización para Eliminar",
     "colCatCreateAuth": "Autorización para Crear",
     "newArticleCategory": "Nueva Categoría",
+    "vfPlaceholder": "Escribe o escanea un SKU, UPC o descripción",
+    "vfNoResults": "Sin resultados",
+    "vfWhere": "Dónde está",
+    "vfNoLocation": "Este código todavía no tiene ubicación en Relación Código.",
+    "vfLoadError": "No se pudo abrir el artículo.",
     "colArticuloTemplateAuth": "Autorización para Cargar por Plantilla",
     "noticeRecordsImported": "Carga por plantilla",
     "articuloOrigenAlta": "Origen del alta",
@@ -3166,8 +3171,16 @@
       "example": "escribes que la nave mide 48 por 28 metros y el croquis aparece solo."
     },
     "verificadorSkuEmpty": {
-      "what": "Aquí vas a verificar un código (SKU): escanearlo o buscarlo para ver qué artículo es, dónde está y, con sesión, lo demás de su ficha.",
-      "example": "escaneas el UPC de una caja y ves qué artículo es y en qué anaquel está."
+      "what": "Busca o escanea un código (SKU, UPC o descripción) para ver qué artículo es y dónde está. Un lector de código de barras escribe en el campo como un teclado.",
+      "example": "escaneas el UPC de una caja y ves qué artículo es y en qué estante, nivel y espacio está."
+    },
+    "verificadorFicha": {
+      "what": "La ficha del artículo: sus descripciones, unidad, tipo, medidas, pesos y las 7 categorías. Lo que está vacío sale con un guion.",
+      "example": "ves que es una caja de 4 × 11 × 6 cm de la categoría Medicamento."
+    },
+    "verificadorUbicacion": {
+      "what": "Los lugares donde está este código, tomados de Relación Código: un renglón por lugar, con la ruta completa desde el centro de costos hasta el espacio. «Ubicado» es que ya se sabe el espacio exacto (o que es un sub almacén virtual); «A medias» es que falta completarlo.",
+      "example": "está en CEDIS Monterrey › Almacén General › Medicamentos › Zona 1 › R-01 › Nivel 2 › Espacio 3."
     },
     "layoutSteps": {
       "what": "Los pasos para armar el Layout, como capas. Toca un paso para verlo en el croquis y editarlo: abajo solo sale lo del paso que tocaste. Puedes dejar varios activos a la vez y el croquis muestra la nave más todos ellos. Para ocultar un paso, tócalo otra vez cuando sea el que estás editando.",

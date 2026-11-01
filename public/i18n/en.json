@@ -2178,6 +2178,11 @@
     "colCatDeleteAuth": "Delete Authorization",
     "colCatCreateAuth": "Create Authorization",
     "newArticleCategory": "New Category",
+    "vfPlaceholder": "Type or scan a SKU, UPC or description",
+    "vfNoResults": "No matches",
+    "vfWhere": "Where it is",
+    "vfNoLocation": "This code has no location in Code Relation yet.",
+    "vfLoadError": "The article could not be opened.",
     "colArticuloTemplateAuth": "Authorization to Load by Template",
     "noticeRecordsImported": "Template load",
     "articuloOrigenAlta": "Origin of the record",
@@ -3167,8 +3172,16 @@
       "example": "you type that the warehouse is 48 by 28 meters and the map appears by itself."
     },
     "verificadorSkuEmpty": {
-      "what": "Here you verify a code (SKU): scan it or search for it to see which article it is, where it is and, when signed in, the rest of its sheet.",
-      "example": "you scan the UPC of a box and see which article it is and which rack it is on."
+      "what": "Search or scan a code (SKU, UPC or description) to see which article it is and where it is. A barcode reader types into the field like a keyboard.",
+      "example": "you scan the UPC of a box and see which article it is and on which rack, level and slot it is."
+    },
+    "verificadorFicha": {
+      "what": "The article card: its descriptions, unit, type, measurements, weights and the 7 categories. Empty values show a dash.",
+      "example": "you see it is a 4 × 11 × 6 cm box of the Medicine category."
+    },
+    "verificadorUbicacion": {
+      "what": "The places where this code is, taken from Code Relation: one line per place, with the full route from cost center down to slot. \"Located\" means the exact slot is known (or it is a virtual sub-warehouse); \"Partial\" means it still needs completing.",
+      "example": "it is in CEDIS Monterrey › General Warehouse › Medicines › Zone 1 › R-01 › Level 2 › Slot 3."
     },
     "layoutSteps": {
       "what": "The steps to build the Layout, like layers. Tap a step to see it on the sketch and edit it: only the step you tapped shows below. You can keep several on at once and the sketch shows the outline plus all of them. To hide a step, tap it again while it is the one you are editing.",
