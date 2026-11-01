@@ -27,7 +27,7 @@
         zonas: 'colLayoutZonas',
         espacios: 'colLayoutEspacios',
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -501,10 +501,13 @@
             const zoneId = typeof (s && s.zoneId) === 'string' && zoneIds.has(s.zoneId) ? s.zoneId : '';
             const type = oneOf(s && s.type, SPACE_TYPES, 'rack');
             const levels = Math.round(Number(s && s.levels));
+            // Espacios por nivel (el hueco dentro de un nivel): solo se guarda si hay más de uno.
+            const slots = Math.round(Number(s && s.slots));
             return {
                 id: idOf(s && s.id, spaceIds, label), type, code, zoneId,
                 x: meters(s && s.x, label, -LIMITS.maxM), y: meters(s && s.y, label, -LIMITS.maxM), l: meters(s && s.l, label), d: meters(s && s.d, label), h: meters(s && s.h, label),
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
+                ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
                 drawers: text(s && s.drawers, label, false), active: !(s && s.active === false),
             };
         });

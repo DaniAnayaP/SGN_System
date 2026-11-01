@@ -1617,6 +1617,7 @@
     "layoutCodigo": "Código",
     "layoutZona": "Zona",
     "layoutNiveles": "Niveles",
+    "layoutEspaciosNivel": "Espacios por nivel",
     "layoutCajones": "Cajones (filas × columnas)",
     "layoutHuellaVolumen": "Huella y volumen",
     "layoutAgregarEspacio": "+ Agregar espacio",

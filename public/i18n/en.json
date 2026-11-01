@@ -1617,6 +1617,7 @@
     "layoutCodigo": "Code",
     "layoutZona": "Zone",
     "layoutNiveles": "Levels",
+    "layoutEspaciosNivel": "Spaces per level",
     "layoutCajones": "Drawers (rows × columns)",
     "layoutHuellaVolumen": "Footprint and volume",
     "layoutAgregarEspacio": "+ Add space",

@@ -406,9 +406,9 @@ function stepHtml(step) {
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
         const saved = isSavedRow('spaces', s.id);
-        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellSelect('spaces', i, 'type', optionsHtml('space', LC.SPACE_TYPES, s.type), dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}${cellNum('spaces', i, 'levels', s.levels, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis) : removeCell('spaces', i, dis)}</tr>`;
+        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellSelect('spaces', i, 'type', optionsHtml('space', LC.SPACE_TYPES, s.type), dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}${cellNum('spaces', i, 'levels', s.levels, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis) : removeCell('spaces', i, dis)}</tr>`;
     });
-    return `${table(['main.layoutTipo', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutNiveles', 'main.layoutCajones', 'main.layoutHuellaVolumen', ''], rows)}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
+    return `${table(['main.layoutTipo', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', 'main.layoutHuellaVolumen', ''], rows)}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
 }
 
 // Los pasos son capas del croquis: se pueden tener activos varios a la vez y el croquis muestra siempre la nave más lo de los pasos activos. Abajo solo sale el formulario del
@@ -782,6 +782,9 @@ function onEdit(event) {
             syncZoneBox(row);
         } else if (key === 'planM2') {
             if (value > 0) row.planM2 = value; else delete row.planM2;
+        } else if (key === 'slots') {
+            const n = Math.max(1, Math.round(value) || 1);
+            if (n > 1) row.slots = Math.min(n, LC.LIMITS.slots); else delete row.slots;
         } else row[key] = (key === 'wall' || key === 'levels') ? Math.max(1, Math.round(value) || 1) : value;
         if (list === 'spaces' && key === 'type' && /^[RGT]-\d+$/i.test(row.code) && !isSavedRow('spaces', row.id)) {
             // un código sin guardar y con forma automática (R-01) sigue al tipo
