@@ -1572,7 +1572,7 @@
     "layoutQrSinPermiso": "You do not have permission to use the Layout QR.",
     "layoutQrSinLayout": "There is no saved Layout yet.",
     "layoutHojaArea": "Distribution Center · Supply Chain",
-    "layoutHojaTitulo": "Warehouse Layout",
+    "layoutHojaTitulo": "Layout",
     "layoutHojaAltura": "clear height",
     "layoutHojaEspacios": "storage spaces",
     "layoutHojaKpiTotal": "Total area",
@@ -1626,6 +1626,7 @@
     "layoutAgregarZona": "+ Add zone",
     "layoutCodigo": "Code",
     "layoutZona": "Zone",
+    "layoutTipoZona": "Zone type",
     "layoutNiveles": "Levels",
     "layoutEspaciosNivel": "Spaces per level",
     "layoutCajones": "Drawers (rows × columns)",
@@ -1690,6 +1691,12 @@
     "layoutMedidasBtn": "Show and hide measures",
     "layoutMedidasOcultar": "Hide measures",
     "layoutMedidasVer": "Show measures",
+    "layoutAreaBtn": "Show and hide the m² of the zones",
+    "layoutAreaOcultar": "Hide m²",
+    "layoutAreaVer": "Show m²",
+    "layoutFiltrosBtn": "Layout table filters",
+    "layoutFiltroQuitar": "Clear filters",
+    "layoutFiltroNota": "Filtering: showing {shown} of {total} rows",
     "layoutFormatoZonaBtn": "Zone format (color, stripes and border)",
     "layoutFormatoZona": "Zone format",
     "layoutFormatoRelleno": "Fill",
@@ -2624,6 +2631,23 @@
     "articuloScanTitle": "Scan UPC",
     "articuloScanHint": "Point the camera at the barcode",
     "articuloScanManual": "Type it in instead",
+    "relappSearch": "Search by SKU, UPC, description or location",
+    "relappEmpty": "There are no relations yet.",
+    "relappScan": "Scan the barcode",
+    "relappNotFound": "Code {code} is not in Article Setup.",
+    "relappPending": "{n} saved on your phone, waiting for signal",
+    "relappRejectedTitle": "Not applied",
+    "relappRejectedOk": "Got it",
+    "relappFailedRows": "{n} rows were not loaded",
+    "relappDelete": "Delete relation",
+    "relappDeleteConfirm": "Delete this relation?",
+    "relappNoCatalogs": "The catalogs have not been downloaded yet. Open this screen once with signal.",
+    "tplappShare": "Share the Excel template",
+    "tplappDownloadHint": "If it did not save here, download the template from the Web version.",
+    "tplappQueued": "It will be loaded when there is signal.",
+    "tplappCopyRows": "Copy the rows that were not loaded",
+    "tplappCopied": "Copied: paste them into Excel.",
+    "tplappNeedCatalogs": "The catalogs have not been downloaded yet. Open this screen once with signal.",
     "articuloScanCameraError": "Couldn't access the camera. Type the code in by hand.",
     "articuloScanDetected": "Code detected — filling the field...",
     "articuloHintDescUnica": "Full, unique description of the article",
@@ -3352,8 +3376,16 @@
       "example": "you type 10.5 by 14.8 for a card: it comes out on a Letter page with the card drawn with a dashed line, ready to cut."
     },
     "layoutMeasures": {
-      "what": "Shows or hides the measures on the sketch: the length of each wall, the height of each corner and the measure of each zone side. The name and m² of each zone stay. It only changes what you see on screen; the downloaded sheet and the QR keep their measures.",
+      "what": "Shows or hides the measures on the sketch: the length of each wall, the height of each corner and the measure of each zone side. The name and m² of each zone stay (to remove the m² use the icon next to it). The downloaded sheet comes out as you see it; the public QR view does not change.",
       "example": "you hide the measures when the sketch looks crowded with numbers and show them again to check a side."
+    },
+    "layoutArea": {
+      "what": "Shows or hides the m² under each zone name on the sketch. The name stays. The downloaded sheet (PDF or image) comes out as you see it; the public QR view does not change and the zones table still shows the surface.",
+      "example": "you hide the m² so the sketch only shows the zone names and show them again to check how big each one is."
+    },
+    "layoutFilterClear": {
+      "what": "Removes every filter from this table and shows all its rows again. Filters are set with the funnel in each header, like in the other tables.",
+      "example": "you filtered the Type column to see only aisles; when you are done, Clear filters brings back all the zones."
     },
     "layoutZoneFmt": {
       "what": "Opens this zone's format, like Excel's Format Cells: background color, stripes or pattern, and border style and color. Without its own format, the zone uses its type color.",
@@ -3436,7 +3468,7 @@
       "example": "you entered something by mistake and go back to how it was."
     },
     "layoutSummary": {
-      "what": "A summary of each zone: its m², how many spaces it has, how much floor they take and how many storage m³ there are.",
+      "what": "A summary of each zone: its name and its zone type (each in its own column), its m², how many spaces it has, how much floor they take and how many storage m³ there are.",
       "example": "you see that Zone A is 25% occupied by its racks."
     },
     "layoutPlanWidth": {

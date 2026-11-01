@@ -56,14 +56,6 @@
         const layers = Array.isArray(view.layers) ? view.layers : null;
         const on = (key) => !layers || layers.includes(key);
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
-        const xs = data.layout.vertices.map((p) => p[0]);
-        const ys = data.layout.vertices.map((p) => p[1]);
-        const dims = `${fmt(Math.max(...xs) - Math.min(...xs), lang)} × ${fmt(Math.max(...ys) - Math.min(...ys), lang)} m`;
-        const hs = data.layout.vertices.map((p) => Number(p[2])).filter((h) => Number.isFinite(h));
-        const hMin = Math.min(...hs);
-        const hMax = Math.max(...hs);
-        const heightText = hMin === hMax ? `${fmt(hMin, lang)} m` : `${fmt(hMin, lang)} – ${fmt(hMax, lang)} m`;
-        const meta = `${dims} · ${labels.height} ${heightText}${on('espacios') ? ` · ${data.layout.spaces.length} ${labels.spaces}` : ''}`;
         const allCards = [
             [`${fmt(k.total, lang)} m²`, labels.kpiTotal], [`${fmt(k.offices, lang)} m²`, labels.kpiOffices], [`${fmt(k.aisles, lang)} m²`, labels.kpiAisles],
             [`${fmt(k.docks, lang)} m²`, labels.kpiDocks], [`${fmt(k.storage, lang)} m²`, labels.kpiStorage], [`${fmt(k.dead, lang)} m²`, labels.kpiDead], [`${fmt(k.volume, lang)} m³`, labels.kpiVolume],
@@ -77,8 +69,9 @@
         const logoW = data.logoDataUrl ? bs * clamp(Number(data.logoRatio) || 1, 0.5, 2.4) : bs;
         if (data.logoDataUrl) s += `<image href="${data.logoDataUrl}" x="${m}" y="${m}" width="${logoW.toFixed(2)}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
         else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${18 * f}" fill="${C.badge}"/><text x="${m + bs / 2}" y="${m + bs * 0.667}" font-size="${36 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(initials)}</text>`;
-        s += `<text x="${m + logoW + 20 * f}" y="${m + 38 * f}" font-size="${nameSize}" font-weight="700" fill="${C.ink}">${esc(data.companyName)}</text><text x="${m + logoW + 20 * f}" y="${m + 70 * f}" font-size="${21 * f}" fill="#3F435D">${esc(labels.area)}</text>`;
-        s += `<text x="${m}" y="${m + 157 * f}" font-size="${(tiny ? 42 : 58) * f}" font-weight="700" fill="${C.ink}">${esc(labels.title)}</text><text x="${m}" y="${m + 195 * f}" font-size="${(tiny ? 19 : 23) * f}" fill="#3F435D">${esc(meta)}</text>`;
+        // Arriba el Sitio (data.siteName: hoy un texto escrito a mano; después saldrá de la configuración) y abajo el nombre de la compañía.
+        s += `<text x="${m + logoW + 20 * f}" y="${m + 30 * f}" font-size="${21 * f}" fill="#3F435D">${esc(data.siteName || labels.area)}</text><text x="${m + logoW + 20 * f}" y="${m + 70 * f}" font-size="${nameSize}" font-weight="700" fill="${C.ink}">${esc(data.companyName)}</text>`;
+        s += `<text x="${m}" y="${m + 157 * f}" font-size="${(tiny ? 42 : 58) * f}" font-weight="700" fill="${C.ink}">${esc(labels.title)}</text>`;
         const qs = clamp(230 * f, 70, Math.min(H * 0.22, W * 0.26));
         const qy = 40 * f;
         s += qrPath(data.qrRows, W - m - qs, qy, qs, C.ink, 3 * f);
@@ -88,7 +81,7 @@
             s += `<text x="${W - m - qs - 20 * f}" y="${qy + qs - 52 * f}" font-size="${19 * f}" fill="#3F435D" text-anchor="end">${esc(labels.fixed)}</text>`;
         }
         const urlY = qy + qs + 22 * f;
-        s += `<text x="${W - m}" y="${urlY}" font-size="${14 * f}" font-family="Consolas, Menlo, monospace" fill="#6B7089" text-anchor="end">${esc(data.url)}</text>`;
+        // La dirección del QR ya no se escribe debajo del código (urlY solo deja el mismo espacio de siempre).
         const ruleY = Math.max(urlY + 14 * f, m + 195 * f + 42 * f);
         s += `<line x1="${m}" y1="${ruleY}" x2="${W - m}" y2="${ruleY}" stroke="${C.rule}" stroke-width="${3 * f}"/>`;
         const top = ruleY + 20 * f;
@@ -154,7 +147,7 @@
         const innerW = frameW - 20 * f;
         const innerH = frameH - 20 * f;
         const h700 = Math.max(120, Math.round((700 * innerH) / Math.max(innerW, 1)));
-        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false, area: view.area !== false }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
         s += `<svg x="${frameX + 10 * f}" y="${top + 10 * f}" width="${innerW}" height="${innerH}" viewBox="0 0 700 ${h700}" preserveAspectRatio="xMidYMid meet">${mapInner}</svg>`;
         legPos.forEach(({ item: [key, text, zone], x, row }) => {
             if (tiny) return;
@@ -200,7 +193,7 @@
         return `${s}</g></svg>`;
     }
 
-    // data: { companyName, logoDataUrl, logoRatio, view: { layers, measures }, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
+    // data: { companyName, siteName (el Sitio que va arriba del nombre; sin él sale labels.area), logoDataUrl, logoRatio, view: { layers, measures }, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
     // options: { widthCm, heightCm, cut } (el espacio que se imprime y si se dibuja la línea punteada para recortar).
     function buildSheetSvg(data, labels, lang, options = {}) {
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));

@@ -13,7 +13,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, showMeasures: true, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
+    saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -85,8 +85,45 @@ function cellText(list, i, key, value, disabled) {
 function cellSelect(list, i, key, optionsMarkup, disabled) {
     return `<td><select data-l="${list}" data-i="${i}" data-k="${key}"${disabled ? ' disabled' : ''}>${optionsMarkup}</select></td>`;
 }
-function table(headKeys, rows) {
-    return `<div class="layout-scroll"><table class="layout-table"><thead><tr>${headKeys.map((k) => `<th>${k ? esc(t(k)) : ''}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+// filterId: la tabla lleva en cada encabezado el embudo de filtros (el mismo menú de todas las tablas, ver bindLayoutFilters) para quien tiene el icono Filtros en el árbol.
+function table(headKeys, rows, filterId) {
+    const filterable = !!(filterId && state.perms && state.perms.canFilterTables);
+    const head = headKeys.map((k) => `<th${filterable && k ? ` data-col="${esc(k)}" class="layout-th-filter"` : ''}>${k ? esc(t(k)) : ''}</th>`).join('');
+    const note = filterable ? `<div class="layout-filter-note" data-filter-note="${filterId}" hidden><span></span><button type="button" class="btn btn-secondary layout-toggle" data-filter-clear="${filterId}" data-help-key="layoutFilterClear">${esc(t('main.layoutFiltroQuitar'))}</button></div>` : '';
+    return `${note}<div class="layout-scroll"><table class="layout-table"${filterable ? ` data-filter-table="${filterId}"` : ''}><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+}
+// Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
+// panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
+const FILTER_TABLE_IDS = ['layout-zonas'];
+function bindLayoutFilters() {
+    if (!window.Dashboard || !Dashboard.bindExternalColumnFilters) return;
+    document.querySelectorAll('#layout-panel table[data-filter-table]').forEach((tbl) => {
+        const id = tbl.dataset.filterTable;
+        const keys = Array.from(tbl.tHead.rows[0].cells).map((th) => th.dataset.col || '');
+        Array.from(tbl.tBodies[0].rows).forEach((tr) => {
+            Array.from(tr.cells).forEach((td, i) => {
+                if (!keys[i]) return;
+                td.dataset.col = keys[i];
+                if (td.querySelector('input, select')) td.dataset.filterFrom = 'control';
+                else if (td.querySelector('[data-zone-area]')) td.dataset.filterFrom = '[data-zone-area]';
+            });
+        });
+        Dashboard.bindExternalColumnFilters(id, tbl);
+        const note = tbl.closest('.layout-section')?.querySelector(`[data-filter-note="${id}"]`);
+        if (!note) return;
+        const refresh = () => {
+            const rows = Array.from(tbl.tBodies[0].rows);
+            const hidden = rows.filter((tr) => tr.classList.contains('data-table-row-col-filtered')).length;
+            note.hidden = !tbl.querySelector('th.data-table-col-filter-active');
+            note.firstElementChild.textContent = t('main.layoutFiltroNota').replace('{shown}', String(rows.length - hidden)).replace('{total}', String(rows.length));
+        };
+        refresh();
+        new MutationObserver(refresh).observe(tbl, { attributes: true, attributeFilter: ['class'], subtree: true });
+    });
+}
+// Una fila nueva siempre se ve: al agregarla se quitan los filtros de la tabla.
+function clearLayoutFilters() {
+    if (window.Dashboard && Dashboard.clearExternalColumnFilters) FILTER_TABLE_IDS.forEach((id) => Dashboard.clearExternalColumnFilters(id));
 }
 const removeCell = (list, i, disabled, extra = '') => {
     const button = `<button type="button" class="layout-x" data-del="${list}:${i}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${disabled ? ' disabled' : ''}>✕</button>`;
@@ -401,7 +438,7 @@ function stepHtml(step) {
             const planBox = `<td><input type="number" step="0.01" min="0" data-l="zones" data-i="${i}" data-k="planM2" data-help-key="layoutZonePlanM2" value="${z.planM2 > 0 ? z.planM2 : ''}"${dis ? ' disabled' : ''}></td>`;
             return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
         });
-        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows)}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
+        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
@@ -438,6 +475,7 @@ function renderPanel() {
         ${stepHtml(s)}
     </div>`;
     $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${tabs}</div>${section}`;
+    bindLayoutFilters();
 }
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
@@ -481,7 +519,7 @@ function renderSvg() {
                     ? `<g class="lzf${z.active === false ? ' lz-off' : ''}${draggable ? ' lz-drag' : ''}" data-zid="${esc(z.id)}">${window.LayoutMapSvg.zonePaint(`ef-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' '))}${title}</g>`
                     : `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
                 const a = LC.zoneLabelAnchor(z);
-                zoneLabels += `<text class="lt" x="${X(a.x)}" y="${Y(a.y) - 1}" text-anchor="middle">${esc(z.name)}</text><text class="lt2" x="${X(a.x)}" y="${Y(a.y) + 10}" text-anchor="middle">${fmt(LC.zoneArea(z))} m²</text>`;
+                zoneLabels += `<text class="lt" x="${X(a.x)}" y="${Y(a.y) - 1}" text-anchor="middle">${esc(z.name)}</text>${state.showArea ? `<text class="lt2" x="${X(a.x)}" y="${Y(a.y) + 10}" text-anchor="middle">${fmt(LC.zoneArea(z))} m²</text>` : ''}`;
                 if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureLabels += measureText(z.pts, 30);
             } else if (z.pts.length) {
                 if (z.pts.length > 1) s += `<polyline class="lz-open" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
@@ -497,7 +535,7 @@ function renderSvg() {
         const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
         const anchor = spot.right ? 'end' : 'start';
         zoneLabels += `<text class="lt" x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(z.name)}</text>`;
-        if (z.w * sc > 26) zoneLabels += `<text class="lt2" x="${tx}" y="${ty + 11}" text-anchor="${anchor}">${fmt(z.l * z.w)} m²</text>`;
+        if (state.showArea && z.w * sc > 26) zoneLabels += `<text class="lt2" x="${tx}" y="${ty + 11}" text-anchor="${anchor}">${fmt(z.l * z.w)} m²</text>`;
         if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureLabels += measureText(LC.zonePoints(z), 30);
     });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
@@ -539,9 +577,9 @@ function renderSvg() {
 
 function renderSummary() {
     const k = LC.computeKpis(state.draft);
-    const rows = k.zones.map((z) => `<tr><td>${esc(z.name)} · ${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
+    const rows = k.zones.map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
     $('layout-summary').innerHTML = rows.length
-        ? `<table class="layout-table layout-summary-table"><thead><tr><th>${esc(t('main.layoutZona'))}</th><th>${esc(t('main.layoutSuperficie'))}</th><th>${esc(t('main.layoutEspacios'))}</th><th>${esc(t('main.layoutHuella'))}</th><th>${esc(t('main.layoutOcupacion'))}</th><th>${esc(t('main.layoutVolumen'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
+        ? `<table class="layout-table layout-summary-table"><thead><tr><th>${esc(t('main.layoutZona'))}</th><th>${esc(t('main.layoutTipoZona'))}</th><th>${esc(t('main.layoutSuperficie'))}</th><th>${esc(t('main.layoutEspacios'))}</th><th>${esc(t('main.layoutHuella'))}</th><th>${esc(t('main.layoutOcupacion'))}</th><th>${esc(t('main.layoutVolumen'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
         : `<p class="layout-muted">${esc(t('main.layoutSinZonas'))}</p>`;
 }
 
@@ -604,9 +642,26 @@ $('layout-measures-btn').addEventListener('click', () => {
     updateMeasuresBtn();
     if (state.draft) renderSvg();
 });
+// Icono Ver / ocultar los m² de cada zona: igual que el de medidas (se recuerda en este navegador, solo lo ve quien lo tiene en el árbol y la hoja que se descarga sale como se ve).
+const AREA_KEY = 'sgn_layout_area';
+function updateAreaBtn() {
+    const btn = $('layout-area-btn');
+    btn.hidden = !(state.perms && state.perms.canToggleArea);
+    btn.setAttribute('aria-pressed', String(state.showArea));
+    btn.classList.toggle('off', !state.showArea);
+    btn.setAttribute('aria-label', t(state.showArea ? 'main.layoutAreaOcultar' : 'main.layoutAreaVer'));
+}
+try { state.showArea = localStorage.getItem(AREA_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se ven */ }
+$('layout-area-btn').addEventListener('click', () => {
+    state.showArea = !state.showArea;
+    try { localStorage.setItem(AREA_KEY, state.showArea ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+    updateAreaBtn();
+    if (state.draft) renderSvg();
+});
 function showEditor() {
     updateQrMenu();
     updateMeasuresBtn();
+    updateAreaBtn();
     $('layout-empty').hidden = true;
     $('layout-plan-width').hidden = true;
     $('layout-editor').hidden = false;
@@ -878,7 +933,10 @@ $('layout-panel').addEventListener('click', (event) => {
     }
     const sidesOpen = event.target.closest('[data-sidesopen]');
     if (sidesOpen) { state.zoneOpen = state.zoneOpen === sidesOpen.dataset.sidesopen ? null : sidesOpen.dataset.sidesopen; renderPanel(); return; }
+    const filterClear = event.target.closest('[data-filter-clear]');
+    if (filterClear) { Dashboard.clearExternalColumnFilters(filterClear.dataset.filterClear); return; }
     if (event.target.closest('[data-add="zonesFree"]')) {
+        clearLayoutFilters();
         // Zona nueva de forma libre: solo su primera esquina; sus lados se escriben después. Empieza sin zona asignada.
         const xs = state.draft.vertices.map((p) => p[0]);
         const ys = state.draft.vertices.map((p) => p[1]);
@@ -895,6 +953,7 @@ $('layout-panel').addEventListener('click', (event) => {
     const add = event.target.closest('[data-add]');
     if (add) {
         const list = add.dataset.add;
+        if (list === 'zones') clearLayoutFilters();
         state.draft[list].push(ROW_FACTORY[list]());
         if (list === 'vertices') state.open.contorno = false;
         renderPanel();
@@ -1329,11 +1388,12 @@ async function loadSheetData() {
 function buildSheetSvgFrom(loaded) {
     const { data, logoRatio } = loaded;
     return window.LayoutSheet.buildSheetSvg({
-        companyName: data.companyName, logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
+        // Sitio: por ahora el texto de siempre, escrito a mano; después se llenará de la configuración (aquí es donde se conecta).
+        companyName: data.companyName, siteName: t('main.layoutHojaArea'), logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: state.steps.slice(), measures: state.showMeasures },
+        view: { layers: state.steps.slice(), measures: state.showMeasures, area: state.showArea },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {

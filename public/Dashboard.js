@@ -3191,7 +3191,8 @@ function applyDataTableColumnLayout(tableId) {
 // the wrapper grew, leaving the same blank-strip bug back the moment the
 // window or sidebar changed size.
 function resizeAllDataTables() {
-    dataTableColumnState.forEach((_, tableId) => applyDataTableColumnLayout(tableId));
+    // Las tablas externas (ver bindExternalColumnFilters) no tienen columnas que repartir: solo filtran.
+    dataTableColumnState.forEach((state, tableId) => { if (!state.external) applyDataTableColumnLayout(tableId); });
 }
 window.addEventListener('resize', resizeAllDataTables);
 
@@ -3669,6 +3670,19 @@ function attachSortHandler(th, tableId) {
 let dataTableFilterMenuEl = null;
 let dataTableFilterMenuTableId = null;
 
+// El valor de una celda al filtrar: su texto. Una celda con data-filter-from dice de dónde sale en vez de eso: "control" = lo que tiene escrito o elegido el
+// campo (input o select) de adentro, o un selector = el texto de ese elemento de adentro. Así una tabla de captura (como la del Layout) filtra por lo que muestra.
+function cellFilterValue(td) {
+    const from = td?.dataset?.filterFrom;
+    if (!from) return td.textContent.trim();
+    if (from === 'control') {
+        const field = td.querySelector('input, select');
+        if (!field) return td.textContent.trim();
+        return (field.tagName === 'SELECT' ? (field.options[field.selectedIndex]?.text || '') : field.value).trim();
+    }
+    return (td.querySelector(from)?.textContent || '').trim();
+}
+
 function getColumnDistinctValues(tableId, key) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return [];
@@ -3676,7 +3690,7 @@ function getColumnDistinctValues(tableId, key) {
     Array.from(state.table.tBodies[0]?.rows || []).forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         const td = tr.querySelector(`[data-col="${key}"]`);
-        if (td) values.add(td.textContent.trim());
+        if (td) values.add(cellFilterValue(td));
     });
     return Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 }
@@ -4022,7 +4036,7 @@ function countRuleRows(tableId, key, rule, selected) {
     let matching = 0;
     rows.forEach((tr) => {
         const td = tr.querySelector(`[data-col="${key}"]`);
-        const value = td ? td.textContent.trim() : '';
+        const value = td ? cellFilterValue(td) : '';
         if ((!selected.size || selected.has(value)) && columnRuleMatches(rule, value)) matching += 1;
     });
     return { matching, total: rows.length };
@@ -4047,11 +4061,11 @@ function applyColumnValueFilters(tableId) {
         let visible = true;
         state.columnFilters.forEach((selectedSet, key) => {
             const td = tr.querySelector(`[data-col="${key}"]`);
-            if (!selectedSet.has(td ? td.textContent.trim() : '')) visible = false;
+            if (!selectedSet.has(td ? cellFilterValue(td) : '')) visible = false;
         });
         state.columnRules.forEach((rule, key) => {
             const td = tr.querySelector(`[data-col="${key}"]`);
-            if (!columnRuleMatches(rule, td ? td.textContent.trim() : '')) visible = false;
+            if (!columnRuleMatches(rule, td ? cellFilterValue(td) : '')) visible = false;
         });
         tr.classList.toggle('data-table-row-col-filtered', !visible);
     });
@@ -4430,7 +4444,7 @@ document.addEventListener('keydown', (event) => {
 // permanently skip re-adding it; re-attaching from a fresh
 // dashboard:language-changed pass (see below) is what keeps it alive.
 function attachColumnFilterTrigger(th, tableId) {
-    if (th.dataset.col === 'actions') return; // nothing meaningful to filter by in this column
+    if (!th.dataset.col || th.dataset.col === 'actions') return; // nothing meaningful to filter by in this column
     if (!hasColumnSearchGrant(tableId, th.dataset.col, 'filter')) return;
     if (th.querySelector('.data-table-col-filter-trigger')) return;
     const btn = document.createElement('button');
@@ -4450,6 +4464,45 @@ document.addEventListener('dashboard:language-changed', () => {
         Array.from(getHeaderRow(state.table)?.cells || []).forEach((th) => attachColumnFilterTrigger(th, tableId));
     });
 });
+
+// Tablas de captura que no son .data-table (la del Layout se dibuja completa otra vez en cada cambio): se les pone el mismo embudo en el encabezado y el mismo menú de
+// filtros de todas las tablas. Cada vez que la tabla se dibuja de nuevo se llama otra vez con la tabla nueva: los filtros puestos viven aquí, no en la tabla, así que
+// se conservan y se vuelven a aplicar. La tabla trae sus <th> con data-col y sus celdas con data-col (y data-filter-from si el valor está en un campo, ver cellFilterValue).
+// Devuelve cuántas columnas tienen un filtro puesto.
+function bindExternalColumnFilters(tableId, table) {
+    if (!table?.tHead) return 0;
+    let state = dataTableColumnState.get(tableId);
+    if (!state) {
+        state = { external: true, columnFilters: new Map(), columnRules: new Map(), panelDrafts: new Map() };
+        dataTableColumnState.set(tableId, state);
+    }
+    state.table = table;
+    state.wrapper = table.parentElement;
+    state.columnKeys = getDataTableColumnKeys(table);
+    state.labels = {};
+    const headers = Array.from(getHeaderRow(table).cells);
+    headers.forEach((th) => {
+        if (th.dataset.col) state.labels[th.dataset.col] = th.textContent.trim();
+        attachColumnFilterTrigger(th, tableId);
+    });
+    [state.columnFilters, state.columnRules].forEach((filters) => {
+        Array.from(filters.keys()).forEach((key) => { if (!state.columnKeys.includes(key)) filters.delete(key); });
+    });
+    applyColumnValueFilters(tableId);
+    headers.forEach((th) => updateColumnFilterIndicator(th, state.columnFilters.has(th.dataset.col) || state.columnRules.has(th.dataset.col)));
+    return new Set([...state.columnFilters.keys(), ...state.columnRules.keys()]).size;
+}
+
+// Quita todos los filtros de una tabla externa y la deja completa.
+function clearExternalColumnFilters(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state?.external) return;
+    state.columnFilters.clear();
+    state.columnRules.clear();
+    closeColumnFilterMenu();
+    applyColumnValueFilters(tableId);
+    getHeaderRow(state.table).querySelectorAll('th.data-table-col-filter-active').forEach((th) => th.classList.remove('data-table-col-filter-active'));
+}
 
 // One-time-per-table setup. Gated behind a ResizeObserver (rather than
 // running straight from initDashboard()) because a table can be inside a
@@ -12726,6 +12779,8 @@ window.Dashboard = {
     hasColumnEditGrant,
     hasColumnDeleteGrant,
     hasScreenGrant,
+    bindExternalColumnFilters,
+    clearExternalColumnFilters,
     canEditField,
     openChangeHistory,
     hasSaasScreenGrant,

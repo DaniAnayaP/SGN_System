@@ -6152,6 +6152,9 @@ function layoutPermissions(req) {
         canFormatZones: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoZona'),
         // Ver u ocultar las medidas del croquis es solo de pantalla, pero también es un icono con su propia hoja en el árbol (iconLayoutMedidas).
         canToggleMeasures: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutMedidas'),
+        // Ver u ocultar los m² de cada zona en el croquis (y en la hoja que se descarga) es otro icono con su hoja (iconLayoutArea); los filtros de las tablas del panel, otro (iconLayoutFiltros).
+        canToggleArea: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutArea'),
+        canFilterTables: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFiltros'),
         // Las categorías de las zonas se capturan con el icono Categorías de la zona y su tarjeta con QR se baja con el icono Tarjeta de categorías (hojas <pantalla>/iconLayoutCategorias e iconLayoutTarjeta).
         canEditCategories: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCategorias'),
         canUseCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjeta'),
@@ -6850,9 +6853,11 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
 app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const term = String(req.query.q || '').slice(0, 80);
+    // all=1 (la App): hasta 5000 códigos, ligeros, para buscar y escanear sin señal.
+    const limit = req.query.all === '1' ? 5000 : 20;
     res.set('Cache-Control', 'no-store');
     res.json({
-        skus: searchSkuItems(req.user.clientId, term, req.user.isTestAccount).map((s) => ({
+        skus: searchSkuItems(req.user.clientId, req.query.all === '1' ? '' : term, req.user.isTestAccount, limit).map((s) => ({
             id: s.id, sku: padSku(s.record_number), upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', uom: s.main_uom || '',
         })),
     });

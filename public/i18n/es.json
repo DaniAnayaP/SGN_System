@@ -1572,7 +1572,7 @@
     "layoutQrSinPermiso": "No tienes permiso para usar el QR del Layout.",
     "layoutQrSinLayout": "Todavía no hay un Layout guardado.",
     "layoutHojaArea": "C. Distribución · Cadena de Suministro",
-    "layoutHojaTitulo": "Layout de la nave",
+    "layoutHojaTitulo": "Layout",
     "layoutHojaAltura": "altura libre",
     "layoutHojaEspacios": "espacios de almacenamiento",
     "layoutHojaKpiTotal": "Superficie total",
@@ -1626,6 +1626,7 @@
     "layoutAgregarZona": "+ Agregar zona",
     "layoutCodigo": "Código",
     "layoutZona": "Zona",
+    "layoutTipoZona": "Tipo de zona",
     "layoutNiveles": "Niveles",
     "layoutEspaciosNivel": "Espacios por nivel",
     "layoutCajones": "Cajones (filas × columnas)",
@@ -1690,6 +1691,12 @@
     "layoutMedidasBtn": "Ver y ocultar medidas",
     "layoutMedidasOcultar": "Ocultar medidas",
     "layoutMedidasVer": "Ver medidas",
+    "layoutAreaBtn": "Ver y ocultar los m² de las zonas",
+    "layoutAreaOcultar": "Ocultar m²",
+    "layoutAreaVer": "Ver m²",
+    "layoutFiltrosBtn": "Filtros de las tablas del Layout",
+    "layoutFiltroQuitar": "Quitar filtros",
+    "layoutFiltroNota": "Filtrando: se ven {shown} de {total} filas",
     "layoutFormatoZonaBtn": "Formato de zona (color, rayas y borde)",
     "layoutFormatoZona": "Formato de la zona",
     "layoutFormatoRelleno": "Relleno",
@@ -2623,6 +2630,23 @@
     "articuloScanTitle": "Escanear UPC",
     "articuloScanHint": "Apunta la cámara al código de barras",
     "articuloScanManual": "Escribir a mano en su lugar",
+    "relappSearch": "Buscar por SKU, UPC, descripción o ubicación",
+    "relappEmpty": "Todavía no hay relaciones.",
+    "relappScan": "Escanear el código de barras",
+    "relappNotFound": "El código {code} no está en Alta Artículos.",
+    "relappPending": "{n} guardadas en tu celular, esperando señal",
+    "relappRejectedTitle": "No se aplicó",
+    "relappRejectedOk": "Entendido",
+    "relappFailedRows": "{n} filas no se cargaron",
+    "relappDelete": "Eliminar relación",
+    "relappDeleteConfirm": "¿Eliminar esta relación?",
+    "relappNoCatalogs": "Todavía no se han bajado los catálogos. Abre esta pantalla una vez con señal.",
+    "tplappShare": "Compartir la plantilla de Excel",
+    "tplappDownloadHint": "Si no se guardó aquí, descarga la plantilla desde la versión Web.",
+    "tplappQueued": "Se cargará cuando haya señal.",
+    "tplappCopyRows": "Copiar las filas que no se cargaron",
+    "tplappCopied": "Copiadas: pégalas en Excel.",
+    "tplappNeedCatalogs": "Todavía no se han bajado los catálogos. Abre esta pantalla una vez con señal.",
     "articuloScanCameraError": "No se pudo acceder a la cámara. Escribe el código a mano.",
     "articuloScanDetected": "Código detectado — llenando el campo...",
     "articuloHintDescUnica": "Descripción completa y única del artículo",
@@ -3351,8 +3375,16 @@
       "example": "escribes 10.5 por 14.8 para una tarjeta: sale en una hoja Carta con la tarjeta dibujada con línea punteada, lista para recortar."
     },
     "layoutMeasures": {
-      "what": "Muestra u oculta las medidas del croquis: el largo de cada pared, la altura de cada esquina y la medida de cada lado de las zonas. El nombre y los m² de cada zona se quedan. Solo cambia lo que ves en pantalla; la hoja que se descarga y el QR siguen con sus medidas.",
+      "what": "Muestra u oculta las medidas del croquis: el largo de cada pared, la altura de cada esquina y la medida de cada lado de las zonas. El nombre y los m² de cada zona se quedan (para quitar los m² está el icono de al lado). La hoja que se descarga sale igual que lo ves; la vista pública del QR no cambia.",
       "example": "ocultas las medidas cuando el croquis se ve cargado de números y las vuelves a mostrar para revisar un lado."
+    },
+    "layoutArea": {
+      "what": "Muestra u oculta los m² que van debajo del nombre de cada zona en el croquis. El nombre se queda. La hoja que se descarga (PDF o imagen) sale igual que lo ves; la vista pública del QR no cambia y la tabla de zonas sigue mostrando la superficie.",
+      "example": "ocultas los m² para que el croquis solo diga los nombres de las zonas y los vuelves a mostrar para revisar cuánto mide cada una."
+    },
+    "layoutFilterClear": {
+      "what": "Quita todos los filtros de esta tabla y vuelve a mostrar todas sus filas. Los filtros se ponen con el embudo de cada encabezado, igual que en las demás tablas.",
+      "example": "filtraste la columna Tipo para ver solo los pasillos; al terminar, Quitar filtros te regresa todas las zonas."
     },
     "layoutZoneFmt": {
       "what": "Abre el formato de esta zona, como Formato de celdas de Excel: color de fondo, rayas o patrón y estilo y color del borde. Sin formato propio, la zona usa el color de su tipo.",
@@ -3435,7 +3467,7 @@
       "example": "capturaste algo por error y vuelves a como estaba."
     },
     "layoutSummary": {
-      "what": "Resumen de cada zona: sus m², cuántos espacios tiene, cuánto piso ocupan y cuántos m³ de almacenamiento hay.",
+      "what": "Resumen de cada zona: su nombre y su tipo de zona (cada uno en su columna), sus m², cuántos espacios tiene, cuánto piso ocupan y cuántos m³ de almacenamiento hay.",
       "example": "ves que la Zona A está ocupada al 25% por sus anaqueles."
     },
     "layoutPlanWidth": {

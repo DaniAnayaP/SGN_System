@@ -7268,6 +7268,25 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-measures-btn i{ font-size: 1.1rem; }
 .layout-measures-btn.off{ color: var(--color-text-secondary); background: var(--color-bg, var(--color-surface)); }
 .layout-measures-btn.off::after{ content: ""; position: absolute; width: 1.5rem; border-top: 2px solid currentColor; transform: rotate(-45deg); }
+/* el icono de m² va junto al de medidas */
+.layout-area-btn{ right: 3rem; }
+
+/* simbología: al lado del croquis cuando el cuadro es ancho; debajo cuando es angosto */
+.layout-canvas{ container-type: inline-size; }
+.layout-canvas-body{ display: flex; flex-direction: column; }
+.layout-map{ position: relative; min-width: 0; }
+@container (min-width: 34rem){
+    .layout-canvas-body{ flex-direction: row; align-items: stretch; }
+    .layout-canvas-body .layout-map{ flex: 1 1 auto; }
+    .layout-canvas-body .layout-legend{ flex: 0 0 9.4rem; flex-direction: column; flex-wrap: nowrap; align-content: flex-start; gap: 0.7rem; padding: 0.8rem; border-top: 0; border-left: 1px solid var(--color-border); }
+    .layout-canvas-body .layout-legend > span{ align-items: flex-start; }
+    .layout-canvas-body .layout-legend i{ flex: none; margin-top: 0.1rem; }
+}
+
+/* filtros de las tablas del panel (el embudo y el menú son los de todas las tablas, ver Dashboard.js bindExternalColumnFilters) */
+.layout-table th.layout-th-filter{ position: relative; padding-left: 1.7rem; }
+.layout-filter-note{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.4rem; font-size: 0.74rem; color: var(--color-text-secondary); }
+.layout-filter-note[hidden]{ display: none; }
 
 /* paso enfocado: el que se está editando abajo (los demás activos solo se ven en el croquis) */
 .layout-step.focus{ box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text-primary); }

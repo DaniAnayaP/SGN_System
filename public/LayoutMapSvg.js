@@ -114,7 +114,7 @@
         const W = options.width || 700;
         const H = options.height || 460;
         const M = 34;
-        // options.layers = los pasos activos del croquis (contorno, puertas, luz, zonas, espacios); sin él se dibuja todo. options.measures = false quita las medidas.
+        // options.layers = los pasos activos del croquis (contorno, puertas, luz, zonas, espacios); sin él se dibuja todo. options.measures = false quita las medidas y options.area = false los m² de cada zona.
         const on = (key) => !Array.isArray(options.layers) || options.layers.includes(key);
         const xs = layout.vertices.map((p) => p[0]);
         const ys = layout.vertices.map((p) => p[1]);
@@ -139,7 +139,7 @@
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<polygon points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" stroke-linejoin="round" ${style}/>`;
                 const a = LC.zoneLabelAnchor(z);
                 zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) - 1}" font-size="10" font-weight="600" fill="#14161F" text-anchor="middle" ${halo}>${esc(z.name)}</text>`;
-                zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) + 10}" font-size="8.5" fill="#6B7089" text-anchor="middle" ${halo}>${fmt(LC.zoneArea(z))} m²</text>`;
+                if (options.area !== false) zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) + 10}" font-size="8.5" fill="#6B7089" text-anchor="middle" ${halo}>${fmt(LC.zoneArea(z))} m²</text>`;
             } else {
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" ${style}/>`;
                 const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
@@ -147,7 +147,7 @@
                 const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
                 const anchor = spot.right ? 'end' : 'start';
                 zoneLabels += `<text x="${tx}" y="${ty}" font-size="10" font-weight="600" fill="#14161F" text-anchor="${anchor}" ${halo}>${esc(z.name)}</text>`;
-                if (z.w * sc > 26) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
+                if (options.area !== false && z.w * sc > 26) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
             }
         });
         // La medida real de cada lado va escrita: afuera en las paredes de la nave y adentro en cada zona (solo si el lado se ve de largo suficiente).
