@@ -1623,6 +1623,44 @@
     "layoutQuitar": "Quitar",
     "layoutDesactivar": "Desactivar",
     "layoutReactivar": "Reactivar",
+    "layoutLado": "Lado",
+    "layoutHaciaDonde": "Hacia dónde",
+    "layoutInclinacion": "Inclinación (°)",
+    "layoutMide": "Mide (m)",
+    "layoutEmpiezaX": "Empieza en X (m)",
+    "layoutEmpiezaY": "Empieza en Y (m)",
+    "layoutAgregarLado": "+ Agregar lado",
+    "layoutSinZona": "Sin zona asignada",
+    "layoutPlanM2": "m² según el plano",
+    "layoutLados": "Lados",
+    "layoutFormaLibre": "Forma libre",
+    "layoutAgregarZonaLibre": "+ Agregar zona de forma libre",
+    "layoutLadosDe": "Lados de {name}",
+    "layoutNoCierraContorno": "El contorno de la nave no cierra. Agrega lo que falta antes de guardar.",
+    "layoutNoCierraZona": "La zona \"{name}\" no cierra. Agrega lo que falta antes de guardar.",
+    "layoutDirR": "→ Derecha",
+    "layoutDirRD": "↘ Derecha y abajo",
+    "layoutDirD": "↓ Abajo",
+    "layoutDirLD": "↙ Izquierda y abajo",
+    "layoutDirL": "← Izquierda",
+    "layoutDirLU": "↖ Izquierda y arriba",
+    "layoutDirU": "↑ Arriba",
+    "layoutDirRU": "↗ Derecha y arriba",
+    "layoutPorLados": "Por lados",
+    "layoutPorEsquinas": "Por esquinas",
+    "layoutCierraBien": "Cierra bien",
+    "layoutNoCierraFalta": "No cierra: falta {gap}",
+    "layoutAgregarFalta": "Agregar lo que falta",
+    "layoutCerrarRecta": "Cerrar en línea recta",
+    "layoutGapR": "{n} m a la derecha",
+    "layoutGapL": "{n} m a la izquierda",
+    "layoutGapD": "{n} m hacia abajo",
+    "layoutGapU": "{n} m hacia arriba",
+    "layoutGapY": " y ",
+    "layoutSaleDeNave": "Sale de la nave",
+    "layoutCoincide": "Coincide {n}",
+    "layoutDifiere": "Difiere {n}",
+    "layoutPorDibujar": "Por dibujar",
     "layoutEliminar": "Eliminar",
     "layoutEliminarZonaConfirm": "¿Eliminar la zona \"{name}\"? Los espacios que tenga quedarán sin zona. Se borra al guardar y no se puede deshacer.",
     "layoutEliminarEspacioConfirm": "¿Eliminar el espacio \"{name}\"? Se borra al guardar y no se puede deshacer.",
@@ -2907,6 +2945,50 @@
     "layoutDeleteRow": {
       "what": "Elimina esta zona o este espacio de forma definitiva al guardar. A diferencia de Desactivar, ya no se conserva ni su historial de m². Solo aparece si tu cuenta tiene el permiso Eliminar en el árbol.",
       "example": "quitas un anaquel que nunca existió en la nave y que capturaron por error."
+    },
+    "layoutZonePlanM2": {
+      "what": "Los m² que dice tu plano para este cuarto. El sistema compara lo dibujado contra ese número y avisa si no coinciden (más de 3 %). Es opcional.",
+      "example": "tu plano dice que la Bodega tiene 38.89 m²; si lo dibujado da 45 m², se marca en ámbar para que revises las medidas."
+    },
+    "layoutFreeShape": {
+      "what": "Convierte este rectángulo en una zona de forma libre: se edita lado por lado, como lo trae el plano, para cuartos en L, con muescas o con paredes inclinadas.",
+      "example": "el Andén de proveedores tiene forma de L: lo pasas a forma libre y escribes sus 6 lados."
+    },
+    "layoutSidesOpen": {
+      "what": "Muestra u oculta los lados de esta zona de forma libre para escribirlos o corregirlos.",
+      "example": "tocas Lados y cambias el lado 3 de 1.27 a 1.30 m."
+    },
+    "layoutSideDir": {
+      "what": "Hacia dónde va este lado, desde la esquina donde termina el anterior. Las flechas en diagonal piden además su inclinación.",
+      "example": "Derecha para una pared horizontal; Derecha y arriba para una pared que sube inclinada."
+    },
+    "layoutSideTilt": {
+      "what": "Cuántos grados se inclina el lado respecto a la horizontal (de 0.1 a 89.9). Solo aparece con las flechas en diagonal.",
+      "example": "una pared que sube 30° hacia la derecha: eliges Derecha y arriba y escribes 30."
+    },
+    "layoutSideLen": {
+      "what": "Cuánto mide este lado, en metros, tal como lo dice tu plano.",
+      "example": "4.57 para el ancho del andén."
+    },
+    "layoutSideAdd": {
+      "what": "Agrega un lado al final. Los lados se escriben en orden, rodeando la figura por dentro.",
+      "example": "después de Derecha 6.30 agregas Abajo 6.17."
+    },
+    "layoutSideClose": {
+      "what": "Agrega los lados derechos que faltan para regresar a la esquina donde empezaste.",
+      "example": "te faltan 6.30 m a la izquierda y 6.17 m hacia arriba: con un toque se agregan los dos lados."
+    },
+    "layoutSideCloseLine": {
+      "what": "Cierra la figura con un solo lado en línea recta, de la última esquina a la de inicio, aunque quede inclinado.",
+      "example": "tu último lado va en diagonal hacia donde empezaste: lo cierras de una vez."
+    },
+    "layoutContornoMode": {
+      "what": "Cómo capturas el contorno: por lados (hacia dónde va y cuánto mide, como lo trae el plano) o por esquinas (sus metros X y Y).",
+      "example": "con el plano a la mano usas Por lados; si ya tienes coordenadas usas Por esquinas."
+    },
+    "layoutOrigin": {
+      "what": "En qué punto del mapa está la primera esquina; desde ahí se dibujan los lados.",
+      "example": "la nave empieza en 0, 0."
     },
     "layoutCanvas": {
       "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz.",

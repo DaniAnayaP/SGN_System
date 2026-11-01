@@ -15,7 +15,11 @@ const SECTION_LABEL_KEYS = {
 const state = {
     saved: null, draft: null, version: 0, perms: null, step: 'contorno', creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
+    // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
+    open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
 };
+let view = null;
+let drag = null;
 
 const t = (key, params) => Dashboard.t(key, params);
 const $ = (id) => document.getElementById(id);
@@ -84,21 +88,215 @@ function cellSelect(list, i, key, optionsMarkup, disabled) {
 function table(headKeys, rows) {
     return `<div class="layout-scroll"><table class="layout-table"><thead><tr>${headKeys.map((k) => `<th>${k ? esc(t(k)) : ''}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 }
-const removeCell = (list, i, disabled) => `<td><button type="button" class="layout-x" data-del="${list}:${i}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${disabled ? ' disabled' : ''}>✕</button></td>`;
+const removeCell = (list, i, disabled, extra = '') => {
+    const button = `<button type="button" class="layout-x" data-del="${list}:${i}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${disabled ? ' disabled' : ''}>✕</button>`;
+    return extra ? `<td><div class="layout-rowbtns">${extra}${button}</div></td>` : `<td>${button}</td>`;
+};
 const addButton = (list, labelKey, disabled) => `<button type="button" class="btn btn-secondary layout-add" data-add="${list}" data-help-key="layoutAddRow"${disabled ? ' disabled' : ''}>${esc(t(labelKey))}</button>`;
 // Fila ya guardada de zonas o espacios: Desactivar/Reactivar (se conserva, deja de contar) y, con permiso, Eliminar.
-function savedRowButtons(list, i, active, disabled) {
+function savedRowButtons(list, i, active, disabled, extra = '') {
     const canDelete = state.perms && (list === 'zones' ? state.perms.canDeleteZones : state.perms.canDeleteSpaces);
     const toggle = `<button type="button" class="btn btn-secondary layout-toggle" data-toggle="${list}:${i}" data-help-key="layoutToggleRow"${disabled ? ' disabled' : ''}>${esc(t(active === false ? 'main.layoutReactivar' : 'main.layoutDesactivar'))}</button>`;
     const del = canDelete ? `<button type="button" class="btn btn-secondary layout-toggle layout-delete" data-delete="${list}:${i}" data-help-key="layoutDeleteRow"${disabled ? ' disabled' : ''}>${esc(t('main.layoutEliminar'))}</button>` : '';
-    return `<td><div class="layout-rowbtns">${toggle}${del}</div></td>`;
+    return `<td><div class="layout-rowbtns">${extra}${toggle}${del}</div></td>`;
 }
 const isSavedRow = (list, id) => !!(state.saved && (state.saved[list] || []).some((row) => row.id === id));
+
+// ---- figuras escritas lado por lado (contorno de la nave y zonas de cualquier forma) --------------------------------------------------
+// Se escriben como las trae el plano: desde una esquina, cada lado es hacia dónde va (derecha, abajo, izquierda, arriba) y cuánto mide. Se guardan como esquinas
+// (vertices / pts); aquí solo se pasa de lados a esquinas y de vuelta. "Abierta" = se está armando y la última esquina todavía no regresa al origen: no se puede guardar así.
+// "Hacia dónde" tiene las 4 direcciones derechas y 4 flechas en diagonal; al elegir una diagonal aparece su inclinación en grados (medida desde la horizontal, 0.1 a 89.9).
+const DIR_KEYS = { R: 'main.layoutDirR', RD: 'main.layoutDirRD', D: 'main.layoutDirD', LD: 'main.layoutDirLD', L: 'main.layoutDirL', LU: 'main.layoutDirLU', U: 'main.layoutDirU', RU: 'main.layoutDirRU' };
+const DIR_ORDER = ['R', 'RD', 'D', 'LD', 'L', 'LU', 'U', 'RU'];
+const NEXT_DIR = { R: 'D', D: 'L', L: 'U', U: 'R' };
+const dirOptions = (selected) => DIR_ORDER.map((k) => `<option value="${k}"${k === selected ? ' selected' : ''}>${esc(t(DIR_KEYS[k]))}</option>`).join('');
+// Un lado se guarda como [R/D/L/U o ángulo en grados girando como las manecillas desde la derecha, medida]; en pantalla se ve como flecha + inclinación.
+const wrapAngle = (a) => ((a % 360) + 360) % 360;
+function sideDirKey(side) {
+    if (typeof side[0] === 'string') return side[0];
+    const a = wrapAngle(side[0]);
+    return a < 90 ? 'RD' : a < 180 ? 'LD' : a < 270 ? 'LU' : 'RU';
+}
+function sideTilt(side) {
+    const a = wrapAngle(side[0]);
+    return a < 90 ? a : a < 180 ? 180 - a : a < 270 ? a - 180 : 360 - a;
+}
+function angleFromTilt(key, tilt) {
+    const i = Math.min(89.9, Math.max(0.1, Number.isFinite(tilt) ? tilt : 45));
+    const a = key === 'RD' ? i : key === 'LD' ? 180 - i : key === 'LU' ? 180 + i : 360 - i;
+    return Math.round(a * 1000) / 1000;
+}
+const round2 = (n) => Math.round(n * 100) / 100;
+const vertexPoints = () => state.draft.vertices.map((p) => [p[0], p[1]]);
+const contornoSides = () => LC.sidesFromPoints(vertexPoints(), state.open.contorno);
+
+function clampWalls() {
+    const walls = state.draft.vertices.length;
+    state.draft.doors.forEach((d) => { if (d.wall > walls) d.wall = walls; });
+    state.draft.power.forEach((p) => { if (p.wall > walls) p.wall = walls; });
+}
+// x, y, largo y ancho de una zona de cualquier forma son siempre el recuadro que la envuelve.
+function syncZoneBox(z) {
+    if (!z.pts.length) return;
+    const xs = z.pts.map((p) => p[0]);
+    const ys = z.pts.map((p) => p[1]);
+    z.x = round2(Math.min(...xs));
+    z.y = round2(Math.min(...ys));
+    z.l = round2(Math.max(...xs) - z.x);
+    z.w = round2(Math.max(...ys) - z.y);
+}
+function setContornoFromSides(origin, sides, heights) {
+    const { pts, closed } = LC.pointsFromSides(origin, sides);
+    state.open.contorno = !closed;
+    const last = heights.length ? heights[heights.length - 1] : 9;
+    state.draft.vertices = pts.map((p, i) => [p[0], p[1], heights[i] != null ? heights[i] : last]);
+    clampWalls();
+}
+function setZoneFromSides(z, origin, sides) {
+    const { pts, closed } = LC.pointsFromSides(origin, sides);
+    z.pts = pts;
+    if (closed) delete state.open.zones[z.id]; else state.open.zones[z.id] = true;
+    syncZoneBox(z);
+}
+// Lo que se está armando: el contorno ('contorno') o una zona ('zone:ID'), con sus lados, su origen y las alturas de las esquinas (solo el contorno las lleva).
+function shapeOf(key) {
+    if (key === 'contorno') {
+        const v = state.draft.vertices;
+        return { sides: contornoSides().sides, origin: [v[0][0], v[0][1]], heights: v.map((p) => p[2]), pts: vertexPoints(), apply: (origin, sides, heights) => setContornoFromSides(origin, sides, heights) };
+    }
+    const z = state.draft.zones.find((r) => r.id === key.slice(5));
+    if (!z || !Array.isArray(z.pts)) return null;
+    return { sides: LC.sidesFromPoints(z.pts, !!state.open.zones[z.id]).sides, origin: z.pts[0] ? [z.pts[0][0], z.pts[0][1]] : [z.x, z.y], heights: [], pts: z.pts, apply: (origin, sides) => setZoneFromSides(z, origin, sides) };
+}
+const isOpenShape = (key) => (key === 'contorno' ? state.open.contorno : !!state.open.zones[key.slice(5)]);
+function gapText(pts) {
+    return LC.closingSides(pts).map(([dir, len]) => t(`main.layoutGap${dir}`).replace('{n}', fmt(len))).join(t('main.layoutGapY'));
+}
+function sidesStatusHtml(key, dis) {
+    const sh = shapeOf(key);
+    if (!sh || sh.pts.length < 2) return '';
+    if (!isOpenShape(key)) return `<span class="layout-chip ok">${esc(t('main.layoutCierraBien'))}</span>`;
+    // Con falta en horizontal y en vertical también se puede cerrar con una sola línea recta (queda inclinada si no va a 90°).
+    const line = LC.closingSides(sh.pts).length === 2 ? `<button type="button" class="btn btn-secondary layout-add" data-sline="${esc(key)}" data-help-key="layoutSideCloseLine"${dis ? ' disabled' : ''}>${esc(t('main.layoutCerrarRecta'))}</button>` : '';
+    return `<span class="layout-chip warn">${esc(t('main.layoutNoCierraFalta').replace('{gap}', gapText(sh.pts)))}</span><button type="button" class="btn btn-secondary layout-add" data-sclose="${esc(key)}" data-help-key="layoutSideClose"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarFalta'))}</button>${line}`;
+}
+function sidesBlockHtml(key, dis) {
+    const sh = shapeOf(key);
+    if (!sh) return '';
+    const isC = key === 'contorno';
+    const attr = isC ? 'data-cs' : 'data-zs';
+    const sfx = isC ? '' : `:${key.slice(5)}`;
+    const idx = (i) => (isC ? `${i}` : `${key.slice(5)}:${i}`);
+    const tiltCell = (s, i) => (typeof s[0] === 'string'
+        ? '<td class="layout-calc">—</td>'
+        : `<td><input type="number" step="0.1" min="0.1" max="89.9" ${attr}="tilt:${idx(i)}" data-help-key="layoutSideTilt" value="${Math.round(sideTilt(s) * 100) / 100}"${dis ? ' disabled' : ''}></td>`);
+    const rows = sh.sides.map((s, i) => `<tr><td class="layout-calc">${esc(t('main.layoutLado'))} ${i + 1}</td><td><select ${attr}="dir:${idx(i)}" data-help-key="layoutSideDir"${dis ? ' disabled' : ''}>${dirOptions(sideDirKey(s))}</select></td>${tiltCell(s, i)}<td><input type="number" step="0.01" min="0" ${attr}="len:${idx(i)}" data-help-key="layoutSideLen" value="${s[1]}"${dis ? ' disabled' : ''}></td>${isC ? `<td><input type="number" step="0.1" min="0" ${attr}="h:${idx(i)}" value="${sh.heights[i] != null ? sh.heights[i] : ''}"${dis ? ' disabled' : ''}></td>` : ''}<td><button type="button" class="layout-x" data-sdel="${esc(key)}:${i}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${dis ? ' disabled' : ''}>✕</button></td></tr>`);
+    const head = isC ? ['main.layoutLado', 'main.layoutHaciaDonde', 'main.layoutInclinacion', 'main.layoutMide', 'main.layoutAlturaEsquina', ''] : ['main.layoutLado', 'main.layoutHaciaDonde', 'main.layoutInclinacion', 'main.layoutMide', ''];
+    return `<div class="layout-fl"><label>${esc(t('main.layoutEmpiezaX'))}<input type="number" step="0.05" ${attr}="ox${sfx}" data-help-key="layoutOrigin" value="${sh.origin[0]}"${dis ? ' disabled' : ''}></label><label>${esc(t('main.layoutEmpiezaY'))}<input type="number" step="0.05" ${attr}="oy${sfx}" data-help-key="layoutOrigin" value="${sh.origin[1]}"${dis ? ' disabled' : ''}></label></div>${table(head, rows)}<div class="layout-sidesbar"><button type="button" class="btn btn-secondary layout-add" data-sadd="${esc(key)}" data-help-key="layoutSideAdd"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarLado'))}</button><span data-sides-status="${esc(key)}">${sidesStatusHtml(key, dis)}</span></div>`;
+}
+function zoneSidesPanelHtml(dis) {
+    const z = state.draft.zones.find((r) => r.id === state.zoneOpen);
+    if (!z || !Array.isArray(z.pts)) return '';
+    return `<div class="layout-zone-sides"><h4 class="layout-sub">${esc(t('main.layoutLadosDe').replace('{name}', z.name))}</h4>${sidesBlockHtml(`zone:${z.id}`, dis)}</div>`;
+}
+// Avisos de una zona: se sale de la nave, o cuánto difiere su superficie de los m² que dice el plano (±3 % se considera que coincide).
+const PLAN_TOLERANCE = 3;
+function zoneChipsHtml(z) {
+    if (Array.isArray(z.pts) && z.pts.length < 3) return `<span class="layout-chip warn">${esc(t('main.layoutPorDibujar'))}</span>`;
+    const chips = [];
+    if (LC.zoneOutsideNave(state.draft.vertices, z)) chips.push(`<span class="layout-chip warn">${esc(t('main.layoutSaleDeNave'))}</span>`);
+    if (z.planM2 > 0) {
+        const d = ((LC.zoneArea(z) - z.planM2) / z.planM2) * 100;
+        const v = Math.round(d * 10) / 10;
+        const n = `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmt(Math.abs(v), 1)}%`;
+        chips.push(Math.abs(d) <= PLAN_TOLERANCE
+            ? `<span class="layout-chip ok">${esc(t('main.layoutCoincide').replace('{n}', n))}</span>`
+            : `<span class="layout-chip warn">${esc(t('main.layoutDifiere').replace('{n}', n))}</span>`);
+    }
+    return chips.join('');
+}
+function addSide(key) {
+    const sh = shapeOf(key);
+    if (!sh) return;
+    const sides = sh.sides.map((s) => s.slice());
+    const heights = sh.heights.slice();
+    const last = sides.length ? sides[sides.length - 1][0] : 'U';
+    sides.push([NEXT_DIR[last] || 'R', 1]);
+    if (heights.length) heights.push(heights[heights.length - 1]);
+    sh.apply(sh.origin, sides, heights);
+}
+function removeSide(key, i) {
+    const sh = shapeOf(key);
+    if (!sh) return;
+    const sides = sh.sides.map((s) => s.slice());
+    const heights = sh.heights.slice();
+    sides.splice(i, 1);
+    heights.splice(i, 1);
+    sh.apply(sh.origin, sides, heights);
+}
+function closeSides(key) {
+    const sh = shapeOf(key);
+    if (!sh) return;
+    const sides = sh.sides.map((s) => s.slice());
+    const heights = sh.heights.slice();
+    LC.closingSides(sh.pts).forEach((s) => { sides.push(s); if (heights.length) heights.push(heights[heights.length - 1]); });
+    sh.apply(sh.origin, sides, heights);
+}
+function closeLine(key) {
+    const sh = shapeOf(key);
+    if (!sh) return;
+    const line = LC.closingLine(sh.pts);
+    if (!line) return;
+    const sides = sh.sides.map((s) => s.slice());
+    const heights = sh.heights.slice();
+    sides.push(line);
+    if (heights.length) heights.push(heights[heights.length - 1]);
+    sh.apply(sh.origin, sides, heights);
+}
+// Una edición de un renglón de lados (hacia dónde, cuánto mide, altura de la esquina) o del origen: se vuelve a armar la figura completa desde sus lados.
+function onSidesEdit(el) {
+    const isC = el.getAttribute('data-cs') !== null;
+    const parts = (isC ? el.getAttribute('data-cs') : el.getAttribute('data-zs')).split(':');
+    const kind = parts[0];
+    const key = isC ? 'contorno' : `zone:${parts[1]}`;
+    const at = Number(isC ? parts[1] : parts[2]);
+    const sh = shapeOf(key);
+    if (!sh) return;
+    const sides = sh.sides.map((s) => s.slice());
+    const heights = sh.heights.slice();
+    const origin = sh.origin.slice();
+    const num = parseFloat(el.value);
+    const n = Number.isFinite(num) ? num : 0;
+    if (kind === 'ox') origin[0] = n;
+    else if (kind === 'oy') origin[1] = n;
+    else if (kind === 'dir') {
+        // Una flecha en diagonal conserva la inclinación que ya traía el lado (o 45° si venía derecho); una derecha deja el lado derecho.
+        sides[at][0] = el.value.length === 2 ? angleFromTilt(el.value, typeof sides[at][0] === 'number' ? sideTilt(sides[at]) : 45) : el.value;
+    } else if (kind === 'tilt') sides[at][0] = angleFromTilt(sideDirKey(sides[at]), n);
+    else if (kind === 'len') sides[at][1] = Math.max(0, n);
+    else if (kind === 'h') heights[at] = n;
+    sh.apply(origin, sides, heights);
+    refreshLive();
+}
+// Al empezar a editar: nada está abierto y el contorno se captura por lados (también se puede por esquinas con X, Y).
+function initEditState() {
+    state.open = { contorno: false, zones: {} };
+    state.zoneOpen = null;
+    state.contornoMode = 'sides';
+}
+// La primera figura que se dejó sin cerrar (no se puede guardar así).
+function firstOpenShape() {
+    if (state.open.contorno) return { kind: 'contorno' };
+    const z = state.draft.zones.find((r) => state.open.zones[r.id]);
+    return z ? { kind: 'zone', zone: z } : null;
+}
 
 function stepHtml(step) {
     const d = state.draft;
     const dis = !canEdit(step);
     if (step === 'contorno') {
+        const mode = state.contornoMode;
+        const modeBar = `<div class="layout-seg" role="group" data-help-key="layoutContornoMode"><button type="button" class="layout-seg-btn${mode === 'sides' ? ' active' : ''}" data-cmode="sides">${esc(t('main.layoutPorLados'))}</button><button type="button" class="layout-seg-btn${mode === 'corners' ? ' active' : ''}" data-cmode="corners">${esc(t('main.layoutPorEsquinas'))}</button></div>`;
         const rows = d.vertices.map((p, i) => {
             const seg = LC.wallSegment(d.vertices, i + 1);
             return `<tr><td class="layout-calc">${esc(t('main.layoutEsquina'))} ${i + 1}</td>${cellNum('vertices', i, '0', p[0], dis)}${cellNum('vertices', i, '1', p[1], dis)}${cellNum('vertices', i, '2', p[2], dis)}<td class="layout-calc" data-wall-len="${i}">${esc(t('main.layoutPared'))} ${i + 1}: ${fmt(seg.length)} m</td>${d.vertices.length > 3 ? removeCell('vertices', i, dis) : '<td></td>'}</tr>`;
@@ -106,8 +304,11 @@ function stepHtml(step) {
         const obstacles = d.obstacles.map((o, i) => `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${cellNum('obstacles', i, 'x', o.x, dis)}${cellNum('obstacles', i, 'y', o.y, dis)}${cellNum('obstacles', i, 'l', o.l, dis)}${cellNum('obstacles', i, 'w', o.w, dis)}${removeCell('obstacles', i, dis)}</tr>`);
         const heights = d.vertices.map((p) => p[2]);
         const sameHeight = heights.every((h) => h === heights[0]) ? heights[0] : '';
-        return `<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label></div>
-            ${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows)}${addButton('vertices', 'main.layoutAgregarEsquina', dis)}
+        const shape = mode === 'sides'
+            ? sidesBlockHtml('contorno', dis)
+            : `${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows)}${addButton('vertices', 'main.layoutAgregarEsquina', dis)}`;
+        return `${modeBar}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label></div>
+            ${shape}
             <h4 class="layout-sub">${esc(t('main.layoutColumnasTitulo'))}</h4>
             ${table(['main.layoutNombre', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', ''], obstacles)}${addButton('obstacles', 'main.layoutAgregarObstaculo', dis)}`;
     }
@@ -122,9 +323,19 @@ function stepHtml(step) {
     if (step === 'zonas') {
         const rows = d.zones.map((z, i) => {
             const saved = isSavedRow('zones', z.id);
-            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', optionsHtml('zone', LC.ZONE_TYPES, z.type), dis)}${cellNum('zones', i, 'x', z.x, dis)}${cellNum('zones', i, 'y', z.y, dis)}${cellNum('zones', i, 'l', z.l, dis)}${cellNum('zones', i, 'w', z.w, dis)}<td class="layout-calc" data-zone-area="${i}">${fmt(z.l * z.w)} m²</td>${saved ? savedRowButtons('zones', i, z.active, dis) : removeCell('zones', i, dis)}</tr>`;
+            const free = Array.isArray(z.pts);
+            const typeOptions = `<option value=""${z.type ? '' : ' selected'}>${esc(t('main.layoutSinZona'))}</option>${optionsHtml('zone', LC.ZONE_TYPES, z.type)}`;
+            const o = free && z.pts[0] ? z.pts[0] : [z.x, z.y];
+            const position = free
+                ? `${cellNum('zones', i, 'ox', o[0], dis, '0.05')}${cellNum('zones', i, 'oy', o[1], dis, '0.05')}<td class="layout-calc">—</td><td class="layout-calc">—</td>`
+                : `${cellNum('zones', i, 'x', z.x, dis)}${cellNum('zones', i, 'y', z.y, dis)}${cellNum('zones', i, 'l', z.l, dis)}${cellNum('zones', i, 'w', z.w, dis)}`;
+            const shapeButton = free
+                ? `<button type="button" class="btn btn-secondary layout-toggle" data-sidesopen="${esc(z.id)}" data-help-key="layoutSidesOpen"${dis ? ' disabled' : ''}>${esc(t('main.layoutLados'))}</button>`
+                : `<button type="button" class="btn btn-secondary layout-toggle" data-freeshape="${i}" data-help-key="layoutFreeShape"${dis ? ' disabled' : ''}>${esc(t('main.layoutFormaLibre'))}</button>`;
+            const planBox = `<td><input type="number" step="0.01" min="0" data-l="zones" data-i="${i}" data-k="planM2" data-help-key="layoutZonePlanM2" value="${z.planM2 > 0 ? z.planM2 : ''}"${dis ? ' disabled' : ''}></td>`;
+            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, shapeButton) : removeCell('zones', i, dis, shapeButton)}</tr>`;
         });
-        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', ''], rows)}${addButton('zones', 'main.layoutAgregarZona', dis)}`;
+        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows)}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
@@ -165,19 +376,40 @@ function renderSvg() {
     const oy = M;
     const X = (x) => ox + (x - x0) * sc;
     const Y = (y) => oy + (y - y0) * sc;
+    view = { sc, W };
     // Los pasillos van sombreados con rayas (principal: rayas; entre anaqueles: puntos).
     let s = '<defs><pattern id="lh-main" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="var(--color-surface)"/><line x1="0" y1="0" x2="0" y2="8" stroke="var(--color-text-secondary)" stroke-width="2.4" opacity="0.4"/></pattern><pattern id="lh-between" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="var(--color-surface)"/><circle cx="3" cy="3" r="1.15" fill="var(--color-text-secondary)" opacity="0.5"/></pattern></defs>';
     if (state.planImage && d.plan) s += `<image href="${state.planImage}" x="${X(0)}" y="${Y(0)}" width="${d.plan.widthM * sc}" height="${d.plan.widthM * state.planAspect * sc}" opacity="0.55" preserveAspectRatio="none"/>`;
-    // El nombre y los m² de cada zona se dibujan al final (encima de anaqueles y paredes) y en la esquina de la zona que no tape ningún espacio.
+    // El nombre y los m² de cada zona se dibujan al final (encima de anaqueles y paredes) y en la esquina de la zona que no tape ningún espacio; las zonas que no son
+    // rectángulos llevan el nombre en el punto más holgado de adentro. La medida real de cada lado se escribe adentro de la zona.
     let zoneLabels = '';
+    let measureLabels = '';
+    const draggable = canEdit('zonas');
+    const measureText = (pts, minPx) => LC.sideMeasures(pts, false).filter((m) => m.len * sc >= minPx && !LC.onPolygonEdge(m.mx, m.my, d.vertices)).map((m) => `<text class="lm" x="${(X(m.mx) + m.nx * 9).toFixed(1)}" y="${(Y(m.my) + m.ny * 9 + 3).toFixed(1)}" text-anchor="middle">${fmt(m.len)}</text>`).join('');
     d.zones.forEach((z) => {
-        s += `<rect class="lz ${ZONE_CLASS[z.type] || 'lz-dock'}${z.active === false ? ' lz-off' : ''}" x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4"><title>${esc(z.name)} · ${esc(typeLabel('zone', z.type))}</title></rect>`;
+        const typeText = z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona');
+        const cls = `lz ${z.type ? (ZONE_CLASS[z.type] || 'lz-dock') : 'lz-none'}${z.active === false ? ' lz-off' : ''}${state.open.zones[z.id] ? ' lz-warn' : ''}${draggable ? ' lz-drag' : ''}`;
+        const title = `<title>${esc(z.name)} · ${esc(typeText)}</title>`;
+        if (Array.isArray(z.pts)) {
+            if (z.pts.length >= 3) {
+                s += `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
+                const a = LC.zoneLabelAnchor(z);
+                zoneLabels += `<text class="lt" x="${X(a.x)}" y="${Y(a.y) - 1}" text-anchor="middle">${esc(z.name)}</text><text class="lt2" x="${X(a.x)}" y="${Y(a.y) + 10}" text-anchor="middle">${fmt(LC.zoneArea(z))} m²</text>`;
+                if (z.active !== false) measureLabels += measureText(z.pts, 26);
+            } else if (z.pts.length) {
+                if (z.pts.length > 1) s += `<polyline class="lz-open" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
+                s += `<circle class="lv" cx="${X(z.pts[0][0])}" cy="${Y(z.pts[0][1])}" r="4"/>`;
+            }
+            return;
+        }
+        s += `<rect class="${cls}" data-zid="${esc(z.id)}" x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4">${title}</rect>`;
         const spot = LC.zoneLabelSpot(z, d.spaces, sc);
         const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
         const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
         const anchor = spot.right ? 'end' : 'start';
         zoneLabels += `<text class="lt" x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(z.name)}</text>`;
         if (z.w * sc > 26) zoneLabels += `<text class="lt2" x="${tx}" y="${ty + 11}" text-anchor="${anchor}">${fmt(z.l * z.w)} m²</text>`;
+        if (z.active !== false) measureLabels += measureText(LC.zonePoints(z), 26);
     });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     d.obstacles.forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
@@ -187,7 +419,7 @@ function renderSvg() {
         s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
     });
-    s += zoneLabels;
+    s += zoneLabels + measureLabels;
     d.doors.forEach((door) => {
         const w = LC.wallSegment(d.vertices, door.wall);
         const a = { x: w.p[0] + w.ux * door.dist, y: w.p[1] + w.uy * door.dist };
@@ -218,7 +450,7 @@ function renderSvg() {
 
 function renderSummary() {
     const k = LC.computeKpis(state.draft);
-    const rows = k.zones.map((z) => `<tr><td>${esc(z.name)} · ${esc(typeLabel('zone', z.type))}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
+    const rows = k.zones.map((z) => `<tr><td>${esc(z.name)} · ${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
     $('layout-summary').innerHTML = rows.length
         ? `<table class="layout-table layout-summary-table"><thead><tr><th>${esc(t('main.layoutZona'))}</th><th>${esc(t('main.layoutSuperficie'))}</th><th>${esc(t('main.layoutEspacios'))}</th><th>${esc(t('main.layoutHuella'))}</th><th>${esc(t('main.layoutOcupacion'))}</th><th>${esc(t('main.layoutVolumen'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
         : `<p class="layout-muted">${esc(t('main.layoutSinZonas'))}</p>`;
@@ -244,7 +476,16 @@ function refreshLive() {
         const cell = document.querySelector(`[data-wall-len="${i}"]`);
         if (cell) cell.textContent = `${t('main.layoutPared')} ${i + 1}: ${fmt(LC.wallSegment(state.draft.vertices, i + 1).length)} m`;
     });
-    state.draft.zones.forEach((z, i) => { const c = document.querySelector(`[data-zone-area="${i}"]`); if (c) c.textContent = `${fmt(z.l * z.w)} m²`; });
+    state.draft.zones.forEach((z, i) => {
+        const c = document.querySelector(`[data-zone-area="${i}"]`);
+        if (c) c.textContent = `${fmt(LC.zoneArea(z))} m²`;
+        const chips = document.querySelector(`[data-zone-chips="${i}"]`);
+        if (chips) chips.innerHTML = zoneChipsHtml(z);
+    });
+    document.querySelectorAll('[data-sides-status]').forEach((box) => {
+        const key = box.getAttribute('data-sides-status');
+        box.innerHTML = sidesStatusHtml(key, !canEdit(key === 'contorno' ? 'contorno' : 'zonas'));
+    });
     state.draft.spaces.forEach((s, i) => { const c = document.querySelector(`[data-space-calc="${i}"]`); if (c) c.textContent = `${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³`; });
 }
 
@@ -279,6 +520,7 @@ async function loadLayout() {
     state.planNew = false;
     state.planImage = '';
     state.draft = body.layout ? clone(body.layout) : null;
+    initEditState();
     if (body.layout && body.hasPlanImage) {
         try {
             const imgRes = await fetch('/api/business/layout/plan-image', { credentials: 'include' });
@@ -306,6 +548,7 @@ function imageAspect(dataUrl) {
 function newDraftFromScratch() {
     const base = LC.emptyLayout();
     state.draft = base;
+    initEditState();
     state.creating = true;
     state.planImage = '';
     state.planNew = false;
@@ -360,6 +603,7 @@ $('layout-plan-width-ok').addEventListener('click', () => {
     base.vertices = [[0, 0, base.heightM], [w, 0, base.heightM], [w, h, base.heightM], [0, h, base.heightM]];
     base.plan = { widthM: w };
     state.draft = base;
+    initEditState();
     state.creating = true;
     state.planImage = state.pendingPlan.url;
     state.planAspect = state.pendingPlan.aspect;
@@ -393,6 +637,12 @@ const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puer
 
 function onEdit(event) {
     const el = event.target;
+    if (state.draft && (el.getAttribute('data-cs') !== null || el.getAttribute('data-zs') !== null)) {
+        onSidesEdit(el);
+        // elegir o quitar una flecha en diagonal agrega o quita el campo de inclinación de ese renglón
+        if (event.type === 'change' && /^dir:/.test(el.getAttribute('data-cs') || el.getAttribute('data-zs'))) renderPanel();
+        return;
+    }
     const list = el.getAttribute('data-l');
     if (!list || !state.draft) return;
     const isNumber = el.type === 'number';
@@ -406,11 +656,22 @@ function onEdit(event) {
                 if (box) box.value = value;
             });
         }
-    } else if (list === 'vertices') state.draft.vertices[Number(el.getAttribute('data-i'))][Number(el.getAttribute('data-k'))] = value;
-    else {
+    } else if (list === 'vertices') {
+        state.draft.vertices[Number(el.getAttribute('data-i'))][Number(el.getAttribute('data-k'))] = value;
+        state.open.contorno = false;
+    } else {
         const row = state.draft[list][Number(el.getAttribute('data-i'))];
         const key = el.getAttribute('data-k');
-        row[key] = (key === 'wall' || key === 'levels') ? Math.max(1, Math.round(value) || 1) : value;
+        if (list === 'zones' && (key === 'ox' || key === 'oy')) {
+            // una zona de forma libre se mueve completa desde su primera esquina
+            const o = row.pts[0] || [row.x, row.y];
+            const dx = key === 'ox' ? value - o[0] : 0;
+            const dy = key === 'oy' ? value - o[1] : 0;
+            row.pts = row.pts.map((p) => [round2(p[0] + dx), round2(p[1] + dy)]);
+            syncZoneBox(row);
+        } else if (key === 'planM2') {
+            if (value > 0) row.planM2 = value; else delete row.planM2;
+        } else row[key] = (key === 'wall' || key === 'levels') ? Math.max(1, Math.round(value) || 1) : value;
         if (list === 'spaces' && key === 'type' && /^[RGT]-\d+$/i.test(row.code) && !isSavedRow('spaces', row.id)) {
             // un código sin guardar y con forma automática (R-01) sigue al tipo
             row.code = nextCode(row.type);
@@ -427,10 +688,55 @@ $('layout-panel').addEventListener('change', onEdit);
 $('layout-panel').addEventListener('click', (event) => {
     const stepBtn = event.target.closest('[data-step]');
     if (stepBtn) { state.step = stepBtn.dataset.step; renderPanel(); return; }
+    const cmode = event.target.closest('[data-cmode]');
+    if (cmode) { state.contornoMode = cmode.dataset.cmode; renderPanel(); return; }
+    const sadd = event.target.closest('[data-sadd]');
+    if (sadd) { addSide(sadd.dataset.sadd); renderPanel(); refreshLive(); return; }
+    const sdel = event.target.closest('[data-sdel]');
+    if (sdel) {
+        const v = sdel.dataset.sdel;
+        const at = v.lastIndexOf(':');
+        removeSide(v.slice(0, at), Number(v.slice(at + 1)));
+        renderPanel();
+        refreshLive();
+        return;
+    }
+    const sclose = event.target.closest('[data-sclose]');
+    if (sclose) { closeSides(sclose.dataset.sclose); renderPanel(); refreshLive(); return; }
+    const sline = event.target.closest('[data-sline]');
+    if (sline) { closeLine(sline.dataset.sline); renderPanel(); refreshLive(); return; }
+    const freeShape = event.target.closest('[data-freeshape]');
+    if (freeShape) {
+        // Un rectángulo pasa a forma libre con sus 4 esquinas; de ahí se cambian sus lados.
+        const z = state.draft.zones[Number(freeShape.dataset.freeshape)];
+        z.pts = [[z.x, z.y], [round2(z.x + z.l), z.y], [round2(z.x + z.l), round2(z.y + z.w)], [z.x, round2(z.y + z.w)]];
+        delete state.open.zones[z.id];
+        state.zoneOpen = z.id;
+        renderPanel();
+        refreshLive();
+        return;
+    }
+    const sidesOpen = event.target.closest('[data-sidesopen]');
+    if (sidesOpen) { state.zoneOpen = state.zoneOpen === sidesOpen.dataset.sidesopen ? null : sidesOpen.dataset.sidesopen; renderPanel(); return; }
+    if (event.target.closest('[data-add="zonesFree"]')) {
+        // Zona nueva de forma libre: solo su primera esquina; sus lados se escriben después. Empieza sin zona asignada.
+        const xs = state.draft.vertices.map((p) => p[0]);
+        const ys = state.draft.vertices.map((p) => p[1]);
+        const x = round2(Math.min(...xs) + 1);
+        const y = round2(Math.min(...ys) + 1);
+        const z = { id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, type: '', x, y, l: 0, w: 0, pts: [[x, y]], active: true };
+        state.draft.zones.push(z);
+        state.open.zones[z.id] = true;
+        state.zoneOpen = z.id;
+        renderPanel();
+        refreshLive();
+        return;
+    }
     const add = event.target.closest('[data-add]');
     if (add) {
         const list = add.dataset.add;
         state.draft[list].push(ROW_FACTORY[list]());
+        if (list === 'vertices') state.open.contorno = false;
         renderPanel();
         refreshLive();
         return;
@@ -438,8 +744,10 @@ $('layout-panel').addEventListener('click', (event) => {
     const del = event.target.closest('[data-del]');
     if (del) {
         const [list, index] = del.dataset.del.split(':');
-        state.draft[list].splice(Number(index), 1);
+        const removed = state.draft[list].splice(Number(index), 1)[0];
+        if (list === 'zones' && removed) { delete state.open.zones[removed.id]; if (state.zoneOpen === removed.id) state.zoneOpen = null; }
         if (list === 'vertices') {
+            state.open.contorno = false;
             const walls = state.draft.vertices.length;
             state.draft.doors.forEach((d) => { if (d.wall > walls) d.wall = walls; });
             state.draft.power.forEach((p) => { if (p.wall > walls) p.wall = walls; });
@@ -459,6 +767,7 @@ $('layout-panel').addEventListener('click', (event) => {
             const current = state.draft[list].findIndex((r) => r.id === row.id);
             if (current < 0) return;
             state.draft[list].splice(current, 1);
+            if (list === 'zones') { delete state.open.zones[row.id]; if (state.zoneOpen === row.id) state.zoneOpen = null; }
             // Los espacios de una zona eliminada quedan sin zona (así también los deja el servidor al guardar).
             if (list === 'zones') state.draft.spaces.forEach((s) => { if (s.zoneId === row.id) s.zoneId = ''; });
             renderPanel();
@@ -476,9 +785,64 @@ $('layout-panel').addEventListener('click', (event) => {
     }
 });
 
+// ---- acomodar una zona arrastrándola sobre el croquis ------------------------------------------------------------------------------
+// Se arrastra cualquier zona (rectángulo o de forma libre) con el dedo o el mouse; al soltarla cerca de una zona vecina o del contorno se pega a su lado (a menos de 0.3 m).
+const SNAP_M = 0.3;
+function translateFrom(start, z, dx, dy) {
+    if (Array.isArray(start.pts)) { z.pts = start.pts.map((p) => [round2(p[0] + dx), round2(p[1] + dy)]); syncZoneBox(z); } else { z.x = round2(start.x + dx); z.y = round2(start.y + dy); }
+}
+$('layout-svg').addEventListener('pointerdown', (event) => {
+    const el = event.target.closest('[data-zid]');
+    if (!el || !state.draft || !canEdit('zonas')) return;
+    const z = state.draft.zones.find((r) => r.id === el.getAttribute('data-zid'));
+    if (!z) return;
+    drag = { id: z.id, px: event.clientX, py: event.clientY, start: clone(z), moved: false };
+    event.preventDefault();
+});
+window.addEventListener('pointermove', (event) => {
+    if (!drag || !view || !state.draft) return;
+    const z = state.draft.zones.find((r) => r.id === drag.id);
+    if (!z) { drag = null; return; }
+    const rect = $('layout-svg').getBoundingClientRect();
+    const k = view.W / rect.width / view.sc;
+    let dx = (event.clientX - drag.px) * k;
+    let dy = (event.clientY - drag.py) * k;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 0.2) return;
+    drag.moved = true;
+    const xs = [];
+    const ys = [];
+    state.draft.zones.forEach((o) => { if (o.id !== z.id && o.active !== false) { xs.push(o.x, o.x + o.l); ys.push(o.y, o.y + o.w); } });
+    state.draft.vertices.forEach((p) => { xs.push(p[0]); ys.push(p[1]); });
+    const snap = (lo, hi, list) => {
+        let best = null;
+        list.forEach((v) => [lo, hi].forEach((c) => { const d = v - c; if (Math.abs(d) < SNAP_M && (best === null || Math.abs(d) < Math.abs(best))) best = d; }));
+        return best === null ? 0 : best;
+    };
+    const s = drag.start;
+    dx += snap(s.x + dx, s.x + s.l + dx, xs);
+    dy += snap(s.y + dy, s.y + s.w + dy, ys);
+    translateFrom(s, z, round2(dx), round2(dy));
+    const i = state.draft.zones.indexOf(z);
+    const put = (key, value) => { const box = document.querySelector(`[data-l="zones"][data-i="${i}"][data-k="${key}"]`); if (box) box.value = value; };
+    if (Array.isArray(z.pts)) { put('ox', z.pts[0][0]); put('oy', z.pts[0][1]); } else { put('x', z.x); put('y', z.y); }
+    refreshLive();
+});
+window.addEventListener('pointerup', () => {
+    if (!drag) return;
+    const moved = drag.moved;
+    drag = null;
+    if (moved && state.draft) { renderPanel(); refreshLive(); }
+});
+
 // ---- guardar / descartar -----------------------------------------------------------------------------------------------
 $('layout-save').addEventListener('click', async () => {
     const button = $('layout-save');
+    const openShape = firstOpenShape();
+    if (openShape) {
+        if (openShape.kind === 'contorno') { state.step = 'contorno'; Dashboard.showToast(t('main.layoutNoCierraContorno'), 'warning'); } else { state.step = 'zonas'; state.zoneOpen = openShape.zone.id; Dashboard.showToast(t('main.layoutNoCierraZona').replace('{name}', openShape.zone.name), 'warning'); }
+        renderPanel();
+        return;
+    }
     button.disabled = true;
     try {
         const body = { layout: state.draft, baseVersion: state.version };

@@ -8,6 +8,8 @@
     const ZONE_COLORS = {
         dry: ['#E3ECF9', '#7C9CD6', ''], cold: ['#E3F6E8', '#4C9B64', ''], chemical: ['#FBF0DE', '#D9A441', ''], finished: ['#ECECF1', '#B7BAC9', ''],
         dock: ['#F5F6FA', '#B7BAC9', ''], office: ['#D2E1F6', '#7C9CD6', '3 2'], aisle: ['url(#lh-main)', '#6B7089', '4 3'], aisle2: ['url(#lh-between)', '#8E94AB', ''],
+        // zona todavía sin tipo asignado
+        none: ['#ECECF1', '#8E94AB', '3 3'],
     };
     const FONT = 'Poppins, Arial, Helvetica, sans-serif';
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -33,15 +35,38 @@
         const halo = 'stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke"';
         let zoneLabels = '';
         (layout.zones || []).forEach((z) => {
-            const c = ZONE_COLORS[z.type] || ZONE_COLORS.dock;
-            s += `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}/>`;
-            const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
-            const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
-            const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
-            const anchor = spot.right ? 'end' : 'start';
-            zoneLabels += `<text x="${tx}" y="${ty}" font-size="10" font-weight="600" fill="#14161F" text-anchor="${anchor}" ${halo}>${esc(z.name)}</text>`;
-            if (z.w * sc > 26) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
+            const c = z.type ? (ZONE_COLORS[z.type] || ZONE_COLORS.dock) : ZONE_COLORS.none;
+            const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
+            if (LC.hasPoints(z)) {
+                // Zona de cualquier forma: se dibuja con sus esquinas y el nombre va en el punto más holgado de adentro.
+                s += `<polygon points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" stroke-linejoin="round" ${style}/>`;
+                const a = LC.zoneLabelAnchor(z);
+                zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) - 1}" font-size="10" font-weight="600" fill="#14161F" text-anchor="middle" ${halo}>${esc(z.name)}</text>`;
+                zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) + 10}" font-size="8.5" fill="#6B7089" text-anchor="middle" ${halo}>${fmt(LC.zoneArea(z))} m²</text>`;
+            } else {
+                s += `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" ${style}/>`;
+                const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
+                const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
+                const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
+                const anchor = spot.right ? 'end' : 'start';
+                zoneLabels += `<text x="${tx}" y="${ty}" font-size="10" font-weight="600" fill="#14161F" text-anchor="${anchor}" ${halo}>${esc(z.name)}</text>`;
+                if (z.w * sc > 26) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
+            }
         });
+        // La medida real de cada lado va escrita: afuera en las paredes de la nave y adentro en cada zona (solo si el lado se ve de largo suficiente).
+        let measureLabels = '';
+        const measure = (pts, outward, minPx) => {
+            LC.sideMeasures(pts, outward).forEach((m) => {
+                if (m.len * sc < minPx) return;
+                if (!outward && LC.onPolygonEdge(m.mx, m.my, layout.vertices)) return;
+                const off = outward ? 11 : 8;
+                measureLabels += `<text x="${(X(m.mx) + m.nx * off).toFixed(1)}" y="${(Y(m.my) + m.ny * off + 2.5).toFixed(1)}" font-size="7.5" font-weight="600" fill="#C0392B" text-anchor="middle" ${halo}>${fmt(m.len)}</text>`;
+            });
+        };
+        if (options.measures !== false) {
+            measure(layout.vertices, true, 24);
+            (layout.zones || []).forEach((z) => measure(LC.zonePoints(z), false, 26));
+        }
         s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="#3F435D" stroke-width="3" stroke-linejoin="round"/>`;
         (layout.spaces || []).forEach((sp) => {
             const w = Math.max(sp.l * sc, 4);
@@ -49,7 +74,7 @@
             s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="#FFFFFF" stroke="#6B7089" stroke-width="1"/>`;
             if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="600" fill="#3F435D" text-anchor="middle">${esc(sp.code)}</text>`;
         });
-        s += zoneLabels;
+        s += zoneLabels + measureLabels;
         (layout.doors || []).forEach((d) => {
             const w = LC.wallSegment(layout.vertices, d.wall);
             const ax = w.p[0] + w.ux * d.dist;

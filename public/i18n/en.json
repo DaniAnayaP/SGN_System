@@ -1623,6 +1623,44 @@
     "layoutQuitar": "Remove",
     "layoutDesactivar": "Deactivate",
     "layoutReactivar": "Reactivate",
+    "layoutLado": "Side",
+    "layoutHaciaDonde": "Direction",
+    "layoutInclinacion": "Tilt (°)",
+    "layoutMide": "Length (m)",
+    "layoutEmpiezaX": "Starts at X (m)",
+    "layoutEmpiezaY": "Starts at Y (m)",
+    "layoutAgregarLado": "+ Add side",
+    "layoutSinZona": "No zone assigned",
+    "layoutPlanM2": "m² per plan",
+    "layoutLados": "Sides",
+    "layoutFormaLibre": "Free shape",
+    "layoutAgregarZonaLibre": "+ Add free-shape zone",
+    "layoutLadosDe": "Sides of {name}",
+    "layoutNoCierraContorno": "The warehouse outline does not close. Add what is missing before saving.",
+    "layoutNoCierraZona": "The zone \"{name}\" does not close. Add what is missing before saving.",
+    "layoutDirR": "→ Right",
+    "layoutDirRD": "↘ Right and down",
+    "layoutDirD": "↓ Down",
+    "layoutDirLD": "↙ Left and down",
+    "layoutDirL": "← Left",
+    "layoutDirLU": "↖ Left and up",
+    "layoutDirU": "↑ Up",
+    "layoutDirRU": "↗ Right and up",
+    "layoutPorLados": "By sides",
+    "layoutPorEsquinas": "By corners",
+    "layoutCierraBien": "Closes properly",
+    "layoutNoCierraFalta": "Does not close: {gap} missing",
+    "layoutAgregarFalta": "Add what is missing",
+    "layoutCerrarRecta": "Close with a straight line",
+    "layoutGapR": "{n} m to the right",
+    "layoutGapL": "{n} m to the left",
+    "layoutGapD": "{n} m down",
+    "layoutGapU": "{n} m up",
+    "layoutGapY": " and ",
+    "layoutSaleDeNave": "Outside the warehouse",
+    "layoutCoincide": "Matches {n}",
+    "layoutDifiere": "Differs {n}",
+    "layoutPorDibujar": "To be drawn",
     "layoutEliminar": "Delete",
     "layoutEliminarZonaConfirm": "Delete the zone \"{name}\"? Its spaces will be left without a zone. It is deleted when you save and cannot be undone.",
     "layoutEliminarEspacioConfirm": "Delete the space \"{name}\"? It is deleted when you save and cannot be undone.",
@@ -2908,6 +2946,50 @@
     "layoutDeleteRow": {
       "what": "Permanently deletes this zone or space when you save. Unlike Deactivate, it is not kept at all. It only appears if your account has the Delete permission in the access tree.",
       "example": "you remove a rack that never existed in the warehouse and was entered by mistake."
+    },
+    "layoutZonePlanM2": {
+      "what": "The m² your plan states for this room. The system compares what you drew against that number and warns if they differ (more than 3%). It is optional.",
+      "example": "your plan says the Warehouse room is 38.89 m²; if what you drew gives 45 m², it turns amber so you can check the measures."
+    },
+    "layoutFreeShape": {
+      "what": "Turns this rectangle into a free-shape zone: it is edited side by side, the way the plan shows it, for L-shaped rooms, notches or slanted walls.",
+      "example": "the Supplier dock is L-shaped: you switch it to free shape and type its 6 sides."
+    },
+    "layoutSidesOpen": {
+      "what": "Shows or hides the sides of this free-shape zone so you can type or fix them.",
+      "example": "you tap Sides and change side 3 from 1.27 to 1.30 m."
+    },
+    "layoutSideDir": {
+      "what": "Which way this side goes, from the corner where the previous one ends. The diagonal arrows also ask for their tilt.",
+      "example": "Right for a horizontal wall; Right and up for a wall that rises at a slant."
+    },
+    "layoutSideTilt": {
+      "what": "How many degrees the side tilts from the horizontal (0.1 to 89.9). It only appears with the diagonal arrows.",
+      "example": "a wall that rises 30° to the right: you pick Right and up and type 30."
+    },
+    "layoutSideLen": {
+      "what": "How long this side is, in meters, as your plan states it.",
+      "example": "4.57 for the width of the dock."
+    },
+    "layoutSideAdd": {
+      "what": "Adds a side at the end. Sides are typed in order, going around the shape on the inside.",
+      "example": "after Right 6.30 you add Down 6.17."
+    },
+    "layoutSideClose": {
+      "what": "Adds the straight sides that are missing to get back to the corner where you started.",
+      "example": "you are missing 6.30 m to the left and 6.17 m up: one tap adds both sides."
+    },
+    "layoutSideCloseLine": {
+      "what": "Closes the shape with a single straight side, from the last corner to the starting one, even if it ends up slanted.",
+      "example": "your last side runs diagonally back to where you started: you close it in one go."
+    },
+    "layoutContornoMode": {
+      "what": "How you enter the outline: by sides (which way it goes and how long, as the plan shows it) or by corners (their X and Y meters).",
+      "example": "with the plan at hand you use By sides; if you already have coordinates you use By corners."
+    },
+    "layoutOrigin": {
+      "what": "Where on the map the first corner is; the sides are drawn from there.",
+      "example": "the warehouse starts at 0, 0."
     },
     "layoutCanvas": {
       "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections.",
