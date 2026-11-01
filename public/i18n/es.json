@@ -1623,6 +1623,9 @@
     "layoutQuitar": "Quitar",
     "layoutDesactivar": "Desactivar",
     "layoutReactivar": "Reactivar",
+    "layoutMedidasBtn": "Ver y ocultar medidas",
+    "layoutMedidasOcultar": "Ocultar medidas",
+    "layoutMedidasVer": "Ver medidas",
     "layoutFormatoZonaBtn": "Formato de zona (color, rayas y borde)",
     "layoutFormatoZona": "Formato de la zona",
     "layoutFormatoRelleno": "Relleno",
@@ -2981,6 +2984,10 @@
     "layoutDeleteRow": {
       "what": "Elimina esta zona o este espacio de forma definitiva al guardar. A diferencia de Desactivar, ya no se conserva ni su historial de m². Solo aparece si tu cuenta tiene el permiso Eliminar en el árbol.",
       "example": "quitas un anaquel que nunca existió en la nave y que capturaron por error."
+    },
+    "layoutMeasures": {
+      "what": "Muestra u oculta las medidas del croquis: el largo de cada pared, la altura de cada esquina y la medida de cada lado de las zonas. El nombre y los m² de cada zona se quedan. Solo cambia lo que ves en pantalla; la hoja que se descarga y el QR siguen con sus medidas.",
+      "example": "ocultas las medidas cuando el croquis se ve cargado de números y las vuelves a mostrar para revisar un lado."
     },
     "layoutZoneFmt": {
       "what": "Abre el formato de esta zona, como Formato de celdas de Excel: color de fondo, rayas o patrón y estilo y color del borde. Sin formato propio, la zona usa el color de su tipo.",

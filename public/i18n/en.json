@@ -1623,6 +1623,9 @@
     "layoutQuitar": "Remove",
     "layoutDesactivar": "Deactivate",
     "layoutReactivar": "Reactivate",
+    "layoutMedidasBtn": "Show and hide measures",
+    "layoutMedidasOcultar": "Hide measures",
+    "layoutMedidasVer": "Show measures",
     "layoutFormatoZonaBtn": "Zone format (color, stripes and border)",
     "layoutFormatoZona": "Zone format",
     "layoutFormatoRelleno": "Fill",
@@ -2982,6 +2985,10 @@
     "layoutDeleteRow": {
       "what": "Permanently deletes this zone or space when you save. Unlike Deactivate, it is not kept at all. It only appears if your account has the Delete permission in the access tree.",
       "example": "you remove a rack that never existed in the warehouse and was entered by mistake."
+    },
+    "layoutMeasures": {
+      "what": "Shows or hides the measures on the sketch: the length of each wall, the height of each corner and the measure of each zone side. The name and m² of each zone stay. It only changes what you see on screen; the downloaded sheet and the QR keep their measures.",
+      "example": "you hide the measures when the sketch looks crowded with numbers and show them again to check a side."
     },
     "layoutZoneFmt": {
       "what": "Opens this zone's format, like Excel's Format Cells: background color, stripes or pattern, and border style and color. Without its own format, the zone uses its type color.",

@@ -6061,6 +6061,8 @@ function layoutPermissions(req) {
         canDeleteSpaces: admin || canDeleteColumn(grants, LAYOUT_TABLE_KEY, 'colLayoutEspacios'),
         // Cambiar el color, las rayas o el borde de una zona pide además el icono Formato de zona (hoja <pantalla>/iconLayoutFormatoZona del árbol).
         canFormatZones: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoZona'),
+        // Ver u ocultar las medidas del croquis es solo de pantalla, pero también es un icono con su propia hoja en el árbol (iconLayoutMedidas).
+        canToggleMeasures: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutMedidas'),
     };
 }
 

@@ -1171,6 +1171,7 @@
             { "id": "colLayoutEspacios", "labelKey": "main.colLayoutEspacios", "permissionOnly": true },
             { "id": "colLayoutQr", "labelKey": "main.colLayoutQr", "permissionOnly": true },
             { "id": "iconLayoutFormatoZona", "labelKey": "main.layoutFormatoZonaBtn", "permissionOnly": true },
+            { "id": "iconLayoutMedidas", "labelKey": "main.layoutMedidasBtn", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [

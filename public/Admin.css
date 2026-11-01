@@ -7260,3 +7260,11 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-fmt-preview svg{ width: 100%; max-width: 14rem; height: auto; }
 .layout-fmt-footer{ display: flex; gap: 0.5rem; align-items: center; border-top: 1px solid var(--color-border); padding-top: 0.8rem; }
 .layout-fmt-spacer{ flex: 1; }
+
+/* ver y ocultar medidas del croquis */
+.layout-canvas{ position: relative; }
+.layout-measures-btn{ position: absolute; top: 0.5rem; right: 0.5rem; z-index: 2; width: 2.1rem; height: 2.1rem; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-primary); border-radius: 999px; cursor: pointer; }
+.layout-measures-btn[hidden]{ display: none; }
+.layout-measures-btn i{ font-size: 1.1rem; }
+.layout-measures-btn.off{ color: var(--color-text-secondary); background: var(--color-bg, var(--color-surface)); }
+.layout-measures-btn.off::after{ content: ""; position: absolute; width: 1.5rem; border-top: 2px solid currentColor; transform: rotate(-45deg); }

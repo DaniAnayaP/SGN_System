@@ -13,7 +13,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, steps: ['contorno'], creating: false,
+    saved: null, draft: null, version: 0, perms: null, showMeasures: true, steps: ['contorno'], creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -451,7 +451,7 @@ function renderSvg() {
         s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
     });
-    s += zoneLabels + measureLabels;
+    s += zoneLabels + (state.showMeasures ? measureLabels : '');
     (on('puertas') ? d.doors : []).forEach((door) => {
         const w = LC.wallSegment(d.vertices, door.wall);
         const a = { x: w.p[0] + w.ux * door.dist, y: w.p[1] + w.uy * door.dist };
@@ -472,9 +472,9 @@ function renderSvg() {
         const nx = w.uy;
         const ny = -w.ux;
         const out = ((mx - cx) * nx + (my - cy) * ny) >= 0 ? 1 : -1;
-        s += `<text class="lt2" text-anchor="middle" x="${X(mx) + nx * out * 15}" y="${Y(my) + ny * out * 15 + 3}">P${i} · ${fmt(w.length)} m</text>`;
+        if (state.showMeasures) s += `<text class="lt2" text-anchor="middle" x="${X(mx) + nx * out * 15}" y="${Y(my) + ny * out * 15 + 3}">P${i} · ${fmt(w.length)} m</text>`;
     }
-    d.vertices.forEach((p, i) => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/><text class="lt2" x="${X(p[0]) + (p[0] <= cx ? -8 : 8)}" y="${Y(p[1]) + (p[1] <= cy ? -7 : 14)}" text-anchor="${p[0] <= cx ? 'end' : 'start'}">${i + 1} · ${fmt(p[2])} m</text>`; });
+    d.vertices.forEach((p, i) => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/>${state.showMeasures ? `<text class="lt2" x="${X(p[0]) + (p[0] <= cx ? -8 : 8)}" y="${Y(p[1]) + (p[1] <= cy ? -7 : 14)}" text-anchor="${p[0] <= cx ? 'end' : 'start'}">${i + 1} · ${fmt(p[2])} m</text>` : ''}`; });
     const bar = 5 * sc;
     s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" class="lscale"/><text class="lt2" x="${M + bar + 6}" y="${H - 8}">5 m</text>`;
     $('layout-svg').innerHTML = s;
@@ -531,8 +531,25 @@ function showEmpty() {
     $('layout-load-plan').disabled = !perms.canLoadPlan;
     renderKpis();
 }
+// Icono Ver / ocultar medidas: se recuerda en este navegador y solo lo ve quien lo tiene en el árbol.
+const MEASURES_KEY = 'sgn_layout_measures';
+function updateMeasuresBtn() {
+    const btn = $('layout-measures-btn');
+    btn.hidden = !(state.perms && state.perms.canToggleMeasures);
+    btn.setAttribute('aria-pressed', String(state.showMeasures));
+    btn.classList.toggle('off', !state.showMeasures);
+    btn.setAttribute('aria-label', t(state.showMeasures ? 'main.layoutMedidasOcultar' : 'main.layoutMedidasVer'));
+}
+try { state.showMeasures = localStorage.getItem(MEASURES_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se ven */ }
+$('layout-measures-btn').addEventListener('click', () => {
+    state.showMeasures = !state.showMeasures;
+    try { localStorage.setItem(MEASURES_KEY, state.showMeasures ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+    updateMeasuresBtn();
+    if (state.draft) renderSvg();
+});
 function showEditor() {
     updateQrMenu();
+    updateMeasuresBtn();
     $('layout-empty').hidden = true;
     $('layout-plan-width').hidden = true;
     $('layout-editor').hidden = false;
