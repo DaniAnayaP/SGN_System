@@ -6903,10 +6903,17 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
         grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
         align-items: stretch;
     }
-    /* El formulario no crece hacia abajo con cada renglón: el panel mide a lo sumo lo que la ventana, los pasos se quedan arriba y solo se desliza el paso de abajo (con su barra);
-       el croquis se estira a la misma altura y su dibujo queda centrado, así abajo del croquis no sobra un hueco. */
+    /* El alto lo pone el croquis: el panel del formulario no suma el suyo (contain: size) y se estira a la misma altura. Mientras el formulario cabe se ve completo; cuando crece más que el croquis,
+       los pasos se quedan arriba y se activa la barra vertical del paso de abajo. Así nunca queda un hueco debajo del croquis ni el formulario lo rebasa. */
     .layout-panel{
-        max-height: calc(100vh - 9rem);
+        contain: size;
+        min-height: 26rem;
+    }
+    .layout-panel .layout-scroll{
+        max-height: none;
+    }
+    .layout-panel .layout-scroll .layout-table thead th{
+        position: relative;
     }
     .layout-panel .layout-steps{
         flex: none;
