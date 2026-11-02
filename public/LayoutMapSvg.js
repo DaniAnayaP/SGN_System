@@ -133,12 +133,18 @@
         const ox = M + ((W - 2 * M) - spanX * sc) / 2;
         const X = (x) => ox + (x - x0) * sc;
         const Y = (y) => M + (y - y0) * sc;
-        let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${FONT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Layout">`;
+        let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${FONT}" text-rendering="geometricPrecision" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Layout">`;
         // Pasillos sombreados con rayas (principal: rayas; entre anaqueles: puntos).
         s += `<defs><pattern id="lh-main" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#FFFFFF"/><line x1="0" y1="0" x2="0" y2="8" stroke="${T.chrome.line}" stroke-width="2.4" opacity="0.45"/></pattern><pattern id="lh-between" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#F5F6FA"/><circle cx="3" cy="3" r="1.15" fill="${T.chrome.line}" opacity="0.55"/></pattern></defs>`;
         // El nombre y los m² de cada zona van al final (encima de anaqueles y paredes), con un contorno blanco, y en la esquina que no tape ningún espacio.
-        const halo = 'stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke"';
+        // El contorno blanco va en una capa APARTE (un texto duplicado solo con trazo) y TODOS los contornos se dibujan antes que TODOS los textos: así ningún contorno puede borrar el
+        // nombre de otra zona y no se depende de paint-order, que algunos navegadores de celular aplican mal a textos chicos.
+        const labelText = (x, y, size, weight, fill, anchor, text) => {
+            const attrs = `x="${x}" y="${y}" font-size="${size}"${weight ? ` font-weight="${weight}"` : ''} text-anchor="${anchor}"`;
+            return { halo: `<text ${attrs} fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${text}</text>`, main: `<text ${attrs} fill="${fill}">${text}</text>` };
+        };
         let zoneLabels = '';
+        let zoneHalos = '';
         // Recuadros (aprox.) que ocupan los nombres y los m² de las zonas: una medida de lado que caería encima se omite para que no tape el nombre (tenía un contorno blanco que lo borraba).
         const labelBoxes = [];
         const addBox = (x, baseline, text, size, anchor) => { labelBoxes.push(LC.labelBox(x, baseline, text, size, anchor)); };
@@ -157,21 +163,23 @@
             const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
             const shapeFrom = s.length;
             const labelsFrom = zoneLabels.length;
+            const halosFrom = zoneHalos.length;
+            const put = (x, y, size, weight, fill, anchor, text) => { const t = labelText(x, y, size, weight, fill, anchor, text); zoneHalos += t.halo; zoneLabels += t.main; };
             if (LC.hasPoints(z)) {
                 // Zona de cualquier forma: se dibuja con sus esquinas y el nombre va en el punto más holgado de adentro.
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<polygon points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" stroke-linejoin="round" ${style}/>`;
                 const a = LC.zoneLabelAnchor(z);
-                zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) - 1}" font-size="10" font-weight="600" fill="#14161F" text-anchor="middle" ${halo}>${esc(z.name)}</text>`;
+                put(X(a.x), Y(a.y) - 1, 10, 600, '#14161F', 'middle', esc(z.name));
                 addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle');
-                if (options.area !== false) { zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) + 10}" font-size="8.5" fill="#6B7089" text-anchor="middle" ${halo}>${fmt(LC.zoneArea(z))} m²</text>`; addBox(X(a.x), Y(a.y) + 10, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle'); }
+                if (options.area !== false) { put(X(a.x), Y(a.y) + 10, 8.5, 0, '#6B7089', 'middle', `${fmt(LC.zoneArea(z))} m²`); addBox(X(a.x), Y(a.y) + 10, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle'); }
             } else {
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" ${style}/>`;
                 const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
                 // si el nombre cae encima del de otra zona (zonas chicas o croquis chico) se corre a otra esquina, más abajo o afuera de la zona
                 const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, options.area !== false ? `${fmt(z.l * z.w)} m²` : '');
                 const { tx, ty, anchor } = place;
-                zoneLabels += `<text x="${tx}" y="${ty}" font-size="10" font-weight="600" fill="#14161F" text-anchor="${anchor}" ${halo}>${esc(z.name)}</text>`;
-                if (place.withArea) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
+                put(tx, ty, 10, 600, '#14161F', anchor, esc(z.name));
+                if (place.withArea) put(tx, ty + 11, 8.5, 0, '#6B7089', anchor, `${fmt(z.l * z.w)} m²`);
                 place.boxes.forEach((b) => labelBoxes.push(b));
             }
             if (focus) {
@@ -182,11 +190,13 @@
                 } else {
                     s = `${s.slice(0, shapeFrom)}<g opacity="0.28">${s.slice(shapeFrom)}</g>`;
                     zoneLabels = `${zoneLabels.slice(0, labelsFrom)}<g opacity="0.4">${zoneLabels.slice(labelsFrom)}</g>`;
+                    zoneHalos = `${zoneHalos.slice(0, halosFrom)}<g opacity="0.4">${zoneHalos.slice(halosFrom)}</g>`;
                 }
             }
         });
         // La medida real de cada lado va escrita: afuera en las paredes de la nave y adentro en cada zona (solo si el lado se ve de largo suficiente).
         let measureLabels = '';
+        let measureHalos = '';
         const measure = (pts, outward, minPx) => {
             LC.sideMeasures(pts, outward).forEach((m) => {
                 if (m.len * sc < minPx) return;
@@ -199,7 +209,9 @@
                     const w = String(fmt(m.len)).length * 4.4 + 2;
                     if (labelBoxes.some(([bx0, by0, bx1, by1]) => cx - w / 2 < bx1 && cx + w / 2 > bx0 && cy - 9 < by1 && cy + 3 > by0)) return;
                 }
-                measureLabels += `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="7.5" font-weight="600" fill="#C0392B" text-anchor="middle" ${halo}>${fmt(m.len)}</text>`;
+                const t = labelText(cx.toFixed(1), cy.toFixed(1), 7.5, 600, '#C0392B', 'middle', fmt(m.len));
+                measureHalos += t.halo;
+                measureLabels += t.main;
             });
         };
         if (options.measures !== false) {
@@ -215,7 +227,7 @@
             s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
             if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
         });
-        s += zoneLabels + measureLabels;
+        s += zoneHalos + measureHalos + zoneLabels + measureLabels;
         (on('puertas') ? (layout.doors || []) : []).forEach((d) => {
             const w = LC.wallSegment(layout.vertices, d.wall);
             const ax = w.p[0] + w.ux * d.dist;
